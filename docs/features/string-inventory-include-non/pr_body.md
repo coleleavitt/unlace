@@ -21,7 +21,7 @@ $ kuna strings crackme.x86_64.elf --section .rodata --filter '_0x|out.js' \
 ## The fix
 
 - The matcher takes a termination policy (`strings/mod.rs (scan_runs)`, mirrored
-  at 2-byte width in `kuna_widestrings.rs`). `Nul` is Ghidra's `requireNullEnd`;
+  at 2-byte width in `widestrings.rs`). `Nul` is Ghidra's `requireNullEnd`;
   `Any` also accepts a run closed by an ordinary byte or by the end of its region.
 - `kuna strings` gains `--termination nul|any` and **defaults to `any`** — the
   probe's command line carries no new flag, and `strings(1)`'s rule is what an

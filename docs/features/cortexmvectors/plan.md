@@ -4,7 +4,7 @@ Owning phase: **P1 code/data partition**, entry discovery oracle 6
 (`docs/spec/01-program-prep.md`). Option: `cortexmvectors`, tier `analysis`,
 `change_kind` `analysis-enablement`, default-OFF.
 
-## 1. The widened signature — `entry/kuna_cortexmvectors.rs` (new module)
+## 1. The widened signature — `entry/cortexmvectors.rs` (new module)
 
 * `vector_table(file, widen)` — the shipped signature first, the widened scan only as a
   fallback. That ordering is the "never removes an entry" guarantee.
@@ -55,7 +55,7 @@ tail-call absorption).
 * `phases.toml` `[[settable]]` row, every field populated,
   `source_decompiler = "kuna"` (this came from kuna's own recall measurement, not a rival),
   `inspiration` prefixed `decbench:`.
-* Hard-coded catalog counts: `kuna_phases/tests.rs` (settable 83->84, analysis tier 25->26,
+* Hard-coded catalog counts: `phases/tests.rs` (settable 83->84, analysis tier 25->26,
   the `PASS_GATES` list, the JSON row count 82->83) and `catalog_bytecompat.rs`
   (83->84 plus the recaptured `tests/fixtures/phase_catalog.json`).
   `tests/stages/kuna-catalog.toml` needs no edit: its exact-count asserts key on
@@ -64,7 +64,7 @@ tail-call absorption).
 
 ## 5. Tests
 
-* Unit (`kuna_cortexmvectors.rs`): the cleanflight/betaflight shape, the RAM-relocated
+* Unit (`cortexmvectors.rs`): the cleanflight/betaflight shape, the RAM-relocated
   table, the `word[1] != e_entry` shape, the `.data` false-positive floor and the
   two-vs-three handler threshold, the non-ARM no-op, shipped-match monotonicity, and a pin
   on the committed fixture.

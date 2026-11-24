@@ -20,7 +20,7 @@ impl ImageBytes {
     /// The load's `load_mmap` option (`UNLACE_LOAD_MMAP=off` outside a load)
     /// selects the owned path.
     pub fn map_thin_macho(path: &str) -> KunaResult<Option<Self>> {
-        use unlace_decomp::kuna_loadoptions::{env, scoped};
+        use unlace_decomp::loadoptions::{env, scoped};
         if !scoped(|o| o.load_mmap).unwrap_or_else(env::load_mmap) {
             return Ok(None);
         }
@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn a_load_without_mmap_keeps_the_owned_path() {
-        use unlace_decomp::kuna_loadoptions::LoadOptions;
+        use unlace_decomp::loadoptions::LoadOptions;
         let thin = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/fixtures/macho_objc_arm64"

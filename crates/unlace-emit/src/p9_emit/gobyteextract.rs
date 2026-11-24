@@ -29,11 +29,11 @@ fn memory_offset(container: i32, size: i32, lsb: u64, big: bool) -> Option<u64> 
 
 fn compatible(source: &Datatype, target: &Datatype, size: i32) -> bool {
     source.get_metatype() == type_metatype::TYPE_ARRAY
-        && !crate::kuna_typequal::is_volatile(source)
+        && !crate::typequal::is_volatile(source)
         && source.get_array_base().is_some_and(|base| {
             base.get_size() == 1
                 && base.get_align_size() == 1
-                && !crate::kuna_typequal::is_volatile(&base)
+                && !crate::typequal::is_volatile(&base)
                 && matches!(
                     base.get_metatype(),
                     type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
@@ -41,7 +41,7 @@ fn compatible(source: &Datatype, target: &Datatype, size: i32) -> bool {
         })
         && matches!(size, 1 | 2 | 4 | 8)
         && target.get_size() == size
-        && !crate::kuna_typequal::is_volatile(target)
+        && !crate::typequal::is_volatile(target)
         && matches!(
             target.get_metatype(),
             type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
@@ -98,7 +98,7 @@ pub fn plan(
         || !compatible(source, &target, size)
         || ((target.get_metatype() == type_metatype::TYPE_UNKNOWN
             || facing.get_metatype() == type_metatype::TYPE_UNKNOWN)
-            && crate::kuna_partialaccess::carries_float(fd, output, read_op.unwrap_or(op)))
+            && crate::partialaccess::carries_float(fd, output, read_op.unwrap_or(op)))
     {
         return None;
     }
@@ -174,7 +174,7 @@ mod tests {
         assert!(!compatible(&words, &word, 8));
         let volatile = |ty| {
             types
-                .get_qualified_type(ty, crate::kuna_typequal::VOLATILE)
+                .get_qualified_type(ty, crate::typequal::VOLATILE)
                 .unwrap()
         };
         assert!(!compatible(&volatile(array.clone()), &word, 8));

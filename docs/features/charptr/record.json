@@ -6,7 +6,7 @@
   "phase": "P5",
   "subphase": "type-propagation",
   "base_commit": "69d252df3 (rebased twice from 2e28ece4a: #689 argclobber then #694 inferfuncentry-intbound landed in between)",
-  "module": "decompiler/crates/kuna-decomp/src/p5_types/kuna_charptr.rs",
+  "module": "decompiler/crates/kuna-decomp/src/p5_types/charptr.rs",
   "stage_test": "tests/stages/kuna-charptr.xml",
   "class_census": {
     "source": "docs/decbench/typecampaign/final-c round-C decision dump, 444 slices, metric pinned to decbench 625e892",

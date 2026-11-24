@@ -37,7 +37,7 @@ A tail jump is the caller's **last instruction**: the compiler tears the frame d
 so the `jmp` executes with the stack pointer exactly where `ret` would find it. An
 intraprocedural jump never does, because the code it jumps to still needs the frame.
 
-`p2_lift/kuna_tailcallframe.rs` measures two constant stack-pointer deltas over the
+`p2_lift/tailcallframe.rs` measures two constant stack-pointer deltas over the
 already-decoded raw p-code — forward from the entry address (`push rbx; sub rsp,0x10` =
 `-0x18`) and backward from the branch (`add rsp,0x10; pop rbx` = `+0x18`) — and fires when
 the second is a strictly positive teardown of exactly the first. The rewrite is the one
@@ -87,7 +87,7 @@ direct-address-keyboard-handler` reports `pass 1 / fail 0 / closed 1`.
 
 - `tests/stages/tailcallframe.toml` — two-pass on a hand-built bytechunk, 4 assertions
   (605 → 609 stage assertions, baseline re-recorded).
-- `decompiler/crates/kuna-decomp/src/p2_lift/kuna_tailcallframe/tests.rs` — 10 unit tests
+- `decompiler/crates/kuna-decomp/src/p2_lift/tailcallframe/tests.rs` — 10 unit tests
   over hand-built IR (partial teardown, frameless leaf, `leave`, self-recursion,
   already-decoded target, indirect branch, address gap).
 - `decompiler/crates/kuna-console/tests/verify_tailcallframe.rs` — 3 tests on a real ELF.

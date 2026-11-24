@@ -115,7 +115,7 @@ fold closes all 98 at once, so that is the lever worth pulling.
 shape: `iteregion` (default-ON, DIV-17) plus its `iteexpr` extension. Neither
 fires here, and `--option iteexpr on` does not change a single line
 (verified). The declining predicate is
-`decompiler/crates/unlace-decomp/src/p8_structure/kuna_iteregion.rs::same_storage`,
+`decompiler/crates/unlace-decomp/src/p8_structure/iteregion.rs::same_storage`,
 which requires the two arms' assignment destinations to be the **same raw storage**
 (space name + offset + size). The raw p-code shows they are not:
 
@@ -184,7 +184,7 @@ and deserves its own triage/proposal — it is a correctness bug, invisible to G
 
 ## Proposed fix
 
-**Mechanism.** In `kuna_iteregion.rs`, replace `same_storage(data, dest_true, dest_else)`
+**Mechanism.** In `iteregion.rs`, replace `same_storage(data, dest_true, dest_else)`
 with a HighVariable-identity test — the two arm outputs must resolve to the same
 `HighVariable` (`Varnode::get_high()`), falling back to the current storage
 comparison when either varnode has no high. That is the question the pass actually
@@ -193,7 +193,7 @@ it is what makes the copy-shadow/`unique` form match. One function, one module,
 inside a pass that is already print-only (no p-code is mutated), so the blast
 radius is a rendering change only.
 
-**Owning files.** `decompiler/crates/unlace-decomp/src/p8_structure/kuna_iteregion.rs`
+**Owning files.** `decompiler/crates/unlace-decomp/src/p8_structure/iteregion.rs`
 (`same_storage`, and its doc comment / the module header's "same storage" prose);
 spec chapter owning `p8_structure/`; a `tests/stages/` two-pass testcase built on
 the `g3` reproducer shape (option off = the diamond, default = the ternary).

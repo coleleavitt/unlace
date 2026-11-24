@@ -3,7 +3,7 @@
 //! the warning never reaches stdout, where `--json` documents go.
 //!
 //! The children are shell stubs speaking the child half of the protocol
-//! (`unlace_console::kuna_buildstamp`): compare `UNLACE_PARENT_BUILD` with a baked
+//! (`unlace_console::buildstamp`): compare `UNLACE_PARENT_BUILD` with a baked
 //! identity and answer on stderr only when they differ. The real binaries' half
 //! is pinned by `unlace-console/tests/verify_buildstamp.rs` and
 //! `unlace-harness/tests/verify_buildstamp.rs`.
@@ -14,7 +14,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use unlace_console::kuna_buildstamp::{ChildKind, PARENT_ENV, REPLY, identity};
+use unlace_console::buildstamp::{ChildKind, PARENT_ENV, REPLY, identity};
 
 const OTHER_BUILD: &str = "1.329 (source 0123456789abcdef)";
 

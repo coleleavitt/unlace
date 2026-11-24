@@ -141,36 +141,36 @@ fn run(mode: Mode) -> Run {
     assert!(
         prog.arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Fid>()
+            .get::<unlace_decomp::analysisgates::Fid>()
             .on
             && prog
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .get::<unlace_decomp::analysisgates::Fid>()
                 .strict
     );
     prog.arch_mut().set_kuna_option("fid", "on").unwrap();
     assert!(
         prog.arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Fid>()
+            .get::<unlace_decomp::analysisgates::Fid>()
             .on
             && !prog
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .get::<unlace_decomp::analysisgates::Fid>()
                 .strict
     );
     assert!(prog.arch_mut().set_kuna_option("fid", "bogus").is_err());
     assert!(
         prog.arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Fid>()
+            .get::<unlace_decomp::analysisgates::Fid>()
             .on
             && !prog
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .get::<unlace_decomp::analysisgates::Fid>()
                 .strict
     );
     prog.arch_mut().set_kuna_option("fid", "off").unwrap();
@@ -178,12 +178,12 @@ fn run(mode: Mode) -> Run {
         !prog
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Fid>()
+            .get::<unlace_decomp::analysisgates::Fid>()
             .on
             && !prog
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .get::<unlace_decomp::analysisgates::Fid>()
                 .strict
     );
 

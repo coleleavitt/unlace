@@ -229,7 +229,7 @@ mod stack_pointer_high_leaf {
         let occupied = declaration_occupied_names(&fd, vec!["param_1".to_string()]);
         assert!(occupied.iter().any(|name| name == "callee_1"));
 
-        let mut allocator = crate::kuna_dedupvardecls::DeclNameUniquifier::new(
+        let mut allocator = crate::dedupvardecls::DeclNameUniquifier::new(
             ["callee", "callee"],
             occupied.iter().map(String::as_str),
         );
@@ -534,7 +534,7 @@ mod stack_pointer_high_leaf {
                 _ => {}
             }
             let mut printer = PrintC::new();
-            printer.out_lang = crate::kuna_lang::OutLang::Rust;
+            printer.out_lang = crate::lang::OutLang::Rust;
             printer.rt_ctx.lang = printer.out_lang;
             printer.rt_ctx.enabled = true;
             printer.rt_ctx.long_is_8 = true;
@@ -585,7 +585,7 @@ mod stack_pointer_high_leaf {
                 assert!(text.contains("array = ["), "{text}");
                 assert!(!text.contains("array["), "{text}");
                 let mut marked = PrintC::new();
-                marked.out_lang = crate::kuna_lang::OutLang::Rust;
+                marked.out_lang = crate::lang::OutLang::Rust;
                 marked.rt_ctx = printer.rt_ctx.clone();
                 marked.set_markup(true);
                 marked.emit_fd = Some(&fd as *const Funcdata);
@@ -1151,7 +1151,7 @@ mod decompile_project_type_render {
 
     #[test]
     fn c_type_definition_aliases_keep_qualifiers_and_nested_declarators() {
-        use crate::kuna_typequal::{CONST, VOLATILE, qualified_type};
+        use crate::typequal::{CONST, VOLATILE, qualified_type};
 
         let value = named(4, type_metatype::TYPE_UINT, "uint4");
         let mut element = (*struct_of("elm.tag", 4, &[(0, "value", value)])).clone();
@@ -2951,7 +2951,7 @@ mod w10_printc_cast_render {
             &fd,
             &bare_arch(),
             op,
-            crate::kuna_bitcast::Transfer {
+            crate::bitcast::Transfer {
                 input,
                 target: named("float", 4, type_metatype::TYPE_FLOAT),
                 size: 4,
@@ -3019,7 +3019,7 @@ mod w10_printc_cast_render {
             for offset in 0..=4 {
                 let shift = fd.new_constant(4, offset);
                 fd.op_set_input(op, shift, 1).unwrap();
-                assert!(crate::kuna_floatslice::recognize(&fd, op).is_some());
+                assert!(crate::floatslice::recognize(&fd, op).is_some());
                 for language in ["c", "rust"] {
                     for nocasts in [false, true] {
                         let mut printer = PrintC::new();
@@ -3064,7 +3064,7 @@ mod w10_printc_cast_render {
             for offset in [5, u64::MAX] {
                 let shift = fd.new_constant(8, offset);
                 fd.op_set_input(op, shift, 1).unwrap();
-                assert!(crate::kuna_floatslice::recognize(&fd, op).is_none());
+                assert!(crate::floatslice::recognize(&fd, op).is_none());
             }
             let zero = fd.new_constant(4, 0);
             fd.op_set_input(op, zero, 1).unwrap();
@@ -3073,14 +3073,14 @@ mod w10_printc_cast_render {
                 4,
                 type_metatype::TYPE_UINT,
             ));
-            assert!(crate::kuna_floatslice::recognize(&fd, op).is_none());
+            assert!(crate::floatslice::recognize(&fd, op).is_none());
             fd.vbank_mut().get_mut(output).unwrap().update_type(named(
                 "float",
                 4,
                 type_metatype::TYPE_FLOAT,
             ));
             fd.op_set_opcode_code(op, OpCode::CPUI_FLOAT_FLOAT2FLOAT);
-            assert!(crate::kuna_floatslice::recognize(&fd, op).is_none());
+            assert!(crate::floatslice::recognize(&fd, op).is_none());
         }
         execute_float_slice_expressions(&cases);
     }
@@ -3141,7 +3141,7 @@ mod w10_printc_cast_render {
             for offset in 0..=(from_size as u64 - 2) {
                 let shift = fd.new_constant(4, offset);
                 fd.op_set_input(op, shift, 1).unwrap();
-                let slice = crate::kuna_floatslice::recognize(&fd, op).unwrap();
+                let slice = crate::floatslice::recognize(&fd, op).unwrap();
                 assert_eq!(slice.width, 2);
                 assert_eq!(slice.shift, offset * 8);
                 for language in ["c", "rust"] {
@@ -3168,7 +3168,7 @@ mod w10_printc_cast_render {
             }
             let past = fd.new_constant(4, from_size as u64 - 1);
             fd.op_set_input(op, past, 1).unwrap();
-            assert!(crate::kuna_floatslice::recognize(&fd, op).is_none());
+            assert!(crate::floatslice::recognize(&fd, op).is_none());
         }
     }
 
@@ -3223,7 +3223,7 @@ mod w10_printc_cast_render {
             fd.op_set_output(op, output).unwrap();
             fd.set_high_level();
             assert_eq!(
-                crate::kuna_floatslice::recognize(&fd, op).is_some(),
+                crate::floatslice::recognize(&fd, op).is_some(),
                 producer == OpCode::CPUI_LOAD
             );
         }
@@ -3366,7 +3366,7 @@ mod w10_printc_cast_render {
             fd.op_set_input(op, input, 0).unwrap();
             fd.op_set_output(op, output).unwrap();
             assert_eq!(
-                crate::kuna_aggregatecast::storage_transfer(&fd, op).is_some(),
+                crate::aggregatecast::storage_transfer(&fd, op).is_some(),
                 allowed
             );
         }
@@ -3381,7 +3381,7 @@ mod w10_printc_cast_render {
         );
         fd.op_set_input(op, input, 0).unwrap();
         fd.op_set_output(op, output).unwrap();
-        assert!(crate::kuna_aggregatecast::storage_transfer(&fd, op).is_none());
+        assert!(crate::aggregatecast::storage_transfer(&fd, op).is_none());
     }
 
     #[test]
@@ -3459,7 +3459,7 @@ mod w10_printc_cast_render {
                 type_metatype::TYPE_FLOAT
             );
             let mut arch = bare_arch();
-            assert!(crate::kuna_bitcast::truncated_float_storage(&fd, op).is_some());
+            assert!(crate::bitcast::truncated_float_storage(&fd, op).is_some());
             for lang in ["c", "rust"] {
                 let mut printer = PrintC::new();
                 printer.set_name(lang);
@@ -3671,7 +3671,7 @@ mod w10_printc_cast_render {
         let mut context = ContextArch::new(build_manager());
         context
             .kuna_options
-            .set(crate::kuna_coreoptions::StackViews(true));
+            .set(crate::coreoptions::StackViews(true));
         let types = Rc::new(crate::dtype::TypeFactoryImpl::new());
         types.set_size_of_int(4);
         types.set_size_of_float(4);
@@ -3740,7 +3740,7 @@ mod w10_printc_cast_render {
             type_metatype::TYPE_FLOAT
         );
         assert_eq!(
-            crate::kuna_stackviews::access_type(&fd, source, op, 0)
+            crate::stackviews::access_type(&fd, source, op, 0)
                 .unwrap()
                 .get_metatype(),
             type_metatype::TYPE_UINT
@@ -3879,7 +3879,7 @@ mod w10_printc_cast_render {
             fd.vn_type_read_facing(source, op).get_metatype(),
             type_metatype::TYPE_FLOAT
         );
-        assert!(crate::kuna_bitcast::storage_transfer(&fd, op, |_, _| None).is_none());
+        assert!(crate::bitcast::storage_transfer(&fd, op, |_, _| None).is_none());
     }
 
     #[test]

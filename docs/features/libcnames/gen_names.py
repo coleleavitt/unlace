@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the NAMES rows of kuna-analysis/src/analyzers/protos/kuna_libcnames.rs.
+"""Regenerate the NAMES rows of kuna-analysis/src/analyzers/protos/libcnames.rs.
 
 usage: python3 gen_names.py > rows.rs   (needs clang and the glibc headers)
 
@@ -49,7 +49,7 @@ RET = {
 
 def arities():
     out = {}
-    for f in ('mod.rs', 'kuna_libcsigs.rs', 'kuna_libctypes.rs'):
+    for f in ('mod.rs', 'libcsigs.rs', 'libctypes.rs'):
         for m in SIG.finditer(open(os.path.join(PROTOS, f)).read()):
             out[m.group(1)] = len(re.findall(r'Ty::', m.group(2)))
     return out

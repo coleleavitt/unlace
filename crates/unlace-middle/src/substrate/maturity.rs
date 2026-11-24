@@ -245,9 +245,9 @@ pub fn check_settled(fd: &Funcdata, fact: Fact, site: &str) {
 macro_rules! debug_assert_settled {
     ($fd:expr, $fact:ident) => {
         if cfg!(debug_assertions) {
-            $crate::kuna_maturity::check_settled(
+            $crate::maturity::check_settled(
                 $fd,
-                $crate::kuna_maturity::Fact::$fact,
+                $crate::maturity::Fact::$fact,
                 concat!(file!(), ":", line!()),
             );
         }

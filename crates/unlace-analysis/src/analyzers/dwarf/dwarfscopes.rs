@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{Reader, kuna_dwarflocation};
+use super::{Reader, dwarflocation};
 
 pub const DWARFSCOPES_ENV: &str = "UNLACE_DWARFSCOPES";
 
@@ -83,7 +83,7 @@ pub fn loclist_frame_offset<'a>(
         let Some(entry) = list.next().ok()? else {
             return found;
         };
-        if let Some(off) = kuna_dwarflocation::frame_offset(entry.data.0.slice()) {
+        if let Some(off) = dwarflocation::frame_offset(entry.data.0.slice()) {
             if found.is_some_and(|f| f != off) {
                 return None;
             }

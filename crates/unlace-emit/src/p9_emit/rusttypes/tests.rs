@@ -6,7 +6,7 @@
 
 use super::*;
 use crate::dtype::DatatypeKind;
-use crate::kuna_lang::OutLang;
+use crate::lang::OutLang;
 
 fn ctx() -> SpellCtx {
     SpellCtx {

@@ -7,7 +7,7 @@
   "branch": "feat/re-local-type-assertion-target",
   "summary": "`--assert name`/`type` now reach a REGISTER-resident local on the in-process surface (`kuna decompile --json`, `decompile-all`, `decompile-project`), by mapping an isolated, locked Symbol over the printed local's storage at its use point -- the mapping `type varnode %REG(pc)` already made, keyed by the identifier the printer chose. A run with no symbol-scoped directive is untouched.",
   "files": [
-    "decompiler/crates/kuna-console/src/kuna_hightarget.rs",
+    "decompiler/crates/kuna-console/src/hightarget.rs",
     "decompiler/crates/kuna-console/src/lib.rs",
     "decompiler/crates/kuna-console/src/assertions.rs",
     "decompiler/crates/kuna-console/src/ifacedecomp.rs",

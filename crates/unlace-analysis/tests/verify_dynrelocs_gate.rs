@@ -1,7 +1,7 @@
 //! (kuna `dynrelocs`) The dynamic-relocation application, in its own test binary,
 //! driven against real fixtures rather than synthetic images.
 
-use unlace_analysis::loader::kuna_dynrelocs::resolve;
+use unlace_analysis::loader::dynrelocs::resolve;
 
 /// A PIE yields its three `R_X86_64_RELATIVE` writes and the two
 /// `PT_GNU_RELRO`-covered const slots.
@@ -63,7 +63,7 @@ fn mips_got_slots_are_constant() {
     let bytes = std::fs::read(&path).expect("MIPS fixture");
     let file = object::File::parse(&bytes[..]).expect("parse");
     assert_eq!(
-        unlace_analysis::loader::kuna_mipsgot::const_ranges(&file),
+        unlace_analysis::loader::mipsgot::const_ranges(&file),
         vec![(0x10428u64, 0x10443u64)]
     );
 }

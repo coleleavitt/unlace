@@ -3,7 +3,7 @@
 use super::*;
 
 /// The sibling merge is a separate option; these tests hold it off.
-const OFF: crate::kuna_structmerge::StructMergeMode = crate::kuna_structmerge::StructMergeMode::Off;
+const OFF: crate::structmerge::StructMergeMode = crate::structmerge::StructMergeMode::Off;
 
 fn indexed_access_family(scales: &[Option<u64>], copies: u32) -> (Funcdata, VarnodeId) {
     use crate::context::ArchContext;

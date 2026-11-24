@@ -5,7 +5,7 @@
 //!
 //! ## What was missing
 //!
-//! [`super::kuna_dwarfstructs`] walks `DW_TAG_member` children. A Rust enum has
+//! [`super::dwarfstructs`] walks `DW_TAG_member` children. A Rust enum has
 //! **none** — its entire layout hangs off a `DW_TAG_variant_part` — so it
 //! recovered its `DW_AT_byte_size` and zero fields. A field-less aggregate is
 //! still an aggregate the ABI classifier acts on, so an 8-byte
@@ -123,14 +123,14 @@
 //! enclosing enum's own PARENT-QUALIFIED name
 //! (`core::result::Result<u32, u32>::Ok`), and a name still held by something of
 //! a different shape is stepped over by
-//! [`super::kuna_dwarfstructs::resolve_name`], the policy `dwarfstructs`
+//! [`super::dwarfstructs::resolve_name`], the policy `dwarfstructs`
 //! established, or by [`open_facet`] for a suppressed facet.
 //!
 //! ## Deliberate refusals
 //!
 //! Every one of these ends at the same place — a named aggregate with the enum's
 //! `DW_AT_byte_size` and no fields, which is exactly what
-//! [`super::kuna_dwarfstructs`] produces for the same DIE (a variant-part struct
+//! [`super::dwarfstructs`] produces for the same DIE (a variant-part struct
 //! has no `DW_TAG_member` children for its member walk to find) — rather than a
 //! layout that is partly guessed.
 //!
@@ -167,14 +167,14 @@ use std::rc::Rc;
 
 use unlace_base::types::{int4, uint4};
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
-use unlace_decomp::kuna_dwarfvariants::{VariantFacet, VariantLayout};
+use unlace_decomp::dwarfvariants::{VariantFacet, VariantLayout};
 
 use super::DieSnap;
-use super::kuna_dwarfstructs::{
+use super::dwarfstructs::{
     aggregate_alignment, aggregate_size, is_static_member, member_offset, qualified_name,
     resolve_name,
 };
-use super::kuna_typedepth::TypeWalk;
+use super::typedepth::TypeWalk;
 
 /// One `DW_TAG_variant`, as read from DWARF and before any kuna type exists.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -341,7 +341,7 @@ pub(super) fn read_variant_part(
 
 /// Intern the discriminated union for `die` and populate it from DWARF.
 ///
-/// `None` means REFUSED — the DIE is left to [`super::kuna_dwarfstructs`], which
+/// `None` means REFUSED — the DIE is left to [`super::dwarfstructs`], which
 /// gives a named aggregate with its byte size and no fields. `Some` is the
 /// completed type — a struct of tag plus overlay
 /// union, or the overlay union alone for a niche — with the geometry recorded on
@@ -524,7 +524,7 @@ fn install_layout(
     // the variant name; the DWARF-declared integer stays when the gate is off,
     // the tag is already an enum, or no variant carries a usable (name, value).
     let tag_field_type =
-        super::kuna_variantnames::synthesized_tag_enum(types, name, &tag_type, &layout.variants)
+        super::variantnames::synthesized_tag_enum(types, name, &tag_type, &layout.variants)
             .unwrap_or_else(|| Rc::clone(&tag_type));
     let mut fields = vec![
         TypeField::new(payload_offset, payload_offset, "payload".to_string(), union),
@@ -545,7 +545,7 @@ fn install_layout(
 }
 
 /// Complete an interned-but-unpopulated shell at the enum's `DW_AT_byte_size`
-/// with no fields — the answer [`super::kuna_dwarfstructs`] gives the same DIE
+/// with no fields — the answer [`super::dwarfstructs`] gives the same DIE
 /// (a variant-part struct has no `DW_TAG_member` children for its member walk to
 /// find). Never `None`: if the factory refuses the completion, the opaque shell
 /// is still returned, because an opaque named aggregate beats `void`.

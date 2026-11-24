@@ -7,7 +7,7 @@
   "selector": "0x9124 (the \"Enter your key: \\n\" prompt)",
   "source_decompiler": "kuna",
   "phase": "P1 (program prep, entry discovery)",
-  "module": "decompiler/crates/kuna-analysis/src/analyzers/entry/kuna_armlibcmain.rs (ArmLibcMainPass)",
+  "module": "decompiler/crates/kuna-analysis/src/analyzers/entry/armlibcmain.rs (ArmLibcMainPass)",
   "change_kind": "correctness-fix",
   "tier": "analysis",
   "option": "armlibcmain",
@@ -50,7 +50,7 @@
     "non_arm_control": "fauxware `authenticate`: off=142.18 ms, on=100.61 ms, delta -29.24% on structurally byte-identical output -- reported as the machine's single-target noise floor, not an effect (docs/features/returncopysplit/record.json measured -20.23% / -12.18% on byte-identical output on the same host)"
   },
   "tests": {
-    "unit": "decompiler/crates/kuna-analysis/src/analyzers/entry/kuna_armlibcmain.rs (5 tests): both crt1 shapes claimed at the right VMA, the PIE/static/non-ARM refusals, and the three A32 decoders on the exact words the witness _start carries",
+    "unit": "decompiler/crates/kuna-analysis/src/analyzers/entry/armlibcmain.rs (5 tests): both crt1 shapes claimed at the right VMA, the PIE/static/non-ARM refusals, and the three A32 decoders on the exact words the witness _start carries",
     "end_to_end": "decompiler/crates/kuna-console/tests/verify_armlibcmain.rs (3 tests, two-pass): option off = no function covers main at all; default = both shapes recover it and its body reaches the printf/fgets calls; and the count guard (exactly one entry added, none on a PIE ARM image)",
     "cli": "tests/cli/arm-prompt-string-owning.json -- make test-cli 66/66",
     "stage_test": null,

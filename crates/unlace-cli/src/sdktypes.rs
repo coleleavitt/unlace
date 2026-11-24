@@ -6,7 +6,7 @@
 //! and each `usr/include` header that declares a function the image imports,
 //! runs the preprocessor over it for the image's target (`clang -E -x c -isysroot
 //! <root> -target arm64-apple-ios`, or the `--types-cpp` command), and hands
-//! the text to [`kuna_cheader::load_text`]. Every record, enum and typedef the
+//! the text to [`cheader::load_text`]. Every record, enum and typedef the
 //! headers define becomes a `typedef` directive, and the declaration of each
 //! imported function a `prototype` directive; they go ahead of the run's
 //! `--types` and `--assert` directives, so those still win. An include the
@@ -22,7 +22,7 @@ use object::read::macho::{LoadCommandVariant, MachHeader};
 use object::{Object, ObjectSymbol, macho};
 
 use unlace_console::assertions::Directive;
-use unlace_console::kuna_cheader;
+use unlace_console::cheader;
 
 /// Headers under `usr/include` that are scanned for imported names.
 const MAX_HEADERS: usize = 20_000;
@@ -36,7 +36,7 @@ const MAX_RETRIES: usize = 32;
 /// The SDK root the run's last `--option sdktypes` names, if any.
 pub(crate) fn sdk_root(options: &[(String, String)]) -> Result<Option<PathBuf>, String> {
     match options.iter().rev().find(|(name, _)| name == "sdktypes") {
-        Some((_, value)) => unlace_decomp::kuna_sdktypes::parse_option_value(value),
+        Some((_, value)) => unlace_decomp::sdktypes::parse_option_value(value),
         None => Ok(None),
     }
 }
@@ -70,10 +70,10 @@ pub(crate) fn directives(
     let text = preprocess(cpp.unwrap_or("clang"), &root, &image.triple, &includes)?;
     let text = blank_objc_containers(&text);
     let shown = root.to_string_lossy();
-    Ok(Some(kuna_cheader::load_text(
+    Ok(Some(cheader::load_text(
         &shown,
         &text,
-        kuna_cheader::SDK_ORIGIN,
+        cheader::SDK_ORIGIN,
         &|name| image.imports.contains(name),
     )))
 }
@@ -111,7 +111,7 @@ impl Image {
             .collect();
         Some(Image {
             triple: format!("{arch}-apple-{os}"),
-            frameworks: unlace_analysis::objc::kuna_objcsdk::linked_frameworks(&file, bytes),
+            frameworks: unlace_analysis::objc::objcsdk::linked_frameworks(&file, bytes),
             imports,
         })
     }

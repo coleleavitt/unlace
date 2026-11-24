@@ -4,9 +4,9 @@ use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_rusttypes::int_name;
 use crate::printc::{PrintC, op_key, tokens};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
+use crate::rusttypes::int_name;
 use unlace_base::address::calc_mask;
 use unlace_num::opcodes::OpCode;
 
@@ -76,7 +76,7 @@ impl PrintC {
                 let convert = source_signed != signed;
                 let context = if convert
                     && node.is_implied()
-                    && crate::kuna_rustintegers::needs_integer_context(fd, id, op, 8) != Some(false)
+                    && crate::rustintegers::needs_integer_context(fd, id, op, 8) != Some(false)
                 {
                     int_name(width, source_signed)
                 } else {

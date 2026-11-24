@@ -1,6 +1,6 @@
 //! (kuna) `win32sigs` — built-in Win32 API prototypes, parked by ENTRY ADDRESS.
 //!
-//! [`super::LibProtoPass`] and [`super::kuna_libcsigs::LibcSigsPass`] carry libc.
+//! [`super::LibProtoPass`] and [`super::libcsigs::LibcSigsPass`] carry libc.
 //! Nothing in the tree carries a single Windows API signature, so on a PE every
 //! `LoadLibraryExW` / `CreateFileW` / `WriteFile` call arrives at
 //! `ActionDefaultParams` with an empty prototype and its arguments have to be
@@ -1378,7 +1378,7 @@ mod tests {
                 "{name} is already in the base libc table"
             );
             assert!(
-                !super::super::kuna_libcsigs::LIBC_EXT
+                !super::super::libcsigs::LIBC_EXT
                     .iter()
                     .any(|(n, _)| n == name),
                 "{name} is already in the libcsigs table"

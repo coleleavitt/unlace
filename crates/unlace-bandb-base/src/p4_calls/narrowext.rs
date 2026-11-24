@@ -76,15 +76,10 @@ pub use crate::context::NarrowExtRules as Rules;
 /// The rules for `arch` under its `narrowext` value.
 pub fn rules(arch: &Architecture) -> Rules {
     let id = arch.archid.as_str();
-    let compiler = arch
-        .kuna_options
-        .get::<crate::kuna_narrowext::NarrowExtMode>()
-        == NarrowExtMode::Compiler;
+    let compiler =
+        arch.kuna_options.get::<crate::narrowext::NarrowExtMode>() == NarrowExtMode::Compiler;
     let gated = |w, documented: bool| (compiler || documented).then_some(w);
-    match arch
-        .kuna_options
-        .get::<crate::kuna_narrowext::NarrowExtMode>()
-    {
+    match arch.kuna_options.get::<crate::narrowext::NarrowExtMode>() {
         NarrowExtMode::Off => Rules::default(),
         _ if id.starts_with("RISCV:") || id.starts_with("Loongarch:") => Rules {
             input: Some(Widen::Register),
@@ -109,7 +104,7 @@ pub fn rules(arch: &Architecture) -> Rules {
 /// The MIPS conventions whose documents state how arguments are extended: o32
 /// (the System V psABI) and n32/n64 (SGI's handbook), not EABI or o64.
 fn mips_documented(id: &str) -> bool {
-    if crate::kuna_octeonid::hard_float(id).is_some() {
+    if crate::octeonid::hard_float(id).is_some() {
         return true;
     }
     let mut parts = id.split(':').skip(3);
@@ -299,14 +294,14 @@ fn implied_mask(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<VarnodeId>) -> Op
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.narrowext_or_model = Some(or_model);
     hooks.narrowext_mark = Some(mark);
     hooks.narrowext_rules = Some(rules);
 }
 
-impl crate::kuna_optionset::KunaOption for NarrowExtMode {
+impl crate::optionset::KunaOption for NarrowExtMode {
     const NAME: &'static str = "narrowext";
     crate::kuna_option_id!();
 
@@ -324,5 +319,5 @@ impl crate::kuna_optionset::KunaOption for NarrowExtMode {
 }
 
 #[cfg(test)]
-#[path = "kuna_narrowext/tests.rs"]
+#[path = "narrowext/tests.rs"]
 mod tests;

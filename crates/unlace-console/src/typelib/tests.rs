@@ -1,7 +1,7 @@
 //! Tests for the prebuilt type library reader ([`super`]).
 
 use unlace_decomp::dtype::{TypeFactory, TypeFactoryImpl, type_metatype as meta};
-use unlace_decomp::kuna_typelib::TypeLib;
+use unlace_decomp::typelib::TypeLib;
 
 use super::{BUILTIN, Library, Reader};
 use crate::grammar::DataOrg;

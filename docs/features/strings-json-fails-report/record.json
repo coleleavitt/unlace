@@ -10,7 +10,7 @@
   "div": "DIV-104",
   "phase": "P1",
   "subphase": "code-data-partition",
-  "module": "decompiler/crates/kuna-analysis/src/listing/kuna_picbase.rs",
+  "module": "decompiler/crates/kuna-analysis/src/listing/picbase.rs",
   "symptom": "kuna strings --json --filter Password found the string at 0x8049127 but returned xrefs_count: 0 and functions: [], despite code directly forming its address for output. All 23 strings in the image reported xrefs_count 0.",
   "witness": {
     "challenge": "5ab77f6333c5d40ad448ca52",
@@ -54,7 +54,7 @@
   ],
   "gates": {},
   "artifacts": {
-    "module": "decompiler/crates/kuna-analysis/src/listing/kuna_picbase.rs",
+    "module": "decompiler/crates/kuna-analysis/src/listing/picbase.rs",
     "seam": "decompiler/crates/kuna-analysis/src/listing/xrefs.rs (build)",
     "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/picbase_i386 (+ .s)",
     "cargo_gate": "decompiler/crates/kuna-console/tests/verify_picbase.rs",

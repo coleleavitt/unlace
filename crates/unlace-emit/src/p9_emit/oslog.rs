@@ -91,7 +91,7 @@ fn callee_shape(fd: &Funcdata, call: OpId) -> Option<Shape> {
 /// nothing about it can be shown better.
 #[doc(hidden)]
 pub fn recover(fd: &Funcdata, arch: &Architecture, call: OpId) -> Option<Plan> {
-    if !arch.kuna_options.get::<crate::kuna_oslog::OsLogArgs>().0 {
+    if !arch.kuna_options.get::<crate::oslog::OsLogArgs>().0 {
         return None;
     }
     let shape = callee_shape(fd, call)?;
@@ -120,7 +120,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, call: OpId) -> Option<Plan> {
 #[doc(hidden)]
 pub fn hidden_ops(fd: &Funcdata, arch: &Architecture) -> BTreeSet<OpId> {
     let mut hidden = BTreeSet::new();
-    if !arch.kuna_options.get::<crate::kuna_oslog::OsLogArgs>().0 {
+    if !arch.kuna_options.get::<crate::oslog::OsLogArgs>().0 {
         return hidden;
     }
     for call in fd.obank().iter_alive() {
@@ -298,7 +298,7 @@ fn decode(
     if !(2..=MAX_BUFFER).contains(&length) {
         return None;
     }
-    let base = super::kuna_rustfmtargs::stack_offset(fd, buffer)?;
+    let base = super::rustfmtargs::stack_offset(fd, buffer)?;
     let end = base.checked_add(length as i64)?;
     let stack = fd.get_arch().manage().get_stack_space()?;
     let big_endian = stack.is_big_endian();

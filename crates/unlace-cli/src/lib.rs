@@ -10,6 +10,7 @@
 #[cfg(feature = "dynamic_linking")]
 extern crate unlace_decomp_dylib;
 
+mod allocrelease;
 mod args;
 mod armember;
 mod assertdecl;
@@ -36,8 +37,6 @@ mod image;
 mod interior;
 mod jobs;
 mod jsonfmt;
-mod kuna_allocrelease;
-mod kuna_sdktypes;
 mod limits;
 mod loadtime;
 mod lumina;
@@ -50,6 +49,7 @@ mod rawfront;
 mod runtime_hints;
 mod rust_signatures;
 mod sbom;
+mod sdktypes;
 mod skill;
 mod specs;
 mod strings;

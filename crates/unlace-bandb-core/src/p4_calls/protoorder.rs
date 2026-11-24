@@ -16,9 +16,9 @@
 //! input-locks every call to it, so the decline rules below guard against a list
 //! that is not evidence of the same quality as what it overwrites.
 
+use crate::entryreads::FuncdataEntryreadsExt;
 use crate::funcdata_spacebase::FuncdataAliasExt;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
-use crate::kuna_entryreads::FuncdataEntryreadsExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -159,7 +159,7 @@ pub struct RecoveredTypes {
     /// not end on the register-file boundary a variadic's register-save prologue
     /// leaves, and it is where the convention would put those types?  Computed
     /// only when `option passthrough` is on, the one reader that moves arity on
-    /// a stated list ([`crate::kuna_passthrough`]); `false` otherwise.
+    /// a stated list ([`crate::passthrough`]); `false` otherwise.
     pub arity_sound: bool,
     /// The recovered return value -- storage, size and type -- when it is not
     /// `void`. Recorded when `option passthrough` is on for tail-call recovery
@@ -168,17 +168,17 @@ pub struct RecoveredTypes {
     /// Where the recovered return value lives, when it is not `void`, whether
     /// or not every return computes it: the registers a return can hand back to
     /// a caller. Recorded only when `option passthrough` is on; read by
-    /// [`crate::kuna_armfloatargs`].
+    /// [`crate::armfloatargs`].
     pub result: Option<(Address, int4)>,
     /// The storage of every parameter in [`Self::inputs`] the callee's body only
     /// ever feeds to a variadic tail
-    /// ([`crate::kuna_varargtail`]): read by the callee, but only
+    /// ([`crate::varargtail`]): read by the callee, but only
     /// where the ABI lets a caller leave the register unset, so
-    /// [`crate::kuna_passthrough`] never claims it.  Recorded only when
+    /// [`crate::passthrough`] never claims it.  Recorded only when
     /// `option passthrough` is on; empty otherwise.
     pub vararg_tail: Vec<Address>,
     /// The incoming registers the body reads, itself or through a callee it
-    /// forwards them to ([`crate::kuna_entryreads`]). Recorded only when
+    /// forwards them to ([`crate::entryreads`]). Recorded only when
     /// `option passthrough` is on; empty otherwise.
     pub reads: Vec<(Address, int4)>,
     /// The part of [`Self::reads`] the body reads only by handing the register
@@ -236,7 +236,7 @@ pub fn call_argument_vote(
     if vote_holds(data, op, fc, slot, arg_size, ct)? {
         return Some(Rc::clone(ct));
     }
-    let bare = crate::kuna_structheadless::bare_pointer_for(data, ct)?;
+    let bare = crate::structheadless::bare_pointer_for(data, ct)?;
     vote_holds(data, op, fc, slot, arg_size, &bare)?.then_some(bare)
 }
 
@@ -251,7 +251,7 @@ fn vote_holds(
 ) -> Option<bool> {
     if class_of(ct).is_none()
         || ct.get_size() > arg_size
-        || crate::kuna_ptrdepth::pointer_depth(ct, 3) > crate::kuna_ptrdepth::MAX_INFERRED_PTR_DEPTH
+        || crate::ptrdepth::pointer_depth(ct, 3) > crate::ptrdepth::MAX_INFERRED_PTR_DEPTH
     {
         return Some(false);
     }
@@ -263,7 +263,7 @@ fn vote_holds(
             || (class_of(ct) == Some(Class::Pointer) && points_into_code(data, op, vn))
             || (class_of(ct) == Some(Class::Float) && !prints_exactly_as_a_float(data, vn))
             || family_refuses(data, vn, Reading::Argument(op, slot), ct)
-            || crate::kuna_structheadless::yields_to_a_declared_pointer(data, vn, ct)),
+            || crate::structheadless::yields_to_a_declared_pointer(data, vn, ct)),
     )
 }
 
@@ -431,7 +431,7 @@ fn inside_a_frame_aggregate(
 fn loaded_through_itself(
     data: &Funcdata,
     o: &crate::op::PcodeOp,
-    members: &crate::kuna_fasthash::FxHashSet<VarnodeId>,
+    members: &crate::fasthash::FxHashSet<VarnodeId>,
 ) -> bool {
     let mut at = o.get_in(1);
     for _ in 0..8 {
@@ -515,8 +515,8 @@ pub fn value_family(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
         )
     };
     let mut family = vec![vn];
-    let mut seen: crate::kuna_fasthash::FxHashSet<VarnodeId> =
-        crate::kuna_fasthash::FxHashSet::from_iter([vn]);
+    let mut seen: crate::fasthash::FxHashSet<VarnodeId> =
+        crate::fasthash::FxHashSet::from_iter([vn]);
     let mut at = 0;
     while at < family.len() && family.len() < 128 {
         let Some(node) = data.vbank().get(family[at]) else {
@@ -562,7 +562,7 @@ pub fn value_family(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
 #[derive(Clone, Copy)]
 enum Reading<'a> {
     Argument(OpId, int4),
-    Member(&'a crate::kuna_fasthash::FxHashSet<OpId>),
+    Member(&'a crate::fasthash::FxHashSet<OpId>),
     Input,
     /// An input whose other calls speak only through a declared prototype.
     DeclaredInput,
@@ -721,7 +721,7 @@ fn family_refuses(data: &Funcdata, vn: VarnodeId, reading: Reading, ct: &Datatyp
     let own = |op: OpId| matches!(reading, Reading::Member(set) if set.contains(&op));
     let mut regions: Option<Vec<(i64, Option<i64>)>> = None;
     let family = value_family(data, vn);
-    let members: crate::kuna_fasthash::FxHashSet<VarnodeId> = family.iter().copied().collect();
+    let members: crate::fasthash::FxHashSet<VarnodeId> = family.iter().copied().collect();
     let mut globals: Vec<(Address, int4)> = Vec::new();
     for &v in &family {
         let Some(node) = data.vbank().get(v) else {
@@ -830,7 +830,7 @@ fn family_refuses(data: &Funcdata, vn: VarnodeId, reading: Reading, ct: &Datatyp
                 || (loaded_elsewhere && !float_seen)
                 || globals
                     .iter()
-                    .any(|(at, size)| !crate::kuna_floatglobals::float_only(data, at, *size))
+                    .any(|(at, size)| !crate::floatglobals::float_only(data, at, *size))
         }
         Some(Class::Pointer) => float_seen || integer_seen || pointee_refuses(data, &family, ct, 0),
         _ => float_seen,
@@ -843,7 +843,7 @@ fn family_refuses(data: &Funcdata, vn: VarnodeId, reading: Reading, ct: &Datatyp
 /// the general registers: `rsi` gets an integer on SysV (a float at that position
 /// goes to `xmm0`), while MIPS o32 puts a float after an integer in `a1`.
 fn a_float_can_arrive_in(data: &Funcdata, node: &crate::varnode::Varnode) -> bool {
-    if !crate::kuna_calleearitybody::is_register(node.get_addr()) {
+    if !crate::calleearitybody::is_register(node.get_addr()) {
         return true;
     }
     let proto = data.get_func_proto();
@@ -1038,7 +1038,7 @@ pub fn accesses_through(
     data: &Funcdata,
     family: &[VarnodeId],
 ) -> Option<(Vec<Access>, Vec<(i64, i64)>, bool)> {
-    let mut place: crate::kuna_fasthash::FxHashMap<VarnodeId, (i64, i64)> =
+    let mut place: crate::fasthash::FxHashMap<VarnodeId, (i64, i64)> =
         family.iter().map(|&v| (v, (0, 0))).collect();
     let mut work: Vec<VarnodeId> = family.to_vec();
     let mut budget = 512;
@@ -1162,7 +1162,7 @@ pub fn accesses_through(
         .and_then(|value| data.vbank().get(*value))
         .map_or(8, |node| node.get_size());
     let mut complete = true;
-    let mut loose: crate::kuna_fasthash::FxHashSet<VarnodeId> = Default::default();
+    let mut loose: crate::fasthash::FxHashSet<VarnodeId> = Default::default();
     let mut edges: Vec<(VarnodeId, VarnodeId)> = Vec::new();
     let mut pointers: Vec<(OpId, VarnodeId, VarnodeId, bool)> = Vec::new();
     while let Some(v) = work.pop() {
@@ -1461,7 +1461,7 @@ fn pointee_refuses(data: &Funcdata, family: &[VarnodeId], ct: &Datatype, depth: 
             }
             Member::Exact(t)
                 if !a.store
-                    && crate::kuna_structheadless::types_a_pointer_as_a_word(data, ct, &t)
+                    && crate::structheadless::types_a_pointer_as_a_word(data, ct, &t)
                     && accesses_through(data, &value_family(data, a.value))
                         .is_some_and(|(acc, _, _)| !acc.is_empty()) =>
             {
@@ -1470,7 +1470,7 @@ fn pointee_refuses(data: &Funcdata, family: &[VarnodeId], ct: &Datatype, depth: 
             Member::Exact(_) => {}
         }
     }
-    let own: crate::kuna_fasthash::FxHashSet<OpId> = floats.iter().map(|(a, _)| a.op).collect();
+    let own: crate::fasthash::FxHashSet<OpId> = floats.iter().map(|(a, _)| a.op).collect();
     floats.iter().any(|(a, t)| {
         if a.store && data.vbank().get(a.value).is_some_and(|n| n.is_constant()) {
             return !prints_exactly_as_a_float(data, a.value);
@@ -1998,7 +1998,7 @@ pub fn model_storage(
     pieces: &PrototypePieces,
     arch: &Architecture,
 ) -> Option<Vec<(Address, int4)>> {
-    let dfp = crate::kuna_typedcallabi::undeclared_model_for(arch, pieces)
+    let dfp = crate::typedcallabi::undeclared_model_for(arch, pieces)
         .or_else(|| arch.default_fp().cloned())?;
     let void_ty = arch.types().get_type_void().ok()?;
     let mut fp = FuncProto::new();
@@ -2025,7 +2025,7 @@ pub fn model_storage(
 /// `Architecture` for the whole run.
 ///
 /// The same probe `calleedeadarg`/`calleearitylive` take
-/// ([`crate::kuna_calleedeadarg::probe_callee_entry_dead`]) and the same cache,
+/// ([`crate::calleedeadarg::probe_callee_entry_dead`]) and the same cache,
 /// so a body decoded for one of them is not decoded again here.  It answers one
 /// question per register range, one-sidedly: does every path from the entry
 /// write these bytes before reading them (`proves_dead`), or does some path read
@@ -2034,7 +2034,7 @@ pub fn model_storage(
 fn entry_facts(
     arch: &mut Architecture,
     entry: &Address,
-) -> Option<Rc<crate::kuna_calleedeadarg::CalleeEntryDead>> {
+) -> Option<Rc<crate::calleedeadarg::CalleeEntryDead>> {
     let reg_idx = arch
         .manage()
         .get_space_by_name("register")
@@ -2042,7 +2042,7 @@ fn entry_facts(
     if reg_idx < 0 {
         return None;
     }
-    crate::kuna_calleedeadarg::probe_cached(arch, entry, reg_idx)
+    crate::calleedeadarg::probe_cached(arch, entry, reg_idx)
 }
 
 /// Where the model would put ONE more parameter past the ones in `pieces` --
@@ -2099,7 +2099,7 @@ fn next_slot_storage(pieces: &PrototypePieces, arch: &Architecture) -> Option<(A
 fn trim_unjustified_tail(
     pieces: &mut PrototypePieces,
     storage: &mut Vec<(Address, int4)>,
-    facts: &crate::kuna_calleedeadarg::CalleeEntryDead,
+    facts: &crate::calleedeadarg::CalleeEntryDead,
 ) -> usize {
     if !facts.is_complete() {
         return 0;
@@ -2132,7 +2132,7 @@ fn trim_unjustified_tail(
 /// short list; stating it would type the wrong slots.
 fn under_recovered(
     next: Option<(Address, int4)>,
-    facts: &crate::kuna_calleedeadarg::CalleeEntryDead,
+    facts: &crate::calleedeadarg::CalleeEntryDead,
 ) -> bool {
     slot_is_read(next, facts)
 }
@@ -2174,15 +2174,14 @@ fn ends_at_the_register_boundary(
     let (Some((last, _)), Some((next, _))) = (last, next) else {
         return false;
     };
-    crate::kuna_calleearitybody::is_register(last)
-        && !crate::kuna_calleearitybody::is_register(&next)
+    crate::calleearitybody::is_register(last) && !crate::calleearitybody::is_register(&next)
 }
 
 /// The decision [`under_recovered`] makes once the next slot's storage is
 /// known: a storage the model cannot name says nothing.
 fn slot_is_read(
     next: Option<(Address, int4)>,
-    facts: &crate::kuna_calleedeadarg::CalleeEntryDead,
+    facts: &crate::calleedeadarg::CalleeEntryDead,
 ) -> bool {
     match next {
         Some((addr, size)) => facts.proves_read(&addr, size),
@@ -2226,48 +2225,28 @@ pub fn park_recovered(
     }
     let (mut pieces, mut storage) = recovered_pieces(proto, name)?;
     if mode.states_types_only() {
-        let arity_sound = arch
-            .kuna_options
-            .get::<crate::kuna_passthrough::PassThrough>()
-            .0
+        let arity_sound = arch.kuna_options.get::<crate::passthrough::PassThrough>().0
             && arity_claim_sound(arch, entry, &pieces, &storage);
-        let output = if arch
-            .kuna_options
-            .get::<crate::kuna_passthrough::PassThrough>()
-            .0
-        {
+        let output = if arch.kuna_options.get::<crate::passthrough::PassThrough>().0 {
             recovered_output(proto, data)
         } else {
             None
         };
-        let result = if arch
-            .kuna_options
-            .get::<crate::kuna_passthrough::PassThrough>()
-            .0
-        {
+        let result = if arch.kuna_options.get::<crate::passthrough::PassThrough>().0 {
             recovered_result(proto)
         } else {
             None
         };
-        let vararg_tail = if arch
-            .kuna_options
-            .get::<crate::kuna_passthrough::PassThrough>()
-            .0
-        {
-            crate::kuna_varargtail::vararg_tail_inputs(data, &storage)
+        let vararg_tail = if arch.kuna_options.get::<crate::passthrough::PassThrough>().0 {
+            crate::varargtail::vararg_tail_inputs(data, &storage)
         } else {
             Vec::new()
         };
         let (reads, passes) = match data.kuna_entry_reads() {
-            Some(r)
-                if arch
-                    .kuna_options
-                    .get::<crate::kuna_passthrough::PassThrough>()
-                    .0 =>
-            {
-                let finals = crate::kuna_entryreads::final_forwards(data);
-                crate::kuna_entryreads::reads_through(r, &finals, |c, a, s| {
-                    crate::kuna_entryreads::callee_takes(data, c, a, s, true)
+            Some(r) if arch.kuna_options.get::<crate::passthrough::PassThrough>().0 => {
+                let finals = crate::entryreads::final_forwards(data);
+                crate::entryreads::reads_through(r, &finals, |c, a, s| {
+                    crate::entryreads::callee_takes(data, c, a, s, true)
                 })
             }
             _ => (Vec::new(), Vec::new()),
@@ -2302,7 +2281,7 @@ pub fn park_recovered(
         Some(model) if model != storage => return Err(Decline::NonCanonicalStorage),
         Some(_) => {}
     }
-    pieces.output_storage = crate::kuna_vfpvariadic::parked_output(data.get_arch(), &pieces);
+    pieces.output_storage = crate::vfpvariadic::parked_output(data.get_arch(), &pieces);
     arch.set_function_prototype_pieces_at(entry, pieces.clone());
     Ok(Recovered { pieces, trimmed })
 }
@@ -2324,7 +2303,7 @@ pub fn reads_past_the_list(
 ) -> bool {
     if !storage
         .iter()
-        .all(|(a, _)| crate::kuna_calleearitybody::is_register(a))
+        .all(|(a, _)| crate::calleearitybody::is_register(a))
     {
         return false;
     }
@@ -2361,14 +2340,14 @@ fn arity_claim_sound(
     pieces: &PrototypePieces,
     storage: &[(Address, int4)],
 ) -> bool {
-    let closed = crate::kuna_armfloatreturn::closed_recovery(arch, pieces);
+    let closed = crate::armfloatreturn::closed_recovery(arch, pieces);
     let pieces = &*closed;
     let Some(facts) = entry_facts(arch, entry) else {
         return false;
     };
     if !storage
         .iter()
-        .all(|(a, _)| crate::kuna_calleearitybody::is_register(a))
+        .all(|(a, _)| crate::calleearitybody::is_register(a))
     {
         return false;
     }
@@ -2403,7 +2382,7 @@ fn recovered_result(proto: &FuncProto) -> Option<(Address, int4)> {
 /// for a `void` or storage-less one, or one the function never computed.
 ///
 /// A recovered return is stated only when every live RETURN hands back a value
-/// the body produced ([`crate::kuna_returnuncomputed::every_return_computes`]).
+/// the body produced ([`crate::returnuncomputed::every_return_computes`]).
 /// A function that ends on a call and keeps that call's return-register clobber
 /// is recovered as returning it -- gnulib's `void version_etc_arn` comes out
 /// `long` -- and a wrapper told so hands the same wrong value back.
@@ -2416,7 +2395,7 @@ fn recovered_output(
     if ct.get_metatype() == type_metatype::TYPE_VOID {
         return None;
     }
-    if !crate::kuna_returnuncomputed::every_return_computes(data) {
+    if !crate::returnuncomputed::every_return_computes(data) {
         return None;
     }
     let addr = out.get_address();
@@ -2477,7 +2456,7 @@ fn state_recovered_types(
         return Err(Decline::InvalidStorage);
     };
     arch.kuna_tables
-        .get_mut::<crate::kuna_protoorder::CalleeTypes>()
+        .get_mut::<crate::protoorder::CalleeTypes>()
         .insert(
             key,
             Rc::new(RecoveredTypes {
@@ -2512,7 +2491,7 @@ pub fn forget_statements_naming(arch: &mut Architecture, names: &[String]) {
         return;
     }
     arch.kuna_tables
-        .get_mut::<crate::kuna_protoorder::CalleeTypes>()
+        .get_mut::<crate::protoorder::CalleeTypes>()
         .retain(|_, stated| !stated.inputs.iter().any(|(_, _, ct)| names_type(ct, names)));
 }
 
@@ -2548,7 +2527,7 @@ pub fn names_type(ct: &Rc<Datatype>, names: &[String]) -> bool {
 pub fn seed_protoorder_types(arch: &Architecture, data: &mut crate::funcdata::Funcdata) {
     if arch
         .kuna_tables
-        .get::<crate::kuna_protoorder::CalleeTypes>()
+        .get::<crate::protoorder::CalleeTypes>()
         .is_empty()
     {
         return;
@@ -2569,7 +2548,7 @@ pub fn seed_protoorder_types(arch: &Architecture, data: &mut crate::funcdata::Fu
         }
         if let Some(stated) = arch
             .kuna_tables
-            .get::<crate::kuna_protoorder::CalleeTypes>()
+            .get::<crate::protoorder::CalleeTypes>()
             .get(&key)
         {
             data.kuna_set_protoorder_types(&e, Rc::clone(stated));
@@ -2577,20 +2556,20 @@ pub fn seed_protoorder_types(arch: &Architecture, data: &mut crate::funcdata::Fu
     }
 }
 
-impl crate::kuna_optionset::KunaOption for ProtoOrderMode {
+impl crate::optionset::KunaOption for ProtoOrderMode {
     const NAME: &'static str = "protoorder";
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::kuna_protoorder::ProtoOrderMode::Off
+        crate::protoorder::ProtoOrderMode::Off
     }
 
     fn shipped() -> Self {
-        crate::kuna_protoorder::ProtoOrderMode::Cycles
+        crate::protoorder::ProtoOrderMode::Cycles
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        Ok(crate::kuna_protoorder::OptionProtoOrder.apply(value)?)
+        Ok(crate::protoorder::OptionProtoOrder.apply(value)?)
     }
 }
 
@@ -2601,7 +2580,7 @@ impl crate::kuna_optionset::KunaOption for ProtoOrderMode {
 struct TypesSlot(
     std::collections::HashMap<
         (unlace_base::types::int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
+        std::rc::Rc<crate::protoorder::RecoveredTypes>,
     >,
 );
 crate::kuna_func_state!(TypesSlot, keep_across_clear: true);
@@ -2614,14 +2593,14 @@ pub trait FuncdataProtoorderExt {
     fn kuna_set_protoorder_types(
         &mut self,
         entry: &unlace_base::address::Address,
-        stated: std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
+        stated: std::rc::Rc<crate::protoorder::RecoveredTypes>,
     );
     /// (kuna `protoorder types`) The types a callee's own recovery stated for
     /// the function entered at `entry`, if any were stated.
     fn kuna_protoorder_types(
         &self,
         entry: &unlace_base::address::Address,
-    ) -> Option<&crate::kuna_protoorder::RecoveredTypes>;
+    ) -> Option<&crate::protoorder::RecoveredTypes>;
 }
 
 impl FuncdataProtoorderExt for crate::funcdata::Funcdata {
@@ -2630,7 +2609,7 @@ impl FuncdataProtoorderExt for crate::funcdata::Funcdata {
     fn kuna_set_protoorder_types(
         &mut self,
         entry: &unlace_base::address::Address,
-        stated: std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
+        stated: std::rc::Rc<crate::protoorder::RecoveredTypes>,
     ) {
         if let Some(sp) = entry.get_space() {
             self.kuna_state_mut::<TypesSlot>()
@@ -2643,7 +2622,7 @@ impl FuncdataProtoorderExt for crate::funcdata::Funcdata {
     fn kuna_protoorder_types(
         &self,
         entry: &unlace_base::address::Address,
-    ) -> Option<&crate::kuna_protoorder::RecoveredTypes> {
+    ) -> Option<&crate::protoorder::RecoveredTypes> {
         let types = &self.kuna_state::<TypesSlot>().0;
         if types.is_empty() {
             return None;
@@ -2657,10 +2636,10 @@ impl FuncdataProtoorderExt for crate::funcdata::Funcdata {
 
 /// (kuna `protoorder types`) The recovered parameter types each callee stated for the callers
 /// decompiled after it, by `(space index, entry offset)`; an
-/// [`ArchTable`](crate::kuna_archstate::ArchTable).
+/// [`ArchTable`](crate::archstate::ArchTable).
 pub type CalleeTypes = std::collections::HashMap<
     (unlace_base::types::int4, unlace_base::types::uintb),
-    std::rc::Rc<crate::kuna_protoorder::RecoveredTypes>,
+    std::rc::Rc<crate::protoorder::RecoveredTypes>,
 >;
 crate::kuna_arch_table!(CalleeTypes);
 

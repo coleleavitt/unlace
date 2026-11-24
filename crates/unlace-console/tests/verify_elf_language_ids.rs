@@ -141,7 +141,7 @@ fn every_object_format_language_id_resolves_in_the_database() {
         ),
         (
             "retro",
-            unlace_analysis::loader::kuna_retroimage::retro_language_ids()
+            unlace_analysis::loader::retroimage::retro_language_ids()
                 .into_iter()
                 .map(|id| (id.to_string(), None))
                 .collect(),

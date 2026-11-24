@@ -79,10 +79,10 @@
 //! builds elide `__cxx11`). For the name-only path this only affects which
 //! intermediate `::` scopes are created, not correctness of the base name.
 
-pub mod kuna_cppsig;
+pub mod cppsig;
 // (kuna) Swift demangling (`$s` stable mangling + the ObjC runtime's `_Tt` names).
-mod kuna_msvcsig;
-pub mod kuna_swift;
+mod msvcsig;
+pub mod swift;
 
 /// `GnuDemangler.GLOBAL_PREFIX` (`GnuDemangler.java:35`).
 const GLOBAL_PREFIX: &str = "_GLOBAL_";
@@ -195,7 +195,7 @@ pub fn demangle_raw(raw: &str) -> Option<String> {
     // form, types included) or passes through; it is never fed to the
     // Itanium/Rust/MSVC arms.
     if crate::sourcelang::is_swift_mangled(raw) {
-        return kuna_swift::demangle_swift_full(raw);
+        return swift::demangle_swift_full(raw);
     }
 
     // MSVC C++ (PR-9): a leading `?` is exclusive to the `cl.exe` scheme, which
@@ -388,7 +388,7 @@ pub fn demangle_name(raw: &str) -> Option<String> {
     // arms, and the name-only printer emits no signature text to strip (the
     // label form `f(a:b:)` survives the default `safe` sanitizer).
     if crate::sourcelang::is_swift_mangled(raw) {
-        return kuna_swift::demangle_swift_name(raw);
+        return swift::demangle_swift_name(raw);
     }
 
     // MSVC C++ (PR-9): a leading `?` is exclusive to the `cl.exe` scheme.
@@ -569,7 +569,7 @@ fn msvc_identifier(phrase: &str) -> Option<String> {
 }
 
 /// The identifier kuna nests an **anonymous namespace** under, matching the
-/// spelling `analyzers/rtti/kuna_itaniumrtti.rs::sanitize_class_name` already
+/// spelling `analyzers/rtti/itaniumrtti.rs::sanitize_class_name` already
 /// gives the same construct (`(anonymous namespace)::Hidden` ->
 /// `anonymous_namespace::Hidden`).
 const ANONYMOUS_NAMESPACE: &str = "anonymous_namespace";
@@ -811,7 +811,7 @@ pub fn demangle_rtti_class_name(typeinfo: &str) -> Option<String> {
 /// matters for the caller: `Vec<int>` and `Vec<double>` are two distinct classes
 /// with two distinct vtables, and collapsing both to `Vec` silently drops one
 /// class's recovery. The caller owns turning this into an identifier
-/// (`analyzers/rtti/kuna_itaniumrtti.rs::sanitize_class_name`), which is a labelling
+/// (`analyzers/rtti/itaniumrtti.rs::sanitize_class_name`), which is a labelling
 /// concern rather than a demangling one.
 ///
 /// A **leading `*`** is stripped first. The Itanium ABI (§2.9.1) marks a type whose

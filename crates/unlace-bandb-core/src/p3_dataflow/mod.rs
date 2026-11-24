@@ -4,13 +4,13 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 #[doc(hidden)]
-pub mod kuna_calleeflags;
-pub mod kuna_calleehomes;
-pub mod kuna_calleememory;
-pub mod kuna_globalarrayanchor;
-pub mod kuna_globalcallranges;
-pub mod kuna_regnarrow;
-pub mod kuna_stackstoreguard;
+pub mod calleeflags;
+pub mod calleehomes;
+pub mod calleememory;
+pub mod globalarrayanchor;
+pub mod globalcallranges;
+pub mod regnarrow;
 pub mod ruleaction_1;
 pub mod ruleaction_4;
+pub mod stackstoreguard;
 pub mod subflow;

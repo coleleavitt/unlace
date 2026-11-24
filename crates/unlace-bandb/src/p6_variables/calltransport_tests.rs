@@ -14,7 +14,7 @@ mod module_scope {
 #[allow(unused_imports)]
 use module_scope::*;
 
-use crate::kuna_calltransport::*;
+use crate::calltransport::*;
 use std::rc::Rc;
 
 use unlace_base::error::{KunaError, KunaResult};

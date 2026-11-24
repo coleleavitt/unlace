@@ -78,23 +78,23 @@
 //!   which a helper that clobbers only scratch never does — MSVC's out-of-line
 //!   stack probe writes `RSP`/`R10`/`R11` and `x86-64-win.cspec` names none of
 //!   them. That body is admitted on a second, independent mark instead, by
-//!   [`calleescratchbody`](crate::kuna_calleescratchbody).
+//!   [`calleescratchbody`](crate::calleescratchbody).
 //! * **The return register needs its own evidence.** The gate above asks the
 //!   callee to have written a register the convention promises is *preserved*,
 //!   which a helper that clobbers only what it is allowed to never does. The
 //!   call's return storage is therefore
-//!   [`calleeretpreserves`](crate::kuna_calleeretpreserves)'s
+//!   [`calleeretpreserves`](crate::calleeretpreserves)'s
 //!   question, on a different positive finding.
 //! * **An explicitly overridden prototype wins.** A call whose `FuncProto`
 //!   carries its own effect list (a decoded `<unaffected>`/`<killedbycall>`
 //!   override) has had a deliberate statement made about it and is left alone.
 //! * **No argument register on a walk through an ARM or MIPS mode switch.**
-//!   See [`CalleeReturnWrites::proves_untouched_for`](crate::kuna_rustabi::CalleeReturnWrites::proves_untouched_for).
+//!   See [`CalleeReturnWrites::proves_untouched_for`](crate::rustabi::CalleeReturnWrites::proves_untouched_for).
 //!
 //! It fires only against a decoded body that contradicts the convention, and
 //! only in the direction of keeping a value the caller computed.
 
-use crate::kuna_rustabi::FuncdataRustabiExt;
+use crate::rustabi::FuncdataRustabiExt;
 use unlace_base::address::Address;
 use unlace_base::marshal::ElementId;
 use unlace_base::space::spacetype;
@@ -111,13 +111,13 @@ pub const ELEM_CALLEEPRESERVES: ElementId = ElementId::new("calleepreserves", 41
 /// call-guard seam can consult it.
 ///
 /// Shares the per-image cache and the walk with
-/// [`crate::kuna_rustabi::seed_callee_return_writes`], so the decode is paid for
+/// [`crate::rustabi::seed_callee_return_writes`], so the decode is paid for
 /// once. Driven from the driver for the same reason
 /// that one is — the per-function `ArchContext` the pipeline runs against carries
 /// the load image but no translator, so this is the last point the callee's
 /// instructions can be read at all.
 pub fn seed_callee_preserves(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
-    crate::kuna_rustabi::seed_callee_write_probe(arch, data);
+    crate::rustabi::seed_callee_write_probe(arch, data);
 }
 
 /// Does the decoded body of `fc`'s callee prove it never writes
@@ -150,11 +150,11 @@ pub fn callee_preserves_range(
     let Some(w) = data.kuna_callee_ret_writes(entry) else {
         return false;
     };
-    if !w.proves_untouched_for(crate::kuna_rustabi::call_model(fc.proto()), addr, size) {
+    if !w.proves_untouched_for(crate::rustabi::call_model(fc.proto()), addr, size) {
         return false;
     }
     body_departs_from_convention(data, fc, w)
-        || crate::kuna_calleescratchbody::scratch_body_is_a_body(data, w)
+        || crate::calleescratchbody::scratch_body_is_a_body(data, w)
 }
 
 /// Does the decoded body demonstrably depart from the convention the effect list
@@ -173,11 +173,11 @@ pub fn callee_preserves_range(
 ///
 /// A helper that clobbers only scratch registers is invisible to this reading
 /// and is admitted by
-/// [`calleescratchbody`](crate::kuna_calleescratchbody) instead.
+/// [`calleescratchbody`](crate::calleescratchbody) instead.
 fn body_departs_from_convention(
     data: &Funcdata,
     fc: &FuncCallSpecs,
-    w: &crate::kuna_rustabi::CalleeReturnWrites,
+    w: &crate::rustabi::CalleeReturnWrites,
 ) -> bool {
     let manage = data.get_arch().manage();
     let stack_pointer = manage
@@ -208,11 +208,11 @@ fn body_departs_from_convention(
     false
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.calleepreserves_callee_preserves_range = Some(callee_preserves_range);
 }
 
 #[cfg(test)]
-#[path = "kuna_calleepreserves/tests.rs"]
+#[path = "calleepreserves/tests.rs"]
 mod tests;

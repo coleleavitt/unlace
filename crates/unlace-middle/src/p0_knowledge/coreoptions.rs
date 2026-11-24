@@ -4,7 +4,7 @@
 
 crate::kuna_flag!(
     /// (kuna `guardedloop`) A guarded do-while prints as a while loop.  See
-    /// [`crate::p8_structure::kuna_guardedloop`].
+    /// [`crate::p8_structure::guardedloop`].
     GuardedLoop,
     "guardedloop",
     "Guarded do-while loops printed as while loops",
@@ -26,7 +26,7 @@ crate::kuna_flag!(
 crate::kuna_flag!(
     /// (kuna `mzdgroup`) `option mzdgroup`: state the data segment an MS-DOS
     /// executable's startup code loads into DS as DS's value at every function
-    /// entry.  Default on.  See [`kuna_mzdgroup`](crate::kuna_mzdgroup).
+    /// entry.  Default on.  See [`kuna_mzdgroup`](crate::mzdgroup).
     MzDgroupOn,
     "mzdgroup",
     "MS-DOS data segment in DS",
@@ -37,7 +37,7 @@ crate::kuna_flag!(
 crate::kuna_flag!(
     /// (kuna `chkstkdarwin`) Remove the calls to the Darwin stack probe
     /// `___chkstk_darwin` from a Darwin AArch64 image before SSA
-    /// (`p2_lift/kuna_chkstkdarwin.rs`), so the argument registers it preserves
+    /// (`p2_lift/chkstkdarwin.rs`), so the argument registers it preserves
     /// keep their values across it. Default on.
     ChkstkDarwin,
     "chkstkdarwin",
@@ -50,7 +50,7 @@ crate::kuna_flag!(
     /// (kuna `spsolve`) In an x86-32 ELF under a compiler spec whose default model
     /// states its extrapop, solve each function's stack-pointer deltas for the
     /// calls that pop arguments or do not return
-    /// (`p4_calls/kuna_spsolve.rs`). Default on.
+    /// (`p4_calls/spsolve.rs`). Default on.
     SpSolve,
     "spsolve",
     "x86-32 stack-pointer delta solve",
@@ -150,7 +150,7 @@ crate::kuna_flag!(
 crate::kuna_flag!(
     /// (kuna `castarith`) Print a pointer plus a whole number of `T`s, used as a
     /// `T *`, as pointer arithmetic on `(T *)p` instead of an integer round
-    /// trip.  Implementation: [`kuna_castarith`](crate::p9_emit::kuna_castarith).
+    /// trip.  Implementation: [`kuna_castarith`](crate::p9_emit::castarith).
     CastArith,
     "castarith",
     "pointer arithmetic in pointer terms",
@@ -162,7 +162,7 @@ crate::kuna_flag!(
     /// (kuna `castindex`) Print a pointer plus a variable index of whole `T`s as
     /// a subscript on `(T *)p`, and the difference of two `char`-width pointers
     /// as `p - q`, instead of an integer round trip.  Implementation:
-    /// [`kuna_castarith`](crate::p9_emit::kuna_castarith).
+    /// [`kuna_castarith`](crate::p9_emit::castarith).
     CastIndex,
     "castindex",
     "variable indexes and pointer differences in pointer terms",
@@ -174,7 +174,7 @@ crate::kuna_flag!(
     /// (kuna `vtabletypes`) Type each recovered Itanium or MSVC vtable as a
     /// `C_vtbl` structure of named method pointers, give the class structure a
     /// `vptr` (`__vftable` for MSVC) field of that type, and fold a load of a
-    /// vtable slot to the method it holds; see [`crate::kuna_vtabletypes`].
+    /// vtable slot to the method it holds; see [`crate::vtabletypes`].
     /// Default **on**.
     Vtabletypes,
     "vtabletypes",
@@ -211,7 +211,7 @@ pub struct DeadCascade(pub Option<u32>);
 /// gone this long is almost always taking dead chains apart one link a pass.
 pub const DEAD_CASCADE_PASSES: u32 = 32;
 
-impl crate::kuna_optionset::KunaOption for DeadCascade {
+impl crate::optionset::KunaOption for DeadCascade {
     const NAME: &'static str = "deadcascade";
     crate::kuna_option_id!();
 
@@ -264,7 +264,7 @@ pub struct LaneFuse {
     pub all: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for LaneFuse {
+impl crate::optionset::KunaOption for LaneFuse {
     const NAME: &'static str = "lanefuse";
     crate::kuna_option_id!();
 
@@ -303,14 +303,14 @@ impl crate::kuna_optionset::KunaOption for LaneFuse {
 
 /// (kuna `opaquepredicate`) Fold comparisons proven constant (`on`), reading
 /// a global the program never writes as its initial value too (`globals`,
-/// [`crate::kuna_opaqueglobals`]).
+/// [`crate::opaqueglobals`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OpaquePredicate {
     pub on: bool,
     pub globals: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for OpaquePredicate {
+impl crate::optionset::KunaOption for OpaquePredicate {
     const NAME: &'static str = "opaquepredicate";
     crate::kuna_option_id!();
 
@@ -360,7 +360,7 @@ crate::kuna_flag!(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NameStyleAngr(pub bool);
 
-impl crate::kuna_optionset::KunaOption for NameStyleAngr {
+impl crate::optionset::KunaOption for NameStyleAngr {
     const NAME: &'static str = "namestyle";
     crate::kuna_option_id!();
 
@@ -489,7 +489,7 @@ impl OptionSyscallRegs {
     }
 }
 
-impl crate::kuna_optionset::KunaOption for SyscallRegsMode {
+impl crate::optionset::KunaOption for SyscallRegsMode {
     const NAME: &'static str = "syscallregs";
     crate::kuna_option_id!();
 
@@ -524,7 +524,7 @@ pub const LEVEL_FULL: unlace_base::types::int4 = 3;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IndexAliasGuard(pub unlace_base::types::int4);
 
-impl crate::kuna_optionset::KunaOption for IndexAliasGuard {
+impl crate::optionset::KunaOption for IndexAliasGuard {
     const NAME: &'static str = "indexaliasguard";
     crate::kuna_option_id!();
 
@@ -603,7 +603,7 @@ pub struct ItaniumEh {
     pub catch_only: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for ItaniumEh {
+impl crate::optionset::KunaOption for ItaniumEh {
     const NAME: &'static str = "itaniumeh";
     crate::kuna_option_id!();
 

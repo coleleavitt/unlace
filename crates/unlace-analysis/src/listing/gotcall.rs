@@ -13,8 +13,8 @@ use unlace_decomp::architecture::Architecture;
 use unlace_num::opcodes::OpCode;
 
 use super::xrefs::{FullOp, MAX_SLOT_COPIES, XrefKind, in_range};
-use crate::loader::kuna_dataptrs::Coverage;
-use crate::loader::kuna_dynrelocs::{FixupKind, fixup_sites, relro_range};
+use crate::loader::dataptrs::Coverage;
+use crate::loader::dynrelocs::{FixupKind, fixup_sites, relro_range};
 
 pub(super) struct GotCalls(BTreeMap<u64, u64>);
 
@@ -248,5 +248,5 @@ fn mapped_flags(file: &object::File, address: u64, end: u64) -> Option<u32> {
 }
 
 #[cfg(test)]
-#[path = "kuna_gotcall_tests.rs"]
+#[path = "gotcall_tests.rs"]
 mod tests;

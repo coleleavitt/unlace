@@ -99,7 +99,7 @@
 //! enumerates the full merge-group set in C++ schedule order for the W8 assembler.
 
 use crate::funcdata_merge::FuncdataMergeExt;
-use crate::kuna_stablenames::FuncdataStablenamesExt;
+use crate::stablenames::FuncdataStablenamesExt;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -612,7 +612,7 @@ fn mark_output_storage_addr_tied(data: &mut Funcdata) {
                 .get_register_name(addr.get_space().unwrap(), addr.get_offset(), size)
                 .is_empty()
         });
-    if is_register && !crate::kuna_registerepochs::single_family(data, &written) {
+    if is_register && !crate::registerepochs::single_family(data, &written) {
         return;
     }
     for vn in targets {
@@ -676,7 +676,7 @@ impl Action for ActionMergeRequired {
         // would let an un-tied input (a global like `dat_52`) wrongly merge into
         // it (no trim COPY fires).  Marking the output storage addrtied restores
         // the `high_is_addr_tied(out) && !high_is_addr_tied(in)` trim trigger.
-        crate::kuna_stackobjects::recover(data);
+        crate::stackobjects::recover(data);
         mark_output_storage_addr_tied(data);
 
         // Drive over `data.getMerge()` — the single persistent `Merge` on
@@ -688,14 +688,14 @@ impl Action for ActionMergeRequired {
         let phi_arm = data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_phiarm::PhiArmSplit>()
+            .get::<crate::phiarm::PhiArmSplit>()
             .0;
         data.with_covermerge(|merge, data| {
             merge.set_phi_arm_split(phi_arm);
             if merge.merge_addr_tied(data).is_err() {
                 return;
             }
-            if crate::kuna_fputruncviews::recover(data).is_err() {
+            if crate::fputruncviews::recover(data).is_err() {
                 return;
             }
             if merge.group_partials(data).is_err() {
@@ -762,7 +762,7 @@ fn base_explicit(data: &Funcdata, vn: crate::context::VarnodeId, mut maxref: int
             return -1;
         }
         // (kuna javatry) The caught exception is the catch clause's variable.
-        if crate::kuna_javatry::caught_handler(data, def).is_some() {
+        if crate::javatry::caught_handler(data, def).is_some() {
             return -1;
         }
         if dop.is_call() {
@@ -776,9 +776,9 @@ fn base_explicit(data: &Funcdata, vn: crate::context::VarnodeId, mut maxref: int
             if !(data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_callretfold::FoldCallReturns>()
+                .get::<crate::callretfold::FoldCallReturns>()
                 .0
-                && crate::kuna_callretfold::call_output_foldable(data, vn))
+                && crate::callretfold::call_output_foldable(data, vn))
             {
                 return -1;
             }
@@ -845,11 +845,11 @@ fn base_explicit(data: &Funcdata, vn: crate::context::VarnodeId, mut maxref: int
     } else if v.is_proto_partial() {
         return -1;
     }
-    if crate::kuna_stablenames::holds_retype(data, vn) {
+    if crate::stablenames::holds_retype(data, vn) {
         return -1;
     }
     // (kuna swiftcall) a throwing call's error is read as one value, named once.
-    if crate::kuna_swifterror::is_error(data, def) {
+    if crate::swifterror::is_error(data, def) {
         return -1;
     }
     // def->code()==PIECE && in0 isProtoPartial -> explicit.
@@ -958,9 +958,9 @@ fn process_multiplier(data: &mut Funcdata, vn: crate::context::VarnodeId, max: i
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_callretfold::FoldCallReturns>()
+        .get::<crate::callretfold::FoldCallReturns>()
         .0
-        && crate::kuna_callretfold::expression_contains_foldable_call(data, vn)
+        && crate::callretfold::expression_contains_foldable_call(data, vn)
     {
         let m = data
             .vbank_mut()
@@ -1266,7 +1266,7 @@ impl Action for ActionMarkImplied {
         // each leaf as implied (if its cover permits) or explicit.
         let mut count = 0;
         let stores = StoreBlocks::new(data);
-        let memory_ops = crate::kuna_memoryguard::memory_ops(data);
+        let memory_ops = crate::memoryguard::memory_ops(data);
         // C++ iterates beginLoc()..endLoc(); iter_loc() is the loc-set order.
         let seeds: Vec<crate::context::VarnodeId> = data.vbank().iter_loc().collect();
         for (i, seed) in seeds.into_iter().enumerate() {
@@ -1739,27 +1739,24 @@ fn check_implied_cover(
             }
         }
     }
-    if load.is_some() && has_cover && crate::kuna_stackloadcover::crosses_write(data, vn) {
+    if load.is_some() && has_cover && crate::stackloadcover::crosses_write(data, vn) {
         return false;
     }
     // (kuna `indexaliasguard global`) a load stays ahead of a store to a global
-    // it may read; see [`crate::kuna_indexaliasguard`].
-    if load.is_some()
-        && has_cover
-        && crate::kuna_indexaliasguard::load_crosses_global_store(data, vn)
-    {
+    // it may read; see [`crate::indexaliasguard`].
+    if load.is_some() && has_cover && crate::indexaliasguard::load_crosses_global_store(data, vn) {
         return false;
     }
     // (kuna) a load of a global holding a stored pointer stays ahead of a write;
-    // see [`crate::kuna_pointeevalue::load_crosses_write`].
-    if crate::kuna_pointeevalue::load_crosses_write(data, vn) {
+    // see [`crate::pointeevalue::load_crosses_write`].
+    if crate::pointeevalue::load_crosses_write(data, vn) {
         return false;
     }
     // (kuna syscallregs) a system call's error flag reads like the call it
     // follows, so it is printed ahead of any later call as well.
     if (data.obank().get(def).map(|o| o.is_call()).unwrap_or(false)
         || load.is_some()
-        || crate::kuna_syscallregs::is_error_flag(data, def))
+        || crate::syscallregs::is_error_flag(data, def))
         && has_cover
     {
         for &callop in memory_ops {
@@ -1798,10 +1795,10 @@ fn check_implied_cover(
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_callretfold::FoldCallReturns>()
+        .get::<crate::callretfold::FoldCallReturns>()
         .0
         && data.obank().get(def).map(|o| o.is_call()).unwrap_or(false)
-        && !crate::kuna_callretfold::fold_print_point_is_order_safe(data, vn)
+        && !crate::callretfold::fold_print_point_is_order_safe(data, vn)
     {
         return false;
     }
@@ -1839,10 +1836,10 @@ fn check_implied_cover(
     let self_effect_ok = data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_callretfold::FoldCallReturns>()
+        .get::<crate::callretfold::FoldCallReturns>()
         .0
         && data.obank().get(def).map(|o| o.is_call()).unwrap_or(false)
-        && crate::kuna_callretfold::call_output_foldable(data, vn);
+        && crate::callretfold::call_output_foldable(data, vn);
     let use_op = if self_effect_ok {
         data.lone_descend(vn)
     } else {
@@ -1860,9 +1857,9 @@ fn check_implied_cover(
         let intersects = data.with_covermerge(|merge, data| merge.inflate_test(data, defvn, high));
         if intersects {
             let discounted = match use_op {
-                Some(u) => crate::kuna_foldcallretphi::conflict_is_self_call_effect(
-                    data, def, defvn, high, u,
-                ),
+                Some(u) => {
+                    crate::foldcallretphi::conflict_is_self_call_effect(data, def, defvn, high, u)
+                }
                 None => false,
             };
             if !discounted {
@@ -2068,10 +2065,10 @@ impl Action for ActionMarkIndirectOnly {
         if data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_indirectonly::MarkIndirectOnly>()
+            .get::<crate::indirectonly::MarkIndirectOnly>()
             .0
         {
-            crate::kuna_indirectonly::mark_indirect_only(data);
+            crate::indirectonly::mark_indirect_only(data);
         }
         0
     }
@@ -2171,11 +2168,11 @@ impl Action for ActionMergeType {
         let mode = data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_typemerge::TypeMergeMode>();
+            .get::<crate::typemerge::TypeMergeMode>();
         let callee_saved = data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_calleesaved::CalleeSavedSplit>()
+            .get::<crate::calleesaved::CalleeSavedSplit>()
             .0;
         data.with_covermerge(|merge, data| {
             merge.set_callee_saved_split(callee_saved);
@@ -2223,7 +2220,7 @@ impl Action for ActionHideShadow {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:4976 — ActionHideShadow::apply
-        self.base.count += crate::kuna_hideshadow::hide_shadow_copies(data);
+        self.base.count += crate::hideshadow::hide_shadow_copies(data);
         0
     }
 }
@@ -2276,7 +2273,7 @@ impl Action for ActionCopyMarker {
         data.with_covermerge(|merge, data| {
             merge.mark_internal_copies(data);
         });
-        crate::kuna_undefinedcopy::mark(data);
+        crate::undefinedcopy::mark(data);
         0
     }
 }
@@ -2535,8 +2532,8 @@ fn kuna_qualify_global_name(
     func_ns_path: &[String],
     name_used: &dyn Fn(&str) -> bool,
 ) -> String {
-    let prefix = crate::kuna_namespaces::scope_prefix(
-        crate::kuna_namespaces::NamespaceStrategy::MinimalNamespaces,
+    let prefix = crate::namespaces::scope_prefix(
+        crate::namespaces::NamespaceStrategy::MinimalNamespaces,
         base,
         sym_scope_path,
         func_ns_path,
@@ -2629,7 +2626,7 @@ fn build_func_param_name_recmap(
             let param_name = param.get_name().to_string();
             let param_size = param.get_size();
             // (kuna) coreaction.cc:2929: skip generated defaults (param_N / aN / vN).
-            if crate::kuna_naming::kuna_is_generated_name(&param_name) {
+            if crate::naming::kuna_is_generated_name(&param_name) {
                 continue;
             }
             // (kuna `objcresolve`) An Objective-C method's receiver and selector
@@ -2922,12 +2919,12 @@ fn name_local_highs_angr(data: &mut Funcdata) {
     // use-point arms are applied per-high inside the walk
     // (`recommended_name_for`).  All are no-ops without recommendations.
     let prior = data.kuna_prior_names().clone();
-    let tallies = crate::kuna_stablenames::tallies(data);
-    let targets = crate::kuna_stablenames::rename_targets(data, &tallies);
-    let retyped = crate::kuna_stablenames::retype_targets(data, &tallies);
-    let reached = crate::kuna_stablenames::directive_targets(data, &tallies);
+    let tallies = crate::stablenames::tallies(data);
+    let targets = crate::stablenames::rename_targets(data, &tallies);
+    let retyped = crate::stablenames::retype_targets(data, &tallies);
+    let reached = crate::stablenames::directive_targets(data, &tallies);
     data.set_kuna_directive_targets(reached);
-    let assigned = crate::kuna_stablenames::assign_numbers(data, &tallies);
+    let assigned = crate::stablenames::assign_numbers(data, &tallies);
     if let Some(lm) = data.get_scope_local_mut() {
         lm.install_prior_names(prior.name_seed());
         lm.set_rename_targets(targets);
@@ -2978,7 +2975,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
         .iter()
         .filter_map(|(_, h)| h.kuna_name().map(str::to_string))
         .collect();
-    let library = crate::kuna_libcnames::candidates(data);
+    let library = crate::libcnames::candidates(data);
     for vn in vlist {
         // C++ `if (curvn->isFree()) continue;` (coreaction.cc:3058) — runs ahead of
         // both the per-space spacebase rename and the body-high naming.
@@ -3137,13 +3134,13 @@ fn name_local_highs_angr(data: &mut Funcdata) {
         let container = data.get_scope_local().and_then(|lm| {
             if !v_input {
                 if let Some(backing) =
-                    crate::kuna_stackparamviews::backing_for_address(data, &v_addr, v_size)
+                    crate::stackparamviews::backing_for_address(data, &v_addr, v_size)
                 {
                     return Some(backing);
                 }
             }
             let info = lm.query_container_for_link(&v_addr, &usepoint)?;
-            if crate::kuna_stackviews::enabled(data)
+            if crate::stackviews::enabled(data)
                 && info.category == crate::database::symbol_category::FUNCTION_PARAMETER
                 && info.entry_size < v_size
             {
@@ -3216,7 +3213,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
                 && size_mismatch
                 && v_size < info.entry_size
                 && !entry_is_composite;
-            let wider_parameter_local = crate::kuna_stackviews::enabled(data)
+            let wider_parameter_local = crate::stackviews::enabled(data)
                 && info.category == crate::database::symbol_category::FUNCTION_PARAMETER
                 && v_addrtied
                 && !v_input
@@ -3447,7 +3444,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
                             .vbank()
                             .get(name_rep.unwrap())
                             .map(|v| v.get_type().clone());
-                        if let Some(number) = crate::kuna_stablenames::renamed_number(data, high) {
+                        if let Some(number) = crate::stablenames::renamed_number(data, high) {
                             renamed_parts.push((high, rep_ty, number));
                             continue;
                         }
@@ -3502,7 +3499,7 @@ fn name_local_highs_angr(data: &mut Funcdata) {
     }
 
     for (high, rep_ty, number) in renamed_parts {
-        if crate::kuna_stablenames::orphaned(data, number) {
+        if crate::stablenames::orphaned(data, number) {
             if let Some(lm) = data.get_scope_local_mut() {
                 lm.release_prior_number(number);
             }
@@ -3518,8 +3515,8 @@ fn name_local_highs_angr(data: &mut Funcdata) {
     // C++ `localmap->assignDefaultNames(base)` (coreaction.cc:3079), plus the kuna
     // counterpart of the printer's live `sym->getDisplayName()` read: no `$$undef`
     // placeholder may outlive this pass, in the Symbol table or in a HighVariable's
-    // name cache.  See `crate::kuna_undefname`.
-    crate::kuna_undefname::finish_undefined_names(data, &mut base);
+    // name cache.  See `crate::undefname`.
+    crate::undefname::finish_undefined_names(data, &mut base);
     let end = data
         .get_scope_local()
         .map_or(base, |lm| base.max(lm.prior_names_end()));
@@ -3528,16 +3525,16 @@ fn name_local_highs_angr(data: &mut Funcdata) {
         retype_whole_variable(data, high, ct);
     }
     if data.kuna_record_names() {
-        let snapshot = crate::kuna_stablenames::snapshot(data);
+        let snapshot = crate::stablenames::snapshot(data);
         data.set_kuna_name_snapshot(snapshot);
     }
-    crate::kuna_libcnames::apply(data, &library);
+    crate::libcnames::apply(data, &library);
 }
 
 /// Type every instance of `high` as `ct` and lock it, after the merge and before
-/// the casts are placed, so a unit retype (`kuna_stablenames::retypes_as_unit`)
+/// the casts are placed, so a unit retype (`stablenames::retypes_as_unit`)
 /// declares the whole variable with the new type and the casts follow from it.
-/// A type that prints constants its own way (`kuna_stablenames::prints_literals`)
+/// A type that prints constants its own way (`stablenames::prints_literals`)
 /// also types the constants the variable is assigned or compared with.
 fn retype_whole_variable(
     data: &mut Funcdata,
@@ -3548,8 +3545,8 @@ fn retype_whole_variable(
         Some(h) => (0..h.num_instances()).map(|i| h.get_instance(i)).collect(),
         None => return,
     };
-    let literals = if crate::kuna_stablenames::prints_literals(&ct) {
-        crate::kuna_stablenames::met_constants(data, &instances, ct.get_size())
+    let literals = if crate::stablenames::prints_literals(&ct) {
+        crate::stablenames::met_constants(data, &instances, ct.get_size())
     } else {
         Vec::new()
     };
@@ -3578,7 +3575,7 @@ fn retype_whole_variable(
 }
 
 /// Run a default-name allocation for `high` trying first the number most of
-/// its instances had in the previous decompile (`crate::kuna_stablenames`); a no-op wrapper
+/// its instances had in the previous decompile (`crate::stablenames`); a no-op wrapper
 /// when no numbering is carried.
 fn with_prior_numbers<T>(
     data: &mut Funcdata,
@@ -3696,10 +3693,10 @@ impl Action for ActionSetCasts {
         if data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_castobject::CastObject>()
+            .get::<crate::castobject::CastObject>()
             .0
         {
-            crate::kuna_castobject::reconcile(data);
+            crate::castobject::reconcile(data);
         }
         let _count = (data.hooks().action_set_casts)(data);
         0
@@ -3740,7 +3737,7 @@ pub fn merge_actions() -> Vec<Box<dyn Action>> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ImplWeight(pub int4);
 
-impl crate::kuna_optionset::KunaOption for ImplWeight {
+impl crate::optionset::KunaOption for ImplWeight {
     const NAME: &'static str = "implweight";
     crate::kuna_option_id!();
 

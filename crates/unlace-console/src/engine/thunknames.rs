@@ -226,7 +226,7 @@ pub(super) fn inherit_prototypes(
     let mut abi = prog
         .arch()
         .kuna_states
-        .get::<unlace_decomp::kuna_swiftcall::SwiftAbi>()
+        .get::<unlace_decomp::swiftcall::SwiftAbi>()
         .cloned();
     for &thunk in renamed {
         let Some(target) = jumps

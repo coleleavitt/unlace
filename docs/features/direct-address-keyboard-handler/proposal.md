@@ -3,7 +3,7 @@
 **This is not a design proposal. It is a salvage briefing.** The implementation you were told to
 "implement starting at Phase 3" is ALREADY WRITTEN and ALREADY COMMITTED on this branch as
 `616959b7` — 1,198 lines across 23 files, `option tailcallframe` (default on, DIV-109) in
-`p2_lift/kuna_tailcallframe.rs`. Attempt 1 wrote it and then stopped at its $30 budget cap with
+`p2_lift/tailcallframe.rs`. Attempt 1 wrote it and then stopped at its $30 budget cap with
 everything committed, no PR opened, and origin/main untouched.
 
 **Your job is to finish and land it. Do not redesign it, do not restart from scratch, and do not
@@ -55,7 +55,7 @@ every `--doc` target. That is the known worktree spec-resolution trap, not a reg
 
 ## Step 4 — the count-sensitive paths this branch already touches
 
-`phases.toml`, `p0_knowledge/options.rs`, `kuna_phases/tests.rs`, `tests/catalog_bytecompat.rs`,
+`phases.toml`, `p0_knowledge/options.rs`, `phases/tests.rs`, `tests/catalog_bytecompat.rs`,
 `tests/fixtures/phase_catalog.json`, `kuna-base/src/xml.rs` (stages corpus count),
 `docs/baseline-stages.json`, `docs/options.md`, `docs/history.md` (DIV-109 — the DIV number is
 claimed on MERGE, so renumber it if another DIV landed first). Run `counters --fix` AFTER your final

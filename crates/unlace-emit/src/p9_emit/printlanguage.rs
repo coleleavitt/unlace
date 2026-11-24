@@ -227,7 +227,7 @@ pub enum TagType {
     LiteralToken,
 }
 
-pub use crate::kuna_namespaces::NamespaceStrategy;
+pub use crate::namespaces::NamespaceStrategy;
 
 /// An opaque arena key for a PcodeOp or Varnode carried on the RPN stack: the
 /// slotmap key's full 64-bit ffi form, so it round-trips on 32-bit targets too.

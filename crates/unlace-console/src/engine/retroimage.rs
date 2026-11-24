@@ -6,7 +6,7 @@
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
-use unlace_analysis::loader::kuna_retroimage::{self, RETRO_PROBE_LEN, RetroImage};
+use unlace_analysis::loader::retroimage::{self, RETRO_PROBE_LEN, RetroImage};
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_sleigh::loadimage::section_flags;
@@ -38,9 +38,9 @@ pub(super) fn file_retro_image(path: &str) -> Option<Vec<u8>> {
             return None;
         }
         let bytes = std::fs::read(path).ok()?;
-        return kuna_retroimage::is_retro_image(&bytes).then_some(bytes);
+        return retroimage::is_retro_image(&bytes).then_some(bytes);
     }
-    kuna_retroimage::is_retro_image(&prefix[..got])
+    retroimage::is_retro_image(&prefix[..got])
         .then(|| std::fs::read(path).ok())
         .flatten()
 }
@@ -52,7 +52,7 @@ pub(crate) fn bootstrap_retro_bytes(
     languages: &(impl Languages + ?Sized),
     isa: Option<ArmIsa>,
 ) -> KunaResult<ConsoleProgram> {
-    let image = kuna_retroimage::parse(path, bytes)?;
+    let image = retroimage::parse(path, bytes)?;
     for note in &image.notes {
         unlace_base::notes::say_once(path, &format!("[kuna {}] {path}: {note}", image.format));
     }

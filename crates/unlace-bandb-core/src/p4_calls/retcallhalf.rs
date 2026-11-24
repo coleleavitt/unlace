@@ -118,7 +118,7 @@ pub fn awaiting_stack(data: &Funcdata, active: &ParamActive, returns: &[OpId]) -
     if !(0..data.num_calls()).any(|i| wide_integer_call(data, data.get_call_specs(i))) {
         return false;
     }
-    if !crate::kuna_bejoin::wide_pair(data.get_func_proto().model(), data.get_arch().manage())
+    if !crate::bejoin::wide_pair(data.get_func_proto().model(), data.get_arch().manage())
         .is_some_and(|pair| pair.hi.1 == 4 && pair.lo.1 == 4)
     {
         return false;
@@ -127,7 +127,7 @@ pub fn awaiting_stack(data: &Funcdata, active: &ParamActive, returns: &[OpId]) -
         data.obank().get(ret).is_some_and(|op| {
             !op.is_dead()
                 && op.get_halt_type() == 0
-                && !crate::kuna_bejoin::never_reached(data, ret)
+                && !crate::bejoin::never_reached(data, ret)
                 && (0..active.get_num_trials()).any(|i| {
                     op.get_in(active.get_trial(i).get_slot()).is_some_and(|vn| {
                         pending_stack_word(data, (vn, 0), stack.get_index(), passes <= 1, MAX_DEPTH)
@@ -193,7 +193,7 @@ pub fn whole_pair(data: &Funcdata, active: &ParamActive, returns: &[OpId]) -> Op
     if !(0..data.num_calls()).any(|i| wide_integer_call(data, data.get_call_specs(i))) {
         return None;
     }
-    let pair = crate::kuna_bejoin::wide_pair(proto.model(), data.get_arch().manage())?;
+    let pair = crate::bejoin::wide_pair(proto.model(), data.get_arch().manage())?;
     if pair.hi.1 != 4 || pair.lo.1 != 4 {
         return None;
     }
@@ -214,7 +214,7 @@ pub fn whole_pair(data: &Funcdata, active: &ParamActive, returns: &[OpId]) -> Op
         let operation = data.obank().get(ret)?;
         if operation.is_dead()
             || operation.get_halt_type() != 0
-            || crate::kuna_bejoin::never_reached(data, ret)
+            || crate::bejoin::never_reached(data, ret)
         {
             continue;
         }
@@ -295,7 +295,7 @@ fn whole_words(
     let hi = word_source(data, hi)?;
     let lo = word_source(data, lo)?;
     let literal = |word: (VarnodeId, u64)| {
-        crate::kuna_bejoin::literal_value(data, word.0, ZERO_DEPTH).is_some()
+        crate::bejoin::literal_value(data, word.0, ZERO_DEPTH).is_some()
             // A word above a zero-extension's input is literal zero even when
             // the complete extended value depends on the call's low word.
             || data.vbank().get(word.0)
@@ -504,7 +504,7 @@ enum First {
 /// before the output map is derived. Returns the first register's storage when
 /// the pair was accepted with the argument left in place at some RETURN, which
 /// the late pair repair must then keep
-/// ([`crate::kuna_retinputhalf::is_moved_back`]).
+/// ([`crate::retinputhalf::is_moved_back`]).
 pub fn accept(
     data: &Funcdata,
     active: &mut ParamActive,
@@ -660,7 +660,7 @@ fn first_kind(
 fn below_noops(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
     let mut base = vn;
     while let Some(d) = data.vbank().get(base).and_then(|v| v.get_def()) {
-        if !crate::kuna_passthrough::is_injected_noop(data, d) {
+        if !crate::passthrough::is_injected_noop(data, d) {
             break;
         }
         let Some(src) = data.obank().get(d).and_then(|o| o.get_in(0)) else {
@@ -696,7 +696,7 @@ pub fn roots(data: &Funcdata, vn: VarnodeId) -> Option<Vec<VarnodeId>> {
             }
             OpCode::CPUI_INDIRECT if !op.is_indirect_creation() => work.extend(op.get_in(0)),
             OpCode::CPUI_COPY
-                if def.is_some_and(|d| crate::kuna_passthrough::is_injected_noop(data, d)) =>
+                if def.is_some_and(|d| crate::passthrough::is_injected_noop(data, d)) =>
             {
                 work.extend(op.get_in(0))
             }
@@ -795,7 +795,7 @@ fn read_only_on_the_way(data: &Funcdata, vn: VarnodeId, pieces: bool) -> bool {
             let space = o.get_addr().get_space().map(|sp| sp.get_type());
             if matches!(op.code(), OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT)
                 || pieces && op.code() == OpCode::CPUI_PIECE
-                || crate::kuna_passthrough::is_injected_noop(data, reader)
+                || crate::passthrough::is_injected_noop(data, reader)
                 || space == Some(spacetype::IPTR_INTERNAL)
             {
                 work.push(out);
@@ -838,7 +838,7 @@ fn is_own_input(data: &Funcdata, vn: VarnodeId, addr: &Address, size: i32) -> bo
     data.vbank()
         .get(vn)
         .is_some_and(|v| v.get_addr() == addr && v.get_size() == size)
-        && crate::kuna_retinputhalf::is_input_parameter(data, vn)
+        && crate::retinputhalf::is_input_parameter(data, vn)
 }
 
 /// Is `vn`, a value the first register holds at `ret`, read only on its way
@@ -1135,7 +1135,7 @@ fn is_call_result(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
         return false;
     };
     match op.code() {
-        OpCode::CPUI_COPY if crate::kuna_passthrough::is_injected_noop(data, def) => op
+        OpCode::CPUI_COPY if crate::passthrough::is_injected_noop(data, def) => op
             .get_in(0)
             .is_some_and(|i| is_call_result(data, i, depth - 1)),
         OpCode::CPUI_MULTIEQUAL => (0..op.num_input()).all(|k| {
@@ -1213,7 +1213,7 @@ fn computed_within(
             .get_in(0)
             .is_some_and(|i| computed_on_purpose(data, i, ret, depth - 1)),
         _ if writes_elsewhere(data, op.get_addr(), within.0, within.1) => false,
-        _ if crate::kuna_retinputhalf::call_between(data, def, ret) => false,
+        _ if crate::retinputhalf::call_between(data, def, ret) => false,
         OpCode::CPUI_COPY => op
             .get_in(0)
             .and_then(|i| data.vbank().get(i))
@@ -1228,7 +1228,7 @@ fn computed_within(
 /// Does the instruction at `pc` write the stack pointer, or a register wider
 /// than a flag outside `[addr, addr+size)`?
 fn writes_elsewhere(data: &Funcdata, pc: &Address, addr: &Address, size: i32) -> bool {
-    if crate::kuna_retinputhalf::writes_stack_pointer(data, pc) {
+    if crate::retinputhalf::writes_stack_pointer(data, pc) {
         return true;
     }
     data.obank().iter_at(pc).any(|(_, op)| {
@@ -1247,7 +1247,7 @@ fn writes_elsewhere(data: &Funcdata, pc: &Address, addr: &Address, size: i32) ->
         if heritage
             || is_tracked_entry_value(data, op)
             || out.has_no_descend()
-            || crate::kuna_passthrough::is_injected_noop(data, op)
+            || crate::passthrough::is_injected_noop(data, op)
         {
             return false;
         }
@@ -1484,13 +1484,13 @@ pub fn plant(data: &mut Funcdata) {
     if first_size != second_size || !only_returns_read(data, &first_addr, first_size) {
         return;
     }
-    let plant_first = !crate::kuna_passthrough::touched(data, &first_addr, first_size);
+    let plant_first = !crate::passthrough::touched(data, &first_addr, first_size);
     let plant_second = !named_whole(data, &second_addr, second_size);
     if plant_first {
-        crate::kuna_voidret::plant_piece(data, first_addr, first_size);
+        crate::voidret::plant_piece(data, first_addr, first_size);
     }
     if plant_second {
-        crate::kuna_voidret::plant_piece(data, second_addr, second_size);
+        crate::voidret::plant_piece(data, second_addr, second_size);
     }
 }
 
@@ -1579,7 +1579,7 @@ fn tail_pair(
                     .iter()
                     .position(|(first, second)| hit(&second.0, second.1) && !hit(&first.0, first.1))
                 {
-                    if crate::kuna_retinputhalf::writes_stack_pointer(data, o.get_addr())
+                    if crate::retinputhalf::writes_stack_pointer(data, o.get_addr())
                         || reads
                             .iter()
                             .any(|(a, s, pc)| pc != o.get_addr() && hit(a, *s))

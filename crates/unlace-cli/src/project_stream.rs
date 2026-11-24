@@ -987,7 +987,7 @@ fn export(
     let selected_entries = if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_callwide::CallWide>()
+        .get::<unlace_decomp::callwide::CallWide>()
         .0
         && specs.len() <= CALLWIDE_PENDING_RECORDS
     {
@@ -1327,7 +1327,7 @@ fn run_serial(
     }
     // (kuna `elemptr`) Each body is written as it lands, so nothing can decide
     // a global or a table for the batch.
-    unlace_decomp::kuna_elemptr::without_objects(prog.arch_mut());
+    unlace_decomp::elemptr::without_objects(prog.arch_mut());
     let mut batch = 1usize;
     loop {
         // The callee-hint context is built once per `decompile_pulled` call, so
@@ -1539,7 +1539,7 @@ mod tests {
         let mut writer = ProjectWriter::create(&layout, String::new(), BTreeSet::new()).unwrap();
         let mut first = result(0x1000, Vec::new());
         first.call_declarations = vec!["unsigned long long producer(int);".into()];
-        first.callwide_prototypes = vec![unlace_decomp::kuna_callwide::ExportPrototype {
+        first.callwide_prototypes = vec![unlace_decomp::callwide::ExportPrototype {
             name: "producer".into(),
             entry: 0x2000,
             signed: false,
@@ -1568,7 +1568,7 @@ mod tests {
         let mut caller = result(0x1000, Vec::new());
         caller.code = Some("void sub_1000(void) { producer(1); }".into());
         caller.call_declarations = vec!["unsigned long long producer(int);".into()];
-        caller.callwide_prototypes = vec![unlace_decomp::kuna_callwide::ExportPrototype {
+        caller.callwide_prototypes = vec![unlace_decomp::callwide::ExportPrototype {
             name: "producer".into(),
             entry: 0x2000,
             signed: false,

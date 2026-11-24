@@ -5,25 +5,23 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
 pub struct FormatterMetadata {
-    pub integers: BTreeMap<u64, unlace_decomp::kuna_rustfmtflags::Formatter>,
+    pub integers: BTreeMap<u64, unlace_decomp::rustfmtflags::Formatter>,
     pub strings: BTreeSet<u64>,
-    pub writers: super::kuna_rustfmtwrite::WriterMetadata,
-    pub io_writers: BTreeMap<u64, unlace_decomp::kuna_rustfmtio::WriterProfile>,
+    pub writers: super::rustfmtwrite::WriterMetadata,
+    pub io_writers: BTreeMap<u64, unlace_decomp::rustfmtio::WriterProfile>,
 }
 
 pub fn primitive_display_formatters(bytes: &[u8]) -> BTreeMap<u64, &'static str> {
     integer_formatters(bytes)
         .into_iter()
         .filter_map(|(address, formatter)| {
-            (formatter.kind == unlace_decomp::kuna_rustfmtflags::Trait::Display)
+            (formatter.kind == unlace_decomp::rustfmtflags::Trait::Display)
                 .then_some((address, formatter.primitive))
         })
         .collect()
 }
 
-pub fn integer_formatters(
-    bytes: &[u8],
-) -> BTreeMap<u64, unlace_decomp::kuna_rustfmtflags::Formatter> {
+pub fn integer_formatters(bytes: &[u8]) -> BTreeMap<u64, unlace_decomp::rustfmtflags::Formatter> {
     formatter_metadata(bytes).integers
 }
 
@@ -55,10 +53,10 @@ pub fn formatter_metadata(bytes: &[u8]) -> FormatterMetadata {
             (symbol.address(), full)
         })
         .collect();
-    let strings = super::kuna_rustfmtstr::collect(&file, &symbols);
-    let writers = super::kuna_rustfmtwrite::collect(&file, bytes, &symbols);
-    let io_writers = super::kuna_rustfmtio::collect(&file, bytes, &symbols);
-    let integers = unlace_decomp::kuna_rustfmtflags::formatter_symbols(symbols);
+    let strings = super::rustfmtstr::collect(&file, &symbols);
+    let writers = super::rustfmtwrite::collect(&file, bytes, &symbols);
+    let io_writers = super::rustfmtio::collect(&file, bytes, &symbols);
+    let integers = unlace_decomp::rustfmtflags::formatter_symbols(symbols);
     FormatterMetadata {
         integers,
         strings,

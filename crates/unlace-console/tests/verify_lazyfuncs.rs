@@ -185,7 +185,7 @@ fn lazyfuncs_is_off_by_default() {
         !load("fauxware", false)
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Lazyfuncs>()
+            .get::<unlace_decomp::analysisgates::Lazyfuncs>()
             .0,
         "the option must default off"
     );

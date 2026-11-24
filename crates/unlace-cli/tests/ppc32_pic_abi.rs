@@ -21,7 +21,7 @@ fn ppc32_pic_import_identity_uses_the_proved_caller_base() {
                     let bytes = fixture.bytes();
                     let file = object::File::parse(&*bytes).unwrap();
                     let imports =
-                        unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file);
+                        unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file);
                     assert_eq!(
                         imports.len(),
                         1,
@@ -61,7 +61,7 @@ fn ppc32_pic_proof_requires_all_paths_and_callers_to_agree() {
             ]);
             let bytes = fixture.bytes();
             let file = object::File::parse(&*bytes).unwrap();
-            let imports = unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file);
+            let imports = unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file);
             assert_eq!(
                 imports.len(),
                 usize::from(proven),
@@ -83,7 +83,7 @@ fn ppc32_pic_proof_requires_all_paths_and_callers_to_agree() {
             ]);
             let bytes = fixture.bytes();
             let file = object::File::parse(&*bytes).unwrap();
-            let imports = unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file);
+            let imports = unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file);
             assert_eq!(
                 imports.len(),
                 usize::from(second_base == Some(0x2804)),
@@ -250,7 +250,7 @@ fn ppc32_pic_proof_rejects_missing_bounds_entries_and_relocated_code() {
                 bytes[offset..offset + 4].copy_from_slice(&fixture.word(value));
             }
             let file = object::File::parse(&*bytes).unwrap();
-            let imports = unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file);
+            let imports = unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file);
             // A symbol without a size is still an entry: the proof follows the
             // code, so a missing extent costs nothing.
             if mutation == "size" {
@@ -274,7 +274,7 @@ fn ppc32_per_object_bases_resolve_distinct_stubs_independently() {
         fixture.second_caller = Some(vec![0x3bc02808, 0x48000800, 0x4e800020]);
         let bytes = fixture.bytes();
         let file = object::File::parse(&*bytes).unwrap();
-        let imports = unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file);
+        let imports = unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file);
         assert_eq!(
             imports
                 .iter()
@@ -302,7 +302,7 @@ fn ppc32_pic_relocation_metadata_is_not_an_address_taken_stub() {
     // It is not a data pointer and contributes no import slot itself.
     bytes[offset + 4..offset + 8].copy_from_slice(&fixture.word(0x1805));
     let file = object::File::parse(&*bytes).unwrap();
-    let imports = unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file);
+    let imports = unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file);
     assert_eq!(imports.len(), 1);
     assert_eq!(imports[0].name, b"extra");
 }
@@ -328,9 +328,7 @@ fn ppc32_pic_dynamic_pointer_relocations_prevent_global_contracts() {
         };
         bytes[offset..offset + 12].copy_from_slice(&fixture.words(&relocation));
         let file = object::File::parse(&*bytes).unwrap();
-        assert!(
-            unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file).is_empty()
-        );
+        assert!(unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file).is_empty());
     }
 }
 
@@ -369,7 +367,7 @@ fn ppc32_pic_nested_symbol_overlap_does_not_hide_an_enclosing_function() {
                 bytes[at..at + 4].copy_from_slice(&fixture.word(value));
             }
             let file = object::File::parse(&*bytes).unwrap();
-            let imports = unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file);
+            let imports = unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file);
             // Every symbol is an entry of its own walk; overlapping extents
             // only widen the scope an unresolved jump would forget.
             assert_eq!(imports.len(), 1, "{outer_size} {duplicate_size:?}");
@@ -455,7 +453,7 @@ fn assert_proof_gap_refused(name: &str) {
         let bytes = fixture::proof_gap(name, little);
         let file = object::File::parse(&*bytes).unwrap();
         assert!(
-            unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file).is_empty(),
+            unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file).is_empty(),
             "{name} little={little}: ambiguous code must not acquire a global contract"
         );
     }
@@ -513,9 +511,7 @@ fn ppc32_pic_unbounded_lr_writer_cannot_supply_a_return_token() {
         let end = (symbols.file_range().unwrap().0 + symbols.size()) as usize;
         bytes[end - 8..end - 4].copy_from_slice(&f.word(0));
         let file = object::File::parse(&*bytes).unwrap();
-        assert!(
-            unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file).is_empty()
-        );
+        assert!(unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file).is_empty());
     }
 }
 
@@ -554,7 +550,7 @@ fn ppc32_pic_lazy_resolver_never_supplies_or_withholds_a_caller_base() {
                 bytes[offset + 48..offset + 52].copy_from_slice(&f.word(0x60000000));
             }
             let file = object::File::parse(&*bytes).unwrap();
-            let imports = unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file);
+            let imports = unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file);
             // The resolver's jump leaves for the dynamic linker; it never
             // targets a stub, so a damaged or bypassed resolver changes no
             // caller evidence.
@@ -567,7 +563,7 @@ fn ppc32_pic_lazy_resolver_never_supplies_or_withholds_a_caller_base() {
 fn pic_imports(fixture: &Fixture) -> Vec<(u64, Vec<u8>)> {
     let bytes = fixture.bytes();
     let file = object::File::parse(&*bytes).unwrap();
-    unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file)
+    unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file)
         .into_iter()
         .map(|s| (s.addr, s.name))
         .collect()
@@ -747,11 +743,10 @@ fn ppc32_pic_driver_linked_library_names_every_stub() {
     );
     let bytes = std::fs::read(path).unwrap();
     let file = object::File::parse(&*bytes).unwrap();
-    let mut imports: Vec<_> =
-        unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file)
-            .into_iter()
-            .map(|s| (s.addr, String::from_utf8(s.name).unwrap()))
-            .collect();
+    let mut imports: Vec<_> = unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file)
+        .into_iter()
+        .map(|s| (s.addr, String::from_utf8(s.name).unwrap()))
+        .collect();
     imports.sort();
     assert_eq!(
         imports,
@@ -1121,8 +1116,7 @@ fn abi_cache_distinguishes_colliding_images_in_both_load_orders() {
                 let swapped_now = (i % 2 == 0) == swapped_first;
                 let bytes = if swapped_now { &swapped } else { &original };
                 let file = object::File::parse(bytes.as_slice()).unwrap();
-                let imports =
-                    unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file);
+                let imports = unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file);
                 assert_eq!(imports.len(), 1);
                 assert_eq!(imports[0].addr, 0x1800);
                 let name: &[u8] = if swapped_now {
@@ -1147,7 +1141,7 @@ fn abi_load_scopes_share_one_proof_per_buffer_and_retain_nothing() {
     use unlace_analysis::loader::ImportProofScope;
     let resolve = |bytes: &[u8]| -> Vec<(u64, Vec<u8>)> {
         let file = object::File::parse(bytes).unwrap();
-        unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file)
+        unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file)
             .into_iter()
             .map(|s| (s.addr, s.name))
             .collect()

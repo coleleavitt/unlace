@@ -13,7 +13,7 @@ use unlace_num::opcodes::OpCode;
 use super::*;
 use crate::context::{ArchContext, BlockId, TypeOp, VarnodeId};
 use crate::jumptable::JumpTable;
-use crate::p2_lift::kuna_loweredswitch::{KunaLoweredSwitchRecord, new_shared_store};
+use crate::p2_lift::loweredswitch::{KunaLoweredSwitchRecord, new_shared_store};
 
 fn input_is_recorded_value(
     data: &Funcdata,
@@ -590,7 +590,7 @@ fn install_fake_switch(
     fd: &mut Funcdata,
     input_vn: VarnodeId,
     read_head_operand: bool,
-) -> crate::p2_lift::kuna_loweredswitch::SharedLoweredSwitchStore {
+) -> crate::p2_lift::loweredswitch::SharedLoweredSwitchStore {
     let bl = new_block(fd, 0x1000);
     let ind = fd.new_op(1, ram(fd, 0x1001));
     fd.op_set_opcode(ind, TypeOp::new(OpCode::CPUI_BRANCHIND, 0, "BRANCHIND"));
@@ -621,7 +621,7 @@ fn install_fake_switch(
 
 fn state(
     fd: &Funcdata,
-    store: &crate::p2_lift::kuna_loweredswitch::SharedLoweredSwitchStore,
+    store: &crate::p2_lift::loweredswitch::SharedLoweredSwitchStore,
 ) -> ValueCheck {
     store.borrow().records(fd)[0].value.clone()
 }

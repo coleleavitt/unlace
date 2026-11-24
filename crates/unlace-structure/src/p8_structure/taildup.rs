@@ -31,11 +31,11 @@
 //! This is the **third** SAILR goto-reduction pass and fills the gap between the two
 //! merged siblings, both of which decline the morton shape:
 //!
-//! * [`crate::kuna_gotoreduce`] (`ActionGotoReduce`, which
+//! * [`crate::gotoreduce`] (`ActionGotoReduce`, which
 //!   `gotoreduce return` runs alone) duplicates a **return tail** but **rejects any
 //!   `CALL`/`CALLIND`/`CALLOTHER`** in the tail — so it cannot handle a
 //!   `free(p); return;` epilogue (a return tail *with* a call).
-//! * [`crate::kuna_crossjumpreverter`] (`ActionCrossJumpReverter`,
+//! * [`crate::crossjumpreverter`] (`ActionCrossJumpReverter`,
 //!   option `crossjumprevert`) permits a call but only for a **non-return,
 //!   fall-through** cross-jump tail — it explicitly **declines a tail that ends in
 //!   `return`** (the closed-path case).
@@ -110,7 +110,7 @@ pub const MAX_TAIL_CALLS: usize = 2;
 
 /// \brief Reduce gotos by duplicating a small **return tail that may contain calls**
 /// into the `goto` source (angr SAILR `ReturnDuplicatorLow` / `max_calls_in_regions`).
-/// Runs when [`GotoReduceMode::call_tails`](crate::kuna_gotoreduce::GotoReduceMode::call_tails).
+/// Runs when [`GotoReduceMode::call_tails`](crate::gotoreduce::GotoReduceMode::call_tails).
 /// Fills the gap between `ActionGotoReduce` (return tail, no calls) and
 /// `crossjumprevert` (non-return tail, calls allowed).
 pub struct ActionTailDup {
@@ -146,7 +146,7 @@ impl Action for ActionTailDup {
         if !data
             .get_arch()
             .kuna_options
-            .get::<super::kuna_gotoreduce::GotoReduceMode>()
+            .get::<super::gotoreduce::GotoReduceMode>()
             .call_tails()
         {
             return 0;
@@ -250,7 +250,7 @@ impl Action for ActionTailDup {
         // Drop the label on any target no longer reached by an unstructured edge --
         // counting switch-case and multigoto carriers, not just BlockGoto/BlockIf
         // (`kuna_gotolabel`), so a target a switch arm still jumps to keeps its label.
-        crate::kuna_gotolabel::release_converted_labels(data, &converted_targets);
+        crate::gotolabel::release_converted_labels(data, &converted_targets);
 
         self.base_mut().count += count;
         0
@@ -278,7 +278,7 @@ fn collect_nodes(data: &Funcdata, root: BlockId) -> Vec<BlockId> {
 /// bounded, side-effect-safe **return-call** tail.
 ///
 /// Unlike `return_tail_chain` in
-/// [`crate::kuna_gotoreduce`] (gotoreduce), which rejects *any* call,
+/// [`crate::gotoreduce`] (gotoreduce), which rejects *any* call,
 /// this permits up to [`MAX_TAIL_CALLS`] calls (angr's `max_calls_in_regions`).
 /// Duplicating a call is safe **only because the tail ends in a `return`**: the
 /// converted `if` arm reaches the duplicated call on exactly one structured path (the

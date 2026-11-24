@@ -50,7 +50,7 @@ space. That is not free on a relocatable object (an ELF `ET_REL` `.o`, a COFF
 `.obj`): the loader lays such a file out synthetically above `RELOC_BASE`
 (`relocobjects`), while a pass re-parsing it through `object::File` sees the
 pre-link, section-relative addresses. `relocrebase` (always on, GH-289) holds the
-contract up by rebasing the tier's **input** — `loader/kuna_relocrebase.rs`
+contract up by rebasing the tier's **input** — `loader/relocrebase.rs`
 re-presents the object with each laid-out section's relocated bytes and load VMA,
 each unlaid `.debug_*` section's relocations applied, and each ELF symbol shifted
 by its own section's delta — so a pass never has to know it is reading a `.o`. A

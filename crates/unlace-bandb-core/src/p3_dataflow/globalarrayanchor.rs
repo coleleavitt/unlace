@@ -21,7 +21,7 @@ pub fn preserve_array_base(data: &Funcdata, root: OpId) -> bool {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_globalarrayanchor::GlobalArrayAnchor>()
+        .get::<crate::globalarrayanchor::GlobalArrayAnchor>()
         .0
         || !data.get_arch().infer_pointers
         || !data.is_type_recovery_on()

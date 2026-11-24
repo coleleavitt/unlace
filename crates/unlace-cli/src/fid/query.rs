@@ -101,8 +101,8 @@ fn query(binary: &str, db_path: &str, addresses: &[u64]) -> Result<serde_json::V
     let prog = bootstrap_from_object(binary, "", &super::spec_roots())
         .map_err(|e| format!("bootstrap: {e}"))?;
     let arch = prog.arch();
-    let lang = unlace_decomp::kuna_langfamily::language_id(&arch.archid);
-    unlace_analysis::fid::kuna_fidapply::applies(db.lang_id(), arch)?;
+    let lang = unlace_decomp::langfamily::language_id(&arch.archid);
+    unlace_analysis::fid::fidapply::applies(db.lang_id(), arch)?;
     let image =
         ObjectLoadImage::from_bytes(binary, &bytes).map_err(|e| format!("load image: {e}"))?;
     let base_seeds = unlace_analysis::passes::listing_seeds(&file, &bytes);

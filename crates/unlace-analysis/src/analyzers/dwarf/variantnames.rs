@@ -27,7 +27,7 @@ use std::rc::Rc;
 use unlace_base::types::int4;
 
 use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
-use unlace_decomp::kuna_dwarfvariants::VariantFacet;
+use unlace_decomp::dwarfvariants::VariantFacet;
 
 /// The discriminant→name map for the synthesized enum: every NAMED facet with
 /// a concrete `DW_AT_discr_value`, masked to the tag's width (the key form the

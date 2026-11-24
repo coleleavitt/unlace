@@ -29,7 +29,7 @@
 //! (`BRANCH` → `CPUI_CALL` + an artificial `RETURN`) is driven by `flow.rs` at the
 //! `CPUI_BRANCH` arm of `xref_control_flow`, mirroring the in-file
 //! `truncate_indirect_jump` / `setup_callind_specs` rewrite + halt-insert idiom.
-//! This is the same hook class as [`kuna_v850indbranch`](crate::kuna_v850indbranch)
+//! This is the same hook class as [`kuna_v850indbranch`](crate::v850indbranch)
 //! (a `FlowEnvironment` predicate consulted inside `xref_control_flow`, gated by an
 //! Architecture bool flag).
 //!
@@ -334,7 +334,7 @@ pub struct TailCallJump {
     pub tables: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for TailCallJump {
+impl crate::optionset::KunaOption for TailCallJump {
     const NAME: &'static str = "tailcalljump";
     crate::kuna_option_id!();
 
@@ -359,5 +359,5 @@ impl crate::kuna_optionset::KunaOption for TailCallJump {
 }
 
 #[cfg(test)]
-#[path = "kuna_tailcalljump/tests.rs"]
+#[path = "tailcalljump/tests.rs"]
 mod tests;

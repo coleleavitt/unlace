@@ -25,21 +25,21 @@ pub fn recover(
     call: OpId,
     formatter: u64,
     pointer: VarnodeId,
-) -> Option<super::kuna_rustfmtargs::Argument> {
+) -> Option<super::rustfmtargs::Argument> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .get::<crate::rustfmt::RustFmtMode>()
         .recovers()
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
         || !arch.rust_str_display_formatters.contains(&formatter)
     {
         return None;
     }
-    let base = super::kuna_rustfmtargs::stack_offset(fd, pointer)?;
+    let base = super::rustfmtargs::stack_offset(fd, pointer)?;
     if base % 8 != 0 {
         return None;
     }
-    let cells = super::kuna_rustfmtargs::stack_cells(fd, call, base, 2)?;
+    let cells = super::rustfmtargs::stack_cells(fd, call, base, 2)?;
     let data = fd.vbank().get(cells[0])?;
     let length = fd.vbank().get(cells[1])?;
     if data.get_size() != 8 || length.get_size() != 8 {
@@ -56,7 +56,7 @@ pub fn recover(
     ) {
         return None;
     }
-    Some(super::kuna_rustfmtargs::Argument::String {
+    Some(super::rustfmtargs::Argument::String {
         data: cells[0],
         length: cells[1],
         pointer_bridge,

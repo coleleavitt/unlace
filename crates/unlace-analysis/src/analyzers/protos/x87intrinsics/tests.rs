@@ -49,7 +49,7 @@ fn the_hash_ignores_relocated_bytes_only() {
 fn every_named_intrinsic_has_the_model() {
     for sig in SIGNATURES {
         assert!(
-            unlace_decomp::kuna_x87intrinsic::is_intrinsic(sig.intrinsic),
+            unlace_decomp::x87intrinsic::is_intrinsic(sig.intrinsic),
             "{}",
             sig.intrinsic
         );
@@ -79,13 +79,13 @@ fn only_a_stub_jumping_to_the_dispatcher_is_found() {
 
 #[test]
 fn the_dispatcher_is_not_an_intrinsic() {
-    assert!(!unlace_decomp::kuna_x87intrinsic::is_intrinsic(
+    assert!(!unlace_decomp::x87intrinsic::is_intrinsic(
         DISPATCHER.intrinsic
     ));
     let binary = SIGNATURES
         .iter()
         .filter(|s| {
-            unlace_decomp::kuna_x87intrinsic::model_for(s.intrinsic).is_some_and(|m| m.1.len() == 2)
+            unlace_decomp::x87intrinsic::model_for(s.intrinsic).is_some_and(|m| m.1.len() == 2)
         })
         .count();
     assert_eq!(binary, 2, "pow and fmod");

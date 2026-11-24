@@ -1,7 +1,7 @@
 //! (kuna) `pdatainterior` — never start a function inside another function's
 //! `.pdata` `RUNTIME_FUNCTION` body (P1 code/data partition).
 //!
-//! The PE half of [`super::kuna_fdeinterior`], and it exists for the same reason:
+//! The PE half of [`super::fdeinterior`], and it exists for the same reason:
 //! a kuna `FunctionSymbol` is an entry address with no extent, so the commit
 //! boundary cannot answer "is this candidate already inside a known function?"
 //! and every discovery oracle is free to plant a `sub_<addr>` in the middle of a
@@ -41,7 +41,7 @@
 //! x86/x64 PE only. The 8-byte ARM/ARM64 `RUNTIME_FUNCTION` carries no
 //! `EndAddress`, and a PE32 without an exception directory describes no bodies at
 //! all, so the pass abstains on both — the same "vouches for nothing" stance
-//! [`super::kuna_pereloccode`] takes.
+//! [`super::pereloccode`] takes.
 
 use object::pe::{IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386};
 use object::read::Object;
@@ -57,7 +57,7 @@ use super::existing_function_addrs;
 /// Reports the `RUNTIME_FUNCTION` bodies that describe exactly one function in
 /// [`AnalysisOutput::fde_bodies`], the same channel `fdeinterior` reports its FDE
 /// bodies on; the commit boundary applies both with
-/// [`super::kuna_fdeinterior::suppress_interior_entries`].
+/// [`super::fdeinterior::suppress_interior_entries`].
 pub struct PdataInteriorPass;
 
 impl AnalysisPass for PdataInteriorPass {
@@ -80,7 +80,7 @@ impl AnalysisPass for PdataInteriorPass {
 /// The `RUNTIME_FUNCTION` bodies that describe exactly one function — the ranges
 /// whose interior may be used to reject a discovered entry. Sorted, disjoint and
 /// ascending, which is the invariant
-/// [`super::kuna_fdeinterior::is_interior`]'s binary search reads.
+/// [`super::fdeinterior::is_interior`]'s binary search reads.
 ///
 /// Empty on anything that is not an x86/x64 PE with a readable exception
 /// directory.
@@ -140,7 +140,7 @@ fn bodies_typed<Pe: ImageNtHeaders>(pe: &PeFile<Pe>, bytes: &[u8]) -> Vec<(u64, 
 /// range kept before it (so the result stays disjoint for the binary search).
 ///
 /// `all` is sorted ascending; `named` is sorted ascending. Shared with
-/// [`crate::pdb::kuna_pdbinterior`], whose procedure extents pass the same test.
+/// [`crate::pdb::pdbinterior`], whose procedure extents pass the same test.
 pub(crate) fn eligible(all: &[(u64, u64)], named: &[u64]) -> Vec<(u64, u64)> {
     let starts: Vec<u64> = all.iter().map(|&(b, _)| b).collect();
     let mut out: Vec<(u64, u64)> = Vec::with_capacity(all.len());
@@ -157,7 +157,7 @@ pub(crate) fn eligible(all: &[(u64, u64)], named: &[u64]) -> Vec<(u64, u64)> {
 }
 
 /// Does the sorted `addrs` hold any value strictly between `start` and `end`?
-/// (`super::kuna_fdeinterior`'s test, kept private there.)
+/// (`super::fdeinterior`'s test, kept private there.)
 fn contains_strictly(addrs: &[u64], start: u64, end: u64) -> bool {
     addrs.partition_point(|&a| a <= start) < addrs.partition_point(|&a| a < end)
 }
@@ -165,7 +165,7 @@ fn contains_strictly(addrs: &[u64], start: u64, end: u64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entry::kuna_fdeinterior::is_interior;
+    use crate::entry::fdeinterior::is_interior;
 
     const DISPATCH: u64 = 0x140001020; // a RUNTIME_FUNCTION BeginAddress
     const LABEL: u64 = 0x140001040; // strictly inside dispatch's record
@@ -201,8 +201,7 @@ mod tests {
     fn suppression_drops_only_the_interior_entry() {
         let bodies = eligible_pdata_bodies(&fixture());
         let mut entries = vec![DISPATCH, LABEL, HANDLER, PAYLOAD];
-        let dropped =
-            crate::entry::kuna_fdeinterior::suppress_interior_entries(&mut entries, &bodies);
+        let dropped = crate::entry::fdeinterior::suppress_interior_entries(&mut entries, &bodies);
         assert_eq!(dropped, vec![LABEL]);
         assert_eq!(entries, vec![DISPATCH, HANDLER, PAYLOAD]);
     }

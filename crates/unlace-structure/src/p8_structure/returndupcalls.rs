@@ -224,7 +224,7 @@ impl Action for ActionReturnDupCalls {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_returndup::ReturnDup>()
+            .get::<crate::returndup::ReturnDup>()
             .calls
         {
             return 0;

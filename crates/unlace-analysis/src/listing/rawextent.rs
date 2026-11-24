@@ -21,7 +21,7 @@
 //! a conditional branch into one is followed on, as the decompiler's flow
 //! follows it. Calls are not entered (the callee is another function) and fall
 //! through unless the callee is no-return; a DOS exit
-//! ([`super::kuna_dosexit`]) has no successor. A branch through a `cs:` table
+//! ([`super::dosexit`]) has no successor. A branch through a `cs:` table
 //! that lies in the span, which the descent leaves unresolved, reaches the
 //! table's words that name an address in the span, decoded here when the
 //! descent did not decode them; a branch through a fixed word (`jmp
@@ -39,7 +39,7 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_fasthash::FxHashSet;
+use unlace_decomp::fasthash::FxHashSet;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::Translate;
@@ -47,7 +47,7 @@ use unlace_sleigh::translate::Translate;
 use crate::listing::Listing;
 use crate::listing::classify::classify;
 use crate::listing::decode::decode_one;
-use crate::listing::kuna_dosexit::{self, DosExits, Op};
+use crate::listing::dosexit::{self, DosExits, Op};
 
 /// The exclusive end of every measured entry's flow, keyed by entry, or `None`
 /// when the language is not x86 real mode.
@@ -61,7 +61,7 @@ pub fn measure(
     entries: &[u64],
     exits: &DosExits,
 ) -> Option<BTreeMap<u64, u64>> {
-    if !kuna_dosexit::is_real_mode(&arch.archid) {
+    if !dosexit::is_real_mode(&arch.archid) {
         return None;
     }
     let walk = Walk {
@@ -79,7 +79,7 @@ pub fn measure(
         cs: translate.get_register_data("CS").ok(),
     };
     let ranges = listing.exec_ranges();
-    Some(crate::loader::kuna_realmodecs::without_commits(
+    Some(crate::loader::realmodecs::without_commits(
         arch,
         translate,
         || {
@@ -109,7 +109,7 @@ pub fn measure(
 /// entry keeps its clip.
 const MAX_VISITS: usize = 1 << 14;
 
-/// The most words read from one table, as [`super::kuna_dosexit`] reads.
+/// The most words read from one table, as [`super::dosexit`] reads.
 const MAX_TABLE: u64 = 256;
 
 struct Walk<'a> {
@@ -250,7 +250,7 @@ impl Walk<'_> {
         let (Some(segment), Some(cs)) = (self.segment, self.cs.as_ref()) else {
             return Through::Unknown;
         };
-        let Some(ops) = kuna_dosexit::decode(self.translate, self.code_space, vma) else {
+        let Some(ops) = dosexit::decode(self.translate, self.code_space, vma) else {
             return Through::Unknown;
         };
         through(&ops, segment, cs)
@@ -324,15 +324,15 @@ fn through(ops: &[Op], segment: u64, cs: &VarnodeData) -> Through {
         return Through::Unknown;
     };
     let offset = &seg.ins[2];
-    if kuna_dosexit::is_const(offset) {
+    if dosexit::is_const(offset) {
         return Through::Word;
     }
-    if !kuna_dosexit::same(&seg.ins[1], cs) {
+    if !dosexit::same(&seg.ins[1], cs) {
         return Through::Unknown;
     }
     match defining(ops, offset) {
         Some(add) if add.opcode == OpCode::CPUI_INT_ADD && add.ins.len() == 2 => {
-            match add.ins.iter().find(|v| kuna_dosexit::is_const(v)) {
+            match add.ins.iter().find(|v| dosexit::is_const(v)) {
                 Some(table) => Through::Table(table.offset),
                 None => Through::Unknown,
             }
@@ -343,19 +343,17 @@ fn through(ops: &[Op], segment: u64, cs: &VarnodeData) -> Through {
 
 /// The last op of `ops` that writes the temporary `v`.
 fn defining<'o>(ops: &'o [Op], v: &VarnodeData) -> Option<&'o Op> {
-    if !kuna_dosexit::is_unique(v) {
+    if !dosexit::is_unique(v) {
         return None;
     }
-    ops.iter().rev().find(|op| {
-        op.out
-            .as_ref()
-            .is_some_and(|out| kuna_dosexit::same(out, v))
-    })
+    ops.iter()
+        .rev()
+        .find(|op| op.out.as_ref().is_some_and(|out| dosexit::same(out, v)))
 }
 
 fn is_segment(op: &Op, segment: u64) -> bool {
     op.opcode == OpCode::CPUI_CALLOTHER
         && op.ins.len() == 3
-        && kuna_dosexit::is_const(&op.ins[0])
+        && dosexit::is_const(&op.ins[0])
         && op.ins[0].offset == segment
 }

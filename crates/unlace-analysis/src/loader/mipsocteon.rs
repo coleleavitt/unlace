@@ -1,7 +1,7 @@
 //! Octeon ELF identity from standard machine, ABI and floating-point evidence.
-use super::kuna_mipsabi::{AbiFlags, abi_flags, fp_abi};
+use super::mipsabi::{AbiFlags, abi_flags, fp_abi};
 use object::{Architecture, BinaryFormat, FileFlags, Object};
-use unlace_decomp::kuna_octeonid::language_id as id;
+use unlace_decomp::octeonid::language_id as id;
 
 const MACH_MASK: u32 = 0x00ff_0000;
 const ABI2: u32 = 0x20;
@@ -108,7 +108,7 @@ pub fn language_id(file: &object::File<'_>) -> Result<Option<String>, &'static s
 
 pub fn language_ids() -> Vec<String> {
     let mut ids = Vec::new();
-    for variant in unlace_decomp::kuna_octeonid::VARIANTS {
+    for variant in unlace_decomp::octeonid::VARIANTS {
         for n32 in [false, true] {
             ids.push(id(variant, n32, false));
             if variant == "octeon3" {
@@ -247,7 +247,7 @@ mod tests {
                 );
                 assert_eq!(select(&bytes), Ok(Some(id("octeon3", n32, false))));
                 assert_eq!(
-                    super::super::kuna_floatabi::float_arg_registers(
+                    super::super::floatabi::float_arg_registers(
                         &object::File::parse(bytes.as_slice()).unwrap()
                     ),
                     Some(false)
@@ -362,7 +362,7 @@ mod tests {
         );
         assert_eq!(select(&bytes), Ok(Some(id("octeon3", true, false))));
         assert_eq!(
-            super::super::kuna_floatabi::float_arg_registers(
+            super::super::floatabi::float_arg_registers(
                 &object::File::parse(bytes.as_slice()).unwrap()
             ),
             Some(false)
@@ -387,7 +387,7 @@ mod tests {
                     Err("little-endian Octeon requires an explicit target")
                 );
                 assert_eq!(
-                    super::super::kuna_floatabi::float_arg_registers(
+                    super::super::floatabi::float_arg_registers(
                         &object::File::parse(bytes.as_slice()).unwrap()
                     ),
                     Some(hard)

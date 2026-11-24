@@ -100,11 +100,11 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::block::{BlockType, block_get_start};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_loweredswitchlabels::{LoweredSwitchSignedness, reconcile_range_signedness};
+use crate::loweredswitchlabels::{LoweredSwitchSignedness, reconcile_range_signedness};
 use crate::options::on_or_off;
-use crate::p2_lift::kuna_loweredswitchexact::record_is_exact;
-use crate::p2_lift::kuna_loweredswitchheads::{cascade_heads, case_body_entered_elsewhere};
-use crate::p2_lift::kuna_loweredswitchvalue::{ValueCheck, verify_installed_switch_values};
+use crate::p2_lift::loweredswitchexact::record_is_exact;
+use crate::p2_lift::loweredswitchheads::{cascade_heads, case_body_entered_elsewhere};
+use crate::p2_lift::loweredswitchvalue::{ValueCheck, verify_installed_switch_values};
 
 use unlace_base::marshal::ElementId;
 
@@ -922,7 +922,7 @@ fn recover_cascade(
         && data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_loweredswitch::LoweredSwitchMode>()
+            .get::<crate::loweredswitch::LoweredSwitchMode>()
             .tree()
     {
         (2, 64)
@@ -989,7 +989,7 @@ fn recover_cascade(
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_loweredswitch::LoweredSwitchMode>()
+            .get::<crate::loweredswitch::LoweredSwitchMode>()
             .linear()
         {
             return None;
@@ -1037,7 +1037,7 @@ fn recover_cascade(
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_loweredswitch::SwitchSelectorGuard>()
+        .get::<crate::loweredswitch::SwitchSelectorGuard>()
         .0
         && !selector_defined_in_function(data, swvar)
     {
@@ -1207,7 +1207,7 @@ impl ActionLowerSwitchDetect {
             && !data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_loweredswitch::LoweredSwitchMode>()
+                .get::<crate::loweredswitch::LoweredSwitchMode>()
                 .enabled()
         {
             return 0;
@@ -1279,12 +1279,12 @@ impl ActionLowerSwitchDetect {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_loweredswitchbits::LoweredSwitchBits>()
+            .get::<crate::loweredswitchbits::LoweredSwitchBits>()
             .0
         {
             return 0;
         }
-        let Some(rec) = crate::p2_lift::kuna_loweredswitchbits::recover(data) else {
+        let Some(rec) = crate::p2_lift::loweredswitchbits::recover(data) else {
             return 0;
         };
         self.store.borrow_mut().push(data, rec);
@@ -1481,7 +1481,7 @@ impl ActionLowerSwitchInstall {
             && !data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_loweredswitch::LoweredSwitchMode>()
+                .get::<crate::loweredswitch::LoweredSwitchMode>()
                 .enabled()
         {
             return 0;
@@ -1492,7 +1492,7 @@ impl ActionLowerSwitchInstall {
         // restart re-flows raw pcode and re-clears heritage, so the first mainloop
         // iteration on the restart has pass 0 — the install fires there, then
         // ActionHeritage rebuilds SSA over the corrected CFG.
-        if data.is_settled(crate::kuna_maturity::Fact::Ssa) {
+        if data.is_settled(crate::maturity::Fact::Ssa) {
             return 0;
         }
         let store = self.store.borrow();
@@ -1538,11 +1538,11 @@ impl ActionLowerSwitchInstall {
                     if let Some(rec) = self.store.borrow_mut().record_mut(data, i) {
                         rec.value.read_head_operand = read_head_operand;
                         if rec.value.state
-                            == crate::p2_lift::kuna_loweredswitchvalue::ValueState::Verified
+                            == crate::p2_lift::loweredswitchvalue::ValueState::Verified
                             && rec.value.verified_read != Some(read_head_operand)
                         {
                             rec.value.state =
-                                crate::p2_lift::kuna_loweredswitchvalue::ValueState::Unchecked;
+                                crate::p2_lift::loweredswitchvalue::ValueState::Unchecked;
                         }
                     }
                     changed += 1
@@ -1742,7 +1742,7 @@ crate::kuna_flag!(
     /// its selector, so the compiler's `if`/`else if` chain over the real
     /// variable survives instead of a `switch` over something else
     /// (`option switchselector`).  See
-    /// [`crate::p2_lift::kuna_loweredswitch::install_selector_is_sound`].
+    /// [`crate::p2_lift::loweredswitch::install_selector_is_sound`].
     SwitchSelectorGuard,
     "switchselector",
     "Lowered-switch in-function-selector restriction",
@@ -1750,7 +1750,7 @@ crate::kuna_flag!(
     shipped: false
 );
 
-impl crate::kuna_optionset::KunaOption for LoweredSwitchMode {
+impl crate::optionset::KunaOption for LoweredSwitchMode {
     const NAME: &'static str = "loweredswitch";
     crate::kuna_option_id!();
 
@@ -1768,5 +1768,5 @@ impl crate::kuna_optionset::KunaOption for LoweredSwitchMode {
 }
 
 #[cfg(test)]
-#[path = "kuna_loweredswitch/tests.rs"]
+#[path = "loweredswitch/tests.rs"]
 mod tests;

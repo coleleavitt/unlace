@@ -8,10 +8,10 @@ use unlace_base::space::spacetype;
 pub fn enabled_for(fd: &Funcdata, addr: &Address, size: i32) -> bool {
     (fd.get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
-        || crate::kuna_stackparamviews::preserves_range(fd, addr, 1)
-        || crate::kuna_localstackviews::preserves_range(fd, addr, size))
+        || crate::stackparamviews::preserves_range(fd, addr, 1)
+        || crate::localstackviews::preserves_range(fd, addr, size))
         && addr
             .get_space()
             .is_some_and(|s| s.get_type() == spacetype::IPTR_SPACEBASE)
@@ -27,8 +27,8 @@ pub fn unresolved_store(fd: &Funcdata, op: OpId) -> bool {
         .is_some_and(|v| !v.is_constant())
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.stackeffects_enabled_for = Some(enabled_for);
     hooks.stackeffects_unresolved_store = Some(unresolved_store);
 }

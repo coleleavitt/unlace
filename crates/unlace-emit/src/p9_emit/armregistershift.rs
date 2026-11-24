@@ -57,7 +57,7 @@ pub fn plan_arm_register_lsl(
     }
     let guarded = arch
         .kuna_options
-        .get::<crate::kuna_armregistershift::ArmShiftGuard>()
+        .get::<crate::armregistershift::ArmShiftGuard>()
         .0
         && count_v.get_nz_mask() >= 32;
     if guarded && !(operand_is_repeatable(fd, lhs, 16) && operand_is_repeatable(fd, count, 16)) {
@@ -98,7 +98,7 @@ fn unsigned_extension_source(fd: &Funcdata, vn: VarnodeId) -> VarnodeId {
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_regnarrow::NarrowLocals>()
+        .get::<crate::regnarrow::NarrowLocals>()
         .0
         || v.is_explicit()
         || v.get_size() != 4

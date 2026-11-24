@@ -18,7 +18,7 @@
 //!   * **The `INT_NOTEQUAL` match-is-not-taken-edge** wiring in `analyzeCmp`.
 //!   * **`canonSwitchVar` peel chain** identity (zero-offset SUBPIECE included).
 //!
-//! The harness mirrors the in-crate `kuna_loweredswitch/tests.rs` fixtures (the
+//! The harness mirrors the in-crate `loweredswitch/tests.rs` fixtures (the
 //! only way to reach the read-only detection over a hand-built CFG); the root
 //! block is reached via the public `fd.bblocks_ref().root` field, as the other
 //! `verify_w*` integration tests do.
@@ -34,12 +34,12 @@ use unlace_num::opcodes::OpCode;
 
 use unlace_decomp::context::{ArchContext, BlockId, TypeOp, VarnodeId};
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::kuna_loweredswitch::{
+use unlace_decomp::loweredswitch::{
     ActionLowerSwitchDetect, KunaLoweredSwitchStore, OptionLowerSwitch,
 };
 
 // -----------------------------------------------------------------------------
-// Harness (mirrors kuna_loweredswitch/tests.rs)
+// Harness (mirrors loweredswitch/tests.rs)
 // -----------------------------------------------------------------------------
 
 fn build_manager() -> AddrSpaceManager {

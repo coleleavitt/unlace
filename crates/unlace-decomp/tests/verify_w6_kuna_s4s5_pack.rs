@@ -34,12 +34,12 @@ use unlace_base::space::{
 use unlace_base::types::{int4, uintb};
 
 use unlace_decomp::action::{Action, ActionContext};
+use unlace_decomp::compareform::{ActionPresentCompareForm, CompareForm, parse_compare_form};
 use unlace_decomp::context::{ArchContext, TypeOp};
 use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::kuna_compareform::{ActionPresentCompareForm, CompareForm, parse_compare_form};
-use unlace_decomp::kuna_memsetsequence::{MemsetRecoverForm, parse_memset_recover_form};
-use unlace_decomp::kuna_returnpair::{ReturnPairForm, keep_single_return, parse_return_pair_form};
+use unlace_decomp::memsetsequence::{MemsetRecoverForm, parse_memset_recover_form};
+use unlace_decomp::returnpair::{ReturnPairForm, keep_single_return, parse_return_pair_form};
 use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 use unlace_num::opcodes::OpCode;
 
@@ -440,7 +440,7 @@ fn r2_t1_compareform_parse_public_api() {
 // forward `val==0` guard nor the inverse `val==calc_uint_max` guard fires; the
 // constant must land back EXACTLY on 0x40 with the LESSEQUAL opcode restored and
 // the provenance mark cleared.
-// Oracle: funcdata_op.cc:1037-1058 (forward), kuna_compareform.cc:30-51 (inverse).
+// Oracle: funcdata_op.cc:1037-1058 (forward), compareform.cc:30-51 (inverse).
 // ===========================================================================
 #[test]
 fn r2_t2_unsigned_left_const_roundtrip() {

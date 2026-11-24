@@ -3,14 +3,14 @@
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_indexaliasguard::LEVEL_GLOBAL;
+use crate::indexaliasguard::LEVEL_GLOBAL;
 use unlace_num::opcodes::OpCode;
 
 pub fn declines(data: &Funcdata, op: OpId, vn: VarnodeId, input: VarnodeId) -> bool {
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
     {
@@ -49,6 +49,6 @@ pub fn declines(data: &Funcdata, op: OpId, vn: VarnodeId, input: VarnodeId) -> b
     };
     copy.1.code() == OpCode::CPUI_COPY
         && !copy.1.is_return_copy()
-        && crate::kuna_globalorder::write_moves(data, copy.0, input)
-        && !crate::kuna_globalstorekeep::old_value_read_after(data, vn)
+        && crate::globalorder::write_moves(data, copy.0, input)
+        && !crate::globalstorekeep::old_value_read_after(data, vn)
 }

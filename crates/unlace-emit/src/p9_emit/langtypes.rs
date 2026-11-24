@@ -5,7 +5,7 @@
 //!
 //! P5 recovers a `Datatype`; this module decides whether that shows up as
 //! `uint4`, `unsigned int`, or `u32`. Spelling deliberately lives in the printer
-//! rather than in the type factory, for the reason `kuna_ctypes.rs` already
+//! rather than in the type factory, for the reason `ctypes.rs` already
 //! records: [`Datatype::hash_name`] makes the registered name determine the type
 //! id, identifier generation derives from the first character of the type name
 //! (`float8` → `fVar1`), and the console's C-type parser resolves base types by
@@ -29,14 +29,14 @@
 //! [`Datatype`]: crate::dtype::Datatype
 //! [`Datatype::hash_name`]: crate::dtype::Datatype
 
-use crate::kuna_lang::OutLangExt;
+use crate::lang::OutLangExt;
 use std::borrow::Cow;
 use std::rc::Rc;
 
 use unlace_base::types::int4;
 
 use crate::dtype::Datatype;
-use crate::kuna_lang::OutLang;
+use crate::lang::OutLang;
 
 /// The per-document type-rendering context (C++ has no analogue: the `realtypes`
 /// and `ctypes` gates are kuna divergences).
@@ -55,7 +55,7 @@ pub struct SpellCtx {
     pub ctypes: bool,
     /// (kuna `ctypes`) The target's declared C scalar widths, which is what makes
     /// the spelling per-architecture rather than a guess.
-    pub model: crate::kuna_ctypes::CDataModel,
+    pub model: crate::ctypes::CDataModel,
     pub c_type_definition: bool,
     /// (kuna `cppshortnames`) Print standard C++ type names short.
     pub cpp_short_names: bool,
@@ -71,7 +71,7 @@ impl SpellCtx {
         enabled: false,
         long_is_8: true,
         ctypes: false,
-        model: crate::kuna_ctypes::CDataModel::LP64,
+        model: crate::ctypes::CDataModel::LP64,
         c_type_definition: false,
         cpp_short_names: false,
         go_package: None,

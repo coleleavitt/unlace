@@ -126,7 +126,7 @@ impl CallGraph {
     /// (kuna `pltlocal`) The function a call to `entry` is built at: the
     /// definition a bound PLT stub forwards to, else `entry` itself.
     pub(crate) fn call_target(&self, entry: u64) -> u64 {
-        unlace_decomp::kuna_pltlocal::target_of(&self.plt_local, entry).unwrap_or(entry)
+        unlace_decomp::pltlocal::target_of(&self.plt_local, entry).unwrap_or(entry)
     }
 
     /// (kuna `callbacktype`) The entries of the functions that CALL or tail-jump

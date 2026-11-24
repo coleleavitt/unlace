@@ -1,6 +1,6 @@
 //! Generated frame unions describe storage, not standalone scalar snapshots.
 
-use crate::kuna_stackobjects::FuncdataStackobjectsExt;
+use crate::stackobjects::FuncdataStackobjectsExt;
 use std::rc::Rc;
 
 use crate::context::VarnodeId;
@@ -57,7 +57,7 @@ pub fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
 }
 
 fn source_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<crate::dtype::Datatype>> {
-    use crate::kuna_stackobjects::{ByteSource, SourcePoint};
+    use crate::stackobjects::{ByteSource, SourcePoint};
     use unlace_num::opcodes::OpCode;
 
     let value = fd.vbank().get(id)?;

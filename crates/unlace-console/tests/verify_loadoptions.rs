@@ -15,8 +15,8 @@ use object::{
 use unlace_console::engine::{
     ARM_ISA_ENV, ArmIsa, Bootstrap, ConsoleProgram, bootstrap_from_object,
 };
-use unlace_decomp::kuna_loadoptions::LoadOptions;
-use unlace_decomp::kuna_sourcelang::SourceLang;
+use unlace_decomp::loadoptions::LoadOptions;
+use unlace_decomp::sourcelang::SourceLang;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -323,7 +323,7 @@ fn console_decompile(prog: ConsoleProgram, name: &str) -> String {
 #[test]
 fn an_explicit_program_never_reads_the_environment() {
     use unlace_console::project::{DecompileOptions, decompile_entry};
-    use unlace_decomp::kuna_loadoptions::environment_fallbacks;
+    use unlace_decomp::loadoptions::environment_fallbacks;
     let go = go_image();
     let fat = root().join("crates/unlace-analysis/tests/fixtures/macho_fat");
     let before = environment_fallbacks();
@@ -381,7 +381,7 @@ fn set_kuna_option_changes_its_program_not_later_explicit_loads() {
 /// choice after the environment changes.
 #[test]
 fn an_explicit_program_ignores_a_later_environment_change() {
-    use unlace_console::kuna_console::kuna_live_value;
+    use unlace_console::console::kuna_live_value;
     let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("UNLACE_KERNELCACHE") };
@@ -494,8 +494,8 @@ fn a_bootstrap_without_options_reads_the_environment() {
 fn a_load_without_options_ignores_options_held_on_the_thread() {
     use unlace_analysis::loadimage_te::synthetic::TeImage;
     use unlace_base::xml::DocumentStorage;
-    use unlace_console::kuna_console::kuna_live_value;
-    use unlace_decomp::kuna_kernelcache::KernelcacheChoice;
+    use unlace_console::console::kuna_live_value;
+    use unlace_decomp::kernelcache::KernelcacheChoice;
 
     let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
     // FIXME: Audit that the environment access only happens in single-threaded code.
@@ -569,7 +569,7 @@ fn the_console_loads_the_next_image_from_the_environment() {
         register_decomp_commands,
     };
     use unlace_console::ifaceterm::ConsoleCommands;
-    use unlace_decomp::kuna_kernelcache::KernelcacheChoice;
+    use unlace_decomp::kernelcache::KernelcacheChoice;
 
     let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
     // FIXME: Audit that the environment access only happens in single-threaded code.

@@ -76,7 +76,7 @@ impl Rule for RuleArrayStride {
             && !data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_arraystride::RecoverArrayStride>()
+                .get::<crate::arraystride::RecoverArrayStride>()
                 .0
         {
             return 0;
@@ -300,5 +300,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_arraystride/tests.rs"]
+#[path = "arraystride/tests.rs"]
 mod tests;

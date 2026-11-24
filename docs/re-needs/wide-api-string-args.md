@@ -131,7 +131,7 @@ _none recorded_
 - closed: acceptance a-038711a56c33 now PASSES at 94286c8eca0c
 - round 2 B_DONE (captain): `pr: null -> 399` (`apply-acceptance` sets `closing_pr` but never
   `pr`). `attempts` stays 0 -- dispatched once, closed on that attempt. `touches` is left as
-  filed but was WRONG: the fix landed in `unlace-analysis` (`analyzers/strings/kuna_widestrings.rs`),
+  filed but was WRONG: the fix landed in `unlace-analysis` (`analyzers/strings/widestrings.rs`),
   not `unlace-decomp`, which is the module the record reserved. The tester's hypothesis (UTF-16LE
   data read as an 8-bit NUL-terminated string in string markup) is what the shipped fix
   corrects; `hypothesis_status` stays `inconclusive` because no refuter ever examined it.

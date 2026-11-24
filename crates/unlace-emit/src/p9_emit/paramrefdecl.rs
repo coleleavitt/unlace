@@ -104,5 +104,5 @@ pub fn parameter_reference_varrefs(fd: &Funcdata, addr: &Address) -> BTreeSet<u6
 }
 
 #[cfg(test)]
-#[path = "kuna_paramrefdecl/tests.rs"]
+#[path = "paramrefdecl/tests.rs"]
 mod tests;

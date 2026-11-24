@@ -7,7 +7,7 @@
   "default": "on",
   "div": "DIV-153",
   "phase": "P3",
-  "module": "decompiler/crates/kuna-decomp/src/p3_dataflow/kuna_splitstorekeep.rs",
+  "module": "decompiler/crates/kuna-decomp/src/p3_dataflow/splitstorekeep.rs",
   "seam": "Heritage::refine_write -> split_by_refinement pieces",
   "decisions": [
     "The filed hypothesis ('lost pieces during stack-copy merging') and the round-11 triage note ('a type-assertion / array-cover rendering defect; a builder should develop against that assertion pair') are both overturned. The loss is in P3 heritage and reproduces at the DEFAULT with no assertion at all: `kuna decompile <bin> sub_15dc` emits two of the four stores. The char[31] assertions only change how the two SURVIVING stores are spelled (element-wise instead of word-wise); they neither cause nor deepen the loss.",

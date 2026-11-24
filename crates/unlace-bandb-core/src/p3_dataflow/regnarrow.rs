@@ -179,7 +179,7 @@ pub fn narrow_locals(data: &mut Funcdata) -> int4 {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_regnarrow::NarrowLocals>()
+        .get::<crate::regnarrow::NarrowLocals>()
         .0
         || data.bblocks_get_size() == 0
         || data.kuna_regnarrow_runs >= MAX_RUNS
@@ -189,7 +189,7 @@ pub fn narrow_locals(data: &mut Funcdata) -> int4 {
     let signed = data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_regnarrow::NarrowSigned>()
+        .get::<crate::regnarrow::NarrowSigned>()
         .0;
     let seeds: Vec<VarnodeId> = data
         .vbank()
@@ -433,11 +433,11 @@ pub fn unsigned_vote(
 
 /// (kuna) Declare a register-local web whose values all fit a narrower low
 /// part at that width (option `regnarrow`).  See
-/// [`crate::kuna_regnarrow`].
+/// [`crate::regnarrow`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct NarrowLocals(pub bool);
 
-impl crate::kuna_optionset::KunaOption for NarrowLocals {
+impl crate::optionset::KunaOption for NarrowLocals {
     const NAME: &'static str = "regnarrow";
     crate::kuna_option_id!();
 
@@ -458,11 +458,11 @@ impl crate::kuna_optionset::KunaOption for NarrowLocals {
 
 /// (kuna) Also narrow a register-local web whose values are all sign
 /// extensions of a narrower part (option `regsigned`).  See
-/// [`crate::kuna_regnarrow`].
+/// [`crate::regnarrow`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct NarrowSigned(pub bool);
 
-impl crate::kuna_optionset::KunaOption for NarrowSigned {
+impl crate::optionset::KunaOption for NarrowSigned {
     const NAME: &'static str = "regsigned";
     crate::kuna_option_id!();
 

@@ -12,7 +12,7 @@ mod module_scope {
     pub(super) use unlace_base::types::{int4, intb};
 }
 use crate::dtype::{Datatype, TypeFactoryImpl};
-use crate::kuna_nulterminator::*;
+use crate::nulterminator::*;
 use crate::varmap::{ScopeLocal, TYPELOCK};
 use module_scope::*;
 use unlace_base::address::RangeList;

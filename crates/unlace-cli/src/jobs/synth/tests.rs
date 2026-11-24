@@ -122,7 +122,7 @@ fn the_report_names_the_serial_run_it_can_actually_replay() {
 
 #[test]
 fn a_structure_rename_rebases_recorded_pointer_arguments() {
-    use unlace_decomp::kuna_pointerargs::{Call, Position, Record};
+    use unlace_decomp::pointerargs::{Call, Position, Record};
     let mut r = sample_result();
     r.code = Some("struct_3 *p; sink(&v1);".into());
     r.pointerargs = Some(Record {

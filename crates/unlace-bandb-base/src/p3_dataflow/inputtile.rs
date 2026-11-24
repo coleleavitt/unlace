@@ -192,8 +192,8 @@ fn combine_covered_pieces(
 // but live" is a decline and not a silent combine).
 // =====================================================================
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.inputtile_new_tiled_input = Some(new_tiled_input);
 }
 

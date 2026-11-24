@@ -25,7 +25,7 @@ shows the four pushes in front of the `GetLastError` call and the three after it
 
 ## The fix
 
-`option calleeprotostack on|off`, default on, in `p4_calls/kuna_calleeprotostack.rs`.
+`option calleeprotostack on|off`, default on, in `p4_calls/calleeprotostack.rs`.
 
 - A locked parameter list under a model whose `<prototype extrapop="unknown">`
   declines to state its own cleanup implies `4 + <stack argument bytes>`.

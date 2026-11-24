@@ -17,8 +17,8 @@ use unlace_analysis::listing::classify::classify;
 use unlace_analysis::listing::decode::decode_one;
 use unlace_analysis::listing::{Listing, ListingDetail};
 use unlace_console::engine::bootstrap_from_object;
-use unlace_decomp::kuna_decodekit::{EngineRecipe, build_decode_engine};
-use unlace_sleigh::kuna_ctxsnapshot::snapshot_context;
+use unlace_decomp::decodekit::{EngineRecipe, build_decode_engine};
+use unlace_sleigh::ctxsnapshot::snapshot_context;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

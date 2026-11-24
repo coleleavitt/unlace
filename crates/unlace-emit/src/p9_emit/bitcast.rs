@@ -1,11 +1,11 @@
 //! Storage transfers preserve bits; FLOAT_* conversion operations change values.
 
+use crate::callrettype::FuncdataCallrettypeExt;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::funcdata_facing::FuncdataFacingExt;
-use crate::kuna_callrettype::FuncdataCallrettypeExt;
-use crate::kuna_voidret::FuncdataVoidretExt;
+use crate::voidret::FuncdataVoidretExt;
 use std::rc::Rc;
 use unlace_num::opcodes::OpCode;
 
@@ -101,7 +101,7 @@ pub fn storage_transfer(
     }
     let slot = operation.get_slot(input);
     let from_ty = printed(input, slot).unwrap_or_else(|| {
-        crate::kuna_stackviews::access_type(fd, input, op, slot)
+        crate::stackviews::access_type(fd, input, op, slot)
             .or_else(|| undefined(input, src.get_type()))
             .or_else(|| declared_member_type(fd, input))
             .filter(|ty| !partial(ty))
@@ -121,7 +121,7 @@ pub fn storage_transfer(
             .unwrap_or_else(|| fd.vn_type_read_facing(input, op))
     });
     let to_ty = printed(out, -1).unwrap_or_else(|| {
-        crate::kuna_stackviews::access_type(fd, out, op, -1)
+        crate::stackviews::access_type(fd, out, op, -1)
             .or_else(|| undefined(out, dst.get_type()))
             .or_else(|| declared_member_type(fd, out))
             .filter(|ty| !partial(ty))
@@ -200,7 +200,7 @@ pub fn truncated_float_storage(fd: &Funcdata, op: OpId) -> Option<(Transfer, Rc<
     ) {
         return None;
     }
-    let declared = crate::kuna_stackviews::access_type(fd, input, op, operation.get_slot(input))
+    let declared = crate::stackviews::access_type(fd, input, op, operation.get_slot(input))
         .or_else(|| declared_member_type(fd, input))?;
     if declared.get_metatype() != type_metatype::TYPE_FLOAT || declared.get_size() != size {
         return None;
@@ -253,7 +253,7 @@ pub fn word_result(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
     {
         return None;
@@ -296,7 +296,7 @@ pub fn stack_float_input(fd: &Funcdata, op: OpId, input: VarnodeId) -> Option<Tr
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
     {
         return None;
@@ -420,7 +420,7 @@ fn states_a_return(fd: &Funcdata, op: OpId) -> bool {
         .is_some_and(|k| {
             fd.kuna_callret_stated(k)
                 .is_some_and(|s| read_as(&s.addr, s.size))
-                || (fd.kuna_callee_returns(k) == Some(crate::kuna_voidret::Returns::Other)
+                || (fd.kuna_callee_returns(k) == Some(crate::voidret::Returns::Other)
                     && fd
                         .kuna_callee_return_storage(k)
                         .is_some_and(|(a, n)| read_as(a, *n)))
@@ -460,25 +460,20 @@ pub fn declared_member_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<Datatype>
         {
             if ty.get_metatype() == type_metatype::TYPE_ARRAY {
                 let types = fd.get_arch().types()?;
-                return crate::kuna_stackviews::scalar_piece(
-                    types,
-                    ty,
-                    offset.max(0),
-                    value.get_size(),
-                )
-                .or_else(|| {
-                    crate::kuna_partialaccess::readable(value.get_type(), value.get_size())
-                        .then(|| Rc::clone(value.get_type()))
-                })
-                .or_else(|| {
-                    matches!(value.get_size(), 4 | 8)
-                        .then(|| {
-                            types
-                                .get_base(value.get_size(), type_metatype::TYPE_UNKNOWN)
-                                .ok()
-                        })
-                        .flatten()
-                });
+                return crate::stackviews::scalar_piece(types, ty, offset.max(0), value.get_size())
+                    .or_else(|| {
+                        crate::partialaccess::readable(value.get_type(), value.get_size())
+                            .then(|| Rc::clone(value.get_type()))
+                    })
+                    .or_else(|| {
+                        matches!(value.get_size(), 4 | 8)
+                            .then(|| {
+                                types
+                                    .get_base(value.get_size(), type_metatype::TYPE_UNKNOWN)
+                                    .ok()
+                            })
+                            .flatten()
+                    });
             }
         }
     }
@@ -486,7 +481,7 @@ pub fn declared_member_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<Datatype>
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
     {
         return Some(declared);
@@ -508,7 +503,7 @@ pub fn declared_member_type(fd: &Funcdata, id: VarnodeId) -> Option<Rc<Datatype>
     let offset = high
         .map(|high| high.get_symbol_offset().max(0))
         .unwrap_or(0);
-    crate::kuna_stackviews::scalar_piece(
+    crate::stackviews::scalar_piece(
         fd.get_arch().types()?,
         Rc::clone(&declared),
         offset,
@@ -546,7 +541,7 @@ pub fn array_float_conversion(fd: &Funcdata, op: OpId) -> Option<Rc<Datatype>> {
         .ok()
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.bitcast_reinterprets_to_float = Some(reinterprets_to_float);
 }

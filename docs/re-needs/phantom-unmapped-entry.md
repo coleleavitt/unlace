@@ -10,7 +10,7 @@ instances: 0
 rounds: [1]
 first_seen_round: 1
 attempts: 1
-touches: [crates/unlace-analysis/src/listing/kuna_unmappedentry.rs]
+touches: [crates/unlace-analysis/src/listing/unmappedentry.rs]
 scope: small
 closed_in_round: 1
 closing_pr: 367

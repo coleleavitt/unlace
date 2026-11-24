@@ -11,7 +11,7 @@
 //! `use_gi` computes with).
 //!
 //! The analysis tier answers it for the whole program
-//! (`unlace_analysis::listing::kuna_floatglobals`): every load and store of a
+//! (`unlace_analysis::listing::floatglobals`): every load and store of a
 //! global in every function's code, with its width and whether the value goes
 //! to or comes from a floating-point register.  A global every access of which
 //! is a float register move or a float operation of one width, that no other
@@ -80,7 +80,7 @@ pub fn float_only(data: &Funcdata, addr: &Address, size: int4) -> bool {
     }
     let on = glb
         .kuna_options
-        .get::<crate::kuna_coreoptions::FloatGlobalsOn>()
+        .get::<crate::coreoptions::FloatGlobalsOn>()
         .0;
     match on
         .then(|| glb.kuna_states.get::<FloatGlobalsFound>())
@@ -88,12 +88,12 @@ pub fn float_only(data: &Funcdata, addr: &Address, size: int4) -> bool {
     {
         Some(found) => {
             found.0.get(&addr.get_offset()) == Some(&(size as u8))
-                && crate::kuna_floatreg::moved_as_a_float_here(data, addr, size)
+                && crate::floatreg::moved_as_a_float_here(data, addr, size)
         }
         None => {
             if on
                 && glb.kuna_states.get::<FloatScan>().is_some()
-                && crate::kuna_floatreg::moved_as_a_float_here(data, addr, size)
+                && crate::floatreg::moved_as_a_float_here(data, addr, size)
             {
                 glb.float_globals_wanted.set(true);
             }
@@ -103,7 +103,7 @@ pub fn float_only(data: &Funcdata, addr: &Address, size: int4) -> bool {
 }
 
 /// The whole-program scan's float globals, once the console took it for the run; an
-/// [`ArchState`](crate::kuna_archstate::ArchState) shared with every function's context.
+/// [`ArchState`](crate::archstate::ArchState) shared with every function's context.
 #[derive(Debug, Default)]
 pub struct FloatGlobalsFound(pub FloatGlobals);
 crate::kuna_arch_state!(FloatGlobalsFound);

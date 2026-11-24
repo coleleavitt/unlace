@@ -4,7 +4,7 @@
    its declaration differs (`addrcensus.py`; analysis.md section 1).
 2. Ship the one class a declaration fixes and whose uses agree: a stack
    out-parameter the callee declares `T *`, re-typed in the frame hints before
-   the layout decision (`p6_variables/kuna_castobject.rs`), only when no reader
+   the layout decision (`p6_variables/castobject.rs`), only when no reader
    wants the other sign, and checked again over the merged variable before the
    cast pass.
 3. Prove value preservation with compiled round trips (gcc and clang, -O0 and

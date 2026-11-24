@@ -39,7 +39,7 @@
 //! `__builtin_unreachable`) is `brk #1`, `llvm.ubsantrap` (`-fsanitize-trap`,
 //! `-ftrapv`) is `brk #0x55xx`, GCC's `__builtin_trap` is `brk #1000`, the
 //! arm64e pointer-authentication failure traps are `brk #0xc470`..`#0xc473`
-//! (see [`kuna_ptrauthtrap`](crate::kuna_ptrauthtrap)) and MSVC's `__fastfail`
+//! (see [`kuna_ptrauthtrap`](crate::ptrauthtrap)) and MSVC's `__fastfail`
 //! is `brk #0xf003`. [`is_brk_trap_branchind`] matches the lowered shape with
 //! one of those immediates and `flow.rs::xref_control_flow` replaces the
 //! `BRANCHIND` with the artificial no-return halt a call that never returns
@@ -97,7 +97,7 @@ pub fn is_compiler_trap_immediate(imm: uintb) -> bool {
         || imm == GCC_TRAP
         || imm == WINDOWS_FASTFAIL
         || UBSAN_TRAP.contains(&imm)
-        || crate::kuna_ptrauthtrap::is_ptrauth_trap_immediate(imm)
+        || crate::ptrauthtrap::is_ptrauth_trap_immediate(imm)
 }
 
 /// The name of the register a trap with immediate `imm` reads its code from:
@@ -135,7 +135,7 @@ pub fn read_code(data: &mut Funcdata, callother: OpId, code: &VarnodeData) -> Ku
 ///
 /// Runs at flow-classification time, before basic blocks exist, so the
 /// `CALLOTHER` is found by walking back over the instruction's raw ops, as
-/// [`kuna_sparcstructret`](crate::kuna_sparcstructret) does for the same
+/// [`kuna_sparcstructret`](crate::sparcstructret) does for the same
 /// lowering of SPARC's `unimp`.
 pub fn brk_site(data: &Funcdata, op: OpId, breakpoint: u32) -> Option<(OpId, uintb)> {
     let id = trap_producer(data, op)?;
@@ -186,5 +186,5 @@ pub fn trap_producer(data: &Funcdata, op: OpId) -> Option<OpId> {
 }
 
 #[cfg(test)]
-#[path = "kuna_brktrap/tests.rs"]
+#[path = "brktrap/tests.rs"]
 mod tests;

@@ -11,7 +11,7 @@
 //! `components/soc/<chip>/include/soc/soc.h` and `reg_base.h`; the ESP8266 map
 //! is that of the ESP8266 Technical Reference.
 
-use unlace_decomp::kuna_esprom::EspChip;
+use unlace_decomp::esprom::EspChip;
 use unlace_sleigh::loadimage::section_flags;
 
 /// What one range of a chip's address space is.

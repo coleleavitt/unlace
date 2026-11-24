@@ -15,7 +15,7 @@
   "stages": "1478/1478 PARITY OK after re-recording (11 narrowload assertions, elemptr #17/#18 renamed)"
  },
  "root_cause": "RuleExpandLoad (cleanup pool) rewrites a LOAD narrower than its pointer's pointee as a LOAD of the whole pointee and takes the bytes back out with a SUBPIECE (truncation form) or inside `(V & C) == D` compares (AND form). elemptr (#731) kept the load narrow only when no type-locked Varnode sat at the base of the pointer chain, and only with elemptr on; every remaining site on main is behind a lock (a structsynth parameter, a declared prototype), and with elemptr off every inferred pointer and every declared record reached through a call result or a loop phi widened too.",
- "fix": "The truncation form is never taken. The AND form is taken only when the widened pointer is a PTRSUB field of a record or union a declaration laid out (not a structsynth-minted record, not a bare pointer's target or an array element) AND that pointer reaches a type-locked Varnode through PTRADD/PTRSUB/INT_ADD/COPY/CAST alone (elemptr's former keeps_load_narrow walk, now without the elemptr gate): p3_dataflow/kuna_narrowload.rs widens_into_declared_field. A declared record reached through a call's result, a loop's phi or a loaded pointer keeps its narrow read. kuna_elemptr::keeps_load_narrow is removed. Nothing widens a STORE (TypeOpStore::getInputCast casts the pointer of a narrow store); the fixture's 1-, 2- and 4-byte stores at a page end are checked.",
+ "fix": "The truncation form is never taken. The AND form is taken only when the widened pointer is a PTRSUB field of a record or union a declaration laid out (not a structsynth-minted record, not a bare pointer's target or an array element) AND that pointer reaches a type-locked Varnode through PTRADD/PTRSUB/INT_ADD/COPY/CAST alone (elemptr's former keeps_load_narrow walk, now without the elemptr gate): p3_dataflow/narrowload.rs widens_into_declared_field. A declared record reached through a call's result, a loop's phi or a loaded pointer keeps its narrow read. kuna_elemptr::keeps_load_narrow is removed. Nothing widens a STORE (TypeOpStore::getInputCast casts the pointer of a narrow store); the fixture's 1-, 2- and 4-byte stores at a page end are checked.",
  "roundtrip": "narrowload_x86_64.c: 17 functions read/write 1, 2 and 4 bytes of wider record fields and elements; main passes objects that end at the last byte touched, at a page end. decompile-project with elemptr on and off, printed functions compiled with gcc and clang against the export header and linked with the fixture's own prelude/main: main's kuna -> SIGSEGV on all 16 (4 builds x 2 compilers x 2 arms); fix -> all 16 print what the binary prints. narrowload_dwarf_x86_64.c (-g): 3 functions mask one byte of a declared record's 4-byte field through a call's result, a loop's phi and a loaded pointer, each object ending at that byte at a page end; runs print `1 0 2 1`. main 632437155: elemptr on 8/8 OK, elemptr off 8/8 SIGSEGV; the previous head (AND form gated on the declared record alone) 16/16 SIGSEGV; this fix 16/16 OK. With the lock walk disabled the test fails: `gcc_O0 on: a narrow read printed wide, as 0x8100`.",
  "corpus_diff": {
   "castbench_default": {
@@ -237,10 +237,10 @@
   "castbench": "all 45 exports byte-identical to the previous head"
  },
  "files": [
-  "decompiler/crates/kuna-decomp/src/p3_dataflow/kuna_narrowload.rs",
+  "decompiler/crates/kuna-decomp/src/p3_dataflow/narrowload.rs",
   "decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_8.rs",
   "decompiler/crates/kuna-decomp/src/p3_dataflow/mod.rs",
-  "decompiler/crates/kuna-decomp/src/p5_types/kuna_elemptr.rs",
+  "decompiler/crates/kuna-decomp/src/p5_types/elemptr.rs",
   "decompiler/crates/kuna-decomp/phases.toml",
   "docs/options.md",
   "docs/spec/03-ssa-and-simplification.md",

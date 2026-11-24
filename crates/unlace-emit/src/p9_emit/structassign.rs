@@ -22,7 +22,7 @@ use crate::funcdata::Funcdata;
 
 crate::kuna_flag!(
     /// (kuna `structassign`) Print a `memcpy` of exactly one struct between two
-    /// pointers to that struct type as `*d = *s`.  See [`crate::kuna_structassign`].
+    /// pointers to that struct type as `*d = *s`.  See [`crate::structassign`].
     StructAssign,
     "structassign",
     "struct-copy assignment printing",

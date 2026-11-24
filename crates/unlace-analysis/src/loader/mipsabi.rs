@@ -96,7 +96,7 @@ pub(super) fn fp_abi(
     file: &object::File<'_>,
     record: Option<AbiFlags>,
 ) -> Result<Option<u32>, &'static str> {
-    let attribute = super::kuna_floatabi::gnu_fp_abi(file)
+    let attribute = super::floatabi::gnu_fp_abi(file)
         .ok_or("malformed or conflicting GNU floating-point attributes")?
         .filter(|v| *v != 0);
     let record_fp = record.map(|a| u32::from(a.0[7])).filter(|v| *v != 0);

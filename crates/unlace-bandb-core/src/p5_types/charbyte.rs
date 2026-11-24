@@ -301,7 +301,7 @@ pub fn begin(data: &Funcdata) {
     let on = data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_charbyte::CharByte>()
+        .get::<crate::charbyte::CharByte>()
         .0;
     NOTED.with(|n| *n.borrow_mut() = if on { Some(Vec::new()) } else { None });
 }
@@ -545,7 +545,7 @@ pub fn keep_or_restore(data: &mut Funcdata, upstream: Snapshot) -> bool {
 crate::kuna_flag!(
     /// (kuna `charbyte`) Keep `char` for a byte loaded through a `char *` when
     /// the only unsigned vote on it is a zero-extension.  Implementation:
-    /// [`kuna_charbyte`](crate::kuna_charbyte).
+    /// [`kuna_charbyte`](crate::charbyte).
     CharByte,
     "charbyte",
     "char-pointer byte typing",

@@ -10,7 +10,7 @@
   "div": "DIV-171",
   "phase": "P1",
   "subphase": "external-refinement",
-  "module": "decompiler/crates/kuna-analysis/src/loader/kuna_peimportcall.rs",
+  "module": "decompiler/crates/kuna-analysis/src/loader/peimportcall.rs",
   "binary": "decompiler/crates/kuna-analysis/tests/fixtures/macho_import_slots",
   "selector": "_call_slots",
   "func_addr": "0x1000003c0",

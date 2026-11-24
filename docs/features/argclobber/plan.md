@@ -3,7 +3,7 @@
 ## The change
 
 One clause of `drop_clobber_tail_arg`
-(`decompiler/crates/kuna-decomp/src/p4_calls/kuna_argclobber.rs`) is replaced and
+(`decompiler/crates/kuna-decomp/src/p4_calls/argclobber.rs`) is replaced and
 one is demoted.
 
 * **New, admitting**: `callee_prototype_excludes` reads

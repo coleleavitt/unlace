@@ -196,7 +196,7 @@ pub fn rewrite_raw(data: &mut Funcdata) {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_alloca::AllocaCalls>()
+        .get::<crate::alloca::AllocaCalls>()
         .0
     {
         return;
@@ -348,7 +348,7 @@ impl Rule for RuleAlloca {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_alloca::AllocaCalls>()
+            .get::<crate::alloca::AllocaCalls>()
             .0
         {
             return 0;
@@ -581,7 +581,7 @@ impl Rule for RuleAllocaProbe {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_alloca::AllocaCalls>()
+            .get::<crate::alloca::AllocaCalls>()
             .0
         {
             return 0;
@@ -635,7 +635,7 @@ impl Rule for RuleAllocaProbe {
 
 crate::kuna_flag!(
     /// (kuna) A dynamic stack allocation becomes `alloca(size)` (option
-    /// `alloca`). See [`crate::kuna_alloca`].
+    /// `alloca`). See [`crate::alloca`].
     AllocaCalls,
     "alloca",
     "dynamic stack allocation as alloca(size)",

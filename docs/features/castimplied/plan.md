@@ -2,7 +2,7 @@
 
 ## The seam
 
-A print-time predicate, `p9_emit/kuna_castimplied.rs (ImpliedCasts::drops)`,
+A print-time predicate, `p9_emit/castimplied.rs (ImpliedCasts::drops)`,
 consulted by the printer where a conversion would print:
 
 - the `CPUI_CAST` arm of `PrintC::op_push_ir_inner` (`op_type_cast_ir_with`),
@@ -59,5 +59,5 @@ nothing when `nocastprinting` is on. Default per `default-on-evaluation.md`.
   `castimplied_{gcc,clang}_O0_x86_64` compiled with gcc and clang, option off and
   on, must print what the binary prints (negative chars, 0xfffffff0 unsigned ints,
   shorts, a varargs `printf`, a sign change that must stay).
-- `p9_emit/kuna_castimplied/tests.rs`: `preserves` agrees with C's own integer
+- `p9_emit/castimplied/tests.rs`: `preserves` agrees with C's own integer
   conversion over every pair of 1/2/4/8-byte signed/unsigned types and `bool`.

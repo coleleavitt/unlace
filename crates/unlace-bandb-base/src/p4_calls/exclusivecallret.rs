@@ -18,14 +18,14 @@
 //! The rule is limited to the shape `calloverlap auto` recovers: a four-byte
 //! trial in the low word of a named eight-byte register on a truncated 32-bit
 //! address target, such as an e500 GPR. Reachability is
-//! [`exclusivearguse`](crate::kuna_exclusivearguse)'s bounded walk,
+//! [`exclusivearguse`](crate::exclusivearguse)'s bounded walk,
 //! which declines once its bound is exceeded.
 
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{BlockId, OpId, VarnodeId};
+use crate::exclusivearguse::{MAX_VISIT, def_block, reaches};
 use crate::funcdata::Funcdata;
-use crate::kuna_exclusivearguse::{MAX_VISIT, def_block, reaches};
 
 /// Whether the trial matched at `opmatch` has the narrow scalar shape the rule
 /// covers. Independent of the use being scored, so it is computed once per walk.
@@ -47,7 +47,7 @@ pub fn applies(data: &Funcdata, opmatch: OpId, trial: &crate::fspec::ParamTrial)
         return false;
     };
     let wide = addr - if space.is_big_endian() { 4 } else { 0 };
-    crate::kuna_calloverlap::auto_register(
+    crate::calloverlap::auto_register(
         data.get_arch().manage(),
         data.get_func_proto(),
         &wide,
@@ -117,8 +117,8 @@ fn shared_producer(data: &Funcdata, producer: BlockId, a: BlockId, b: BlockId) -
     a != b && follows(a) && follows(b)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.exclusivecallret_applies = Some(applies);
     hooks.exclusivecallret_skips_use = Some(skips_use);
 }

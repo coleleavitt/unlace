@@ -78,7 +78,7 @@ Both cost real debugging time and are recorded in `docs/spec/08-structuring.md`
   and heritage failed with `non-root block has no idom`. The correct sequence is
   that function minus the copy: `new_block_basic` + `switch_edge` + `add_edge`, and
   then **no** `remove_branch`/`push_branch` — with the entry edge moved the region
-  is unreachable and the sweep collects it, matching `kuna_stackguard.rs`.
+  is unreachable and the sweep collects it, matching `stackguard.rs`.
 - **A hand-built `FuncCallSpecs` has no prototype store.** Every later
   `FuncProto::store` query panics on the null. Decoder-produced specs get theirs
   from `ActionDefaultParams`; a synthesized one must call

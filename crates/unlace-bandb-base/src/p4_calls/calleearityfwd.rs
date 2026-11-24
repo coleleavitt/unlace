@@ -3,7 +3,7 @@
 //!
 //! # The gap
 //!
-//! [`calleearity`](crate::kuna_calleearity) reconciles a call site
+//! [`calleearity`](crate::calleearity) reconciles a call site
 //! that recovered nothing against another call to the same callee whose argument
 //! list is already final, and its own documentation names the case it cannot
 //! reach: `ActionActiveParam` finalizes each call spec the moment that spec is
@@ -51,7 +51,7 @@
 //! `opSetAllInput` drops them — and retried once, at the end of the same
 //! `ActionActiveParam::apply`, when every spec in the pass is final.  The witness
 //! search, the promotion plan and every one of its refusals are
-//! [`calleearity`](crate::kuna_calleearity)'s, unchanged: register
+//! [`calleearity`](crate::calleearity)'s, unchanged: register
 //! storage only, real Varnodes only, all-or-nothing, never subtractive, and only
 //! a call that recovered nothing at all (a Swift `self` alone counting as
 //! nothing, and kept first).  This option adds no new way to promote
@@ -77,10 +77,10 @@ use unlace_base::types::int4;
 
 use unlace_num::opcodes::OpCode;
 
+use crate::calleearity::{TrialView, best_witness_for, plan_promotions};
 use crate::context::{OpId, VarnodeId};
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::kuna_calleearity::{TrialView, best_witness_for, plan_promotions};
 
 /// Marshaling element `<calleearityfwd>` (kuna 4000+ range; 4133 = calleearity).
 pub const ELEM_CALLEEARITYFWD: ElementId = ElementId::new("calleearityfwd", 4137);
@@ -123,7 +123,7 @@ pub fn capture_empty_call(fc: &FuncCallSpecs, data: &Funcdata) -> Option<Pending
         if t.is_used() {
             // (kuna `swiftcall`) A Swift `self` alone is no recovered list.
             if swift_self.is_none()
-                && crate::kuna_swiftcall::is_self_storage(data, t.get_address(), t.get_size())
+                && crate::swiftcall::is_self_storage(data, t.get_address(), t.get_size())
             {
                 swift_self = Some((t.get_address().clone(), t.get_size()));
                 continue;
@@ -248,5 +248,5 @@ fn rescue_one(data: &mut Funcdata, p: &PendingRescue) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_calleearityfwd/tests.rs"]
+#[path = "calleearityfwd/tests.rs"]
 mod tests;

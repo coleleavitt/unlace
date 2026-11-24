@@ -44,14 +44,14 @@ pub fn note(data: &mut Funcdata, idx: int4, i: int4, loads: &[OpId]) {
     if loads.is_empty() || data.get_arch().source_lang.is_go() {
         return;
     }
-    let Some(sp) = crate::kuna_spillargtrial::stack_pointer_storage(data) else {
+    let Some(sp) = crate::spillargtrial::stack_pointer_storage(data) else {
         return;
     };
     let from_frame = loads.iter().any(|&load| {
         data.obank()
             .get(load)
             .and_then(|o| o.get_in(1))
-            .is_some_and(|ptr| crate::kuna_spillargtrial::frame_slot(data, ptr, &sp).is_some())
+            .is_some_and(|ptr| crate::spillargtrial::frame_slot(data, ptr, &sp).is_some())
     });
     if from_frame {
         let active = data.get_call_specs_mut(idx).get_active_input();
@@ -105,10 +105,9 @@ pub fn recheck(data: &mut Funcdata, idx: int4, mut alias: Option<&mut AliasCheck
         if !junk(data, vn, 16, &mut alias) {
             return;
         }
-        let args = format_arguments.get_or_insert_with(|| {
-            super::kuna_varargformat::arguments(data, data.get_call_specs(idx))
-        });
-        if super::kuna_varargformat::activate_trial(data, idx, i, args) {
+        let args = format_arguments
+            .get_or_insert_with(|| super::varargformat::arguments(data, data.get_call_specs(idx)));
+        if super::varargformat::activate_trial(data, idx, i, args) {
             return;
         }
         data.get_call_specs_mut(idx)

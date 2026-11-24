@@ -8,7 +8,7 @@ claim source tuple recovery.
 
 The comparison baseline is `72757bccf5e212f0a3238bd22c47cd2800665a47`.
 
-The module `p9_emit/kuna_gobyteview.rs` selects only exact-width bounded views
+The module `p9_emit/gobyteview.rs` selects only exact-width bounded views
 of byte-array storage, under the existing Go output selection. Refusal cases
 retain their previous representation. Native and hermetic emitted bodies are
 executed without edits, checking both words for positive, negative and extreme

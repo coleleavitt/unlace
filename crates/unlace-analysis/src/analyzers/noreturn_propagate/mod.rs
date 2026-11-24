@@ -128,7 +128,7 @@ impl AnalysisPass for NoReturnPropagatePass {
         let error_recog = if ctx
             .arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::NoreturnKnown>()
+            .get::<unlace_decomp::analysisgates::NoreturnKnown>()
             .0
         {
             ErrorRecognizer::from_imports(&imports, listing)
@@ -144,9 +144,9 @@ impl AnalysisPass for NoReturnPropagatePass {
         let reach = ctx
             .arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::NoreturnReach>()
+            .get::<unlace_decomp::analysisgates::NoreturnReach>()
             .0;
-        let resuming_entry = crate::pclntab::kuna_gomcall::resuming_entry(ctx, listing);
+        let resuming_entry = crate::pclntab::gomcall::resuming_entry(ctx, listing);
         let slot_calls = terminal_slot_calls(listing, ctx.file);
         for fact in propagate_noreturn(
             listing,
@@ -216,7 +216,7 @@ struct ErrorRecognizer {
     /// Entry addresses (PLT stub + any defined funcsym) of `error`/`error_at_line`.
     /// Empty ⇒ the recognizer is inert (disabled, or no `error` import present).
     error_addrs: BTreeSet<u64>,
-    /// (kuna #1288) The MS-DOS exit interrupts ([`crate::listing::kuna_dosexit`]):
+    /// (kuna #1288) The MS-DOS exit interrupts ([`crate::listing::dosexit`]):
     /// call sites that never return whatever their arguments.
     exit_sites: BTreeSet<u64>,
 }

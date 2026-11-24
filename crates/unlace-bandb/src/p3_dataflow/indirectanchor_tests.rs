@@ -19,7 +19,7 @@ mod module_scope {
 #[allow(unused_imports)]
 use module_scope::*;
 
-use crate::kuna_indirectanchor::*;
+use crate::indirectanchor::*;
 
 use std::rc::Rc;
 

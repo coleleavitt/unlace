@@ -7,7 +7,7 @@ the numbers behind it.
 
 | file | change |
 |---|---|
-| `decompiler/crates/kuna-decomp/src/p6_variables/kuna_undefname.rs` | **new** -- the whole fix: `finish_undefined_names` = `assign_scope_default_names` + `refresh_placeholder_high_names` |
+| `decompiler/crates/kuna-decomp/src/p6_variables/undefname.rs` | **new** -- the whole fix: `finish_undefined_names` = `assign_scope_default_names` + `refresh_placeholder_high_names` |
 | `decompiler/crates/kuna-decomp/src/p6_variables/mod.rs` | declare the module |
 | `decompiler/crates/kuna-decomp/src/p6_variables/varmap.rs` | `ScopeLocal::assign_default_names`, a one-line accessor onto the already-ported `Database::assign_default_names` |
 | `decompiler/crates/kuna-decomp/src/p6_variables/coreaction_cleanup.rs` | one call at the tail of `name_local_highs_angr`, after the spacebase attach pass |

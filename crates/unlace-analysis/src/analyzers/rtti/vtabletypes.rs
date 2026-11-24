@@ -1,7 +1,7 @@
 //! (kuna `vtabletypes`) The per-class vtable facts the typed-vtable commit
-//! installs ([`unlace_decomp::kuna_vtabletypes`]).
+//! installs ([`unlace_decomp::vtabletypes`]).
 //!
-//! Built on the Itanium recovery ([`super::kuna_itaniumrtti::recover`]), which
+//! Built on the Itanium recovery ([`super::itaniumrtti::recover`]), which
 //! this pass runs on its own so the facts do not depend on whether the
 //! `itaniumrtti` symbols are committed. For each polymorphic class it reports
 //! the primary vtable's slots, and for each slot the function the class holds
@@ -19,12 +19,12 @@ use std::collections::{HashMap, HashSet};
 use object::SymbolKind;
 use object::read::{Object, ObjectSymbol};
 
-use unlace_decomp::kuna_vtabletypes::{VtableClass, VtableSlot};
+use unlace_decomp::vtabletypes::{VtableClass, VtableSlot};
 
 use crate::demangle::demangle_raw;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
-use super::kuna_itaniumrtti::{Recovery, TypeInfo, recover};
+use super::itaniumrtti::{Recovery, TypeInfo, recover};
 
 /// The typed-vtable pass (gate id `vtabletypes`).
 #[derive(Default)]
@@ -54,7 +54,7 @@ impl AnalysisPass for VtableTypesPass {
 /// The typed-vtable facts: the classes to type and the vtable slot words, as
 /// inclusive `[first, last]` byte ranges. An MSVC image also states the class
 /// of each virtual member's `this` and the vftables to type
-/// ([`super::kuna_msvcvtabletypes`]).
+/// ([`super::msvcvtabletypes`]).
 #[derive(Clone, Debug, Default)]
 pub struct VtableFacts {
     pub classes: Vec<VtableClass>,

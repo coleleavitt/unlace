@@ -1,7 +1,7 @@
 //! (kuna `cppsig`) The three-valued gate on applying a DEMANGLED C++ signature.
 //!
 //! The recovering pass lives in the analyzer tier
-//! (`unlace_analysis::demangle::kuna_cppsig`); what lives here is the *decision*
+//! (`unlace_analysis::demangle::cppsig`); what lives here is the *decision*
 //! the option names, because the option is not a plain on/off.
 //!
 //! Itanium mangling does not distinguish a **static** member function from a
@@ -73,20 +73,20 @@ pub fn parse_cppsig_mode(p1: &str) -> KunaResult<(CppSigMode, String)> {
     ))
 }
 
-impl crate::kuna_optionset::KunaOption for CppSigMode {
+impl crate::optionset::KunaOption for CppSigMode {
     const NAME: &'static str = "cppsig";
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::kuna_cppsig::CppSigMode::Off
+        crate::cppsig::CppSigMode::Off
     }
 
     fn shipped() -> Self {
-        crate::kuna_cppsig::CppSigMode::Proven
+        crate::cppsig::CppSigMode::Proven
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        Ok(crate::kuna_cppsig::parse_cppsig_mode(value)?)
+        Ok(crate::cppsig::parse_cppsig_mode(value)?)
     }
 }
 

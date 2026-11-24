@@ -42,7 +42,7 @@
 //! pointer slot holds a packed chain entry (`1004000000000000` for a pointer to
 //! `0x100000410`), not the pointer. [`resolve`] writes each rebase's target and
 //! zeroes each bind, the word every other format's loader leaves in an import
-//! slot (the [`super::kuna_machorelocs`] arm). Only the rebased slots of an
+//! slot (the [`super::machorelocs`] arm). Only the rebased slots of an
 //! `SG_READ_ONLY` segment are reported constant. A classic `LC_DYLD_INFO` image
 //! needs neither: its rebased words are already the unslid pointers.
 //!
@@ -54,7 +54,7 @@
 //! Linked images only (`ET_EXEC`/`ET_DYN`); an `ET_REL` `.o` takes the separate
 //! `relocobjects` layout path, which applies its own relocations. A Mach-O's
 //! chained fixups are the same fact stream in Apple's format; they take the
-//! [`super::kuna_machorelocs`] arm under the same gate. Architectures:
+//! [`super::machorelocs`] arm under the same gate. Architectures:
 //! x86-64, AArch64, i386 and ARM — the four whose `RELATIVE`/`GLOB_DAT`/
 //! `JUMP_SLOT` triple is all that is needed. Both `RELA` (explicit addend) and
 //! `REL` (addend in the slot) tables are handled. Relocation kinds outside the
@@ -283,12 +283,12 @@ fn implicit_addend(file: &object::File, vma: u64, width: usize, le: bool) -> Opt
 /// Returns an empty result whenever the file is neither an ELF nor a Mach-O,
 /// the file is an `ET_REL` object (the `relocobjects` path owns those), or the
 /// machine is not one of the four handled. A Mach-O takes the chained-fixup
-/// arm in [`super::kuna_machorelocs`]. Never errors: a malformed entry is
+/// arm in [`super::machorelocs`]. Never errors: a malformed entry is
 /// skipped, never applied on a guess.
 pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
     let mut out = DynRelocs::default();
     if file.format() == object::BinaryFormat::MachO {
-        return super::kuna_machorelocs::resolve(file, bytes);
+        return super::machorelocs::resolve(file, bytes);
     }
     if file.format() != object::BinaryFormat::Elf {
         return out;
@@ -622,7 +622,7 @@ pub struct FixupSite {
 /// partial.
 #[derive(Debug, Clone)]
 pub struct FixupSites {
-    pub coverage: crate::loader::kuna_dataptrs::Coverage,
+    pub coverage: crate::loader::dataptrs::Coverage,
     pub reason: Option<String>,
     pub sites: Vec<FixupSite>,
 }
@@ -636,9 +636,9 @@ pub struct FixupSites {
 /// reason, when some of an ELF's tables could not be read ([`unread_tables`])
 /// or a Mach-O's chain walk stopped short.
 ///
-/// [`Coverage::None`]: crate::loader::kuna_dataptrs::Coverage::None
+/// [`Coverage::None`]: crate::loader::dataptrs::Coverage::None
 pub fn fixup_sites(file: &object::File, bytes: &[u8]) -> FixupSites {
-    use crate::loader::kuna_dataptrs::{Coverage, Source};
+    use crate::loader::dataptrs::{Coverage, Source};
     let mut sites = Vec::new();
     let mut reason = None;
     let coverage = if file.format() == object::BinaryFormat::MachO {

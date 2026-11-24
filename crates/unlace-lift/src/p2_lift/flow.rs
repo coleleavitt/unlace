@@ -81,7 +81,7 @@ pub use crate::fspec::next_fspec_handle;
 pub use crate::funcdata_block::JtPipelineFn;
 pub use crate::funcdata_block::VisitStat;
 pub use crate::funcdata_block::VisitedMap;
-use crate::kuna_ppc32piccalls::FuncdataPpc32piccallsExt;
+use crate::ppc32piccalls::FuncdataPpc32piccallsExt;
 use std::collections::BTreeMap;
 use unlace_base::address::{Address, SeqNum};
 use unlace_base::error::{KunaError, KunaResult};
@@ -162,17 +162,14 @@ pub trait FlowEnvironment {
     /// p-code, returning the instruction length in bytes.
     fn translate(&self) -> &dyn Translate;
 
-    fn arm_decode_mode(
-        &self,
-        _addr: &Address,
-    ) -> Option<super::kuna_armflowcontext::ArmDecodeMode> {
+    fn arm_decode_mode(&self, _addr: &Address) -> Option<super::armflowcontext::ArmDecodeMode> {
         None
     }
 
     fn preserve_arm_decode_mode(
         &self,
         _addr: &Address,
-        _mode: super::kuna_armflowcontext::ArmDecodeMode,
+        _mode: super::armflowcontext::ArmDecodeMode,
         _entry: bool,
     ) {
     }
@@ -313,7 +310,7 @@ pub trait FlowEnvironment {
     }
 
     /// (kuna) The prototype the loader parked for the call instruction at `site`
-    /// ([`crate::p2_lift::kuna_callsiteproto`]).
+    /// ([`crate::p2_lift::callsiteproto`]).
     fn call_site_prototype(&self, _site: &Address) -> Option<crate::fspec::PrototypePieces> {
         None
     }
@@ -339,7 +336,7 @@ pub trait FlowEnvironment {
 
     /// (kuna `fastfailnoreturn`) Is `op` the CALLIND half of a Windows `int 0x29`
     /// (`__fastfail`), which never returns?  See
-    /// [`kuna_fastfailnoreturn`](crate::kuna_fastfailnoreturn).  The default shell
+    /// [`kuna_fastfailnoreturn`](crate::fastfailnoreturn).  The default shell
     /// reports `false` (upstream behavior: the interrupt is an ordinary modelled
     /// call, so the cspec's `extrapop` raises the stack pointer by 8 at every site).
     fn is_fastfail_callind(&self, _fd: &Funcdata, _op: OpId) -> bool {
@@ -356,7 +353,7 @@ pub trait FlowEnvironment {
 
     /// (kuna `msvcsig`) The import slot the CALLIND `op` calls through, when that
     /// slot carries a locked MSVC prototype, so the call is direct from the flow
-    /// on. See [`kuna_msvcimportcall`](crate::kuna_msvcimportcall). The default
+    /// on. See [`kuna_msvcimportcall`](crate::msvcimportcall). The default
     /// shell reports `None` (upstream behavior: `ActionDeindirect` resolves it
     /// later and the function restarts).
     fn msvc_import_slot(&self, _fd: &Funcdata, _op: OpId) -> Option<Address> {
@@ -382,7 +379,7 @@ pub trait FlowEnvironment {
 
     /// (kuna `guarddispatch`) The register holding the real target, when the
     /// CALLIND `op` calls through a Control Flow Guard dispatch slot. See
-    /// [`kuna_guarddispatch`](crate::kuna_guarddispatch). The default shell
+    /// [`kuna_guarddispatch`](crate::guarddispatch). The default shell
     /// reports `None`.
     fn guard_dispatch_target(
         &self,
@@ -393,7 +390,7 @@ pub trait FlowEnvironment {
     }
 
     /// (kuna `--assert callee`) Did the caller state where the indirect jump at
-    /// `site` goes? See [`kuna_calleeoverride`](crate::kuna_calleeoverride).
+    /// `site` goes? See [`kuna_calleeoverride`](crate::calleeoverride).
     fn stated_callee_site(&self, _fd: &Funcdata, _site: &Address) -> bool {
         false
     }
@@ -408,29 +405,29 @@ pub trait FlowEnvironment {
 
     /// (kuna `int3pad`) Is `op` the CALLIND half of a decoded `int3`, and if so
     /// how long is the pad and does the flow end there?  See
-    /// [`kuna_int3pad`](crate::kuna_int3pad).  The default shell reports `None`
+    /// [`kuna_int3pad`](crate::int3pad).  The default shell reports `None`
     /// (upstream behavior: the pad prints as an indirect call through the `swi`
     /// userop and nothing says control ran into it).
-    fn int3_pad_site(&self, _fd: &Funcdata, _op: OpId) -> Option<crate::kuna_int3pad::Int3PadSite> {
+    fn int3_pad_site(&self, _fd: &Funcdata, _op: OpId) -> Option<crate::int3pad::Int3PadSite> {
         None
     }
 
     /// (kuna) Is `op` the BRANCHIND half of an AArch64 `brk` whose immediate a
     /// compiler emits for a trap that does not return?  Matched, it becomes a
-    /// no-return halt.  See [`kuna_brktrap`](crate::kuna_brktrap).
-    fn brk_trap(&self, _fd: &Funcdata, _op: OpId) -> Option<crate::kuna_brktrap::BrkTrap> {
+    /// no-return halt.  See [`kuna_brktrap`](crate::brktrap).
+    fn brk_trap(&self, _fd: &Funcdata, _op: OpId) -> Option<crate::brktrap::BrkTrap> {
         None
     }
 
     /// (kuna) Is `op` the BRANCHIND half of a trap a Linux kernel `__bug_table`
     /// entry names? Matched, the trap's CALLOTHER and the entry are returned and
     /// the site prints as `BUG()` or `__WARN(file,line)`. See
-    /// [`kuna_kernelbug`](crate::kuna_kernelbug).
+    /// [`kuna_kernelbug`](crate::kernelbug).
     fn kernel_bug_site(
         &self,
         _fd: &Funcdata,
         _op: OpId,
-    ) -> Option<(OpId, crate::kuna_kernelbug::KernelBugSite)> {
+    ) -> Option<(OpId, crate::kernelbug::KernelBugSite)> {
         None
     }
 
@@ -444,7 +441,7 @@ pub trait FlowEnvironment {
     /// (kuna) Is the direct BRANCH or bounded CBRANCH `op`, whose target is
     /// `dest`, an `-O2` tail call to another known function's entry (and so should
     /// be recovered as a `CALL` + `RETURN` rather than flow-followed into the
-    /// callee)?  See [`kuna_tailcalljump`](crate::kuna_tailcalljump).
+    /// callee)?  See [`kuna_tailcalljump`](crate::tailcalljump).
     ///
     /// // STUB(W4): ArchOption tailcalljump — gated on `option tailcalljump
     /// on|off`, default \b false (default-pipeline byte-identical).
@@ -456,7 +453,7 @@ pub trait FlowEnvironment {
     /// [`is_tail_call_branch`](FlowEnvironment::is_tail_call_branch) for a
     /// `CPUI_BRANCHIND` whose recovered jump table has the single destination
     /// `dest`, which may lie outside the declared extent.  See
-    /// [`kuna_is_tail_call_table`](crate::kuna_tailcalljump::kuna_is_tail_call_table).
+    /// [`kuna_is_tail_call_table`](crate::tailcalljump::kuna_is_tail_call_table).
     fn is_tail_call_table(
         &self,
         _fd: &Funcdata,
@@ -472,16 +469,16 @@ pub trait FlowEnvironment {
     /// the symbol table does NOT know: does the run of instructions ending at
     /// `op` tear down exactly the frame the entry block built, so the jump is a
     /// tail call into a callee no discovery oracle reached?  See
-    /// [`kuna_tailcallframe`](crate::kuna_tailcallframe).  The default shell
+    /// [`kuna_tailcallframe`](crate::tailcallframe).  The default shell
     /// reports `false`.
     fn is_frame_teardown_tail_call(&self, _fd: &Funcdata, _op: OpId, _dest: &Address) -> bool {
         false
     }
 
     /// (kuna `evmcalls`) The image's classified EVM internal calls and
-    /// returns. See [`kuna_evmcalls`](crate::kuna_evmcalls). The default
+    /// returns. See [`kuna_evmcalls`](crate::evmcalls). The default
     /// shell has none.
-    fn evm_calls(&self) -> Option<std::rc::Rc<crate::kuna_evmcalls::EvmCallMap>> {
+    fn evm_calls(&self) -> Option<std::rc::Rc<crate::evmcalls::EvmCallMap>> {
         None
     }
 
@@ -524,22 +521,19 @@ pub trait FlowEnvironment {
     /// (kuna `pltlocal`) The function the PLT stub at a direct-call `entry` is
     /// bound to by the image's own relocations, which the call spec is built at.
     /// The default shell has no loader and reports `None`. See
-    /// [`crate::p4_calls::kuna_pltlocal`].
+    /// [`crate::p4_calls::pltlocal`].
     fn query_call_definition(&self, _entry: &Address) -> Option<Address> {
         None
     }
 
     /// (kuna `spsolve`) What the returns of the function at the direct-call
-    /// `entry` do to the stack pointer. See `p4_calls/kuna_spsolve.rs`.
-    fn query_call_returns(
-        &self,
-        _entry: &Address,
-    ) -> Option<crate::kuna_calleefacts::CalleeReturns> {
+    /// `entry` do to the stack pointer. See `p4_calls/spsolve.rs`.
+    fn query_call_returns(&self, _entry: &Address) -> Option<crate::calleefacts::CalleeReturns> {
         None
     }
 
     /// The model the register inputs of the function at the direct-call `entry`
-    /// select. See [`crate::p4_calls::kuna_calleereginputs`].
+    /// select. See [`crate::p4_calls::calleereginputs`].
     fn query_call_register_model(
         &self,
         _entry: &Address,
@@ -548,50 +542,50 @@ pub trait FlowEnvironment {
     }
 
     /// How many of EAX, ECX and EDX the function at the direct-call `entry`
-    /// reads before writing them. See [`crate::p4_calls::kuna_calleereginputs`].
+    /// reads before writing them. See [`crate::p4_calls::calleereginputs`].
     fn query_call_arg_registers(&self, _entry: &Address) -> u8 {
         0
     }
 
     /// The extrapop the returns of the function at the direct-call `entry`
-    /// state. See `p4_calls/kuna_calleepurge.rs`.
+    /// state. See `p4_calls/calleepurge.rs`.
     fn query_call_extra_pop(&self, _entry: &Address) -> Option<int4> {
         None
     }
 
     /// The stack bytes the caller removes right after the indirect call at
-    /// `call_at`. See [`crate::p4_calls::kuna_calleereginputs`].
+    /// `call_at`. See [`crate::p4_calls::calleereginputs`].
     fn query_callind_cleanup(&self, _call_at: &Address) -> u32 {
         0
     }
 
     /// The stack-argument bytes the function at the direct-call `entry` can
-    /// take at the call at `call_at`. See [`crate::p4_calls::kuna_calleestackargs`].
+    /// take at the call at `call_at`. See [`crate::p4_calls::calleestackargs`].
     fn query_call_stack_arg_bytes(
         &self,
         _entry: &Address,
         _call_at: &Address,
-    ) -> Option<crate::kuna_calleefacts::StackArgs> {
+    ) -> Option<crate::calleefacts::StackArgs> {
         None
     }
 
     /// The stack bytes the function at the direct-call `entry` pops, or the
     /// caller removes after the call at `call_at`, when it states no stack
-    /// extent. See [`crate::p4_calls::kuna_calleestackargs`].
+    /// extent. See [`crate::p4_calls::calleestackargs`].
     fn query_call_stack_window(&self, _entry: &Address, _call_at: &Address) -> Option<u32> {
         None
     }
 
     /// The stack bytes the reached returns of the function at the direct-call
     /// `entry` pop above the return address, when it states no stack extent.
-    /// See [`crate::p4_calls::kuna_calleestackargs`].
+    /// See [`crate::p4_calls::calleestackargs`].
     fn query_call_return_pop(&self, _entry: &Address) -> Option<u32> {
         None
     }
 
     /// Does the function at the direct-call `entry` move its caller's stack
     /// pointer (`_chkstk`, `__SEH_prolog4`)? See
-    /// [`crate::p4_calls::kuna_calleestackargs`].
+    /// [`crate::p4_calls::calleestackargs`].
     fn query_call_moves_stack(&self, _entry: &Address) -> bool {
         false
     }
@@ -613,7 +607,7 @@ pub trait FlowEnvironment {
     /// (kuna `noreturn_known`) Is this one direct call to `entry`, the instruction
     /// at `call` falling through to `fallthrough`, no-return although the callee
     /// is not? See
-    /// [`is_proxy_no_return_at`](crate::p4_calls::kuna_calleenoreturn::is_proxy_no_return_at).
+    /// [`is_proxy_no_return_at`](crate::p4_calls::calleenoreturn::is_proxy_no_return_at).
     /// The default shell reports `false`.
     fn query_call_no_return_at(
         &self,
@@ -630,7 +624,7 @@ pub trait FlowEnvironment {
     /// another known function (via [`query_call`](FlowEnvironment::query_call))
     /// instead of decoding the next function's body into this one.  The default
     /// shell reports `false` (no bounding, upstream behavior).  See
-    /// [`kuna_funcboundflow`](crate::kuna_funcboundflow).
+    /// [`kuna_funcboundflow`](crate::funcboundflow).
     fn funcbound_flow_enabled(&self) -> bool {
         false
     }
@@ -650,7 +644,7 @@ pub trait FlowEnvironment {
 
     /// (kuna `funcboundflow`) How far past the fall-through `next` the
     /// function's literal pool starts, from the extents the analysis tier
-    /// proved ([`kuna_pool_pad`](crate::kuna_funcboundflow::kuna_pool_pad));
+    /// proved ([`kuna_pool_pad`](crate::funcboundflow::kuna_pool_pad));
     /// `None` when none starts within the padding allowance. The default shell
     /// reports `None`, so no call's fall-through is bounded at a pool.
     fn funcbound_pool_pad(&self, _next: &Address) -> Option<u64> {
@@ -660,7 +654,7 @@ pub trait FlowEnvironment {
     /// (kuna `funcboundflow`) Do the `len` bytes at `addr` decode as instructions
     /// that do nothing — the alignment padding a compiler can leave between a
     /// call and the literal pool after it
-    /// ([`kuna_is_padding_run`](crate::kuna_funcboundflow::kuna_is_padding_run))?
+    /// ([`kuna_is_padding_run`](crate::funcboundflow::kuna_is_padding_run))?
     /// The default shell reports `false`, keeping the fall-through.
     fn funcbound_padding_run(&self, _addr: &Address, _len: int4) -> bool {
         false
@@ -673,7 +667,7 @@ pub trait FlowEnvironment {
     /// instruction's encoding (the anti-disassembly junk-byte idiom), instead of
     /// letting the fall-through decode swallow the target and desynchronise the
     /// stream.  The default shell reports `false` (upstream behavior).  See
-    /// [`kuna_overlapbranch`](crate::kuna_overlapbranch).
+    /// [`kuna_overlapbranch`](crate::overlapbranch).
     fn overlap_branch_enabled(&self) -> bool {
         false
     }
@@ -684,7 +678,7 @@ pub trait FlowEnvironment {
     /// printer renders beside the `halt_baddata()` / `halt_unimplemented()`
     /// statement.  The live environment always reports; the default shell
     /// reports `false` (the silent `return;`).  See
-    /// [`kuna_decodehalt`](crate::kuna_decodehalt).
+    /// [`kuna_decodehalt`](crate::decodehalt).
     fn decode_halt_reports(&self) -> bool {
         false
     }
@@ -692,7 +686,7 @@ pub trait FlowEnvironment {
     /// (kuna `honestgaps`) Does an instruction stepped over under the
     /// `ignoreunimplemented` policy get a warning at its address naming it?
     /// The default shell reports `false`.  See
-    /// [`kuna_honestgaps`](crate::kuna_honestgaps).
+    /// [`kuna_honestgaps`](crate::honestgaps).
     fn honest_gaps(&self) -> bool {
         false
     }
@@ -706,7 +700,7 @@ pub trait FlowEnvironment {
     /// discards the pushed return address and jumps back into the instruction
     /// stream, so the `CALL` should be flowed through as a branch rather than
     /// decoding a fall-through at the return address?  See
-    /// [`kuna_calltrampoline`](crate::kuna_calltrampoline).  The default shell
+    /// [`kuna_calltrampoline`](crate::calltrampoline).  The default shell
     /// reports `false` (upstream behavior: every `CALL` falls through).
     fn is_return_discarding_trampoline(&self, _dest: &Address) -> bool {
         false
@@ -715,7 +709,7 @@ pub trait FlowEnvironment {
     /// (kuna `callpopret`) Is the direct-call target `dest` a fragment that pops
     /// the pushed return address off the stack and `ret`s through the word above
     /// it — returning to the caller's own caller, so control never reaches the
-    /// return address?  See [`kuna_callpopret`](crate::kuna_callpopret).  The
+    /// return address?  See [`kuna_callpopret`](crate::callpopret).  The
     /// default shell reports `false` (upstream behavior: every `CALL` falls
     /// through).
     fn pops_return_address(&self, _dest: &Address) -> bool {
@@ -860,7 +854,7 @@ pub struct FlowInfo<'a, E: FlowEnvironment> {
     /// a forward target.  Consumed by the very next
     /// [`process_instruction`](FlowInfo::process_instruction), which truncates the
     /// fall-through when the branch target turns out to lie strictly inside it.
-    /// See [`kuna_overlapbranch`](crate::kuna_overlapbranch).
+    /// See [`kuna_overlapbranch`](crate::overlapbranch).
     overlap_watch: Option<(Address, Address)>,
     /// (kuna `overlapbranch`) Direct target of the CBRANCH seen while
     /// xref-classifying the current instruction, staged for `overlap_watch`.
@@ -880,8 +874,8 @@ pub struct FlowInfo<'a, E: FlowEnvironment> {
     /// (kuna `javatry`) The DEX model of a method decoded with the option on,
     /// and its try items.
     java_try: Option<(
-        crate::kuna_javatry::JavaTryPlan,
-        std::rc::Rc<crate::kuna_dex::DexModel>,
+        crate::javatry::JavaTryPlan,
+        std::rc::Rc<crate::dex::DexModel>,
     )>,
 }
 
@@ -939,16 +933,16 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
             .filter(|_| {
                 data.get_arch()
                     .kuna_options
-                    .get::<crate::kuna_coreoptions::JavaTry>()
+                    .get::<crate::coreoptions::JavaTry>()
                     .0
             })
             .map(|model| {
                 (
-                    crate::kuna_javatry::JavaTryPlan::new(model, entry.get_offset()),
+                    crate::javatry::JavaTryPlan::new(model, entry.get_offset()),
                     std::rc::Rc::clone(model),
                 )
             });
-        let loader_transfers_present = crate::kuna_stubtailcall::active(data.get_arch());
+        let loader_transfers_present = crate::stubtailcall::active(data.get_arch());
         FlowInfo {
             data,
             env,
@@ -1331,7 +1325,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
         // target outside a declared extent ends it.
         let mapped = self.env.mapped_flow_image().map_or_else(
             || self.env.code_bytes_mapped(to),
-            |image| crate::kuna_mappedflowboundary::mapped_start(image, to),
+            |image| crate::mappedflowboundary::mapped_start(image, to),
         );
         if !mapped {
             let fromaddr = self
@@ -1463,7 +1457,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
         !self.is_flow_for_inline()
             && curaddr != self.data.get_address()
             && self.env.mapped_flow_image().is_some_and(|image| {
-                crate::kuna_mappedflowboundary::truncated_instruction(
+                crate::mappedflowboundary::truncated_instruction(
                     image,
                     self.env.translate(),
                     curaddr,
@@ -1652,12 +1646,9 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                 let branchind = self.env.resolve_typeop(OpCode::CPUI_BRANCHIND);
                 self.data.op_set_opcode(curop, branchind);
             }
-            if crate::kuna_returnbranch::computed_target(
-                &self.data,
-                curop,
-                &self.visited,
-                |index| self.env.is_isa_mode_switch(index),
-            ) {
+            if crate::returnbranch::computed_target(&self.data, curop, &self.visited, |index| {
+                self.env.is_isa_mode_switch(index)
+            }) {
                 let branchind = self.env.resolve_typeop(OpCode::CPUI_BRANCHIND);
                 self.data.op_set_opcode(curop, branchind);
             }
@@ -1848,10 +1839,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                     if let Some(producer) =
                         self.env.sparc_struct_ret_trap_producer(&self.data, curop)
                     {
-                        crate::kuna_sparcstructret::neutralize_trap_producer(
-                            &mut self.data,
-                            producer,
-                        )?;
+                        crate::sparcstructret::neutralize_trap_producer(&mut self.data, producer)?;
                         self.data.op_destroy_raw(curop)?;
                         op = None;
                         *isfallthru = true;
@@ -1865,7 +1853,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                             .expect("kernelbug: stale op")
                             .get_addr()
                             .clone();
-                        crate::kuna_kernelbug::rewrite(&mut self.data, curop, callother, &site)?;
+                        crate::kernelbug::rewrite(&mut self.data, curop, callother, &site)?;
                         self.data.op_destroy_raw(curop)?;
                         if site.warning {
                             op = Some(callother);
@@ -1878,7 +1866,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                     }
                     if let Some(trap) = self.env.brk_trap(&self.data, curop) {
                         if let Some(code) = &trap.code {
-                            crate::kuna_brktrap::read_code(&mut self.data, trap.callother, code)?;
+                            crate::brktrap::read_code(&mut self.data, trap.callother, code)?;
                         }
                         let addr = self
                             .data
@@ -2119,7 +2107,7 @@ following this call as a branch"
     /// edge. Relative targets keep both synthetic blocks at the branch site.
     fn recover_conditional_tail_call(&mut self, branch: OpId, dest: &Address) -> KunaResult<()> {
         let (skip, taken, call) =
-            crate::kuna_tailcalljump::conditional_tail_branches(&mut self.data, branch, dest)?;
+            crate::tailcalljump::conditional_tail_branches(&mut self.data, branch, dest)?;
         self.recover_tail_call(call, dest, "tailcalljump")?;
         let halt = self
             .dead_next(call)
@@ -2149,7 +2137,7 @@ following this call as a branch"
     /// recovered table `jt_idx` names exactly one address and the environment
     /// accepts that address as a tail-call target.
     fn tail_call_table_dest(&self, op: OpId, jt_idx: usize) -> Option<Address> {
-        let dest = crate::kuna_tailcalljump::kuna_sole_table_destination(
+        let dest = crate::tailcalljump::kuna_sole_table_destination(
             self.data.get_jump_table(jt_idx as int4),
         )?;
         if self.is_inside_declared_extent(&dest) {
@@ -2215,7 +2203,7 @@ following this call as a branch"
                     .is_some_and(|out| out.get_addr() == want.get_addr())
             });
             let Some(pos) = pos else {
-                return crate::kuna_calleefacts::is_register(want.get_addr())
+                return crate::calleefacts::is_register(want.get_addr())
                     .then(|| (want.get_addr().clone(), want.get_size()));
             };
             let def = obank.get(earlier[pos])?;
@@ -2238,10 +2226,10 @@ following this call as a branch"
     ///
     /// A target inside the current function's declared extent is
     /// intraprocedural, so neither inference rule is consulted there. Else,
-    /// [`kuna_tailcalljump`](crate::kuna_tailcalljump) is asked first, so a
+    /// [`kuna_tailcalljump`](crate::tailcalljump) is asked first, so a
     /// branch to a known function entry keeps the existing decision and the
     /// existing `tailcalljump:` warning text; [`kuna_tailcallframe`](
-    /// crate::kuna_tailcallframe) then gets the targets the symbol table does not
+    /// crate::tailcallframe) then gets the targets the symbol table does not
     /// know.  The returned name is the option that fired, so the introduced call
     /// is attributable to the rule that introduced it.
     fn tail_call_kind(&self, op: OpId, dest: &Address) -> Option<&'static str> {
@@ -2380,17 +2368,17 @@ following this call as a branch"
             crate::overrides::flow_type::NONE
         };
         let flowoverride = if self.loader_transfers_present {
-            crate::kuna_stubtailcall::flow_override(self.data.get_arch(), curaddr, explicit)
+            crate::stubtailcall::flow_override(self.data.get_arch(), curaddr, explicit)
         } else {
             explicit
         };
 
-        let eh_table = crate::kuna_itaniumeh::eh_table(self.data.get_arch());
+        let eh_table = crate::itaniumeh::eh_table(self.data.get_arch());
         if let Some(table) = eh_table.as_deref() {
             let own_funclet = table.funclet(curaddr.get_offset()).is_some()
                 && curaddr.get_offset() == self.data.get_address().get_offset();
             if table.is_pad(curaddr.get_offset()) && !self.is_flow_for_inline() && !own_funclet {
-                crate::kuna_itaniumeh::define_pad_registers(&mut self.data, table, curaddr)?;
+                crate::itaniumeh::define_pad_registers(&mut self.data, table, curaddr)?;
                 self.eh_pad_stub.insert(curaddr.clone());
             }
         }
@@ -2401,7 +2389,7 @@ following this call as a branch"
             .filter(|_| !self.is_flow_for_inline())
         {
             if let Some(first) =
-                crate::kuna_javatry::before_instruction(&mut self.data, plan, model, curaddr)?
+                crate::javatry::before_instruction(&mut self.data, plan, model, curaddr)?
             {
                 self.op_mark_start_basic(first);
             }
@@ -2442,7 +2430,7 @@ following this call as a branch"
             Err(err) => {
                 let overlap_step = if matches!(err, KunaError::DataUnavail { .. }) {
                     self.env.mapped_flow_image().and_then(|image| {
-                        crate::kuna_mappedflowboundary::unmapped_overlap_step(
+                        crate::mappedflowboundary::unmapped_overlap_step(
                             image,
                             self.env.translate(),
                             self.env.overlap_branch_enabled(),
@@ -2457,7 +2445,7 @@ following this call as a branch"
                     Some(step) => step,
                     None if self.kuna_truncated_mapped_instruction(curaddr) => {
                         self.artificial_halt(curaddr, pcodeop_flags::missing)?;
-                        let msg = crate::kuna_mappedflowboundary::truncated_warning(curaddr);
+                        let msg = crate::mappedflowboundary::truncated_warning(curaddr);
                         self.note_unmapped_flow(&msg, curaddr);
                         1
                     }
@@ -2483,7 +2471,7 @@ following this call as a branch"
                 None
             }
         });
-        if crate::kuna_overlapbranch::kuna_overlaps_pending_branch(
+        if crate::overlapbranch::kuna_overlaps_pending_branch(
             self.env.overlap_branch_enabled(),
             curaddr.get_offset(),
             step,
@@ -2552,7 +2540,7 @@ truncating the fall-through here"
             self.maxaddr = endaddr.clone();
         }
 
-        if !crate::kuna_nullable_reloc::relocations(&self.data.get_arch().kuna_states).is_empty() {
+        if !crate::nullable_reloc::relocations(&self.data.get_arch().kuna_states).is_empty() {
             let first = if emptyflag {
                 self.dead_head()
             } else {
@@ -2564,7 +2552,7 @@ truncating the fall-through here"
                 ops.push(op);
                 cursor = self.dead_next(op);
             }
-            crate::kuna_nullable_reloc::materialize(&mut self.data, curaddr, step, &ops);
+            crate::nullable_reloc::materialize(&mut self.data, curaddr, step, &ops);
         }
 
         // oiter points at first new op: beginDead() if was empty, else ++marker.
@@ -2586,7 +2574,7 @@ truncating the fall-through here"
                 insn_ops.push(next);
             }
             if flowoverride == crate::overrides::flow_type::NONE {
-                if let Some(first) = super::kuna_atomics::rewrite(&mut self.data, &insn_ops) {
+                if let Some(first) = super::atomics::rewrite(&mut self.data, &insn_ops) {
                     if first != firstop {
                         firstop = first;
                         insn_ops.insert(0, first);
@@ -2595,7 +2583,7 @@ truncating the fall-through here"
             }
             (self.data.hooks().retpushedhalf_observe_instruction)(&mut self.data, &insn_ops);
             if flowoverride == crate::overrides::flow_type::NONE {
-                super::kuna_atomicxadd::observe(&mut self.data, &insn_ops);
+                super::atomicxadd::observe(&mut self.data, &insn_ops);
             }
             ends_in_call = self.pool_bound && self.ends_in_unconditional_call(&insn_ops);
             call_before_pad = !self.is_flow_for_inline()
@@ -2618,7 +2606,7 @@ truncating the fall-through here"
                 .data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_coreoptions::LaneFuse>()
+                .get::<crate::coreoptions::LaneFuse>()
                 .on
             {
                 let mut ops = Vec::new();
@@ -2651,14 +2639,14 @@ truncating the fall-through here"
                             .data
                             .get_arch()
                             .kuna_options
-                            .get::<crate::kuna_coreoptions::LaneFuse>()
+                            .get::<crate::coreoptions::LaneFuse>()
                             .all;
                     if !self.data.kuna_vector_code
-                        && crate::kuna_lanefuse::has_vector_run(&self.data, &ops)
+                        && crate::lanefuse::has_vector_run(&self.data, &ops)
                     {
                         self.data.kuna_vector_code = true;
                     }
-                    crate::kuna_lanefuse::fuse(&mut self.data, &ops, vex)?;
+                    crate::lanefuse::fuse(&mut self.data, &ops, vex)?;
                     if !self.data.kuna_vector_code {
                         let vector = &self.data.get_arch().vector_userops;
                         self.data.kuna_vector_code = ops.iter().any(|&op| {
@@ -2677,14 +2665,14 @@ truncating the fall-through here"
                         });
                     }
                     let evex_z = fetched && head[0] == 0x62 && head[3] & 0x80 != 0;
-                    crate::kuna_lanefuse::fold_mask(&mut self.data, &ops, evex_z)?;
+                    crate::lanefuse::fold_mask(&mut self.data, &ops, evex_z)?;
                 }
             }
             if self
                 .data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_neonintrin::NeonIntrin>()
+                .get::<crate::neonintrin::NeonIntrin>()
                 .fuse
             {
                 let mut ops = Vec::new();
@@ -2693,13 +2681,13 @@ truncating the fall-through here"
                     ops.push(op);
                     cursor = self.dead_next(op);
                 }
-                crate::kuna_lanefuse::fuse_neon(&mut self.data, &ops)?;
+                crate::lanefuse::fuse_neon(&mut self.data, &ops)?;
             }
             if self
                 .data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_coreoptions::VexZeroUpper>()
+                .get::<crate::coreoptions::VexZeroUpper>()
                 .0
             {
                 let mut insn = Vec::new();
@@ -2709,7 +2697,7 @@ truncating the fall-through here"
                     cursor = self.dead_next(op);
                 }
                 for &op in &insn {
-                    crate::kuna_vexzeroupper::split(&mut self.data, op, &insn)?;
+                    crate::vexzeroupper::split(&mut self.data, op, &insn)?;
                 }
             }
             if let Some(site) = eh_table
@@ -2725,12 +2713,12 @@ truncating the fall-through here"
                         .data
                         .get_arch()
                         .kuna_options
-                        .get::<crate::kuna_itaniumeh::ItaniumEh>()
+                        .get::<crate::itaniumeh::ItaniumEh>()
                         .catch_only
                         || site
                             .clauses
                             .iter()
-                            .any(|c| *c != crate::kuna_itaniumeh::EhClause::Cleanup)))
+                            .any(|c| *c != crate::itaniumeh::EhClause::Cleanup)))
                 .then(|| {
                     let mut cursor = Some(firstop);
                     while let Some(op) = cursor {
@@ -2748,7 +2736,7 @@ truncating the fall-through here"
                         curaddr.get_space().expect("eh: code space").clone(),
                         site.pad,
                     );
-                    crate::kuna_itaniumeh::insert_unwind_edge(&mut self.data, op, &pad)?;
+                    crate::itaniumeh::insert_unwind_edge(&mut self.data, op, &pad)?;
                 }
             }
             // (kuna `msvceh`) An MSVC try region: the first call in it gets one
@@ -2766,7 +2754,7 @@ truncating the fall-through here"
                     .data
                     .get_arch()
                     .kuna_options
-                    .get::<crate::kuna_itaniumeh::ItaniumEh>()
+                    .get::<crate::itaniumeh::ItaniumEh>()
                     .catch_only;
                 let sites: Vec<_> = sites
                     .into_iter()
@@ -2774,7 +2762,7 @@ truncating the fall-through here"
                         !catch_only
                             || s.clauses
                                 .iter()
-                                .any(|c| *c != crate::kuna_itaniumeh::EhClause::Cleanup)
+                                .any(|c| *c != crate::itaniumeh::EhClause::Cleanup)
                     })
                     .collect();
                 if !sites.is_empty() || cont.is_some() || cleanup_ret {
@@ -2795,19 +2783,15 @@ truncating the fall-through here"
                         for site in sites.iter().rev() {
                             if self.eh_records_seen.insert(site.pad) {
                                 let pad = Address::new(space.clone(), site.pad);
-                                crate::kuna_itaniumeh::insert_unwind_edge(
-                                    &mut self.data,
-                                    call,
-                                    &pad,
-                                )?;
+                                crate::itaniumeh::insert_unwind_edge(&mut self.data, call, &pad)?;
                             }
                         }
                     }
                     if let Some(cont) = cont {
                         let to = Address::new(space, cont);
-                        crate::kuna_itaniumeh::return_to_continuation(&mut self.data, &insn, &to)?;
+                        crate::itaniumeh::return_to_continuation(&mut self.data, &insn, &to)?;
                     } else if cleanup_ret {
-                        crate::kuna_itaniumeh::return_to_halt(&mut self.data, &insn)?;
+                        crate::itaniumeh::return_to_halt(&mut self.data, &insn)?;
                     }
                 }
             }
@@ -2923,9 +2907,10 @@ truncating the fall-through here"
             } else if self.baddr <= next
                 && next <= self.eaddr
                 && !self.is_flow_for_inline()
-                && self.env.mapped_flow_image().is_some_and(|image| {
-                    !crate::kuna_mappedflowboundary::mapped_start(image, &next)
-                })
+                && self
+                    .env
+                    .mapped_flow_image()
+                    .is_some_and(|image| !crate::mappedflowboundary::mapped_start(image, &next))
             {
                 self.handle_unmapped_target(curaddr, &next);
                 self.register_missing_halt(&next)?;
@@ -2945,7 +2930,7 @@ truncating the fall-through here"
     /// branch target's own decode end at the same address?  True means they are
     /// the same instruction with leading bytes skipped — glibc's conditional-`LOCK`
     /// idiom, where both streams are real — and the truncation must not fire.
-    /// See [`kuna_overlapbranch::kuna_streams_reconverge`](crate::kuna_overlapbranch).
+    /// See [`overlapbranch::kuna_streams_reconverge`](crate::overlapbranch).
     ///
     /// Runs only once the cheap strict-interior test has already matched, which it
     /// never does in ordinary code, so the extra decode costs nothing in practice.
@@ -2960,7 +2945,7 @@ truncating the fall-through here"
             None => return true,
         };
         let len = self.env.translate().instruction_length(target).ok();
-        crate::kuna_overlapbranch::kuna_streams_reconverge(
+        crate::overlapbranch::kuna_streams_reconverge(
             curaddr.get_offset(),
             step,
             target.get_offset(),
@@ -2986,10 +2971,10 @@ truncating the fall-through here"
     /// (kuna `funcboundflow`) Is the fall-through to `next` the start of this
     /// function's literal pool, allowing for the compiler's alignment padding?
     /// See
-    /// [`kuna_should_bound_at_pool`](crate::kuna_funcboundflow::kuna_should_bound_at_pool).
+    /// [`kuna_should_bound_at_pool`](crate::funcboundflow::kuna_should_bound_at_pool).
     fn is_pool_fallthru(&self, next: &Address) -> bool {
         let pad = self.env.funcbound_pool_pad(next);
-        crate::kuna_funcboundflow::kuna_should_bound_at_pool(
+        crate::funcboundflow::kuna_should_bound_at_pool(
             pad,
             pad.is_some_and(|pad| pad == 0 || self.env.funcbound_padding_run(next, pad as int4)),
         )
@@ -3026,7 +3011,7 @@ truncating the fall-through here"
         let next_is_unconditional_return = next_is_known_function
             && !next_is_self
             && self.env.funcbound_entry_is_unconditional_return(next);
-        crate::kuna_funcboundflow::kuna_should_bound_at_entry(
+        crate::funcboundflow::kuna_should_bound_at_entry(
             true,
             next_is_known_function,
             next_is_self,
@@ -3049,15 +3034,14 @@ truncating the fall-through here"
                 if (self.flags & flow_flags::ignore_unimplemented) != 0 {
                     let step = *instruction_length;
                     if self.env.honest_gaps() {
-                        let text = crate::kuna_honestgaps::not_modelled_text(explain);
+                        let text = crate::honestgaps::not_modelled_text(explain);
                         self.data.warning(&text, curaddr);
                     }
                     if !self.has_unimplemented() {
                         self.flags |= flow_flags::unimplemented_present;
                         if reports {
-                            self.data.warning_header(
-                                crate::kuna_decodehalt::UNIMPLEMENTED_IGNORED_HEADER,
-                            );
+                            self.data
+                                .warning_header(crate::decodehalt::UNIMPLEMENTED_IGNORED_HEADER);
                         }
                     }
                     Ok(step)
@@ -3068,13 +3052,13 @@ truncating the fall-through here"
                     self.artificial_halt(curaddr, pcodeop_flags::unimplemented)?;
                     if reports {
                         self.data
-                            .warning(crate::kuna_decodehalt::UNIMPLEMENTED_WARNING, curaddr);
+                            .warning(crate::decodehalt::UNIMPLEMENTED_WARNING, curaddr);
                     }
                     if !self.has_unimplemented() {
                         self.flags |= flow_flags::unimplemented_present;
                         if reports {
                             self.data
-                                .warning_header(crate::kuna_decodehalt::UNIMPLEMENTED_HEADER);
+                                .warning_header(crate::decodehalt::UNIMPLEMENTED_HEADER);
                         }
                     }
                     Ok(1)
@@ -3088,7 +3072,7 @@ truncating the fall-through here"
                     let reports = self.env.decode_halt_reports();
                     if reports {
                         self.data
-                            .warning(crate::kuna_decodehalt::BAD_INSTRUCTION_WARNING, curaddr);
+                            .warning(crate::decodehalt::BAD_INSTRUCTION_WARNING, curaddr);
                         if let Some(hint) = self.env.decode_failure_hint(curaddr) {
                             self.data.warning(&hint, curaddr);
                         }
@@ -3097,7 +3081,7 @@ truncating the fall-through here"
                         self.flags |= flow_flags::baddata_present;
                         if reports {
                             self.data
-                                .warning_header(crate::kuna_decodehalt::BAD_INSTRUCTION_HEADER);
+                                .warning_header(crate::decodehalt::BAD_INSTRUCTION_HEADER);
                         }
                     }
                     Ok(1)
@@ -3696,7 +3680,7 @@ truncating the fall-through here"
             .data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_constselectjump::ConstSelectMode>()
+            .get::<crate::constselectjump::ConstSelectMode>()
             .admits_reentry();
         let mut provisional = std::collections::BTreeSet::new();
         let mut followed = std::collections::HashSet::new();
@@ -3782,7 +3766,7 @@ truncating the fall-through here"
                     }
                 }
                 if reentry {
-                    new_edges.extend(crate::kuna_indirectreturn::reentry_edges(
+                    new_edges.extend(crate::indirectreturn::reentry_edges(
                         &self.data,
                         mark,
                         |to| self.target(to).ok(),
@@ -3803,7 +3787,7 @@ truncating the fall-through here"
                 let relevant = if new_edges.is_empty() || dispatches.is_empty() {
                     Default::default()
                 } else {
-                    crate::kuna_indirectreturn::reaching_edges(
+                    crate::indirectreturn::reaching_edges(
                         &self.data,
                         &dispatches,
                         &new_edges,
@@ -3823,12 +3807,10 @@ truncating the fall-through here"
                             exact = false;
                             continue;
                         }
-                        let value = crate::kuna_returnbranch::target_on_edge(
-                            &self.data,
-                            from,
-                            op,
-                            |index| self.env.is_isa_mode_switch(index),
-                        );
+                        let value =
+                            crate::returnbranch::target_on_edge(&self.data, from, op, |index| {
+                                self.env.is_isa_mode_switch(index)
+                            });
                         let result = value.and_then(|value| {
                             let target = Address::new(address.get_space()?.clone(), value);
                             if self.outofbounds.contains(&target)
@@ -4088,7 +4070,7 @@ truncating the fall-through here"
             self.data.op_dead_insert_after(haltop, anchor);
             if !is_inline {
                 let text = if self.data.ppc32_pic_calls().contains_key(&addr.get_offset()) {
-                    crate::kuna_ppc32piccalls::WARNING
+                    crate::ppc32piccalls::WARNING
                 } else {
                     "Subroutine does not return"
                 };
@@ -4112,7 +4094,7 @@ truncating the fall-through here"
             .data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_coreoptions::TrapAfterCall>()
+            .get::<crate::coreoptions::TrapAfterCall>()
             .0
         {
             return false;
@@ -4305,7 +4287,7 @@ truncating the fall-through here"
                 .get_addr()
                 .clone();
             self.data
-                .warning(&crate::kuna_int3pad::warning_text(site.run), &addr);
+                .warning(&crate::int3pad::warning_text(site.run), &addr);
             if site.halt {
                 if let Some(idx) = self.data.get_call_specs_index(op) {
                     self.data
@@ -4329,7 +4311,7 @@ truncating the fall-through here"
     /// \e fspec annotation in0 + register the printed name.
     fn build_call_specs(&mut self, op: OpId, entry: Address, indirect: bool) -> KunaResult<()> {
         use crate::fspec::FuncCallSpecs;
-        if crate::kuna_ppc32piccalls::bind(&mut self.data, op, &entry, indirect)? {
+        if crate::ppc32piccalls::bind(&mut self.data, op, &entry, indirect)? {
             return Ok(());
         }
         let callee = (!indirect && !entry.is_invalid())
@@ -4637,7 +4619,7 @@ truncating the fall-through here"
                 .kuna_options
                 .get::<crate::flow::OutlinedInline>()
                 .0
-            && crate::kuna_outlinedinline::is_outlined_name(inlineflow.data.get_name())
+            && crate::outlinedinline::is_outlined_name(inlineflow.data.get_name())
         {
             *inlinefd = inlineflow.data;
             return Ok(-1);
@@ -4829,7 +4811,7 @@ truncating the fall-through here"
             .kuna_options
             .get::<crate::flow::OutlinedInline>()
             .0
-            || !crate::kuna_outlinedinline::is_outlined_name(inlineflow.data.get_name())
+            || !crate::outlinedinline::is_outlined_name(inlineflow.data.get_name())
         {
             return false;
         }
@@ -5020,7 +5002,7 @@ truncating the fall-through here"
                     let fixup = self.env.call_fixup_name(inject_id);
                     // (kuna `objcarc`) Hidden ARC bookkeeping is not worth a
                     // header line per call; the option says what happened.
-                    if !fixup.starts_with(crate::kuna_objcarc::FIXUP_PREFIX) {
+                    if !fixup.starts_with(crate::objcarc::FIXUP_PREFIX) {
                         self.data.warning_header(&format!(
                             "Function: {name} replaced with injection: {fixup}"
                         ));
@@ -5299,7 +5281,7 @@ truncating the fall-through here"
                 .obank()
                 .get(op)
                 .map_or(0, |o| o.get_addr().get_offset());
-            let _scope = crate::kuna_budget::JumpTableScope::enter(at);
+            let _scope = crate::budget::JumpTableScope::enter(at);
             if !for_inline && self.is_stated_tail_call(op) {
                 self.stated_tail_call(op)?;
                 continue;
@@ -5309,7 +5291,7 @@ truncating the fall-through here"
                     .get_jump_table(idx as int4)
                     .kuna_keeps_recovered_targets()
             });
-            let mut mode = if crate::kuna_budget::deadline_passed_in("jump-table recovery")
+            let mut mode = if crate::budget::deadline_passed_in("jump-table recovery")
                 || self.jt_work_exhausted(op)
             {
                 Ok(None)
@@ -5321,7 +5303,7 @@ truncating the fall-through here"
                     run_pipeline,
                     &mut shared_partial,
                 );
-                crate::kuna_budget::deadline_passed_in("jump-table recovery");
+                crate::budget::deadline_passed_in("jump-table recovery");
                 if unlace_base::env::var_os("UNLACE_JUMPTABLE_TRACE").is_some() {
                     eprintln!(
                         "jumptable: recovery at {at:#x}: {}",
@@ -5337,7 +5319,7 @@ truncating the fall-through here"
             // (kuna `switchextent`) A table nothing bounded: decode the
             // function's extent once, name its jump tables, and when it has
             // another table to end this one at, try again with that bound
-            // (`kuna_switchextent.rs`).
+            // (`switchextent.rs`).
             // A table that is its function's last and whose rows run on asked
             // for the next functions' tables too, on either attempt.
             let mut wanted = self.data.kuna_later_wanted.take();
@@ -5352,7 +5334,7 @@ truncating the fall-through here"
                     .kuna_options
                     .get::<crate::jumptable::SwitchExtent>()
                     .0
-                && !crate::kuna_budget::deadline_passed_in("jump-table recovery")
+                && !crate::budget::deadline_passed_in("jump-table recovery")
             {
                 rounds += 1;
                 let entry = self.data.get_address().clone();
@@ -5360,12 +5342,12 @@ truncating the fall-through here"
                 let mut bounded = false;
                 if self.data.kuna_extent_tables().is_none() {
                     let arch = self.data.get_arch();
-                    let tables = std::rc::Rc::new(super::kuna_switchextent::function_tables(
+                    let tables = std::rc::Rc::new(super::switchextent::function_tables(
                         self.env.translate(),
                         self.env.mapped_flow_image(),
                         &entry,
                         end,
-                        super::kuna_switchextent::enum_calls(arch, self.env.translate(), &entry)
+                        super::switchextent::enum_calls(arch, self.env.translate(), &entry)
                             .as_ref(),
                     ));
                     if let Some(partial) = shared_partial.as_mut() {
@@ -5382,7 +5364,7 @@ truncating the fall-through here"
                         arch.function_entry_after(&Address::new(std::rc::Rc::clone(s), at))
                     };
                     let later = std::rc::Rc::new(end.map_or_else(Vec::new, |end| {
-                        super::kuna_switchextent::later_tables(
+                        super::switchextent::later_tables(
                             self.env.translate(),
                             self.env.mapped_flow_image(),
                             &entry,
@@ -5470,9 +5452,9 @@ truncating the fall-through here"
                 .data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_jumptablework::JumpTableWork>()
+                .get::<crate::jumptablework::JumpTableWork>()
                 .0;
-            if !crate::kuna_jumptablework::exhausted(limit, self.kuna_jt_work) {
+            if !crate::jumptablework::exhausted(limit, self.kuna_jt_work) {
                 return false;
             }
             self.kuna_jt_work_spent = true;
@@ -5858,8 +5840,8 @@ pub fn build_partial_blocks<E: FlowEnvironment>(
     Ok(())
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.flow_next_fspec_handle = Some(next_fspec_handle);
 }
 

@@ -4,7 +4,7 @@
 //! Stage-aligned module group; declared flatly at the crate root via re-export in
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
+pub mod decodekit;
+pub mod emulatefunction;
 pub mod engine_translate;
 pub mod inject_sleigh;
-pub mod kuna_decodekit;
-pub mod kuna_emulatefunction;

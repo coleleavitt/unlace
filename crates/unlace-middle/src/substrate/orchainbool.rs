@@ -1,4 +1,4 @@
-//! (kuna `orchainbool`) The short-circuit protection of `returndup` (`kuna_orchain.rs`, DIV-69)
+//! (kuna `orchainbool`) The short-circuit protection of `returndup` (`orchain.rs`, DIV-69)
 //! guards the operand chain of a boolean expression: `return a || (b && c);` compiles to tests
 //! that share a `return 0`/`return 1` block. A shared return of any other constant
 //! (`return -1`) is the exit of guard clauses (`if (!p) return -1; if (p->x != K) return -1;`),

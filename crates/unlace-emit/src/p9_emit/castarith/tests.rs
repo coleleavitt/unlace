@@ -57,9 +57,9 @@ impl Fx {
         let mut arch = ArchContext::new(m);
         arch.types = Some(Rc::clone(&tf));
         arch.kuna_options
-            .set(crate::kuna_coreoptions::CastArith(cast_arith));
+            .set(crate::coreoptions::CastArith(cast_arith));
         arch.kuna_options
-            .set(crate::kuna_coreoptions::CastIndex(cast_index));
+            .set(crate::coreoptions::CastIndex(cast_index));
         let glb = Rc::new(arch);
         let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
         let mut fd = Funcdata::new(

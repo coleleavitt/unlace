@@ -1,7 +1,7 @@
 //! (kuna `flownames`) Name locals from the fields and types they meet.
 //!
 //! Two kinds of evidence for a numbered local that are read from the code
-//! rather than from a library table, added to the [`crate::kuna_libcnames`]
+//! rather than from a library table, added to the [`crate::libcnames`]
 //! walk:
 //!
 //! 1. a named structure field the value is loaded from or stored to, through a
@@ -27,7 +27,7 @@ use crate::context::{HighVariableId, OpId, VarnodeId};
 use crate::database::symbol_category;
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_libcnames::{Evidence, FIELD, TYPE, folded_from, folded_into, local_of};
+use crate::libcnames::{Evidence, FIELD, TYPE, folded_from, folded_into, local_of};
 
 /// How deep [`field_name`] follows nested structures.
 const NEST_DEPTH: usize = 4;
@@ -263,7 +263,7 @@ fn field_uses(fd: &Funcdata) -> Vec<(VarnodeId, bool, OpId, String)> {
 
 crate::kuna_flag!(
     /// (kuna `flownames`) Name locals from the fields and types they meet.
-    /// See [`crate::kuna_flownames`].
+    /// See [`crate::flownames`].
     FlowNames,
     "flownames",
     "field- and type-derived local names",

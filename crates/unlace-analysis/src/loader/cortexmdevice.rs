@@ -24,7 +24,7 @@ pub const DEVICE: [(u64, u64); 2] = [(0x4000_0000, 0x6000_0000), (0xe000_0000, 0
 pub fn is_m_profile(archid: &str, file: Option<&object::File<'_>>) -> bool {
     let mut parts = archid.split(':');
     let cortex = parts.next() == Some("ARM") && matches!(parts.nth(2), Some("Cortex" | "v8-m"));
-    cortex || file.is_some_and(super::kuna_armfloatabi::m_profile)
+    cortex || file.is_some_and(super::armfloatabi::m_profile)
 }
 
 /// The parts of [`DEVICE`] in `space` that no `mapped` `(vma, size, flags)`

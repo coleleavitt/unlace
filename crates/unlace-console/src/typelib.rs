@@ -49,13 +49,13 @@ use unlace_base::types::int4;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, flags, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
-use unlace_decomp::kuna_libcnames::LibraryNames;
-use unlace_decomp::kuna_typelib::TypeLib;
+use unlace_decomp::libcnames::LibraryNames;
+use unlace_decomp::typelib::TypeLib;
 
 use crate::grammar::{DataOrg, parse_protopieces, parse_type};
 
 /// The format version this reader accepts.
-const FORMAT: &str = unlace_decomp::kuna_typelib::MAGIC;
+const FORMAT: &str = unlace_decomp::typelib::MAGIC;
 
 /// The libraries built into kuna, by target.
 const BUILTIN: &[(&str, &str)] = &[
@@ -543,7 +543,7 @@ fn file_text(path: &Path, target: &str, addr_size: u8) -> Result<String, String>
             ));
         }
         let bytes = std::fs::read(path).map_err(|e| format!("typelib {shown}: {e}"))?;
-        return unlace_analysis::protos::kuna_til::to_typelib(&bytes, target, addr_size)
+        return unlace_analysis::protos::til::to_typelib(&bytes, target, addr_size)
             .map_err(|e| format!("typelib {shown}: {e}"));
     }
     if meta.len() > MAX_LIBRARY_BYTES {
@@ -622,7 +622,7 @@ fn is_til_file(path: &Path) -> bool {
     std::fs::File::open(path)
         .and_then(|mut f| f.read_exact(&mut head))
         .is_ok()
-        && unlace_analysis::protos::kuna_til::is_til(&head)
+        && unlace_analysis::protos::til::is_til(&head)
 }
 
 /// The function names FLIRT, FID or a PDB gave, one per address: a name the
@@ -667,9 +667,7 @@ pub fn seed(
     facts: &TypeLibFacts,
     merged: &mut AnalysisOutput,
 ) -> Result<(usize, Option<String>), String> {
-    let typelib = arch
-        .kuna_options
-        .get::<unlace_decomp::kuna_typelib::TypeLib>();
+    let typelib = arch.kuna_options.get::<unlace_decomp::typelib::TypeLib>();
     let (addr_size, word_size) = arch.data_org();
     let til_dir = std::env::var_os(TIL_DIR_ENV)
         .filter(|d| !d.is_empty())
@@ -709,7 +707,7 @@ pub fn seed(
     let chosen_windows =
         facts.target.starts_with("windows ") && sources.iter().any(|s| s.label != "auto");
     let replaceable =
-        |name: &str| chosen_windows && unlace_analysis::protos::kuna_win32sigs::declares(name);
+        |name: &str| chosen_windows && unlace_analysis::protos::win32sigs::declares(name);
     let beyond = names_beyond_imports(&merged.fid_names);
     let declared: BTreeSet<&str> = merged
         .prototypes

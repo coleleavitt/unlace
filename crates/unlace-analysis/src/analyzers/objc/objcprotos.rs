@@ -11,8 +11,8 @@
 
 use object::read::Object;
 
-use super::kuna_objcrefs::section_slots;
 use super::methods::{self, Method};
+use super::objcrefs::section_slots;
 use super::sections::MachoImage;
 
 const SEC_PROTOLIST: &str = "__objc_protolist";
@@ -60,14 +60,14 @@ pub fn protocols(img: &MachoImage, file: &object::File) -> Vec<Protocol> {
         }
         let mut properties = img
             .rebase_ptr(addr.wrapping_add(protocol_t::INSTANCE_PROPERTIES))
-            .map(|list| super::kuna_objcprops::declarations(img, list))
+            .map(|list| super::objcprops::declarations(img, list))
             .unwrap_or_default();
         let size = img
             .read_u32(addr.wrapping_add(protocol_t::SIZE))
             .unwrap_or(0) as u64;
         if size > protocol_t::CLASS_PROPERTIES {
             if let Some(list) = img.rebase_ptr(addr.wrapping_add(protocol_t::CLASS_PROPERTIES)) {
-                properties.extend(super::kuna_objcprops::declarations(img, list));
+                properties.extend(super::objcprops::declarations(img, list));
             }
         }
         out.push(Protocol {
@@ -131,7 +131,7 @@ mod tests {
         let bytes = std::fs::read(path).expect("read fixture");
         for size in [0x0800_0000_0000_0000u64, u64::MAX] {
             let patched =
-                super::super::kuna_objcrefs::with_section_size(bytes.clone(), SEC_PROTOLIST, size);
+                super::super::objcrefs::with_section_size(bytes.clone(), SEC_PROTOLIST, size);
             let file = object::File::parse(patched.as_slice()).expect("parse Mach-O");
             let img = MachoImage::with_fixups(&file, resolve_chained_fixups(&file, &patched));
             assert!(protocols(&img, &file).len() <= 1, "size {size:#x}");

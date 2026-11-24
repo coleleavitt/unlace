@@ -143,7 +143,7 @@ impl ObjectFormat for ElfFormat {
     /// The GOT slots [`ElfFormat::resolve_imports`] names for functions no PLT stub
     /// fronts, and the `GLOB_DAT` slots of undefined symbols, one pointer wide.
     fn import_slots(&self, file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
-        let mut slots = crate::loader::kuna_elfgotimports::slots(file);
+        let mut slots = crate::loader::elfgotimports::slots(file);
         slots.extend(crate::loader::elf_plt::got_call_slot_ranges(file, bytes));
         slots.sort_unstable();
         slots.dedup();
@@ -151,7 +151,7 @@ impl ObjectFormat for ElfFormat {
     }
 
     fn local_import_targets(&self, file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
-        crate::loader::kuna_pltlocal::bind(
+        crate::loader::pltlocal::bind(
             file,
             &crate::loader::elf_plt::resolve_plt_imports(file, bytes),
         )
@@ -159,7 +159,7 @@ impl ObjectFormat for ElfFormat {
 
     fn const_ranges(&self, file: &object::File, _bytes: &[u8]) -> Vec<(u64, u64)> {
         let mut ranges = crate::loader::elf_plt::mips_got_const_ranges(file);
-        ranges.extend(crate::loader::kuna_mipsgot::const_ranges(file));
+        ranges.extend(crate::loader::mipsgot::const_ranges(file));
         ranges
     }
 

@@ -20,11 +20,7 @@ pub fn paint(arch: &mut Architecture, entry: &Address) {
     if !arch.archid.starts_with("AARCH64:") {
         return;
     }
-    let want = u32::from(
-        arch.kuna_options
-            .get::<crate::kuna_memtag::AcleIntrinsics>()
-            .0,
-    );
+    let want = u32::from(arch.kuna_options.get::<crate::memtag::AcleIntrinsics>().0);
     if arch.with_context_db(|db| {
         db.get_variable_value(SHOW_MEMTAG, entry)
             .map_or(true, |v| v == want)

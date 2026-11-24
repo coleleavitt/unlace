@@ -114,7 +114,7 @@ fn boolean_truncation_keeps_the_low_byte_before_comparison() {
         .unwrap()
         .set_kuna_name("value");
     let mut arch = bare_arch();
-    arch.kuna_options.set(crate::kuna_boolbyte::BoolByte(true));
+    arch.kuna_options.set(crate::boolbyte::BoolByte(true));
     let types = arch.types_impl();
     types.set_max_basetype_size(8);
     types.set_default_alignment_map();

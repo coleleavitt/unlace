@@ -22,16 +22,16 @@
 use std::io::{Read, Write};
 use std::process::ExitCode;
 
+use crate::console::register_kuna_commands;
 use crate::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands, register_decomp_commands,
 };
 use crate::ifaceterm::IfaceTerm;
 use crate::interface::IfaceStatus;
-use crate::kuna_console::register_kuna_commands;
 
 /// Run the console over `args` (`args[0]` is the program name) and stdin.
 pub fn main(args: Vec<String>) -> ExitCode {
-    crate::kuna_buildstamp::answer_parent(crate::kuna_buildstamp::ChildKind::Engine);
+    crate::buildstamp::answer_parent(crate::buildstamp::ChildKind::Engine);
 
     // --- argument parsing (consolemain.cc:183) ----------------------------
     // kuna also accepts the long `-sleighpath <dir>` the Python tooling may pass.
@@ -56,11 +56,11 @@ pub fn main(args: Vec<String>) -> ExitCode {
             i += 1;
             match args.get(i).map(|v| v.trim()) {
                 Some("cgroup") => {
-                    unlace_decomp::kuna_fnmemory::use_cgroup_default();
+                    unlace_decomp::fnmemory::use_cgroup_default();
                 }
                 Some(v) => {
                     if let Ok(mib) = v.parse::<u64>() {
-                        unlace_decomp::kuna_fnmemory::set_limit_mib(mib);
+                        unlace_decomp::fnmemory::set_limit_mib(mib);
                     }
                 }
                 None => {}

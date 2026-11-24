@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use super::kuna_rustfmtargs::{self, MacroKind, Plan};
+use super::rustfmtargs::{self, MacroKind, Plan};
 use crate::architecture::Architecture;
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
@@ -15,9 +15,9 @@ use unlace_num::opcodes::OpCode;
 pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .get::<crate::rustfmt::RustFmtMode>()
         .recovers()
-        || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
+        || arch.source_lang() != crate::sourcelang::SourceLang::Rust
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
     {
         return None;
@@ -53,7 +53,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
         }
         _ => return None,
     }
-    let location = kuna_rustfmtargs::constant_word(fd, call.get_in(3)?)?;
+    let location = rustfmtargs::constant_word(fd, call.get_in(3)?)?;
     if location == 0 {
         return None;
     }
@@ -71,8 +71,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     fd.get_arch()
         .loader_fill(&mut [0; 24], &Address::new(Rc::clone(space), location))
         .ok()?;
-    if let Some(bytes) =
-        super::kuna_rustfmtliteral::literal_bytes(fd, call.get_in(1)?, call.get_in(2)?)
+    if let Some(bytes) = super::rustfmtliteral::literal_bytes(fd, call.get_in(1)?, call.get_in(2)?)
     {
         let literal = panic_literal(std::str::from_utf8(&bytes).ok()?);
         return Some(Plan {
@@ -81,7 +80,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
             arguments: Vec::new(),
         });
     }
-    kuna_rustfmtargs::recover_at(fd, arch, id, 1, 2, MacroKind::Panic)
+    rustfmtargs::recover_at(fd, arch, id, 1, 2, MacroKind::Panic)
 }
 
 fn panic_literal(text: &str) -> String {

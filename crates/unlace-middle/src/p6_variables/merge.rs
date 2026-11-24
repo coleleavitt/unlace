@@ -142,8 +142,8 @@ pub type BoundType = int4;
 /// `docs/rust-port/losses.md`); the [`Merge`] routine that calls them transcribes
 /// the surrounding structure verbatim so the body is correct once the hook fills.
 pub trait MergeContext: HighContext {
-    /// The pass hooks the merge calls through ([`crate::kuna_passhooks`]).
-    fn pass_hooks(&self) -> &'static crate::kuna_passhooks::KunaHooks {
+    /// The pass hooks the merge calls through ([`crate::passhooks`]).
+    fn pass_hooks(&self) -> &'static crate::passhooks::KunaHooks {
         crate::architecture::default_pass_hooks()
     }
     fn fpu_trunc_views_enabled(&self) -> bool {
@@ -426,19 +426,19 @@ pub trait MergeContext: HighContext {
     /// `data.beginOpAlive()..endOpAlive()` — the alive-op list in C++ order.
     fn ops_alive(&self) -> Vec<OpId>;
 
-    /// (kuna) [`crate::kuna_stablenames::same_variable`].
+    /// (kuna) [`crate::stablenames::same_variable`].
     fn kuna_same_prior_variable(&self, _a: HighVariableId, _b: HighVariableId) -> Option<bool> {
         None
     }
-    /// (kuna) [`crate::kuna_stablenames::variable_groups`].
+    /// (kuna) [`crate::stablenames::variable_groups`].
     fn kuna_prior_variable_groups(&self, _highs: &[HighVariableId]) -> Vec<Vec<HighVariableId>> {
         Vec::new()
     }
-    /// (kuna) [`crate::p6_variables::kuna_pointeevalue::load_crosses_write`].
+    /// (kuna) [`crate::p6_variables::pointeevalue::load_crosses_write`].
     fn vn_loads_across_write(&self, _vn: VarnodeId) -> bool {
         false
     }
-    /// (kuna) [`crate::p6_variables::kuna_loadorder::crosses_global_write`].
+    /// (kuna) [`crate::p6_variables::loadorder::crosses_global_write`].
     fn vn_load_crosses_global_write(&mut self, _vn: VarnodeId, _except: HighVariableId) -> bool {
         false
     }
@@ -486,7 +486,7 @@ pub trait MergeContext: HighContext {
         slot: int4,
     ) -> (VarnodeId, unlace_base::address::Address, bool);
     /// `Merge::snipReads` insert point; guarded stack-read divergence lives in
-    /// `kuna_guardedreadtrim.rs`.
+    /// `guardedreadtrim.rs`.
     fn snip_reads_insert_point(
         &self,
         vn: VarnodeId,
@@ -1213,9 +1213,9 @@ pub struct Merge {
     /// the storage each was trimmed away from.
     tied_phis: Vec<(VarnodeId, unlace_base::address::Address)>,
     /// (kuna) Option `phiarm`: trim phi arms that are variables of their own
-    /// ([`crate::kuna_phiarm`]).
+    /// ([`crate::phiarm`]).
     phi_arm_split: bool,
-    /// (kuna) Option `calleesaved` ([`crate::kuna_calleesaved`]).
+    /// (kuna) Option `calleesaved` ([`crate::calleesaved`]).
     callee_saved_split: bool,
     /// (kuna) Each arm value `kuna_phiarm` trimmed, with the MULTIEQUAL output
     /// it was trimmed from.
@@ -1262,7 +1262,7 @@ impl Merge {
         if !self.spent {
             self.probes = self.probes.wrapping_add(1);
             self.spent = self.probes % BUDGET_STRIDE == 0
-                && crate::kuna_budget::deadline_passed_in("variable merging");
+                && crate::budget::deadline_passed_in("variable merging");
         }
         if self.spent {
             return Err(KunaError::lowlevel(
@@ -1361,7 +1361,7 @@ impl Merge {
                 high1,
                 high2,
             )
-            || crate::kuna_phiarm::keeps_apart(&self.phi_arms, &*ctx, high1, high2)
+            || crate::phiarm::keeps_apart(&self.phi_arms, &*ctx, high1, high2)
         {
             return Ok(false);
         }
@@ -1499,7 +1499,7 @@ impl Merge {
                 &mut self.test_cache,
                 a,
                 high,
-            ) || crate::kuna_phiarm::keeps_apart(&self.phi_arms, &*ctx, a, high)
+            ) || crate::phiarm::keeps_apart(&self.phi_arms, &*ctx, a, high)
             {
                 return Err(None);
             }
@@ -1638,13 +1638,13 @@ impl Merge {
     /// C++ `[startiter,enditer)`).  Highs are gathered (deduped by `setMark`),
     /// grouped by exact type identity preserving discovery order, and each group is
     /// merged with [`merge_linear`](Self::merge_linear).  (kuna) `mode` (option
-    /// `typemerge`, [`crate::kuna_typemerge`]) narrows which same-typed highs
+    /// `typemerge`, [`crate::typemerge`]) narrows which same-typed highs
     /// share a group; `On` is upstream.
     pub fn merge_by_datatype(
         &mut self,
         ctx: &mut dyn MergeContext,
         range: &[VarnodeId],
-        mode: crate::kuna_typemerge::TypeMergeMode,
+        mode: crate::typemerge::TypeMergeMode,
     ) -> KunaResult<()> {
         // Gather all highs, deduped by mark.
         let mut highlist: Vec<HighVariableId> = Vec::new();
@@ -1671,14 +1671,14 @@ impl Merge {
         let gathered = highlist.clone();
 
         // Group by exact type (Rc identity) preserving order; each group -> mergeLinear.
-        if mode == crate::kuna_typemerge::TypeMergeMode::Off {
+        if mode == crate::typemerge::TypeMergeMode::Off {
             highlist.clear();
         }
         let calls = if self.callee_saved_split && !highlist.is_empty() {
             for &h in &highlist {
                 MergeIntersect::update_high(ctx, &mut self.test_cache, h);
             }
-            crate::kuna_calleesaved::call_ops(&*ctx)
+            crate::calleesaved::call_ops(&*ctx)
         } else {
             Vec::new()
         };
@@ -1688,7 +1688,7 @@ impl Merge {
                 (
                     h,
                     mode.storage_key(&*ctx, h),
-                    crate::kuna_calleesaved::span_key(&*ctx, h, &calls),
+                    crate::calleesaved::span_key(&*ctx, h, &calls),
                 )
             })
             .collect();
@@ -1920,7 +1920,7 @@ impl Merge {
 
         if self.phi_arm_split && ctx.op_code(op) == OpCode::CPUI_MULTIEQUAL {
             let out = ctx.op_out(op).expect("mergeOp: op has no output");
-            for slot in crate::kuna_phiarm::arm_slots(ctx, op) {
+            for slot in crate::phiarm::arm_slots(ctx, op) {
                 let arm = ctx.op_in(op, slot).expect("mergeOp: null input");
                 self.trim_op_input(ctx, op, slot)?;
                 self.phi_arms.push((arm, out));

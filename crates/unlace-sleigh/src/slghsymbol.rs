@@ -39,8 +39,8 @@ use crate::slghpatexpress::{
 };
 use crate::slghpattern::{DisjointPattern, Pattern};
 
-#[path = "kuna_operandplan.rs"]
-pub(crate) mod kuna_operandplan;
+#[path = "operandplan.rs"]
+pub(crate) mod operandplan;
 
 /// SLA IDs used by the symbol system.
 pub use crate::slaformat::ids as sla;

@@ -41,11 +41,11 @@ use super::Namer;
 use super::descriptors::{
     Context, ContextKind, FieldDescriptor, Metadata, MethodKind, Reader, Target,
 };
-use super::kuna_swiftwitness::{HAS_ENUM_WITNESSES, WITNESSES, witness_pointer};
-use crate::demangle::kuna_swift::node::{Kind, Node, NodeRef};
-use crate::demangle::kuna_swift::parse::mk_type;
-use crate::demangle::kuna_swift::print::print_full;
-use crate::demangle::kuna_swift::{demangle_swift_tree, demangle_swift_type};
+use super::swiftwitness::{HAS_ENUM_WITNESSES, WITNESSES, witness_pointer};
+use crate::demangle::swift::node::{Kind, Node, NodeRef};
+use crate::demangle::swift::parse::mk_type;
+use crate::demangle::swift::print::print_full;
+use crate::demangle::swift::{demangle_swift_tree, demangle_swift_type};
 use crate::objc::sections::MachoImage;
 use crate::pass::{AnalysisOutput, ParamLockFact, TypedDataFact};
 
@@ -1279,7 +1279,7 @@ impl<'a> Types<'a> {
         }
         let ty = entity.child_of_kind(Kind::Type)?;
         let t = self.kuna_type(ty, u32::MAX, 0)?;
-        let name = crate::demangle::kuna_swift::name::print_name(&tree)?;
+        let name = crate::demangle::swift::name::print_name(&tree)?;
         Some((name, t))
     }
 

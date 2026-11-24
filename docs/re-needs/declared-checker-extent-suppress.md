@@ -14,7 +14,7 @@ rounds: [9]
 first_seen_round: 9
 attempts: 0
 covered_by_option: pdatainterior
-touches: [crates/unlace-analysis/src/analyzers/entry/kuna_pdatainterior.rs]
+touches: [crates/unlace-analysis/src/analyzers/entry/pdatainterior.rs]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/557
@@ -165,7 +165,7 @@ resolves against.
   and shortened the body to 488 lines. This credits the causal implementation,
   PR #557 (squash `02b8ddc2efafc43eef6ac4e72480346ea3b6f846`), not the later
   administrative PR #564. The implementation commit is an ancestor of the
-  verified main, and the entire `kuna_pdatainterior.rs` file is still blamed to
+  verified main, and the entire `pdatainterior.rs` file is still blamed to
   it. Canonical stale-reconciliation metadata therefore keeps `rounds: [9]`
   and `attempts: 0`, records `covered_by_option: pdatainterior`, and closes in
   round 12 with `pr`/`closing_pr` pointing to #557.

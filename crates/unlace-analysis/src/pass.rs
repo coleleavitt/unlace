@@ -13,7 +13,7 @@
 //! `loader`/`analyzers/*` modules implementing [`AnalysisPass`].
 
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_symbolnamechars::{NameChars, sanitize_symbol_name};
+use unlace_decomp::symbolnamechars::{NameChars, sanitize_symbol_name};
 
 use crate::listing::Listing;
 use crate::loadimage_object::ObjectLoadImage;
@@ -230,7 +230,7 @@ pub struct RegLocalFact {
 /// the address, the name it is installed under, and the recovered type.
 ///
 /// The one producer today is
-/// [`crate::protos::kuna_libctypes::LibcTypesPass`]'s stdio-stream step. Where
+/// [`crate::protos::libctypes::LibcTypesPass`]'s stdio-stream step. Where
 /// [`DataObjectFact`] and the loader's `.dynsym` data stream give an object a
 /// NAME and leave its type to propagation, a stream slot's type is a
 /// declaration: a `stdout` the dynamic linker fills is a `FILE *`, whatever the
@@ -309,7 +309,7 @@ pub struct SwiftTypeFacts {
     /// they throw.
     pub async_imports: Vec<(String, bool)>,
     /// (kuna `swiftcall`) The runtime's `swiftasync` entry points, by name.
-    pub runtime_context: Vec<crate::analyzers::swift::kuna_swiftruntime::ContextProto>,
+    pub runtime_context: Vec<crate::analyzers::swift::swiftruntime::ContextProto>,
 }
 
 /// (kuna `swifthelpers`) The facts the Swift helper arm produces, kept apart
@@ -349,12 +349,12 @@ pub struct ModelFact {
     pub maybe_self: bool,
 }
 
-pub use crate::pclntab::kuna_goabi0_leaf::LeafStackInputs;
+pub use crate::pclntab::goabi0_leaf::LeafStackInputs;
 
 /// The input of the function at `func_addr` in register `reg` is `name`, of
 /// `type_` when that is known, when the function's own analysis finds it
 /// reads that register
-/// (an unlocked hint, see `unlace_decomp::kuna_inputhints`).
+/// (an unlocked hint, see `unlace_decomp::inputhints`).
 #[derive(Clone, Debug)]
 pub struct InputHintFact {
     pub func_addr: u64,
@@ -442,7 +442,7 @@ pub struct CallFixupFact {
 /// (kuna `fid`) The prototype the `.fid` record matched at `addr` carries, as
 /// C text. The commit parses and parks it only where the function took the
 /// record's name and no other source parked a prototype
-/// (`unlace_console::kuna_fidproto`).
+/// (`unlace_console::fidproto`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FidProtoFact {
     /// Entry of the matched function.
@@ -503,7 +503,7 @@ pub struct ConstRange {
 #[derive(Default, Debug)]
 pub struct AnalysisOutput {
     /// Validated PPC32 JMP_SLOT metadata, consumed only by caller-local flow proof.
-    pub ppc32_pic_slots: Vec<unlace_decomp::kuna_ppc32piccalls::ImportSlot>,
+    pub ppc32_pic_slots: Vec<unlace_decomp::ppc32piccalls::ImportSlot>,
     /// `(addr, name, kind)` -> seed `Database::add_function` / symbol map.
     pub symbols: Vec<SymFact>,
     /// Unique AMD64 Go function-table entry of the blocking status receive helper.
@@ -518,7 +518,7 @@ pub struct AnalysisOutput {
     /// is on.
     pub dwarf_typed_globals: Vec<TypedDataFact>,
     /// (kuna `tlsnames`) The executable's static TLS block.
-    pub tls_layout: Option<unlace_decomp::kuna_tlsnames::TlsLayout>,
+    pub tls_layout: Option<unlace_decomp::tlsnames::TlsLayout>,
     /// (kuna `dwarfscopes`) DWARF locals held in a register.
     pub dwarf_reg_locals: Vec<RegLocalFact>,
     /// (kuna `dwarfscopes`) DWARF parameters whose entry location is a register.
@@ -529,8 +529,8 @@ pub struct AnalysisOutput {
     /// The commit boundary rejects any [`Self::entries`] VMA strictly inside one of
     /// these — a discovered entry in the middle of a body is a landing pad /
     /// gap-walk artifact, not a function. Produced by
-    /// [`crate::entry::kuna_fdeinterior`] (`.eh_frame` FDEs),
-    /// [`crate::entry::kuna_pdatainterior`] (`.pdata` records) and
+    /// [`crate::entry::fdeinterior`] (`.eh_frame` FDEs),
+    /// [`crate::entry::pdatainterior`] (`.pdata` records) and
     /// [`crate::pclntab`] (a Go binary's `functab`, the linker's own extent for
     /// every function), so the list is empty whenever their gates are off and the
     /// suppression is a no-op.
@@ -538,21 +538,21 @@ pub struct AnalysisOutput {
     /// (kuna) Function entries strictly inside an FDE body that the image itself
     /// enters from outside it — the extra entry points of a multi-entry `.cold`
     /// fragment. Added after the [`Self::fde_bodies`] suppression. Produced only by
-    /// [`crate::entry::kuna_coldentry`] (`coldentry`).
+    /// [`crate::entry::coldentry`] (`coldentry`).
     pub fde_interior_entries: Vec<u64>,
     /// (kuna) FDE bodies that are another function's exception-cleanup cold
     /// part; every entry inside one is dropped at the commit. Produced only by
-    /// [`crate::entry::kuna_ehcold`] (`ehcold`).
+    /// [`crate::entry::ehcold`] (`ehcold`).
     pub eh_cold: Vec<(u64, u64)>,
     /// (kuna) The direct call sites of each PLT import, by stub address.
-    /// Produced only by [`crate::protos::kuna_importvote`] (`importvote`).
+    /// Produced only by [`crate::protos::importvote`] (`importvote`).
     pub import_call_sites: Vec<(u64, Vec<u64>)>,
     /// (kuna) PDB procedure extents that describe exactly one function, as
     /// `[start, end)`, sorted and disjoint. Applied after [`Self::fde_bodies`],
     /// only where a function is committed at `start` (a `static` function has an
     /// `S_LPROC32` but no public, and nothing may leave its code with no function),
     /// and only to the entries that function's own decode reaches. Produced only by
-    /// [`crate::pdb::kuna_pdbinterior`] (`pdbinterior`), so the list is empty
+    /// [`crate::pdb::pdbinterior`] (`pdbinterior`), so the list is empty
     /// whenever that gate or `pdb` is off.
     pub pdb_bodies: Vec<(u64, u64)>,
     /// Optional Ghidra-faithful names for a *subset* of [`Self::entries`], keyed by
@@ -588,20 +588,20 @@ pub struct AnalysisOutput {
     pub no_fallthru_calls: Vec<u64>,
     /// (kuna `itaniumeh`) The `.gcc_except_table` call-site records that have a
     /// landing pad, with each pad's clauses. Committed only under `itaniumeh`.
-    pub eh_call_sites: Vec<unlace_decomp::kuna_itaniumeh::EhCallSite>,
+    pub eh_call_sites: Vec<unlace_decomp::itaniumeh::EhCallSite>,
     /// (kuna `msvceh`) MSVC x64 try regions as call-site records whose pads are
-    /// catch funclets. Produced only by [`crate::entry::kuna_msvcfuncinfo`].
-    pub msvc_eh_sites: Vec<unlace_decomp::kuna_itaniumeh::EhCallSite>,
+    /// catch funclets. Produced only by [`crate::entry::msvcfuncinfo`].
+    pub msvc_eh_sites: Vec<unlace_decomp::itaniumeh::EhCallSite>,
     /// (kuna `msvceh`) The catch funclets those records enter.
-    pub msvc_funclets: Vec<unlace_decomp::kuna_itaniumeh::MsvcFunclet>,
+    pub msvc_funclets: Vec<unlace_decomp::itaniumeh::MsvcFunclet>,
     /// (kuna `callerreads`) Every direct call of the Listing walk as `(callee
     /// entry, return address)`; the decompile step decodes a `void` function's
     /// callers from there.
     pub call_returns: Vec<(u64, u64)>,
     /// (kuna `kernelbug`) A Linux kernel image's `__bug_table` entries, one per
     /// `WARN`/`BUG` trap. Parked on the architecture for the flow
-    /// (`unlace_decomp::kuna_kernelbug`); empty on every other image.
-    pub kernel_bugs: Vec<unlace_decomp::kuna_kernelbug::KernelBugSite>,
+    /// (`unlace_decomp::kernelbug`); empty on every other image.
+    pub kernel_bugs: Vec<unlace_decomp::kernelbug::KernelBugSite>,
     /// (kuna `poolextents`) The ARM32 literal pools the Listing's trusted
     /// instructions prove, as sorted, disjoint `[lo, hi)` word runs; the flow
     /// walk's `funcboundflow` bound ends a call's fall-through at one. Empty
@@ -622,11 +622,11 @@ pub struct AnalysisOutput {
     /// each class's own methods by selector, its superclass, its `class_t`
     /// address, every selector string's address — for the engine to type and
     /// resolve message sends by receiver. Produced only by the `objc` pass.
-    pub objc_classes: Option<unlace_decomp::kuna_objcrettype::ObjcClassTable>,
+    pub objc_classes: Option<unlace_decomp::objcrettype::ObjcClassTable>,
     /// (kuna `xnutables`) `(view address, what it allocates)` for every
     /// `kalloc_type_view` / `kalloc_type_var_view`; the engine types a typed
     /// allocator's result by the view it is passed.
-    pub kalloc_types: Vec<(u64, unlace_decomp::kuna_kalloctype::KallocView)>,
+    pub kalloc_types: Vec<(u64, unlace_decomp::kalloctype::KallocView)>,
     /// (kuna `com`) `(interface-id address, interface struct)` for every interface
     /// id the image holds; the engine types a COM request's out-parameter by the
     /// id it passes. Produced only by the `com` pass.
@@ -647,7 +647,7 @@ pub struct AnalysisOutput {
     /// flag `ActionDeindirect` requires before it will resolve a `CALLIND` through
     /// a global to the FunctionSymbol registered at that address. Produced by the
     /// `peimportcall` pass; empty for formats without such typed slots. See
-    /// [`crate::loader::kuna_peimportcall`].
+    /// [`crate::loader::peimportcall`].
     pub externref: Vec<(u64, u64)>,
     /// (kuna `elfgotimports`) The import each loader import slot holds, as
     /// `(slot VMA, import name)`. Committed as a `FunctionSymbol` in the symbol
@@ -656,11 +656,11 @@ pub struct AnalysisOutput {
     /// pointer word, not a function.
     pub import_slot_names: Vec<(u64, String)>,
     /// (kuna `arm64evcall`) arm64e virtual call sites and the methods their
-    /// vtable slot can hold. See [`crate::rtti::kuna_arm64evcall`].
-    pub vcall_sites: Vec<crate::rtti::kuna_arm64evcall::VcallSite>,
+    /// vtable slot can hold. See [`crate::rtti::arm64evcall`].
+    pub vcall_sites: Vec<crate::rtti::arm64evcall::VcallSite>,
     /// (kuna `vtabletypes`) The recovered C++ vtables to type. See
-    /// [`crate::rtti::kuna_vtabletypes`].
-    pub cpp_vtables: crate::rtti::kuna_vtabletypes::VtableFacts,
+    /// [`crate::rtti::vtabletypes`].
+    pub cpp_vtables: crate::rtti::vtabletypes::VtableFacts,
     /// (kuna `iokitclasses on`) The IOKit classes to type like `cpp_vtables`, and
     /// the class each member's `this` points to. See [`crate::iokit`].
     pub iokit_cxx: crate::iokit::IokitCxxFacts,
@@ -670,7 +670,7 @@ pub struct AnalysisOutput {
     /// Detected NUL-terminated string literals (a typed `char[N]` per address).
     pub strings: Vec<StringFact>,
     /// (kuna `fatstr`) Length-BOUNDED string literals recovered from static
-    /// `(ptr, len)` records (`strings::kuna_strrecords`): `len` is the exact
+    /// `(ptr, len)` records (`strings::strrecords`): `len` is the exact
     /// byte count, there is NO terminator, and the commit arm plants these
     /// BEFORE [`Self::strings`] so a glued NUL-run row at the same address is
     /// retired by the occupied-address guard.
@@ -679,11 +679,11 @@ pub struct AnalysisOutput {
     /// `StringsAnalyzer` `allCharWidths` width kuna did not carry. Kept apart from
     /// [`Self::strings`] because the commit boundary types them differently (a
     /// `wchar2[N]`, whose element count is `len / 2`) and gates them separately.
-    /// Produced by [`crate::strings::kuna_widestrings`].
+    /// Produced by [`crate::strings::widestrings`].
     pub wide_strings: Vec<StringFact>,
     /// (kuna `widestrings32`) Detected NUL-terminated 4-byte (`wchar_t` on ELF,
     /// `char32_t`) string literals, each committed as a `wchar4[N]` (element
-    /// count `len / 4`). Produced by [`crate::strings::kuna_widestrings32`] at the
+    /// count `len / 4`). Produced by [`crate::strings::widestrings32`] at the
     /// deferred scalar-operand commit, where the operand targets it weighs are known.
     pub wide_strings32: Vec<StringFact>,
     /// (kuna `cfstrings`) Mach-O Core Foundation constant strings (`__cfstring`):
@@ -728,17 +728,17 @@ pub struct AnalysisOutput {
     pub arm_float_prototypes: Vec<(Option<u64>, unlace_decomp::fspec::PrototypePieces)>,
     /// (kuna `honestgaps`) Prototypes the load withheld, by entry address
     /// (`None`: by name), with why. The commit records them in the
-    /// architecture's `kuna_honestgaps::WithheldPrototypes` table.
+    /// architecture's `honestgaps::WithheldPrototypes` table.
     pub withheld_prototypes: Vec<(
         Option<u64>,
         String,
-        unlace_decomp::kuna_honestgaps::WithheldCause,
+        unlace_decomp::honestgaps::WithheldCause,
     )>,
     /// The C runtime declaration `elfmain` has for an executable's own
     /// symbol-named `main`, keyed by entry address (an ARM Thumb symbol's mode
     /// bit cleared). The commit keeps it OFF the symbol; the drive applies it
     /// inside `main`'s own analysis, naming and typing only the parameters that
-    /// analysis recovers (`unlace_decomp::kuna_elfmaindecl`). The full
+    /// analysis recovers (`unlace_decomp::elfmaindecl`). The full
     /// three-parameter pieces, named argc/argv/envp.
     pub main_decl_at: Vec<(u64, unlace_decomp::fspec::PrototypePieces)>,
     /// The names a PE imports from a C runtime DLL, whose functions are `__cdecl`
@@ -770,7 +770,7 @@ pub struct AnalysisOutput {
     /// Register values seeded at one function entry through the architecture's
     /// per-entry loader seeds, as the ELFv1 TOC is, rather than as a context-database
     /// range: every function's snapshot of that database would otherwise grow with
-    /// their number. Produced by [`crate::loader::kuna_ppc64r12`]; empty otherwise.
+    /// their number. Produced by [`crate::loader::ppc64r12`]; empty otherwise.
     pub entry_tracks: Vec<TrackedRegFact>,
     /// Functions whose names matched a cspec call-fixup `<target>` (e.g. the `-pg`
     /// `mcount`/`__fentry__` profiling stubs). The commit boundary tags each with the
@@ -797,7 +797,7 @@ pub struct AnalysisOutput {
     /// [`CommentFact`].
     pub comments: Vec<CommentFact>,
     /// (kuna) Function header (plate) comments, keyed by `func_addr`. Produced
-    /// by [`crate::entry::kuna_itaniumeh::EhNotePass`] (`ehnote`) and the Go
+    /// by [`crate::entry::itaniumeh::EhNotePass`] (`ehnote`) and the Go
     /// source-position pass (`gopcln`).
     pub header_comments: Vec<CommentFact>,
     /// Functions the FID matcher re-identified by full-hash fingerprint, by
@@ -830,21 +830,21 @@ pub struct AnalysisOutput {
     /// What became of each `.fid` database the FID pass was configured with
     /// (loaded, missing, unreadable, invalid, incompatible). Produced only by
     /// [`crate::fid::FidPass`] when `kuna_fid_db` names a database.
-    pub fid_databases: Vec<crate::fid::kuna_fidapply::FidDbReport>,
+    pub fid_databases: Vec<crate::fid::fidapply::FidDbReport>,
     /// Lowest-priority function names, committed after every other name stream:
     /// only an existing `sub_`/`FUN_` placeholder function takes the name, and
     /// only when no function, data symbol or alias anywhere already uses it. No
-    /// function is created. Produced only by [`crate::kuna_cvftrace::CvfTracePass`].
+    /// function is created. Produced only by [`crate::cvftrace::CvfTracePass`].
     pub fallback_names: Vec<FidMatch>,
     /// (kuna `cppproto`) The DWARF recoveries that only the C++ arm of the DWARF
     /// pass produces, held APART from the streams above so the commit boundary
     /// merges them in its own order. See [`CppDwarfFacts`].
     pub cpp_dwarf: CppDwarfFacts,
     /// Go DWARF signatures, with type interning deferred until the commit gate.
-    pub go_dwarf: Vec<crate::dwarf::kuna_godwarfsig::Facts>,
+    pub go_dwarf: Vec<crate::dwarf::godwarfsig::Facts>,
     /// Exact linked pointer method statements, intersected with Go DWARF at commit.
     pub go_pointer_methods:
-        std::collections::BTreeMap<u64, crate::gotypes::kuna_pointermethods::LinkedMethod>,
+        std::collections::BTreeMap<u64, crate::gotypes::pointermethods::LinkedMethod>,
     /// (kuna `cppsig`) The prototypes recovered from the MANGLED SYMBOL, split by
     /// how certain the pass is that argument 0 is an implicit `this`. Held apart
     /// for the same reason as [`Self::cpp_dwarf`] — the producing pass runs at
@@ -874,7 +874,7 @@ pub struct AnalysisOutput {
     /// (kuna `goitabcalls`) Interface parameters of a stripped Go binary: each
     /// callee register a static itab is passed in, typed as a pointer to the
     /// interface's itab record. Produced by the Listing consumer
-    /// [`crate::gotypes::kuna_itabargs::GoItabArgsPass`], which runs only under
+    /// [`crate::gotypes::itabargs::GoItabArgsPass`], which runs only under
     /// the option; committed as input hints.
     pub go_itab_inputs: Vec<InputHintFact>,
     /// (kuna `swifttypes`) The Swift type-layout facts. See [`SwiftTypeFacts`].
@@ -891,7 +891,7 @@ pub struct AnalysisOutput {
     /// (kuna `swiftmetadata`) Each local Swift enum's metadata accessor and
     /// the enum's case count from its descriptor: the exact bound of a
     /// `swift_getEnumCaseMultiPayload` result, which indexes the enum's
-    /// `switch` table with no range check (`p2_lift/kuna_switchextent.rs`).
+    /// `switch` table with no range check (`p2_lift/switchextent.rs`).
     pub swift_enum_cases: Vec<(u64, u32)>,
     /// (kuna `formatstring static`) Per-call-site prototype overrides the
     /// LOAD-TIME format-string resolver recovered — a printf/scanf-family call
@@ -899,20 +899,20 @@ pub struct AnalysisOutput {
     /// `Architecture::format_call_overrides`, which the per-function decompile
     /// step reads before the FIRST drive, so the varargs are typed without the
     /// second decompile Ghidra's `FormatStringAnalyzer` needs. Produced only by
-    /// [`crate::formatstring::kuna_fmtstatic::FormatStringStaticPass`], which
+    /// [`crate::formatstring::fmtstatic::FormatStringStaticPass`], which
     /// requires the Listing; empty otherwise. See [`FormatSiteFact`].
     pub format_sites: Vec<FormatSiteFact>,
     /// (kuna) The prototype of one call instruction, by the instruction's
     /// address: what a pass that read the call's arguments knows beyond its
-    /// callee's prototype (`unlace_decomp::kuna_callsiteproto`).
+    /// callee's prototype (`unlace_decomp::callsiteproto`).
     pub call_prototypes: Vec<(u64, unlace_decomp::fspec::PrototypePieces)>,
     /// (kuna `uefi`) The protocol and PPI interface instances an EFI module
     /// installs.
-    pub uefi_installs: Vec<unlace_decomp::kuna_uefiprotocols::InstalledInterface>,
+    pub uefi_installs: Vec<unlace_decomp::uefiprotocols::InstalledInterface>,
     /// (kuna `libctypes glibc`) The published glibc x86-64 field layouts went
     /// into THIS image's named aggregates.
     ///
-    /// Set by [`crate::protos::kuna_libctypes::LibcTypesPass`] when, and only
+    /// Set by [`crate::protos::libctypes::LibcTypesPass`] when, and only
     /// when, its own target gate (`glibc::target_is_glibc_x86_64`) accepted the
     /// object it was handed. It is the load-time decision carried forward, for
     /// the one consumer that runs after the object file is out of reach: a
@@ -933,7 +933,7 @@ pub struct AnalysisOutput {
     pub typelib: Option<TypeLibFacts>,
     /// (kuna `armframes`) What whole-image frame recovery decided, for a
     /// `--jobs` worker to replay.
-    pub arm_frames: Option<crate::aif::kuna_framereplay::ArmFrameReplay>,
+    pub arm_frames: Option<crate::aif::framereplay::ArmFrameReplay>,
 }
 
 impl AnalysisOutput {
@@ -1143,11 +1143,11 @@ pub struct CppSigFacts {
     )>,
     /// (kuna `msvcbyval`) The MSVC `__cdecl` imports in [`Self::msvc`] left open
     /// at a by-value class, as whole declarations the call sites size.
-    pub msvc_byval: Vec<(u64, unlace_decomp::kuna_msvcbyval::ByvalDecl)>,
+    pub msvc_byval: Vec<(u64, unlace_decomp::msvcbyval::ByvalDecl)>,
     /// (kuna `msvcbyval`) The entries an MSVC name declares as building the
     /// object at an address they are handed: a `__thiscall` constructor, or a
     /// function returning a class through its hidden pointer.
-    pub msvc_builders: Vec<(u64, unlace_decomp::kuna_msvcbyval::Builder)>,
+    pub msvc_builders: Vec<(u64, unlace_decomp::msvcbyval::Builder)>,
 }
 
 /// (kuna `cppproto`) The DWARF facts recovered by resolving a subprogram DIE
@@ -1348,7 +1348,7 @@ impl AnalysisOutput {
     }
 }
 
-/// (kuna `typelib`) What [`crate::protos::kuna_typelib::TypeLibPass`] read off
+/// (kuna `typelib`) What [`crate::protos::typelib::TypeLibPass`] read off
 /// the object file for the prebuilt type library.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeLibFacts {
@@ -1368,7 +1368,7 @@ pub struct TypeLibFacts {
     /// (kuna `typelib auto`) The IDA type libraries IDA would load for an ELF
     /// or Mach-O image: per slot, candidate paths relative to an IDA `til`
     /// directory, the first that exists being read
-    /// (`analyzers::protos::kuna_typelib::til_slots`).
+    /// (`analyzers::protos::typelib::til_slots`).
     pub til_slots: Vec<Vec<String>>,
 }
 

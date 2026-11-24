@@ -60,7 +60,7 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
 - Swift form: `<…CodingKeys:Swift.Hashable>.hashValue.getter` 0x101324704: `sub_1013245e8(v1); Swift.Hasher._finalize()();`
   (IDA `v0 = sub_1013245E8(v2); return Hasher._finalize()(v0);`).
 - Suspected owner: p4_calls return/parameter recovery — `ActionActiveParam`/`ActionReturnRecovery` ports in
-  `crates/unlace-decomp/src/p4_calls/` plus the `kuna_objcarc.rs` call-fixup (`p2_lift/kuna_objcarc.rs:66`,
+  `crates/unlace-decomp/src/p4_calls/` plus the `objcarc.rs` call-fixup (`p2_lift/objcarc.rs:66`,
   `retain_x{n}`/`objc_retainAutoreleasedReturnValue` → `x0 = x0`) which makes the receiver an input of a removed call.
   The C/Swift form has no ARC involved, so the root is the return/arity recovery treating an unknown callee's `x0`
   output as dead when it is only read by the next call's `x0` or the `ret`.
@@ -79,8 +79,8 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
   `unlace read DeviceKit 0x14ad8` already labels the `__got` slot `$ss11_StringGutsV4growyySiF` (raw, undemangled), so the
   bind name is known to the loader; only the stub→slot→name step and the demangle are missing.
 - Suspected owner: `unlace-analysis/src/loader/macho_stubs.rs` (`resolve_macho_indirect_symbols`: indirect-symbol table only;
-  `__stubs` has `reserved1/2 = 0` here) and `listing/kuna_pltstub.rs` (`PltStubs::for_file`, slot-following) — the
-  chained-import name path (`kuna_machorelocs.rs`/`chained.rs` binds) is not consulted for the stub name, and the
+  `__stubs` has `reserved1/2 = 0` here) and `listing/pltstub.rs` (`PltStubs::for_file`, slot-following) — the
+  chained-import name path (`machorelocs.rs`/`chained.rs` binds) is not consulted for the stub name, and the
   Swift-mangled bind names are not run through the `$s` demangler the way nlist names are.
 - Repro: any SwiftPM-built dynamic framework from an App Store IPA (`ld64 -fixup_chains` + `strip -x`), or
   `ld64.lld -fixup_chains … && strip -u -r` on a Swift object calling `String.append`.
@@ -94,7 +94,7 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
   `SwiftUI.View.onScrollPhaseChange(_:).opaque_type_descriptor`, …) — 3% of the inventory, all `udf 0x0` bytes.
 - IDA: `&OBJC_CLASS_$_NSMutableData`, `&type metadata for String`, `_NSConcreteStackBlock`.
 - Suspected owner: `importdata` path (`p0_knowledge` symbol commit of `ImportSym{kind: Data}` from `loader/format/macho.rs`
-  + `kuna_machorelocs.rs`) — bound data slots get a `FunctionSymbol` when the import is a function and no symbol at all when
+  + `machorelocs.rs`) — bound data slots get a `FunctionSymbol` when the import is a function and no symbol at all when
   it is data; `unlace-console` engine commit of `ImportSymKind`.
 - Status: **claimed by open PR #1735** ("A call or read through a pointer bound to an import is anonymous …
   `dat_100004000` → `ext_handler()` / `ext_counter`"). Not in `all`. The size-0-function inventory half is not mentioned there.
@@ -102,9 +102,9 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
 ### G4. Outlined Swift ARC helpers `swift_retain_x<N>` / `swift_release_x<N>` print with no argument
 - Visible: 74 such imports in the main binary (`swift_retain_x1…x28`, `swift_release_x1…x28`, also `_x8`); `unlace xrefs`:
   `swift_release_x24` 4,954 call sites, `swift_retain_x20` 4,894. tp300: 183 bare `swift_release_xN()` in 58/300 functions.
-  `kuna_objcarc.rs:66` builds the register-arg call-fixups only for `objc_retain_x{n}`/`objc_release_x{n}`.
+  `objcarc.rs:66` builds the register-arg call-fixups only for `objc_retain_x{n}`/`objc_release_x{n}`.
 - Snippet (0x10163fcf8): `swift_release_x24();` / `swift_release_x8(async_context[0x16].parent);` (the x8 one works by accident: x8 was a live arg).
-- Owner: `p2_lift/kuna_objcarc.rs` (fixup table) + `unlace-analysis/src/analyzers/objc/kuna_objcruntime.rs:121 outlined_register`
+- Owner: `p2_lift/objcarc.rs` (fixup table) + `unlace-analysis/src/analyzers/objc/objcruntime.rs:121 outlined_register`
   (only accepts the `objc_` prefix). Extend to `swift_retain|swift_release|swift_bridgeObjectRelease|swift_unknownObjectRelease_x<N>`.
 - Repro: any -O Swift arm64 binary ≥ Swift 5.9 (`swiftc -O` emits them via the runtime's `swift_retain_xN` entry points).
 
@@ -150,7 +150,7 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
   as args", still reproduces for Swift-runtime C symbols the SDK does not declare).
 - `objc_msgSendSuper2(arg1.x,arg1.y,arg1.width,arg1.height,&v1,sel_initWithFrame_)` (26 sites): varargs printed before the fixed `(objc_super*, SEL)`.
   IDA: `-[… initWithFrame:](&v11, "initWithFrame:", x, y, width, height)`.
-- Owner: `p4_calls` varargs handling of `...` prototypes from `objcsdk` (`kuna_sdkprotos.rs`/`protos/mod.rs`) and the
+- Owner: `p4_calls` varargs handling of `...` prototypes from `objcsdk` (`sdkprotos.rs`/`protos/mod.rs`) and the
   `swiftcall`/`objcsdk` C-proto gap (PR #1693 covers SDK-declared C functions; Swift runtime entry points need their own table —
   PR #1815 adds 101 concurrency ones, not `_swift_stdlib_*`).
 
@@ -163,7 +163,7 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
   the `adr x10,…; ldrb w11,[x8,x9]; add x10,x10,x11,lsl#2; br x10` targets were made functions (`sub_16b8c`, `sub_16bc4`, `sub_16d70`,
   `sub_175b0`, `sub_177a4`); `_cmark_node_get_type_string` spawns 24 12-byte `sub_f49c…sub_f5cc` (the switch itself decompiles
   correctly). 35 only-kuna functions in cmark-gfm, all of this kind.
-- Owner: `p2_lift/kuna_loweredswitch.rs` / `jumptable` models (`JumpBasic2`, `switchtrim`) and the discovery pass that
+- Owner: `p2_lift/loweredswitch.rs` / `jumptable` models (`JumpBasic2`, `switchtrim`) and the discovery pass that
   registers jump-table targets as starts (`unlace-analysis` function discovery, `calltable`/`addrtable` votes).
 - Status: PR #1819 (`relswitch`) drops bogus starts for *hardened* (`cmp/csel`-clamped) arm64e tables; neither the
   unclamped `getEnumCaseMultiPayload` index nor the plain-arm64 re2c tables are covered.
@@ -187,7 +187,7 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
 
 ### G12. Literal-pool and `__const` constants read as data (`block.block.flags = dat_17d20` instead of `0xc2000000`), block descriptor names mangled (`…_e5_v8_x01?0l`)
 - Every ObjC block literal in AppAuthCore (dozens). IDA folds the `ldr w8, =0xC2000000` read. Owner: `importdata`/`objcblocks`
-  (`kuna_objcblocks.rs`) + read-only `__TEXT,__const` folding in p3.
+  (`objcblocks.rs`) + read-only `__TEXT,__const` folding in p3.
 
 ## 1b. A/B against the open PR branches (built here)
 

@@ -71,7 +71,7 @@ const MAX_BYTES: intb = 1 << 24;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArraySize(pub int4);
 
-impl crate::kuna_optionset::KunaOption for ArraySize {
+impl crate::optionset::KunaOption for ArraySize {
     const NAME: &'static str = "arraysize";
     crate::kuna_option_id!();
 
@@ -717,11 +717,11 @@ pub fn fit(cur: &RangeHint, cur_end: intb, gap: intb, state: &MapState) -> Optio
     int4::try_from(bytes).ok()
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.arraysize_fit = Some(fit);
 }
 
 #[cfg(test)]
-#[path = "kuna_arraysize/tests.rs"]
+#[path = "arraysize/tests.rs"]
 mod tests;

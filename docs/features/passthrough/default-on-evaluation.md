@@ -16,7 +16,7 @@ whose own return is a value it did not compute".
 
 ## Round G, first pass: the return gate and the whole-corpus check
 
-`recovered_output` (`kuna_protoorder.rs`) states a callee's return only when
+`recovered_output` (`protoorder.rs`) states a callee's return only when
 `kuna_returnuncomputed::every_return_computes` holds of that callee: every live
 RETURN must hand back a value produced in every byte and on every path. gnulib's
 `void version_etc_arn` ends its fallthrough on a `__fprintf_chk` and returns
@@ -37,7 +37,7 @@ register for stack alignment at a variadic call (`xcalloc`), or because the call
 reads it as a `va_arg` (`open_safer`).
 
 Three refusals and one detection fix (`dwarf-confirmation.md` has the full
-account): the **vararg tail** (`kuna_varargtail.rs`), the **hole** a positional
+account): the **vararg tail** (`varargtail.rs`), the **hole** a positional
 claim would have to fill (`no_hole_before`), the `xor %eax,%eax` **variadic-call
 detection** that had never fired, and `computes_everywhere` answering `false`
 rather than `true` when its budget runs out.

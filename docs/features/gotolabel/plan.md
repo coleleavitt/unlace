@@ -2,7 +2,7 @@
 
 ## 1. The change
 
-**`p8_structure/kuna_gotolabel.rs` (new).** One carrier census shared by the
+**`p8_structure/gotolabel.rs` (new).** One carrier census shared by the
 three tail-duplication passes:
 
 ```rust
@@ -15,7 +15,7 @@ an unstructured edge: a `BlockGoto` target, a `BlockIf` goto target, a
 `BlockSwitch` case arm whose `gototype` is `f_goto_goto`, and each
 `BlockMultiGoto` `gotoedges` entry. `release_converted_labels` resolves both
 sides to **front leaves** before comparing, because that is where the label flag
-lives. `kuna_gotoreduce.rs`, `kuna_taildup.rs` and `kuna_crossjumpreverter.rs`
+lives. `gotoreduce.rs`, `taildup.rs` and `crossjumpreverter.rs`
 each drop their private copy and call it.
 
 **`substrate/block.rs (BlockGraph::mark_unstructured)`.** A `BlockGoto`'s target

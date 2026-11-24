@@ -112,7 +112,7 @@ on `unlace decompile`, and discovery via `unlace catalog`.
 The model is physical in kuna:
 
 - **Registry & console**: every action/rule group, console surface, and settable
-  assertion is phase-addressed in `kuna_phases.rs`; `phase list/map/status/catalog`,
+  assertion is phase-addressed in `phases.rs`; `phase list/map/status/catalog`,
   `kassert`, `pipeline`, `quality`, `restarts` operate it. The P7 region tree is
   directly observable via `region tree/blocks/walk` (the angr RegionIdentifier
   port — `docs/spec/07-regions.md`).

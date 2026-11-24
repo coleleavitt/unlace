@@ -2,7 +2,7 @@
 //! module owns: which of a call's trials the callee's body claims as arguments
 //! ([`plan_from_body`]), and the two guards that bound the claim.  Every case
 //! here passes `cut = false`, so it is this rule alone that answers;
-//! [`crate::kuna_calleearitycut`] owns the widened boundary test and
+//! [`crate::calleearitycut`] owns the widened boundary test and
 //! its own cases.  The end-to-end behaviour is
 //! `tests/cli/defined-payload-function-loses.json`.
 

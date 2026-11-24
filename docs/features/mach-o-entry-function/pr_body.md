@@ -23,7 +23,7 @@ routine" — stands.
 ## Mechanism
 
 New option **`machomain`** (`on|off`, default **on**, DIV-111), a P1 analysis pass in
-`decompiler/crates/kuna-analysis/src/analyzers/entry/kuna_machomain.rs`:
+`decompiler/crates/kuna-analysis/src/analyzers/entry/machomain.rs`:
 
 - the **name** `main` rides the existing `entry_names` overlay — the same additive map the
   commit boundary already consults for the ELF `_INIT_<i>` / `_DT_INIT` names — so the

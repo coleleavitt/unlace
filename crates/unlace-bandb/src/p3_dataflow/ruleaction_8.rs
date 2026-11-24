@@ -2090,7 +2090,7 @@ impl Rule for RuleOrCompare {
 /// (kuna) Only the AND form is taken, and only into a field a declared record
 /// lays out, reached through a pointer whose type is locked; the truncation
 /// form is never taken.  Both read bytes the program never reads (see
-/// [`crate::kuna_narrowload`]).
+/// [`crate::narrowload`]).
 pub struct RuleExpandLoad;
 
 impl RuleExpandLoad {
@@ -2331,7 +2331,7 @@ impl Rule for RuleExpandLoad {
             return 0;
         }
         if !RuleExpandLoad::check_and_comparison(data, out_vn)
-            || !crate::kuna_narrowload::widens_into_declared_field(data, root_ptr)
+            || !crate::narrowload::widens_into_declared_field(data, root_ptr)
         {
             return 0;
         }

@@ -1,6 +1,6 @@
 //! Machine storage for declared variables, including homes removed by simplification.
 
-use crate::kuna_calltransport::FuncdataCallTransportExt;
+use crate::calltransport::FuncdataCallTransportExt;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -139,7 +139,7 @@ pub fn high_comment(
 ) -> Option<StorageComment> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_coreoptions::NameStyleAngr>()
+        .get::<crate::coreoptions::NameStyleAngr>()
         .0
     {
         return None;
@@ -195,7 +195,7 @@ fn visit_homes(
     let mut pending: Vec<_> = (0..high.num_instances())
         .map(|i| high.get_instance(i))
         .collect();
-    let mut visited = crate::kuna_fasthash::FxHashSet::default();
+    let mut visited = crate::fasthash::FxHashSet::default();
     while let Some(id) = pending.pop() {
         if !visited.insert(id) {
             continue;

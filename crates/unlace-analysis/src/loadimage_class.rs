@@ -2,16 +2,16 @@
 //! read-only, as Ghidra's `JavaLoader` copies it.
 //!
 //! A `.class` file's methods map one after another from
-//! [`unlace_decomp::kuna_jvm::CODE_BASE`], each on a 4-byte boundary; a JAR's
+//! [`unlace_decomp::jvm::CODE_BASE`], each on a 4-byte boundary; a JAR's
 //! classes (its `.class` members, in archive order) follow each other. The
-//! constant pools live in [`unlace_decomp::kuna_jvm::JvmModel`].
+//! constant pools live in [`unlace_decomp::jvm::JvmModel`].
 
 use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::AddrSpace;
-use unlace_decomp::kuna_jvm::{CODE_BASE, JvmModel, is_class};
+use unlace_decomp::jvm::{CODE_BASE, JvmModel, is_class};
 use unlace_sleigh::loadimage::{LoadImage, LoadImageSection, section_flags};
 
 use crate::loader::firmware::bundles::{Bundle, Kind};

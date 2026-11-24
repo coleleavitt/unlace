@@ -288,7 +288,7 @@ pub fn merge_mapped<'a>(
     Some(Cow::Owned(pieces))
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.inputstorage_assign = Some(assign);
 }

@@ -1,4 +1,4 @@
-use crate::kuna_int3pad::warning_text;
+use crate::int3pad::warning_text;
 
 #[test]
 fn warning_text_carries_the_run_and_no_earlier_digit() {

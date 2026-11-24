@@ -67,10 +67,10 @@
     "bytecompat_fixture": "regenerated from the fresh decomp_dbg build"
   },
   "files": [
-    "decompiler/crates/kuna-analysis/src/analyzers/dwarf/kuna_typedepth.rs (new)",
+    "decompiler/crates/kuna-analysis/src/analyzers/dwarf/typedepth.rs (new)",
     "decompiler/crates/kuna-analysis/src/analyzers/dwarf/mod.rs",
-    "decompiler/crates/kuna-analysis/src/analyzers/dwarf/kuna_cppproto.rs",
-    "decompiler/crates/kuna-decomp/src/p0_knowledge/kuna_typedepth.rs (new)",
+    "decompiler/crates/kuna-analysis/src/analyzers/dwarf/cppproto.rs",
+    "decompiler/crates/kuna-decomp/src/p0_knowledge/typedepth.rs (new)",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
     "decompiler/crates/kuna-decomp/phases.toml",
     "decompiler/crates/kuna-cli/src/decompile.rs",

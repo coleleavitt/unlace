@@ -5,14 +5,14 @@
 
 use crate::context::ArchContext;
 use crate::context::BlockId;
+use crate::coreoptions::LEVEL_FULL;
+use crate::coreoptions::LEVEL_GLOBAL;
+use crate::coreoptions::LEVEL_OFF;
 use crate::funcdata::Funcdata;
 use crate::heritage::*;
-use crate::kuna_coreoptions::LEVEL_FULL;
-use crate::kuna_coreoptions::LEVEL_GLOBAL;
-use crate::kuna_coreoptions::LEVEL_OFF;
-use crate::kuna_restartlog::KunaRestartReason;
-use crate::kuna_restartlog::RestartLog;
 use crate::overrides::Override;
+use crate::restartlog::KunaRestartReason;
+use crate::restartlog::RestartLog;
 use crate::varnode::varnode_flags;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -197,7 +197,7 @@ fn complete_register_partition_extracts_call_slots_in_both_byte_orders() {
                 &whole,
                 &whole,
                 8,
-                crate::kuna_calloverlap::LEVEL_OFF,
+                crate::calloverlap::LEVEL_OFF,
             );
         }
         for (slot, offset) in [0x20, 0x24].into_iter().enumerate() {
@@ -255,7 +255,7 @@ fn heritage_splits_a_read_that_wraps_past_the_top_of_its_space() {
         }
         let off = v.get_addr().get_offset();
         assert_eq!(
-            crate::kuna_wrapsplit::wrap_cut(off, v.get_size(), stack.get_highest()),
+            crate::wrapsplit::wrap_cut(off, v.get_size(), stack.get_highest()),
             None
         );
         let (start, range) = h.globaldisjoint.find(v.get_addr()).expect("heritaged");
@@ -456,7 +456,7 @@ fn heritage_builds_real_ssa_on_a_diamond() {
     assert_eq!(fd.vbank().get(phi_out).unwrap().get_create_index(), first);
     assert_eq!(fd.vbank_mut().reserve_create_index(0), first + 3);
     assert!(
-        !crate::kuna_renamereads::pending(&fd, phi),
+        !crate::renamereads::pending(&fd, phi),
         "phi no longer marked"
     );
 }
@@ -472,7 +472,7 @@ fn a_slot_renaming_never_reaches_gets_upstreams_placeholder() {
     let phi = fd.new_op(2, raddr(&fd, 0x1002));
     let phi_out = fd.new_varnode_out(1, &loc, phi).unwrap();
     fd.op_set_opcode(phi, typeop_skeleton(OpCode::CPUI_MULTIEQUAL));
-    crate::kuna_renamereads::mark(&mut fd, phi, 2, &mut pending);
+    crate::renamereads::mark(&mut fd, phi, 2, &mut pending);
     fd.op_insert_begin(phi, b[2]);
     let first = pending[0].1;
     let reached = fd.new_varnode(1, &loc, None);
@@ -481,7 +481,7 @@ fn a_slot_renaming_never_reaches_gets_upstreams_placeholder() {
     let copy = fd.new_op(1, raddr(&fd, 0x1002));
     let copy_out = fd.new_varnode_out(1, &raddr(&fd, 0x200), copy).unwrap();
     fd.op_set_opcode_code(copy, OpCode::CPUI_COPY);
-    crate::kuna_renamereads::mark(&mut fd, copy, 1, &mut pending);
+    crate::renamereads::mark(&mut fd, copy, 1, &mut pending);
     fd.op_insert_end(copy, b[2]);
     let copy_first = pending[1].1;
     assert_eq!(
@@ -490,7 +490,7 @@ fn a_slot_renaming_never_reaches_gets_upstreams_placeholder() {
         "the slots' indices are taken when they are left empty"
     );
 
-    crate::kuna_renamereads::finish(&mut fd, &mut pending);
+    crate::renamereads::finish(&mut fd, &mut pending);
     assert!(pending.is_empty());
     assert_eq!(fd.obank().get(phi).unwrap().get_in(0), Some(reached));
     let slot = fd
@@ -516,8 +516,8 @@ fn a_slot_renaming_never_reaches_gets_upstreams_placeholder() {
     );
     assert_eq!((v.get_addr(), v.get_size()), (&raddr(&fd, 0x200), 1));
     assert_eq!(v.get_create_index(), copy_first);
-    assert!(!crate::kuna_renamereads::pending(&fd, phi));
-    assert!(!crate::kuna_renamereads::pending(&fd, copy));
+    assert!(!crate::renamereads::pending(&fd, phi));
+    assert!(!crate::renamereads::pending(&fd, copy));
     let _ = (phi_out, copy_out);
 }
 
@@ -538,7 +538,7 @@ fn the_guards_of_one_call_share_its_annotation() {
     fd.op_set_opcode_code(call, OpCode::CPUI_CALL);
     fd.op_insert_end(call, b[0]);
     let (mut pending, mut iops) = (Vec::new(), Default::default());
-    let renamereads = crate::kuna_renamereads::new_indirect;
+    let renamereads = crate::renamereads::new_indirect;
     let (a1, a2) = (raddr(&fd, 0x100), raddr(&fd, 0x200));
     let g1 = renamereads(&mut fd, call, &a1, 4, 0, &mut pending, &mut iops);
     let g2 = renamereads(&mut fd, call, &a2, 8, 0, &mut pending, &mut iops);
@@ -556,7 +556,7 @@ fn the_guards_of_one_call_share_its_annotation() {
         "a reuse keeps the numbering"
     );
     assert_eq!(index(&fd, g1, Some(1)), index(&fd, g1, None) + 1);
-    crate::kuna_renamereads::finish(&mut fd, &mut pending);
+    crate::renamereads::finish(&mut fd, &mut pending);
     fd.op_destroy(g1);
     assert_eq!(fd.obank().get(g2).unwrap().get_in(1), Some(iop));
     assert_eq!(

@@ -37,8 +37,8 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, DatatypeKind, type_metatype};
 use crate::funcdata::Funcdata;
 
-/// Fill the facing-type hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill the facing-type hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.vn_type_def_facing = Some(Funcdata::vn_type_def_facing);
     hooks.vn_type_read_facing = Some(Funcdata::vn_type_read_facing);
 }
@@ -122,9 +122,9 @@ impl FuncdataFacingExt for Funcdata {
     /// data-type, resolved against the *write* edge (`slot == -1`) when it needs
     /// union resolution.  `vn` **must** be written.
     fn vn_type_def_facing(&self, vn: VarnodeId) -> Rc<Datatype> {
-        if crate::kuna_stackviews::enabled(self) {
+        if crate::stackviews::enabled(self) {
             if let Some(op) = self.vbank().get(vn).and_then(|v| v.get_def()) {
-                if let Some(view) = crate::kuna_stackviews::access_type(self, vn, op, -1) {
+                if let Some(view) = crate::stackviews::access_type(self, vn, op, -1) {
                     return view;
                 }
             }
@@ -144,9 +144,9 @@ impl FuncdataFacingExt for Funcdata {
     /// data-type, resolved against the *read* edge (`op->getSlot(this)`) when it
     /// needs union resolution.
     fn vn_type_read_facing(&self, vn: VarnodeId, op: OpId) -> Rc<Datatype> {
-        if crate::kuna_stackviews::enabled(self) {
+        if crate::stackviews::enabled(self) {
             let slot = self.obank().get(op).map(|o| o.get_slot(vn)).unwrap_or(-1);
-            if let Some(view) = crate::kuna_stackviews::access_type(self, vn, op, slot) {
+            if let Some(view) = crate::stackviews::access_type(self, vn, op, slot) {
                 return view;
             }
         }
@@ -168,9 +168,9 @@ impl FuncdataFacingExt for Funcdata {
     /// union resolution.  This is the def-facing node of the type graph the Casts
     /// stage walks.
     fn vn_high_type_def_facing(&mut self, vn: VarnodeId) -> Rc<Datatype> {
-        if crate::kuna_stackviews::enabled(self) {
+        if crate::stackviews::enabled(self) {
             if let Some(op) = self.vbank().get(vn).and_then(|v| v.get_def()) {
-                if let Some(view) = crate::kuna_stackviews::access_type(self, vn, op, -1) {
+                if let Some(view) = crate::stackviews::access_type(self, vn, op, -1) {
                     return view;
                 }
             }
@@ -194,9 +194,9 @@ impl FuncdataFacingExt for Funcdata {
     /// resolution.  This is the read-facing node of the type graph
     /// `ActionSetCasts::castInput`/`castOutput` query.
     fn vn_high_type_read_facing(&mut self, vn: VarnodeId, op: OpId) -> Rc<Datatype> {
-        if crate::kuna_stackviews::enabled(self) {
+        if crate::stackviews::enabled(self) {
             let slot = self.obank().get(op).map(|o| o.get_slot(vn)).unwrap_or(-1);
-            if let Some(view) = crate::kuna_stackviews::access_type(self, vn, op, slot) {
+            if let Some(view) = crate::stackviews::access_type(self, vn, op, slot) {
                 return view;
             }
         }

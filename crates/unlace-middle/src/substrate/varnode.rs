@@ -32,7 +32,7 @@ use std::collections::BTreeMap;
 use std::ops::Bound;
 use std::rc::Rc;
 
-use crate::kuna_checkedarena::Arena;
+use crate::checkedarena::Arena;
 use smallvec::SmallVec;
 use unlace_base::address::{Address, SeqNum, mach_extreme};
 use unlace_base::error::{KunaError, KunaResult};
@@ -154,12 +154,12 @@ pub mod addl_flags {
     /// The varnode is implied but also has a data-type that needs resolution
     pub const has_implied_field: uint2 = 0x1000;
     /// (kuna) A load of a global the value was stored to reads this value instead
-    /// (`p3_dataflow/kuna_globalstorekeep.rs`)
+    /// (`p3_dataflow/globalstorekeep.rs`)
     pub const global_load: uint2 = 0x2000;
     /// (kuna `sitetypelock`) This Varnode's type lock was applied by the
     /// per-call-site output type lock, so the lock may be retracted if the
     /// Varnode's HighVariable turns out to span foreign members
-    /// (`p5_types/kuna_sitetypelock.rs`).
+    /// (`p5_types/sitetypelock.rs`).
     pub const site_locked: uint2 = 0x4000;
     /// A program literal that coincides with a synthetic extern display address.
     pub const synthetic_literal: uint2 = 0x8000;

@@ -17,7 +17,7 @@ pub trait PrintHandle: std::any::Any {
     /// Select the output language by name.
     fn set_name(&mut self, name: &str);
     /// The output language the printer renders.
-    fn out_lang(&self) -> crate::kuna_outlang::OutLang;
+    fn out_lang(&self) -> crate::outlang::OutLang;
     /// Reset the printing context and the wire-visible print options to their defaults.
     fn reset_wire_defaults(&mut self);
     /// The header and per-instruction comment-type masks, combined.

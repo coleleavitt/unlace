@@ -3,7 +3,7 @@
 //!
 //! # The gap
 //!
-//! [`calleearitybody`](crate::kuna_calleearitybody) recovers the
+//! [`calleearitybody`](crate::calleearitybody) recovers the
 //! argument list of a call that has no sibling from the callee's own body: the
 //! list is the leading run of argument registers the callee `proves_input`, and
 //! it must END at an argument register the callee `proves_dead`.  That second
@@ -76,13 +76,13 @@
 //! Inert unless `calleearitybody` is also on: it widens that rule rather than
 //! adding a second one.
 //!
-//! [`probe_callee_entry_dead`]: crate::kuna_calleedeadarg::probe_callee_entry_dead
+//! [`probe_callee_entry_dead`]: crate::calleedeadarg::probe_callee_entry_dead
 
 use unlace_base::address::Address;
 use unlace_base::marshal::ElementId;
 use unlace_base::types::int4;
 
-use crate::kuna_calleearitybody::{BodyTrial, is_register};
+use crate::calleearitybody::{BodyTrial, is_register};
 
 /// Marshaling element `<calleearitycut>` (kuna 4000+ range; 4153 = calleeretpreserves).
 pub const ELEM_CALLEEARITYCUT: ElementId = ElementId::new("calleearitycut", 4154);
@@ -92,8 +92,8 @@ pub const ELEM_CALLEEARITYCUT: ElementId = ElementId::new("calleearitycut", 4154
 ///
 /// `picked` are indices into `trials`, in prototype order, and `entries` are the
 /// prototype model's own input locations — both exactly as
-/// [`crate::kuna_calleearitybody::plan_from_body`] built them.
-/// [`crate::kuna_calleearityscratch`] widens the quiet test.
+/// [`crate::calleearitybody::plan_from_body`] built them.
+/// [`crate::calleearityscratch`] widens the quiet test.
 pub fn accepts_cut_run(trials: &[BodyTrial], picked: &[int4], entries: &[(Address, int4)]) -> bool {
     let (Some(&first), Some(&last)) = (picked.first(), picked.last()) else {
         return false;
@@ -104,8 +104,7 @@ pub fn accepts_cut_run(trials: &[BodyTrial], picked: &[int4], entries: &[(Addres
     let Some(bound) = trials.get(last as usize + 1) else {
         return false;
     };
-    let quiet =
-        bound.caller_quiet || crate::kuna_calleearityscratch::boundary_is_caller_scratch(bound);
+    let quiet = bound.caller_quiet || crate::calleearityscratch::boundary_is_caller_scratch(bound);
     if !is_register(&bound.addr) || !quiet {
         return false;
     }
@@ -117,5 +116,5 @@ pub fn accepts_cut_run(trials: &[BodyTrial], picked: &[int4], entries: &[(Addres
 }
 
 #[cfg(test)]
-#[path = "kuna_calleearitycut/tests.rs"]
+#[path = "calleearitycut/tests.rs"]
 mod tests;

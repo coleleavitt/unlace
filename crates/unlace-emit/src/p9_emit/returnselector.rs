@@ -41,7 +41,7 @@ impl Action for ActionReturnSelector {
             }
             let placeholder = crate::jumptable::JumpTable::new(data.get_address().clone());
             let table = std::mem::replace(data.get_jump_table_mut(i), placeholder);
-            if crate::kuna_indirectreturn::normalize_return_selector(data, &table) {
+            if crate::indirectreturn::normalize_return_selector(data, &table) {
                 self.base.count += 1;
                 changed = true;
             } else {

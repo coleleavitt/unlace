@@ -182,7 +182,7 @@ pub fn took_runtime_type(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool 
     };
     v.is_input()
         && slot_of(data, v.get_addr(), v.get_size())
-            .is_some_and(|s| crate::kuna_calleevote::same_type(&s.ct, ct))
+            .is_some_and(|s| crate::calleevote::same_type(&s.ct, ct))
 }
 
 /// The runtime name of the recovered parameter in `addr`/`size`.
@@ -224,7 +224,7 @@ pub fn settled(fd: &Funcdata) -> bool {
 /// (kuna `elfmain`) The C runtime's `main` declaration this function's inputs take, when it is
 /// an executable's own `main`; kept across `Funcdata::clear`.
 #[derive(Default)]
-struct RuntimeSlot(Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>);
+struct RuntimeSlot(Option<std::rc::Rc<crate::elfmaindecl::Runtime>>);
 crate::kuna_func_state!(RuntimeSlot, keep_across_clear: true);
 
 /// The `kuna_elfmaindecl` pass's methods on [`Funcdata`], as an extension trait so the type can
@@ -232,19 +232,19 @@ crate::kuna_func_state!(RuntimeSlot, keep_across_clear: true);
 pub trait FuncdataElfmaindeclExt {
     /// (kuna `elfmain`) Give this function's inputs the C runtime's `main`
     /// declaration, as far as its own analysis recovers them.
-    fn kuna_set_elfmain(&mut self, runtime: Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>);
+    fn kuna_set_elfmain(&mut self, runtime: Option<std::rc::Rc<crate::elfmaindecl::Runtime>>);
     /// (kuna `elfmain`) The C runtime's `main` declaration for this function.
-    fn kuna_elfmain(&self) -> Option<&crate::kuna_elfmaindecl::Runtime>;
+    fn kuna_elfmain(&self) -> Option<&crate::elfmaindecl::Runtime>;
 }
 
 impl FuncdataElfmaindeclExt for crate::funcdata::Funcdata {
     /// (kuna `elfmain`) Give this function's inputs the C runtime's `main`
     /// declaration, as far as its own analysis recovers them.
-    fn kuna_set_elfmain(&mut self, runtime: Option<std::rc::Rc<crate::kuna_elfmaindecl::Runtime>>) {
+    fn kuna_set_elfmain(&mut self, runtime: Option<std::rc::Rc<crate::elfmaindecl::Runtime>>) {
         self.kuna_state_mut::<RuntimeSlot>().0 = runtime;
     }
     /// (kuna `elfmain`) The C runtime's `main` declaration for this function.
-    fn kuna_elfmain(&self) -> Option<&crate::kuna_elfmaindecl::Runtime> {
+    fn kuna_elfmain(&self) -> Option<&crate::elfmaindecl::Runtime> {
         self.kuna_state::<RuntimeSlot>().0.as_deref()
     }
 }

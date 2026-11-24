@@ -63,7 +63,7 @@ in the second register, reads as the `long long` with the same registers
    `ArchContext::be_join`, `kuna_bejoin::live`) gates steps 2-5: off, every
    pair and call pair joins first register low and nothing else moves.
 
-Tests: `kuna_bejoin/tests.rs` (the classification on hand-built IR);
+Tests: `bejoin/tests.rs` (the classification on hand-built IR);
 `kuna-cli/tests/decompile_all_cli.rs` compiled round trips for wide values
 (`bejoin_*.o`, `bejoin_carry_*`, `bejoin_avr.bin`, `bejoin_window64_*`) and for
 functions that return one register and must keep it (`bejoin_zero_mips32_O0.o`,

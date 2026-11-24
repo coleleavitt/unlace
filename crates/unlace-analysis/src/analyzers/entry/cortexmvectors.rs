@@ -88,7 +88,7 @@ use super::{
 /// signature rejects, plus the whole-image Thumb (`TMode=1`) region paint that a
 /// confirmed table unlocks. Like every other analysis pass it RUNS at load; the
 /// **commit** is gated by `--option cortexmvectors on`
-/// (`engine.rs::analysis_pass_enabled` → `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Cortexmvectors>().0`), so a
+/// (`engine.rs::analysis_pass_enabled` → `arch.kuna_options.get::<unlace_decomp::analysisgates::Cortexmvectors>().0`), so a
 /// default run computes the facts and commits nothing, leaving the discovery set
 /// byte-identical to the shipped oracle.
 ///

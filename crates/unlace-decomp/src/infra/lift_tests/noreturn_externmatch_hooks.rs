@@ -13,7 +13,7 @@ mod module_scope {
     pub(super) use unlace_num::pcoderaw::VarnodeData;
     pub(super) use unlace_sleigh::translate::PcodeEmit;
 }
-use crate::kuna_noreturn_externmatch::*;
+use crate::noreturn_externmatch::*;
 use module_scope::*;
 use std::rc::Rc;
 use std::sync::Arc;

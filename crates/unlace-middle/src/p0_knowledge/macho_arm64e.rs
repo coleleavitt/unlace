@@ -4,7 +4,7 @@
 //!
 //! Spec selection is a **load-time** decision (`language_id_for` in
 //! `unlace-analysis`), taken before any console `option` command runs, so like
-//! [`ifuncfpret`](crate::kuna_ifuncfpret) the gate is a process environment
+//! [`ifuncfpret`](crate::ifuncfpret) the gate is a process environment
 //! variable: the CLI exports it onto the `decomp_dbg` subprocess, the console
 //! `option` arm sets it for a later `load file` in the same process, and the
 //! loader reads it when it picks the language. Unset means **on**; only an
@@ -19,8 +19,8 @@ pub const MACHO_ARM64E_ENV: &str = "UNLACE_MACHO_ARM64E";
 
 /// Whether an arm64e Mach-O selects the AppleSilicon spec in this process.
 pub fn macho_arm64e_enabled() -> bool {
-    crate::kuna_loadoptions::scoped(|o| o.macho_arm64e)
-        .unwrap_or_else(crate::kuna_loadoptions::env::macho_arm64e)
+    crate::loadoptions::scoped(|o| o.macho_arm64e)
+        .unwrap_or_else(crate::loadoptions::env::macho_arm64e)
 }
 
 /// Bridge a `set_kuna_option("macho-arm64e", val)` toggle to

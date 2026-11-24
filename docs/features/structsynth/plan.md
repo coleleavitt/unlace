@@ -2,7 +2,7 @@
 
 ## 1. The change
 
-A new P5 action, `p5_types/kuna_structsynth.rs (ActionStructSynth)`, inserted into
+A new P5 action, `p5_types/structsynth.rs (ActionStructSynth)`, inserted into
 `mainloop` immediately after `ActionInferTypes` in the `typerecovery` group, behind
 `--option structsynth off|param` (default `off`).
 
@@ -143,7 +143,7 @@ was made dense).
   dereferences but the body names anyway; with the hole filler ablated,
   assertions #4 and #5 fail while #3 (the body naming it) still passes, which is
   the bug.
-- 16 unit tests in `p5_types/kuna_structsynth/tests.rs` — option parsing, the
+- 16 unit tests in `p5_types/structsynth/tests.rs` — option parsing, the
   widest-wins rule, the array-shape rule and its gap tolerance, constant sign
   extension, each prune clause, the dense layout, the rounded size, the saved
   `int[2]` pair, and the plateau latch.

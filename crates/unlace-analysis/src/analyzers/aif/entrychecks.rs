@@ -26,13 +26,13 @@ pub(crate) fn run(
     translate: &dyn Translate,
     code_space: Rc<AddrSpace>,
     pointer_entries: Vec<u64>,
-    bracket: Option<&super::kuna_aifbracket::BracketEvidence>,
-    memo: Option<&Rc<crate::listing::kuna_decodememo::DecodeMemo>>,
+    bracket: Option<&super::aifbracket::BracketEvidence>,
+    memo: Option<&Rc<crate::listing::decodememo::DecodeMemo>>,
 ) -> CheckedAif {
     let mut straight_line = std::collections::BTreeSet::new();
     let poolslide = (arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Aifpoolslide>()
+        .get::<unlace_decomp::analysisgates::Aifpoolslide>()
         .0
         && crate::loadimage_object::is_arm32_language(&arch.archid))
     .then_some(arch);
@@ -43,10 +43,10 @@ pub(crate) fn run(
             translate,
             Rc::clone(&code_space),
             arch.kuna_options
-                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .get::<unlace_decomp::aif::AifMode>()
                 .strict(),
             arch.kuna_options
-                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .get::<unlace_decomp::aif::AifMode>()
                 .corroborate(),
             bracket,
             poolslide,
@@ -60,10 +60,10 @@ pub(crate) fn run(
             Rc::clone(&code_space),
             listing.exec_ranges(),
             arch.kuna_options
-                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .get::<unlace_decomp::aif::AifMode>()
                 .strict(),
             arch.kuna_options
-                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .get::<unlace_decomp::aif::AifMode>()
                 .corroborate(),
             bracket,
             poolslide,
@@ -73,10 +73,10 @@ pub(crate) fn run(
     let mut pool_entries = Vec::new();
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Poolentry>()
+        .get::<unlace_decomp::analysisgates::Poolentry>()
         .0
     {
-        let checked = super::kuna_poolentry::run_pool_pass(
+        let checked = super::poolentry::run_pool_pass(
             arch,
             listing,
             translate,

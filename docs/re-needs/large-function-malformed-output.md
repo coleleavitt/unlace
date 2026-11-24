@@ -212,7 +212,7 @@ _none recorded_
   `docs/features/large-function-malformed-output/proposal.md` and are out of scope for the
   closing PR.
 - round 3 (builder `b-r3-large-function-m`): increment A IMPLEMENTED and the acceptance PASSES.
-  `option fastfailnoreturn` (default on, DIV-119, ElementId 4144, `p2_lift/kuna_fastfailnoreturn.rs`
+  `option fastfailnoreturn` (default on, DIV-119, ElementId 4144, `p2_lift/fastfailnoreturn.rs`
   + one call site in `flow.rs::setup_callind_specs`): on a Windows image a CALLIND that reads what a
   `swi` CALLOTHER with the 1-byte constant `0x29` wrote in the same instruction is `__fastfail`, so
   its call spec is marked no-return and the halt `check_for_flow_modification` already plants for a

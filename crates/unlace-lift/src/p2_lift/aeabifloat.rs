@@ -7,7 +7,7 @@
 //! fixes each one's result: IEEE 754 arithmetic rounded to nearest, a comparison
 //! returning 1 or 0 (0 when unordered, except `dcmpun`), a conversion to an
 //! integer rounding toward zero. Each helper is registered as a `<callfixup>`,
-//! like [`crate::kuna_arithhelpers`], whose payload list this one extends: the
+//! like [`crate::arithhelpers`], whose payload list this one extends: the
 //! CALL is replaced with the operation in p-code, reading its operands from
 //! r0..r3 under the base standard (a `double` low word first on little-endian,
 //! high word first on big-endian) and writing its result to r0 or r0:r1, so
@@ -136,7 +136,7 @@ const LIBGCC: &[(&str, &str)] = &[
 /// The synthesized `<callfixup>` elements for one byte order, each targeting
 /// `__aeabi_<helper>`, the libgcc routine it is ([`LIBGCC`]), and the
 /// one-more-underscore spelling of each, as
-/// [`crate::kuna_arithhelpers::payload_xml`] does.
+/// [`crate::arithhelpers::payload_xml`] does.
 pub fn payload_xml(big_endian: bool) -> Vec<String> {
     fixups(big_endian)
         .into_iter()
@@ -157,7 +157,7 @@ pub fn payload_xml(big_endian: bool) -> Vec<String> {
 
 crate::kuna_flag!(
     /// (kuna `aeabifloat`) Install the AEABI floating-point helper call-fixups
-    /// (`p2_lift/kuna_aeabifloat.rs`) so `__aeabi_dadd(a,b)` prints as `a + b`.
+    /// (`p2_lift/aeabifloat.rs`) so `__aeabi_dadd(a,b)` prints as `a + b`.
     /// Read by the analysis-tier call-fixup installer, like `arithhelpers`.
     AeabiFloat,
     "aeabifloat",

@@ -9,7 +9,7 @@ use std::io::{BufWriter, Write};
 use unlace_console::engine::{EntryProvenance, ObjectLocation};
 use unlace_console::project::FuncResult;
 use unlace_decomp::decompile_drive::{GlobalInfo, LineMapping, TypeInfo, VarInfo};
-use unlace_decomp::kuna_structsynth::shard::FunctionRecord;
+use unlace_decomp::structsynth::shard::FunctionRecord;
 
 use super::TargetSpec;
 
@@ -543,13 +543,13 @@ pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
         let nu = r.u32()? as usize;
         let mut uses = r.sized(nu);
         for _ in 0..nu {
-            uses.push(unlace_decomp::kuna_stackobjectinfo::StackObjectUseInfo {
+            uses.push(unlace_decomp::stackobjectinfo::StackObjectUseInfo {
                 address: r.u64()?,
                 slot: r.u32()? as i32,
                 type_name: r.string()?,
             });
         }
-        stack_objects.push(unlace_decomp::kuna_stackobjectinfo::StackObjectInfo {
+        stack_objects.push(unlace_decomp::stackobjectinfo::StackObjectInfo {
             id,
             name,
             stack_offset,
@@ -588,7 +588,7 @@ pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
             1 => Some(r.string()?),
             _ => return None,
         };
-        field_calls.push(unlace_decomp::kuna_calltargettype::FieldDecl {
+        field_calls.push(unlace_decomp::calltargettype::FieldDecl {
             record,
             field,
             declaration,
@@ -641,7 +641,7 @@ pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
             1 => true,
             _ => return None,
         };
-        callwide_prototypes.push(unlace_decomp::kuna_callwide::ExportPrototype {
+        callwide_prototypes.push(unlace_decomp::callwide::ExportPrototype {
             name,
             entry,
             signed,
@@ -679,17 +679,17 @@ pub(crate) fn decode_result(body: &[u8]) -> Option<FuncResult> {
     })
 }
 
-fn put_entry(out: &mut Vec<u8>, entry: &unlace_decomp::kuna_pointerargs::Entry) {
+fn put_entry(out: &mut Vec<u8>, entry: &unlace_decomp::pointerargs::Entry) {
     put_str(out, &entry.0);
     put_u64(out, entry.1);
 }
 
-fn put_storage(out: &mut Vec<u8>, storage: &unlace_decomp::kuna_pointerargs::Storage) {
+fn put_storage(out: &mut Vec<u8>, storage: &unlace_decomp::pointerargs::Storage) {
     put_entry(out, &storage.0);
     out.extend_from_slice(&i64::from(storage.1).to_le_bytes());
 }
 
-fn put_pointerargs(out: &mut Vec<u8>, record: Option<&unlace_decomp::kuna_pointerargs::Record>) {
+fn put_pointerargs(out: &mut Vec<u8>, record: Option<&unlace_decomp::pointerargs::Record>) {
     let Some(record) = record else {
         out.push(0);
         return;
@@ -719,7 +719,7 @@ fn put_pointerargs(out: &mut Vec<u8>, record: Option<&unlace_decomp::kuna_pointe
     }
 }
 
-fn put_warnings(out: &mut Vec<u8>, warnings: &[unlace_decomp::kuna_functionwarnings::Warning]) {
+fn put_warnings(out: &mut Vec<u8>, warnings: &[unlace_decomp::functionwarnings::Warning]) {
     put_u32(out, warnings.len() as u32);
     for warning in warnings {
         match warning.address {
@@ -734,7 +734,7 @@ fn put_warnings(out: &mut Vec<u8>, warnings: &[unlace_decomp::kuna_functionwarni
     }
 }
 
-fn read_warnings(r: &mut Reader<'_>) -> Option<Vec<unlace_decomp::kuna_functionwarnings::Warning>> {
+fn read_warnings(r: &mut Reader<'_>) -> Option<Vec<unlace_decomp::functionwarnings::Warning>> {
     let n = r.u32()? as usize;
     let mut warnings = r.sized(n);
     for _ in 0..n {
@@ -745,7 +745,7 @@ fn read_warnings(r: &mut Reader<'_>) -> Option<Vec<unlace_decomp::kuna_functionw
         };
         let text = r.string()?;
         let line = r.u64()?.try_into().ok()?;
-        warnings.push(unlace_decomp::kuna_functionwarnings::Warning {
+        warnings.push(unlace_decomp::functionwarnings::Warning {
             address,
             text,
             line,
@@ -754,16 +754,16 @@ fn read_warnings(r: &mut Reader<'_>) -> Option<Vec<unlace_decomp::kuna_functionw
     Some(warnings)
 }
 
-fn read_entry(r: &mut Reader<'_>) -> Option<unlace_decomp::kuna_pointerargs::Entry> {
+fn read_entry(r: &mut Reader<'_>) -> Option<unlace_decomp::pointerargs::Entry> {
     Some((r.string()?, r.u64()?))
 }
 
-fn read_storage(r: &mut Reader<'_>) -> Option<unlace_decomp::kuna_pointerargs::Storage> {
+fn read_storage(r: &mut Reader<'_>) -> Option<unlace_decomp::pointerargs::Storage> {
     Some((read_entry(r)?, r.i64()?.try_into().ok()?))
 }
 
-fn read_pointerargs(r: &mut Reader<'_>) -> Option<Option<unlace_decomp::kuna_pointerargs::Record>> {
-    use unlace_decomp::kuna_pointerargs::{Call, Parameter, Position, Record};
+fn read_pointerargs(r: &mut Reader<'_>) -> Option<Option<unlace_decomp::pointerargs::Record>> {
+    use unlace_decomp::pointerargs::{Call, Parameter, Position, Record};
     match r.u8()? {
         0 => return Some(None),
         1 => {}

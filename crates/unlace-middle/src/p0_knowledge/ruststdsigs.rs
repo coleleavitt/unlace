@@ -57,7 +57,7 @@ pub fn set_ruststdsigs_env(value: RustStdSigs) {
     unsafe { std::env::set_var(RUSTSTDSIGS_ENV, value.as_str()) };
 }
 
-impl crate::kuna_optionset::KunaOption for RustStdSigs {
+impl crate::optionset::KunaOption for RustStdSigs {
     const NAME: &'static str = "ruststdsigs";
     crate::kuna_option_id!();
 

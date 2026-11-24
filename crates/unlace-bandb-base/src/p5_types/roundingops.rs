@@ -24,7 +24,7 @@ use crate::context::OpId;
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
-pub use crate::kuna_specnames::ROUNDING_USEROPS as USEROP_NAMES;
+pub use crate::specnames::ROUNDING_USEROPS as USEROP_NAMES;
 
 /// Whether `op` is a CALLOTHER of one of the rounding user ops.
 fn is_rounding_op(data: &Funcdata, op: OpId) -> Option<()> {

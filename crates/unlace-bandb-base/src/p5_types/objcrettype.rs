@@ -441,7 +441,7 @@ pub fn instancetype(data: &Funcdata, op: OpId, fc: &FuncCallSpecs) -> Option<Rc<
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_objcrettype::ObjcRettype>()
+        .get::<crate::objcrettype::ObjcRettype>()
         .0
     {
         return None;
@@ -469,11 +469,7 @@ pub struct ResolvedSend {
 /// The method the send at `op` reaches when its receiver's class is known.
 pub fn resolve_send(data: &Funcdata, op: OpId) -> Option<ResolvedSend> {
     let arch = data.get_arch();
-    if !arch
-        .kuna_options
-        .get::<crate::kuna_objcrettype::ObjcResolve>()
-        .0
-    {
+    if !arch.kuna_options.get::<crate::objcrettype::ObjcResolve>().0 {
         return None;
     }
     let fc = data.get_call_specs(data.get_call_specs_index(op)?);
@@ -550,7 +546,7 @@ pub fn holds_loaded_value(fd: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
 crate::kuna_flag!(
     /// (kuna `objcrettype`) Type a message send's result by its receiver:
     /// `[Foo alloc]` is a `Foo *`, `init…`/`self`/`retain`/`copy` return their
-    /// receiver's class (`p5_types/kuna_objcrettype.rs`). Default on.
+    /// receiver's class (`p5_types/objcrettype.rs`). Default on.
     ObjcRettype,
     "objcrettype",
     "Objective-C message result typed by its receiver",
@@ -572,7 +568,7 @@ crate::kuna_arch_state!(ObjcClassTable);
 
 /// The image's Objective-C class table, shared through the architecture's states; empty before
 /// the loader commits one.
-pub fn classes(states: &crate::kuna_archstate::ArchStates) -> Rc<ObjcClassTable> {
+pub fn classes(states: &crate::archstate::ArchStates) -> Rc<ObjcClassTable> {
     states.get_rc::<ObjcClassTable>().unwrap_or_default()
 }
 

@@ -1,7 +1,7 @@
 //! (kuna `octeoneffects`) The option's mode and the table of Octeon user operations the core reads:
 //! each operation's memory effect, upstream's fixups for the ones `off` lifts as upstream does,
 //! and the user-op ids an `ArchContext` carries. The passes that act on them are in
-//! [`crate::p3_dataflow::kuna_octeoneffects`].
+//! [`crate::p3_dataflow::octeoneffects`].
 
 use unlace_base::{
     error::{KunaError, KunaResult},
@@ -239,7 +239,7 @@ pub fn userop_ids(
         .collect()
 }
 
-impl crate::kuna_optionset::KunaOption for OcteonEffectsMode {
+impl crate::optionset::KunaOption for OcteonEffectsMode {
     const NAME: &'static str = "octeoneffects";
     crate::kuna_option_id!();
 

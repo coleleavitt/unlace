@@ -1,7 +1,7 @@
 //! (kuna) The rust-language policy objects: the profile and capability record
 //! for Rust output.
 //!
-//! The type speller lives next door in [`crate::kuna_rusttypes`]; this file owns
+//! The type speller lives next door in [`crate::rusttypes`]; this file owns
 //! the surface vocabulary and the capability record that tells the emitters what
 //! Rust is willing to be handed.
 //!
@@ -16,7 +16,7 @@
 //! Rust a single correct choice.
 //!
 //! `switch_captures_break: false` is the load-bearing one. A C `switch` captures
-//! a bare `break`, so `kuna_scope_break` (`p8_structure/kuna_loopbreak_recovery.rs`,
+//! a bare `break`, so `kuna_scope_break` (`p8_structure/loopbreak_recovery.rs`,
 //! DIV-10, default-on) legitimately retags a goto that targets the switch exit as
 //! `f_break_goto`. A Rust `match` does **not** capture `break`: the same flag,
 //! rendered naively inside a `match` arm inside a loop, breaks the *loop*. The
@@ -47,7 +47,7 @@
 //! between `&&` and `||`. Rust has one `^` for both logical and bitwise xor, so
 //! the Rust token is `^` at the bitwise tier.
 
-use crate::kuna_lang::{
+use crate::lang::{
     CastForm, CharForm, DeclForm, DoWhileForm, ForLoopForm, GotoForm, InfLoopForm, LabelForm,
     LangCaps, LangForms, LangProfile, MemberForm, Prec, PrecLadder, ProtoForm, StringEscape,
     SwitchForm, WhileForm,
@@ -368,7 +368,7 @@ impl PrintC {
         // The recovered name is often a demangled Rust path, which is not an
         // identifier. Rewrite it and keep the original above, so the mapping back
         // to the symbol is never lost.
-        let ident = crate::kuna_rusttypes::path_tail(&display);
+        let ident = crate::rusttypes::path_tail(&display);
         if ident != display {
             self.emit.tag_line();
             self.emit
@@ -385,7 +385,7 @@ impl PrintC {
 
         let idp = self.emit.begin_func_proto();
         // Which `extern` the signature declares is the ABI seam's one decision
-        // (`p4_calls/kuna_langabi.rs`); for Rust it is forced by the grammar --
+        // (`p4_calls/langabi.rs`); for Rust it is forced by the grammar --
         // a C-variadic is only legal on an `unsafe extern "C" fn`.
         let model = fd.get_func_proto().get_model_name().to_string();
         let ext = self
@@ -442,7 +442,7 @@ impl PrintC {
             if name.is_empty() {
                 default_name = crate::database::kuna_materialized_param_name(
                     arch.kuna_options
-                        .get::<crate::kuna_coreoptions::NameStyleAngr>()
+                        .get::<crate::coreoptions::NameStyleAngr>()
                         .0,
                     i,
                     "",

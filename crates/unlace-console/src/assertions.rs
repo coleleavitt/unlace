@@ -69,8 +69,8 @@
 //!   indirect `call *%rdx` that never returns, a tail call unlace read as a call,
 //!   a jump into a neighbour.  `callee` states where one indirect call goes,
 //!   so the flow builds it as a direct call to that function
-//!   ([`crate::kuna_calleeoverride`]).  `callproto` states the arguments and
-//!   return of ONE call instruction ([`crate::kuna_callproto`]), which is what
+//!   ([`crate::calleeoverride`]).  `callproto` states the arguments and
+//!   return of ONE call instruction ([`crate::callproto`]), which is what
 //!   a call through a pointer or a variadic callback needs: no callee symbol
 //!   carries its signature.  An address no call is at is rejected.
 //! * **Symbol-scoped** (`name`, `type`, `format`, `isolate`) can only be applied AFTER a decompile:
@@ -908,12 +908,12 @@ fn apply_prototype(prog: &mut ConsoleProgram, func: &str, decl: &str) -> Result<
     let target = resolve_proto_target(prog, func)?;
     let model = declared_model(prog, &model);
     park_prototype(prog, &target, &mut pieces, model.as_ref());
-    crate::kuna_callwide::target_declaration(
+    crate::callwide::target_declaration(
         prog,
         &target,
         &pieces,
         model,
-        unlace_decomp::kuna_callwide::DeclarationSource::Assertion,
+        unlace_decomp::callwide::DeclarationSource::Assertion,
     );
     prog.set_pending_prototype(target.name(), pieces);
     Ok(())
@@ -990,7 +990,7 @@ pub(crate) fn lock_prototype_on_symbol(
     // follows the image's float convention.
     let model = model
         .cloned()
-        .or_else(|| unlace_decomp::kuna_typedcallabi::undeclared_model_for(arch, pieces));
+        .or_else(|| unlace_decomp::typedcallabi::undeclared_model_for(arch, pieces));
     let tc = match model {
         Some(m) => arch.types_impl().get_type_code_proto_model(pieces, m),
         None => arch.types().get_type_code_proto(pieces),
@@ -1366,8 +1366,8 @@ pub fn record_unbound_call_prototypes(
         let Ok(at) = code_addr(prog, *addr) else {
             continue;
         };
-        if !crate::kuna_callproto::has_call_at(fd, &at) {
-            let outcome = directive.rejected(crate::kuna_callproto::NO_CALL);
+        if !crate::callproto::has_call_at(fd, &at) {
+            let outcome = directive.rejected(crate::callproto::NO_CALL);
             prog.set_assertion_outcome(i, outcome);
         }
     }
@@ -1444,12 +1444,12 @@ fn seed_one(
             if type_ == unlace_decomp::overrides::flow_type::CALL
                 || type_ == unlace_decomp::overrides::flow_type::CALL_RETURN
             {
-                for site in crate::kuna_retcallchain::kuna_chain_sites(
+                for site in crate::retcallchain::kuna_chain_sites(
                     prog.arch().translate(),
                     entry,
                     &at,
-                    crate::kuna_retcallchain::CHAIN_MAX_SITES,
-                    crate::kuna_retcallchain::CHAIN_MAX_INSNS,
+                    crate::retcallchain::CHAIN_MAX_SITES,
+                    crate::retcallchain::CHAIN_MAX_INSNS,
                 ) {
                     seed.flow_overrides.push((site, type_));
                 }
@@ -1458,11 +1458,11 @@ fn seed_one(
         }
         Body::Callee { addr, callee, .. } => {
             let at = code_addr(prog, *addr)?;
-            crate::kuna_calleeoverride::plant(prog, entry, &at, callee)
+            crate::calleeoverride::plant(prog, entry, &at, callee)
         }
         Body::CallProto { addr, decl, .. } => {
             let at = code_addr(prog, *addr)?;
-            let pieces = crate::kuna_callproto::parse(prog, decl)?;
+            let pieces = crate::callproto::parse(prog, decl)?;
             seed.proto_overrides.retain(|(site, _)| site != &at);
             seed.proto_overrides.push((at, pieces));
             Ok(())
@@ -1491,7 +1491,7 @@ pub fn has_symbol_scoped(prog: &ConsoleProgram, name: &str, single: bool) -> boo
 /// directives on different locals do not depend on their order, and
 /// `name v2 credbuf` then `type v2 char[16]` retypes `credbuf`.  An identifier
 /// that output does not contain may name what an earlier directive renamed a
-/// local to (`crate::kuna_hightarget` has both rules).
+/// local to (`crate::hightarget` has both rules).
 pub fn apply_symbol_scoped(
     prog: &mut ConsoleProgram,
     fd: &mut Funcdata,
@@ -1534,12 +1534,12 @@ fn apply_one_symbol_scoped(
     ),
     String,
 > {
-    let maxduplicates = unlace_decomp::kuna_dynamichashmax::MAX_DUPLICATES;
+    let maxduplicates = unlace_decomp::dynamichashmax::MAX_DUPLICATES;
     match body {
         Body::Name {
             symbol, newname, ..
         } => Ok((
-            crate::kuna_hightarget::apply_local(
+            crate::hightarget::apply_local(
                 fd,
                 symbol,
                 newname,
@@ -1553,7 +1553,7 @@ fn apply_one_symbol_scoped(
             let (ct, newname) =
                 crate::grammar::parse_type(decl, prog.arch().types(), data_org(prog))
                     .map_err(|e| e.explain().to_string())?;
-            let applied = crate::kuna_hightarget::apply_local(
+            let applied = crate::hightarget::apply_local(
                 fd,
                 symbol,
                 &newname,
@@ -1570,11 +1570,11 @@ fn apply_one_symbol_scoped(
             ..
         } => {
             let at = code_addr(prog, *addr)?;
-            crate::kuna_constformat::apply(fd, prog.arch(), &at, format, *value, maxduplicates)?;
+            crate::constformat::apply(fd, prog.arch(), &at, format, *value, maxduplicates)?;
             Ok((None, None))
         }
         Body::Isolate { symbol, .. } => {
-            crate::kuna_hightarget::isolate_local(fd, symbol, maxduplicates, Some(prog.arch()))?;
+            crate::hightarget::isolate_local(fd, symbol, maxduplicates, Some(prog.arch()))?;
             Ok((None, None))
         }
         _ => Err("internal: not a symbol-scoped directive".into()),
@@ -1701,8 +1701,8 @@ pub fn verify_formats(prog: &mut ConsoleProgram, fd: &Funcdata, name: &str, sing
         let Ok(at) = code_addr(prog, *addr) else {
             continue;
         };
-        if !crate::kuna_constformat::holds(fd, &at, format, *value) {
-            let outcome = directive.refused(crate::kuna_constformat::NOT_REPLAYED);
+        if !crate::constformat::holds(fd, &at, format, *value) {
+            let outcome = directive.refused(crate::constformat::NOT_REPLAYED);
             prog.set_assertion_outcome(i, outcome);
         }
     }
@@ -1722,7 +1722,7 @@ pub fn check_printed(
     code: &str,
     expected: &[Expected],
 ) -> Vec<(usize, Shown)> {
-    if arch.print().out_lang() != unlace_decomp::kuna_lang::OutLang::C {
+    if arch.print().out_lang() != unlace_decomp::lang::OutLang::C {
         return Vec::new();
     }
     let print = arch.print();
@@ -1730,7 +1730,7 @@ pub fn check_printed(
     let mut taken: std::collections::HashSet<unlace_decomp::context::HighVariableId> =
         std::collections::HashSet::new();
     let mut found: Vec<Option<(String, String)>> = vec![None; expected.len()];
-    // A local printed under its library name (`unlace_decomp::kuna_libcnames`)
+    // A local printed under its library name (`unlace_decomp::libcnames`)
     // is declared under that name and answers to its number too.
     let declares = |base: &str, name: &str| {
         base == name
@@ -1908,14 +1908,14 @@ pub fn unclaimed(directive: &Directive) -> Outcome {
 /// rebuild).
 pub fn carried_symbols(fd: &Funcdata) -> Vec<(String, Rc<Datatype>, Address, uint4)> {
     let renamed = name_only_renames(fd);
-    let mut specs = crate::kuna_paramasserts::exclude_from_locals(fd, fd.mapped_symbol_specs());
+    let mut specs = crate::paramasserts::exclude_from_locals(fd, fd.mapped_symbol_specs());
     specs.retain(|(name, ..)| !renamed.contains(name));
     specs
 }
 
 /// The usepoint-scoped half of the same carry: the register-storage Symbols a
 /// `name`/`type` directive on a printed local maps
-/// (`crate::kuna_hightarget::bind_printed_local`).  `carried_symbols` walks the
+/// (`crate::hightarget::bind_printed_local`).  `carried_symbols` walks the
 /// stack space and the addr-tied globals, so without this a retyped register
 /// temporary is simply dropped on the second pass and the directive reports
 /// `applied` over unchanged output.
@@ -1923,8 +1923,7 @@ pub fn carried_usepoint_symbols(
     fd: &Funcdata,
 ) -> Vec<(String, Rc<Datatype>, Address, uint4, Address, bool)> {
     let renamed = name_only_renames(fd);
-    let mut specs =
-        crate::kuna_paramasserts::exclude_from_usepoints(fd, fd.usepoint_symbol_specs());
+    let mut specs = crate::paramasserts::exclude_from_usepoints(fd, fd.usepoint_symbol_specs());
     specs.retain(|(name, ..)| !renamed.contains(name));
     specs
 }
@@ -1938,10 +1937,10 @@ pub fn carried_dynamic_symbols(fd: &Funcdata) -> Vec<unlace_decomp::database::Dy
     specs
 }
 
-/// The Symbols of the directives carried as names (`kuna_stablenames::
+/// The Symbols of the directives carried as names (`stablenames::
 /// is_carried_as_name`): a `name` that states no type, and a `type` that keeps
 /// the printed variable's width and kind. They travel to the next decompile as
-/// names and types (`kuna_stablenames::carry`), not as Symbols: a Symbol mapped
+/// names and types (`stablenames::carry`), not as Symbols: a Symbol mapped
 /// over one definition of a merged variable split it on the next decompile, and
 /// a type lock retyped what it did not cover.
 fn name_only_renames(fd: &Funcdata) -> Vec<String> {
@@ -1950,7 +1949,7 @@ fn name_only_renames(fd: &Funcdata) -> Vec<String> {
     };
     fd.kuna_directive_symbols()
         .iter()
-        .filter(|d| unlace_decomp::kuna_stablenames::is_carried_as_name(fd, d.symbol))
+        .filter(|d| unlace_decomp::stablenames::is_carried_as_name(fd, d.symbol))
         .map(|d| lm.database().symbol(d.symbol).name.clone())
         .collect()
 }

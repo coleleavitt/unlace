@@ -31,7 +31,7 @@ const MAX_TYPE_DEPTH: u32 = 3;
 /// [`Guard`] is the guard proper; `active` is the (kuna `dwarfstructs`) set of
 /// aggregate names whose field population is on the current path, so a
 /// self-referential member resolves to the interned shell instead of re-entering
-/// the populate — see [`super::kuna_dwarfstructs`].
+/// the populate — see [`super::dwarfstructs`].
 pub(super) struct TypeWalk {
     guard: Guard,
     active: BTreeSet<String>,

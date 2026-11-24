@@ -57,7 +57,7 @@ pub(crate) fn decompile_callee_first(
     let cycles = prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>()
+        .get::<unlace_decomp::protoorder::ProtoOrderMode>()
         .states_in_cycles();
     let graph = CallGraph::build(prog, &args.binary, args.slice_pref());
     let plan = match &graph {
@@ -78,12 +78,12 @@ pub(crate) fn decompile_callee_first(
     let wants_open = prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_calleevote::CalleeVoteMode>()
+        .get::<unlace_decomp::calleevote::CalleeVoteMode>()
         .is_on()
         || prog
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_callbacktype::CallbackTypeMode>()
+            .get::<unlace_decomp::callbacktype::CallbackTypeMode>()
             .is_on();
     let open = match &graph {
         Ok(graph) if wants_open => Some(graph.open_entries(&args.binary, args.slice_pref())),
@@ -94,7 +94,7 @@ pub(crate) fn decompile_callee_first(
             if prog
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_calleevote::CalleeVoteMode>()
+                .get::<unlace_decomp::calleevote::CalleeVoteMode>()
                 .is_on() =>
         {
             Some(open_callee_votes(prog, graph, open, &targets))
@@ -104,35 +104,34 @@ pub(crate) fn decompile_callee_first(
     if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_callbacktype::CallbackTypeMode>()
+        .get::<unlace_decomp::callbacktype::CallbackTypeMode>()
         .is_on()
         && open.is_some()
     {
         let ledger = prog
             .arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_callbacktype::Ledger>();
-        *ledger = unlace_decomp::kuna_callbacktype::Ledger::default();
+            .get_mut::<unlace_decomp::callbacktype::Ledger>();
+        *ledger = unlace_decomp::callbacktype::Ledger::default();
         ledger.recording = true;
     }
     *prog
         .arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_gottailcall::Ledger>() =
-        unlace_decomp::kuna_gottailcall::Ledger {
-            recording: true,
-            planned: plan
-                .iter()
-                .filter_map(|&(i, _)| vote_key(&targets[i]))
-                .collect(),
-            ..Default::default()
-        };
+        .get_mut::<unlace_decomp::gottailcall::Ledger>() = unlace_decomp::gottailcall::Ledger {
+        recording: true,
+        planned: plan
+            .iter()
+            .filter_map(|&(i, _)| vote_key(&targets[i]))
+            .collect(),
+        ..Default::default()
+    };
     let callers = match &graph {
         Ok(graph)
             if prog
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_narrowargs::NarrowArgs>()
+                .get::<unlace_decomp::narrowargs::NarrowArgs>()
                 .callers =>
         {
             graph.arm_closed_sites(&args.binary, args.slice_pref())
@@ -144,7 +143,7 @@ pub(crate) fn decompile_callee_first(
             if prog
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_callbacktype::CallbackTypeMode>()
+                .get::<unlace_decomp::callbacktype::CallbackTypeMode>()
                 .is_on() =>
         {
             Some(graph.callback_refs(targets.iter().filter_map(|t| vote_key(t).map(|k| k.1))))
@@ -162,12 +161,12 @@ pub(crate) fn decompile_callee_first(
     let previous_settling =
         std::mem::replace(&mut prog.arch_mut().kuna_settle_caller_reads, graph.is_ok());
     drop(graph);
-    crate::kuna_allocrelease::after_analysis();
+    crate::allocrelease::after_analysis();
     {
         let ledger = prog
             .arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_callerargs::Ledger>();
+            .get_mut::<unlace_decomp::callerargs::Ledger>();
         *ledger = Default::default();
         if let Some(expected) = callers {
             ledger.expected = expected;
@@ -175,19 +174,19 @@ pub(crate) fn decompile_callee_first(
         }
     }
     let mut slots = ResultStore::new(targets.len());
-    unlace_decomp::kuna_elemptr::start(prog.arch_mut(), true);
+    unlace_decomp::elemptr::start(prog.arch_mut(), true);
     let storetype = prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
+        .get::<unlace_decomp::storetype::StoreTypeMode>();
     prog.arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_storetype::Ledger>()
+        .get_mut::<unlace_decomp::storetype::Ledger>()
         .start(storetype);
     *prog
         .arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_voidret::Ledger>() = Default::default();
+        .get_mut::<unlace_decomp::voidret::Ledger>() = Default::default();
     let mut reads = VoidReads::default();
     for &(index, park) in &plan {
         let first = decompile_planned(prog, &targets[index], park, &base);
@@ -197,7 +196,7 @@ pub(crate) fn decompile_callee_first(
             reads.decompiled(k);
             prog.arch_mut()
                 .kuna_tables
-                .get_mut::<unlace_decomp::kuna_gottailcall::Ledger>()
+                .get_mut::<unlace_decomp::gottailcall::Ledger>()
                 .seen
                 .insert(k);
         }
@@ -209,7 +208,7 @@ pub(crate) fn decompile_callee_first(
     if prog
         .arch()
         .kuna_tables
-        .get::<unlace_decomp::kuna_callerargs::Ledger>()
+        .get::<unlace_decomp::callerargs::Ledger>()
         .recording
     {
         caller_args_round(prog, &targets, &plan, &base, &mut slots);
@@ -220,13 +219,13 @@ pub(crate) fn decompile_callee_first(
     converge_callee_first(prog, &targets, &plan, &base, &mut slots);
     prog.arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_callbacktype::Ledger>()
+        .get_mut::<unlace_decomp::callbacktype::Ledger>()
         .recording = false;
     if let (Some(refs), Some(open)) = (&callback_refs, &open)
         && prog
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_callbacktype::CallbackTypeMode>()
+            .get::<unlace_decomp::callbacktype::CallbackTypeMode>()
             .is_on()
     {
         callback_park_round(prog, refs, open, &targets, &plan, &base, &mut slots);
@@ -237,11 +236,11 @@ pub(crate) fn decompile_callee_first(
     *prog
         .arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_gottailcall::Ledger>() = Default::default();
-    unlace_decomp::kuna_elemptr::stop(prog.arch_mut());
+        .get_mut::<unlace_decomp::gottailcall::Ledger>() = Default::default();
+    unlace_decomp::elemptr::stop(prog.arch_mut());
     prog.arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_storetype::Ledger>()
+        .get_mut::<unlace_decomp::storetype::Ledger>()
         .stop();
     let mut results: Vec<FuncResult> = slots.into_results();
     if base.want_pointer_arguments {
@@ -274,7 +273,7 @@ impl VoidReads {
 
     /// Decompile again, in plan order, every function recovered `void` whose
     /// result a caller reads, returning in the storage the callers read
-    /// (`unlace_decomp::kuna_voidret`), every function whose float return a
+    /// (`unlace_decomp::voidret`), every function whose float return a
     /// reader keeps as another type, and every reader of a function whose
     /// return a redo changed after the reader was decompiled, until none is
     /// left. It runs after each function of the callee-first plan, so a
@@ -283,7 +282,7 @@ impl VoidReads {
     /// return the first time. Once none of those is left, every caller that
     /// copied in a callee `gottailcall` has since filed, and has seen every
     /// planned callee it copied in decompiled, is decompiled again
-    /// (`unlace_decomp::kuna_gottailcall`), so the callee's return is settled
+    /// (`unlace_decomp::gottailcall`), so the callee's return is settled
     /// before the caller reads it. A redo that fails keeps the first body.
     fn settle(
         &mut self,
@@ -294,15 +293,15 @@ impl VoidReads {
         slots: &mut ResultStore,
     ) {
         for _ in 0..VOID_READ_ROUNDS {
-            let mut redo = unlace_decomp::kuna_voidret::due(prog.arch_mut());
-            redo.extend(unlace_decomp::kuna_voidret::withdrawals(prog.arch_mut()));
-            redo.extend(unlace_decomp::kuna_voidret::stale_readers(
+            let mut redo = unlace_decomp::voidret::due(prog.arch_mut());
+            redo.extend(unlace_decomp::voidret::withdrawals(prog.arch_mut()));
+            redo.extend(unlace_decomp::voidret::stale_readers(
                 prog.arch(),
                 &self.stamp_of,
                 &self.changed,
             ));
             if redo.is_empty() {
-                redo = unlace_decomp::kuna_gottailcall::due(prog.arch_mut());
+                redo = unlace_decomp::gottailcall::due(prog.arch_mut());
             }
             if redo.is_empty() {
                 break;
@@ -326,10 +325,10 @@ impl VoidReads {
             let Some(k) = vote_key(&targets[index]).filter(|k| keys.contains(k)) else {
                 continue;
             };
-            let stated = unlace_decomp::kuna_callrettype::statement(prog.arch(), k);
-            let narrow = unlace_decomp::kuna_narrowret::statement(prog.arch(), k);
-            let returns = unlace_decomp::kuna_voidret::returns(prog.arch(), k);
-            let storage = unlace_decomp::kuna_voidret::return_storage(prog.arch(), k);
+            let stated = unlace_decomp::callrettype::statement(prog.arch(), k);
+            let narrow = unlace_decomp::narrowret::statement(prog.arch(), k);
+            let returns = unlace_decomp::voidret::returns(prog.arch(), k);
+            let storage = unlace_decomp::voidret::return_storage(prog.arch(), k);
             let again = decompile_planned(prog, &targets[index], park, base);
             if slots
                 .get(index)
@@ -337,21 +336,21 @@ impl VoidReads {
             {
                 slots.put(index, again);
             } else {
-                unlace_decomp::kuna_callrettype::restore(prog.arch_mut(), k, stated.clone());
-                unlace_decomp::kuna_narrowret::restore(prog.arch_mut(), k, narrow.clone());
-                unlace_decomp::kuna_voidret::restore(prog.arch_mut(), k, returns, storage.clone());
+                unlace_decomp::callrettype::restore(prog.arch_mut(), k, stated.clone());
+                unlace_decomp::narrowret::restore(prog.arch_mut(), k, narrow.clone());
+                unlace_decomp::voidret::restore(prog.arch_mut(), k, returns, storage.clone());
             }
             self.decompiled(k);
-            if unlace_decomp::kuna_voidret::returns(prog.arch(), k) != returns
-                || (unlace_decomp::kuna_voidret::widened(prog.arch(), k)
-                    && unlace_decomp::kuna_voidret::return_storage(prog.arch(), k) != storage)
-                || !unlace_decomp::kuna_callrettype::same_statement(
+            if unlace_decomp::voidret::returns(prog.arch(), k) != returns
+                || (unlace_decomp::voidret::widened(prog.arch(), k)
+                    && unlace_decomp::voidret::return_storage(prog.arch(), k) != storage)
+                || !unlace_decomp::callrettype::same_statement(
                     stated.as_deref(),
-                    unlace_decomp::kuna_callrettype::statement(prog.arch(), k).as_deref(),
+                    unlace_decomp::callrettype::statement(prog.arch(), k).as_deref(),
                 )
-                || !unlace_decomp::kuna_narrowret::same_statement(
+                || !unlace_decomp::narrowret::same_statement(
                     narrow.as_deref(),
-                    unlace_decomp::kuna_narrowret::statement(prog.arch(), k).as_deref(),
+                    unlace_decomp::narrowret::statement(prog.arch(), k).as_deref(),
                 )
             {
                 self.changed.insert(k, self.stamp);
@@ -372,12 +371,12 @@ fn converge_store_types_callee_first(
     let mode = prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
+        .get::<unlace_decomp::storetype::StoreTypeMode>();
     for _ in 0..2 {
         let decided = prog
             .arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_storetype::Ledger>()
+            .get_mut::<unlace_decomp::storetype::Ledger>()
             .decide(mode);
         let typed: Vec<u64> = decided
             .into_iter()
@@ -390,7 +389,7 @@ fn converge_store_types_callee_first(
         let redo = prog
             .arch()
             .kuna_tables
-            .get::<unlace_decomp::kuna_storetype::Ledger>()
+            .get::<unlace_decomp::storetype::Ledger>()
             .readers(&typed);
         for &(index, park) in plan {
             if !redo.contains(&targets[index].addr.get_offset()) {
@@ -415,7 +414,7 @@ fn converge_element_globals_callee_first(
     slots: &mut ResultStore,
 ) {
     for _ in 0..2 {
-        let redo = unlace_decomp::kuna_elemptr::disagreements(prog.arch_mut());
+        let redo = unlace_decomp::elemptr::disagreements(prog.arch_mut());
         if redo.is_empty() {
             return;
         }
@@ -424,13 +423,12 @@ fn converge_element_globals_callee_first(
                 continue;
             }
             let key = vote_key(&targets[index]);
-            let stated =
-                key.and_then(|k| unlace_decomp::kuna_callrettype::statement(prog.arch(), k));
-            let narrow = key.and_then(|k| unlace_decomp::kuna_narrowret::statement(prog.arch(), k));
+            let stated = key.and_then(|k| unlace_decomp::callrettype::statement(prog.arch(), k));
+            let narrow = key.and_then(|k| unlace_decomp::narrowret::statement(prog.arch(), k));
             let again = decompile_planned(prog, &targets[index], park, base);
             if let Some(k) = key.filter(|&k| narrow_changed(prog, k, narrow.as_deref())) {
-                unlace_decomp::kuna_callrettype::restore(prog.arch_mut(), k, stated);
-                unlace_decomp::kuna_narrowret::restore(prog.arch_mut(), k, narrow);
+                unlace_decomp::callrettype::restore(prog.arch_mut(), k, stated);
+                unlace_decomp::narrowret::restore(prog.arch_mut(), k, narrow);
                 continue;
             }
             match slots.get(index) {
@@ -465,7 +463,7 @@ fn caller_args_round(
         reason = "Membership only; the ordered plan determines redo order."
     )]
     let changed: std::collections::HashSet<u64> =
-        unlace_decomp::kuna_callerargs::decide(prog.arch_mut())
+        unlace_decomp::callerargs::decide(prog.arch_mut())
             .into_iter()
             .collect();
     let queue: Vec<(usize, (i32, u64))> = plan
@@ -479,7 +477,7 @@ fn caller_args_round(
     for (_, key) in declined {
         prog.arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_callerargs::Ledger>()
+            .get_mut::<unlace_decomp::callerargs::Ledger>()
             .stated
             .remove(&key.1);
     }
@@ -487,7 +485,7 @@ fn caller_args_round(
         let Some(key) = vote_key(&targets[index]).filter(|k| admitted.contains(k)) else {
             continue;
         };
-        let stated = unlace_decomp::kuna_callrettype::statement(prog.arch(), key);
+        let stated = unlace_decomp::callrettype::statement(prog.arch(), key);
         let again = decompile_planned(prog, &targets[index], park, base);
         match slots.get(index) {
             Some(first)
@@ -496,17 +494,17 @@ fn caller_args_round(
             {
                 prog.arch_mut()
                     .kuna_tables
-                    .get_mut::<unlace_decomp::kuna_callerargs::Ledger>()
+                    .get_mut::<unlace_decomp::callerargs::Ledger>()
                     .stated
                     .remove(&key.1);
-                unlace_decomp::kuna_callrettype::restore(prog.arch_mut(), key, stated);
+                unlace_decomp::callrettype::restore(prog.arch_mut(), key, stated);
             }
             _ => slots.put(index, again),
         }
     }
     prog.arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_callerargs::Ledger>()
+        .get_mut::<unlace_decomp::callerargs::Ledger>()
         .recording = false;
 }
 
@@ -638,12 +636,12 @@ fn callback_park_round(
     base: &unlace_console::project::DecompileOptions,
     slots: &mut ResultStore,
 ) {
-    use unlace_decomp::kuna_callbacktype as cb;
+    use unlace_decomp::callbacktype as cb;
     let trace = cb::trace();
     let decided = prog
         .arch()
         .kuna_tables
-        .get::<unlace_decomp::kuna_callbacktype::Ledger>()
+        .get::<unlace_decomp::callbacktype::Ledger>()
         .decided();
     if decided.is_empty() {
         return;
@@ -763,8 +761,8 @@ fn open_callee_votes(
     let ledger = prog
         .arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_calleevote::Ledger>();
-    *ledger = unlace_decomp::kuna_calleevote::Ledger::default();
+        .get_mut::<unlace_decomp::calleevote::Ledger>();
+    *ledger = unlace_decomp::calleevote::Ledger::default();
     ledger.closed = closed;
     ledger.recording = true;
     expected
@@ -799,13 +797,13 @@ fn callee_vote_rounds(
     let opening = budget;
     let mut spent = 0usize;
     let mut redone = 0usize;
-    if unlace_decomp::kuna_calleevote::trace() {
+    if unlace_decomp::calleevote::trace() {
         eprintln!("[calleevote] {printed} lines printed, redo budget {budget} lines");
     }
     for round in 0..CALLEE_VOTE_ROUNDS {
         let changed =
-            unlace_decomp::kuna_calleevote::decide(prog.arch_mut(), &|k| expected.get(&k).cloned());
-        if unlace_decomp::kuna_calleevote::trace() {
+            unlace_decomp::calleevote::decide(prog.arch_mut(), &|k| expected.get(&k).cloned());
+        if unlace_decomp::calleevote::trace() {
             eprintln!(
                 "[calleevote] round {}: {} functions decompiled again",
                 round + 1,
@@ -830,14 +828,14 @@ fn callee_vote_rounds(
         let caller_ptr = prog
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_callerptr::CallerPtr>()
+            .get::<unlace_decomp::callerptr::CallerPtr>()
             .0;
         let (pointers_only, queue): (Vec<_>, Vec<_>) = queue.into_iter().partition(|(_, key)| {
             caller_ptr
                 && prog
                     .arch()
                     .kuna_tables
-                    .get::<unlace_decomp::kuna_calleevote::Ledger>()
+                    .get::<unlace_decomp::calleevote::Ledger>()
                     .pointers_only(*key)
         });
         let (mut admitted, mut declined) = admit_within_budget(queue, &mut budget, &mut spent);
@@ -845,7 +843,7 @@ fn callee_vote_rounds(
         admitted.extend(more);
         declined.extend(refused);
         for (charge, key) in declined {
-            if unlace_decomp::kuna_calleevote::trace() {
+            if unlace_decomp::calleevote::trace() {
                 eprintln!(
                     "[calleevote] 0x{:x} declined: {charge} lines, {budget} left",
                     key.1
@@ -853,51 +851,51 @@ fn callee_vote_rounds(
             }
             prog.arch_mut()
                 .kuna_tables
-                .get_mut::<unlace_decomp::kuna_calleevote::Ledger>()
+                .get_mut::<unlace_decomp::calleevote::Ledger>()
                 .decline(key);
         }
         for &(index, park) in plan {
             let Some(key) = vote_key(&targets[index]).filter(|k| admitted.contains(k)) else {
                 continue;
             };
-            let stated = unlace_decomp::kuna_callrettype::statement(prog.arch(), key);
-            let narrow = unlace_decomp::kuna_narrowret::statement(prog.arch(), key);
+            let stated = unlace_decomp::callrettype::statement(prog.arch(), key);
+            let narrow = unlace_decomp::narrowret::statement(prog.arch(), key);
             let again = decompile_planned(prog, &targets[index], park, base);
             redone += 1;
             match slots.get(index) {
                 Some(first) if !same_arity(&first, &again) => {
                     prog.arch_mut()
                         .kuna_tables
-                        .get_mut::<unlace_decomp::kuna_calleevote::Ledger>()
+                        .get_mut::<unlace_decomp::calleevote::Ledger>()
                         .forget(key);
-                    unlace_decomp::kuna_callrettype::restore(prog.arch_mut(), key, stated);
-                    unlace_decomp::kuna_narrowret::restore(prog.arch_mut(), key, narrow);
+                    unlace_decomp::callrettype::restore(prog.arch_mut(), key, stated);
+                    unlace_decomp::narrowret::restore(prog.arch_mut(), key, narrow);
                 }
                 Some(first)
                     if !unlace_console::project::redo_replaces(&first, &again)
                         || narrow_changed(prog, key, narrow.as_deref()) =>
                 {
-                    unlace_decomp::kuna_callrettype::restore(prog.arch_mut(), key, stated);
-                    unlace_decomp::kuna_narrowret::restore(prog.arch_mut(), key, narrow);
+                    unlace_decomp::callrettype::restore(prog.arch_mut(), key, stated);
+                    unlace_decomp::narrowret::restore(prog.arch_mut(), key, narrow);
                 }
                 _ => {
                     prog.arch_mut()
                         .kuna_tables
-                        .get_mut::<unlace_decomp::kuna_calleevote::Ledger>()
+                        .get_mut::<unlace_decomp::calleevote::Ledger>()
                         .keep(key);
                     slots.put(index, again);
                 }
             }
         }
     }
-    if unlace_decomp::kuna_calleevote::trace() {
+    if unlace_decomp::calleevote::trace() {
         eprintln!(
             "[calleevote] redo pass: {redone} decompiles, {spent} lines reprinted of {opening} budgeted"
         );
     }
     prog.arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_calleevote::Ledger>()
+        .get_mut::<unlace_decomp::calleevote::Ledger>()
         .recording = false;
 }
 
@@ -1006,8 +1004,8 @@ fn converge_callee_first(
     if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>()
-        == unlace_decomp::kuna_protoorder::ProtoOrderMode::Lock
+        .get::<unlace_decomp::protoorder::ProtoOrderMode>()
+        == unlace_decomp::protoorder::ProtoOrderMode::Lock
     {
         return;
     }
@@ -1030,16 +1028,16 @@ fn converge_callee_first(
         .collect();
     let mut budget = (slots.printed() * STRUCT_SWEEP_BUDGET_PCT / 100).max(STRUCT_SWEEP_MIN_LINES);
     let (admitted, _) = admit_within_budget(queue, &mut budget, &mut 0);
-    unlace_decomp::kuna_protoorder::forget_statements_naming(prog.arch_mut(), &stale);
-    unlace_decomp::kuna_calleevote::forget_statements_naming(prog.arch_mut(), &stale);
-    unlace_decomp::kuna_callrettype::forget_statements_naming(prog.arch_mut(), &stale);
+    unlace_decomp::protoorder::forget_statements_naming(prog.arch_mut(), &stale);
+    unlace_decomp::calleevote::forget_statements_naming(prog.arch_mut(), &stale);
+    unlace_decomp::callrettype::forget_statements_naming(prog.arch_mut(), &stale);
     for &(index, park) in plan {
         let key = vote_key(&targets[index]);
         if !naming.contains(&index) || key.is_some_and(|k| !admitted.contains(&k)) {
             continue;
         }
-        let stated = key.and_then(|k| unlace_decomp::kuna_callrettype::statement(prog.arch(), k));
-        let narrow = key.and_then(|k| unlace_decomp::kuna_narrowret::statement(prog.arch(), k));
+        let stated = key.and_then(|k| unlace_decomp::callrettype::statement(prog.arch(), k));
+        let narrow = key.and_then(|k| unlace_decomp::narrowret::statement(prog.arch(), k));
         let again = decompile_planned(prog, &targets[index], park, base);
         let kept = key.is_none_or(|k| !narrow_changed(prog, k, narrow.as_deref()));
         if kept
@@ -1049,8 +1047,8 @@ fn converge_callee_first(
         {
             slots.put(index, again);
         } else if let Some(k) = key {
-            unlace_decomp::kuna_callrettype::restore(prog.arch_mut(), k, stated);
-            unlace_decomp::kuna_narrowret::restore(prog.arch_mut(), k, narrow);
+            unlace_decomp::callrettype::restore(prog.arch_mut(), k, stated);
+            unlace_decomp::narrowret::restore(prog.arch_mut(), k, narrow);
         }
     }
 }
@@ -1064,11 +1062,11 @@ fn converge_callee_first(
 fn narrow_changed(
     prog: &ConsoleProgram,
     k: (i32, u64),
-    before: Option<&unlace_decomp::kuna_narrowret::NarrowReturn>,
+    before: Option<&unlace_decomp::narrowret::NarrowReturn>,
 ) -> bool {
-    !unlace_decomp::kuna_narrowret::same_statement(
+    !unlace_decomp::narrowret::same_statement(
         before,
-        unlace_decomp::kuna_narrowret::statement(prog.arch(), k).as_deref(),
+        unlace_decomp::narrowret::statement(prog.arch(), k).as_deref(),
     )
 }
 

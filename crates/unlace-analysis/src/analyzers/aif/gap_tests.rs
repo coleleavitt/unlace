@@ -131,11 +131,11 @@ fn legacy_walk(
             .next_instruction_start_after(start)
             .unwrap_or(u64::MAX);
         let mut advanced = if strict {
-            kuna_aifstrict::next_probe_after(start, hi)
+            aifstrict::next_probe_after(start, hi)
         } else {
             start.saturating_add(1)
         };
-        if (!strict || kuna_aifstrict::probe_allowed(listing, start)) && !claimed.contains(&start) {
+        if (!strict || aifstrict::probe_allowed(listing, start)) && !claimed.contains(&start) {
             decoder.linear_run = None;
             let body = match probe_gap_start(decoder, listing, &hist, start, hi, corroborate) {
                 Probe::Accept(body) => {
@@ -582,7 +582,7 @@ fn reconciled_prefix_keeps_its_instruction_records_as_a_frame_root() {
 fn a_rescan_through_the_shared_memo_decodes_nothing_again() {
     let (engine, space, listing) = hidden_fixture("call");
     let root = BASE + 0x404;
-    let memo = Rc::new(crate::listing::kuna_decodememo::DecodeMemo::new(
+    let memo = Rc::new(crate::listing::decodememo::DecodeMemo::new(
         listing.exec_ranges(),
     ));
     let mut decoder = GapDecoder::new(&engine, Rc::clone(&space), listing.exec_ranges());

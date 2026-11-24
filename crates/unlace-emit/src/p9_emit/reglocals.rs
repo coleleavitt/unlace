@@ -23,7 +23,7 @@ use unlace_base::space::AddrSpace;
 use crate::architecture::Architecture;
 use crate::context::HighVariableId;
 use crate::funcdata::Funcdata;
-use crate::kuna_funcreport::VarInfo;
+use crate::funcreport::VarInfo;
 use crate::printc::ArchPrintExt;
 use crate::printc::{DeclaredLocal, PrintC};
 
@@ -65,7 +65,7 @@ fn frame_object(
             off_stack = true;
             continue;
         };
-        let lo = crate::kuna_funcreport::signed_space_offset(stack, v.get_offset());
+        let lo = crate::funcreport::signed_space_offset(stack, v.get_offset());
         let hi = lo + i64::from(v.get_size());
         if rows.iter().any(|&(a, b)| a < hi && lo < b) {
             return true;
@@ -87,7 +87,7 @@ fn stack_homes_only(
     };
     let mut homes = highs
         .iter()
-        .filter_map(|&high| crate::kuna_varsources::high_homes(fd, arch, high))
+        .filter_map(|&high| crate::varsources::high_homes(fd, arch, high))
         .flat_map(|(homes, _)| homes.into_values())
         .peekable();
     homes.peek().is_some() && homes.all(|(space, _)| space.get_index() == stack.get_index())
@@ -142,7 +142,7 @@ pub fn register_locals(arch: &Architecture, fd: &Funcdata, reported: &[VarInfo])
         })
         .map(|local| {
             let type_name = match &local.ty {
-                Some(ty) => crate::kuna_bytehonest::exported_type_name(arch, ty),
+                Some(ty) => crate::bytehonest::exported_type_name(arch, ty),
                 None => local.decl.clone(),
             };
             let size = local

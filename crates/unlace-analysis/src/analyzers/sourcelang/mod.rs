@@ -84,19 +84,19 @@
 //! `Rustc`/`Go` — so a PE/Mach-O detecting as `Gcc`/`Clang`/`Unknown` produces
 //! byte-identical output, and the **ELF path is untouched**.
 
-mod kuna_dwarfproducer;
-pub use kuna_dwarfproducer::dwarf_compiler;
-mod kuna_legacy_llvm;
-mod kuna_rustversion;
-pub use kuna_rustversion::{fmt_pieces_layout, rustc_version_label, stable_rustc_version};
-mod kuna_rustcrates;
-mod kuna_rustreleases;
-pub use kuna_rustcrates::registry_crates;
-mod kuna_rustfmtio;
-mod kuna_rustfmtstr;
-mod kuna_rustfmtwrite;
-mod kuna_rustformatters;
-pub use kuna_rustformatters::{
+mod dwarfproducer;
+pub use dwarfproducer::dwarf_compiler;
+mod legacy_llvm;
+mod rustversion;
+pub use rustversion::{fmt_pieces_layout, rustc_version_label, stable_rustc_version};
+mod rustcrates;
+mod rustreleases;
+pub use rustcrates::registry_crates;
+mod rustfmtio;
+mod rustfmtstr;
+mod rustfmtwrite;
+mod rustformatters;
+pub use rustformatters::{
     FormatterMetadata, formatter_metadata, integer_formatters, primitive_display_formatters,
 };
 
@@ -229,8 +229,8 @@ impl Compiler {
 
     /// The engine-plane [`SourceLang`] this verdict records on the
     /// `Architecture` (toolchain conveniences collapse to `C`).
-    pub fn to_source_lang(self) -> unlace_decomp::kuna_sourcelang::SourceLang {
-        use unlace_decomp::kuna_sourcelang::SourceLang;
+    pub fn to_source_lang(self) -> unlace_decomp::sourcelang::SourceLang {
+        use unlace_decomp::sourcelang::SourceLang;
         match self {
             Compiler::Gcc | Compiler::Clang => SourceLang::C,
             Compiler::Rustc => SourceLang::Rust,
@@ -243,8 +243,8 @@ impl Compiler {
     /// The detection verdict a forced [`SourceLang`] stands in for — the
     /// inverse of [`Compiler::to_source_lang`] up to the toolchain
     /// conveniences (`c` forces the generic C arm, reported as `Gcc`).
-    pub fn from_forced_lang(lang: unlace_decomp::kuna_sourcelang::SourceLang) -> Compiler {
-        use unlace_decomp::kuna_sourcelang::SourceLang;
+    pub fn from_forced_lang(lang: unlace_decomp::sourcelang::SourceLang) -> Compiler {
+        use unlace_decomp::sourcelang::SourceLang;
         match lang {
             SourceLang::C => Compiler::Gcc,
             SourceLang::Rust => Compiler::Rustc,
@@ -259,7 +259,7 @@ impl Compiler {
 /// `sourcelang` when it has one (`LoadOptions::sourcelang`, or the
 /// `UNLACE_SOURCELANG` the CLI sets before `load file`), else detection.
 pub fn effective_compiler(file: &object::File, bytes: &[u8]) -> Compiler {
-    match unlace_decomp::kuna_sourcelang::forced() {
+    match unlace_decomp::sourcelang::forced() {
         Some(lang) => Compiler::from_forced_lang(lang),
         None => detect_compiler(file, bytes),
     }
@@ -267,7 +267,7 @@ pub fn effective_compiler(file: &object::File, bytes: &[u8]) -> Compiler {
 
 /// [`effective_compiler`] over raw image bytes (the `load file` entry point).
 pub fn effective_compiler_bytes(bytes: &[u8]) -> Compiler {
-    match unlace_decomp::kuna_sourcelang::forced() {
+    match unlace_decomp::sourcelang::forced() {
         Some(lang) => Compiler::from_forced_lang(lang),
         None => detect_compiler_bytes(bytes),
     }
@@ -658,7 +658,7 @@ fn is_rust_legacy(name: &str) -> bool {
     name[pos + 3..]
         .strip_suffix('E')
         .is_some_and(is_legacy_rust_hash_digits)
-        || kuna_legacy_llvm::stem(name).is_some()
+        || legacy_llvm::stem(name).is_some()
 }
 
 pub(crate) fn is_legacy_rust_hash_digits(hex: &str) -> bool {
@@ -1175,7 +1175,7 @@ mod tests {
     /// by the `tests/cli` probes — no process-global mutation here).
     #[test]
     fn forced_language_round_trips_to_compiler_and_source_lang() {
-        use unlace_decomp::kuna_sourcelang::SourceLang;
+        use unlace_decomp::sourcelang::SourceLang;
         for (lang, compiler) in [
             (SourceLang::C, Compiler::Gcc),
             (SourceLang::Rust, Compiler::Rustc),

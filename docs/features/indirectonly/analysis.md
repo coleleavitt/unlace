@@ -262,7 +262,7 @@ Pinned:
   bytechunk. Its first pass runs the **default**, so flipping the shipped default
   to on turns the test red.
 * `tests/stages/kuna-indirectonly.toml` — the sound direction, both arms explicit.
-* `kuna_indirectonly/tests.rs` — eight unit tests over `check_indirect_use`,
+* `indirectonly/tests.rs` — eight unit tests over `check_indirect_use`,
   including the direct-read counterexample that must not be marked.
 * `p0_knowledge/modes.rs` `EXCLUDED_ON_PURPOSE` — the option is deliberately out
   of the `aggressive` preset, which `auto` picks under 500 KiB, so nothing on the

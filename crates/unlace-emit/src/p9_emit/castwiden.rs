@@ -77,11 +77,11 @@ use std::rc::Rc;
 
 use unlace_num::opcodes::OpCode;
 
+use crate::castimplied::{CType, ImpliedCasts, PrintedForms, int_range, preserves};
+use crate::castternary::{INT, LONG, UINT, ULONG, literal_type, promote, usual};
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_castimplied::{CType, ImpliedCasts, PrintedForms, int_range, preserves};
-use crate::kuna_castternary::{INT, LONG, UINT, ULONG, literal_type, promote, usual};
 
 /// The value of `castwiden`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -95,7 +95,7 @@ pub enum CastWidenMode {
     Literal,
 }
 
-impl crate::kuna_optionset::KunaOption for CastWidenMode {
+impl crate::optionset::KunaOption for CastWidenMode {
     const NAME: &'static str = "castwiden";
     crate::kuna_option_id!();
 
@@ -715,5 +715,5 @@ fn p_same(a: &Datatype, b: &Datatype) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_castwiden/tests.rs"]
+#[path = "castwiden/tests.rs"]
 mod tests;

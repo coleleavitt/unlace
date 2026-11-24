@@ -157,8 +157,8 @@ impl NameChars {
 /// a large image carries a few hundred thousand names and `std::env::var` is not
 /// free.
 pub fn symbolnamechars_mode() -> NameChars {
-    crate::kuna_loadoptions::scoped(|o| o.symbolnamechars)
-        .unwrap_or_else(crate::kuna_loadoptions::env::symbolnamechars)
+    crate::loadoptions::scoped(|o| o.symbolnamechars)
+        .unwrap_or_else(crate::loadoptions::env::symbolnamechars)
 }
 
 /// Export a `set_kuna_option("symbolnamechars", val)` choice to
@@ -374,7 +374,7 @@ pub fn sanitize_ident_chain(name: &str) -> String {
         .join("::")
 }
 
-impl crate::kuna_optionset::KunaOption for NameChars {
+impl crate::optionset::KunaOption for NameChars {
     const NAME: &'static str = "symbolnamechars";
     crate::kuna_option_id!();
 

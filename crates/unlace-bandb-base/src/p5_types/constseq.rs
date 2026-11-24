@@ -1555,7 +1555,7 @@ impl StringSequence {
     /// constant COPY run with each COPY's byte size recorded in the `WriteNode`
     /// slot (via [`collect_fill_run`](Self::collect_fill_run)) and skips
     /// `formByteArray` — the driver runs the single-value-fill detection
-    /// ([`detect_fill_run`](crate::kuna_memsetsequence::detect_fill_run)) on the
+    /// ([`detect_fill_run`](crate::memsetsequence::detect_fill_run)) on the
     /// returned `move_ops` and then [`transform_memset`](Self::transform_memset).
     /// Returns `None` when no containing `ct`-array exists or no run was gathered.
     #[doc(hidden)]

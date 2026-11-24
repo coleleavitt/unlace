@@ -60,7 +60,7 @@ pub fn bind(fd: &mut Funcdata, vn: VarnodeId, entry: &SymbolEntry) -> KunaResult
     Ok(changed || old != Some(entry.symbol) || (high.is_some() && !attached))
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.dynamiclocals_bind = Some(bind);
 }

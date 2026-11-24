@@ -9,7 +9,7 @@
 //!   - V850 indirect-jmp: input in a non-register space ordering vs. PC.
 //!   - inferfuncentry: cross-space rampoint/entry equality (Address total order).
 //!
-//! C++ oracle: decompiler/cpp/kuna_sparcstructret.cc, kuna_v850indbranch.cc,
+//! C++ oracle: decompiler/cpp/kuna_sparcstructret.cc, v850indbranch.cc,
 //! kuna_inferfuncentry.cc (at the recorded cpp blob).
 
 use std::rc::Rc;
@@ -26,9 +26,9 @@ use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
 
-use unlace_decomp::kuna_inferfuncentry::kuna_is_function_entry;
-use unlace_decomp::kuna_sparcstructret::kuna_sparc_struct_ret_trap_producer;
-use unlace_decomp::kuna_v850indbranch::kuna_is_v850_indirect_jmp;
+use unlace_decomp::inferfuncentry::kuna_is_function_entry;
+use unlace_decomp::sparcstructret::kuna_sparc_struct_ret_trap_producer;
+use unlace_decomp::v850indbranch::kuna_is_v850_indirect_jmp;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();

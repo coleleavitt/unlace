@@ -289,7 +289,7 @@ pub fn function_name(arch: &crate::architecture::Architecture, name: String) -> 
 
 crate::kuna_flag!(
     /// (kuna `cppshortnames`) Print the short spelling of standard C++ names.
-    /// See [`crate::kuna_cppshortnames`].
+    /// See [`crate::cppshortnames`].
     CppShortNames,
     "cppshortnames",
     "short standard C++ names",

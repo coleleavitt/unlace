@@ -139,7 +139,7 @@ impl Atomics {
     }
 }
 
-impl crate::kuna_optionset::KunaOption for Atomics {
+impl crate::optionset::KunaOption for Atomics {
     const NAME: &'static str = "atomics";
     crate::kuna_option_id!();
 
@@ -182,7 +182,7 @@ crate::kuna_flag!(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kuna_optionset::KunaOption;
+    use crate::optionset::KunaOption;
 
     #[test]
     fn options_parse_and_ship_on() {

@@ -1,6 +1,6 @@
 # egraph: equality saturation over MBA trees (research track, closed)
 
-Option `egraph` (default off), `crates/unlace-bandb-base/src/p3_dataflow/kuna_egraph.rs`, spec in
+Option `egraph` (default off), `crates/unlace-bandb-base/src/p3_dataflow/egraph.rs`, spec in
 docs/spec/03-ssa-and-simplification.md ("Equality saturation over MBA trees"). It uses the `egg`
 crate (MIT, pure Rust, `deterministic` feature). PRs: #508 (pass), #523 (hang fix), #559
 (once-per-value regrouping), #572/#577/#632 (docs), #613 (barren-tree memo), #698 (quick round,

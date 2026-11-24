@@ -4,7 +4,7 @@ use crate::common;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use unlace_console::engine::Bootstrap;
-use unlace_decomp::kuna_loadoptions::LoadOptions;
+use unlace_decomp::loadoptions::LoadOptions;
 
 const COMMENT: &[u8] = b"rustc version 1.89.0-nightly (bf64d66bd 2025-05-21)\0";
 const TINY: &str = "49444153474e0600000000000000000000000000000000000000000000000000000007000001000000746573746c6962010400554889e50004bc1628006d7966756e6300";
@@ -249,7 +249,7 @@ fn stable_comment_profile_hint_preserves_matches_selection_and_provenance() {
 
 #[test]
 fn image_report_survives_second_commit_without_changing_analysis_flags() {
-    use unlace_analysis::flirt::kuna_rustprofiles::{Profile, Request, Selection};
+    use unlace_analysis::flirt::rustprofiles::{Profile, Request, Selection};
     let (_temp, binary, _) = fixture();
     let specs = common::repo_root().join("specs").display().to_string();
     for listing in [false, true] {
@@ -260,11 +260,11 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
         program
             .arch_mut()
             .kuna_options
-            .set(unlace_decomp::kuna_analysisgates::Listing(listing));
+            .set(unlace_decomp::analysisgates::Listing(listing));
         program
             .arch_mut()
             .kuna_options
-            .set(unlace_decomp::kuna_coreoptions::Flirt(false));
+            .set(unlace_decomp::coreoptions::Flirt(false));
         program.request_rust_profiles(Request {
             candidates: vec![Profile {
                 version: (1, 88, 0),
@@ -297,7 +297,7 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
             program
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Listing>()
+                .get::<unlace_decomp::analysisgates::Listing>()
                 .0,
             listing
         );
@@ -305,7 +305,7 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
             !program
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_coreoptions::Flirt>()
+                .get::<unlace_decomp::coreoptions::Flirt>()
                 .0
         );
         program.commit_pending_analysis().unwrap();
@@ -314,7 +314,7 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
             program
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Listing>()
+                .get::<unlace_decomp::analysisgates::Listing>()
                 .0,
             listing
         );
@@ -322,7 +322,7 @@ fn image_report_survives_second_commit_without_changing_analysis_flags() {
             !program
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_coreoptions::Flirt>()
+                .get::<unlace_decomp::coreoptions::Flirt>()
                 .0
         );
     }
@@ -715,9 +715,7 @@ fn caller_declaration_and_prototype_outrank_applied_signature_names() {
 
 #[test]
 fn application_consumes_one_observation_and_console_rejects_effective_overlays() {
-    use unlace_analysis::flirt::kuna_rustprofiles::{
-        Bank, Profile, ProfileSignature, Request, Source,
-    };
+    use unlace_analysis::flirt::rustprofiles::{Bank, Profile, ProfileSignature, Request, Source};
     use unlace_console::assertions::{Body, Directive};
     let (temp, binary, _) = fixture();
     let specs = common::repo_root().join("specs").display().to_string();
@@ -733,11 +731,11 @@ fn application_consumes_one_observation_and_console_rejects_effective_overlays()
         program
             .arch_mut()
             .kuna_options
-            .set(unlace_decomp::kuna_coreoptions::Flirt(false));
+            .set(unlace_decomp::coreoptions::Flirt(false));
         program
             .arch_mut()
             .kuna_options
-            .set(unlace_decomp::kuna_analysisgates::Listing(true));
+            .set(unlace_decomp::analysisgates::Listing(true));
         if overlay {
             program.set_assertions(vec![Directive {
                 raw: "bytes 0x400100 90".into(),

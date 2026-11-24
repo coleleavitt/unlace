@@ -194,7 +194,7 @@ pub fn kuna_storage_comment(view: &StorageView) -> String {
 }
 
 /// (kuna) Master naming-scheme toggle: `namestyle angr|ghidra`
-/// (C++ `OptionNameStyle`, kuna_naming.cc:16-28).
+/// (C++ `OptionNameStyle`, naming.cc:16-28).
 ///
 /// "angr" (default) renders angr-style names (vN/aN/dat_/sub_/label_) plus a
 /// storage-location comment on each local; "ghidra" restores upstream Ghidra
@@ -228,5 +228,5 @@ impl OptionNameStyle {
 }
 
 #[cfg(test)]
-#[path = "kuna_naming/tests.rs"]
+#[path = "naming/tests.rs"]
 mod tests;

@@ -18,7 +18,7 @@
 //! comments of type WARNING/WARNINGHEADER restyle; user and `dwarf_lines`
 //! comments keep their banner-line form.
 //!
-//! Following the kuna-option idiom ([`crate::kuna_arraynotation::OptionArrayNotation`]),
+//! Following the kuna-option idiom ([`crate::arraynotation::OptionArrayNotation`]),
 //! this module owns only the option struct; the caller
 //! (`Architecture::set_kuna_option`) writes the live flag.
 
@@ -56,5 +56,5 @@ impl OptionWarnStyle {
 }
 
 #[cfg(test)]
-#[path = "kuna_warnstyle/tests.rs"]
+#[path = "warnstyle/tests.rs"]
 mod tests;

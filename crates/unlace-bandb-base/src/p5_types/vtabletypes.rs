@@ -10,7 +10,7 @@
 //! v2 = (**(int (**)(void))(*(long *)a0 + 0x10))();
 //! ```
 //!
-//! The RTTI recovery (`unlace_analysis::rtti::kuna_vtabletypes`) knows each
+//! The RTTI recovery (`unlace_analysis::rtti::vtabletypes`) knows each
 //! polymorphic class's primary vtable and, for every slot, the function the
 //! class holds there and every override its derived classes hold. This module
 //! turns that into types: a structure `C_vtbl` with one function-pointer field
@@ -46,7 +46,7 @@ use unlace_base::types::int4;
 use crate::architecture::Architecture;
 use crate::dtype::{Datatype, TypeField, flags, type_metatype};
 use crate::fspec::PrototypePieces;
-use crate::kuna_kalloctype::KallocView;
+use crate::kalloctype::KallocView;
 
 /// One polymorphic class's primary vtable, as the RTTI recovery found it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -92,7 +92,7 @@ pub fn install(
     classes: &[VtableClass],
 ) -> KunaResult<usize> {
     let mut views: HashMap<&str, &KallocView> = HashMap::new();
-    let kalloc = crate::kuna_kalloctype::kalloc_types(&arch.kuna_states);
+    let kalloc = crate::kalloctype::kalloc_types(&arch.kuna_states);
     for v in kalloc.values().filter(|v| !v.pointers) {
         views.entry(v.name.as_str()).or_insert(v);
     }
@@ -195,8 +195,8 @@ fn install_class(
             .filter(|v| u64::from(v.size) == c.size)
             .map_or("", |v| v.signature.as_str());
         let mut fields = vec![TypeField::new(0, 0, "vtable", vptr)];
-        for f in crate::kuna_kalloctype::granule_fields(types, signature, true, ptr, size)
-            .unwrap_or_default()
+        for f in
+            crate::kalloctype::granule_fields(types, signature, true, ptr, size).unwrap_or_default()
         {
             fields.push(TypeField::new(
                 fields.len() as int4,

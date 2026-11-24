@@ -218,7 +218,7 @@ impl DeclDedup {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DedupVarDecls(pub bool);
 
-impl crate::kuna_optionset::KunaOption for DedupVarDecls {
+impl crate::optionset::KunaOption for DedupVarDecls {
     const NAME: &'static str = "dedupvardecls";
     crate::kuna_option_id!();
 
@@ -231,11 +231,11 @@ impl crate::kuna_optionset::KunaOption for DedupVarDecls {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_dedupvardecls::OptionDedupVarDecls.apply(value)?;
+        let (v, msg) = crate::dedupvardecls::OptionDedupVarDecls.apply(value)?;
         Ok((DedupVarDecls(v), msg))
     }
 }
 
 #[cfg(test)]
-#[path = "kuna_dedupvardecls/tests.rs"]
+#[path = "dedupvardecls/tests.rs"]
 mod tests;

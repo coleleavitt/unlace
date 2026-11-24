@@ -65,7 +65,7 @@ pub enum PtrFromUseMode {
     Void,
 }
 
-impl crate::kuna_optionset::KunaOption for PtrFromUseMode {
+impl crate::optionset::KunaOption for PtrFromUseMode {
     const NAME: &'static str = "ptrfromuse";
     crate::kuna_option_id!();
 
@@ -460,7 +460,7 @@ pub fn is_float_op(opcode: OpCode) -> bool {
 
 /// Does the constant `cvn` of `op` resolve to a global object kuna knows about,
 /// making it the BASE of its `INT_ADD` rather than a field offset?  Shared with
-/// [`crate::kuna_charptr`], whose walk grades a literal addend the same way.
+/// [`crate::charptr`], whose walk grades a literal addend the same way.
 #[doc(hidden)]
 pub fn constant_is_global_base(data: &Funcdata, op: OpId, cvn: VarnodeId) -> bool {
     matches!(const_base_evidence(data, op, cvn), BaseEvidence::Object)

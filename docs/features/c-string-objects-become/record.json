@@ -17,7 +17,7 @@
   {
    "id": "scope-not-large",
    "claim": "The captain's `scope: large` triage followed from the (wrong) hypothesis. The fix is one focused change, not a C++ type-recovery project, so the proposal fork was NOT taken.",
-   "evidence": "Upstream already has the rule (TypeFactory::getTypePointerNoDepth, type.cc:1509); Ghidra just never calls it on the spacebase-PTRSUB arm. Shipped as one new module (p5_types/kuna_ptrdepth.rs), one gated call site in propagate_type_edge, one settable row. No new pass, no new pass type, no ported-core anchor files touched."
+   "evidence": "Upstream already has the rule (TypeFactory::getTypePointerNoDepth, type.cc:1509); Ghidra just never calls it on the spacebase-PTRSUB arm. Shipped as one new module (p5_types/ptrdepth.rs), one gated call site in propagate_type_edge, one settable row. No new pass, no new pass type, no ported-core anchor files touched."
   },
   {
    "id": "acceptance-strengthened",

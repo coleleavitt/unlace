@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use unlace_console::project::FuncResult;
-use unlace_decomp::kuna_structsynth::shard::{self, FunctionRecord, Replay, SynthRequest};
+use unlace_decomp::structsynth::shard::{self, FunctionRecord, Replay, SynthRequest};
 
 use super::wire::encode_spec;
 use super::{

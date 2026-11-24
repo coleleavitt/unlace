@@ -88,7 +88,7 @@ impl PrintC {
         arch: &Architecture,
         first: OpId,
     ) -> Option<OpId> {
-        if self.out_lang != crate::kuna_lang::OutLang::Rust
+        if self.out_lang != crate::lang::OutLang::Rust
             || self.context.is_set(modifiers::COMMA_SEPARATE)
         {
             return None;

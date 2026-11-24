@@ -23,11 +23,11 @@ use std::rc::Rc;
 use unlace_base::types::int4;
 
 use crate::dtype::{Datatype, type_metatype};
-use crate::kuna_lang::{
+use crate::lang::{
     CastForm, CharForm, DeclForm, DoWhileForm, ForLoopForm, GotoForm, InfLoopForm, LabelForm,
     LangCaps, LangForms, LangProfile, MemberForm, ProtoForm, StringEscape, SwitchForm, WhileForm,
 };
-use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
+use crate::langtypes::{SpellCtx, TypeSpeller};
 use crate::printc::{keywords, op_token, tokens};
 use crate::printlanguage::{OpToken, TokenType};
 

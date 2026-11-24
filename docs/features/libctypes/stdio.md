@@ -241,7 +241,7 @@ once `opaque` — with assertions #16-#25, plus pass 10 for the `datasyms off` i
   (#24), and whose library form only loses the cast the untyped slot needed
   (#25).
 
-Seven unit tests in `protos/kuna_libctypes/tests.rs`: the two shapes' addresses,
+Seven unit tests in `protos/libctypes/tests.rs`: the two shapes' addresses,
 names and indirection depth; that neither borrows the other's naming; that the
 slots share the table's own interned `FILE`; that `glibc` reaches them; that a
 relocatable object and a PE yield nothing; and that a third build of the same

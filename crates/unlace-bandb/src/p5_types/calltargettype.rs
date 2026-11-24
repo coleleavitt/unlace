@@ -102,13 +102,13 @@ pub struct FieldDecl {
     pub declaration: Option<String>,
 }
 
-pub use crate::kuna_loadoptions::CALLTARGETTYPE_ENV;
+pub use crate::loadoptions::CALLTARGETTYPE_ENV;
 
 /// Does the DWARF mapper give a pointer to a `DW_TAG_subroutine_type` its
 /// prototype rather than a `void` pointee.
 pub fn dwarf_function_types() -> bool {
-    crate::kuna_loadoptions::scoped(|o| o.calltargettype)
-        .unwrap_or_else(crate::kuna_loadoptions::env::calltargettype)
+    crate::loadoptions::scoped(|o| o.calltargettype)
+        .unwrap_or_else(crate::loadoptions::env::calltargettype)
 }
 
 /// (kuna) `ActionCallTargetType` -- type each indirect call's target from the
@@ -147,7 +147,7 @@ impl Action for ActionCallTargetType {
         if data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_coreoptions::CallTargetType>()
+            .get::<crate::coreoptions::CallTargetType>()
             .0
         {
             retype_call_targets(data);
@@ -658,7 +658,7 @@ fn declare_field(data: &mut Funcdata, op: OpId, ty: &Rc<Datatype>, agreed: bool)
     let Some((rec, offset)) = uncallable_field(data, op) else {
         return agreed;
     };
-    if !crate::kuna_structsynth::ledger::is_minted(&rec) {
+    if !crate::structsynth::ledger::is_minted(&rec) {
         return false;
     }
     let Some(field) = (0..)
@@ -1005,7 +1005,7 @@ fn use_agrees(
             let param = usize::try_from(slot - 1).ok();
             !callee
                 .zip(param)
-                .is_some_and(|(name, i)| crate::kuna_callbacktype::is_callback_slot(&name, i))
+                .is_some_and(|(name, i)| crate::callbacktype::is_callback_slot(&name, i))
         }
         OpCode::CPUI_STORE if slot == 2 => {
             let Some(ptr) = o.get_in(1) else { return false };
@@ -1140,7 +1140,7 @@ fn carry_back(
 /// (kuna `calltargettype`) The calls through fields of synthesized records; kept across
 /// `Funcdata::clear`, forgotten with the call target types.
 #[derive(Default)]
-struct FieldCallsSlot(Vec<crate::kuna_calltargettype::FieldCall>);
+struct FieldCallsSlot(Vec<crate::calltargettype::FieldCall>);
 crate::kuna_func_state!(FieldCallsSlot, keep_across_clear: true);
 
 /// The `kuna_calltargettype` pass's methods on [`Funcdata`], as an extension trait so the type can
@@ -1149,9 +1149,9 @@ pub trait FuncdataCalltargettypeExt {
     /// (kuna `calltargettype`) Forget every recorded call target type.
     fn kuna_clear_call_target_types(&mut self);
     /// (kuna `calltargettype`) Record a call through a field of a synthesized record.
-    fn kuna_add_field_call(&mut self, call: crate::kuna_calltargettype::FieldCall);
+    fn kuna_add_field_call(&mut self, call: crate::calltargettype::FieldCall);
     /// (kuna `calltargettype`) The calls through fields of synthesized records.
-    fn kuna_field_calls(&self) -> &[crate::kuna_calltargettype::FieldCall];
+    fn kuna_field_calls(&self) -> &[crate::calltargettype::FieldCall];
 }
 
 impl FuncdataCalltargettypeExt for crate::funcdata::Funcdata {
@@ -1161,11 +1161,11 @@ impl FuncdataCalltargettypeExt for crate::funcdata::Funcdata {
         self.kuna_state_mut::<FieldCallsSlot>().0.clear();
     }
     /// (kuna `calltargettype`) Record a call through a field of a synthesized record.
-    fn kuna_add_field_call(&mut self, call: crate::kuna_calltargettype::FieldCall) {
+    fn kuna_add_field_call(&mut self, call: crate::calltargettype::FieldCall) {
         self.kuna_state_mut::<FieldCallsSlot>().0.push(call);
     }
     /// (kuna `calltargettype`) The calls through fields of synthesized records.
-    fn kuna_field_calls(&self) -> &[crate::kuna_calltargettype::FieldCall] {
+    fn kuna_field_calls(&self) -> &[crate::calltargettype::FieldCall] {
         &self.kuna_state::<FieldCallsSlot>().0
     }
 }

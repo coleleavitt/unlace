@@ -105,19 +105,19 @@ This is the known `condfold` family (`docs/options.md`, and the memory note
 condition operand whose block `isComplex()` (more than a couple of printed
 statements), and each `iVar1 = strcmp(a0, "-xx");` clause is exactly that. kuna
 already ships the relaxation as `--option condfold off|on|wide`
-(`p8_structure/kuna_condfold.rs`), default **off**, and it is **not** in the
+(`p8_structure/condfold.rs`), default **off**, and it is **not** in the
 `aggressive` preset — which is why a no-flag run on today's build still shows the
 full nest.
 
 `wide` is a *bounded* relaxation: both admission rules share a printed-width budget
 (5 statements at `on`, 9 at `wide` — `MAX_SHAPE_STMTS` / `ShapeVerdict` in
-`kuna_condfold.rs`). Twelve `strcmp` clauses do not fit in 9, so the fold breaks into
+`condfold.rs`). Twelve `strcmp` clauses do not fit in 9, so the fold breaks into
 groups of 3/2/4/2 and four `if`s survive. That is the entire residual: **11 → 4 is a
 budget artifact, not a matcher failure.**
 
 ### Owning phase
 
-**P8** — Structured AST & Goto Quality (`p8_structure/kuna_condfold.rs`).
+**P8** — Structured AST & Goto Quality (`p8_structure/condfold.rs`).
 
 ### Metric-artifact check
 
@@ -150,7 +150,7 @@ three optimisation levels.
 
 2. **The residual, if anyone wants the last 3 `if`s**: the only thing standing
    between `wide` and IDA's single `if` is the shared printed-width budget in
-   `p8_structure/kuna_condfold.rs`. A third policy level (an `unbounded`/`max` value
+   `p8_structure/condfold.rs`. A third policy level (an `unbounded`/`max` value
    on the existing option — options take values, not just on/off) would close it in
    one module. I would rank that *below* the default-flip: an unbounded fold produces
    a 12-term condition on one source line, and whether that reads better than a

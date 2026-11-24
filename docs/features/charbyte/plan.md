@@ -5,7 +5,7 @@
 `charbyte on|off`, P5 `type-propagation`, tier `core`, change_kind
 `type-inference`, shipped **on** (see record.json `default_on`).
 
-## Mechanism (`p5_types/kuna_charbyte.rs`)
+## Mechanism (`p5_types/charbyte.rs`)
 
 1. `run_infer_types` calls `begin`, which arms a per-thread record when the
    option is on.
@@ -51,7 +51,7 @@ prints `char v1; ... v1 == 0xe9` - wrong C (analysis.md §3).
   `highbit` (an unsigned-compared byte stays `uint1`), `ishigh` (the `0xe9`
   constant becomes `'\xe9'` with the byte), `dashlen` (a pointer that is `char *`
   only through `strlen`: off `uint1 *a0` + `strlen((char *)a0)`, on `char *a0`).
-* Unit tests (`kuna_charbyte/tests.rs`): the lattice fact (`uint1` outranks
+* Unit tests (`charbyte/tests.rs`): the lattice fact (`uint1` outranks
   `char`), the `char`/`uint1` predicates, one-shot record semantics.
 * Whole-corpus before/after on 8 binaries, then 34, with every hunk
   classified and every unchanged line that reads a retyped byte audited; a

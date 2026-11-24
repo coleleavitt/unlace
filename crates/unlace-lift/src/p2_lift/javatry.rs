@@ -27,8 +27,8 @@ use unlace_base::error::KunaResult;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::OpId;
+use crate::dex::{DexModel, REGISTER_START, TryBlock};
 use crate::funcdata::Funcdata;
-use crate::kuna_dex::{DexModel, REGISTER_START, TryBlock};
 use crate::op::pcodeop_flags;
 use crate::userop::{BUILTIN_JAVA_CAUGHT, BUILTIN_JAVA_THROWS, BUILTIN_JAVA_TRY};
 
@@ -304,11 +304,10 @@ impl CatchTable {
     /// and option `javatry` is on.
     pub fn new(data: &Funcdata) -> Option<CatchTable> {
         let arch = data.get_arch();
-        let model = arch.dex.as_ref().filter(|_| {
-            arch.kuna_options
-                .get::<crate::kuna_coreoptions::JavaTry>()
-                .0
-        })?;
+        let model = arch
+            .dex
+            .as_ref()
+            .filter(|_| arch.kuna_options.get::<crate::coreoptions::JavaTry>().0)?;
         let mut handlers: BTreeMap<u64, (Vec<(u64, u64)>, Vec<Option<u32>>)> = BTreeMap::new();
         for block in canonical_blocks(model, data.get_address().get_offset()) {
             for &(type_idx, handler) in &block.handlers {
@@ -558,7 +557,7 @@ impl crate::action::Action for ActionJavaThrowPrune {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_coreoptions::JavaTry>()
+            .get::<crate::coreoptions::JavaTry>()
             .0
         {
             return 0;

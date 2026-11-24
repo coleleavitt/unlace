@@ -410,8 +410,8 @@
     "make rust-test": "RUST_TEST_RC=0 via the lane script, 2026-09-19 16:04:47-16:20:23Z, started after the last .rs/.toml commit 173efc85 (16:04:33Z); later commits are docs and a stage-file comment. (An earlier lane on 64e37365 was stopped to take the phases.toml text; no failure before it was stopped.)"
   },
   "files": [
-    "decompiler/crates/kuna-analysis/src/analyzers/formatstring/kuna_fmtstatic.rs",
-    "decompiler/crates/kuna-decomp/src/p1_partition/kuna_formatstring.rs",
+    "decompiler/crates/kuna-analysis/src/analyzers/formatstring/fmtstatic.rs",
+    "decompiler/crates/kuna-decomp/src/p1_partition/formatstring.rs",
     "decompiler/crates/kuna-analysis/src/analyzers/formatstring/apply.rs",
     "decompiler/crates/kuna-analysis/src/analyzers/formatstring/mod.rs",
     "decompiler/crates/kuna-analysis/src/analyzers/protos/mod.rs",
@@ -430,7 +430,7 @@
     "docs/baseline-stages.json",
     "docs/ghidra-integration.md",
     "decompiler/crates/kuna-ghidra/tests/ghidra_sim_e2e.rs",
-    "decompiler/crates/kuna-decomp/src/p4_calls/kuna_formattail.rs",
+    "decompiler/crates/kuna-decomp/src/p4_calls/formattail.rs",
     "decompiler/crates/kuna-decomp/src/p4_calls/coreaction_protos.rs",
     "decompiler/crates/kuna-decomp/src/p4_calls/fspec.rs",
     "decompiler/crates/kuna-decomp/src/p0_knowledge/overrides.rs",
@@ -493,7 +493,7 @@
   "round3": {
     "review": "CHANGES: the closed override moved varargs on targets that do not pass them like named arguments (Apple arm64, ARM32 hard-float, RISC-V); a format in writable memory was trusted; %lc narrowed to char; docs overstated aggressive-only.",
     "vararg_abi": {
-      "rule": "kuna_formatstring.rs (vararg_abi), checked per conversion in apply.rs (build_override_pieces), so it binds static and full",
+      "rule": "formatstring.rs (vararg_abi), checked per conversion in apply.rs (build_override_pieces), so it binds static and full",
       "all conversions": "x86 (32/64, SysV and Win64), AArch64 in an ELF",
       "integer/pointer <= pointer width": "ARM, RISC-V, MIPS, PowerPC, AArch64 in a PE (or a windows cspec)",
       "none": "Apple AArch64 (Mach-O container or the AppleSilicon language), AArch64 with no container (XML path), every other processor",
@@ -559,7 +559,7 @@
     "review": "CHANGES (blocker): %lf/%le/%lg/%la typed unsigned long (printf) / long * (scanf) -- Ghidra longLengthModification falls through; on by default the double left xmm0, arguments shifted, phantom parameters appeared (x86-64, AArch64, ARM32); e2fsck O2 0x736b0 printed its bit counter. Minor: MIPS delay slots; stale record gates line; chfn byte split; inline comment in ghidra_sim_e2e.rs.",
     "fix": {
       "parser": "mod.rs long_length_modification: l + [aAeEfFgG] -> Spec::Double (C11 7.21.6.1p7), l + p -> VoidPtr; parse_input_types: l + floating -> new Spec::DoublePtr (double *); plain scanf %f stays void * as before",
-      "delay_slot": "kuna_fmtstatic.rs writes_before_transfer: the call instruction is lifted; a site (or gettext hop) whose call instruction writes the format storage before its CALL/BRANCH is declined (MIPS/SPARC delay slot). MIPS is inert today (non-PIC plt stubs not import-named; PIC calls through $t9)",
+      "delay_slot": "fmtstatic.rs writes_before_transfer: the call instruction is lifted; a site (or gettext hop) whose call instruction writes the format storage before its CALL/BRANCH is declined (MIPS/SPARC delay slot). MIPS is inert today (non-PIC plt stubs not import-named; PIC calls through $t9)",
       "comment": "ghidra_sim_e2e.rs inline block moved to the test function header"
     },
     "unit_tests": [
@@ -684,7 +684,7 @@
   "round7": {
     "review": "CHANGES (major): x86-64 wrong output by default -- calls whose format is not resolved pick up phantom stack arguments. /usr/bin/m4 (Ubuntu 1.4.18, sha256 bef5254af5957f1c) 0x16bc0 gnulib version_etc: three __fprintf_chk calls 9 -> 12 varargs by default, 9 under off. PR body/spec/reached_by_default claim 'on x86 that only ever removed phantoms' false. Add a corpus beyond decbench (reviewer: 25 Ubuntu /usr/bin binaries, 116 fixed / 3 new).",
     "root_cause": "Trace (KUNA_TRIAL_TRACE build, temporary eprintln in only_op_use): under off the open version calls 0x16cfd/0x16f2b claim the va_list's three outgoing stack slots (callee-relative 0x8/0x10/0x18) as phantoms, so check_call_double_use vetoes the same values at the switch calls (their slots 0x38..0x48, below six pushes). Closed from the start, the version call has no input there, nothing vetoes, and the case-8/9/others calls take them.",
-    "fix": "p4_calls/kuna_formattail.rs: the override is installed as the declared arguments + ... (first_var_arg_slot = declared count; decompile_step sets Architecture::format_override_callpoints, the flow build marks Override::insert_format_call, build_call_specs sets FuncCallSpecs::format_arity). The call scores the trials past its declared arguments exactly as under off; keep_declared_trials re-marks declared (fixed-position) trials active at finalization (fillinMap's chain rule dropped a ninth double on the stack behind rcx..r9 unused); shed_format_tails removes inputs past the declared count and the ... once no live call is input-active (end of ActionActiveParam, before the calleearity retries).",
+    "fix": "p4_calls/formattail.rs: the override is installed as the declared arguments + ... (first_var_arg_slot = declared count; decompile_step sets Architecture::format_override_callpoints, the flow build marks Override::insert_format_call, build_call_specs sets FuncCallSpecs::format_arity). The call scores the trials past its declared arguments exactly as under off; keep_declared_trials re-marks declared (fixed-position) trials active at finalization (fillinMap's chain rule dropped a ninth double on the stack behind rcx..r9 unused); shed_format_tails removes inputs past the declared count and the ... once no live call is input-active (end of ActionActiveParam, before the calleearity retries).",
     "also_fixed": "clang -O1+ keeps a local in the push-rax slot (the first outgoing stack-arg slot): closed from the start, sscanf(\"%d\",&a); return a+1 rendered 'return 6;' and a %c pair 'return 0;' (a latent wrong output of the earlier closed install, not on main). The open tail renders them as off. And the audit's alloca arity withdrawals (130 on decbench) no longer fire: those sites are typed; tar O2 0x23875 jump-table join still withdrawn (format differs).",
     "stage_test": "passes 27-29 fmtvalist_x86_64 (gcc -O2 -flto, version_etc shape: #29 off keeps the version line's phantoms, #30 default/full print it with 3 strings, #31 switch calls keep off's arguments, #32 no switch call takes the va_list's slots); passes 30-32 fmtslots_x86_64 (clang -O2: #33-#36 sscanf destinations read back / typed / no 'return 6;', #37-#38 show9 keeps its ninth stack double). New 38/38; the round-6 binary 32/38 (fails #31-#36). baseline-stages 1219 = main 1181 + 38 FMTSTATIC keys, 0 removed.",
     "measurement": {

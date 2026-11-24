@@ -1,7 +1,7 @@
 //! (kuna) `stackstoreguard` -- every stack byte a guarded indexed store may
 //! reach is one local.
 //!
-//! The heritage guard of `p3_dataflow/kuna_stackstoreguard.rs` keeps an indexed
+//! The heritage guard of `p3_dataflow/stackstoreguard.rs` keeps an indexed
 //! stack byte store's effect on the slots it may write. The store prints through
 //! the local at its base address, `v1[i & 7] = j`, so every slot it may reach
 //! must be part of that local: a slot mapped as its own local is a separate C
@@ -27,7 +27,7 @@
 //! does not resolve (`(&v1 | 4) + i`, a walk with a variable step, a choice
 //! between more than eight addresses) is not guarded at all: that access may
 //! write or read any slot near a reach, so no layout of the frame is known to
-//! be right (`p3_dataflow/kuna_stackstoreguard.rs (frame_unresolved)`). When a
+//! be right (`p3_dataflow/stackstoreguard.rs (frame_unresolved)`). When a
 //! layout pass finds one in a frame heritage already guarded, the analysis
 //! stops and the drive analyzes a freshly built copy of the function without
 //! the guard. The partial copy jump-table recovery analyzes is never analyzed
@@ -102,7 +102,7 @@ impl<T: Clone> Walk<T> {
         let n = self.steps.get().wrapping_add(1);
         self.steps.set(n);
         if self.expired.get()
-            || (n % 256 == 0 && crate::kuna_budget::deadline_passed_in("store reachability"))
+            || (n % 256 == 0 && crate::budget::deadline_passed_in("store reachability"))
         {
             self.expired.set(true);
             return gave_up;
@@ -1811,7 +1811,7 @@ fn moved_from(fd: &Funcdata, vn: VarnodeId) -> VarnodeId {
 /// (kuna `stackstoreguard`) What the latest `restructure_varnode` pass says the final layout
 /// must satisfy; reset by `Funcdata::clear`.
 #[derive(Default)]
-struct ChecksSlot(std::cell::RefCell<crate::kuna_storereach::ReachChecks>);
+struct ChecksSlot(std::cell::RefCell<crate::storereach::ReachChecks>);
 crate::kuna_func_state!(ChecksSlot, keep_across_clear: false);
 
 /// The `kuna_storereach` pass's methods on [`Funcdata`], as an extension trait so the type can
@@ -1819,19 +1819,19 @@ crate::kuna_func_state!(ChecksSlot, keep_across_clear: false);
 pub trait FuncdataStorereachExt {
     /// (kuna `stackstoreguard`) Record what this pass says the final layout
     /// must satisfy.
-    fn note_store_reach_checks(&self, checks: crate::kuna_storereach::ReachChecks);
+    fn note_store_reach_checks(&self, checks: crate::storereach::ReachChecks);
     /// (kuna `stackstoreguard`) What the latest pass recorded.
-    fn store_reach_checks(&self) -> crate::kuna_storereach::ReachChecks;
+    fn store_reach_checks(&self) -> crate::storereach::ReachChecks;
 }
 
 impl FuncdataStorereachExt for crate::funcdata::Funcdata {
     /// (kuna `stackstoreguard`) Record what this pass says the final layout
     /// must satisfy.
-    fn note_store_reach_checks(&self, checks: crate::kuna_storereach::ReachChecks) {
+    fn note_store_reach_checks(&self, checks: crate::storereach::ReachChecks) {
         *self.kuna_state::<ChecksSlot>().0.borrow_mut() = checks;
     }
     /// (kuna `stackstoreguard`) What the latest pass recorded.
-    fn store_reach_checks(&self) -> crate::kuna_storereach::ReachChecks {
+    fn store_reach_checks(&self) -> crate::storereach::ReachChecks {
         self.kuna_state::<ChecksSlot>().0.borrow().clone()
     }
 }

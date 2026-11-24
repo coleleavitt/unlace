@@ -149,7 +149,7 @@ impl Rule for RuleMemsetCopy {
             && !data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_memsetsequence::MemsetRecover>()
+                .get::<crate::memsetsequence::MemsetRecover>()
                 .0
         {
             return 0;
@@ -354,7 +354,7 @@ pub fn detect_fill_run(data: &Funcdata, move_ops: &mut Vec<WriteNode>) -> Option
 #[derive(Clone, Debug, PartialEq)]
 pub struct MemsetRecover(pub bool);
 
-impl crate::kuna_optionset::KunaOption for MemsetRecover {
+impl crate::optionset::KunaOption for MemsetRecover {
     const NAME: &'static str = "memsetrecover";
     crate::kuna_option_id!();
 
@@ -367,12 +367,12 @@ impl crate::kuna_optionset::KunaOption for MemsetRecover {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_memsetsequence::parse_memset_recover_form(value)
+        let (v, msg) = crate::memsetsequence::parse_memset_recover_form(value)
             .map(|(form, msg)| (form.memset_recover(), msg))?;
         Ok((MemsetRecover(v), msg))
     }
 }
 
 #[cfg(test)]
-#[path = "kuna_memsetsequence/tests.rs"]
+#[path = "memsetsequence/tests.rs"]
 mod tests;

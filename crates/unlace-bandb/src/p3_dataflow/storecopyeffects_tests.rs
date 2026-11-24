@@ -15,8 +15,8 @@ use module_scope::*;
 
 use crate::action::Rule;
 use crate::context::ArchContext;
-use crate::kuna_storecopyeffects::*;
 use crate::ruleaction_4::RuleStoreVarnode;
+use crate::storecopyeffects::*;
 use std::rc::Rc;
 use unlace_base::address::{Address, calc_mask};
 use unlace_base::space::{

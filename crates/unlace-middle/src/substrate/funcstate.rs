@@ -2,7 +2,7 @@
 //!
 //! A [`FuncStates`] holds one value per [`FuncState`] type, indexed by a dense [`StateId`] the
 //! type takes the first time it is used, the per-function counterpart of
-//! [`OptionSet`](crate::kuna_optionset::OptionSet). [`Funcdata`](crate::funcdata::Funcdata) owns
+//! [`OptionSet`](crate::optionset::OptionSet). [`Funcdata`](crate::funcdata::Funcdata) owns
 //! one, so it never names a pass's type: a pass reads its table with
 //! `data.kuna_state::<S>()` and writes it with `data.kuna_state_mut::<S>()`. A slot is created
 //! with [`Default`] on first use. `Funcdata::clear` drops every slot whose
@@ -45,14 +45,14 @@ pub trait FuncState: Any + Default {
 #[macro_export]
 macro_rules! kuna_func_state {
     ($ty:ty, keep_across_clear: $keep:expr) => {
-        impl $crate::kuna_funcstate::FuncState for $ty {
+        impl $crate::funcstate::FuncState for $ty {
             const KEEP_ACROSS_CLEAR: bool = $keep;
 
             #[inline]
-            fn id() -> $crate::kuna_funcstate::StateId {
-                static ID: std::sync::OnceLock<$crate::kuna_funcstate::StateId> =
+            fn id() -> $crate::funcstate::StateId {
+                static ID: std::sync::OnceLock<$crate::funcstate::StateId> =
                     std::sync::OnceLock::new();
-                *ID.get_or_init($crate::kuna_funcstate::StateId::next)
+                *ID.get_or_init($crate::funcstate::StateId::next)
             }
         }
     };

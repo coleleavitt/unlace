@@ -126,7 +126,7 @@ pub fn fat_slice_offset(bytes: &[u8], pref: SlicePref) -> Option<u64> {
 /// The environment variable carrying a `--slice <arch>` fat-slice override to
 /// the `decomp_dbg` subprocess and the in-process CLI surfaces; empty/unset
 /// selects the default slice.
-pub const SLICE_ENV: &str = unlace_decomp::kuna_loadoptions::MACHO_SLICE_ENV;
+pub const SLICE_ENV: &str = unlace_decomp::loadoptions::MACHO_SLICE_ENV;
 
 /// The slice preference a run asks for, in precedence order: an explicit
 /// `--slice` token, else the load's slice (`LoadOptions::macho_slice`, or
@@ -135,7 +135,7 @@ pub const SLICE_ENV: &str = unlace_decomp::kuna_loadoptions::MACHO_SLICE_ENV;
 /// recognizable stays the default rather than falling through to `--target`, so
 /// a typo'd `--slice` cannot be silently answered by the language override.
 pub fn slice_pref(slice: Option<&str>, target: Option<&str>) -> SlicePref {
-    use unlace_decomp::kuna_loadoptions::{env, scoped};
+    use unlace_decomp::loadoptions::{env, scoped};
     let explicit = slice
         .map(str::trim)
         .filter(|token| !token.is_empty())
@@ -241,7 +241,7 @@ mod tests {
     /// these assertions.
     #[test]
     fn slice_pref_prefers_an_explicit_slice_over_a_target_stem() {
-        let _load = unlace_decomp::kuna_loadoptions::LoadOptions::default().enter();
+        let _load = unlace_decomp::loadoptions::LoadOptions::default().enter();
         assert_eq!(
             slice_pref(Some("arm64"), Some("x86:LE:64:default:gcc")).0,
             Some(Architecture::Aarch64),

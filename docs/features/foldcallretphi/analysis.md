@@ -18,7 +18,7 @@ coreutils `fmt` -O2 (stripped), `main` @0x26a0:
 `v3` and the `sub_41f0` result are each defined by a call and read exactly once,
 in the same basic block, a couple of ops later, with nothing between them that
 touches memory. `foldcallret` is on by default and its order-safety predicate
-(`kuna_callretfold.rs (call_output_foldable)`) accepts both. They still spill.
+(`callretfold.rs (call_output_foldable)`) accepts both. They still spill.
 
 ## What actually blocks them (instrumented build, `KUNA_DBG_FCR=1`)
 
@@ -88,7 +88,7 @@ than one use, a phi use, or an intervening call — correctly, and untouched her
 
 ## The change, and why it is sound
 
-Only the first blocked column is taken. `kuna_foldcallretphi.rs
+Only the first blocked column is taken. `foldcallretphi.rs
 (conflict_is_self_call_effect)` re-walks the instances `inflate_test` just
 rejected on and discounts the rejection when *every* colliding instance is an
 INDIRECT effect of the call being folded.

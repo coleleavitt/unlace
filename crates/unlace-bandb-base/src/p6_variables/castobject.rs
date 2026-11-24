@@ -482,7 +482,7 @@ pub fn reconcile(fd: &mut Funcdata) {
             if highs.iter().any(|(k, _)| *k == h) {
                 continue;
             }
-            let Some(t) = crate::kuna_declhightype::type_representative(fd, h)
+            let Some(t) = crate::declhightype::type_representative(fd, h)
                 .and_then(|r| fd.vbank().get(r))
                 .map(|r| Rc::clone(r.get_type()))
             else {
@@ -536,11 +536,11 @@ pub fn reconcile(fd: &mut Funcdata) {
 
 /// (kuna) A frame object whose address only fills declared `T *` parameters
 /// is declared `T` (option `castobject`).  See
-/// [`crate::kuna_castobject`].
+/// [`crate::castobject`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct CastObject(pub bool);
 
-impl crate::kuna_optionset::KunaOption for CastObject {
+impl crate::optionset::KunaOption for CastObject {
     const NAME: &'static str = "castobject";
     crate::kuna_option_id!();
 
@@ -553,7 +553,7 @@ impl crate::kuna_optionset::KunaOption for CastObject {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_castobject::OptionCastObject.apply(value)?;
+        let (v, msg) = crate::castobject::OptionCastObject.apply(value)?;
         Ok((CastObject(v), msg))
     }
 }

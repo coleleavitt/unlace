@@ -32,6 +32,7 @@ use crate::architecture::{Architecture, GoLayout, HelperAbi, Regs, Storage, Vara
 use crate::context::{ArchContext, BlockId, HighVariableId, OpId, VarnodeId};
 use crate::database::SymbolEntry;
 use crate::dtype::{Datatype, TypeFactory};
+use crate::fasthash::{FxHashMap, FxHashSet};
 use crate::fspec::{
     Extension, FuncCallSpecs, FuncProto, ParamActive, ParamEntry, ParamListStandard, ParamTrial,
     ParameterPieces, ProtoModel, PrototypePieces, Widen,
@@ -41,7 +42,6 @@ use crate::funcdata_block::HeadOperand;
 use crate::funcdata_varnode::{Forced, Reach};
 use crate::heritage::{Guard, LiveCalls, LoadGuard, MemoryOps, StoreBounds, WidePair};
 use crate::jumptable::{GuardRecord, JumpModel, JumpTable, LoadTable};
-use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 use crate::merge::MergeContext;
 use crate::op::PcodeOpBank;
 use crate::rangeutil::CircleRange;
@@ -168,218 +168,218 @@ declare_hooks! {
     force_facing_type: fn(&mut Funcdata, Rc<Datatype>, int4, OpId, int4) -> KunaResult<()>;
     /// `Funcdata::inheritUnionField` (`funcdata_union`).
     inherit_union_field: fn(&mut Funcdata, &Datatype, OpId, int4, OpId, int4) -> int4;
-    /// `kuna_calleereginputs::reads_register`.
+    /// `calleereginputs::reads_register`.
     calleereginputs_reads_register: fn(&FuncCallSpecs, &Address, int4) -> bool;
-    /// `kuna_callresultuse::scores_trial`.
+    /// `callresultuse::scores_trial`.
     callresultuse_scores_trial: fn(&Funcdata, VarnodeId, OpId) -> bool;
-    /// `kuna_callresultuse::scoring_argument`.
+    /// `callresultuse::scoring_argument`.
     callresultuse_scoring_argument: fn(&Funcdata, OpId, VarnodeId) -> bool;
-    /// `kuna_callresultuse::scoring_return`.
+    /// `callresultuse::scoring_return`.
     callresultuse_scoring_return: fn(&Funcdata, OpId, VarnodeId) -> bool;
-    /// `kuna_exclusivearguse::access_cannot_reach_call`.
+    /// `exclusivearguse::access_cannot_reach_call`.
     exclusivearguse_access_cannot_reach_call: fn(&Funcdata, OpId, OpId, VarnodeId) -> bool;
-    /// `kuna_retindexuse::index_only_load`.
+    /// `retindexuse::index_only_load`.
     retindexuse_index_only_load: fn(&Funcdata, OpId, OpId, VarnodeId) -> bool;
-    /// `kuna_carryuse::carry_test`.
+    /// `carryuse::carry_test`.
     carryuse_carry_test: fn(&Funcdata, OpId, OpId, VarnodeId) -> bool;
-    /// `kuna_exclusivecallret::applies`.
+    /// `exclusivecallret::applies`.
     exclusivecallret_applies: fn(&Funcdata, OpId, &ParamTrial) -> bool;
-    /// `kuna_exclusivecallret::skips_use`.
+    /// `exclusivecallret::skips_use`.
     exclusivecallret_skips_use: fn(&Funcdata, OpId, OpId, VarnodeId, VarnodeId) -> bool;
-    /// `kuna_multiregargs::subpiece_drops_reached_piece`.
+    /// `multiregargs::subpiece_drops_reached_piece`.
     multiregargs_subpiece_drops_reached_piece: fn(&Funcdata, OpId, VarnodeId) -> bool;
-    /// `kuna_noreturnretuse::call_cannot_reach_return`.
+    /// `noreturnretuse::call_cannot_reach_return`.
     noreturnretuse_call_cannot_reach_return: fn(&Funcdata, OpId, OpId) -> bool;
-    /// `kuna_sharedpush::declared_arm_shares`.
+    /// `sharedpush::declared_arm_shares`.
     sharedpush_declared_arm_shares: fn(&Funcdata, OpId, OpId, VarnodeId, &ParamTrial) -> bool;
-    /// `kuna_spillargtrial::store_is_caller_save_spill`.
+    /// `spillargtrial::store_is_caller_save_spill`.
     spillargtrial_store_is_caller_save_spill: fn(&Funcdata, OpId, VarnodeId) -> bool;
-    /// `kuna_stackparamviews::backing_for_address`.
+    /// `stackparamviews::backing_for_address`.
     stackparamviews_backing_for_address: fn(&Funcdata, &Address, i32) -> Option<LinkEntryInfo>;
-    /// `kuna_stackviews::enabled`.
+    /// `stackviews::enabled`.
     stackviews_enabled: fn(&Funcdata) -> bool;
-    /// `kuna_syscallregs::is_error_flag`.
+    /// `syscallregs::is_error_flag`.
     syscallregs_is_error_flag: fn(&Funcdata, OpId) -> bool;
-    /// `kuna_syscallregs::reads_as_argument`.
+    /// `syscallregs::reads_as_argument`.
     syscallregs_reads_as_argument: fn(&Funcdata, OpId, VarnodeId) -> bool;
-    /// `kuna_voidret::returned_use`.
+    /// `voidret::returned_use`.
     voidret_returned_use: fn(&Funcdata, OpId, VarnodeId) -> bool;
-    /// `kuna_voidret::scoring_return`.
+    /// `voidret::scoring_return`.
     voidret_scoring_return: fn(&Funcdata, OpId) -> bool;
-    /// `kuna_zeroidiomuse::op_discards_operand`.
+    /// `zeroidiomuse::op_discards_operand`.
     zeroidiomuse_op_discards_operand: fn(&Funcdata, OpId) -> bool;
     /// `coreaction_infertypes::propagate_type_pub`.
     coreaction_infertypes_propagate_type_pub: fn(&mut Funcdata, Rc<Datatype>, OpId, VarnodeId, VarnodeId, int4, int4) -> Option<Rc<Datatype>>;
-    /// `kuna_clonephiorder::order_global_phis`.
+    /// `clonephiorder::order_global_phis`.
     clonephiorder_order_global_phis: fn(&Funcdata, &mut [OpId]);
-    /// `kuna_indirectanchor::anchor_of`.
+    /// `indirectanchor::anchor_of`.
     indirectanchor_anchor_of: fn(&Funcdata, OpId) -> Option<OpId>;
-    /// `kuna_indirectreturn::target_encoding`.
+    /// `indirectreturn::target_encoding`.
     indirectreturn_target_encoding: fn(&Funcdata, OpId) -> Option<(i32, u64)>;
-    /// `kuna_loweredswitchexact::raw_install_keeps_values`.
+    /// `loweredswitchexact::raw_install_keeps_values`.
     loweredswitchexact_raw_install_keeps_values: fn(&Funcdata, BlockId, &[BlockId]) -> bool;
-    /// `kuna_orchain::shortcircuit_shared_targets`.
+    /// `orchain::shortcircuit_shared_targets`.
     orchain_shortcircuit_shared_targets: fn(&Funcdata) -> BTreeSet<BlockId>;
-    /// `kuna_retsplitglobal::is_global_store`.
+    /// `retsplitglobal::is_global_store`.
     retsplitglobal_is_global_store: fn(bool, bool, bool, bool) -> bool;
-    /// `kuna_retsplitglobal::split_is_declined`.
+    /// `retsplitglobal::split_is_declined`.
     retsplitglobal_split_is_declined: fn(bool, usize) -> bool;
-    /// `kuna_retsplitlimit::split_is_declined` under the run's `retsplitlimit` option.
-    retsplitlimit_split_is_declined: fn(&crate::kuna_optionset::OptionSet, usize, usize) -> bool;
-    /// `kuna_rettriangle::is_triangle_join`.
+    /// `retsplitlimit::split_is_declined` under the run's `retsplitlimit` option.
+    retsplitlimit_split_is_declined: fn(&crate::optionset::OptionSet, usize, usize) -> bool;
+    /// `rettriangle::is_triangle_join`.
     rettriangle_is_triangle_join: fn(&Funcdata, BlockId) -> bool;
-    /// `kuna_armfloatargs::stated_singles`.
+    /// `armfloatargs::stated_singles`.
     armfloatargs_stated_singles: fn(&Funcdata, &FuncCallSpecs, &Address, i32) -> Vec<Address>;
-    /// `kuna_armfloatreturn::call_input_allowed`.
+    /// `armfloatreturn::call_input_allowed`.
     armfloatreturn_call_input_allowed: fn(&Funcdata, &FuncCallSpecs, &Address, i32) -> bool;
-    /// `kuna_calleememory::preserves`.
+    /// `calleememory::preserves`.
     calleememory_preserves: fn(&Funcdata, &FuncCallSpecs, &Address, i32) -> bool;
-    /// `kuna_calleepreserves::callee_preserves_range`.
+    /// `calleepreserves::callee_preserves_range`.
     calleepreserves_callee_preserves_range: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
-    /// `kuna_calleeprotostack::above_callee_frame`.
+    /// `calleeprotostack::above_callee_frame`.
     calleeprotostack_above_callee_frame: fn(uintb, int4, int4, int4) -> bool;
-    /// `kuna_calleeprotostack::declared_caller_frame_floor`.
+    /// `calleeprotostack::declared_caller_frame_floor`.
     calleeprotostack_declared_caller_frame_floor: fn(&FuncProto) -> Option<int4>;
-    /// `kuna_calleeprotostack::pointer_input_may_alias`.
+    /// `calleeprotostack::pointer_input_may_alias`.
     calleeprotostack_pointer_input_may_alias: fn(&Funcdata, &FuncCallSpecs, uintb, int4) -> bool;
-    /// `kuna_calleeprotostack::rebound_frame_base`.
+    /// `calleeprotostack::rebound_frame_base`.
     calleeprotostack_rebound_frame_base: fn(&Funcdata) -> bool;
-    /// `kuna_calleeretpreserves::callee_preserved_output_within`.
+    /// `calleeretpreserves::callee_preserved_output_within`.
     calleeretpreserves_callee_preserved_output_within: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> Option<VarnodeData>;
-    /// `kuna_calleeretpreserves::callee_preserves_return_storage`.
+    /// `calleeretpreserves::callee_preserves_return_storage`.
     calleeretpreserves_callee_preserves_return_storage: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
-    /// `kuna_calleeretpreserves::exact_cookie_preserved_output_within`.
+    /// `calleeretpreserves::exact_cookie_preserved_output_within`.
     calleeretpreserves_exact_cookie_preserved_output_within: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> Option<VarnodeData>;
-    /// `kuna_calleeretpreserves::exact_cookie_preserves_return_storage`.
+    /// `calleeretpreserves::exact_cookie_preserves_return_storage`.
     calleeretpreserves_exact_cookie_preserves_return_storage: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
-    /// `kuna_calleeretpreserves::exact_cookie_preserves_unjustified_return_slice`.
+    /// `calleeretpreserves::exact_cookie_preserves_unjustified_return_slice`.
     calleeretpreserves_exact_cookie_preserves_unjustified_return_slice: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
-    /// `kuna_inputtile::new_tiled_input`.
+    /// `inputtile::new_tiled_input`.
     inputtile_new_tiled_input: fn(&mut Funcdata, int4, &Address) -> KunaResult<VarnodeId>;
-    /// `kuna_localstackviews::preserves_range`.
+    /// `localstackviews::preserves_range`.
     localstackviews_preserves_range: fn(&Funcdata, &Address, i32) -> bool;
-    /// `kuna_msvcbyval::constructed_ranges`.
+    /// `msvcbyval::constructed_ranges`.
     msvcbyval_constructed_ranges: fn(&Funcdata, &[FuncCallSpecs], &Rc<AddrSpace>) -> Vec<(OpId, uintb, int4)>;
-    /// `kuna_msvcbyval::constructs`.
+    /// `msvcbyval::constructs`.
     msvcbyval_constructs: fn(&[(OpId, uintb, int4)], OpId, &AddrSpace, uintb, int4) -> bool;
-    /// `kuna_pairrefine::split_pair`.
+    /// `pairrefine::split_pair`.
     pairrefine_split_pair: fn(&Funcdata, &Address, int4, int4, &[VarnodeId], &[VarnodeId], &[VarnodeId]) -> bool;
-    /// `kuna_pairrefine::straddles_middle`.
+    /// `pairrefine::straddles_middle`.
     pairrefine_straddles_middle: fn(&Funcdata, VarnodeId, &Address, int4) -> bool;
-    /// `kuna_passthrough::suppresses_return_trial`.
+    /// `passthrough::suppresses_return_trial`.
     passthrough_suppresses_return_trial: fn(&Funcdata, &Address, int4) -> bool;
-    /// `kuna_registerslots::guard_output`.
+    /// `registerslots::guard_output`.
     registerslots_guard_output: fn(&mut Funcdata, &mut FuncCallSpecs, &Address, &Address, i32, &mut Vec<VarnodeId>) -> bool;
-    /// `kuna_registerslots::input_slot`.
+    /// `registerslots::input_slot`.
     registerslots_input_slot: fn(&FuncCallSpecs, &Address, &Address, i32) -> Option<(Address, i32)>;
-    /// `kuna_splitstorekeep::keep_store_mark`.
+    /// `splitstorekeep::keep_store_mark`.
     splitstorekeep_keep_store_mark: fn(&mut Funcdata, VarnodeId, &[VarnodeId]) -> bool;
-    /// `kuna_stackeffects::enabled_for`.
+    /// `stackeffects::enabled_for`.
     stackeffects_enabled_for: fn(&Funcdata, &Address, i32) -> bool;
-    /// `kuna_stackeffects::unresolved_store`.
+    /// `stackeffects::unresolved_store`.
     stackeffects_unresolved_store: fn(&Funcdata, OpId) -> bool;
-    /// `kuna_stackreadscope::mark_guarded_read`.
+    /// `stackreadscope::mark_guarded_read`.
     stackreadscope_mark_guarded_read: fn(&mut Funcdata, OpId, &Address, i32);
-    /// `kuna_varargretreg::argument_in_own_output`.
+    /// `varargretreg::argument_in_own_output`.
     varargretreg_argument_in_own_output: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
-    /// `kuna_varargretreg::counted_float_entry`.
+    /// `varargretreg::counted_float_entry`.
     varargretreg_counted_float_entry: fn(&Funcdata, &FuncCallSpecs, &Address, int4) -> Option<Address>;
-    /// `kuna_voidret::planted_overlaps`.
+    /// `voidret::planted_overlaps`.
     voidret_planted_overlaps: fn(&Funcdata, &Address, int4) -> bool;
-    /// `kuna_haltloopguard::exitless_loops`.
+    /// `haltloopguard::exitless_loops`.
     haltloopguard_exitless_loops: fn(&Funcdata) -> Vec<BlockId>;
-    /// `kuna_haltloopguard::guard`.
+    /// `haltloopguard::guard`.
     haltloopguard_guard: fn(&Funcdata, &[BlockId], uint4, &Address, &[VarnodeId], &mut BTreeMap<usize, Vec<Address>>);
-    /// `kuna_haltloopguard::mark`.
+    /// `haltloopguard::mark`.
     haltloopguard_mark: fn(&mut Funcdata, &[VarnodeId]);
-    /// `kuna_leafmemory::preserves`.
+    /// `leafmemory::preserves`.
     leafmemory_preserves: fn(&Funcdata, &FuncCallSpecs, &Address, i32) -> bool;
-    /// `kuna_memoryguard::guard_memory`.
+    /// `memoryguard::guard_memory`.
     memoryguard_guard_memory: fn(&mut Funcdata, &mut Option<Vec<OpId>>, uint4, &Address, int4, &mut Vec<VarnodeId>);
-    /// `kuna_multiregargs::input_partition`.
+    /// `multiregargs::input_partition`.
     multiregargs_input_partition: fn(&FuncProto, &AddrSpaceManager, &Address, int4) -> Option<Vec<VarnodeData>>;
-    /// `kuna_renamereads::finish`.
+    /// `renamereads::finish`.
     renamereads_finish: fn(&mut Funcdata, &mut Vec<(OpId, uint4)>);
-    /// `kuna_renamereads::mark`.
+    /// `renamereads::mark`.
     renamereads_mark: fn(&mut Funcdata, OpId, uint4, &mut Vec<(OpId, uint4)>);
-    /// `kuna_renamereads::new_indirect`.
+    /// `renamereads::new_indirect`.
     renamereads_new_indirect: fn(&mut Funcdata, OpId, &Address, int4, uint4, &mut Vec<(OpId, uint4)>, &mut FxHashMap<OpId, VarnodeId>) -> OpId;
-    /// `kuna_renamereads::pending`.
+    /// `renamereads::pending`.
     renamereads_pending: fn(&Funcdata, OpId) -> bool;
-    /// `kuna_renamereads::storage`.
+    /// `renamereads::storage`.
     renamereads_storage: fn(&Funcdata, OpId) -> Option<(Address, int4)>;
-    /// `kuna_spillstoreguard::bounds`.
+    /// `spillstoreguard::bounds`.
     spillstoreguard_bounds: fn(&Funcdata, &[OpId]) -> HashMap<OpId, (u64, int4)>;
-    /// `kuna_spillstoreguard::build`.
+    /// `spillstoreguard::build`.
     spillstoreguard_build: fn(&mut Funcdata, &Address, int4, &[OpId], &[OpId], &HashMap<OpId, (u64, int4)>, &mut Vec<(OpId, OpId)>, &mut Vec<VarnodeId>);
-    /// `kuna_spillstoreguard::prune`.
+    /// `spillstoreguard::prune`.
     spillstoreguard_prune: fn(&mut Funcdata, &[(OpId, OpId)]);
-    /// `kuna_spillstoreguard::within_budget`.
+    /// `spillstoreguard::within_budget`.
     spillstoreguard_within_budget: fn(&Funcdata, &[OpId], &HashMap<OpId, (u64, int4)>) -> bool;
-    /// `kuna_wrapsplit::wrap_cut`.
+    /// `wrapsplit::wrap_cut`.
     wrapsplit_wrap_cut: fn(u64, int4, u64) -> Option<int4>;
-    /// `kuna_wrapsplit::wrap_floor`.
+    /// `wrapsplit::wrap_floor`.
     wrapsplit_wrap_floor: fn(u64) -> u64;
-    /// `kuna_wrapsplit::wrap_refinement`.
+    /// `wrapsplit::wrap_refinement`.
     wrapsplit_wrap_refinement: fn(int4, int4) -> Vec<int4>;
     /// `flow::next_fspec_handle`.
     flow_next_fspec_handle: fn() -> unlace_base::types::uintb;
-    /// `kuna_callmechanisms::requires_reflow`.
+    /// `callmechanisms::requires_reflow`.
     callmechanisms_requires_reflow: fn(&crate::fspec::FuncProto, &crate::fspec::FuncProto) -> bool;
-    /// `kuna_callmechanisms::failed`: installing a call mechanism failed, so the pipeline stops.
+    /// `callmechanisms::failed`: installing a call mechanism failed, so the pipeline stops.
     callmechanisms_failed: fn(&Funcdata) -> bool;
     /// `kuna_callmechanisms`: a context's `(call_mechanism_effects, call_mechanism_reload_only)`
     /// from the options and the image's ELFv1 TOC fact.
-    callmechanisms_effects: fn(&crate::kuna_optionset::OptionSet, bool) -> (bool, bool);
+    callmechanisms_effects: fn(&crate::optionset::OptionSet, bool) -> (bool, bool);
     /// `kuna_callmechanisms`: compile the call mechanisms out of the loaded inject library.
     callmechanisms_load: fn(&mut Architecture);
-    /// `kuna_callmechanisms::compiled_ids` for a prototype model's name.
+    /// `callmechanisms::compiled_ids` for a prototype model's name.
     callmechanisms_compiled_ids: fn(&Architecture, &str) -> (i32, i32);
-    /// `kuna_callmechanisms::register`: register the compiler spec's prototype p-code.
+    /// `callmechanisms::register`: register the compiler spec's prototype p-code.
     callmechanisms_register: fn(Option<&str>, &AddrSpaceManager, &mut Architecture) -> KunaResult<()>;
     /// `kuna_callwide`: drop the whole-image caller proof (the image or its facts changed).
-    callwide_clear: fn(&mut crate::kuna_archstate::ArchTables);
+    callwide_clear: fn(&mut crate::archstate::ArchTables);
     /// `kuna_callwide`: revoke the whole-image caller proof through a shared borrow.
-    callwide_revoke: fn(&crate::kuna_archstate::ArchTables);
-    /// `kuna_globalcallranges::preserves`: does a completely decoded leaf callee leave the range alone?
+    callwide_revoke: fn(&crate::archstate::ArchTables);
+    /// `globalcallranges::preserves`: does a completely decoded leaf callee leave the range alone?
     globalcallranges_preserves:
         fn(&mut crate::heritage::GlobalCallRanges, &Funcdata, &FuncCallSpecs, &Address, int4) -> bool;
     /// `kuna_inputhints`: did a pass give any method's `this` input hints?
-    inputhints_has_this_hints: fn(&crate::kuna_archstate::ArchTables) -> bool;
+    inputhints_has_this_hints: fn(&crate::archstate::ArchTables) -> bool;
     /// `kuna_hooks`: register an embedder rule on the architecture's registry.
     hooks_add_rule: fn(
-        &mut crate::kuna_archstate::ArchTables,
+        &mut crate::archstate::ArchTables,
         &str,
         crate::action::RuleState,
         Box<dyn crate::action::Rule>,
     ) -> KunaResult<()>;
     /// `kuna_hooks`: register an embedder phase callback on the architecture's registry.
     hooks_on_phase: fn(
-        &mut crate::kuna_archstate::ArchTables,
-        crate::kuna_phases::KunaPhase,
+        &mut crate::archstate::ArchTables,
+        crate::phases::KunaPhase,
         Box<dyn FnMut(&mut Funcdata)>,
     ) -> KunaResult<()>;
     /// `printc`: a new output-language printer (C++ `PrintCLanguageCapability::buildLanguage`).
-    printer_new: fn() -> Box<dyn crate::kuna_printhandle::PrintHandle>;
+    printer_new: fn() -> Box<dyn crate::printhandle::PrintHandle>;
     /// `printc`: a default printer, standing in while the owned one is lent out.
-    printer_default: fn() -> Box<dyn crate::kuna_printhandle::PrintHandle>;
+    printer_default: fn() -> Box<dyn crate::printhandle::PrintHandle>;
     /// `kuna_lang`: does the output language continue a bottom-tested loop (not Rust's
     /// `loop { ...; if !c { break; } }`)?
-    lang_do_while_continue: fn(crate::kuna_outlang::OutLang) -> bool;
+    lang_do_while_continue: fn(crate::outlang::OutLang) -> bool;
     /// `kuna_lang`: does the output language promote narrow integer operands as C does?
-    lang_int_promotion: fn(crate::kuna_outlang::OutLang) -> bool;
+    lang_int_promotion: fn(crate::outlang::OutLang) -> bool;
     /// `kuna_lang`: does the output language have C's `for` header?
-    lang_c_for: fn(crate::kuna_outlang::OutLang) -> bool;
+    lang_c_for: fn(crate::outlang::OutLang) -> bool;
     /// `kuna_lang`: the language's real name for a residual unknown
     /// (`TypeSpeller::unknown_base`).
     lang_unknown_base: fn(
-        crate::kuna_outlang::OutLang,
+        crate::outlang::OutLang,
         int4,
         bool,
         bool,
     ) -> Option<std::borrow::Cow<'static, str>>;
     /// `kuna_calleepurge`: forget the x86-32 callee walks (the host's facts changed).
-    calleepurge_forget_walks: fn(&mut crate::kuna_archstate::ArchTables);
+    calleepurge_forget_walks: fn(&mut crate::archstate::ArchTables);
     /// `kuna_jumpassist`: compile the jump assists out of the loaded inject library.
     jumpassist_load: fn(&mut Architecture);
     /// `kuna_segmentize`: compile the registered segment operations into the states.
@@ -387,294 +387,294 @@ declare_hooks! {
         &Architecture,
         Rc<AddrSpaceManager>,
         &[Option<Rc<dyn unlace_num::opbehavior::OpBehavior>>],
-        &mut crate::kuna_archstate::ArchStates,
+        &mut crate::archstate::ArchStates,
     ) -> KunaResult<()>;
-    /// `kuna_callmechanisms::install_at_entry`: straight-line p-code at the start of a block.
+    /// `callmechanisms::install_at_entry`: straight-line p-code at the start of a block.
     callmechanisms_install_at_entry:
-        fn(&mut Funcdata, BlockId, &[crate::kuna_emittedop::Operation]) -> KunaResult<()>;
-    /// `kuna_dynamiclocals::bind`.
+        fn(&mut Funcdata, BlockId, &[crate::emittedop::Operation]) -> KunaResult<()>;
+    /// `dynamiclocals::bind`.
     dynamiclocals_bind: fn(&mut Funcdata, VarnodeId, &SymbolEntry) -> KunaResult<bool>;
-    /// `kuna_highslice_guard::matches`.
+    /// `highslice_guard::matches`.
     highslice_guard_matches: fn(&Funcdata, OpId, OpId) -> bool;
-    /// `kuna_joincalloutput::needs_reflow`.
+    /// `joincalloutput::needs_reflow`.
     joincalloutput_needs_reflow: fn(&Funcdata, &FuncCallSpecs, &FuncProto) -> bool;
-    /// `kuna_octeoneffects::input_type`.
+    /// `octeoneffects::input_type`.
     octeoneffects_input_type: fn(&Funcdata, OpId, int4) -> Option<Rc<Datatype>>;
-    /// `kuna_octeoneffects::output_type`.
+    /// `octeoneffects::output_type`.
     octeoneffects_output_type: fn(&Funcdata, OpId) -> Option<Rc<Datatype>>;
-    /// `kuna_atomics::input_type`.
+    /// `atomics::input_type`.
     atomics_input_type: fn(&Funcdata, OpId, int4) -> Option<Rc<Datatype>>;
-    /// `kuna_atomics::output_type`.
+    /// `atomics::output_type`.
     atomics_output_type: fn(&Funcdata, OpId) -> Option<Rc<Datatype>>;
-    /// `kuna_segmentize::table_leaves_image`.
+    /// `segmentize::table_leaves_image`.
     segmentize_table_leaves_image: fn(&Funcdata, OpId, &[Address]) -> bool;
-    /// `kuna_switchextent::table_read`.
+    /// `switchextent::table_read`.
     switchextent_table_read: fn(&Funcdata, OpId) -> Option<(u64, u64, VarnodeId)>;
-    /// `kuna_switchtrim::trimmed_rows`.
+    /// `switchtrim::trimmed_rows`.
     switchtrim_trimmed_rows: fn(&Funcdata, &[Address], &[LoadTable], Option<&Vec<int4>>) -> usize;
-    /// `kuna_varargtransfer::pending_trials`.
+    /// `varargtransfer::pending_trials`.
     varargtransfer_pending_trials: fn(&Funcdata, &FuncCallSpecs) -> Vec<(ParamTrial, VarnodeId)>;
-    /// `kuna_fputruncviews::keeps_apart`.
+    /// `fputruncviews::keeps_apart`.
     fputruncviews_keeps_apart: fn(&dyn MergeContext, OpId) -> bool;
-    /// `kuna_fputruncviews::keeps_highs_apart`.
+    /// `fputruncviews::keeps_highs_apart`.
     fputruncviews_keeps_highs_apart: fn(&dyn MergeContext, HighVariableId, HighVariableId) -> bool;
-    /// `kuna_fputruncviews::keeps_root_alone`.
+    /// `fputruncviews::keeps_root_alone`.
     fputruncviews_keeps_root_alone: fn(&dyn MergeContext, HighVariableId, HighVariableId) -> bool;
-    /// `kuna_globalorder::keeps_apart`.
+    /// `globalorder::keeps_apart`.
     globalorder_keeps_apart: fn(&mut dyn MergeContext, VarnodeId, VarnodeId) -> bool;
-    /// `kuna_globalvalue::keeps_apart`.
+    /// `globalvalue::keeps_apart`.
     globalvalue_keeps_apart: fn(&mut dyn MergeContext, HighVariableId, HighVariableId) -> bool;
-    /// `kuna_loadorder::keeps_apart`.
+    /// `loadorder::keeps_apart`.
     loadorder_keeps_apart: fn(&mut dyn MergeContext, VarnodeId, VarnodeId) -> bool;
-    /// `kuna_pointeevalue::keeps_apart`.
+    /// `pointeevalue::keeps_apart`.
     pointeevalue_keeps_apart: fn(&mut dyn MergeContext, VarnodeId, VarnodeId) -> bool;
-    /// `kuna_tiedphitrim::intersects`.
+    /// `tiedphitrim::intersects`.
     tiedphitrim_intersects: fn(&[(VarnodeId, Address)], &mut dyn MergeContext, &mut HighIntersectTest, HighVariableId, HighVariableId) -> bool;
-    /// `kuna_tiedphitrim::tied_slots`.
+    /// `tiedphitrim::tied_slots`.
     tiedphitrim_tied_slots: fn(&mut dyn MergeContext, OpId) -> Option<(Vec<int4>, Address)>;
-    /// `kuna_armfloatargs::applies`.
+    /// `armfloatargs::applies`.
     armfloatargs_applies: fn(&Architecture) -> bool;
-    /// `kuna_armfloatreturn::applies`.
+    /// `armfloatreturn::applies`.
     armfloatreturn_applies: fn(&Architecture) -> bool;
-    /// `kuna_armfloatreturn::base_pcs_helper`.
+    /// `armfloatreturn::base_pcs_helper`.
     armfloatreturn_base_pcs_helper: fn(&str) -> bool;
-    /// `kuna_armfloatreturn::model`.
+    /// `armfloatreturn::model`.
     armfloatreturn_model: fn(&Rc<ProtoModel>, &AddrSpaceManager, bool) -> Rc<ProtoModel>;
-    /// `kuna_avxintrin::element_kind`.
+    /// `avxintrin::element_kind`.
     avxintrin_element_kind: fn(&str) -> u8;
-    /// `kuna_avxintrin::intrinsic`.
+    /// `avxintrin::intrinsic`.
     avxintrin_intrinsic: fn(&str, i32) -> Option<(String, Vec<usize>)>;
-    /// `kuna_chkstkdarwin::applies_to`.
+    /// `chkstkdarwin::applies_to`.
     chkstkdarwin_applies_to: fn(&str) -> bool;
-    /// `kuna_fastfailnoreturn::archid_is_windows`.
+    /// `fastfailnoreturn::archid_is_windows`.
     fastfailnoreturn_archid_is_windows: fn(&str) -> bool;
-    /// `kuna_litpoolconst::contains`.
+    /// `litpoolconst::contains`.
     litpoolconst_contains: fn(&[(u64, u64)], u64, u32) -> bool;
-    /// `kuna_protomerge::merge`.
+    /// `protomerge::merge`.
     protomerge_merge: fn(&PrototypePieces, PrototypePieces) -> PrototypePieces;
-    /// `kuna_qualifiedcall::prototype`.
+    /// `qualifiedcall::prototype`.
     qualifiedcall_prototype: fn(&ArchContext, &Address) -> Option<FuncProto>;
-    /// `kuna_spsolve::applies`.
+    /// `spsolve::applies`.
     spsolve_applies: fn(&Architecture) -> bool;
-    /// `kuna_stackparamalign::decode`.
+    /// `stackparamalign::decode`.
     stackparamalign_decode: fn(&Element, &AddrSpace, i32, i32) -> KunaResult<u32>;
-    /// `kuna_typedcallabi::caller_extends_from`.
+    /// `typedcallabi::caller_extends_from`.
     typedcallabi_caller_extends_from: fn(&Architecture) -> i32;
-    /// `kuna_typedcallabi::image_evidence`.
+    /// `typedcallabi::image_evidence`.
     typedcallabi_image_evidence: fn(&Architecture) -> Option<bool>;
-    /// `kuna_typedcallabi::soft_model`.
+    /// `typedcallabi::soft_model`.
     typedcallabi_soft_model: fn(&Architecture, Option<bool>) -> Option<Rc<ProtoModel>>;
-    /// `kuna_typedcallabi::without_fpu`.
+    /// `typedcallabi::without_fpu`.
     typedcallabi_without_fpu: fn(&Architecture) -> bool;
-    /// `kuna_vectorabi::model`.
+    /// `vectorabi::model`.
     vectorabi_model: fn(&Rc<ProtoModel>, &AddrSpaceManager) -> Rc<ProtoModel>;
-    /// `kuna_vfpvariadic::applies`.
+    /// `vfpvariadic::applies`.
     vfpvariadic_applies: fn(&Architecture) -> bool;
-    /// `kuna_floatregister::storage_size`.
+    /// `floatregister::storage_size`.
     floatregister_storage_size: fn(&ParamEntry, &Datatype, &AddrSpaceManager) -> i32;
-    /// `kuna_inputparamgap::trial_is_protected`.
+    /// `inputparamgap::trial_is_protected`.
     inputparamgap_trial_is_protected: fn(&ParamActive, &ParamTrial, &[ParamEntry]) -> bool;
-    /// `kuna_inputrefinement::span_straddles_join`.
+    /// `inputrefinement::span_straddles_join`.
     inputrefinement_span_straddles_join: fn((usize, usize), usize, usize, usize) -> bool;
-    /// `kuna_inputstorage::assign`.
+    /// `inputstorage::assign`.
     inputstorage_assign: fn(&ParamListStandard, &PrototypePieces, &dyn TypeFactory, &mut Vec<ParameterPieces>, &AddrSpaceManager, &mut [i32]) -> KunaResult<()>;
-    /// `kuna_narrowext::mark`.
+    /// `narrowext::mark`.
     narrowext_mark: fn(&mut Funcdata, OpId);
-    /// `kuna_nulterminator::close_at_terminator`.
+    /// `nulterminator::close_at_terminator`.
     nulterminator_close_at_terminator: fn(&RangeHint, &RangeHint, Option<&RangeHint>, &MapState) -> Option<RangeHint>;
-    /// `kuna_revisitrefine::spanned`.
+    /// `revisitrefine::spanned`.
     revisitrefine_spanned: fn(&[(usize, usize)], usize) -> bool;
-    /// `kuna_stackaddrargtrial::trial_is_protected`.
+    /// `stackaddrargtrial::trial_is_protected`.
     stackaddrargtrial_trial_is_protected: fn(&ParamActive, &ParamTrial, &[ParamEntry]) -> bool;
-    /// `kuna_stackarggap::address_is_spacebase`.
+    /// `stackarggap::address_is_spacebase`.
     stackarggap_address_is_spacebase: fn(&Address) -> bool;
-    /// `kuna_stackparamalign::effective_alignment`.
+    /// `stackparamalign::effective_alignment`.
     stackparamalign_effective_alignment: fn(u32, i32, i32) -> i32;
-    /// `kuna_swifterror::is_error_op`.
+    /// `swifterror::is_error_op`.
     swifterror_is_error_op: fn(&PcodeOpBank, &VarnodeBank, OpId) -> bool;
-    /// `kuna_syscallregs::is_error_flag_op`.
+    /// `syscallregs::is_error_flag_op`.
     syscallregs_is_error_flag_op: fn(&PcodeOpBank, &VarnodeBank, OpId) -> bool;
-    /// `kuna_varargstackargs::stack_section_split`.
+    /// `varargstackargs::stack_section_split`.
     varargstackargs_stack_section_split: fn(&ParamActive, int4, int4) -> Option<int4>;
-    /// `kuna_calloverlap::auto_register`.
+    /// `calloverlap::auto_register`.
     calloverlap_auto_register: fn(&AddrSpaceManager, &FuncProto, &Address, int4, bool) -> bool;
-    /// `kuna_partialglobalload::apply`.
+    /// `partialglobalload::apply`.
     partialglobalload_apply: fn(&mut Funcdata, Vec<Guard>);
-    /// `kuna_persistcalls::applies`.
+    /// `persistcalls::applies`.
     persistcalls_applies: fn(&Funcdata, u32, &Address) -> bool;
-    /// `kuna_persistcalls::crosses_skipped`.
+    /// `persistcalls::crosses_skipped`.
     persistcalls_crosses_skipped: fn(&Funcdata, VarnodeId, &[(int4, u64, int4)], bool) -> bool;
-    /// `kuna_persistcalls::keep`.
+    /// `persistcalls::keep`.
     persistcalls_keep: fn(&Funcdata, &mut MemoryOps, i32, &[OpId], &[VarnodeId], &[OpId], &[OpId]) -> (FxHashSet<OpId>, FxHashSet<OpId>);
-    /// `kuna_persistcalls::restart_full`.
+    /// `persistcalls::restart_full`.
     persistcalls_restart_full: fn(&mut Funcdata);
-    /// `kuna_persistcalls::skip_guard`.
+    /// `persistcalls::skip_guard`.
     persistcalls_skip_guard: fn(&mut Funcdata);
-    /// `kuna_persistcalls::skip_join`.
+    /// `persistcalls::skip_join`.
     persistcalls_skip_join: fn(&mut Funcdata, u32);
-    /// `kuna_persistcalls::stale_calls`.
+    /// `persistcalls::stale_calls`.
     persistcalls_stale_calls: fn(&Funcdata, &[OpId], &FxHashSet<OpId>, &[OpId], &[BlockId]) -> Vec<OpId>;
-    /// `kuna_persistcalls::stale_inputs`.
+    /// `persistcalls::stale_inputs`.
     persistcalls_stale_inputs: fn(&Funcdata, &[OpId], &FxHashSet<OpId>, &[OpId], &[BlockId]) -> FxHashSet<OpId>;
-    /// `kuna_prunedssa::applies`.
+    /// `prunedssa::applies`.
     prunedssa_applies: fn(u32, &Address, int4, int4) -> bool;
-    /// `kuna_prunedssa::applies_to_calls`.
+    /// `prunedssa::applies_to_calls`.
     prunedssa_applies_to_calls: fn(&Funcdata, &Address) -> bool;
-    /// `kuna_prunedssa::live_calls`.
+    /// `prunedssa::live_calls`.
     prunedssa_live_calls: fn(&Funcdata, &[FuncCallSpecs], &Address, int4, &[VarnodeId], &[OpId], &[OpId]) -> LiveCalls;
-    /// `kuna_prunedssa::prune_merges`.
+    /// `prunedssa::prune_merges`.
     prunedssa_prune_merges: fn(&Funcdata, &Address, int4, &mut Vec<BlockId>) -> bool;
-    /// `kuna_stackstoreguard::enabled`.
+    /// `stackstoreguard::enabled`.
     stackstoreguard_enabled: fn(&Funcdata, &Address, &[VarnodeId]) -> bool;
-    /// `kuna_stackstoreguard::frame_unresolved`.
+    /// `stackstoreguard::frame_unresolved`.
     stackstoreguard_frame_unresolved: fn(&Funcdata, &Rc<AddrSpace>, &[LoadGuard]) -> bool;
-    /// `kuna_stackstoreguard::indexed_enabled`.
+    /// `stackstoreguard::indexed_enabled`.
     stackstoreguard_indexed_enabled: fn(&Funcdata, &Address, &[VarnodeId]) -> bool;
-    /// `kuna_stackstoreguard::indexed_stores`.
+    /// `stackstoreguard::indexed_stores`.
     stackstoreguard_indexed_stores: fn(&Funcdata, &[LoadGuard], &mut StoreBounds, &Address, int4, &[OpId]) -> Vec<OpId>;
-    /// `kuna_stackstoreguard::prune_indexed`.
+    /// `stackstoreguard::prune_indexed`.
     stackstoreguard_prune_indexed: fn(&mut Funcdata, &[LoadGuard], &mut StoreBounds, &[(OpId, OpId)]);
-    /// `kuna_calleereginputs::virtual_this`.
+    /// `calleereginputs::virtual_this`.
     calleereginputs_virtual_this: fn(&Architecture) -> Option<(Rc<ProtoModel>, Address, int4, Address)>;
-    /// `kuna_fpuemu::apply`.
+    /// `fpuemu::apply`.
     fpuemu_apply: fn(&Architecture) -> bool;
-    /// `kuna_goreg::g_symbol_flags`.
+    /// `goreg::g_symbol_flags`.
     goreg_g_symbol_flags: fn() -> uint4;
-    /// `kuna_goreg::goroutine_register`.
+    /// `goreg::goroutine_register`.
     goreg_goroutine_register: fn(&str, Option<(u16, u16)>) -> Option<&'static str>;
-    /// `kuna_goreg::register_abi`.
+    /// `goreg::register_abi`.
     goreg_register_abi: fn(&str, Option<(u16, u16)>) -> bool;
-    /// `kuna_lanefuse::builtins`.
+    /// `lanefuse::builtins`.
     lanefuse_builtins: fn() -> Vec<(uint4, String)>;
-    /// `kuna_mzdgroup::apply`.
+    /// `mzdgroup::apply`.
     mzdgroup_apply: fn(&Architecture);
-    /// `kuna_swiftcall::derive_model`.
+    /// `swiftcall::derive_model`.
     swiftcall_derive_model: fn(&Element, &str, &str, Option<&str>, Option<&str>) -> Element;
-    /// `kuna_dfunaffected::assert_direction_flag_unaffected`.
+    /// `dfunaffected::assert_direction_flag_unaffected`.
     dfunaffected_assert_direction_flag_unaffected: fn(&mut ProtoModel, &dyn Fn(&[u8]) -> Option<VarnodeData>);
-    /// `kuna_inputrefinement::coalesce`.
+    /// `inputrefinement::coalesce`.
     inputrefinement_coalesce: fn(&mut [int4], &mut dyn FnMut(usize, usize, usize) -> bool);
-    /// `kuna_msvcftol::decode_payload`.
+    /// `msvcftol::decode_payload`.
     msvcftol_decode_payload: fn(&mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
-    /// `kuna_msvcftol::language_is_x86_32`.
+    /// `msvcftol::language_is_x86_32`.
     msvcftol_language_is_x86_32: fn(&dyn Fn(&[u8]) -> bool, i32) -> bool;
-    /// `kuna_objcarc::decode_payload`.
+    /// `objcarc::decode_payload`.
     objcarc_decode_payload: fn(&str, &mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
-    /// `kuna_objcarc::payload_xml`.
+    /// `objcarc::payload_xml`.
     objcarc_payload_xml: fn(&dyn Fn(&[u8]) -> bool, i32) -> Option<String>;
-    /// `kuna_stackarggap::ends_argument_list`.
+    /// `stackarggap::ends_argument_list`.
     stackarggap_ends_argument_list: fn(&ParamActive, int4, int4, &dyn Fn(int4) -> bool) -> bool;
-    /// `kuna_swiftcall::swift_registers`.
+    /// `swiftcall::swift_registers`.
     swiftcall_swift_registers: fn(&dyn Fn(&str) -> Option<int4>) -> Option<(&'static str, &'static str, &'static str)>;
-    /// `kuna_switchrunon::own_rows`.
+    /// `switchrunon::own_rows`.
     switchrunon_own_rows: fn(u64, &[u64], &dyn Fn(u64) -> Option<u64>) -> Option<usize>;
-    /// `kuna_x87intrinsic::decode_prototype`.
+    /// `x87intrinsic::decode_prototype`.
     x87intrinsic_decode_prototype: fn(&mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
-    /// `kuna_retpushedhalf::observe_instruction`.
+    /// `retpushedhalf::observe_instruction`.
     retpushedhalf_observe_instruction: fn(&mut Funcdata, &[OpId]);
-    /// `kuna_armfloatreturn::declared_helper_model`.
+    /// `armfloatreturn::declared_helper_model`.
     armfloatreturn_declared_helper_model: fn(&ArchContext, &str) -> Option<Rc<ProtoModel>>;
-    /// `kuna_calleeprotostack::resolve_declared_extra_pop`.
+    /// `calleeprotostack::resolve_declared_extra_pop`.
     calleeprotostack_resolve_declared_extra_pop: fn(&mut FuncProto);
-    /// `kuna_localstackviews::record_native`.
+    /// `localstackviews::record_native`.
     localstackviews_record_native: fn(&mut Funcdata, OpId);
-    /// `kuna_passthrough::claim_after_go_stack_guard`.
+    /// `passthrough::claim_after_go_stack_guard`.
     passthrough_claim_after_go_stack_guard: fn(&mut Funcdata);
-    /// `kuna_bitcast::reinterprets_to_float`.
+    /// `bitcast::reinterprets_to_float`.
     bitcast_reinterprets_to_float: fn(&Funcdata, VarnodeId) -> bool;
     /// `printc::decl_type_representative`.
     printc_decl_type_representative: fn(&Funcdata, &Architecture, HighVariableId) -> Option<VarnodeId>;
     /// `printc::type_to_c_string`.
     printc_type_to_c_string: fn(&Architecture, &Rc<Datatype>) -> String;
-    /// `kuna_arithhelpers::decode_payloads`.
+    /// `arithhelpers::decode_payloads`.
     arithhelpers_decode_payloads: fn(HelperAbi, &mut dyn FnMut(&std::rc::Rc<Element>) -> KunaResult<()>) -> KunaResult<()>;
-    /// `kuna_arithhelpers::helper_abi`.
+    /// `arithhelpers::helper_abi`.
     arithhelpers_helper_abi: fn(&dyn Fn(&[u8]) -> bool, i32, bool) -> Option<HelperAbi>;
-    /// `kuna_lanefuse::mask_builtins`.
+    /// `lanefuse::mask_builtins`.
     lanefuse_mask_builtins: fn(&mut dyn Iterator<Item = (uint4, &[u8])>) -> Vec<(uint4, String)>;
-    /// `kuna_switchguardrange::intersect`.
+    /// `switchguardrange::intersect`.
     switchguardrange_intersect: fn(&Funcdata, &[GuardRecord], VarnodeId, &mut CircleRange);
     /// `modelrules::register_ids`.
     modelrules_register_ids: fn(&mut IdRegistry);
-    /// `kuna_customreturn::input_assignment`.
+    /// `customreturn::input_assignment`.
     customreturn_input_assignment: for<'a> fn(
         &'a PrototypePieces,
         &dyn TypeFactory,
     ) -> KunaResult<std::borrow::Cow<'a, PrototypePieces>>;
-    /// `kuna_arrayextent::settle`.
+    /// `arrayextent::settle`.
     arrayextent_settle: fn(&mut MapState, &Rc<AddrSpace>, &dyn TypeFactory);
-    /// `kuna_goreg::g_pointer_type`.
+    /// `goreg::g_pointer_type`.
     goreg_g_pointer_type: fn(&dyn TypeFactory, GoLayout) -> KunaResult<std::rc::Rc<Datatype>>;
-    /// `kuna_narrowext::or_model`.
+    /// `narrowext::or_model`.
     narrowext_or_model: fn(Option<Widen>, &ParamListStandard, &Address, i32, Option<&Datatype>, &mut VarnodeData) -> (OpCode, bool);
-    /// `kuna_passthrough::anchors_neutral_run`.
+    /// `passthrough::anchors_neutral_run`.
     passthrough_anchors_neutral_run: fn(&ParamActive, &ParamTrial, bool) -> bool;
-    /// `kuna_passthrough::ends_rescued_run`.
+    /// `passthrough::ends_rescued_run`.
     passthrough_ends_rescued_run: fn(&ParamActive, &ParamTrial, bool) -> bool;
-    /// `kuna_passthrough::neutral_in_chain`.
+    /// `passthrough::neutral_in_chain`.
     passthrough_neutral_in_chain: fn(&ParamActive, int4, bool) -> bool;
-    /// `kuna_registerslots::assumed`.
+    /// `registerslots::assumed`.
     registerslots_assumed: fn(&[ParamEntry], &Address, i32, &mut VarnodeData) -> Option<OpCode>;
-    /// `kuna_registerslots::decode`.
+    /// `registerslots::decode`.
     registerslots_decode: fn(&Element, Option<VarnodeData>, i32, i32, u32) -> KunaResult<Option<Extension>>;
-    /// `kuna_varargretreg::image_vararg_floats`.
+    /// `varargretreg::image_vararg_floats`.
     varargretreg_image_vararg_floats: fn(&Architecture) -> VarargFloats;
-    /// `kuna_varargsave::regs`.
+    /// `varargsave::regs`.
     varargsave_regs: fn(&Architecture) -> Option<Regs>;
-    /// `kuna_x87emptyreturn::storage`.
+    /// `x87emptyreturn::storage`.
     x87emptyreturn_storage: fn(&Architecture) -> Option<Storage>;
-    /// `kuna_arraysize::fit`.
+    /// `arraysize::fit`.
     arraysize_fit: fn(&RangeHint, intb, intb, &MapState) -> Option<int4>;
-    /// `kuna_condexeretuse::any_retest_merge`.
+    /// `condexeretuse::any_retest_merge`.
     condexeretuse_any_retest_merge: fn(&Funcdata, &[(OpId, VarnodeId)]) -> bool;
-    /// `kuna_condexeretuse::applies`.
+    /// `condexeretuse::applies`.
     condexeretuse_applies: fn(&Funcdata, OpId) -> bool;
-    /// `kuna_condexeretuse::cannot_arrive`.
+    /// `condexeretuse::cannot_arrive`.
     condexeretuse_cannot_arrive: fn(&Funcdata, Forced, OpId, &mut Reach) -> bool;
-    /// `kuna_condexeretuse::carried`.
+    /// `condexeretuse::carried`.
     condexeretuse_carried: fn(&Funcdata, OpId, VarnodeId, Option<Forced>) -> Option<Forced>;
-    /// `kuna_loweredswitchvalue::head_compare_operand`.
+    /// `loweredswitchvalue::head_compare_operand`.
     loweredswitchvalue_head_compare_operand: fn(&Funcdata, BlockId, OpId, &Address, int4) -> Option<HeadOperand>;
-    /// `kuna_bejoin::wide_pair`.
+    /// `bejoin::wide_pair`.
     bejoin_wide_pair: fn(&ProtoModel, &AddrSpaceManager) -> Option<WidePair>;
     /// The universal action tree for the architecture: its stack space and embedder hooks
     /// (`universalaction::build_universal_action_hooked`).
     universal_action: fn(&Architecture) -> Box<dyn Action>;
-    /// `kuna_constselectjump::kuna_destination_is_local`.
+    /// `constselectjump::kuna_destination_is_local`.
     constselectjump_destination_is_local: fn(uintb, uintb) -> bool;
-    /// `kuna_constselectjump::JumpModelConstSelect::from_flow_targets`.
+    /// `constselectjump::JumpModelConstSelect::from_flow_targets`.
     constselectjump_from_flow_targets: fn(Vec<uintb>, Option<uintb>) -> Box<dyn JumpModel>;
-    /// `kuna_constselectjump::recover`.
+    /// `constselectjump::recover`.
     constselectjump_recover: fn(&JumpTable, &mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
-    /// `kuna_rawswitch::recover`.
+    /// `rawswitch::recover`.
     rawswitch_recover: fn(&JumpTable, &mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
-    /// `kuna_jumpassist::recover`.
+    /// `jumpassist::recover`.
     jumpassist_recover: fn(&mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
-    /// `kuna_indexaliasguard::stores_into`.
+    /// `indexaliasguard::stores_into`.
     indexaliasguard_stores_into: fn(&Funcdata, &Rc<AddrSpace>, &dyn Fn(&Funcdata, VarnodeId) -> Option<Rc<AddrSpace>>) -> Vec<OpId>;
-    /// `kuna_narrowext::rules`.
+    /// `narrowext::rules`.
     narrowext_rules: fn(&Architecture) -> crate::context::NarrowExtRules;
-    /// `kuna_syscallregs::userop_ids`.
+    /// `syscallregs::userop_ids`.
     syscallregs_userop_ids: fn(&crate::userop::UserOpManage, Option<crate::context::SyscallFamily>) -> Vec<uint4>;
-    /// `kuna_indexaliasguard::loads_from`.
+    /// `indexaliasguard::loads_from`.
     indexaliasguard_loads_from: fn(&Funcdata, &Rc<AddrSpace>, &dyn Fn(&Funcdata, VarnodeId) -> Option<Rc<AddrSpace>>) -> Vec<(OpId, Option<(u64, u64)>)>;
-    /// `kuna_stackvalueorder::moves_write`.
+    /// `stackvalueorder::moves_write`.
     stackvalueorder_moves_write: fn(&Funcdata, crate::context::HighVariableId, crate::context::HighVariableId) -> bool;
-    /// `kuna_stackparamviews::separates_parameter`.
+    /// `stackparamviews::separates_parameter`.
     stackparamviews_separates_parameter: fn(&Funcdata, crate::context::HighVariableId, crate::context::HighVariableId) -> bool;
-    /// `kuna_isolated::holds`.
+    /// `isolated::holds`.
     isolated_holds: fn(&Funcdata, crate::context::HighVariableId) -> bool;
-    /// `kuna_stablenames::same_variable`.
+    /// `stablenames::same_variable`.
     stablenames_same_variable: fn(&Funcdata, crate::context::HighVariableId, crate::context::HighVariableId) -> Option<bool>;
-    /// `kuna_stablenames::variable_groups`.
+    /// `stablenames::variable_groups`.
     stablenames_variable_groups: fn(&Funcdata, &[crate::context::HighVariableId]) -> Vec<Vec<crate::context::HighVariableId>>;
-    /// `kuna_pointeevalue::load_crosses_write`.
+    /// `pointeevalue::load_crosses_write`.
     pointeevalue_load_crosses_write: fn(&Funcdata, VarnodeId) -> bool;
-    /// `kuna_loadorder::crosses_global_write`.
+    /// `loadorder::crosses_global_write`.
     loadorder_crosses_global_write: fn(&mut Funcdata, VarnodeId, Option<crate::context::HighVariableId>) -> bool;
-    /// `kuna_globalorder::copy_moves_write`.
+    /// `globalorder::copy_moves_write`.
     globalorder_copy_moves_write: fn(&Funcdata, crate::context::HighVariableId, crate::context::HighVariableId) -> bool;
-    /// `kuna_guardedreadtrim::guarded_block`.
+    /// `guardedreadtrim::guarded_block`.
     guardedreadtrim_guarded_block: fn(&Funcdata, VarnodeId, &[OpId]) -> Option<BlockId>;
     /// `kuna_option_dispatch`: validate and apply a named kuna option.
     set_kuna_option: fn(&mut Architecture, &str, &str) -> KunaResult<String>;

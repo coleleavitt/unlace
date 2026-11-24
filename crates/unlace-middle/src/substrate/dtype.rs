@@ -1566,11 +1566,11 @@ impl Datatype {
             || self.typedef_imm.is_some()
             || op.typedef_imm.is_some()
         {
-            let left_qualifiers = crate::kuna_typequal::effective_qualifiers(self);
-            let right_qualifiers = crate::kuna_typequal::effective_qualifiers(op);
+            let left_qualifiers = crate::typequal::effective_qualifiers(self);
+            let right_qualifiers = crate::typequal::effective_qualifiers(op);
             if left_qualifiers != 0 || right_qualifiers != 0 {
-                let left = crate::kuna_typequal::unqualified_shape(self);
-                let right = crate::kuna_typequal::unqualified_shape(op);
+                let left = crate::typequal::unqualified_shape(self);
+                let right = crate::typequal::unqualified_shape(op);
                 let order = left.compare(right, level)?;
                 return Ok(if order != 0 {
                     order
@@ -4186,7 +4186,7 @@ pub trait TypeFactory {
     fn get_type_pointer(&self, s: int4, pt: Rc<Datatype>, ws: uint4) -> KunaResult<Rc<Datatype>>;
 
     fn get_qualified_type(&self, base: Rc<Datatype>, qualifiers: u8) -> KunaResult<Rc<Datatype>> {
-        Ok(crate::kuna_typequal::qualified_type(base, qualifiers))
+        Ok(crate::typequal::qualified_type(base, qualifiers))
     }
 
     fn has_volatile_types(&self) -> bool {
@@ -4468,7 +4468,7 @@ pub trait TypeFactory {
     }
 
     /// (kuna `dwarfvariants`) Record the recovered geometry of a DWARF
-    /// `DW_TAG_variant_part` under [`crate::kuna_dwarfvariants::VariantLayout::type_name`].
+    /// `DW_TAG_variant_part` under [`crate::dwarfvariants::VariantLayout::type_name`].
     ///
     /// A SIDE TABLE, in the `kuna_wire_symbols` sense: nothing in the analysis
     /// reads it, no `Datatype` points at it, and it is not encoded onto the
@@ -4476,18 +4476,15 @@ pub trait TypeFactory {
     /// to render `match` / `if let` / `Ok(v)` from the compiler's own answer
     /// instead of re-deriving the discriminant from codegen shape. Defaulted to a
     /// no-op: only the concrete container keeps the table.
-    fn kuna_record_variant_layout(&self, _layout: crate::kuna_dwarfvariants::VariantLayout) {}
+    fn kuna_record_variant_layout(&self, _layout: crate::dwarfvariants::VariantLayout) {}
 
     /// (kuna `dwarfvariants`) The layout recorded for the interned type `name`.
-    fn kuna_variant_layout(
-        &self,
-        _name: &str,
-    ) -> Option<Rc<crate::kuna_dwarfvariants::VariantLayout>> {
+    fn kuna_variant_layout(&self, _name: &str) -> Option<Rc<crate::dwarfvariants::VariantLayout>> {
         None
     }
 
     /// (kuna `dwarfvariants`) Every recorded layout, in interned-name order.
-    fn kuna_variant_layouts(&self) -> Vec<Rc<crate::kuna_dwarfvariants::VariantLayout>> {
+    fn kuna_variant_layouts(&self) -> Vec<Rc<crate::dwarfvariants::VariantLayout>> {
         Vec::new()
     }
 
@@ -4498,7 +4495,7 @@ pub trait TypeFactory {
     fn kuna_register_lang_facet(
         &self,
         _name: &str,
-        _facet: crate::kuna_langfacet::LangFacet,
+        _facet: crate::langfacet::LangFacet,
     ) -> KunaResult<()> {
         Err(KunaError::lowlevel(
             "kuna_register_lang_facet unsupported".to_string(),
@@ -4510,14 +4507,14 @@ pub trait TypeFactory {
     /// one descriptor with DIFFERENT layouts (function-local types reuse the
     /// `pkg.Name` spelling). A name-keyed factory keeps only one such record, so
     /// a per-site type lock resolved through this name may assert the wrong
-    /// layout; [`crate::kuna_gonewtype`] refuses a marked name.
+    /// layout; [`crate::gonewtype`] refuses a marked name.
     fn kuna_mark_ambiguous_go_type(&self, _name: &str) {}
     /// (kuna `gonewtype`) Is this Go reflection name layout-ambiguous? See
     /// [`TypeFactory::kuna_mark_ambiguous_go_type`].
     fn kuna_is_ambiguous_go_type(&self, _name: &str) -> bool {
         false
     }
-    fn kuna_lang_facet(&self, _name: &str) -> Option<crate::kuna_langfacet::LangFacet> {
+    fn kuna_lang_facet(&self, _name: &str) -> Option<crate::langfacet::LangFacet> {
         None
     }
 
@@ -4616,7 +4613,7 @@ pub const ATTRIB_VARLENGTH: unlace_base::marshal::AttributeId =
 /// Register the wire type-vocabulary ids (for XML-form documents; the packed
 /// wire form matches by number and needs no registry).
 pub fn register_type_wire_ids(reg: &mut unlace_base::marshal::IdRegistry) {
-    reg.register_element(&crate::kuna_typequal::ELEM_QUALIFIED);
+    reg.register_element(&crate::typequal::ELEM_QUALIFIED);
     reg.register_element(&ELEM_CORETYPES);
     reg.register_element(&ELEM_DEF);
     reg.register_element(&ELEM_TYPEREF);
@@ -4752,13 +4749,13 @@ impl Datatype {
             ELEM_VAL, ELEM_VOID,
         };
         if let Some(base) = &self.qualified_base {
-            encoder.open_element(&crate::kuna_typequal::ELEM_QUALIFIED);
+            encoder.open_element(&crate::typequal::ELEM_QUALIFIED);
             encoder.write_unsigned_integer(
                 &unlace_base::marshal::ATTRIB_VALUE,
                 self.qualifiers as u64,
             );
             base.encode_ref(encoder)?;
-            encoder.close_element(&crate::kuna_typequal::ELEM_QUALIFIED);
+            encoder.close_element(&crate::typequal::ELEM_QUALIFIED);
             return Ok(());
         }
         let elem_type = &ELEM_TYPE;
@@ -5191,11 +5188,11 @@ pub struct TypeFactoryImpl {
     /// (kuna `dwarfvariants`) Recovered `DW_TAG_variant_part` geometry, keyed by
     /// the interned type name.  Read by nothing in the analysis -- see
     /// [`TypeFactory::kuna_record_variant_layout`].
-    variant_layouts: RefCell<BTreeMap<String, Rc<crate::kuna_dwarfvariants::VariantLayout>>>,
+    variant_layouts: RefCell<BTreeMap<String, Rc<crate::dwarfvariants::VariantLayout>>>,
     /// (kuna multilang W3) Language facets, keyed by the type name.  Like
     /// `variant_layouts`, the records key by name so they survive
-    /// `clear_noncore`.  See [`crate::kuna_langfacet::LangFacet`].
-    lang_facets: RefCell<BTreeMap<String, crate::kuna_langfacet::LangFacet>>,
+    /// `clear_noncore`.  See [`crate::langfacet::LangFacet`].
+    lang_facets: RefCell<BTreeMap<String, crate::langfacet::LangFacet>>,
     /// (kuna `cfstrings`) Named pointers preferred for their pointee, keyed by
     /// the pointee's id. See [`TypeFactory::kuna_prefer_named_pointer`].
     named_pointers: RefCell<BTreeMap<uint8, Rc<Datatype>>>,
@@ -6167,7 +6164,7 @@ impl TypeFactoryImpl {
             decoder.close_element(elem_id)?;
             return Ok(ct);
         }
-        if elem_id == crate::kuna_typequal::ELEM_QUALIFIED.get_id() {
+        if elem_id == crate::typequal::ELEM_QUALIFIED.get_id() {
             let qualifiers =
                 decoder.read_unsigned_integer_id(&unlace_base::marshal::ATTRIB_VALUE)?;
             if qualifiers == 0 || qualifiers & !7 != 0 {
@@ -7690,10 +7687,10 @@ impl TypeFactory for TypeFactoryImpl {
         if qualifiers == 0 {
             return Ok(base);
         }
-        if qualifiers & crate::kuna_typequal::VOLATILE != 0 {
+        if qualifiers & crate::typequal::VOLATILE != 0 {
             self.has_volatile_types.set(true);
         }
-        self.find_add((*crate::kuna_typequal::qualified_type(base, qualifiers)).clone())
+        self.find_add((*crate::typequal::qualified_type(base, qualifiers)).clone())
     }
 
     fn has_volatile_types(&self) -> bool {
@@ -7879,18 +7876,15 @@ impl TypeFactory for TypeFactoryImpl {
     fn destroy_type(&self, ct: &Rc<Datatype>) -> KunaResult<()> {
         self.destroy_type_impl(ct)
     }
-    fn kuna_record_variant_layout(&self, layout: crate::kuna_dwarfvariants::VariantLayout) {
+    fn kuna_record_variant_layout(&self, layout: crate::dwarfvariants::VariantLayout) {
         self.variant_layouts
             .borrow_mut()
             .insert(layout.type_name.clone(), Rc::new(layout));
     }
-    fn kuna_variant_layout(
-        &self,
-        name: &str,
-    ) -> Option<Rc<crate::kuna_dwarfvariants::VariantLayout>> {
+    fn kuna_variant_layout(&self, name: &str) -> Option<Rc<crate::dwarfvariants::VariantLayout>> {
         self.variant_layouts.borrow().get(name).map(Rc::clone)
     }
-    fn kuna_variant_layouts(&self) -> Vec<Rc<crate::kuna_dwarfvariants::VariantLayout>> {
+    fn kuna_variant_layouts(&self) -> Vec<Rc<crate::dwarfvariants::VariantLayout>> {
         self.variant_layouts
             .borrow()
             .values()
@@ -7900,7 +7894,7 @@ impl TypeFactory for TypeFactoryImpl {
     fn kuna_register_lang_facet(
         &self,
         name: &str,
-        facet: crate::kuna_langfacet::LangFacet,
+        facet: crate::langfacet::LangFacet,
     ) -> KunaResult<()> {
         self.lang_facets
             .borrow_mut()
@@ -7916,7 +7910,7 @@ impl TypeFactory for TypeFactoryImpl {
         self.go_ambiguous_types.borrow().contains(name)
     }
     #[inline]
-    fn kuna_lang_facet(&self, name: &str) -> Option<crate::kuna_langfacet::LangFacet> {
+    fn kuna_lang_facet(&self, name: &str) -> Option<crate::langfacet::LangFacet> {
         self.lang_facets.borrow().get(name).cloned()
     }
     fn kuna_prefer_named_pointer(&self, ptr: &Rc<Datatype>) {

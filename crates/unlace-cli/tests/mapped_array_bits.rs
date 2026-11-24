@@ -30,12 +30,12 @@ __declspec(dllexport) float wrap_float(float value) {
 fn check_target(target: &str) {
     use std::collections::HashMap;
     use unlace_base::address::Address;
+    use unlace_console::console::register_kuna_commands;
     use unlace_console::ifacedecomp::{
         DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
         register_decomp_commands,
     };
     use unlace_console::ifaceterm::IfaceTerm;
-    use unlace_console::kuna_console::register_kuna_commands;
     use unlace_decomp::context::VarnodeId;
     use unlace_decomp::cover::Cover;
     use unlace_decomp::variable::{CompareNameView, HighContext, VarnodeView, VarnodeViewLoc};
@@ -185,7 +185,7 @@ fn check_target(target: &str) {
     arch.kuna_options
         .set(unlace_decomp::printc::Realtypes(true));
     arch.kuna_options
-        .set(unlace_decomp::kuna_coreoptions::CTypes(true));
+        .set(unlace_decomp::coreoptions::CTypes(true));
     let body = arch.with_print(|printer, arch| {
         printer.options.partial_access = true;
         printer.doc_function_full(fd, arch)

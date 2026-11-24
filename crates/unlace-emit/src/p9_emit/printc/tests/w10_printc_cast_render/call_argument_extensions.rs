@@ -1,6 +1,6 @@
 //! Typed call boundaries preserve zero extensions removed by subvariable flow.
 use super::*;
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::protoorder::FuncdataProtoorderExt;
 
 fn argument(
     source: Rc<Datatype>,
@@ -27,7 +27,7 @@ fn argument(
     call.set_final_input_storage(vec![(storage.clone(), 8)]);
     call.note_trimmed_input(1, width, 2, zext);
     fd.push_call_specs(call);
-    let recovered = crate::kuna_protoorder::RecoveredTypes {
+    let recovered = crate::protoorder::RecoveredTypes {
         inputs: vec![(storage, target.get_size(), target)],
         arity_sound: false,
         output: None,

@@ -100,7 +100,7 @@ that were previously merged across it. That is a real cost and is recorded rathe
 
 ### The fix, and the alternative that was considered and not recommended
 
-**Recommended.** A new `p2_lift/kuna_fastfailnoreturn.rs`, consulted from the one CALLIND seam
+**Recommended.** A new `p2_lift/fastfailnoreturn.rs`, consulted from the one CALLIND seam
 in `flow.rs` (`setup_callind_specs`, just before `build_call_specs(op, Address::default(), true)`
 at `flow.rs:2167`). If the call's target varnode is defined by a `CALLOTHER` of the `swi` userop
 with the constant `0x29`, and the image is a Windows PE, the call is marked no-return, so the

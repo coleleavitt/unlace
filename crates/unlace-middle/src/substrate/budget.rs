@@ -111,11 +111,11 @@ impl Drop for JumpTableScope {
 
 /// (unlace decompile-all watchdog) The one test every cooperative probe makes:
 /// the clock passed `deadline`, or the drive went over its memory limit
-/// ([`crate::kuna_fnmemory::over`]).
+/// ([`crate::fnmemory::over`]).
 #[doc(hidden)]
 pub fn budget_spent(deadline: std::time::Instant) -> bool {
     let now = std::time::Instant::now();
-    now >= deadline || crate::kuna_fnmemory::over(now)
+    now >= deadline || crate::fnmemory::over(now)
 }
 
 /// Publishes a drive's deadline to [`deadline_passed`], with no budget site

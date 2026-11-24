@@ -45,8 +45,8 @@ use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, VarnodeId};
+use crate::fatstr::{FatStrMode, bytes_are_text};
 use crate::funcdata::Funcdata;
-use crate::kuna_fatstr::{FatStrMode, bytes_are_text};
 
 /// Parse an `option swiftstr` value (the `fatstr` three-valued shape).
 pub fn parse_mode(value: &str) -> Result<(FatStrMode, String), String> {
@@ -896,18 +896,18 @@ pub fn specs() -> Vec<RuleSpec> {
 
 /// The `swiftstr` setting: the fat-string mode for Swift two-word literals.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SwiftStr(pub crate::kuna_fatstr::FatStrMode);
+pub struct SwiftStr(pub crate::fatstr::FatStrMode);
 
-impl crate::kuna_optionset::KunaOption for SwiftStr {
+impl crate::optionset::KunaOption for SwiftStr {
     const NAME: &'static str = "swiftstr";
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        SwiftStr(crate::kuna_fatstr::FatStrMode::Auto)
+        SwiftStr(crate::fatstr::FatStrMode::Auto)
     }
 
     fn shipped() -> Self {
-        SwiftStr(crate::kuna_fatstr::FatStrMode::Auto)
+        SwiftStr(crate::fatstr::FatStrMode::Auto)
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {

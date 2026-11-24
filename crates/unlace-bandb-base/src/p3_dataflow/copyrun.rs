@@ -101,7 +101,7 @@ impl Action for ActionCopyRun {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_copyrun::CopyRun>()
+            .get::<crate::copyrun::CopyRun>()
             .0
         {
             return 0;
@@ -464,7 +464,7 @@ fn rewrite(data: &mut Funcdata, run: &Run) -> KunaResult<()> {
 
 crate::kuna_flag!(
     /// (kuna) Collapse an unrolled element-copy run into `memcpy` (option
-    /// `copyrun`).  See [`crate::kuna_copyrun`].
+    /// `copyrun`).  See [`crate::copyrun`].
     CopyRun,
     "copyrun",
     "unrolled element-copy runs as memcpy",

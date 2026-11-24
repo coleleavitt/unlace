@@ -127,7 +127,7 @@ pass looks the way it does.
 
 ## Mechanism as shipped
 
-`p6_variables/kuna_paramcopyhoist.rs` — `ActionParamCopyHoist` (ELEM 4120), the
+`p6_variables/paramcopyhoist.rs` — `ActionParamCopyHoist` (ELEM 4120), the
 last action in `universal_sched`. A candidate must be a printing `COPY` whose
 input occupies a **formal parameter's** storage (`Varnode::isInput` alone also
 admits globals and read-before-written stack slots), at least one of whose reads

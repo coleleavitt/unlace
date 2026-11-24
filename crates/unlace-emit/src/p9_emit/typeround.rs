@@ -179,7 +179,7 @@
 //! the programmer's.  Because `+ - *` are neutral here, a re-declared local may be
 //! the operand of arithmetic the binary wraps, and the emitted C computes what the
 //! binary computes only under `-fwrapv` at the edge of the range.  `castsign`
-//! does not extend that to the highs it admits ([`crate::kuna_castsign`]).
+//! does not extend that to the highs it admits ([`crate::castsign`]).
 //! `docs/features/signedness/analysis.md` carries the measured agreement rate
 //! against DWARF.
 
@@ -219,7 +219,7 @@ pub enum SignPolicy {
     PreferUnsigned,
 }
 
-impl crate::kuna_optionset::KunaOption for SignPolicy {
+impl crate::optionset::KunaOption for SignPolicy {
     const NAME: &'static str = "signedness";
     crate::kuna_option_id!();
 
@@ -594,7 +594,7 @@ fn def_evidence(opc: OpCode) -> Evidence {
     }
 }
 
-/// What the walk saw that only [`crate::kuna_castsign`] reads.
+/// What the walk saw that only [`crate::castsign`] reads.
 #[derive(Debug, Default)]
 struct CastsignWalk {
     /// A reader castsign takes as neutral decided the verdict.
@@ -609,7 +609,7 @@ struct CastsignWalk {
 }
 
 /// Accumulate the op set reachable from `high`'s explicit members and fold it into
-/// one verdict.  With `castsign`, the readers [`crate::kuna_castsign`] adds are
+/// one verdict.  With `castsign`, the readers [`crate::castsign`] adds are
 /// consulted too, and the walk also reports what that option checks before a flip
 /// (a verdict it widened may only ever declare the value signed).
 fn evidence_for(fd: &Funcdata, high: HighVariableId, castsign: bool) -> (Evidence, CastsignWalk) {
@@ -692,7 +692,7 @@ fn evidence_walk(
                     .unwrap_or(Evidence::Veto);
                 if cast_ev == Evidence::Veto
                     && castsign
-                    && crate::kuna_castsign::neutral_reader(fd, op, vn)
+                    && crate::castsign::neutral_reader(fd, op, vn)
                 {
                     cs.widened = true;
                     continue;
@@ -715,7 +715,7 @@ fn evidence_walk(
                 if o.get_in(slot) != Some(vn) {
                     continue;
                 }
-                if castsign && crate::kuna_castsign::can_overflow(opc, slot) {
+                if castsign && crate::castsign::can_overflow(opc, slot) {
                     cs.wraps = true;
                 }
                 if castsign
@@ -730,11 +730,11 @@ fn evidence_walk(
                     && (0..o.num_input())
                         .filter(|&s| s != slot)
                         .filter_map(|s| o.get_in(s))
-                        .any(|other| other != vn && crate::kuna_castsign::wide_literal(fd, other))
+                        .any(|other| other != vn && crate::castsign::wide_literal(fd, other))
                 {
                     cs.wide = true;
                 }
-                let class = if crate::kuna_truncarg::zext_trimmed_arg(fd, op, slot) {
+                let class = if crate::truncarg::zext_trimmed_arg(fd, op, slot) {
                     ReaderClass::Demands(Evidence::Unsigned)
                 } else {
                     classify_reader(opc, slot)
@@ -748,7 +748,7 @@ fn evidence_walk(
                     ReaderClass::Carries => carries = true,
                     ReaderClass::Opaque => {}
                     ReaderClass::Veto => {
-                        if castsign && crate::kuna_castsign::neutral_reader(fd, op, vn) {
+                        if castsign && crate::castsign::neutral_reader(fd, op, vn) {
                             cs.widened = true;
                         } else {
                             verdict = Evidence::Veto;
@@ -794,7 +794,7 @@ pub fn plan(
         return out;
     }
     let names = if castsign {
-        crate::kuna_castsign::name_counts(fd)
+        crate::castsign::name_counts(fd)
     } else {
         HashMap::new()
     };
@@ -858,7 +858,7 @@ pub fn plan(
             continue;
         }
         if frame_local
-            && !crate::kuna_castsign::whole_slot_local(
+            && !crate::castsign::whole_slot_local(
                 fd,
                 high,
                 cur.get_size(),
@@ -868,7 +868,7 @@ pub fn plan(
         {
             continue;
         }
-        if castsign && crate::kuna_castsign::symbol_type_locked(fd, high) {
+        if castsign && crate::castsign::symbol_type_locked(fd, high) {
             continue;
         }
         let (ev, cs) = evidence_for(fd, high, castsign);
@@ -899,7 +899,7 @@ pub fn plan(
         if !is_plain_integer(&newty) {
             continue;
         }
-        if castsign_only && !crate::kuna_castsign::drops_printed_cast(fd, &cs.casts, &newty) {
+        if castsign_only && !crate::castsign::drops_printed_cast(fd, &cs.casts, &newty) {
             continue;
         }
         out.decls.insert(high, newty);
@@ -908,5 +908,5 @@ pub fn plan(
 }
 
 #[cfg(test)]
-#[path = "kuna_typeround/tests.rs"]
+#[path = "typeround/tests.rs"]
 mod tests;

@@ -8,8 +8,8 @@ use std::path::PathBuf;
 use unlace_base::error::KunaResult;
 use unlace_console::engine::{Bootstrap, ConsoleProgram, language_database};
 use unlace_console::project::{DecompileOptions, decompile_entry};
-use unlace_decomp::kuna_loadoptions::LoadOptions;
-use unlace_decomp::kuna_memoryspecs::SpecRoot;
+use unlace_decomp::loadoptions::LoadOptions;
+use unlace_decomp::memoryspecs::SpecRoot;
 use unlace_decomp::sleigh_arch::LanguageDatabase;
 
 fn repo_root() -> PathBuf {

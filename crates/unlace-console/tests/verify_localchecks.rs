@@ -67,20 +67,13 @@ fn a_directive_the_output_does_not_show_is_reported() {
     )
     .expect("parses");
 
-    let renamed =
-        unlace_console::kuna_hightarget::apply_local(&mut fd, "v5", "hash", None, 8, None)
+    let renamed = unlace_console::hightarget::apply_local(&mut fd, "v5", "hash", None, 8, None)
+        .expect("applies")
+        .expect("binds a Symbol");
+    let retyped =
+        unlace_console::hightarget::apply_local(&mut fd, "v7", "", Some(float8.clone()), 8, None)
             .expect("applies")
             .expect("binds a Symbol");
-    let retyped = unlace_console::kuna_hightarget::apply_local(
-        &mut fd,
-        "v7",
-        "",
-        Some(float8.clone()),
-        8,
-        None,
-    )
-    .expect("applies")
-    .expect("binds a Symbol");
     let expected =
         assertions::expected_locals(&fd, &[(0, renamed, None), (1, retyped, Some(float8))]);
     let code = unlace_decomp::decompile_drive::print_c(prog.arch_mut(), &fd);
@@ -97,10 +90,9 @@ fn a_directive_the_output_does_not_show_is_reported() {
         "{unapplied:?}"
     );
 
-    let untouched =
-        unlace_console::kuna_hightarget::apply_local(&mut fd, "v2", "v2", None, 8, None)
-            .expect("applies")
-            .expect("binds a Symbol");
+    let untouched = unlace_console::hightarget::apply_local(&mut fd, "v2", "v2", None, 8, None)
+        .expect("applies")
+        .expect("binds a Symbol");
     let expected = assertions::expected_locals(&fd, &[(2, untouched, None)]);
     assert!(refusals(&prog, &fd, &code, &expected).is_empty());
 }

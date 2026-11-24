@@ -1,6 +1,6 @@
 //! (kuna `dynrelocs`, Mach-O arm) Apply a linked Mach-O image's chained-fixup
 //! rebases (and a zero for each bind) into the loaded image, and report the
-//! slots `SG_READ_ONLY` freezes as constant — the twin of the ELF walk in [`super::kuna_dynrelocs`].
+//! slots `SG_READ_ONLY` freezes as constant — the twin of the ELF walk in [`super::dynrelocs`].
 //!
 //! A chained-fixup Mach-O (`LC_DYLD_CHAINED_FIXUPS`, every arm64 image since
 //! macOS 12 / iOS 15) stores no pointer in a fixed-up slot: the word is a packed
@@ -15,7 +15,7 @@
 //! exactly the `PT_GNU_RELRO` statement the ELF arm keys on. A rebase slot in a
 //! writable segment (`__DATA`) is written but not declared constant; the ObjC
 //! reference slots there get their own, metadata-backed constancy from the
-//! `objc` pass (`analyzers/objc/kuna_objcrefs.rs`).
+//! `objc` pass (`analyzers/objc/objcrefs.rs`).
 //!
 //! Bind slots (imports) have no static value: each is written as zero (never
 //! declared constant), the word every other format's loader leaves in an import
@@ -23,8 +23,8 @@
 //! `LC_DYLD_INFO` image already holds its unslid pointers in the file, so the
 //! resolver yields nothing and the image is untouched.
 
+use super::dynrelocs::{DynRelocWrite, DynRelocs};
 use super::format::macho::resolve_chained_fixups;
-use super::kuna_dynrelocs::{DynRelocWrite, DynRelocs};
 
 /// The rebase writes and the `SG_READ_ONLY`-frozen constant slots of a
 /// chained-fixup Mach-O. Empty for any other input.

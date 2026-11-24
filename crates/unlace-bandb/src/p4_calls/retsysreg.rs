@@ -56,7 +56,7 @@ const MAX_DEPTH: u32 = 8;
 /// set for a system register.
 ///
 /// Runs once `ActionReturnRecovery` has scored every trial for the last time,
-/// before [`crate::kuna_retcallhalf::accept`] and the output map.
+/// before [`crate::retcallhalf::accept`] and the output map.
 pub fn drop_set_aside(data: &Funcdata, active: &mut ParamActive, return_ops: &[OpId]) {
     let rets: Vec<OpId> = return_ops
         .iter()
@@ -96,7 +96,7 @@ pub fn drop_set_aside(data: &Funcdata, active: &mut ParamActive, return_ops: &[O
             })
             .collect();
         let handed_over = |vn: VarnodeId| {
-            crate::kuna_retcallhalf::roots(data, vn).is_none_or(|roots| {
+            crate::retcallhalf::roots(data, vn).is_none_or(|roots| {
                 roots
                     .into_iter()
                     .any(|r| sinks(data, r).is_none_or(|s| !s.is_empty()))
@@ -115,7 +115,7 @@ pub fn drop_set_aside(data: &Funcdata, active: &mut ParamActive, return_ops: &[O
 /// system register: is every value it merges handed to the machine
 /// ([`sinks`]) and not computed from a call's result in that register?
 fn set_aside(data: &Funcdata, vn: VarnodeId, addr: &Address, size: i32) -> bool {
-    let Some(roots) = crate::kuna_retcallhalf::roots(data, vn) else {
+    let Some(roots) = crate::retcallhalf::roots(data, vn) else {
         return false;
     };
     roots.into_iter().all(|root| {
@@ -127,7 +127,7 @@ fn set_aside(data: &Funcdata, vn: VarnodeId, addr: &Address, size: i32) -> bool 
 /// Is every write that takes a value `vn` merges to the machine free of the
 /// other registers a RETURN reads (`others`)?
 fn alone(data: &Funcdata, vn: VarnodeId, others: &[VarnodeId]) -> bool {
-    let Some(roots) = crate::kuna_retcallhalf::roots(data, vn) else {
+    let Some(roots) = crate::retcallhalf::roots(data, vn) else {
         return false;
     };
     roots.into_iter().all(|root| {
@@ -164,7 +164,7 @@ fn sinks(data: &Funcdata, root: VarnodeId) -> Option<Vec<OpId>> {
             let o = data.vbank().get(out)?;
             let space = o.get_addr().get_space().map(|sp| sp.get_type());
             if matches!(op.code(), OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_INDIRECT)
-                || crate::kuna_passthrough::is_injected_noop(data, reader)
+                || crate::passthrough::is_injected_noop(data, reader)
                 || space == Some(spacetype::IPTR_INTERNAL)
             {
                 work.push(out);
@@ -180,9 +180,9 @@ fn sinks(data: &Funcdata, root: VarnodeId) -> Option<Vec<OpId>> {
     Some(found)
 }
 
-pub use crate::kuna_specnames::RETSYSREG_STATE_USEROPS as STATE_USEROP_NAMES;
+pub use crate::specnames::RETSYSREG_STATE_USEROPS as STATE_USEROP_NAMES;
 
-pub use crate::kuna_specnames::RETSYSREG_COP_USEROPS as COP_USEROP_NAMES;
+pub use crate::specnames::RETSYSREG_COP_USEROPS as COP_USEROP_NAMES;
 
 /// Is `op` a CALLOTHER that sets processor state: a [`STATE_USEROP_NAMES`] op,
 /// a [`COP_USEROP_NAMES`] write to coprocessor 0 or 1, or the volatile write
@@ -324,7 +324,7 @@ fn from_call_result(data: &Funcdata, vn: VarnodeId, addr: &Address, size: i32) -
             OpCode::CPUI_INDIRECT if op.is_indirect_creation() => {
                 let overlaps = v.get_addr().overlap(0, addr, size) >= 0
                     || addr.overlap(0, v.get_addr(), v.get_size()) >= 0;
-                if overlaps && crate::kuna_retcallhalf::created_by_call(data, op) {
+                if overlaps && crate::retcallhalf::created_by_call(data, op) {
                     return true;
                 }
             }

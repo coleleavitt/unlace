@@ -152,7 +152,7 @@ No option added: a JSON metadata field cannot change emitted C, so there is no
 `phases.toml` row, no `options.rs` registration and no catalog counter to bump.
 
 One unrelated one-liner rides along because `scripts.repipe.mergecheck` rejects
-without it: `kuna_phases/tests.rs`'s `settable_count_is_117` is renamed to
+without it: `phases/tests.rs`'s `settable_count_is_117` is renamed to
 `settable_count_is_127`. The stale name is already on `origin/main` (the
 assertion inside it has long said 127) and the counter tool matches on the
 function name, so every branch is blocked until someone renames it. No assertion

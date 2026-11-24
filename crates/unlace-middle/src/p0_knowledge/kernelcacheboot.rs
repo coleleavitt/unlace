@@ -45,8 +45,8 @@ impl KernelcacheBoot {
     /// The choice of the load in progress (`LoadOptions::kernelcache_boot`,
     /// else [`KERNELCACHE_BOOT_ENV`]).
     pub fn in_force() -> Self {
-        crate::kuna_loadoptions::scoped(|o| o.kernelcache_boot.clone())
-            .unwrap_or_else(crate::kuna_loadoptions::env::kernelcache_boot)
+        crate::loadoptions::scoped(|o| o.kernelcache_boot.clone())
+            .unwrap_or_else(crate::loadoptions::env::kernelcache_boot)
     }
 
     /// The choice [`KERNELCACHE_BOOT_ENV`] states; unset is `auto`. Reads only

@@ -50,7 +50,7 @@ its pointer, and it prints. Ghidra prints the same statements; IDA prints none.
 
 ## The change
 
-`RuleCallPush` (`p4_calls/kuna_callpush.rs`, option `callpush`) deletes that STORE when the
+`RuleCallPush` (`p4_calls/callpush.rs`, option `callpush`) deletes that STORE when the
 stored value is a constant one word wide within 15 bytes after the instruction, a CALL/CALLIND
 follows at the same instruction address whose destination is not the stored address, the pointer
 is the stack pointer register as that instruction wrote it, and `check_spacebase` cannot place it

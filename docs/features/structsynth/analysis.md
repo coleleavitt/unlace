@@ -30,7 +30,7 @@ the same p-code into `w->length` / `w->text` with no engine change: `down_chain`
 `get_type_pointer_rel`, `RuleStructOffset0`/`RulePushPtr`/`RulePtrArith` and the
 printer all do the right thing unprompted. What is absent is anything that
 *produces* the type: `set_fields_struct_raw` has exactly one production caller in
-the tree (`kuna_pebnames.rs`, for the Windows `TEB`), and the `aggregate-union`
+the tree (`pebnames.rs`, for the Windows `TEB`), and the `aggregate-union`
 subphase row in `phases.toml` has advertised "when to synthesize struct/array"
 with nothing behind the struct half.
 

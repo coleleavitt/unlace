@@ -34,7 +34,7 @@
 //!    executable sections and name the **thunk entry** with the slot's import
 //!    name (the decode is identical to the ELF x86-64 PLT `decode_x86_64`).
 //!    A match one byte into a REX-prefixed `48 FF 25` tail jump is not a thunk
-//!    and is dropped ([`super::kuna_rexthunk`]).
+//!    and is dropped ([`super::rexthunk`]).
 //! 3. **Named thunk / wrapper** — a non-stripped MinGW PE additionally carries a
 //!    COFF symbol *on* the thunk (`puts`), which the format-neutral
 //!    `file.symbols()` funcsym source already registers; this module is purely
@@ -46,7 +46,7 @@
 //! the IAT (the slot addresses) **in lockstep**: the `i`-th INT entry's name
 //! belongs to the IAT slot at `image_base + first_thunk_rva + i*ptr`.  Emit one
 //! [`ImportSym`] per slot.  An import-by-ordinal (no name) takes its name from
-//! the built-in export table of a covered system DLL ([`super::kuna_peordinal`]),
+//! the built-in export table of a covered system DLL ([`super::peordinal`]),
 //! else synthesizes `<DLL>_Ordinal_<n>` (named beats
 //! unresolved).
 //!
@@ -95,7 +95,7 @@ pub(crate) fn resolve_pe_imports(file: &object::File, bytes: &[u8]) -> Vec<Impor
 /// `peimportcall` pass paints `Varnode::externref` over exactly these ranges so a
 /// `call dword ptr [slot]` resolves through `ActionDeindirect` to the import
 /// FunctionSymbol registered at the slot VA.  See
-/// [`crate::loader::kuna_peimportcall`].
+/// [`crate::loader::peimportcall`].
 pub(crate) fn resolve_pe_import_slots(bytes: &[u8]) -> Vec<(u64, u64)> {
     match FileKind::parse(bytes) {
         Ok(FileKind::Pe64) => match PeFile64::parse(bytes) {
@@ -215,7 +215,7 @@ fn collect<Pe: ImageNtHeaders>(
     // veneer that jumps through an IAT slot we just named.  Decode the veneers
     // over the executable sections (x86/x64 only — `FF 25` is an x86 opcode; on
     // other arches the call shape differs and this loop simply matches nothing).
-    let starts = super::kuna_rexthunk::declared_starts(neutral, pe, bytes);
+    let starts = super::rexthunk::declared_starts(neutral, pe, bytes);
     decode_iat_thunks(neutral, &starts, &slot_to_name, &mut out);
 
     // PE exports (additive funcsyms): name + address, registered directly so a
@@ -417,7 +417,7 @@ fn read_slot(table: &[u8], index: u64, ptr: u64) -> Option<u64> {
 /// The name of an import-by-ordinal: the built-in export table's name for a
 /// covered system DLL, else [`synth_ordinal_name`].
 fn ordinal_import_name(dll: &[u8], ord: u16) -> Vec<u8> {
-    match super::kuna_peordinal::ordinal_name(dll, ord) {
+    match super::peordinal::ordinal_name(dll, ord) {
         Some(name) => name.as_bytes().to_vec(),
         None => synth_ordinal_name(dll, ord),
     }
@@ -486,7 +486,7 @@ fn decode_iat_thunks(
 
 /// Decode the `FF 25` thunks of every `(vma, bytes)` code section into `out`. On
 /// x86-64, a REX tail the image never references is dropped
-/// ([`super::kuna_rexthunk`]); `image` is every section but discardable data and
+/// ([`super::rexthunk`]); `image` is every section but discardable data and
 /// `starts` the addresses the image declares to begin code.
 fn decode_thunks(
     code: &[(u64, &[u8])],
@@ -512,7 +512,7 @@ fn decode_thunks(
     if rex_tails.is_empty() {
         return;
     }
-    let referenced = super::kuna_rexthunk::referenced_cached(code, image, starts, &rex_tails);
+    let referenced = super::rexthunk::referenced_cached(code, image, starts, &rex_tails);
     let mut thunks = out.split_off(first);
     thunks.retain(|t| !rex_tails.contains(&t.addr) || referenced.contains(&t.addr));
     out.extend(thunks);
@@ -522,7 +522,7 @@ fn decode_thunks(
 /// IAT slot is in `slot_to_name`, record the thunk entry address against the
 /// import name.  `is_64` selects RIP-relative (x64) vs absolute (x86) addressing.
 /// With `rex_tails`, each recorded entry that is a REX tail
-/// ([`super::kuna_rexthunk::is_rex_tail`]) is also added to that set.
+/// ([`super::rexthunk::is_rex_tail`]) is also added to that set.
 /// Factored out from [`decode_iat_thunks`] so the arithmetic is unit-testable
 /// without an `object::File` (mirrors `elf_plt`'s synthetic decoder tests).
 fn decode_ff25(
@@ -557,7 +557,7 @@ fn decode_ff25(
                 // The thunk entry is the `FF` byte (the `call` target).  MinGW
                 // veneers have no CET `endbr` prefix, so no back-up is needed.
                 if let Some(tails) = rex_tails.as_deref_mut() {
-                    if super::kuna_rexthunk::is_rex_tail(vma, data, i, slot_to_name) {
+                    if super::rexthunk::is_rex_tail(vma, data, i, slot_to_name) {
                         tails.insert(insn_addr);
                     }
                 }

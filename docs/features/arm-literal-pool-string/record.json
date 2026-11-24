@@ -20,7 +20,7 @@
   "branch": "feat/re-arm-literal-pool-string",
   "hypothesis_status": "no hypothesis was offered; the captain's T_TRIAGE reading (the reference scan does not follow an ARM literal-pool load) is upheld exactly",
   "files": [
-    "decompiler/crates/kuna-analysis/src/listing/kuna_poolref.rs",
+    "decompiler/crates/kuna-analysis/src/listing/poolref.rs",
     "decompiler/crates/kuna-analysis/src/listing/xrefs.rs",
     "decompiler/crates/kuna-analysis/src/listing/mod.rs",
     "decompiler/crates/kuna-analysis/tests/fixtures/poolref_arm_le32",

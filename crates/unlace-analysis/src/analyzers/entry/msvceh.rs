@@ -20,13 +20,13 @@
 //! named as its class's copy constructor and a `ThrowInfo`'s `pmfnUnwind` as
 //! the thrown class's destructor ([`member_symbols`]). References are image-relative on x64 and
 //! absolute on x86 ([`RefKind`]). The x64 catch side (`FuncInfo`, FH4,
-//! funclets) is [`super::kuna_msvcfuncinfo`], SEH scope tables and x86 C++
-//! `FuncInfo` are [`super::kuna_msvcseh`], all run from the same pass.
+//! funclets) is [`super::msvcfuncinfo`], SEH scope tables and x86 C++
+//! `FuncInfo` are [`super::msvcseh`], all run from the same pass.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use object::{BinaryFormat, Object, ObjectSection, SectionKind};
-use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
+use unlace_decomp::fasthash::{FxHashMap, FxHashSet};
 
 use crate::pass::{
     AnalysisCtx, AnalysisOutput, AnalysisPass, CommentFact, Phase, SymFact, SymKind,
@@ -137,8 +137,8 @@ pub fn collect<'a>(file: &'a object::File<'a>, bytes: &[u8]) -> AnalysisOutput {
     let text = TextRanges::new(file);
     let code = exec_sections(file);
     let targets = throw_targets(file, bytes);
-    out.merge(super::kuna_msvcfuncinfo::collect(file, bytes, &img));
-    out.merge(super::kuna_msvcseh::collect(file, bytes, &img, &code));
+    out.merge(super::msvcfuncinfo::collect(file, bytes, &img));
+    out.merge(super::msvcseh::collect(file, bytes, &img, &code));
     let infos = find_throw_infos(&img, &rk, &text);
     if infos.is_empty() && targets.is_empty() {
         return out;
@@ -494,7 +494,7 @@ pub fn label_symbols(infos: &[ThrowInfo]) -> Vec<SymFact> {
 /// (`C::~C`). An address two classes claim (an identical-code fold of two
 /// copy constructors) is left unnamed.
 pub fn member_symbols(infos: &[ThrowInfo]) -> Vec<SymFact> {
-    use crate::rtti::kuna_itaniumctors::{ctor_name, dtor_name};
+    use crate::rtti::itaniumctors::{ctor_name, dtor_name};
     let mut named: BTreeMap<u64, BTreeSet<String>> = BTreeMap::new();
     for ti in infos {
         if let Some(class) = ti.types.first().and_then(|c| c.class.as_deref())

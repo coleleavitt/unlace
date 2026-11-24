@@ -1,7 +1,7 @@
 //! (kuna `loweredswitchvalue`) Prove that a re-rolled lowered switch dispatches
 //! on the value its comparison cascade compared.
 //!
-//! [`crate::kuna_loweredswitch`] detects a cascade on the simplified SSA graph,
+//! [`crate::loweredswitch`] detects a cascade on the simplified SSA graph,
 //! where every compare reads one value, and records that value's storage. The
 //! install re-lifts raw p-code on the restart and has a new `BRANCHIND` read
 //! storage at the cascade head, and that storage need not hold the value any
@@ -27,7 +27,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::p2_lift::kuna_loweredswitch::SharedLoweredSwitchStore;
+use crate::p2_lift::loweredswitch::SharedLoweredSwitchStore;
 
 /// Marshaling element `<loweredswitchvalue>` (kuna 4000+ range).
 pub const ELEM_LOWEREDSWITCHVALUE: ElementId = ElementId::new("loweredswitchvalue", 4170);
@@ -680,11 +680,11 @@ pub fn verify_installed_switch_values(data: &mut Funcdata, store: &SharedLowered
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.loweredswitchvalue_head_compare_operand = Some(head_compare_operand);
 }
 
 #[cfg(test)]
-#[path = "kuna_loweredswitchvalue/tests.rs"]
+#[path = "loweredswitchvalue/tests.rs"]
 mod tests;

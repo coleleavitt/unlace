@@ -44,7 +44,7 @@ committed pointer, is 131 wrong-to-right under the pinned metric (mostly
 literals), 41 more under #93 crediting, and 18 where the callers' type is wrong.
 
 **(b) A lone field.** `structsynth` declines a pointer read at one offset: it
-wants two distinct offsets including 0 (`kuna_structsynth.rs` `accepts_record`).
+wants two distinct offsets including 0 (`structsynth.rs` `accepts_record`).
 Relaxing that alone did nothing, and the reason is a second blocker the census
 did not name. `ActionStructSynth` fires only once `ActionInferTypes` reports a
 pass that changed nothing (`kuna_infertypes_settled`). A short function's main

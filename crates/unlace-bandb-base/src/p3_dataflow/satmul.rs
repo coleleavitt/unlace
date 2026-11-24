@@ -26,7 +26,7 @@ use crate::userop::BUILTIN_SATURATED_MUL;
 
 crate::kuna_flag!(
     /// (kuna `satmul`) Fold the overflow-checked multiply before `operator new[]`
-    /// into `saturated_mul(a, b)` (see [`crate::kuna_satmul`]).
+    /// into `saturated_mul(a, b)` (see [`crate::satmul`]).
     SatMul,
     "satmul",
     "Saturated multiply folding",

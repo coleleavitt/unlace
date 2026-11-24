@@ -5,7 +5,7 @@
 //! return in `ST0`; under any `x86win.cspec` model a call to one recovers no
 //! argument, and the expression that computed the operand is dead-code
 //! eliminated. Each such function is bound to the dedicated model of
-//! [`unlace_decomp::kuna_x87intrinsic`]: by name where the image names it, and in a
+//! [`unlace_decomp::x87intrinsic`]: by name where the image names it, and in a
 //! stripped PE32 i386 image by recognizing the VS2005 CRT object it came from.
 //!
 //! Recognition stores no CRT code. Each signature is a 16-byte anchor inside the
@@ -479,7 +479,7 @@ fn scan_bytes(code: &[u8], base: u64, sigs: &[Signature]) -> Vec<(u64, usize)> {
 /// `long double name(long double...)`, so a call passes its operands whatever
 /// else the caller does with those values.
 fn bind(out: &mut AnalysisOutput, ctx: &AnalysisCtx, addr: u64, name: &str) {
-    let Some((model, operands)) = unlace_decomp::kuna_x87intrinsic::model_for(name) else {
+    let Some((model, operands)) = unlace_decomp::x87intrinsic::model_for(name) else {
         return;
     };
     out.models.push(ModelFact {
@@ -563,7 +563,7 @@ impl AnalysisPass for X87IntrinsicPass {
             return out;
         }
         for (addr, n) in ctx.image.expect("load-time analysis image").func_symbols() {
-            if unlace_decomp::kuna_x87intrinsic::is_intrinsic(&n) {
+            if unlace_decomp::x87intrinsic::is_intrinsic(&n) {
                 bind(&mut out, ctx, addr, &n);
             }
         }

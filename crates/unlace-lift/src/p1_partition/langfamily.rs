@@ -49,7 +49,7 @@ pub fn language_id(archid: &str) -> &str {
 
 /// (kuna) Every language the bootstrap's `.ldefs` scan found, by id: what decides whether a FID
 /// database built for another language applies here; an
-/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture, empty for one that was not
+/// [`ArchTable`](crate::archstate::ArchTable) on the architecture, empty for one that was not
 /// bootstrapped from `.ldefs`.
 pub struct LanguageFamilies(pub std::sync::Arc<[(String, LanguageFamily)]>);
 

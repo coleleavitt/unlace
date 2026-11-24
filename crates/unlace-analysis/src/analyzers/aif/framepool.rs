@@ -10,17 +10,17 @@ pub(super) fn policy(
     GapWalk {
         strict: arch
             .kuna_options
-            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .get::<unlace_decomp::aif::AifMode>()
             .strict(),
         corroborate: arch
             .kuna_options
-            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .get::<unlace_decomp::aif::AifMode>()
             .corroborate(),
         bracket: None,
         noppad: false,
         poolslide: arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Aifpoolslide>()
+            .get::<unlace_decomp::analysisgates::Aifpoolslide>()
             .0
             .then_some((arch, code_space)),
     }
@@ -31,11 +31,11 @@ pub(super) fn literals<'a>(
     decoder: &GapDecoder,
     frames: &BTreeMap<u64, u32>,
     policy: Option<(&'a unlace_decomp::architecture::Architecture, Rc<AddrSpace>)>,
-) -> Option<kuna_aifpoolslide::LiteralWords<'a>> {
+) -> Option<aifpoolslide::LiteralWords<'a>> {
     let (arch, code_space) = policy?;
-    let mut literals = kuna_aifpoolslide::LiteralWords::from_listing(
+    let mut literals = aifpoolslide::LiteralWords::from_listing(
         listing,
-        kuna_poolentry::DecodeMode { arch, code_space },
+        poolentry::DecodeMode { arch, code_space },
     );
     literals.add_instructions(listing, decoder, frames.keys().copied());
     Some(literals)

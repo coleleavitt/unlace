@@ -46,7 +46,7 @@
 //! and the table is bounded by the count, also when it is the function's last.
 //!
 //! The same rule reads the table in the discovery Listing
-//! (`unlace-analysis/src/listing/kuna_switchextent.rs`), so the case bodies are
+//! (`unlace-analysis/src/listing/switchextent.rs`), so the case bodies are
 //! the dispatcher's own code there too and no gap entry is planted on them.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -140,7 +140,7 @@ pub fn enum_calls<'a>(
     })
 }
 
-pub use crate::kuna_funcslots::ExtentTables;
+pub use crate::funcslots::ExtentTables;
 
 /// The tables the computed jumps in `[entry, end)` dispatch through, from a
 /// linear decode with `translate` over `image` when the flow holds one;
@@ -674,7 +674,7 @@ fn base_constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
     value
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.switchextent_table_read = Some(table_read);
 }

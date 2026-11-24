@@ -250,7 +250,7 @@ impl Action for ActionLaneDivide {
                 let mut all_varnodes_processed = true;
                 let mut viter: Vec<VarnodeId> =
                     data.vbank().iter_loc_size_addr(*sz, addr).collect();
-                let mut failed = super::kuna_lanetrace::FailedTraces::default();
+                let mut failed = super::lanetrace::FailedTraces::default();
                 let mut idx = 0;
                 while idx < viter.len() {
                     let vn = viter[idx];
@@ -394,13 +394,13 @@ fn lane_divide_collect_lane_sizes(
 /// fails the function, as the C++ exception does. (kuna) A trace whose
 /// transform `apply` would refuse before rewriting anything counts as a failed
 /// trace. A failure is recorded in `failed`, and a split is reported to it
-/// before it is applied ([`super::kuna_lanetrace::FailedTraces`]).
+/// before it is applied ([`super::lanetrace::FailedTraces`]).
 fn lane_divide_process_varnode(
     data: &mut Funcdata,
     vn: VarnodeId,
     laned_register: &LanedRegister,
     mode: int4,
-    failed: &mut super::kuna_lanetrace::FailedTraces,
+    failed: &mut super::lanetrace::FailedTraces,
 ) -> KunaResult<bool> {
     let mut check_lanes = LanedRegister::new(); // Lanes we are going to try, no lanes initially
     let allow_downcast = mode > 0;
@@ -427,8 +427,8 @@ fn lane_divide_process_varnode(
         failed.reach(lane_divide.traced());
         if traced && lane_divide.check_free_fanout(data).is_ok() {
             failed.split(vn, start, |root, reached| {
-                let mut read = crate::kuna_fasthash::FxHashSet::default();
-                super::kuna_lanetrace::footprint(data, root, reached.iter().copied(), &mut read);
+                let mut read = crate::fasthash::FxHashSet::default();
+                super::lanetrace::footprint(data, root, reached.iter().copied(), &mut read);
                 read
             });
             lane_divide.apply(data).map_err(|e| {
@@ -785,7 +785,7 @@ impl Action for ActionConstantPtr {
         data.kuna_global_array_anchor_passes = data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_globalarrayanchor::GlobalArrayAnchor>()
+            .get::<crate::globalarrayanchor::GlobalArrayAnchor>()
             .0
             .then_some(0);
     }
@@ -802,7 +802,7 @@ impl Action for ActionConstantPtr {
         if data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_globalarrayanchor::GlobalArrayAnchor>()
+            .get::<crate::globalarrayanchor::GlobalArrayAnchor>()
             .0
         {
             data.kuna_global_array_anchor_passes = Some(self.localcount as u8);
@@ -850,11 +850,11 @@ impl Action for ActionConstantPtr {
             else {
                 continue;
             };
-            if !crate::kuna_inferfuncentry::reads_as_integer(code) {
+            if !crate::inferfuncentry::reads_as_integer(code) {
                 continue;
             }
             numeric.insert(off);
-            if crate::kuna_inferfuncentry::orders_its_constant(code) {
+            if crate::inferfuncentry::orders_its_constant(code) {
                 numeric.insert(off.wrapping_sub(1));
             }
         }
@@ -933,7 +933,7 @@ impl Action for ActionConstantPtr {
                 .set_ptr_check();
             if let Some((entry, rampoint)) = resolved {
                 // (kuna) A Swift string object lands 32 bytes before its literal.
-                if crate::kuna_swiftstrobj::is_string_object(data, vn, &rampoint) {
+                if crate::swiftstrobj::is_string_object(data, vn, &rampoint) {
                     continue;
                 }
                 // (kuna) Mid-string char pointer. `is_pointer` admits a constant
@@ -1280,9 +1280,9 @@ fn is_pointer(
                 }
             }
             OpCode::CPUI_CALLOTHER => {
-                let rep = glb.kuna_options.get::<crate::kuna_repstring::RepString>().0
-                    && crate::kuna_repstring::input_type(data, op, slot).is_some();
-                if !rep && crate::kuna_atomics::input_type(data, op, slot).is_none() {
+                let rep = glb.kuna_options.get::<crate::repstring::RepString>().0
+                    && crate::repstring::input_type(data, op, slot).is_some();
+                if !rep && crate::atomics::input_type(data, op, slot).is_none() {
                     return None;
                 }
             }
@@ -1293,7 +1293,7 @@ fn is_pointer(
         // in the low page a shared object's read-only data starts in, and
         // even when its value has the bit pattern of a mask.
         let blob_start = glb.blob_entries.contains(&vn_offset)
-            && crate::kuna_inferfuncentry::entry_escape_applies(opc, numeric.contains(&vn_offset));
+            && crate::inferfuncentry::entry_escape_applies(opc, numeric.contains(&vn_offset));
         if spc.get_pointer_lower_bound() > vn_offset && !blob_start {
             return None;
         }
@@ -1305,10 +1305,8 @@ fn is_pointer(
         // kuna_is_function_entry (no re-special-casing).
         if bit_transitions(vn_offset, vn_size) < 3
             && !blob_start
-            && !(crate::kuna_inferfuncentry::entry_escape_applies(
-                opc,
-                numeric.contains(&vn_offset),
-            ) && kuna_const_is_function_entry(data, spc, vn_offset, vn_size, &op_addr))
+            && !(crate::inferfuncentry::entry_escape_applies(opc, numeric.contains(&vn_offset))
+                && kuna_const_is_function_entry(data, spc, vn_offset, vn_size, &op_addr))
         {
             return None;
         }
@@ -1369,7 +1367,7 @@ fn is_pointer(
 /// The `ActionConstantPtr::isPointer` `bit_transitions < 3` kuna GH-6930 escape
 /// (coreaction.cc:1159): a single-bit constant that resolves to an exact function
 /// entry stays a pointer.  Wraps [`kuna_is_function_entry`](crate::
-/// kuna_inferfuncentry::kuna_is_function_entry) — the function-entry query is the
+/// inferfuncentry::kuna_is_function_entry) — the function-entry query is the
 /// global-scope `queryFunction(rampoint)`, reached through `glb`'s snapshot: a
 /// covering global Symbol whose type is `TYPE_CODE` and whose entry address equals
 /// `rampoint`.  For ordinary data constants (no function there) this is `false`, so
@@ -1406,7 +1404,7 @@ fn kuna_const_is_function_entry(
                 None
             }
         });
-    crate::kuna_inferfuncentry::kuna_is_function_entry(Some(&rampoint), function_entry.as_ref())
+    crate::inferfuncentry::kuna_is_function_entry(Some(&rampoint), function_entry.as_ref())
 }
 
 // =============================================================================
@@ -1539,7 +1537,7 @@ impl Action for ActionDeindirect {
                     proto
                 };
                 let mut fc = data.replace_call_specs(i);
-                let mut restartlog = crate::kuna_restartlog::RestartLog::new();
+                let mut restartlog = crate::restartlog::RestartLog::new();
                 let r = fc.deindirect(
                     data,
                     entry,
@@ -1567,23 +1565,22 @@ impl Action for ActionDeindirect {
                 let proto = code
                     .as_ref()
                     .and_then(|ty| ty.get_code_prototype().cloned())
-                    .and_then(|proto| crate::kuna_typedcallabi::admit(data, proto));
+                    .and_then(|proto| crate::typedcallabi::admit(data, proto));
                 if let Some(proto) = proto {
                     let pending = data.has_restart_pending();
                     let mut fc = data.replace_call_specs(i);
                     let mut recovered = crate::fspec::FuncProto::new();
                     recovered.copy(fc.proto());
-                    let mut restartlog = crate::kuna_restartlog::RestartLog::new();
+                    let mut restartlog = crate::restartlog::RestartLog::new();
                     let result = fc.force_set(data, &proto, &mut restartlog);
                     // (kuna `valuewitness`) A value witness slot learned this
                     // late, when the call's inputs no longer fit it, keeps the
                     // inputs already recovered rather than restart the function.
-                    // See `kuna_valuewitness::call_prototype`.
+                    // See `valuewitness::call_prototype`.
                     if !pending
                         && data.has_restart_pending()
-                        && code.is_some_and(|c| {
-                            crate::kuna_valuewitness::is_slot_code(data.get_arch(), &c)
-                        })
+                        && code
+                            .is_some_and(|c| crate::valuewitness::is_slot_code(data.get_arch(), &c))
                     {
                         data.set_restart_pending(false);
                         fc.proto_mut().copy(&recovered);
@@ -2083,7 +2080,7 @@ impl Action for ActionMapGlobals {
 /// typed like upstream's `DAT_` Symbol (the widest Varnode's type when it spans
 /// the group, else `undefined<N>`), and with `mapglobalsyms` on the driver adds
 /// it to the global scope once the function is done
-/// ([`crate::kuna_mapglobalsyms::persist`]); kuna names it `dat_<addr>` either way.
+/// ([`crate::mapglobalsyms::persist`]); kuna names it `dat_<addr>` either way.
 fn map_globals(data: &mut Funcdata) {
     let vbank = data.vbank();
     let arch = data.get_arch();
@@ -2119,7 +2116,7 @@ fn map_globals(data: &mut Funcdata) {
         let Some((first, esize, name)) = arch.global_data_symbol_at(addr) else {
             if arch
                 .kuna_options
-                .get::<crate::kuna_mapglobalsyms::Mapglobalsyms>()
+                .get::<crate::mapglobalsyms::Mapglobalsyms>()
                 .0
                 && arch.global_symbol_extent(addr).is_none()
             {
@@ -2184,7 +2181,7 @@ fn same_space(a: &Address, b: &Address) -> bool {
 pub struct ActionDeadCode {
     base: ActionBase,
     /// (kuna `narrowargs`) This pass, after `mainloop` settles, also narrows
-    /// the function's register inputs ([`crate::kuna_narrowargs`]).
+    /// the function's register inputs ([`crate::narrowargs`]).
     narrow_inputs: bool,
 }
 
@@ -2226,8 +2223,8 @@ impl Action for ActionDeadCode {
         // C++ coreaction.cc:4146 — ActionDeadCode::apply.
         let res = deadcode_apply(data);
         if self.narrow_inputs {
-            self.base.count += crate::kuna_narrowargs::narrow_inputs(data);
-            self.base.count += crate::kuna_regnarrow::narrow_locals(data);
+            self.base.count += crate::narrowargs::narrow_inputs(data);
+            self.base.count += crate::regnarrow::narrow_locals(data);
         }
         res
     }
@@ -2638,7 +2635,7 @@ fn dc_never_consumed(data: &mut Funcdata, vn: VarnodeId) -> bool {
         .get(op)
         .expect("neverConsumed: stale op")
         .is_call()
-        && !crate::kuna_roundingops::is_pure_call(data, op)
+        && !crate::roundingops::is_pure_call(data, op)
     {
         data.op_unset_output(op);
     } else {
@@ -2666,7 +2663,7 @@ fn dc_gather_consumed_return(data: &Funcdata) -> u64 {
             let vn = o.get_in(1).expect("RETURN in1");
             let nz = data.vbank().get(vn).expect("RETURN in1 vn").get_nz_mask();
             consume_val |= minimalmask(nz)
-                & crate::kuna_narrowext::implied_sign_extension(data, vn).unwrap_or(!0u64);
+                & crate::narrowext::implied_sign_extension(data, vn).unwrap_or(!0u64);
         }
     }
     let val = data.get_func_proto().get_return_bytes_consumed();
@@ -2715,8 +2712,7 @@ fn dc_mark_consumed_parameters(
         let mut slot_consumed: Vec<int4> = Vec::new();
         if !fully_consumed {
             for i in 1..n {
-                let stated =
-                    crate::kuna_narrowargs::stated_bytes_consumed(data, fc, (i - 1) as usize);
+                let stated = crate::narrowargs::stated_bytes_consumed(data, fc, (i - 1) as usize);
                 slot_consumed.push(match (fc.get_input_bytes_consumed(i), stated) {
                     (0, s) => s,
                     (c, 0) => c,
@@ -2759,7 +2755,7 @@ fn dc_mark_consumed_parameters(
                 !0u64
             } else {
                 minimalmask(v.get_nz_mask())
-                    & crate::kuna_narrowext::implied_sign_extension(data, vn).unwrap_or(!0u64)
+                    & crate::narrowext::implied_sign_extension(data, vn).unwrap_or(!0u64)
             }
         };
         // cast: `i` is an int4 >= 1 (loop starts at 1), so `i - 1` is a
@@ -2840,7 +2836,7 @@ fn dc_is_eventual_constant(data: &Funcdata, vn: VarnodeId, max_binary: i32, max_
 /// readers consume none of its bits (which the sweep would otherwise delete as
 /// never consumed), unless its instruction already reads that address.
 fn dc_last_chance_load(data: &mut Funcdata, worklist: &mut Vec<VarnodeId>) -> bool {
-    use crate::kuna_volatileload;
+    use crate::volatileload;
     if data.is_jumptable_recovery_on() {
         return false;
     }
@@ -2852,7 +2848,7 @@ fn dc_last_chance_load(data: &mut Funcdata, worklist: &mut Vec<VarnodeId>) -> bo
             .is_some_and(|v| v.is_consume_vacuous() && v.get_consume() != 0)
     };
     let loads: Vec<OpId> = data.obank().iter_code(OpCode::CPUI_LOAD).collect();
-    let mut memo = kuna_volatileload::Memo::new();
+    let mut memo = volatileload::Memo::new();
     let mut res = false;
     for op in loads {
         let o = data.obank().get(op).expect("lastChanceLoad: stale op");
@@ -2871,8 +2867,8 @@ fn dc_last_chance_load(data: &mut Funcdata, worklist: &mut Vec<VarnodeId>) -> bo
             continue;
         }
         let ptr = o.get_in(1).expect("LOAD ptr");
-        let volatile = kuna_volatileload::is_volatile_with(data, op, &mut memo);
-        if volatile && kuna_volatileload::rereads(data, op, &mut memo, consumed_load) {
+        let volatile = volatileload::is_volatile_with(data, op, &mut memo);
+        if volatile && volatileload::rereads(data, op, &mut memo, consumed_load) {
             continue;
         }
         let eventual = volatile
@@ -2910,12 +2906,12 @@ fn deadcode_apply(data: &mut Funcdata) -> ApplyResult {
     // a real run already built it in `op_heritage`).
     data.ensure_heritage_info_list();
 
-    let policy_changes = crate::kuna_stackalias::prepare(data);
+    let policy_changes = crate::stackalias::prepare(data);
 
     // 1. Clear consume flags on every Varnode; drop addrforce on non-directwrite.
     let all_locs: Vec<VarnodeId> = data.vbank().iter_loc().collect();
     for vn in all_locs {
-        let hold_store = crate::kuna_stackalias::holds_store(data, vn);
+        let hold_store = crate::stackalias::holds_store(data, vn);
         // One arena lookup, not three: none of the clears touch `addrforce` or
         // `directwrite`, so the two reads see what a re-fetch would.  This loop
         // runs over every Varnode in the function on every ActionDeadCode pass.
@@ -2969,7 +2965,7 @@ fn deadcode_apply(data: &mut Funcdata) -> ApplyResult {
         let (is_call, is_assignment, opc, n) = {
             let o = data.obank().get(op).expect("deadcode: stale op");
             (
-                o.is_call() && !crate::kuna_roundingops::is_pure_call(data, op),
+                o.is_call() && !crate::roundingops::is_pure_call(data, op),
                 o.is_assignment(),
                 o.code(),
                 o.num_input(),
@@ -3078,7 +3074,7 @@ fn deadcode_apply(data: &mut Funcdata) -> ApplyResult {
         let mut changecount = 0i32;
         for (visited, vn) in ids.into_iter().enumerate() {
             if visited % SWEEP_DEADLINE_STRIDE == 0
-                && crate::kuna_budget::deadline_passed_in("action deadcode")
+                && crate::budget::deadline_passed_in("action deadcode")
             {
                 budget_spent = true;
                 break;
@@ -3112,7 +3108,7 @@ fn deadcode_apply(data: &mut Funcdata) -> ApplyResult {
                     .expect("def");
                 changecount += 1;
                 if data.obank().get(op).expect("sweep: stale op").is_call()
-                    && !crate::kuna_roundingops::is_pure_call(data, op)
+                    && !crate::roundingops::is_pure_call(data, op)
                 {
                     data.op_unset_output(op);
                 } else {
@@ -3697,9 +3693,8 @@ impl Action for ActionInferTypes {
         // a full pass has run and changed nothing.  A function whose first pass
         // is already at the fixpoint is settled too -- a lattice that never
         // needed to move is still decided.
-        if crate::kuna_floatreg::with_moved_memo(|| {
-            crate::coreaction_infertypes::run_infer_types(data)
-        }) {
+        if crate::floatreg::with_moved_memo(|| crate::coreaction_infertypes::run_infer_types(data))
+        {
             self.localcount += 1;
             data.set_kuna_infertypes_settled(false);
         } else {

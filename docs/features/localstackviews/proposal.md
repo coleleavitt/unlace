@@ -132,16 +132,16 @@ These modules define the approved implementation scope. The lift callback record
 
 | Module | Responsibility |
 |---|---|
-| New `p6_variables/kuna_localstackviews.rs` | Bounded local policy, proof records and queries; one feature module. |
+| New `p6_variables/localstackviews.rs` | Bounded local policy, proof records and queries; one feature module. |
 | `substrate/funcdata.rs` | Per-analysis state and reset lifecycle. |
 | `p2_lift/flow.rs::FlowEmit::dump` | Capture bounded original STORE and persistent memory COPY identities before optimization. |
 | `p3_dataflow/ruleaction_4.rs::RuleStoreVarnode::apply_op` | Record actual native STORE before replacement, next to #1122's hook. |
 | `p3_dataflow/ruleaction_3.rs::RulePropagateCopy::apply_op` | Retain only validated native publications at their execution point through marker readers. |
-| `p6_variables/kuna_stackalias.rs::{prepare,holds_store}` | Consult the local footprint when retaining physical writes; retain existing observer/overwrite logic. |
-| `p3_dataflow/kuna_stackeffects.rs::enabled_for` | Add only positive local byte ranges to the existing scoped barrier query. |
-| `p6_variables/kuna_stackviews.rs::{gather,prepare_casts}` | Admit exact protected local components and feed existing write/view selection. |
-| `p6_variables/kuna_stackobjects.rs::recover` | Admit only these local backings to existing object-family recovery. |
-| Existing `p6_variables/kuna_stackuses.rs` | Consume the preserved receiver contract with existing typed member binding; no changes to this module. |
+| `p6_variables/stackalias.rs::{prepare,holds_store}` | Consult the local footprint when retaining physical writes; retain existing observer/overwrite logic. |
+| `p3_dataflow/stackeffects.rs::enabled_for` | Add only positive local byte ranges to the existing scoped barrier query. |
+| `p6_variables/stackviews.rs::{gather,prepare_casts}` | Admit exact protected local components and feed existing write/view selection. |
+| `p6_variables/stackobjects.rs::recover` | Admit only these local backings to existing object-family recovery. |
+| Existing `p6_variables/stackuses.rs` | Consume the preserved receiver contract with existing typed member binding; no changes to this module. |
 | P0 metadata/dispatch, architecture reset, module registration | One flag, complete catalog row and supported ablation. |
 | Existing owning spec chapters 02, 03, 06 and 09 | Describe original lift evidence, preservation, local eligibility and resulting C contract. |
 

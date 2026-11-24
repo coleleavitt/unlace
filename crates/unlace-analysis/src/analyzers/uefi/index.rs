@@ -25,7 +25,7 @@ use super::flow::{Foreign, Kind};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
-use unlace_decomp::kuna_uefiprotocols::InstalledInterface;
+use unlace_decomp::uefiprotocols::InstalledInterface;
 
 /// The index file's name inside the unpack directory.
 pub const FILE_NAME: &str = "kuna-uefi.index";

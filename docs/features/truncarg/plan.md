@@ -6,12 +6,12 @@ A strict fix with no option: it only restores a conversion the binary
 performed. Two halves:
 
 - Evidence (P3). `SubvariableFlow::try_call_pull` notes each call slot whose
-  trim drops only known-zero bits (`kuna_truncarg.rs (drops_only_zero_bits)`:
+  trim drops only known-zero bits (`truncarg.rs (drops_only_zero_bits)`:
   the wide input's non-zero mask lies inside the logical mask, anchored at bit
   0). When the rewrite commits, `do_replacement` records the slot, its new size
   and the call's input count on the call's `FuncCallSpecs`
   (`note_trimmed_arg`); a trim without that proof clears the slot.
-- The cast (P9). `p9_emit/kuna_truncarg.rs (narrowed_arg_cast)` is consulted by
+- The cast (P9). `p9_emit/truncarg.rs (narrowed_arg_cast)` is consulted by
   the default arm of `get_input_cast` when `cast_standard` asks for nothing,
   only for C output (`LangCaps::integer_promotion`). For a recorded
   CALL/CALLIND input, still at the recorded size and input count, narrower than

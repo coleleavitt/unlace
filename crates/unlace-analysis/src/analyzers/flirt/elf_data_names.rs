@@ -2,7 +2,7 @@
 
 use object::read::{Object, ObjectSection, ObjectSegment, ObjectSymbol};
 use object::{BinaryFormat, ObjectKind, SectionFlags, SymbolFlags};
-use unlace_decomp::kuna_symbolnamechars::{sanitize_symbol_name_bytes, symbolnamechars_mode};
+use unlace_decomp::symbolnamechars::{sanitize_symbol_name_bytes, symbolnamechars_mode};
 
 /// Collect names for the signature rename guard without constructing data symbols.
 pub fn zero_size_data_names(bytes: &[u8]) -> Vec<String> {

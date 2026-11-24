@@ -1,6 +1,6 @@
 {
  "opportunity": "The 206-entry `libcsigs` table was selected by which callee would move type_match on a case a rival already gets right -- a narrow question that never asks which callees the corpus actually imports. On the campaign's 444 slices, 158 of the 878 ground-truth `char *` variables binja gets right and kuna does not sit in a function that calls a libc import kuna cannot type, across 35 distinct names (docs/features/libcwiden/gap.md).",
- "test_name": "tests/stages/kuna-libcwiden.xml (9 two-pass assertions over one real ELF) + 3 table-invariant unit tests in kuna_libcsigs.rs",
+ "test_name": "tests/stages/kuna-libcwiden.xml (9 two-pass assertions over one real ELF) + 3 table-invariant unit tests in libcsigs.rs",
  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/libcwiden_x86_64",
  "selector": "can_write / move_entry / make_dir / jail",
  "witness_binary": "decbench full_run_address_2026-09-11/O0/coreutils/stripped/ginstall",

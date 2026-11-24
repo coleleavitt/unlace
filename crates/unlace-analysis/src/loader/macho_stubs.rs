@@ -84,7 +84,7 @@ pub(crate) fn resolve_macho_import_slots(file: &object::File, bytes: &[u8]) -> V
 
 /// Resolve the symbol-pointer slots whose import is a data object (`(slot VA,
 /// raw import name)`), which [`resolve_macho_imports`] leaves out: see
-/// [`super::kuna_machodataslots`].
+/// [`super::machodataslots`].
 pub(crate) fn resolve_macho_data_import_slots(
     file: &object::File,
     bytes: &[u8],
@@ -185,9 +185,9 @@ where
         }
     }
 
-    if unlace_decomp::kuna_dyldcache::dyldcrossrefs_enabled() {
-        for xref in super::kuna_dyldcache::xrefs::read_note(bytes) {
-            if xref.kind == super::kuna_dyldcache::xrefs::XrefKind::Slot {
+    if unlace_decomp::dyldcache::dyldcrossrefs_enabled() {
+        for xref in super::dyldcache::xrefs::read_note(bytes) {
+            if xref.kind == super::dyldcache::xrefs::XrefKind::Slot {
                 out.import_slots.push((
                     xref.addr,
                     xref.addr
@@ -272,7 +272,7 @@ where
                 if let Some(last_open) = addr.checked_add(stride) {
                     out.import_slots.push((addr, last_open));
                 }
-                if super::kuna_machodataslots::is_data_import(raw_name) {
+                if super::machodataslots::is_data_import(raw_name) {
                     out.data_slots.push((addr, name));
                     continue;
                 }
@@ -423,7 +423,7 @@ fn finish_with_exports(
             });
         }
     }
-    if unlace_decomp::kuna_exporttrie::exporttrie_enabled() {
+    if unlace_decomp::exporttrie::exporttrie_enabled() {
         for (addr, name) in trie_exports(neutral, bytes) {
             if exported.insert(addr) {
                 out.imports.push(ImportSym {

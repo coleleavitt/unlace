@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use unlace_analysis::listing::Listing;
-use unlace_analysis::listing::kuna_funcchunks::ChunkModel;
+use unlace_analysis::listing::funcchunks::ChunkModel;
 use unlace_console::engine::bootstrap_from_object;
 
 const F: u64 = 0x401019;

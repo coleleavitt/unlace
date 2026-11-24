@@ -6,19 +6,19 @@
 /// The imports of `kuna_callwide` itself, as a glob so the tests' own imports win.
 mod module_scope {
     pub(super) use crate::architecture::Architecture;
+    pub(super) use crate::bejoin::WidePair;
     pub(super) use crate::context::OpId;
     pub(super) use crate::fspec::{FuncCallSpecs, FuncProto, ParamActive, ProtoModel};
     pub(super) use crate::funcdata::Funcdata;
-    pub(super) use crate::kuna_bejoin::WidePair;
     pub(super) use std::collections::BTreeSet;
     pub(super) use std::rc::Rc;
     pub(super) use unlace_base::address::Address;
     pub(super) use unlace_base::types::int4;
 }
+use crate::bejoin::BeJoinMode;
+use crate::callwide::FuncdataCallwideExt;
+use crate::callwide::*;
 use crate::context::{ArchContext, TypeOp, VarnodeId};
-use crate::kuna_bejoin::BeJoinMode;
-use crate::kuna_callwide::FuncdataCallwideExt;
-use crate::kuna_callwide::*;
 use crate::options::ArchOptionContext;
 use module_scope::*;
 use std::cell::Cell;
@@ -75,9 +75,7 @@ fn data_and_proof() -> (Funcdata, Rc<Ledger>) {
     let register = manager.get_space_by_name("register").unwrap().clone();
     let model = Rc::new(ProtoModel::new(&manager));
     let mut context = ArchContext::new(manager);
-    context
-        .kuna_options
-        .set(crate::kuna_callwide::CallWide(true));
+    context.kuna_options.set(crate::callwide::CallWide(true));
     context.kuna_options.set(BeJoinMode::Evidence);
     let mut fd = Funcdata::new(
         "f",
@@ -327,9 +325,7 @@ fn every_model_mutation_revokes_an_already_seeded_drive() {
     for mutation in mutations {
         let (fd, proof) = data_and_proof();
         let mut arch = architecture();
-        *arch
-            .kuna_tables
-            .get_mut::<crate::kuna_callwide::ProofSlot>() = ProofSlot(Some(proof));
+        *arch.kuna_tables.get_mut::<crate::callwide::ProofSlot>() = ProofSlot(Some(proof));
         assert!(proven(&fd, fd.get_address()));
         mutation(&mut arch);
         assert!(!proven(&fd, fd.get_address()));
@@ -344,9 +340,7 @@ fn replaying_the_same_declared_model_does_not_split_a_batch() {
     arch.set_function_prototype_model("f", model.clone());
     arch.set_default_model_rc(model.clone());
     arch.register_model(model.clone());
-    *arch
-        .kuna_tables
-        .get_mut::<crate::kuna_callwide::ProofSlot>() = ProofSlot(Some(proof));
+    *arch.kuna_tables.get_mut::<crate::callwide::ProofSlot>() = ProofSlot(Some(proof));
     arch.set_function_prototype_model("f", model.clone());
     arch.set_default_model_rc(model.clone());
     arch.register_model(model);

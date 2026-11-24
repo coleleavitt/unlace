@@ -204,7 +204,7 @@ pub(super) fn collect<'v>(
         return Vec::new();
     }
     let names = Names::new(cache);
-    if unlace_decomp::kuna_exporttrie::exporttrie_enabled() {
+    if unlace_decomp::exporttrie::exporttrie_enabled() {
         names.adopt_imports_of(index);
     }
     let mut out = Vec::new();

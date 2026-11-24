@@ -2481,7 +2481,7 @@ impl Funcdata {
             if curtrial.is_checked() {
                 if curtrial.is_active() {
                     // (kuna) `varargsharedfloat`: see
-                    // [`crate::p4_calls::kuna_varargsharedfloat`].
+                    // [`crate::p4_calls::varargsharedfloat`].
                     return op == opmatch && self.kuna_shared_float_call() == Some(op);
                 }
             } else if TraverseNode::is_alternate_path_valid(vn, fl, self.vbank(), self.obank()) {
@@ -2489,7 +2489,7 @@ impl Funcdata {
             }
             return true;
         }
-        // (kuna) `sharedpush`: see [`crate::p4_calls::kuna_sharedpush`].
+        // (kuna) `sharedpush`: see [`crate::p4_calls::sharedpush`].
         (self.hooks().sharedpush_declared_arm_shares)(self, opmatch, op, vn, trial)
     }
 
@@ -2529,7 +2529,7 @@ impl Funcdata {
     /// walk passes through, with the Varnode it reached each by; `by_merge`
     /// skips the uses a merge block that re-tests its condition rules out, and
     /// then passes only if the walk still reached `opmatch`'s trial slot
-    /// (`condexeretuse`, see [`crate::p4_calls::kuna_condexeretuse`]).
+    /// (`condexeretuse`, see [`crate::p4_calls::condexeretuse`]).
     fn only_op_use_walk(
         &mut self,
         invn: VarnodeId,
@@ -2559,7 +2559,7 @@ impl Funcdata {
         let mut reached_match = false;
         let mut i = 0;
         while i < varlist.len() {
-            if crate::kuna_budget::budget_probe() {
+            if crate::budget::budget_probe() {
                 res = false;
                 break;
             }
@@ -2578,12 +2578,12 @@ impl Funcdata {
                 // (kuna) An `INT_XOR`/`INT_SUB` of a value with itself is `0`
                 // whatever the value is, so it neither observes the
                 // Varnode nor carries it onward.  See
-                // [`crate::p4_calls::kuna_zeroidiomuse`].
+                // [`crate::p4_calls::zeroidiomuse`].
                 if (self.hooks().zeroidiomuse_op_discards_operand)(self, op) {
                     continue;
                 }
                 // (kuna) `voidret` — a forced return value may also be stored
-                // and branched on.  See [`crate::p4_calls::kuna_voidret::returned_use`].
+                // and branched on.  See [`crate::p4_calls::voidret::returned_use`].
                 if forced_return && (self.hooks().voidret_returned_use)(self, op, vn) {
                     continue;
                 }
@@ -2599,14 +2599,14 @@ impl Funcdata {
                     }
                 }
                 let mut cur_flags = base_flags;
-                // (kuna) `exclusivecallret` — see [`crate::p4_calls::kuna_exclusivecallret`].
+                // (kuna) `exclusivecallret` — see [`crate::p4_calls::exclusivecallret`].
                 if call_return
                     && (self.hooks().exclusivecallret_skips_use)(self, opmatch, op, invn, vn)
                 {
                     continue;
                 }
                 // (kuna) `carryuse`: the carry test of a returned sum.  See
-                // [`crate::p4_calls::kuna_carryuse`].
+                // [`crate::p4_calls::carryuse`].
                 if (self.hooks().carryuse_carry_test)(self, opmatch, op, vn) {
                     continue;
                 }
@@ -2620,7 +2620,7 @@ impl Funcdata {
                         // use of the pointer the call is passed, and the value it
                         // reads is not the value being scored, so the walk skips the
                         // op outright.  See
-                        // [`crate::p4_calls::kuna_exclusivearguse`].
+                        // [`crate::p4_calls::exclusivearguse`].
                         if (self.hooks().exclusivearguse_access_cannot_reach_call)(
                             self, opmatch, op, vn,
                         ) {
@@ -2637,7 +2637,7 @@ impl Funcdata {
                         // (kuna) `spillargtrial off|reload|spill` — upstream rejects
                         // on every STORE (`off`); the other levels tolerate the
                         // caller's own caller-save spill of the argument value.  See
-                        // [`crate::p4_calls::kuna_spillargtrial`].  `exclusivearguse`
+                        // [`crate::p4_calls::spillargtrial`].  `exclusivearguse`
                         // covers the disjoint case where the trial Varnode is the
                         // store's ADDRESS on a path that cannot reach the call.
                         if (self.hooks().exclusivearguse_access_cannot_reach_call)(
@@ -2654,7 +2654,7 @@ impl Funcdata {
                         // rejects on every competing CALL use; a call on a block
                         // that ends in a no-return halt can never reach the RETURN
                         // being matched, so it does not compete.  See
-                        // [`crate::p4_calls::kuna_noreturnretuse`].
+                        // [`crate::p4_calls::noreturnretuse`].
                         if (self.hooks().noreturnretuse_call_cannot_reach_return)(self, opmatch, op)
                         {
                             continue;
@@ -2664,7 +2664,7 @@ impl Funcdata {
                         }
                         // (kuna) `callresultuse`: a call result handed to another
                         // call as well is a value both read.  See
-                        // [`crate::p4_calls::kuna_callresultuse::scoring_argument`].
+                        // [`crate::p4_calls::callresultuse::scoring_argument`].
                         if result_argument && o.get_slot(vn) > 0 {
                             continue;
                         }
@@ -2678,7 +2678,7 @@ impl Funcdata {
                     // through: its result is the kernel's.  The value is then not
                     // also a returned register half, and stays free to be another
                     // call's argument.  See
-                    // [`crate::kuna_syscallregs::reads_as_argument`].
+                    // [`crate::syscallregs::reads_as_argument`].
                     OpCode::CPUI_CALLOTHER
                         if (self.hooks().syscallregs_reads_as_argument)(self, op, vn) =>
                     {
@@ -2888,7 +2888,7 @@ impl Funcdata {
         offset: int4,
         main_flags: unlace_base::types::uint4,
     ) -> Ancestry {
-        if maxlevel == 0 || crate::kuna_budget::budget_probe() {
+        if maxlevel == 0 || crate::budget::budget_probe() {
             return Ancestry::Unused {
                 cut: 0,
                 bounded: true,
@@ -2979,7 +2979,7 @@ impl Funcdata {
                     .unwrap_or(false)
                 {
                     // (kuna) `callresultuse`: a call's possible output is its
-                    // result.  See [`crate::p4_calls::kuna_callresultuse`].
+                    // result.  See [`crate::p4_calls::callresultuse`].
                     let scored = self.kuna_forced_scoring() || memo.call_result_root;
                     return Ancestry::of(scored && self.only_op_use(invn, op, trial, main_flags));
                 }
@@ -3245,7 +3245,7 @@ struct AncestorMemo {
     /// (kuna) `callresultuse`: the trial's root is a call result on every
     /// path, so a CALL output or creation ends a path as a use.
     call_result_root: bool,
-    unused: crate::kuna_fasthash::FxHashMap<AncestorKey, UnusedAbove>,
+    unused: crate::fasthash::FxHashMap<AncestorKey, UnusedAbove>,
     #[cfg(any(test, feature = "test-support"))]
     every_path: bool,
     #[cfg(any(test, feature = "test-support"))]
@@ -3471,7 +3471,7 @@ impl AncestorRealistic {
     }
 
     /// (kuna) The LOADs the last [`Self::execute`] stopped at as solid
-    /// movement, read by [`crate::p4_calls::kuna_reloadarg`].
+    /// movement, read by [`crate::p4_calls::reloadarg`].
     #[doc(hidden)]
     pub fn solid_loads(&self) -> &[OpId] {
         &self.solid_loads

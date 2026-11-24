@@ -36,7 +36,7 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 /// as a discovered entry. Registered always (the facts are cheap to compute and
 /// are stashed at load), but the COMMIT is gated by `--option unwindstarts on`
 /// (default-OFF, output-changing) via `engine.rs::analysis_pass_enabled` →
-/// `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Unwindstarts>().0`, so a default run is byte-identical to before.
+/// `arch.kuna_options.get::<unlace_decomp::analysisgates::Unwindstarts>().0`, so a default run is byte-identical to before.
 pub struct UnwindInfoStartsPass;
 
 impl AnalysisPass for UnwindInfoStartsPass {

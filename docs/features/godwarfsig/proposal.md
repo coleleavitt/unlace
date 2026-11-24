@@ -28,7 +28,7 @@ prototype precedence. Existing inference remains available for rejected cases.
 The implementation must recover values even for identity functions with only a
 RET instruction, and propagate contracts to calls as well as definitions.
 
-Implement new logic in `kuna_godwarfsig.rs` under the DWARF analyzer. Add option
+Implement new logic in `godwarfsig.rs` under the DWARF analyzer. Add option
 metadata, dispatch and live-reader wiring; document the contract in the P0/P1
 spec owner. Keep the option off until ablation, speed and corpus evidence justify
 default-on. Do not change the original regression baseline.

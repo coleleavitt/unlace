@@ -52,6 +52,7 @@ use crate::stagetoml::{PatternLine, StageMatch, StageTest, escape_literal};
 use unlace_base::types::{int4, uint4};
 use unlace_base::xml::{DocumentStorage, Element};
 
+use unlace_console::console::register_kuna_commands;
 use unlace_console::engine::bootstrap_program;
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, mainloop, register_console_commands,
@@ -59,7 +60,6 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_console::interface::{FileOut, IfaceError, IfaceStatus};
-use unlace_console::kuna_console::register_kuna_commands;
 
 /// C++ `IfaceParseError` / `IfaceExecutionError` distinction at the file level:
 /// the two `catch` arms of `runTestFiles` produce different prefixes

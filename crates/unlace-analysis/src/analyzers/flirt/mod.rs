@@ -28,8 +28,8 @@
 //! The signature files are named by `UNLACE_FLIRT_SIGS` (`:`-separated files or
 //! directories).
 
-pub mod kuna_flirtpat;
-pub mod kuna_flirtsig;
+pub mod flirtpat;
+pub mod flirtsig;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -39,12 +39,12 @@ use crate::listing::Listing;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, Phase};
 use flirt_sig::{Endian, FLAG_STARTUP, Matcher, Module, Signature};
 
-pub mod kuna_elf_data_names;
-pub mod kuna_rustprofiles;
-pub mod kuna_ruststdsigs;
+pub mod elf_data_names;
+pub mod rustprofiles;
+pub mod ruststdsigs;
 
 /// The environment variable that lists the `.sig` files.
-pub const FLIRT_SIGS_ENV: &str = unlace_decomp::kuna_loadoptions::FLIRT_SIGS_ENV;
+pub const FLIRT_SIGS_ENV: &str = unlace_decomp::loadoptions::FLIRT_SIGS_ENV;
 
 /// Matching rounds: a module whose reference names a function another module
 /// names is accepted in the round after that name exists.
@@ -68,8 +68,8 @@ impl AnalysisPass for FlirtPass {
             return out;
         };
         let mut sigs = load_sigs(ctx.file.format());
-        if let Some(sig) = kuna_ruststdsigs::signature_bytes(ctx.file)
-            .and_then(|bytes| Signature::parse(&bytes).ok())
+        if let Some(sig) =
+            ruststdsigs::signature_bytes(ctx.file).and_then(|bytes| Signature::parse(&bytes).ok())
         {
             sigs.push(sig);
         }
@@ -105,7 +105,7 @@ impl AnalysisPass for FlirtPass {
 /// startup signatures and those whose header excludes the file type are left
 /// out. Unreadable or malformed files are skipped.
 pub fn load_sigs(format: object::BinaryFormat) -> Vec<Signature> {
-    use unlace_decomp::kuna_loadoptions::{env, scoped};
+    use unlace_decomp::loadoptions::{env, scoped};
     let list = scoped(|o| o.flirt_sigs.clone()).unwrap_or_else(env::flirt_sigs);
     if list.is_empty() {
         return Vec::new();

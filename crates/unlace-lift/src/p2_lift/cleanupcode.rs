@@ -77,8 +77,8 @@
 //!
 //! Registered at the top of `mainloop` and self-gated on
 //! `get_heritage_pass() == 0` — the documented pre-SSA window
-//! ([`crate::p8_structure::kuna_outline`] and
-//! [`crate::p2_lift::kuna_loweredswitch`] use the same one).  This mirrors
+//! ([`crate::p8_structure::outline`] and
+//! [`crate::p2_lift::loweredswitch`] use the same one).  This mirrors
 //! Oxidizer's `STAGE = BEFORE_VARIABLE_RECOVERY`, and the timing is the whole
 //! point: before SSA there are no `INDIRECT` call-effect ops to unpick and no
 //! `MULTIEQUAL` to patch, the CALL is not a control-transfer op so the CFG is
@@ -376,14 +376,14 @@ impl Action for ActionRemoveCleanupCode {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_cleanupcode::RemoveCleanupCode>()
+            .get::<crate::cleanupcode::RemoveCleanupCode>()
             .0
         {
             return 0;
         }
         // The pre-SSA window: no INDIRECT call effects to unpick, and the
         // argument setup still dies to the following dead-code fixpoint.
-        if data.is_settled(crate::kuna_maturity::Fact::Ssa) || data.num_calls() == 0 {
+        if data.is_settled(crate::maturity::Fact::Ssa) || data.num_calls() == 0 {
             return 0;
         }
         // Never gut the glue itself: a cleanup routine's body is calls to other
@@ -410,7 +410,7 @@ crate::kuna_flag!(
     /// the argument setup that only feeds it never reach the output
     /// (`option cleanupcode`).  Structurally inert on a C binary — no C ELF
     /// resolves a call to one of those names.  See
-    /// [`crate::p2_lift::kuna_cleanupcode`].
+    /// [`crate::p2_lift::cleanupcode`].
     RemoveCleanupCode,
     "cleanupcode",
     "Rust drop/deallocate call removal",

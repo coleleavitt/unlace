@@ -4,7 +4,7 @@ use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use super::kuna_calleememory::RawOp;
+use super::calleememory::RawOp;
 
 fn overlaps(left: &VarnodeData, right: &VarnodeData) -> bool {
     left.space.as_ref().map(|s| s.get_index()) == right.space.as_ref().map(|s| s.get_index())

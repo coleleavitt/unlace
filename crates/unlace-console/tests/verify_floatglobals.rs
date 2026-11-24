@@ -34,9 +34,9 @@ fn float_globals(fixture: &str) -> BTreeMap<String, u8> {
     let input = prog
         .arch()
         .kuna_states
-        .get_rc::<unlace_decomp::kuna_floatglobals::FloatScan>()
+        .get_rc::<unlace_decomp::floatglobals::FloatScan>()
         .expect("a loaded image stashes the scan input");
-    let found = unlace_analysis::listing::kuna_floatglobals::scan(prog.arch(), &input);
+    let found = unlace_analysis::listing::floatglobals::scan(prog.arch(), &input);
 
     let bytes = std::fs::read(&bin).expect("fixture readable");
     let file = object::File::parse(&*bytes).expect("fixture parses");

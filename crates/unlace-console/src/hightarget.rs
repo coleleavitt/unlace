@@ -188,12 +188,12 @@ fn printed_by_pass(fd: &Funcdata, name: &str, touched: &[DirectiveSymbol]) -> bo
 
 /// The HighVariables the printer declared as `name`, a local printed under its
 /// library name answering to the number it is numbered under
-/// (`unlace_decomp::kuna_libcnames`).
+/// (`unlace_decomp::libcnames`).
 fn printed_highs(fd: &Funcdata, name: &str) -> Vec<HighVariableId> {
     fd.high_bank()
         .iter()
         .filter(|(id, h)| {
-            unlace_decomp::kuna_libcnames::shown_number(fd, *id).or(h.kuna_name()) == Some(name)
+            unlace_decomp::libcnames::shown_number(fd, *id).or(h.kuna_name()) == Some(name)
         })
         // A CONCAT piece shares its root's name and carries the root's in-symbol
         // offset; the root (offset -1) is the declaration and the only nameable
@@ -212,14 +212,14 @@ fn printed_highs(fd: &Funcdata, name: &str) -> Vec<HighVariableId> {
         .collect()
 }
 
-/// The number a library name (`unlace_decomp::kuna_libcnames`) stands for, so a
+/// The number a library name (`unlace_decomp::libcnames`) stands for, so a
 /// directive reaches the local by either of its names and a replay records the
 /// number, whether or not this run prints library names. `None` when no local
 /// has the library name `name`, or when an earlier directive in the batch gave
 /// `name` to another local: that rename took the library name, which is then
 /// that local's.
 fn library_number(fd: &Funcdata, name: &str) -> Option<String> {
-    let number = unlace_decomp::kuna_libcnames::number_for(fd, name)?;
+    let number = unlace_decomp::libcnames::number_for(fd, name)?;
     let lm = fd.get_scope_local()?;
     let given = fd
         .kuna_directive_symbols()
@@ -318,7 +318,7 @@ fn resolve_shown(
     if !shared {
         return Some(Ok((LocalTarget::Printed(target), key)));
     }
-    unlace_decomp::kuna_stablenames::relabel(fd, local.high, shown);
+    unlace_decomp::stablenames::relabel(fd, local.high, shown);
     Some(Ok((LocalTarget::Printed(target), shown.to_string())))
 }
 
@@ -524,7 +524,7 @@ pub fn apply_local(
     }
     let number = library_number(fd, name);
     let name = number.as_deref().unwrap_or(name);
-    if unlace_decomp::kuna_stackobjectasserts::apply(fd, name, newname, retype.clone())? {
+    if unlace_decomp::stackobjectasserts::apply(fd, name, newname, retype.clone())? {
         return Ok(None);
     }
     let (target, name) = resolve_target(
@@ -540,7 +540,7 @@ pub fn apply_local(
             let lock_type = retype.is_some();
             let unit_type = retype
                 .as_ref()
-                .and_then(|ct| unlace_decomp::kuna_stablenames::unit_retype(&target.dtype, ct));
+                .and_then(|ct| unlace_decomp::stablenames::unit_retype(&target.dtype, ct));
             let ct = retype.unwrap_or_else(|| target.dtype.clone());
             let symbol = bind_printed_local(fd, &target, newname, ct, lock_type)?;
             fd.kuna_record_directive_symbol(DirectiveSymbol {
@@ -567,7 +567,7 @@ pub fn apply_local(
         })
         .and_then(|lm| lm.database().symbol(sym).dtype.clone())
         .zip(retype.as_ref())
-        .and_then(|(from, to)| unlace_decomp::kuna_stablenames::unit_retype(&from, to));
+        .and_then(|(from, to)| unlace_decomp::stablenames::unit_retype(&from, to));
     if let (Some(size), Some(ct)) = (bound_size, retype.as_ref()) {
         check_width(size, ct)?;
     }
@@ -578,7 +578,7 @@ pub fn apply_local(
         }
     }
     let retype_given = retype.is_some();
-    let parameter = crate::kuna_paramasserts::prepare(fd, sym, retype.as_ref())?;
+    let parameter = crate::paramasserts::prepare(fd, sym, retype.as_ref())?;
     // A parameter's storage is model-derived; locking its name or type locks the
     // input side of the prototype too (C++ `IfcRename`/`IfcRetype`).
     let lm = fd
@@ -631,7 +631,7 @@ pub fn apply_local(
         }
     }
     if let Some(parameter) = parameter {
-        crate::kuna_paramasserts::apply(fd, sym, parameter);
+        crate::paramasserts::apply(fd, sym, parameter);
     }
     fd.kuna_record_directive_symbol(DirectiveSymbol {
         symbol: sym,
@@ -672,7 +672,7 @@ fn resolve_target(
 /// storage, as a `type` directive stating its present type would map. A
 /// stack local or a parameter keeps the type the analysis gives it, and the
 /// next decompile isolates it again by its storage
-/// (`unlace_decomp::kuna_isolated`).
+/// (`unlace_decomp::isolated`).
 pub fn isolate_local(
     fd: &mut Funcdata,
     name: &str,

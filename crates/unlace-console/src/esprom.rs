@@ -17,7 +17,7 @@ use unlace_analysis::loader::firmware::esprom::{self, RegionKind};
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_decomp::dtype::type_metatype::TYPE_UNKNOWN;
-use unlace_decomp::kuna_esprom::{EspChip, EspRom};
+use unlace_decomp::esprom::{EspChip, EspRom};
 use unlace_decomp::varnode::varnode_flags;
 use unlace_sleigh::loadimage::RawLoadImage;
 
@@ -85,12 +85,12 @@ fn chip_in_force(prog: &ConsoleProgram) -> Option<EspChip> {
     match prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_esprom::EspRom>()
+        .get::<unlace_decomp::esprom::EspRom>()
     {
         EspRom::Auto => prog
             .arch()
             .kuna_tables
-            .get::<unlace_decomp::kuna_esprom::ImageChip>()
+            .get::<unlace_decomp::esprom::ImageChip>()
             .clone(),
         value => value.chip(),
     }

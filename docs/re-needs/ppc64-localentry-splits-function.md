@@ -14,7 +14,7 @@ rounds: [2]
 first_seen_round: 2
 attempts: 1
 covered_by_option: ppclocalentry
-touches: [crates/unlace-analysis/src, crates/unlace-decomp/src/p2_lift/kuna_funcboundflow.rs]
+touches: [crates/unlace-analysis/src, crates/unlace-decomp/src/p2_lift/funcboundflow.rs]
 scope: small
 regression_of: null
 pr: "390"
@@ -162,7 +162,7 @@ overturned while the symptom stood in all 8.
   point, `st_value + 8`, so a call-target-seeded discovery files 0x948 as a function of its own. kuna has
   the information to know better and does not use it: `readelf -sW` shows these symbols carry
   `st_size == 0` and `[<localentry>: 8]` in `st_other`, and nothing in `unlace-analysis` consumes that
-  ELFv2 annotation. (2) `funcboundflow` (`p2_lift/kuna_funcboundflow.rs`) then does exactly what it says
+  ELFv2 annotation. (2) `funcboundflow` (`p2_lift/funcboundflow.rs`) then does exactly what it says
   on the tin -- a fall-through reaching a known function entry is truncated -- and the "known function
   entry" it stops at is 8 bytes into the function being decompiled.
 - The narrow fix is to fold a local-entry address back into its global entry at discovery time, so

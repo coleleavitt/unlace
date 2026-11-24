@@ -187,20 +187,20 @@ pub fn efi_global_name(ty: &Datatype) -> Option<&'static str> {
     })
 }
 
-impl crate::kuna_optionset::KunaOption for StoreTypeMode {
+impl crate::optionset::KunaOption for StoreTypeMode {
     const NAME: &'static str = "storetype";
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::kuna_storetype::StoreTypeMode::Off
+        crate::storetype::StoreTypeMode::Off
     }
 
     fn shipped() -> Self {
-        crate::kuna_storetype::StoreTypeMode::Uefi
+        crate::storetype::StoreTypeMode::Uefi
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        Ok(crate::kuna_storetype::StoreTypeMode::parse(value.trim())
+        Ok(crate::storetype::StoreTypeMode::parse(value.trim())
             .map_err(unlace_base::error::KunaError::parse)
             .map(|mode| {
                 (

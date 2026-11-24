@@ -30,8 +30,8 @@ use unlace_num::pcoderaw::VarnodeData;
 
 use crate::cpool::{CPoolRecord, cpool_tag};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
+use crate::emittedop::Operation;
 use crate::fspec::PrototypePieces;
-use crate::kuna_emittedop::Operation;
 
 pub use format::{
     CatchHandler, DexFile, EncodedMethod, TryItem, java_type_name, simple_class_name,

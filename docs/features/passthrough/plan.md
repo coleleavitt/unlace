@@ -2,17 +2,17 @@
 
 ## The change
 
-A new P4 option `passthrough` (default off), in a `kuna_passthrough.rs` module
+A new P4 option `passthrough` (default off), in a `passthrough.rs` module
 inside `p4_calls/`. It reads `protoorder`'s stated callee prototype to recover a
 register a function forwards untouched to a callee that reads it, as a parameter
 of that function, and the return value of a tail call it hands straight back.
 
 ## The seams it touches
 
-- `RecoveredTypes` (`kuna_protoorder.rs`) gains `arity_sound` (the `lock`-mode
+- `RecoveredTypes` (`protoorder.rs`) gains `arity_sound` (the `lock`-mode
   arity bar, computed only when the option is on) and `output` (the callee's
   stated return). Nothing about the stated TYPES changes.
-- `CalleeEntryDead::live_input_width` (`kuna_calleedeadarg.rs`) reports the width
+- `CalleeEntryDead::live_input_width` (`calleedeadarg.rs`) reports the width
   a callee body consumes, so a forwarded pointer read as `edi` is passed as `int`.
 - `claim_untouched_registers` runs at the end of `ActionFuncLink` (claims only at
   `first_calls`); `claimed_range` keeps `check_input_trial_use` from scoring a
@@ -34,7 +34,7 @@ callee-body probes are `calleedeadarg`'s existing bounded walks.
 
 ## Tests
 
-- Unit: `kuna_passthrough/tests.rs` — the option surface, claim overlap
+- Unit: `passthrough/tests.rs` — the option surface, claim overlap
   (`overlaps_claim`: width, neighbour, space), the extension plan (`extension`:
   leading run, stated order, stop at the first gap), and `live_input_width`.
 - Stage: `tests/stages/kuna-passthrough.toml` — the negative control (the console

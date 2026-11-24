@@ -126,11 +126,11 @@ impl Action for ActionStart {
         // C++: data.startProcessing(); return 0;
         // STUB(W3-op/W4): Funcdata::startProcessing (the per-function p-code
         // gather / processing-start bookkeeping) is not in the merged tree.
-        crate::kuna_alloca::rewrite_raw(data);
-        crate::kuna_varargsave::strip(data);
-        crate::kuna_vaargconst::rewrite(data);
-        crate::kuna_x87emptyreturn::capture(data);
-        crate::kuna_x87free::annotate(data);
+        crate::alloca::rewrite_raw(data);
+        crate::varargsave::strip(data);
+        crate::vaargconst::rewrite(data);
+        crate::x87emptyreturn::capture(data);
+        crate::x87free::annotate(data);
         0
     }
 }
@@ -305,17 +305,17 @@ impl Action for ActionConstbase {
         let bb = data.bblocks_get_block(0);
         let bb_start = data.bblocks_block_start(bb);
 
-        if let Err(error) = crate::kuna_callmechanisms::apply_entry(data)
-            .and_then(|_| crate::kuna_registerslots::apply(data))
+        if let Err(error) =
+            crate::callmechanisms::apply_entry(data).and_then(|_| crate::registerslots::apply(data))
         {
-            data.kuna_state_mut::<crate::kuna_callmechanisms::State>()
+            data.kuna_state_mut::<crate::callmechanisms::State>()
                 .failure = Some(error.to_string());
             return 0;
         }
         if let Err(error) =
-            crate::kuna_dex::apply_entry(data).and_then(|_| crate::kuna_jvm::apply_entry(data))
+            crate::dex::apply_entry(data).and_then(|_| crate::jvm::apply_entry(data))
         {
-            data.kuna_state_mut::<crate::kuna_callmechanisms::State>()
+            data.kuna_state_mut::<crate::callmechanisms::State>()
                 .failure = Some(error.to_string());
             return 0;
         }
@@ -440,14 +440,14 @@ impl Action for ActionHeritage {
         if data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_passthrough::PassThrough>()
+            .get::<crate::passthrough::PassThrough>()
             .0
         {
-            crate::kuna_entryreads::capture(data);
+            crate::entryreads::capture(data);
         }
         // (kuna) Expand a frame `rep movs` with a known count before the stack's
-        // first heritage (`kuna_repframecopy.rs`).
-        crate::kuna_repframecopy::expand_all(data);
+        // first heritage (`repframecopy.rs`).
+        crate::repframecopy::expand_all(data);
         // (kuna) Repair any synthetic lowered-switch BRANCHIND whose input
         // heritage normalized away (see `kuna_repair_lowered_switch_inputs`).
         // A no-op unless a lowered-switch was installed this function, so it
@@ -624,8 +624,8 @@ impl Action for ActionVarnodeProps {
                             }
                         }
                     }
-                    skip |= crate::kuna_stackalias::holds_store(data, vn);
-                    skip |= def.is_some_and(|op| crate::kuna_volatileload::is_volatile(data, op));
+                    skip |= crate::stackalias::holds_store(data, vn);
+                    skip |= def.is_some_and(|op| crate::volatileload::is_volatile(data, op));
                     if !skip {
                         data.vbank_mut()
                             .get_mut(vn)
@@ -983,7 +983,7 @@ impl Action for ActionRedundBranch {
                 if bl_size_in == 1
                     && !bl_is_entry
                     && !bb_is_switch
-                    && !crate::kuna_javatry::is_dispatch_only(data, bl)
+                    && !crate::javatry::is_dispatch_only(data, bl)
                 {
                     // splice_block_basic Errs when the spliced block ends in a
                     // branch op (STUB(W3-op)); a successful splice counts as a

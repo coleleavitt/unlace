@@ -1,8 +1,8 @@
 //! Preserve nullable symbol identity separately from a pre-link display address.
-use super::kuna_mipsreloc;
+use super::mipsreloc;
 use object::{Object, ObjectSection, ObjectSymbol, RelocationTarget, SectionIndex, SymbolIndex};
 use std::collections::HashMap;
-use unlace_decomp::kuna_nullable_reloc::{NullableRelocation, Operand};
+use unlace_decomp::nullable_reloc::{NullableRelocation, Operand};
 
 fn is_mips(arch: object::Architecture) -> bool {
     matches!(
@@ -86,7 +86,7 @@ pub(super) fn references(
         };
         let data = section.data().unwrap_or(&[]);
         let relocs: Vec<_> = section.relocations().collect();
-        let lows = kuna_mipsreloc::lo_halves(file, &relocs, data, file.is_little_endian());
+        let lows = mipsreloc::lo_halves(file, &relocs, data, file.is_little_endian());
         for (i, (offset, reloc)) in relocs.iter().enumerate() {
             let RelocationTarget::Symbol(idx) = reloc.target() else {
                 continue;
@@ -100,7 +100,7 @@ pub(super) fn references(
             let Some(&value) = externs.get(&idx) else {
                 continue;
             };
-            let Some(kind) = kuna_mipsreloc::r_type_of(reloc) else {
+            let Some(kind) = mipsreloc::r_type_of(reloc) else {
                 continue;
             };
             let Some(field) = base.checked_add(*offset) else {
@@ -156,7 +156,7 @@ pub(super) fn references(
                     out.push(reference);
                     continue;
                 }
-                if kuna_mipsreloc::targets_code(kind)
+                if mipsreloc::targets_code(kind)
                     || matches!(kind & 0xff, 0 | 9 | 19 | 20 | 21 | 22 | 23 | 37)
                 {
                     continue;

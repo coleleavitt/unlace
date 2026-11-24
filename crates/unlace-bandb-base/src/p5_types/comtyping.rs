@@ -69,7 +69,7 @@ crate::kuna_arch_state!(ComInterfaces);
 
 /// The image's interface ids, shared through the architecture's states; empty
 /// before the analysis commits them (and always, with `com` off).
-pub fn com_interfaces(states: &crate::kuna_archstate::ArchStates) -> Rc<ComInterfaces> {
+pub fn com_interfaces(states: &crate::archstate::ArchStates) -> Rc<ComInterfaces> {
     states.get_rc::<ComInterfaces>().unwrap_or_default()
 }
 
@@ -129,7 +129,7 @@ pub fn out_param_type(
     if slot != out || o.num_input() <= out {
         return None;
     }
-    let iid = crate::kuna_objcrettype::constant_address(data, o.get_in(riid)?, 0)?;
+    let iid = crate::objcrettype::constant_address(data, o.get_in(riid)?, 0)?;
     let iface = known.0.get(&iid)?;
     let types = arch.types()?;
     let space = arch.manage.get_default_data_space()?;
@@ -152,7 +152,7 @@ fn multi_qi_type(
     array: i32,
     known: &ComInterfaces,
 ) -> Option<Rc<Datatype>> {
-    let n = crate::kuna_objcrettype::constant_address(data, o.get_in(count)?, 0)?;
+    let n = crate::objcrettype::constant_address(data, o.get_in(count)?, 0)?;
     if n == 0 || n > MAX_QI {
         return None;
     }
@@ -308,7 +308,7 @@ fn element_ids(data: &Funcdata, base: i64, n: u64, stride: i64, ptr: i32) -> Vec
         if data.vbank().get(value).map(|v| v.get_size()) != Some(ptr) {
             continue;
         }
-        let iid = crate::kuna_objcrettype::constant_address(data, value, 0);
+        let iid = crate::objcrettype::constant_address(data, value, 0);
         seen.entry(i)
             .and_modify(|e| {
                 if *e != iid {

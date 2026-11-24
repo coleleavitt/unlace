@@ -41,7 +41,7 @@
 //!    (`>= 4096`, no byte masks), and a bare integer that happens to look like an
 //!    address is not reported. A constant the instruction computed from its own
 //!    address is an address whatever its size, so it is exempt
-//!    ([`super::kuna_pcform`]). A materialized address that is not dereferenced is
+//!    ([`super::pcform`]). A materialized address that is not dereferenced is
 //!    [`XrefKind::Data`]: the address-taken case — a function pointer, a string
 //!    pointer, a global's address.
 //!
@@ -78,20 +78,20 @@ use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::{AssemblyEmit, PcodeEmit, Translate};
 
+use super::calltable;
 use super::classify::classify;
 use super::context::ContextPainter;
-use super::kuna_calltable;
-use super::kuna_pcform::{Formed, PcForm};
-use super::kuna_picbase::{self, Ctx as PicCtx, PicBase};
-use super::kuna_picpool::{self, GotImage, Insn, PicPool};
-use super::kuna_pltstub::PltStubs;
-use super::kuna_poolref::PoolImage;
-use super::kuna_regcarry::{self, Machine as CarryMachine};
-use super::kuna_switchflow;
-use super::kuna_switchtable;
 use super::model::{FlowKind, FlowType, RawOp};
-#[path = "kuna_prefixreuse.rs"]
-mod kuna_prefixreuse;
+use super::pcform::{Formed, PcForm};
+use super::picbase::{self, Ctx as PicCtx, PicBase};
+use super::picpool::{self, GotImage, Insn, PicPool};
+use super::pltstub::PltStubs;
+use super::poolref::PoolImage;
+use super::regcarry::{self, Machine as CarryMachine};
+use super::switchflow;
+use super::switchtable;
+#[path = "prefixreuse.rs"]
+mod prefixreuse;
 
 /// ELF section-header flag `SHF_ALLOC` (the section occupies memory at runtime).
 const SHF_ALLOC: u64 = 0x2;
@@ -870,7 +870,7 @@ pub fn build_with_focus(
 
 /// [`build_with_focus`], where a focus address may also lie in one of
 /// `unflagged`: executable memory in a section not marked as code
-/// ([`super::kuna_unflaggedcode`]). The caller naming such an address is not
+/// ([`super::unflaggedcode`]). The caller naming such an address is not
 /// enough to read its bytes as instructions; it is decoded when the image says
 /// it is code, because a direct call or branch the seeded walk decoded targets
 /// it, or because it is one of `declared` (an ELF `STT_FUNC`). Only its own body
@@ -900,7 +900,7 @@ pub fn build_with_unflagged_focus(
 ///
 /// (kuna `armframes`) On an ARM image a computed jump is tried as an A32
 /// `addls pc,pc,rN,lsl #2` / `ldrls pc,[pc,rN,lsl #2]` table
-/// ([`super::kuna_a32switch`]) before any other table read, because its
+/// ([`super::a32switch`]) before any other table read, because its
 /// PC-relative operand names the dispatch itself rather than a table
 /// ([`super::classify::Classified::predicated_skip`]).
 ///
@@ -917,7 +917,7 @@ pub fn build_with_unflagged_focus(
 /// survive, and rendered in that mode only when kept.
 ///
 /// (kuna) On an ARM image a PLT stub's partial sums are not
-/// references, its slot is ([`super::kuna_pltstub`]).
+/// references, its slot is ([`super::pltstub`]).
 fn descend(
     file: &object::File,
     arch: &Architecture,
@@ -987,7 +987,7 @@ fn descend(
     // a 32-bit one pays for probing every seed's prologue.
     let picbase: Option<(PicCtx, PicBase)> = if !file.is_64() && !mapped.is_empty() {
         PicCtx::new(arch, data_space.as_ref()).and_then(|ctx| {
-            kuna_picbase::detect(file, translate, &code_space, &ctx, &seed_set).map(|b| (ctx, b))
+            picbase::detect(file, translate, &code_space, &ctx, &seed_set).map(|b| (ctx, b))
         })
     } else {
         None
@@ -1006,7 +1006,7 @@ fn descend(
     let got_calls = if mapped.is_empty() {
         None
     } else {
-        super::kuna_gotcall::GotCalls::new(file, arch, &exec_set)
+        super::gotcall::GotCalls::new(file, arch, &exec_set)
     };
     // (kuna) `picpool`: the GOT's file bytes, read through a PC-composed base.
     let got = if mapped.is_empty() {
@@ -1016,13 +1016,13 @@ fn descend(
     };
     // (kuna) `pcform`: the addresses an instruction forms from its own address,
     // which the `checkOperands` floor must not drop. `None` unless the image
-    // maps something below that floor. See [`super::kuna_pcform`].
+    // maps something below that floor. See [`super::pcform`].
     let pcform = PcForm::new(file, pool.as_ref(), &mapped);
     let max_entries = match arch.max_jumptable_size {
-        0 => kuna_switchtable::DEFAULT_MAX_ENTRIES,
+        0 => switchtable::DEFAULT_MAX_ENTRIES,
         n => n as usize,
     };
-    let preserved = kuna_switchtable::preserved_registers(arch);
+    let preserved = switchtable::preserved_registers(arch);
     let named_set = std::cell::OnceCell::new();
     let named = |at: u64| {
         pool.as_ref()
@@ -1030,9 +1030,7 @@ fn descend(
     };
     // (kuna `switchextent`) A dispatch's function spans the seeds around it;
     // its jump tables bound one no range check does (`kuna_switchextent`).
-    let function_tables = pool
-        .as_ref()
-        .map(super::kuna_switchextent::FunctionTables::new);
+    let function_tables = pool.as_ref().map(super::switchextent::FunctionTables::new);
     let extent_entries = seed_set.clone();
     let next_table = |from: u64, table: u64| {
         let lo = extent_entries.range(..=from).next_back().copied()?;
@@ -1047,7 +1045,7 @@ fn descend(
             table,
         )
     };
-    let reach = kuna_switchtable::Reach {
+    let reach = switchtable::Reach {
         max_entries,
         preserved: &preserved,
         settled: false,
@@ -1059,7 +1057,7 @@ fn descend(
             .then_some(&next_table),
     };
     let arm = file.architecture() == object::Architecture::Arm;
-    let pic_image = pool.as_ref().map(|pool| kuna_picpool::Image {
+    let pic_image = pool.as_ref().map(|pool| picpool::Image {
         pool,
         mapped: &mapped,
         extended: [".got", ".got.plt", ".dynamic"]
@@ -1080,13 +1078,11 @@ fn descend(
         pool.as_ref(),
         match arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::MovwPairs>()
+            .get::<unlace_decomp::analysisgates::MovwPairs>()
         {
-            unlace_decomp::kuna_analysisgates::MovwPairs::Off => kuna_regcarry::HalfPairs::Off,
-            unlace_decomp::kuna_analysisgates::MovwPairs::Access => {
-                kuna_regcarry::HalfPairs::Access
-            }
-            unlace_decomp::kuna_analysisgates::MovwPairs::On => kuna_regcarry::HalfPairs::On,
+            unlace_decomp::analysisgates::MovwPairs::Off => regcarry::HalfPairs::Off,
+            unlace_decomp::analysisgates::MovwPairs::Access => regcarry::HalfPairs::Access,
+            unlace_decomp::analysisgates::MovwPairs::On => regcarry::HalfPairs::On,
         },
     );
     // (kuna) `picpool`: odd composed addresses held for the Thumb-bit decision.
@@ -1098,29 +1094,27 @@ fn descend(
     // has settled so a table that runs into the next one stops at its cases.
     let mut call_sites: Vec<(u64, VarnodeData)> = Vec::new();
     let thumb_tables = sections_are_runtime
-        .then(|| {
-            super::kuna_thumbswitch::HalfwordTables::new(file, data_space.clone(), max_entries)
-        })
+        .then(|| super::thumbswitch::HalfwordTables::new(file, data_space.clone(), max_entries))
         .flatten();
     let a32_tables = pool
         .as_ref()
-        .filter(|_| super::kuna_a32switch::applies(file, arch))
-        .map(|pool| super::kuna_a32switch::A32Tables::new(arch, pool));
+        .filter(|_| super::a32switch::applies(file, arch))
+        .map(|pool| super::a32switch::A32Tables::new(arch, pool));
 
     let preserve_bodies = sections_are_runtime
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0
         && file.architecture() == object::Architecture::Arm;
     let prologues = preserve_bodies
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+            .get::<unlace_decomp::analysisgates::ArmFrames>()
             .inventory
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+            .get::<unlace_decomp::analysisgates::ArmFrames>()
             .full;
     let mut st = State::new(&seed_set, measure || preserve_bodies);
 
@@ -1135,20 +1129,20 @@ fn descend(
     // Share the decoded partition with prologue recovery and AIF.
     let gapwalk = arch
         .kuna_options
-        .get::<unlace_decomp::kuna_aif::AifMode>()
+        .get::<unlace_decomp::aif::AifMode>()
         .enabled();
     let mut fingerprint_contexts =
-        (prologues && gapwalk).then(super::kuna_fingerprintcontext::FingerprintContexts::default);
+        (prologues && gapwalk).then(super::fingerprintcontext::FingerprintContexts::default);
     let mut prologues_done = false;
     let mut pending_prologues: VecDeque<u64> = VecDeque::new();
     let mut frame_candidates = Vec::new();
     let mut frame_cache = crate::aif::ArmFrames::default();
     let mut frame_partition = None;
     let mut walk_context =
-        super::kuna_walkcontext::WalkContext::new(prologues, translate, arch, &code_space, &exec);
+        super::walkcontext::WalkContext::new(prologues, translate, arch, &code_space, &exec);
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch.input_arm_isa_override
     {
@@ -1157,7 +1151,7 @@ fn descend(
         }
     }
     let mut frame_context = None;
-    let mut frame_modes: Option<super::kuna_framemode::FrameModes> = None;
+    let mut frame_modes: Option<super::framemode::FrameModes> = None;
     let mut frame_reconciled = false;
     let mut gapwalk_done = false;
     let mut partition: Vec<(u64, u32)> = Vec::new();
@@ -1229,7 +1223,7 @@ fn descend(
                     gapwalk_done = false;
                     frame_partition = Some(listing);
                     frame_context = translate.context_scope();
-                    frame_modes = Some(super::kuna_framemode::FrameModes::new(&found));
+                    frame_modes = Some(super::framemode::FrameModes::new(&found));
                 }
                 pending_prologues.extend(found.iter().copied());
                 frame_candidates = found;
@@ -1324,7 +1318,7 @@ fn descend(
                             frame_cache.prefixes_in_arm_context(&replacements, arch, &code_space)
                         });
                     if extendable {
-                        kuna_prefixreuse::discard_bodies(
+                        prefixreuse::discard_bodies(
                             &mut st,
                             &mut partition,
                             &mut recovered_spans,
@@ -1382,8 +1376,7 @@ fn descend(
                         call_sites.clear();
                         func_queue = seed_set.iter().copied().collect();
                         frame_candidates = reconciled.into_iter().collect();
-                        frame_modes =
-                            Some(super::kuna_framemode::FrameModes::new(&frame_candidates));
+                        frame_modes = Some(super::framemode::FrameModes::new(&frame_candidates));
                         frame_reconciled = false;
                         gapwalk_done = false;
                         pending_prologues = frame_candidates.iter().copied().collect();
@@ -1422,7 +1415,7 @@ fn descend(
                         &exec,
                         fingerprint_contexts.as_ref(),
                         frame_partition.as_ref(),
-                        Some(&crate::aif::kuna_aifbracket::BracketEvidence::from_object(
+                        Some(&crate::aif::aifbracket::BracketEvidence::from_object(
                             file, &exec,
                         )),
                     );
@@ -1434,19 +1427,19 @@ fn descend(
                 // or nothing.
                 None if arch
                     .kuna_options
-                    .get::<unlace_decomp::kuna_analysisgates::Calltable>()
+                    .get::<unlace_decomp::analysisgates::Calltable>()
                     .0
                     && !waiting.is_empty()
                     && pool.is_some() =>
                 {
-                    let settled = kuna_switchtable::Reach {
+                    let settled = switchtable::Reach {
                         settled: true,
                         ..reach
                     };
                     let mut left: Vec<_> = waiting.drain().flat_map(|(_, sites)| sites).collect();
                     left.sort_unstable_by_key(|&(vma, ..)| vma);
                     for (vma, _, branch) in left {
-                        let read = kuna_switchtable::register_targets(
+                        let read = switchtable::register_targets(
                             translate,
                             &code_space,
                             data_space.as_ref(),
@@ -1460,10 +1453,10 @@ fn descend(
                         if !read.unbounded {
                             continue;
                         }
-                        let run = kuna_calltable::call_table_run(read.cases, arm, |t| {
+                        let run = calltable::call_table_run(read.cases, arm, |t| {
                             st.decoded.contains(&t) && !st.funcs.contains(&t)
                         });
-                        if !kuna_calltable::is_call_table(&run, true, |t| st.funcs.contains(&t)) {
+                        if !calltable::is_call_table(&run, true, |t| st.funcs.contains(&t)) {
                             continue;
                         }
                         let text = assembly(translate, vma, &code_space);
@@ -1478,7 +1471,7 @@ fn descend(
                 }
                 None if !call_sites.is_empty() && pool.is_some() => {
                     for (vma, callind) in std::mem::take(&mut call_sites) {
-                        let read = kuna_switchtable::register_targets(
+                        let read = switchtable::register_targets(
                             translate,
                             &code_space,
                             data_space.as_ref(),
@@ -1489,7 +1482,7 @@ fn descend(
                             &exec,
                             &reach,
                         );
-                        let run = kuna_calltable::call_table_run(read.cases, arm, |t| {
+                        let run = calltable::call_table_run(read.cases, arm, |t| {
                             st.decoded.contains(&t) && !st.funcs.contains(&t)
                         });
                         let text = assembly(translate, vma, &code_space);
@@ -1525,13 +1518,13 @@ fn descend(
         let mut woken: Vec<(u64, _, VarnodeData)> = Vec::new();
         // (kuna) `switchflow`: this body's intra-function edges as `(to, from)`,
         // and the dispatches the linear read declined, read over those edges
-        // once the body drains. See [`super::kuna_switchflow`].
+        // once the body drains. See [`super::switchflow`].
         let mut body_edges: Vec<(u64, u64)> = Vec::new();
         let mut pending: Vec<(u64, _, VarnodeData)> = Vec::new();
         // Only collected when a base exists: the admission rule needs the whole
-        // body before any of it can be attributed (`kuna_picbase::scope`), and
+        // body before any of it can be attributed (`picbase::scope`), and
         // buffering it costs nothing on the overwhelmingly common `None` path.
-        let mut body: Vec<kuna_picbase::BaseCandidate> = Vec::new();
+        let mut body: Vec<picbase::BaseCandidate> = Vec::new();
         // (kuna) `picpool`: the pool words this body is carrying towards the
         // `add` that turns each into an address. Per function, because the values
         // it tracks are live only inside one straight-line run.
@@ -1550,7 +1543,7 @@ fn descend(
         while let Some((vma, mode)) = insn_queue.pop_front().or_else(|| {
             let p = pool.as_ref()?;
             for (vma, mode, branch) in std::mem::take(&mut woken) {
-                let mut read = kuna_switchtable::TableRead::default();
+                let mut read = switchtable::TableRead::default();
                 if let Some(tables) = &a32_tables {
                     let decoded = |at: u64| st.decoded.contains(&at);
                     read = tables.targets(translate, &code_space, &exec, &decoded, vma);
@@ -1605,12 +1598,12 @@ fn descend(
                 insn_queue.extend(read.cases.iter().map(|&target| (target, mode)));
             }
             if insn_queue.is_empty() && !pending.is_empty() {
-                let edges = kuna_switchflow::Edges::new(body_edges.clone());
+                let edges = switchflow::Edges::new(body_edges.clone());
                 for (vma, mode, branch) in std::mem::take(&mut pending) {
                     if st.funcs.range(..=vma).next_back() != Some(&entry) {
                         continue;
                     }
-                    let read = kuna_switchflow::register_targets(
+                    let read = switchflow::register_targets(
                         translate,
                         &code_space,
                         data_space.as_ref(),
@@ -1670,7 +1663,7 @@ fn descend(
             {
                 continue; // out of bounds (the `flow.rs` gate)
             }
-            let selection = super::kuna_walkcontext::InstructionMode::select(
+            let selection = super::walkcontext::InstructionMode::select(
                 arch,
                 translate,
                 &code_space,
@@ -1733,8 +1726,8 @@ fn descend(
             } else {
                 None
             };
-            let proven_call = proven_call
-                .filter(|_| !super::kuna_gotcall::has_stated_callee(arch, &code_space, vma));
+            let proven_call =
+                proven_call.filter(|_| !super::gotcall::has_stated_callee(arch, &code_space, vma));
             if let Some((_, target)) = proven_call {
                 c.flows.push(target);
             }
@@ -1776,14 +1769,14 @@ fn descend(
                 )
             };
             if let Some((slot, _)) = proven_call {
-                super::kuna_gotcall::resolved_slot_reads(&mut drefs, slot);
+                super::gotcall::resolved_slot_reads(&mut drefs, slot);
             }
             // (kuna) `regcarry`: the address a register pair forms across
-            // instructions. See [`super::kuna_regcarry`].
+            // instructions. See [`super::regcarry`].
             if let Some(m) = &carry_machine {
                 st.carry.step(
                     m,
-                    kuna_regcarry::Insn {
+                    regcarry::Insn {
                         vma,
                         ops: cap.ops(),
                         fall: c.fall_through,
@@ -1795,7 +1788,7 @@ fn descend(
             }
             // (kuna) `picpool`: the address a PC-relative literal-pool pair forms,
             // which is in neither of its two instructions on its own. See
-            // [`super::kuna_picpool`].
+            // [`super::picpool`].
             let seeded = pic_image.as_ref().and_then(|img| {
                 let insn = Insn {
                     vma,
@@ -1904,7 +1897,7 @@ fn descend(
             // bodies -- and every reference they form -- are invisible. Read the
             // table the jump indexes and take its entries up as successors of
             // THIS function: a case body is the dispatcher's own code. See
-            // [`super::kuna_switchtable`].
+            // [`super::switchtable`].
             if c.flows.iter().all(|&t| Some(t) == skip)
                 && c.flow.is_computed
                 && c.flow.is_jump
@@ -1912,7 +1905,7 @@ fn descend(
             {
                 if let Some(p) = pool.as_ref() {
                     let a32 = a32_tables.as_ref().map_or_else(
-                        kuna_switchtable::TableRead::default,
+                        switchtable::TableRead::default,
                         |tables| {
                             let decoded = |at: u64| st.decoded.contains(&at);
                             tables.decoded_targets(
@@ -1940,8 +1933,8 @@ fn descend(
                     }
                     // A jump on a register or a loaded temporary; not a trap
                     // (`ud2`), which branches on what its own `CALLOTHER` yields.
-                    if let Some(b) = branch
-                        .filter(|b| kuna_switchtable::key_of(b, data_space.as_ref()).is_some())
+                    if let Some(b) =
+                        branch.filter(|b| switchtable::key_of(b, data_space.as_ref()).is_some())
                     {
                         let trap = cap.ops().iter().any(|o| {
                             o.opcode == OpCode::CPUI_CALLOTHER && o.out.as_ref() == Some(b)
@@ -1958,7 +1951,7 @@ fn descend(
                             && stated.is_none()
                             && a32.gap.is_none()
                         {
-                            cases.extend(kuna_switchtable::targets(
+                            cases.extend(switchtable::targets(
                                 base,
                                 vma,
                                 p,
@@ -2011,18 +2004,18 @@ fn descend(
                     if unbounded
                         && arch
                             .kuna_options
-                            .get::<unlace_decomp::kuna_analysisgates::Calltable>()
+                            .get::<unlace_decomp::analysisgates::Calltable>()
                             .0
                     {
-                        cases = kuna_calltable::call_table_run(cases, arm, |t| {
+                        cases = calltable::call_table_run(cases, arm, |t| {
                             st.decoded.contains(&t) && !st.funcs.contains(&t)
                         });
                     }
                     let call_table = arch
                         .kuna_options
-                        .get::<unlace_decomp::kuna_analysisgates::Calltable>()
+                        .get::<unlace_decomp::analysisgates::Calltable>()
                         .0
-                        && kuna_calltable::is_call_table(&cases, stated.is_none(), |t| {
+                        && calltable::is_call_table(&cases, stated.is_none(), |t| {
                             st.funcs.contains(&t) && t != entry
                         });
                     if call_table {
@@ -2056,7 +2049,7 @@ fn descend(
             // pointers calls every entry of the table.
             if arch
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Calltable>()
+                .get::<unlace_decomp::analysisgates::Calltable>()
                 .0
                 && c.flows.is_empty()
                 && c.flow.is_computed
@@ -2068,7 +2061,7 @@ fn descend(
                     .find(|o| o.opcode == OpCode::CPUI_CALLIND)
                     .and_then(|o| o.ins.first());
                 if let (Some(p), Some(callind)) = (pool.as_ref(), callind) {
-                    let mut read = kuna_switchtable::register_targets(
+                    let mut read = switchtable::register_targets(
                         translate,
                         &code_space,
                         data_space.as_ref(),
@@ -2104,16 +2097,10 @@ fn descend(
             // rather than by buffering (and cloning) the whole p-code.
             if let Some((ctx, base)) = &picbase {
                 let fall_through = vma.wrapping_add(u64::from(len));
-                body.push(kuna_picbase::BaseCandidate {
+                body.push(picbase::BaseCandidate {
                     vma,
-                    writes_base: kuna_picbase::writes_base(cap.ops(), base),
-                    refs: kuna_picbase::refs_through_base(
-                        cap.ops(),
-                        base,
-                        ctx,
-                        &mapped,
-                        fall_through,
-                    ),
+                    writes_base: picbase::writes_base(cap.ops(), base),
+                    refs: picbase::refs_through_base(cap.ops(), base, ctx, &mapped, fall_through),
                 });
             }
         }
@@ -2144,7 +2131,7 @@ fn descend(
         if let Some((ctx, base)) = &picbase {
             body.sort_by_key(|c| c.vma);
             if let Some(scope) =
-                kuna_picbase::scope(translate, &code_space, ctx, &mut pc_thunks, base, &body)
+                picbase::scope(translate, &code_space, ctx, &mut pc_thunks, base, &body)
             {
                 for cand in &body {
                     if cand.refs.is_empty() || !scope.admits(cand.vma) {
@@ -2200,7 +2187,7 @@ fn descend(
 
     for (from, to, entry, mode) in std::mem::take(&mut st.skips) {
         if to != entry && st.funcs.contains(&to) {
-            let _selection = super::kuna_walkcontext::InstructionMode::select(
+            let _selection = super::walkcontext::InstructionMode::select(
                 arch,
                 translate,
                 &code_space,
@@ -2236,7 +2223,7 @@ fn descend(
     }
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
+        .get::<unlace_decomp::analysisgates::Addrtable>()
         .0
         && sections_are_runtime
     {
@@ -2277,9 +2264,9 @@ fn gap_entries(
     partition: &[(u64, u32)],
     funcs: &BTreeSet<u64>,
     exec: &[(u64, u64)],
-    contexts: Option<&super::kuna_fingerprintcontext::FingerprintContexts>,
+    contexts: Option<&super::fingerprintcontext::FingerprintContexts>,
     frame: Option<&super::Listing>,
-    bracket: Option<&crate::aif::kuna_aifbracket::BracketEvidence>,
+    bracket: Option<&crate::aif::aifbracket::BracketEvidence>,
 ) -> Vec<u64> {
     if funcs.len() < AIF_MIN_FUNCTIONS || partition.is_empty() {
         return Vec::new();
@@ -2297,7 +2284,7 @@ fn gap_entries(
     );
     let poolslide = (arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Aifpoolslide>()
+        .get::<unlace_decomp::analysisgates::Aifpoolslide>()
         .0
         && crate::loadimage_object::is_arm32_language(&arch.archid))
     .then_some(arch);
@@ -2308,10 +2295,10 @@ fn gap_entries(
             translate,
             Rc::clone(code_space),
             arch.kuna_options
-                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .get::<unlace_decomp::aif::AifMode>()
                 .strict(),
             arch.kuna_options
-                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .get::<unlace_decomp::aif::AifMode>()
                 .corroborate(),
             bracket,
             poolslide,
@@ -2325,10 +2312,10 @@ fn gap_entries(
             Rc::clone(code_space),
             listing.exec_ranges(),
             arch.kuna_options
-                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .get::<unlace_decomp::aif::AifMode>()
                 .strict(),
             arch.kuna_options
-                .get::<unlace_decomp::kuna_aif::AifMode>()
+                .get::<unlace_decomp::aif::AifMode>()
                 .corroborate(),
             bracket,
             poolslide,
@@ -2363,7 +2350,7 @@ fn render_fingerprints(
     translate: &dyn Translate,
     code_space: &Rc<AddrSpace>,
     partition: &[(u64, u32)],
-    contexts: Option<&super::kuna_fingerprintcontext::FingerprintContexts>,
+    contexts: Option<&super::fingerprintcontext::FingerprintContexts>,
 ) {
     if let Some(contexts) = contexts {
         contexts.render(listing, partition, arch, translate, code_space);
@@ -2397,7 +2384,7 @@ fn partition_listing(
     funcs: &BTreeSet<u64>,
     exec: &[(u64, u64)],
 ) -> super::Listing {
-    let mut insns = super::kuna_insnstore::InstructionStore::default();
+    let mut insns = super::insnstore::InstructionStore::default();
     for &(addr, len) in partition {
         insns.insert(
             addr,
@@ -2531,7 +2518,7 @@ struct State {
     refused: HashSet<u64>,
     /// (kuna) `regcarry`: the register constants in flight and the references
     /// they wait to file.
-    carry: kuna_regcarry::Tracker,
+    carry: regcarry::Tracker,
     /// Condition skips `(from, to, entry, mode)` held until the walk ends: one
     /// files a `Jump` only when `to` is then another function's entry, and only
     /// then is `from` rendered, in the `mode` the walk decoded it in.
@@ -2553,7 +2540,7 @@ impl State {
             }),
             switches: Vec::new(),
             refused: HashSet::new(),
-            carry: kuna_regcarry::Tracker::default(),
+            carry: regcarry::Tracker::default(),
             skips: Vec::new(),
         }
     }
@@ -2776,18 +2763,18 @@ fn branch_cases(
     branch: Option<&VarnodeData>,
     pool: &PoolImage,
     exec: &[(u64, u64)],
-    reach: &kuna_switchtable::Reach,
-    thumb_tables: Option<&super::kuna_thumbswitch::HalfwordTables<'_>>,
-) -> kuna_switchtable::TableRead {
+    reach: &switchtable::Reach,
+    thumb_tables: Option<&super::thumbswitch::HalfwordTables<'_>>,
+) -> switchtable::TableRead {
     let decoded = |at: u64| decoded.contains(&at);
     let mut read = match branch {
-        Some(branch) => kuna_switchtable::register_targets(
+        Some(branch) => switchtable::register_targets(
             translate, code_space, data_space, &decoded, vma, branch, pool, exec, reach,
         ),
-        None => kuna_switchtable::TableRead::default(),
+        None => switchtable::TableRead::default(),
     };
     // (kuna) `thumbswitch`: a Thumb `tbb`/`tbh` reads offsets, not addresses.
-    // See [`super::kuna_thumbswitch`].
+    // See [`super::thumbswitch`].
     if read.cases.is_empty() && read.stated.is_none() {
         if let Some(tables) = thumb_tables {
             (read.cases, read.stated) = tables.targets(translate, code_space, exec, &decoded, vma);
@@ -2886,7 +2873,7 @@ fn assembly(translate: &dyn Translate, vma: u64, code_space: &Rc<AddrSpace>) -> 
 ///
 /// A constant below the `checkOperands` floor is still an address where the
 /// instruction computed it from its own address: `formed`, the values
-/// [`super::kuna_pcform`] recomputes from the encoding (`adr`, `lea [rip]`).
+/// [`super::pcform`] recomputes from the encoding (`adr`, `lea [rip]`).
 fn data_refs(
     ops: &[FullOp],
     data_space: Option<&Rc<AddrSpace>>,
@@ -2900,7 +2887,7 @@ fn data_refs(
     let linked = links(ops);
     let never_taken = || !branches(ops) && delayed();
     // (kuna) `poolref`: the second edge a literal-pool load forms, from this same
-    // instruction to the address the pool word holds. See [`super::kuna_poolref`].
+    // instruction to the address the pool word holds. See [`super::poolref`].
     // `width` is how many bytes the instruction READ, which a `LOAD`'s address
     // varnode does not carry -- it is pointer-sized whatever the access is, so
     // `ldrh r0,[0x1003c]` would read as a pointer-sized load of the pool word.
@@ -3275,7 +3262,7 @@ mod tests {
     const MAPPED: [(u64, u64); 2] = [(0x1000, 0x2000), (0x4000, 0x4100)];
 
     /// A read-only literal pool at 0x1000: a mapped address, a number, a mapped
-    /// address. See [`super::super::kuna_poolref`].
+    /// address. See [`super::super::poolref`].
     const POOL: [u8; 12] = [
         0x00, 0x40, 0x00, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x10, 0x40, 0x00, 0x00,
     ];
@@ -3468,7 +3455,7 @@ mod tests {
                 (0x4020, XrefKind::Write),
             ]
         );
-        super::super::kuna_gotcall::resolved_slot_reads(&mut references, 0x4010);
+        super::super::gotcall::resolved_slot_reads(&mut references, 0x4010);
         assert_eq!(
             references,
             vec![
@@ -3487,7 +3474,7 @@ mod tests {
         ];
         let mut references = refs(&ram, &outside_sections);
         assert!(references.is_empty());
-        super::super::kuna_gotcall::resolved_slot_reads(&mut references, 0x3000);
+        super::super::gotcall::resolved_slot_reads(&mut references, 0x3000);
         assert_eq!(references, vec![(0x3000, XrefKind::Read)]);
     }
 
@@ -3996,7 +3983,7 @@ mod tests {
             flow: None,
             switches: Vec::new(),
             refused: HashSet::new(),
-            carry: kuna_regcarry::Tracker::default(),
+            carry: regcarry::Tracker::default(),
             skips: Vec::new(),
         };
         for e in edges {
@@ -4066,7 +4053,7 @@ mod tests {
             flow: None,
             switches: Vec::new(),
             refused: HashSet::new(),
-            carry: kuna_regcarry::Tracker::default(),
+            carry: regcarry::Tracker::default(),
             skips: Vec::new(),
         };
         st.file(0x1188, 0x4008, XrefKind::Read, "");
@@ -4111,7 +4098,7 @@ mod tests {
             }),
             switches: Vec::new(),
             refused: HashSet::new(),
-            carry: kuna_regcarry::Tracker::default(),
+            carry: regcarry::Tracker::default(),
             skips: Vec::new(),
         };
         let index = st.finish(BTreeMap::new(), true);

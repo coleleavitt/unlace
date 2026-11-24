@@ -38,7 +38,7 @@ use unlace_num::opcodes::OpCode;
 use unlace_sleigh::loadimage::section_flags;
 
 use crate::engine::{ConsoleProgram, EntryProvenance, FunctionEntry, ObjectLocation};
-pub use crate::kuna_stringoverlaps::GlobalAliasNames;
+pub use crate::stringoverlaps::GlobalAliasNames;
 use unlace_decomp::printc::ArchPrintExt;
 
 /// `dat_` blocks larger than this are truncated in the `.asm` data tail (the
@@ -60,7 +60,7 @@ pub fn default_fn_budget_seconds(mode: &str, whole_binary: bool) -> u64 {
 /// `error`).
 #[derive(Clone)]
 pub struct FuncResult {
-    pub stack_objects: Vec<unlace_decomp::kuna_stackobjectinfo::StackObjectInfo>,
+    pub stack_objects: Vec<unlace_decomp::stackobjectinfo::StackObjectInfo>,
     pub name: String,
     /// User-facing address, in the target's address units for a raw image.
     pub address: u64,
@@ -88,7 +88,7 @@ pub struct FuncResult {
     /// Complete declarations for named callees, retained when bodies stream out.
     pub call_declarations: Vec<String>,
     /// Private project/worker contracts for live callwide proofs.
-    pub callwide_prototypes: Vec<unlace_decomp::kuna_callwide::ExportPrototype>,
+    pub callwide_prototypes: Vec<unlace_decomp::callwide::ExportPrototype>,
     pub variables: Vec<VarInfo>,
     /// (kuna `structdefs`) The composite/enum/typedef definitions this
     /// function's C names, in definition-before-use order. Empty unless the
@@ -100,7 +100,7 @@ pub struct FuncResult {
     pub globals: Vec<GlobalInfo>,
     /// (kuna `calltargettype`) The calls through fields of synthesized records,
     /// which the project header declares where they all agree.
-    pub field_calls: Vec<unlace_decomp::kuna_calltargettype::FieldDecl>,
+    pub field_calls: Vec<unlace_decomp::calltargettype::FieldDecl>,
     pub line_mappings: Vec<LineMapping>,
     /// (kuna, issue #197) Every OTHER name this entry carries — a generic
     /// `sub_<addr>` placeholder, an ELF weak/strong twin, a PE
@@ -129,13 +129,13 @@ pub struct FuncResult {
     /// ledger, recorded only by a `--jobs` worker whose architecture carries the
     /// shard hook, so the parent can name every `struct_N` as the serial run
     /// does. `None` everywhere else.
-    pub synth: Option<unlace_decomp::kuna_structsynth::shard::FunctionRecord>,
+    pub synth: Option<unlace_decomp::structsynth::shard::FunctionRecord>,
     /// Internal facts from this render, reconciled only by buffered drivers.
-    pub pointerargs: Option<unlace_decomp::kuna_pointerargs::Record>,
+    pub pointerargs: Option<unlace_decomp::pointerargs::Record>,
     /// The analysis warnings `code` carries as comments, each at the address
     /// the engine recorded it at (in the target's address units). Empty on
     /// every error record.
-    pub warnings: Vec<unlace_decomp::kuna_functionwarnings::Warning>,
+    pub warnings: Vec<unlace_decomp::functionwarnings::Warning>,
     /// The token source map, captured only when the caller asked for it
     /// ([`DecompileOptions::want_tokens`]).
     pub detail: Option<Box<crate::inspect::FuncDetail>>,
@@ -154,7 +154,7 @@ impl FuncResult {
     pub fn unstructured_gotos(&self) -> usize {
         self.code
             .as_deref()
-            .map_or(0, unlace_decomp::kuna_langrust::count_unstructured_gotos)
+            .map_or(0, unlace_decomp::langrust::count_unstructured_gotos)
     }
 }
 
@@ -164,14 +164,14 @@ impl FuncResult {
 /// no longer matches the text leaves only that argument uncast; every
 /// successful result still supplies the declarations it printed.
 pub fn reconcile_pointer_arguments(results: &mut [FuncResult]) {
-    use unlace_decomp::kuna_pointerargs;
+    use unlace_decomp::pointerargs;
     if !results
         .iter()
         .any(|r| r.pointerargs.as_ref().is_some_and(|r| !r.calls.is_empty()))
     {
         return;
     }
-    let definitions = kuna_pointerargs::definitions(
+    let definitions = pointerargs::definitions(
         results
             .iter()
             .filter(|r| r.error.is_none() && r.code.is_some())
@@ -181,7 +181,7 @@ pub fn reconcile_pointer_arguments(results: &mut [FuncResult]) {
         let Some(record) = &mut result.pointerargs else {
             continue;
         };
-        let edits = kuna_pointerargs::insertions(record, &definitions);
+        let edits = pointerargs::insertions(record, &definitions);
         record.calls.clear();
         let Some(original) = result.code.as_deref().filter(|_| result.error.is_none()) else {
             continue;
@@ -189,7 +189,7 @@ pub fn reconcile_pointer_arguments(results: &mut [FuncResult]) {
         if edits.is_empty() {
             continue;
         }
-        let applied = kuna_pointerargs::apply(original, &edits);
+        let applied = pointerargs::apply(original, &edits);
         if applied.code != original {
             if let Some(detail) = result.detail.as_mut().filter(|d| d.tokens_error.is_none()) {
                 detail.tokens.clear();
@@ -378,29 +378,29 @@ fn decompile_batch(
     let storetype = prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
+        .get::<unlace_decomp::storetype::StoreTypeMode>();
     let replay = if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_structsynth::StructSynthMode>()
+        .get::<unlace_decomp::structsynth::StructSynthMode>()
         .fires()
         || prog
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_elemptr::ElemPtr>()
+            .get::<unlace_decomp::elemptr::ElemPtr>()
             .0
-        || storetype != unlace_decomp::kuna_storetype::StoreTypeMode::Off
+        || storetype != unlace_decomp::storetype::StoreTypeMode::Off
     {
         targets.clone()
     } else {
         Vec::new()
     };
-    unlace_decomp::kuna_elemptr::start(prog.arch_mut(), targets.len() <= 1);
+    unlace_decomp::elemptr::start(prog.arch_mut(), targets.len() <= 1);
     prog.arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_storetype::Ledger>()
+        .get_mut::<unlace_decomp::storetype::Ledger>()
         .start(if targets.len() <= 1 {
-            unlace_decomp::kuna_storetype::StoreTypeMode::Off
+            unlace_decomp::storetype::StoreTypeMode::Off
         } else {
             storetype
         });
@@ -412,10 +412,10 @@ fn decompile_batch(
     converge_synthesized_structs(prog, opts, &replay, &mut out, &mut |_| {});
     converge_element_globals(prog, opts, &replay, &mut out);
     converge_store_types(prog, opts, &replay, &mut out);
-    unlace_decomp::kuna_elemptr::stop(prog.arch_mut());
+    unlace_decomp::elemptr::stop(prog.arch_mut());
     prog.arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_storetype::Ledger>()
+        .get_mut::<unlace_decomp::storetype::Ledger>()
         .stop();
     if opts.want_pointer_arguments {
         reconcile_pointer_arguments(&mut out);
@@ -437,7 +437,7 @@ pub fn converge_element_globals(
     out: &mut [FuncResult],
 ) {
     for _ in 0..2 {
-        let redo = unlace_decomp::kuna_elemptr::disagreements(prog.arch_mut());
+        let redo = unlace_decomp::elemptr::disagreements(prog.arch_mut());
         if redo.is_empty() {
             return;
         }
@@ -466,12 +466,12 @@ pub fn converge_store_types(
     let mode = prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_storetype::StoreTypeMode>();
+        .get::<unlace_decomp::storetype::StoreTypeMode>();
     for _ in 0..2 {
         let decided = prog
             .arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_storetype::Ledger>()
+            .get_mut::<unlace_decomp::storetype::Ledger>()
             .decide(mode);
         let typed: Vec<u64> = decided
             .into_iter()
@@ -484,7 +484,7 @@ pub fn converge_store_types(
         let redo = prog
             .arch()
             .kuna_tables
-            .get::<unlace_decomp::kuna_storetype::Ledger>()
+            .get::<unlace_decomp::storetype::Ledger>()
             .readers(&typed);
         for (i, t) in targets.iter().enumerate() {
             if i >= out.len() || !redo.contains(&t.addr.get_offset()) {
@@ -532,7 +532,7 @@ pub fn commit_store_type(
     let name = match &existing {
         Some((_, _, true, _)) | Some((false, ..)) => return false,
         Some((true, name, false, true)) => name.clone(),
-        _ => unlace_decomp::kuna_storetype::efi_global_name(ty)
+        _ => unlace_decomp::storetype::efi_global_name(ty)
             .map(str::to_string)
             .unwrap_or_else(|| format!("dat_{vma:x}")),
     };
@@ -605,12 +605,12 @@ pub fn superseded_struct_names(prog: &ConsoleProgram) -> Vec<String> {
     if !prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_structsynth::StructSynthMode>()
+        .get::<unlace_decomp::structsynth::StructSynthMode>()
         .fires()
     {
         return Vec::new();
     }
-    unlace_decomp::kuna_structsynth::ledger::superseded_names(prog.arch().types())
+    unlace_decomp::structsynth::ledger::superseded_names(prog.arch().types())
 }
 
 /// Does the sweep's second decompile replace the first one?
@@ -682,7 +682,7 @@ pub fn decompile_pulled(
     next: &mut dyn FnMut() -> Option<FunctionEntry>,
     sink: &mut dyn FnMut(FuncResult),
 ) {
-    crate::kuna_callwide::prepare(prog);
+    crate::callwide::prepare(prog);
     let DecompileOptions {
         no_vars,
         want_proto,
@@ -917,14 +917,13 @@ pub fn decompile_pulled(
                         let carried_usepoint = crate::assertions::carried_usepoint_symbols(&fd);
                         let carried_dynamic = crate::assertions::carried_dynamic_symbols(&fd);
                         let carried_objects =
-                            unlace_decomp::kuna_stackobjectasserts::specs(&fd).to_vec();
-                        let carried_params =
-                            crate::kuna_paramasserts::carried(&fd, &seed.mapped_params);
+                            unlace_decomp::stackobjectasserts::specs(&fd).to_vec();
+                        let carried_params = crate::paramasserts::carried(&fd, &seed.mapped_params);
                         *prog
                             .arch_mut()
                             .kuna_tables
-                            .get_mut::<unlace_decomp::kuna_stablenames::PriorNames>() =
-                            unlace_decomp::kuna_stablenames::carry(&fd);
+                            .get_mut::<unlace_decomp::stablenames::PriorNames>() =
+                            unlace_decomp::stablenames::carry(&fd);
                         let second = crate::decompile_step::decompile_one(
                             prog.arch_mut(),
                             &name,
@@ -946,7 +945,7 @@ pub fn decompile_pulled(
                         *prog
                             .arch_mut()
                             .kuna_tables
-                            .get_mut::<unlace_decomp::kuna_stablenames::PriorNames>() =
+                            .get_mut::<unlace_decomp::stablenames::PriorNames>() =
                             Default::default();
                         replayed = expected;
                         second
@@ -978,23 +977,23 @@ pub fn decompile_pulled(
                 if prog
                     .arch()
                     .kuna_tables
-                    .get::<unlace_decomp::kuna_callerargs::Ledger>()
+                    .get::<unlace_decomp::callerargs::Ledger>()
                     .recording
                 {
-                    unlace_decomp::kuna_callerargs::record(prog.arch_mut(), &park_entry, &fd);
+                    unlace_decomp::callerargs::record(prog.arch_mut(), &park_entry, &fd);
                 }
                 // (kuna `calleereginputs custom`) Record what this function read on
                 // entry and the calls it printed, for the two-sided decision.
-                if unlace_decomp::kuna_calleereginputs::custom_applies(prog.arch()) {
-                    unlace_decomp::kuna_calleereginputs::record(prog.arch_mut(), &park_entry, &fd);
+                if unlace_decomp::calleereginputs::custom_applies(prog.arch()) {
+                    unlace_decomp::calleereginputs::record(prog.arch_mut(), &park_entry, &fd);
                 }
                 // (kuna `protoorder`) State what this function's recovery found for its callers.
                 if opts.park_recovered_proto {
                     let mode = prog
                         .arch()
                         .kuna_options
-                        .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>();
-                    let outcome = unlace_decomp::kuna_protoorder::park_recovered(
+                        .get::<unlace_decomp::protoorder::ProtoOrderMode>();
+                    let outcome = unlace_decomp::protoorder::park_recovered(
                         prog.arch_mut(),
                         &park_entry,
                         &name,
@@ -1018,48 +1017,46 @@ pub fn decompile_pulled(
                 }
                 // (kuna `callrettype`) State what this function returns for its callers.
                 if opts.park_recovered_proto {
-                    unlace_decomp::kuna_callrettype::record(prog.arch_mut(), &park_entry, &fd);
+                    unlace_decomp::callrettype::record(prog.arch_mut(), &park_entry, &fd);
                     // (kuna `narrowret`) And the narrow value it returns zero-extended.
-                    unlace_decomp::kuna_narrowret::record(prog.arch_mut(), &park_entry, &fd);
+                    unlace_decomp::narrowret::record(prog.arch_mut(), &park_entry, &fd);
                     // (kuna `voidret`) And whether it returns nothing a caller reads.
-                    unlace_decomp::kuna_voidret::record(prog.arch_mut(), &park_entry, &fd);
+                    unlace_decomp::voidret::record(prog.arch_mut(), &park_entry, &fd);
                     // (kuna `elemptr`) And which of its pointers are indexed buffers.
-                    unlace_decomp::kuna_elemptr::state(prog.arch_mut(), &park_entry, &fd);
+                    unlace_decomp::elemptr::state(prog.arch_mut(), &park_entry, &fd);
                     // (kuna `gottailcall`) And whether a tail call to it loses nothing.
-                    unlace_decomp::kuna_gottailcall::record(prog.arch_mut(), &park_entry, &fd);
+                    unlace_decomp::gottailcall::record(prog.arch_mut(), &park_entry, &fd);
                 }
                 // (kuna `calleevote`) Record what this function passes at each call.
                 if prog
                     .arch()
                     .kuna_tables
-                    .get::<unlace_decomp::kuna_calleevote::Ledger>()
+                    .get::<unlace_decomp::calleevote::Ledger>()
                     .recording
                 {
-                    unlace_decomp::kuna_calleevote::record(prog.arch_mut(), &park_entry, &mut fd);
+                    unlace_decomp::calleevote::record(prog.arch_mut(), &park_entry, &mut fd);
                 }
                 // (kuna `callbacktype`) Record every constant it hands to a
                 // declared callback slot.
                 if prog
                     .arch()
                     .kuna_tables
-                    .get::<unlace_decomp::kuna_callbacktype::Ledger>()
+                    .get::<unlace_decomp::callbacktype::Ledger>()
                     .recording
                 {
-                    unlace_decomp::kuna_callbacktype::record(prog.arch_mut(), &park_entry, &fd);
+                    unlace_decomp::callbacktype::record(prog.arch_mut(), &park_entry, &fd);
                 }
                 // (kuna `elemptr`) Record what this function said about each global.
-                unlace_decomp::kuna_elemptr::record(prog.arch_mut(), &fd);
-                unlace_decomp::kuna_storetype::record(
+                unlace_decomp::elemptr::record(prog.arch_mut(), &fd);
+                unlace_decomp::storetype::record(
                     prog.arch_mut()
                         .kuna_tables
-                        .get_mut::<unlace_decomp::kuna_storetype::Ledger>(),
+                        .get_mut::<unlace_decomp::storetype::Ledger>(),
                     &fd,
                 );
                 let original_display = fd.get_display_name().to_string();
                 if header_carries_types {
-                    if let Some(display) =
-                        crate::kuna_projectfunctionnames::display(prog.arch(), &fd)
-                    {
+                    if let Some(display) = crate::projectfunctionnames::display(prog.arch(), &fd) {
                         fd.set_display_name(&display);
                     }
                 }
@@ -1071,7 +1068,7 @@ pub fn decompile_pulled(
                 let budget = unlace_decomp::decompile_drive::RenderBudget::enter(prog.arch(), &fd);
                 let rendered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     if header_carries_types {
-                        crate::kuna_projectfunctionnames::reserve(prog.arch(), &mut fd)
+                        crate::projectfunctionnames::reserve(prog.arch(), &mut fd)
                             .expect("project C symbol names must remain distinct");
                     }
                     // Trim the surrounding newlines the same way `unlace decompile`
@@ -1104,16 +1101,16 @@ pub fn decompile_pulled(
                     let globals =
                         unlace_decomp::decompile_drive::extract_global_objects(prog.arch());
                     let calls = if want_proto
-                        && prog.arch().print().out_lang() == unlace_decomp::kuna_lang::OutLang::C
+                        && prog.arch().print().out_lang() == unlace_decomp::lang::OutLang::C
                     {
-                        unlace_decomp::kuna_callprototypes::declarations(prog.arch(), &fd)?
+                        unlace_decomp::callprototypes::declarations(prog.arch(), &fd)?
                     } else {
                         Default::default()
                     };
                     let call_declarations = calls.declarations;
                     let callwide_prototypes = calls.callwide_prototypes;
                     let field_calls =
-                        unlace_decomp::kuna_callprototypes::field_declarations(prog.arch(), &fd);
+                        unlace_decomp::callprototypes::field_declarations(prog.arch(), &fd);
                     let mut variables = if no_vars {
                         Vec::new()
                     } else {
@@ -1124,7 +1121,7 @@ pub fn decompile_pulled(
                     // as records. Empty unless the option is on.
                     let mut types = extract_type_definitions(prog.arch(), &fd);
                     if want_proto {
-                        types.extend(unlace_decomp::kuna_callprototypes::type_definitions(
+                        types.extend(unlace_decomp::callprototypes::type_definitions(
                             prog.arch(),
                             &fd,
                         ));
@@ -1132,7 +1129,7 @@ pub fn decompile_pulled(
                     let mut stack_objects = if no_vars {
                         Vec::new()
                     } else {
-                        unlace_decomp::kuna_stackobjectinfo::extract(prog.arch(), &fd)
+                        unlace_decomp::stackobjectinfo::extract(prog.arch(), &fd)
                     };
                     for object in &mut stack_objects {
                         for use_ in &mut object.uses {
@@ -1230,7 +1227,7 @@ pub fn decompile_pulled(
                             proto,
                             emitted_c_name: (header_carries_types
                                 && prog.arch().print().out_lang()
-                                    == unlace_decomp::kuna_lang::OutLang::C)
+                                    == unlace_decomp::lang::OutLang::C)
                                 .then_some(emitted_name),
                             call_declarations,
                             callwide_prototypes,
@@ -1585,12 +1582,12 @@ pub fn deferred_callwide_header<'a>(
     }
     let completed: BTreeSet<_> = results.iter().map(|r| r.byte_address).collect();
     let results: Vec<_> = results.into_iter().filter(|r| r.error.is_none()).collect();
-    let same = |a: &unlace_decomp::kuna_callwide::ExportPrototype,
-                b: &unlace_decomp::kuna_callwide::ExportPrototype| {
+    let same = |a: &unlace_decomp::callwide::ExportPrototype,
+                b: &unlace_decomp::callwide::ExportPrototype| {
         a.name == b.name && a.entry == b.entry && a.signed == b.signed && a.inputs == b.inputs
     };
-    let same_words = |a: &unlace_decomp::kuna_callwide::ExportPrototype,
-                      b: &unlace_decomp::kuna_callwide::ExportPrototype| {
+    let same_words = |a: &unlace_decomp::callwide::ExportPrototype,
+                      b: &unlace_decomp::callwide::ExportPrototype| {
         a.name == b.name
             && a.entry == b.entry
             && a.signed == b.signed
@@ -1605,8 +1602,8 @@ pub fn deferred_callwide_header<'a>(
                 .push(result);
         }
     }
-    let agrees = |a: &unlace_decomp::kuna_callwide::ExportPrototype,
-                  b: &unlace_decomp::kuna_callwide::ExportPrototype| {
+    let agrees = |a: &unlace_decomp::callwide::ExportPrototype,
+                  b: &unlace_decomp::callwide::ExportPrototype| {
         same(a, b)
             || (same_words(a, b)
                 && selected.get(&a.name).is_some_and(|own| {
@@ -1620,7 +1617,7 @@ pub fn deferred_callwide_header<'a>(
     let mut contracts = BTreeMap::new();
     let mut required = BTreeSet::new();
     let mut pending = BTreeSet::new();
-    let can_wait = |contract: &unlace_decomp::kuna_callwide::ExportPrototype| {
+    let can_wait = |contract: &unlace_decomp::callwide::ExportPrototype| {
         selected_entries.contains(&contract.entry)
             && !completed.contains(&contract.entry)
             && !selected.contains_key(&contract.name)
@@ -1776,7 +1773,7 @@ pub fn build_header_with_names(
         out.push_str("\n/* user-defined types */\n");
         out.push_str(types);
     }
-    let conflicts = crate::kuna_projectfunctionnames::conflicts(results, &shadowed);
+    let conflicts = crate::projectfunctionnames::conflicts(results, &shadowed);
     if !conflicts.is_empty() {
         out.push_str(
             "\n/* C name conflicts: the generated C does not compile until these are renamed */\n",
@@ -1890,7 +1887,7 @@ fn global_declarations(
     header: &[&str],
 ) -> String {
     let string_views = if names.covers(results) {
-        crate::kuna_stringoverlaps::declarations(
+        crate::stringoverlaps::declarations(
             results.iter().flat_map(|r| r.globals.iter()),
             names.occupied(),
             header,
@@ -2677,7 +2674,7 @@ mod tests {
     #[test]
     fn complete_project_checks_actual_c_names_after_bodies_are_streamed() {
         let conflicts = |types: &str, records: &[FuncResult]| {
-            crate::kuna_projectfunctionnames::conflicts(records, &super::typedef_names(types)).len()
+            crate::projectfunctionnames::conflicts(records, &super::typedef_names(types)).len()
         };
         let mut first = streamed("void linked(void)", "int");
         first.name = "source_one".into();
@@ -2733,7 +2730,7 @@ mod tests {
     fn wide_call() -> FuncResult {
         let mut result = streamed("unsigned long long caller(void);", "unsigned long long");
         result.call_declarations = vec!["unsigned long long producer(int,int,int,int);".into()];
-        result.callwide_prototypes = vec![unlace_decomp::kuna_callwide::ExportPrototype {
+        result.callwide_prototypes = vec![unlace_decomp::callwide::ExportPrototype {
             name: "producer".into(),
             entry: 0x2000,
             signed: false,
@@ -2927,7 +2924,7 @@ mod tests {
 
     #[test]
     fn pointer_arguments_use_only_the_final_successful_results() {
-        use unlace_decomp::kuna_pointerargs::{Call, Parameter, Position, Record};
+        use unlace_decomp::pointerargs::{Call, Parameter, Position, Record};
         let storage = (("register".into(), 0x38), 8);
         let mut callee = streamed("void sink(unsigned char *);", "unsigned char *");
         callee.code = Some("void sink(unsigned char *p) {}".into());

@@ -13,8 +13,8 @@ use unlace_base::space::AddrSpace;
 use unlace_decomp::dtype::type_metatype;
 use unlace_decomp::varnode::varnode_flags;
 
+use crate::dataidentifiers::Names;
 use crate::engine::ConsoleProgram;
-use crate::kuna_dataidentifiers::Names;
 
 /// The address ranges of the blobs, sorted by start.
 pub(crate) struct Extents(Vec<(u64, u64)>);

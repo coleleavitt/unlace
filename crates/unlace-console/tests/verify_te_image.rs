@@ -4,7 +4,7 @@ use crate::common;
 
 use std::path::PathBuf;
 
-use unlace_analysis::listing::kuna_entrythumbflow::MAX_INSTRUCTIONS;
+use unlace_analysis::listing::entrythumbflow::MAX_INSTRUCTIONS;
 use unlace_analysis::loadimage_te::synthetic::{CODE_RVA, TeImage};
 use unlace_base::address::Address;
 use unlace_console::assertions::{self, Body, Directive};

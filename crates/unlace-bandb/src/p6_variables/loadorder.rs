@@ -18,7 +18,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{HighVariableId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_indexaliasguard::LEVEL_GLOBAL;
+use crate::indexaliasguard::LEVEL_GLOBAL;
 use crate::merge::MergeContext;
 
 /// Is `vn`, a `LOAD`'s output whose Cover is current, live across an operation
@@ -39,7 +39,7 @@ pub fn crosses_global_write(
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
     {
@@ -185,8 +185,8 @@ pub fn keeps_apart(ctx: &mut dyn MergeContext, vn1: VarnodeId, vn2: VarnodeId) -
         .any(|v| ctx.vn_load_crosses_global_write(v, global))
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.loadorder_crosses_global_write = Some(crosses_global_write);
     hooks.loadorder_keeps_apart = Some(keeps_apart);
 }

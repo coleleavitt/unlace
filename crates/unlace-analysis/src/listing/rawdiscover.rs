@@ -29,7 +29,7 @@
 //! instruction alignment after a failed decode rather than cascading, and every
 //! surviving root is then re-walked by the descent, which decodes it for real.
 //! An MS-DOS executable, whose load module is mostly data, also hands the
-//! sweep its relocations ([`super::kuna_mzsweep`]). `--define-function`
+//! sweep its relocations ([`super::mzsweep`]). `--define-function`
 //! remains the way to assert a boundary neither oracle found.
 
 use std::collections::BTreeMap;
@@ -41,9 +41,9 @@ use unlace_sleigh::translate::Translate;
 
 use crate::listing::classify::classify;
 use crate::listing::decode::decode_one;
-use crate::listing::kuna_dosexit::{self, DosExits};
-use crate::listing::kuna_mzsweep::{self, MzEvidence, SweepRun};
-use crate::listing::kuna_rawextent;
+use crate::listing::dosexit::{self, DosExits};
+use crate::listing::mzsweep::{self, MzEvidence, SweepRun};
+use crate::listing::rawextent;
 use crate::listing::{Listing, ListingDetail};
 
 /// What [`discover`] finds in a raw image.
@@ -68,7 +68,7 @@ pub struct RawDiscovery {
 /// `exec_ranges` bounds every decode. An address outside it is not decoded and
 /// contributes no successor, so a call into unmapped space is dropped rather
 /// than walked into the void. `mz`, an MS-DOS executable's evidence, holds the
-/// sweep to the calls [`super::kuna_mzsweep`] keeps and the targets that open
+/// sweep to the calls [`super::mzsweep`] keeps and the targets that open
 /// with code.
 pub fn discover(
     arch: &Architecture,
@@ -86,7 +86,7 @@ pub fn discover(
         };
     }
     let mut roots: Vec<u64> = seeds.to_vec();
-    roots.extend(crate::loader::kuna_realmodecs::without_commits(
+    roots.extend(crate::loader::realmodecs::without_commits(
         arch,
         translate,
         || {
@@ -96,7 +96,7 @@ pub fn discover(
                     .into_iter()
                     .filter(|&target| {
                         seeds.contains(&target)
-                            || kuna_mzsweep::opens_as_code(
+                            || mzsweep::opens_as_code(
                                 translate,
                                 code_space,
                                 exec_ranges,
@@ -128,9 +128,8 @@ pub fn discover(
     out.extend(listing.functions().map(|(&vma, _)| vma));
     out.sort_unstable();
     out.dedup();
-    let dos_exits = kuna_dosexit::analyze(arch, translate, code_space, &listing);
-    let flow_ends =
-        kuna_rawextent::measure(arch, translate, code_space, &listing, &out, &dos_exits);
+    let dos_exits = dosexit::analyze(arch, translate, code_space, &listing);
+    let flow_ends = rawextent::measure(arch, translate, code_space, &listing, &out, &dos_exits);
     RawDiscovery {
         entries: out,
         dos_exits,
@@ -153,7 +152,7 @@ pub fn discover(
 /// Targets outside `exec_ranges` are dropped.
 ///
 /// [`discover`] runs it with x86 real-mode segment commits masked off
-/// ([`crate::loader::kuna_realmodecs::without_commits`]): a branch decoded from
+/// ([`crate::loader::realmodecs::without_commits`]): a branch decoded from
 /// data must not move the segment the code after its target decodes in.
 fn sweep_call_targets(
     translate: &dyn Translate,

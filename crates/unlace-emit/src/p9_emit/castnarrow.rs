@@ -52,11 +52,11 @@ use std::rc::Rc;
 
 use unlace_num::opcodes::OpCode;
 
+use crate::castimplied::{CType, ImpliedCasts, PrintedForms, through_copies, trusted_param};
+use crate::castwiden::{operand_set, plain_int, store_pointee};
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_castimplied::{CType, ImpliedCasts, PrintedForms, through_copies, trusted_param};
-use crate::kuna_castwiden::{operand_set, plain_int, store_pointee};
 
 /// Leave out the truncation or sign change `op` prints, read by `read_op`
 /// (`None` at the top of a statement)?
@@ -148,7 +148,7 @@ fn destination(
         OpCode::CPUI_STORE
             if ro.get_slot(value) == 2
                 && !ro.does_special_printing()
-                && crate::kuna_stackmem::access(fd, r).is_none() =>
+                && crate::stackmem::access(fd, r).is_none() =>
         {
             store_pointee(ic, p, fd, r)
                 .filter(|t| c_integer(t))
@@ -162,8 +162,8 @@ fn destination(
 /// a stack view or a byte-wise store writes?
 fn plain_statement(p: &dyn PrintedForms, fd: &Funcdata, op: OpId) -> bool {
     p.is_statement(op)
-        && crate::kuna_stackassign::assignment(fd, op).is_none()
-        && crate::kuna_stackbytes::assignment(fd, op).is_none()
+        && crate::stackassign::assignment(fd, op).is_none()
+        && crate::stackbytes::assignment(fd, op).is_none()
 }
 
 /// Does `vn`, as printed where `op` reads it, have an integer C type?  A shift
@@ -215,7 +215,7 @@ crate::kuna_flag!(
     /// (kuna `castnarrow`) Leave out an integer truncation or sign change that
     /// flows whole into an assignment, a store, a trusted argument or a `return`
     /// whose type is spelled exactly as the cast's: C's own conversion there is
-    /// that very conversion.  See [`crate::kuna_castnarrow`].
+    /// that very conversion.  See [`crate::castnarrow`].
     CastNarrow,
     "castnarrow",
     "implied narrowing-cast elision",

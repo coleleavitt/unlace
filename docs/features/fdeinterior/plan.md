@@ -4,7 +4,7 @@ Owning phase: **P1 code/data partition** (`docs/spec/01-program-prep.md` section
 1.5). Option: `fdeinterior`, tier `analysis`, `change_kind`
 `analysis-enablement`, default-**ON** (DIV-61).
 
-## 1. The pass - `analyzers/entry/kuna_fdeinterior.rs` (new module)
+## 1. The pass - `analyzers/entry/fdeinterior.rs` (new module)
 
 A child module of `entry/`, so it reuses that module's private `.eh_frame` reader
 (`read_u32`/`read_u64`, `parse_cie_fde_encoding`, `encoded_size`,
@@ -64,7 +64,7 @@ never runs the analyzer tier, so the corpus cannot express this - the same reaso
 
 ## 4. Counts and docs
 
-`kuna_phases/tests.rs` (settables 90 -> 91, analysis tier 29 -> 30, catalog rows
+`phases/tests.rs` (settables 90 -> 91, analysis tier 29 -> 30, catalog rows
 89 -> 90 -- derived from a fresh catalog capture, never incremented),
 `catalog_bytecompat.rs` (90 -> 91) and the regenerated
 `tests/fixtures/phase_catalog.json`; `docs/options.md` regenerated;

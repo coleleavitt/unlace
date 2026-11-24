@@ -40,7 +40,7 @@ pub struct VarInfo {
 impl VarInfo {
     /// The JSON `kind`: `arg` for a parameter, `stack` for a local with a frame
     /// offset, `register` for a local the C declares outside the frame
-    /// ([`crate::kuna_reglocals`]).
+    /// ([`crate::reglocals`]).
     pub fn kind(&self) -> &'static str {
         if self.is_param {
             "arg"

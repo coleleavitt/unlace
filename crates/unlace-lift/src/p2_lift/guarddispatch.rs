@@ -52,7 +52,7 @@ pub fn calls_through_slot(data: &Funcdata, op: OpId, slots: &BTreeSet<(int4, uin
     };
     let slot = match target.get_space().get_type() {
         spacetype::IPTR_PROCESSOR => Some(target.get_addr().clone()),
-        spacetype::IPTR_INTERNAL => crate::kuna_msvcimportcall::loaded_slot(
+        spacetype::IPTR_INTERNAL => crate::msvcimportcall::loaded_slot(
             data,
             op,
             target.get_addr().clone(),

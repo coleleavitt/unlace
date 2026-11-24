@@ -114,7 +114,7 @@ fn block_type(types: &dyn TypeFactory, block: &Block) -> Option<Rc<Datatype>> {
 /// the ARMv8-M ones when `Tag_CPU_arch` is an ARMv8-M value, else ARMv7-M
 /// (which ARMv6-M is a subset of).
 pub fn layout_of_object(file: &object::File<'_>) -> Option<&'static [Block]> {
-    let arch = crate::loader::kuna_armfloatabi::m_profile_arch(file)?;
+    let arch = crate::loader::armfloatabi::m_profile_arch(file)?;
     Some(if matches!(arch, 16 | 17 | 21) {
         tables::V8M
     } else {

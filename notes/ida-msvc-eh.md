@@ -108,15 +108,15 @@ Helper vocabulary (strings in eh34, each with its own description):
 
 unlace already has the hard half: the exceptional-edge helpers (`eh_unwinding`, `eh_exception`,
 `eh_selector`), the `try`/`catch` printer (`crates/unlace-emit/src/p9_emit/printc.rs` `emit_eh_try`),
-and `.pdata` reading for function starts (`analyzers/entry/kuna_pdatainterior.rs`,
-`kuna_pereloccode.rs`). What it lacks is the MSVC decoder and funclet handling. Proposed as one option,
+and `.pdata` reading for function starts (`analyzers/entry/pdatainterior.rs`,
+`pereloccode.rs`). What it lacks is the MSVC decoder and funclet handling. Proposed as one option,
 `msvceh on | catch | off` (mirrors `itaniumeh`; no row exists today), in four PRs, smallest first:
 
 | step | what | owner | size |
 |---|---|---|---|
 | 1 | **throw.** A call to `_CxxThrowException`/`CxxThrowException` with a constant second argument prints `throw (T)obj;`: T from ThrowInfo -> CatchableTypeArray[0] -> TypeDescriptor name, demangled with the existing MSVC demangler; a null ThrowInfo is `throw;`. Also the call does not return. | `unlace-lift` or `unlace-bandb` P4 (a callfixup-like rewrite), RTTI reader from `analyzers/rtti` | S |
-| 2 | **decode.** `analyzers/entry/kuna_msvceh.rs`: personality from the UNWIND_INFO handler RVA (import or FLIRT/PDB name), FH3 (both layouts) and FH4 (compressed ints, segment maps), IP-to-state, unwind map, try map, handler arrays. Name funclets `<parent>$catch$<n>` / `$dtor$<n>` and attach them to the parent instead of listing them as roots. Bounds-check every RVA and count as eh34 does (§2), cap counts, reject state cycles. | `unlace-analysis` | S-M |
-| 3 | **edges.** For each try block, give the first call inside its IP range an exceptional edge (as `itaniumeh` does per landing pad) to a synthetic block that calls the catch funclet(s) with the catch type as a selector, and continue at the funclet's returned continuation address. Destructor (unwind) states only under `on`, like `itaniumeh catch`. | `unlace-lift` `p2_lift/kuna_msvceh.rs` (beside `kuna_itaniumeh.rs`) | M |
+| 2 | **decode.** `analyzers/entry/msvceh.rs`: personality from the UNWIND_INFO handler RVA (import or FLIRT/PDB name), FH3 (both layouts) and FH4 (compressed ints, segment maps), IP-to-state, unwind map, try map, handler arrays. Name funclets `<parent>$catch$<n>` / `$dtor$<n>` and attach them to the parent instead of listing them as roots. Bounds-check every RVA and count as eh34 does (§2), cap counts, reject state cycles. | `unlace-analysis` | S-M |
+| 3 | **edges.** For each try block, give the first call inside its IP range an exceptional edge (as `itaniumeh` does per landing pad) to a synthetic block that calls the catch funclet(s) with the catch type as a selector, and continue at the funclet's returned continuation address. Destructor (unwind) states only under `on`, like `itaniumeh catch`. | `unlace-lift` `p2_lift/msvceh.rs` (beside `itaniumeh.rs`) | M |
 | 4 | **inline funclets.** Decompile the funclet into the parent with its establisher-frame accesses rebased to the parent's frame, so a catch body reads the parent's locals by name (IDA's step 3). Until then step 3 prints `catch (T) { parent$catch$0(); }`. | `unlace-lift` (flow) + P6 frame | M-L |
 
 x86-32: `__CxxFrameHandler3` keeps the state in `[ebp-4]` (stores of constants mark transitions) and

@@ -8,7 +8,7 @@
   "default": "on",
   "phase": "P2",
   "subphase": "flow-classification",
-  "module": "decompiler/crates/kuna-decomp/src/p2_lift/kuna_tailcallsaved.rs",
+  "module": "decompiler/crates/kuna-decomp/src/p2_lift/tailcallsaved.rs",
   "symptom": "Argument cleanup creates a false internal tail call (major, 1 instance, crackmes.one 5ab77f5f33c5d40ad448c820). Classified the jump at 0x4010f2 as a tail call after ADD ESP,8 removes two call arguments. Its destination, 0x401102, is an internal TEST EAX,EAX reached by both paths; saved registers remain on the stack.",
   "hypothesis_status": "confirmed",
   "decisions": [
@@ -61,8 +61,8 @@
   "tests": [
     "tests/stages/kuna-tailcallsaved.xml (two-pass: option off = the bug, default = the fix)",
     "tests/cli/argument-cleanup-creates-false.json (promoted acceptance, in-repo fixture tailcallsaved_i386)",
-    "decompiler/crates/kuna-decomp/src/p2_lift/kuna_tailcallsaved/tests.rs (10 cases)",
-    "decompiler/crates/kuna-decomp/src/p2_lift/kuna_tailcallframe/tests.rs (+3 cases)"
+    "decompiler/crates/kuna-decomp/src/p2_lift/tailcallsaved/tests.rs (10 cases)",
+    "decompiler/crates/kuna-decomp/src/p2_lift/tailcallframe/tests.rs (+3 cases)"
   ],
   "acceptance": "a-d6135fbc9bd1 PASS"
 }

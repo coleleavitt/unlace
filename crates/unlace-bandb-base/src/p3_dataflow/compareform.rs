@@ -120,7 +120,7 @@ impl Action for ActionPresentCompareForm {
             && !data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_compareform::PresentLessequal>()
+                .get::<crate::compareform::PresentLessequal>()
                 .0
         {
             return 0;
@@ -283,8 +283,8 @@ impl CompareForm {
 ///
 /// The C++ `throw ParseError(...)` surfaces as a [`KunaError::parse`] (the
 /// established option-parse error idiom shared with the sibling
-/// [`parse_return_pair_form`](crate::kuna_returnpair::parse_return_pair_form) /
-/// [`parse_memset_recover_form`](crate::kuna_memsetsequence::parse_memset_recover_form)).
+/// [`parse_return_pair_form`](crate::returnpair::parse_return_pair_form) /
+/// [`parse_memset_recover_form`](crate::memsetsequence::parse_memset_recover_form)).
 /// The caller writes the resolved [`CompareForm::present_lessequal`] into
 /// [the registered option `PresentLessequal`].
 pub fn parse_compare_form(p1: &str) -> KunaResult<(CompareForm, String)> {
@@ -338,7 +338,7 @@ fn vn_size(data: &Funcdata, vn: VarnodeId) -> int4 {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PresentLessequal(pub bool);
 
-impl crate::kuna_optionset::KunaOption for PresentLessequal {
+impl crate::optionset::KunaOption for PresentLessequal {
     const NAME: &'static str = "compareform";
     crate::kuna_option_id!();
 
@@ -351,12 +351,12 @@ impl crate::kuna_optionset::KunaOption for PresentLessequal {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_compareform::parse_compare_form(value)
+        let (v, msg) = crate::compareform::parse_compare_form(value)
             .map(|(form, msg)| (form.present_lessequal(), msg))?;
         Ok((PresentLessequal(v), msg))
     }
 }
 
 #[cfg(test)]
-#[path = "kuna_compareform/tests.rs"]
+#[path = "compareform/tests.rs"]
 mod tests;

@@ -37,7 +37,7 @@ impl ComCfg {
     }
 }
 
-impl crate::kuna_optionset::KunaOption for ComCfg {
+impl crate::optionset::KunaOption for ComCfg {
     const NAME: &'static str = "comcfg";
     crate::kuna_option_id!();
 

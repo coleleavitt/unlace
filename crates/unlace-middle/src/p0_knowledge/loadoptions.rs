@@ -19,13 +19,13 @@ use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use crate::kuna_kernelcache::KernelcacheChoice;
-use crate::kuna_kernelcacheboot::KernelcacheBoot;
-use crate::kuna_libctypes::LibcTypesLayout;
-use crate::kuna_ppc32picimports::Mode as Ppc32PicMode;
-use crate::kuna_sourcelang::SourceLang;
-use crate::kuna_symbolnamechars::NameChars;
+use crate::kernelcache::KernelcacheChoice;
+use crate::kernelcacheboot::KernelcacheBoot;
+use crate::libctypes::LibcTypesLayout;
 use crate::options::env_toggle;
+use crate::ppc32picimports::Mode as Ppc32PicMode;
+use crate::sourcelang::SourceLang;
+use crate::symbolnamechars::NameChars;
 
 /// Carries `calltargettype` to the DWARF type mapper, which runs at `load file`
 /// before any option is applied; the CLI exports it ahead of the load.
@@ -220,18 +220,14 @@ impl LoadOptions {
         use crate::*;
         match option {
             "ppc32picimports" => self.ppc32picimports.set_env(),
-            "ifuncfpret" => kuna_ifuncfpret::set_ifuncfpret_env(self.ifuncfpret),
-            "ppcapu" => kuna_ppcapu::set_ppcapu_env(self.ppcapu),
-            "kernelcache" => kuna_kernelcache::set_kernelcache_env(&self.kernelcache),
-            "kernelcache-boot" => {
-                kuna_kernelcacheboot::set_kernelcache_boot_env(&self.kernelcache_boot)
-            }
-            "goabi" => kuna_goabi::set_goabi_env(self.goabi),
-            "cil" => kuna_cil::set_cil_env(self.cil),
-            "symbolnamechars" => {
-                kuna_symbolnamechars::set_symbolnamechars_env(self.symbolnamechars)
-            }
-            "libctypes" => kuna_libctypes::set_libctypes_env_layout(self.libctypes),
+            "ifuncfpret" => ifuncfpret::set_ifuncfpret_env(self.ifuncfpret),
+            "ppcapu" => ppcapu::set_ppcapu_env(self.ppcapu),
+            "kernelcache" => kernelcache::set_kernelcache_env(&self.kernelcache),
+            "kernelcache-boot" => kernelcacheboot::set_kernelcache_boot_env(&self.kernelcache_boot),
+            "goabi" => goabi::set_goabi_env(self.goabi),
+            "cil" => cil::set_cil_env(self.cil),
+            "symbolnamechars" => symbolnamechars::set_symbolnamechars_env(self.symbolnamechars),
+            "libctypes" => libctypes::set_libctypes_env_layout(self.libctypes),
             // FIXME: Audit that the environment access only happens in single-threaded code.
             "calltargettype" => unsafe {
                 std::env::set_var(
@@ -239,16 +235,14 @@ impl LoadOptions {
                     if self.calltargettype { "on" } else { "off" },
                 )
             },
-            "macho-arm64e" => kuna_macho_arm64e::set_macho_arm64e_env(self.macho_arm64e),
-            "sourcelang" => kuna_sourcelang::set_sourcelang_env(self.sourcelang),
-            "objcivars" => kuna_objcivars::set_objcivars_env(self.objcivars),
-            "objcsdk" => {
-                kuna_objcsdk::set_objcsdk_env(self.objcsdk.as_deref().and_then(|p| p.to_str()))
-            }
+            "macho-arm64e" => macho_arm64e::set_macho_arm64e_env(self.macho_arm64e),
+            "sourcelang" => sourcelang::set_sourcelang_env(self.sourcelang),
+            "objcivars" => objcivars::set_objcivars_env(self.objcivars),
+            "objcsdk" => objcsdk::set_objcsdk_env(self.objcsdk.as_deref().and_then(|p| p.to_str())),
             "dyldimage" => {
-                kuna_dyldcache::set_dyldimage_env(self.dyldimage.as_deref().unwrap_or("none"))
+                dyldcache::set_dyldimage_env(self.dyldimage.as_deref().unwrap_or("none"))
             }
-            "dyldcrossrefs" => kuna_dyldcache::set_dyldcrossrefs_env(self.dyldcrossrefs),
+            "dyldcrossrefs" => dyldcache::set_dyldcrossrefs_env(self.dyldcrossrefs),
             "codestrings" => set_toggle_env(CODESTRINGS_ENV, self.codestrings),
             "nameladder" => set_toggle_env(NAMELADDER_ENV, self.nameladder),
             "swifttypes" => set_toggle_env(SWIFTTYPES_ENV, self.swifttypes),
@@ -379,17 +373,17 @@ pub mod env {
     }
 
     pub fn ppc32picimports() -> Ppc32PicMode {
-        unlace_base::env::var(crate::kuna_ppc32picimports::ENV).map_or(Ppc32PicMode::Off, |value| {
+        unlace_base::env::var(crate::ppc32picimports::ENV).map_or(Ppc32PicMode::Off, |value| {
             Ppc32PicMode::from_env_value(&value)
         })
     }
 
     pub fn ifuncfpret() -> bool {
-        env_toggle(crate::kuna_ifuncfpret::IFUNCFPRET_ENV, true)
+        env_toggle(crate::ifuncfpret::IFUNCFPRET_ENV, true)
     }
 
     pub fn ppcapu() -> bool {
-        env_toggle(crate::kuna_ppcapu::PPCAPU_ENV, false)
+        env_toggle(crate::ppcapu::PPCAPU_ENV, false)
     }
 
     pub fn kernelcache() -> KernelcacheChoice {
@@ -401,22 +395,22 @@ pub mod env {
     }
 
     pub fn goabi() -> bool {
-        env_toggle(crate::kuna_goabi::GOABI_ENV, true)
+        env_toggle(crate::goabi::GOABI_ENV, true)
     }
 
     pub fn cil() -> bool {
-        env_toggle(crate::kuna_cil::CIL_ENV, true)
+        env_toggle(crate::cil::CIL_ENV, true)
     }
 
     pub fn symbolnamechars() -> NameChars {
-        match unlace_base::env::var(crate::kuna_symbolnamechars::SYMBOLNAMECHARS_ENV) {
+        match unlace_base::env::var(crate::symbolnamechars::SYMBOLNAMECHARS_ENV) {
             Ok(v) => NameChars::parse(&v).unwrap_or_default(),
             Err(_) => NameChars::default(),
         }
     }
 
     pub fn libctypes() -> LibcTypesLayout {
-        match unlace_base::env::var(crate::kuna_libctypes::LIBCTYPES_ENV) {
+        match unlace_base::env::var(crate::libctypes::LIBCTYPES_ENV) {
             Ok(v) => match v.trim().to_ascii_lowercase().as_str() {
                 "off" | "0" | "false" => LibcTypesLayout::Off,
                 "glibc" => LibcTypesLayout::Glibc,
@@ -431,13 +425,11 @@ pub mod env {
     }
 
     pub fn macho_arm64e() -> bool {
-        env_toggle(crate::kuna_macho_arm64e::MACHO_ARM64E_ENV, true)
+        env_toggle(crate::macho_arm64e::MACHO_ARM64E_ENV, true)
     }
 
     pub fn sourcelang() -> Option<SourceLang> {
-        SourceLang::parse_forced(
-            &unlace_base::env::var(crate::kuna_sourcelang::SOURCELANG_ENV).ok()?,
-        )
+        SourceLang::parse_forced(&unlace_base::env::var(crate::sourcelang::SOURCELANG_ENV).ok()?)
     }
 
     pub fn codestrings() -> bool {
@@ -453,7 +445,7 @@ pub mod env {
     }
 
     pub fn objcivars() -> bool {
-        match unlace_base::env::var(crate::kuna_objcivars::OBJCIVARS_ENV) {
+        match unlace_base::env::var(crate::objcivars::OBJCIVARS_ENV) {
             Ok(v) => !matches!(
                 v.trim().to_ascii_lowercase().as_str(),
                 "off" | "0" | "false" | "no"
@@ -463,17 +455,17 @@ pub mod env {
     }
 
     pub fn objcsdk() -> Option<PathBuf> {
-        crate::kuna_objcsdk::sdk_path_from_env()
+        crate::objcsdk::sdk_path_from_env()
     }
 
     pub fn dyldimage() -> Option<String> {
-        unlace_base::env::var(crate::kuna_dyldcache::DYLDIMAGE_ENV)
+        unlace_base::env::var(crate::dyldcache::DYLDIMAGE_ENV)
             .ok()
-            .and_then(|v| crate::kuna_dyldcache::image_name(&v).map(str::to_string))
+            .and_then(|v| crate::dyldcache::image_name(&v).map(str::to_string))
     }
 
     pub fn dyldcrossrefs() -> bool {
-        env_toggle(crate::kuna_dyldcache::DYLDCROSSREFS_ENV, true)
+        env_toggle(crate::dyldcache::DYLDCROSSREFS_ENV, true)
     }
 
     pub fn macho_slice() -> Option<String> {
@@ -629,35 +621,32 @@ mod tests {
             ..LoadOptions::default()
         };
         let _scope = options.enter();
-        assert!(!crate::kuna_loadoptions::codestrings_enabled());
-        assert!(!crate::kuna_loadoptions::nameladder_enabled());
-        assert!(!crate::kuna_loadoptions::swifttypes_enabled());
-        assert!(!crate::kuna_ifuncfpret::ifuncfpret_enabled());
-        assert!(crate::kuna_ppcapu::ppcapu_enabled());
+        assert!(!crate::loadoptions::codestrings_enabled());
+        assert!(!crate::loadoptions::nameladder_enabled());
+        assert!(!crate::loadoptions::swifttypes_enabled());
+        assert!(!crate::ifuncfpret::ifuncfpret_enabled());
+        assert!(crate::ppcapu::ppcapu_enabled());
         assert_eq!(KernelcacheChoice::in_force(), KernelcacheChoice::Off);
         assert_eq!(KernelcacheBoot::in_force(), KernelcacheBoot::Off);
         assert_eq!(
-            crate::kuna_symbolnamechars::symbolnamechars_mode(),
+            crate::symbolnamechars::symbolnamechars_mode(),
             NameChars::Ident
         );
-        assert_eq!(
-            crate::kuna_libctypes::libctypes_layout(),
-            LibcTypesLayout::Glibc
-        );
+        assert_eq!(crate::libctypes::libctypes_layout(), LibcTypesLayout::Glibc);
         assert!(
-            !crate::kuna_loadoptions::scoped(|o| o.calltargettype)
-                .unwrap_or_else(crate::kuna_loadoptions::env::calltargettype)
+            !crate::loadoptions::scoped(|o| o.calltargettype)
+                .unwrap_or_else(crate::loadoptions::env::calltargettype)
         );
-        assert!(!crate::kuna_macho_arm64e::macho_arm64e_enabled());
-        assert_eq!(crate::kuna_sourcelang::forced(), Some(SourceLang::Rust));
-        assert!(crate::kuna_ppc32picimports::abi_enabled());
-        assert!(!crate::kuna_objcivars::objcivars_enabled());
-        assert_eq!(crate::kuna_objcsdk::sdk_path(), Some(PathBuf::from("/sdk")));
+        assert!(!crate::macho_arm64e::macho_arm64e_enabled());
+        assert_eq!(crate::sourcelang::forced(), Some(SourceLang::Rust));
+        assert!(crate::ppc32picimports::abi_enabled());
+        assert!(!crate::objcivars::objcivars_enabled());
+        assert_eq!(crate::objcsdk::sdk_path(), Some(PathBuf::from("/sdk")));
         assert_eq!(
-            crate::kuna_dyldcache::selected_image().as_deref(),
+            crate::dyldcache::selected_image().as_deref(),
             Some("libfoo.dylib")
         );
-        assert!(!crate::kuna_dyldcache::dyldcrossrefs_enabled());
-        assert!(!crate::kuna_cil::cil_enabled());
+        assert!(!crate::dyldcache::dyldcrossrefs_enabled());
+        assert!(!crate::cil::cil_enabled());
     }
 }

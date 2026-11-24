@@ -6,7 +6,7 @@ use crate::architecture::Architecture;
 use crate::database::ScopeId;
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
-use crate::kuna_namespaces::plain_scope;
+use crate::namespaces::plain_scope;
 use crate::printlanguage::NamespaceStrategy;
 
 #[doc(hidden)]
@@ -93,15 +93,10 @@ pub fn prefix(
         let stop = scopes.target_ids.get(levels).copied();
         Some(scopes.caller) != stop && db.is_name_used(scopes.caller, candidate, stop)
     };
-    let prefix = crate::kuna_namespaces::scope_prefix(
-        strategy,
-        name,
-        &scopes.target_inner,
-        &use_path,
-        &used,
-    );
+    let prefix =
+        crate::namespaces::scope_prefix(strategy, name, &scopes.target_inner, &use_path, &used);
     if matches!(strategy, NamespaceStrategy::AllNamespaces) {
-        let required = crate::kuna_namespaces::scope_prefix(
+        let required = crate::namespaces::scope_prefix(
             NamespaceStrategy::MinimalNamespaces,
             name,
             &scopes.target_inner,

@@ -85,5 +85,5 @@ pub fn declines_literal(chars_emitted: int4, window: Option<&[uint1]>) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_emptystrconst/tests.rs"]
+#[path = "emptystrconst/tests.rs"]
 mod tests;

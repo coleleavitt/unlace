@@ -4,11 +4,11 @@
 
 use std::path::PathBuf;
 
+use unlace_console::console::register_kuna_commands;
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
-use unlace_console::kuna_console::register_kuna_commands;
 
 fn run(commands: &[String]) -> String {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");

@@ -8,9 +8,9 @@ use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::PcodeEmit;
 
 use crate::architecture::Architecture;
+use crate::bejoin::WidePair;
 use crate::dtype::type_metatype;
 use crate::fspec::{ParameterPieces, ProtoModel, PrototypePieces};
-use crate::kuna_bejoin::WidePair;
 
 use super::{CodeRegion, Ledger};
 
@@ -572,7 +572,7 @@ impl Image<'_> {
                 return Some(false);
             }
             let assigned = self.assigned(entry)?;
-            let rules = crate::kuna_narrowext::rules(self.arch);
+            let rules = crate::narrowext::rules(self.arch);
             for (index, piece) in assigned.iter().enumerate() {
                 let ty = piece.type_.as_ref()?;
                 if !matches!(integer_width(ty.get_metatype(), ty.get_size()), Some(1 | 2)) {
@@ -591,7 +591,7 @@ impl Image<'_> {
                     self.model.input_opt()?
                 };
                 let mut container = VarnodeData::default();
-                if crate::kuna_narrowext::extension(
+                if crate::narrowext::extension(
                     widen,
                     list,
                     &piece.addr,
@@ -894,7 +894,7 @@ pub fn prove(
     {
         return None;
     }
-    let pair = crate::kuna_bejoin::wide_pair(&model, arch.manage())?;
+    let pair = crate::bejoin::wide_pair(&model, arch.manage())?;
     if pair.hi.1 != 4 || pair.lo.1 != 4 || !pair.hi.0.get_space()?.is_big_endian() {
         return None;
     }

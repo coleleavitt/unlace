@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
-use unlace_analysis::protos::kuna_til;
+use unlace_analysis::protos::til;
 use unlace_idb::{CommentKind, Database, Function, Load, LocalType};
 use unlace_project::{BinaryIdentity, Project};
 
@@ -293,16 +293,16 @@ pub(crate) struct Knowledge {
 }
 
 /// Decode the database's type strings with unlace's TIL reader
-/// (`unlace_analysis::protos::kuna_til`): the local types from its type library section,
+/// (`unlace_analysis::protos::til`): the local types from its type library section,
 /// and each function's prototype, named by its C identifier.
 fn render_types(db: &mut Database) {
     let ptr_size = u8::try_from(db.info.bitness / 8).unwrap_or(8);
     let til = db
         .til
         .as_deref()
-        .and_then(|bytes| kuna_til::Til::parse(bytes).ok())
-        .unwrap_or_else(|| kuna_til::Til {
-            header: kuna_til::Header {
+        .and_then(|bytes| til::Til::parse(bytes).ok())
+        .unwrap_or_else(|| til::Til {
+            header: til::Header {
                 format: 0x12,
                 flags: 0,
                 title: String::new(),
@@ -317,7 +317,7 @@ fn render_types(db: &mut Database) {
             types: Vec::new(),
             aliases: BTreeMap::new(),
         });
-    db.types = kuna_til::c_declarations(&til, ptr_size)
+    db.types = til::c_declarations(&til, ptr_size)
         .into_iter()
         .map(|(ordinal, name, declaration)| LocalType {
             ordinal,
@@ -327,7 +327,7 @@ fn render_types(db: &mut Database) {
         .collect();
     for f in &mut db.functions {
         if let Some(info) = &f.type_info {
-            f.prototype = kuna_til::declare_type_string(
+            f.prototype = til::declare_type_string(
                 &til,
                 &info.type_bytes,
                 &info.fields,

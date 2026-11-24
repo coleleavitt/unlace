@@ -31,7 +31,7 @@ wrong ownership with no gate in this repo able to see it.
 
 ## The mechanism — `option picbase` (analysis tier, default **on**, DIV-104)
 
-New `decompiler/crates/kuna-analysis/src/listing/kuna_picbase.rs`, consumed by a gated seam
+New `decompiler/crates/kuna-analysis/src/listing/picbase.rs`, consumed by a gated seam
 in the existing read-only query (`listing/xrefs.rs (build)`).
 
 A deliberately tiny abstract machine over the same whole p-code the query already keeps: a

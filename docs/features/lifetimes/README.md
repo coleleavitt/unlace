@@ -108,7 +108,7 @@ stack home: an unresolved load or store through it must retain the saved lanes.
 Literal global addresses proved disjoint from that home remain a positive control.
 
 The focused regressions live in `saved_xmm_msabi.rs`,
-`kuna_calleehomes/tests.rs` and `kuna_calleememory.rs`. The native saved-XMM test
+`calleehomes/tests.rs` and `calleememory.rs`. The native saved-XMM test
 compares original assembly with generated C using GCC and Clang at O0 and O2.
 
 ## Reproducing disjoint private spills

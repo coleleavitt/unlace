@@ -62,12 +62,12 @@ fn check(target: &str, word: bool, double: bool, arith: bool) {
     } else {
         "unsigned int"
     };
+    use unlace_console::console::register_kuna_commands;
     use unlace_console::ifacedecomp::{
         DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
         register_decomp_commands,
     };
     use unlace_console::ifaceterm::IfaceTerm;
-    use unlace_console::kuna_console::register_kuna_commands;
     if process::optional_output(Command::new("clang").arg("--version")).is_none() {
         return;
     }

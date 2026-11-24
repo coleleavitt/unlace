@@ -1,4 +1,4 @@
-//! Unit tests for the restart observability side table (`kuna_restartlog.rs`).
+//! Unit tests for the restart observability side table (`restartlog.rs`).
 //!
 //! Covers the reason-name strings, the per-function keying, the per-function
 //! cap, the global sequence counter, and the `restarts` dump rendering.

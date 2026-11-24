@@ -1,10 +1,10 @@
 use super::*;
 use crate::dtype::{DatatypeKind, TypeFactoryImpl, TypeField};
 use crate::fspec::{FuncProto, ParameterPieces, ProtoModel};
-use crate::kuna_lang::OutLang;
-use crate::kuna_langfacet::LangFacet;
-use crate::kuna_langgo::GO_SPELLER;
-use crate::kuna_langtypes::TypeSpeller;
+use crate::lang::OutLang;
+use crate::langfacet::LangFacet;
+use crate::langgo::GO_SPELLER;
+use crate::langtypes::TypeSpeller;
 use unlace_base::address::Address;
 
 fn pair(factory: &TypeFactoryImpl, name: &str) -> Rc<Datatype> {

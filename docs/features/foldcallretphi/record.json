@@ -97,8 +97,8 @@
     "rebased_onto": "origin/main f02365cc; every count re-derived with scripts.repipe.counters on the freshly built tree"
   },
   "files": [
-    "decompiler/crates/kuna-decomp/src/p6_variables/kuna_foldcallretphi.rs (new)",
-    "decompiler/crates/kuna-decomp/src/p6_variables/kuna_foldcallretphi/tests.rs (new)",
+    "decompiler/crates/kuna-decomp/src/p6_variables/foldcallretphi.rs (new)",
+    "decompiler/crates/kuna-decomp/src/p6_variables/foldcallretphi/tests.rs (new)",
     "decompiler/crates/kuna-decomp/src/p6_variables/coreaction_cleanup.rs",
     "decompiler/crates/kuna-decomp/src/p6_variables/mod.rs",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
@@ -145,8 +145,8 @@
     "what_differs": "only the vN name renumbering plus line_numbers/addresses; the (type, kind, stack_offset) multiset is identical in every changed function, so type_match cannot move"
   },
   "hidden_count_sites": [
-    "kuna_phases/tests.rs: fn-name-settables / kuna_num_settables / SETTABLE_TABLE-len / fn-name-tiers / tier-tuple / catalog-json-records (counters --fix)",
-    "kuna_phases/tests.rs option_values_live_value_present_for_86: a bool option with no live_field must be listed beside its sibling foldcallret",
+    "phases/tests.rs: fn-name-settables / kuna_num_settables / SETTABLE_TABLE-len / fn-name-tiers / tier-tuple / catalog-json-records (counters --fix)",
+    "phases/tests.rs option_values_live_value_present_for_86: a bool option with no live_field must be listed beside its sibling foldcallret",
     "tests/catalog_bytecompat.rs x4 + tests/fixtures/phase_catalog.json (recaptured with no program loaded)",
     "tests/stages/kuna-catalog.xml #6 angr bucket 32 -> 33",
     "kuna-base/src/xml.rs corpus file count 295 -> 296",

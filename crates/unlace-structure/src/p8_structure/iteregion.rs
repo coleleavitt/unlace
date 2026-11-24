@@ -34,7 +34,7 @@
 //!
 //! Running once after [`ActionFinalStructure`](crate::blockaction::ActionFinalStructure)
 //! (the structured tree is final and goto targets are labelled) — alongside
-//! [`ActionDedupIteTail`](crate::kuna_dedupitetail::ActionDedupIteTail)
+//! [`ActionDedupIteTail`](crate::dedupitetail::ActionDedupIteTail)
 //! and the other post-structuring rewrites — [`ActionIteRegion`] finds every
 //! narrow, unambiguous assignment diamond and marks it for ternary rendering:
 //!
@@ -140,7 +140,7 @@ impl Action for ActionIteRegion {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_iteregion::Iteregion>()
+            .get::<crate::iteregion::Iteregion>()
             .0
         {
             return 0;
@@ -222,7 +222,7 @@ pub fn match_ite_assignment(data: &Funcdata, n: BlockId) -> Option<IteAssignMatc
     // ternary, so nothing is lost.
     let cbranch = cond_cbranch(data, cond_block)?;
     // (kuna javatry) A `try` dispatch is not a value selection.
-    if crate::kuna_javatry::dispatch_handler(data, cbranch).is_some() {
+    if crate::javatry::dispatch_handler(data, cbranch).is_some() {
         return None;
     }
 
@@ -281,11 +281,11 @@ pub fn leaf_bblock(data: &Funcdata, id: BlockId) -> Option<BlockId> {
 ///
 /// A multi-component condition `BlockList` is descended to its last component
 /// first
-/// ([`cond_list_tail`](crate::kuna_itecondlist::cond_list_tail)) — the
+/// ([`cond_list_tail`](crate::itecondlist::cond_list_tail)) — the
 /// same tolerance across a block boundary, and the reason a chain of diamonds no
 /// longer folds only every other one.
 fn cond_cbranch(data: &Funcdata, id: BlockId) -> Option<OpId> {
-    let bb = leaf_bblock(data, crate::kuna_itecondlist::cond_list_tail(data, id))?;
+    let bb = leaf_bblock(data, crate::itecondlist::cond_list_tail(data, id))?;
     let ops = printed_ops(data, bb);
     let op = *ops.last()?;
     if data.obank().get(op)?.code() != OpCode::CPUI_CBRANCH {
@@ -327,7 +327,7 @@ fn single_assign_arm(data: &Funcdata, id: BlockId) -> Option<(OpId, VarnodeId)> 
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_iteregion::Iteexpr>()
+            .get::<crate::iteregion::Iteexpr>()
             .0
         {
             return None;
@@ -451,7 +451,7 @@ crate::kuna_flag!(
 #[derive(Clone, Debug, PartialEq)]
 pub struct Iteregion(pub bool);
 
-impl crate::kuna_optionset::KunaOption for Iteregion {
+impl crate::optionset::KunaOption for Iteregion {
     const NAME: &'static str = "iteregion";
     crate::kuna_option_id!();
 
@@ -464,7 +464,7 @@ impl crate::kuna_optionset::KunaOption for Iteregion {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_iteregion::OptionIteRegion.apply(value)?;
+        let (v, msg) = crate::iteregion::OptionIteRegion.apply(value)?;
         Ok((Iteregion(v), msg))
     }
 }

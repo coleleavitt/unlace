@@ -31,7 +31,7 @@
 //!
 //! The signed slots come from the image's own chained fixups, or, for a
 //! kernelcache entry, from the whole kernel collection
-//! (`loader::kuna_kernelcache`), whose fixups are applied before the entry is
+//! (`loader::kernelcache`), whose fixups are applied before the entry is
 //! cut out.
 
 use std::collections::{BTreeMap, HashMap};

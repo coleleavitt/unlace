@@ -161,7 +161,7 @@ pub fn vararg_abi(archid: &str, family: Option<ImageFamily>) -> VarargAbi {
 /// A resolved format call also changes how P4 scores the argument trials of the
 /// calls around it: an argument it declares is taken for certain, so it vetoes
 /// the same value at a neighbour. (The phantoms it would claim without the
-/// override still do; see [`crate::p4_calls::kuna_formattail`].) Over the x86
+/// override still do; see [`crate::p4_calls::formattail`].) Over the x86
 /// corpora measured every such change removed a phantom argument. On AArch64
 /// and ARM32, measured with the prototype closed from the start, most changes
 /// added a phantom (an `x8` of `0` ahead of the real arguments) or dropped a
@@ -174,7 +174,7 @@ pub fn reached_by_default(archid: &str) -> bool {
 /// recorded one, else what the language id alone says.
 pub fn target_vararg_abi(arch: &Architecture) -> VarargAbi {
     arch.kuna_tables
-        .get::<crate::kuna_formatstring::ImageVarargAbi>()
+        .get::<crate::formatstring::ImageVarargAbi>()
         .unwrap_or_else(|| vararg_abi(&arch.archid, None))
 }
 
@@ -201,30 +201,30 @@ pub fn parse_formatstring_mode(p1: &str) -> KunaResult<(FormatStringMode, String
     ))
 }
 
-impl crate::kuna_optionset::KunaOption for FormatStringMode {
+impl crate::optionset::KunaOption for FormatStringMode {
     const NAME: &'static str = "formatstring";
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::kuna_formatstring::FormatStringMode::Off
+        crate::formatstring::FormatStringMode::Off
     }
 
     fn shipped() -> Self {
-        crate::kuna_formatstring::FormatStringMode::Static
+        crate::formatstring::FormatStringMode::Static
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        Ok(crate::kuna_formatstring::parse_formatstring_mode(value)?)
+        Ok(crate::formatstring::parse_formatstring_mode(value)?)
     }
 }
 
 /// (kuna `formatstring`) The format sites the analysis tier parked, by call address; an
-/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+/// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type ParkedSites = std::collections::BTreeMap<u64, Vec<ParkedFormatSite>>;
 crate::kuna_arch_table!(ParkedSites);
 
 /// (kuna `formatstring`) How the image passes variadic arguments, a load-time fact; an
-/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+/// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type ImageVarargAbi = Option<VarargAbi>;
 crate::kuna_arch_table!(ImageVarargAbi);
 

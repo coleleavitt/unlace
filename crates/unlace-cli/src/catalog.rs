@@ -3,14 +3,14 @@
 //! The linked engine supplies static JSON by default; an explicit console
 //! override keeps external queries. This module renders a table, indented JSON
 //! or the generated Markdown manual. Validation compares the catalog with
-//! [`unlace_decomp::kuna_option_dispatch::KUNA_OPTION_NAMES`] to reject missing or stale rows.
+//! [`unlace_decomp::option_dispatch::KUNA_OPTION_NAMES`] to reject missing or stale rows.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
-use unlace_console::kuna_buildstamp;
-use unlace_decomp::kuna_option_dispatch::KUNA_OPTION_NAMES;
-use unlace_decomp::kuna_phases::{emit_catalog_json, emit_catalog_json_one, emit_catalog_markdown};
+use unlace_console::buildstamp;
+use unlace_decomp::option_dispatch::KUNA_OPTION_NAMES;
+use unlace_decomp::phases::{emit_catalog_json, emit_catalog_json_one, emit_catalog_markdown};
 
 use crate::jsonfmt::{Json, dumps_indent2, extract_json_span, parse};
 use crate::paths;
@@ -43,8 +43,8 @@ fn run_external_catalog(option: Option<&str>, pinned_by: Option<&str>) -> Result
         .arg(&specs)
         .env("SLEIGHHOME", &specs)
         .env(
-            kuna_buildstamp::PARENT_ENV,
-            kuna_buildstamp::identity(kuna_buildstamp::ChildKind::Engine),
+            buildstamp::PARENT_ENV,
+            buildstamp::identity(buildstamp::ChildKind::Engine),
         )
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -58,8 +58,8 @@ fn run_external_catalog(option: Option<&str>, pinned_by: Option<&str>) -> Result
             child.wait_with_output()
         })
         .map_err(|e| format!("failed to run decomp_dbg: {e}"))?;
-    kuna_buildstamp::report(
-        kuna_buildstamp::ChildKind::Engine,
+    buildstamp::report(
+        buildstamp::ChildKind::Engine,
         String::from_utf8_lossy(&output.stderr).into_owned(),
         "decomp_dbg",
         &engine.path,
@@ -158,7 +158,7 @@ pub fn cmd_json(option: Option<&str>, tier: Option<&str>, pinned_by: Option<&str
 }
 
 /// `--markdown`: the body of `docs/options.md`, rendered in-process straight
-/// from `SETTABLE_TABLE` (`kuna_phases::emit_catalog_markdown`) -- no live
+/// from `SETTABLE_TABLE` (`phases::emit_catalog_markdown`) -- no live
 /// values, byte-stable, freshness-fenced by unlace-decomp's
 /// `tests/options_md_fresh.rs`.
 pub fn cmd_markdown(option: Option<&str>) -> i32 {

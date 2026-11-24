@@ -19,7 +19,7 @@ qualifier. Other source languages and output languages receive no Go package
 context. Interned metadata and the call ABI are unchanged.
 
 This is a strict correction under the existing Go output selection, without a
-new option. The owned module is `p9_emit/kuna_gopackage.rs`; the per-document
+new option. The owned module is `p9_emit/gopackage.rs`; the per-document
 context uses a shared string so recursive type spelling does not copy the
 package name. C and Rust output are checked for exact equality.
 

@@ -116,7 +116,7 @@ pub fn keep_single_return(return_single: bool, newparam_size: usize) -> bool {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReturnSingle(pub bool);
 
-impl crate::kuna_optionset::KunaOption for ReturnSingle {
+impl crate::optionset::KunaOption for ReturnSingle {
     const NAME: &'static str = "returnpair";
     crate::kuna_option_id!();
 
@@ -129,12 +129,12 @@ impl crate::kuna_optionset::KunaOption for ReturnSingle {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_returnpair::parse_return_pair_form(value)
+        let (v, msg) = crate::returnpair::parse_return_pair_form(value)
             .map(|(form, msg)| (form.return_single(), msg))?;
         Ok((ReturnSingle(v), msg))
     }
 }
 
 #[cfg(test)]
-#[path = "kuna_returnpair/tests.rs"]
+#[path = "returnpair/tests.rs"]
 mod tests;

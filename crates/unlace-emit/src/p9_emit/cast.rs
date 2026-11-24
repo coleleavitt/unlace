@@ -57,7 +57,7 @@
 //! data-type pairs `getInputCast` would feed it, and the promotion tests drive
 //! the IR-walking methods through a mock [`CastContext`].
 
-use crate::kuna_typequal::DatatypeQualExt;
+use crate::typequal::DatatypeQualExt;
 use std::rc::Rc;
 
 use unlace_base::address::{mostsigbit_set, signbit_negative, uintb_negate};
@@ -389,7 +389,7 @@ impl CastStrategyC {
     }
 
     /// (kuna `calltargettype`) Treat a record's declaration and its completed
-    /// definition as one type ([`same_record`](crate::kuna_calltargettype::same_record)).
+    /// definition as one type ([`same_record`](crate::calltargettype::same_record)).
     pub fn with_record_identity(mut self, on: bool) -> CastStrategyC {
         self.record_identity = on;
         self
@@ -731,7 +731,7 @@ impl CastStrategy for CastStrategyC {
             }
             let req_ptr_to = reqbase.get_ptr_to().expect("TYPE_PTR has ptrto");
             let cur_ptr_to = curbase.get_ptr_to().expect("TYPE_PTR has ptrto");
-            if crate::kuna_typequal::discards_volatile(&req_ptr_to, &cur_ptr_to) {
+            if crate::typequal::discards_volatile(&req_ptr_to, &cur_ptr_to) {
                 return Some(Rc::clone(reqtype));
             }
             reqbase = req_ptr_to;
@@ -751,7 +751,7 @@ impl CastStrategy for CastStrategyC {
         if Rc::ptr_eq(&curbase, &reqbase) {
             return None; // Different typedefs could point to the same type
         }
-        if self.record_identity && crate::kuna_calltargettype::same_record(&reqbase, &curbase) {
+        if self.record_identity && crate::calltargettype::same_record(&reqbase, &curbase) {
             return None;
         }
         if reqbase.get_metatype() == type_metatype::TYPE_VOID

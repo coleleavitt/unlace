@@ -75,7 +75,7 @@
 //!
 //! ## Provenance
 //!
-//! Same rule as [`super::kuna_libcsigs`]: no signature here was written from
+//! Same rule as [`super::libcsigs`]: no signature here was written from
 //! memory. The retargets restate a signature already in the shipped tables with
 //! its aggregate slots named; each name new to this module was reduced from
 //! `gcc -aux-info` over the platform headers with `_GNU_SOURCE` +
@@ -131,10 +131,10 @@ mod streams;
 
 /// How much of an aggregate this table says — the `libctypes` value, as the
 /// option's own gate module spells it.
-pub(super) use unlace_decomp::kuna_libctypes::LibcTypesLayout as Layout;
+pub(super) use unlace_decomp::libctypes::LibcTypesLayout as Layout;
 
 /// Seed the named-aggregate libc signatures. Registered after
-/// [`super::LibProtoPass`] and [`super::kuna_libcsigs::LibcSigsPass`] so its
+/// [`super::LibProtoPass`] and [`super::libcsigs::LibcSigsPass`] so its
 /// prototypes are committed last and win for the names it restates.
 pub struct LibcTypesPass;
 
@@ -142,7 +142,7 @@ pub struct LibcTypesPass;
 /// `libctypes` env bridge — the shells are interned inside `load file`, upstream
 /// of every `option` command).
 pub(super) fn enabled() -> bool {
-    unlace_decomp::kuna_libctypes::libctypes_enabled()
+    unlace_decomp::libctypes::libctypes_enabled()
 }
 
 /// A named aggregate the table may point at: its bare DWARF spelling and its
@@ -432,7 +432,7 @@ pub(super) const LIBC_NAMED: &[(&str, Sig)] = &[
     ),
 ];
 
-/// Retargets of [`super::kuna_libcsigs::LIBC_EXT`] entries, plus the stdio names
+/// Retargets of [`super::libcsigs::LIBC_EXT`] entries, plus the stdio names
 /// neither shipped table carries. Matched, like `LIBC_EXT`, against IMPORTED
 /// names only: a coincidental spelling the image defines itself must not be
 /// retyped, and that judgement does not change because the pointee got a name.
@@ -1823,7 +1823,7 @@ impl AnalysisPass for LibcTypesPass {
         // the type factory by `build_pieces` below, and with the gate off not one
         // of them may exist (an interned `stat` is exactly what the DWARF
         // importer would meet). Off is therefore the shipped tables, untouched.
-        if unlace_decomp::kuna_libctypes::libctypes_layout() == Layout::Off {
+        if unlace_decomp::libctypes::libctypes_layout() == Layout::Off {
             return out;
         }
         // Two questions about THIS image, each able to make a declaration wrong.
@@ -1870,7 +1870,7 @@ impl AnalysisPass for LibcTypesPass {
             types,
             word_size,
             layout,
-            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
+            unlace_decomp::loadoptions::nameladder_enabled(),
         );
         seed_named_prototypes(
             &mut out,
@@ -1879,7 +1879,7 @@ impl AnalysisPass for LibcTypesPass {
             types,
             word_size,
             layout,
-            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
+            unlace_decomp::loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(
             &mut out,
@@ -1896,7 +1896,7 @@ impl AnalysisPass for LibcTypesPass {
             types,
             word_size,
             layout,
-            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
+            unlace_decomp::loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(&mut out, &resolved, LIBC_NAMED, types, word_size, layout);
         seed_named_prototypes(
@@ -1906,7 +1906,7 @@ impl AnalysisPass for LibcTypesPass {
             types,
             word_size,
             layout,
-            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
+            unlace_decomp::loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(
             &mut out,

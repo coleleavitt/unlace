@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 1
 covered_by_option: null
-touches: [crates/unlace-analysis/src/listing/kuna_picpool.rs, crates/unlace-analysis/src/listing/xrefs.rs]
+touches: [crates/unlace-analysis/src/listing/picpool.rs, crates/unlace-analysis/src/listing/xrefs.rs]
 scope: small
 regression_of: null
 pr: 1264

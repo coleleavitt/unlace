@@ -487,13 +487,13 @@ fn ret_transfer_probes_do_not_change_another_functions_return_ip() {
         emit.pushed
     };
     assert_eq!(pushed(), Some(0x8893));
-    unlace_console::kuna_retcallchain::kuna_entry_chain_sites(arch.translate(), &probe, 8, 16);
+    unlace_console::retcallchain::kuna_entry_chain_sites(arch.translate(), &probe, 8, 16);
     assert_eq!(
         pushed(),
         Some(0x8893),
         "an advisory chain walk changed the caller's IP"
     );
-    unlace_console::kuna_retcallchain::kuna_push_immediate_ret(arch.translate(), &probe, 16);
+    unlace_console::retcallchain::kuna_push_immediate_ret(arch.translate(), &probe, 16);
     assert_eq!(
         pushed(),
         Some(0x8893),

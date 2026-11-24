@@ -196,7 +196,7 @@ narrowing, so the narrowing is strictly disjoint from the regressing population.
 Owning files:
 - `decompiler/crates/unlace-decomp/src/substrate/funcdata_block.rs` (new predicate + the
   `returndup_apply` gate; reuses `return_split_is_splittable` + `node_split` verbatim)
-- `decompiler/crates/unlace-decomp/src/p8_structure/kuna_returndup.rs` (option plumbing, or
+- `decompiler/crates/unlace-decomp/src/p8_structure/returndup.rs` (option plumbing, or
   a sibling `kuna_repeatreturn.rs` action if it wants its own ablation switch — preferred,
   so the decbench delta is separable from `returndup`'s)
 - `decompiler/crates/unlace-decomp/phases.toml` + `src/p0_knowledge/options.rs` (new option

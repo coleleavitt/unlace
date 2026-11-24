@@ -1,7 +1,7 @@
 //! (kuna `libcnames`) The library's own names for the parameters and results
 //! of the built-in libc and Win32 signatures ([`super::LIBC`],
-//! [`super::kuna_libcsigs`], [`super::kuna_libctypes`],
-//! [`super::kuna_win32sigs`]).
+//! [`super::libcsigs`], [`super::libctypes`],
+//! [`super::win32sigs`]).
 //!
 //! [`super::build_pieces`] attaches an entry to the prototype it builds from
 //! one of those tables, so the names travel with exactly the prototypes the
@@ -28,7 +28,7 @@
 //! character, and the like. `fcntl` and `ioctl`, whose result depends on the
 //! command, have none.
 //!
-//! The Win32 table ([`super::kuna_win32sigs::WIN32`]) gets the Windows SDK names
+//! The Win32 table ([`super::win32sigs::WIN32`]) gets the Windows SDK names
 //! the same way ([`WIN32_NAMES`]), from the mingw-w64 8.0.0 declarations, which
 //! carry them; mingw-w64 leaves the OLE Automation `BSTR` family unnamed, and
 //! those take the SDK documentation's names. A Win32 result is named only where
@@ -37,7 +37,7 @@
 //! `docs/features/libcnames/gen_win32_names.py`. The two tables are disjoint, so
 //! a name reaches only its own table's prototype.
 
-use unlace_decomp::kuna_libcnames::LibraryNames;
+use unlace_decomp::libcnames::LibraryNames;
 
 /// Every named entry, sorted by function name.
 const NAMES: &[(&str, LibraryNames)] = &[
@@ -4019,7 +4019,7 @@ const NAMES: &[(&str, LibraryNames)] = &[
     ),
 ];
 
-/// The Win32 entries ([`super::kuna_win32sigs::WIN32`]), sorted by function
+/// The Win32 entries ([`super::win32sigs::WIN32`]), sorted by function
 /// name.
 const WIN32_NAMES: &[(&str, LibraryNames)] = &[
     (
@@ -5141,7 +5141,7 @@ mod tests {
 
     #[test]
     fn every_win32_entry_matches_its_signature_slot_for_slot() {
-        let win32 = super::super::kuna_win32sigs::WIN32;
+        let win32 = super::super::win32sigs::WIN32;
         for (name, names) in WIN32_NAMES {
             let sig = win32.iter().find(|(n, _)| n == name).map(|(_, sig)| sig);
             assert_eq!(
@@ -5185,16 +5185,16 @@ mod tests {
 
     #[test]
     fn every_entry_matches_a_signature_slot_for_slot() {
-        let _gate = super::super::kuna_libctypes::tests::ENV_LOCK
+        let _gate = super::super::libctypes::tests::ENV_LOCK
             .lock()
             .unwrap_or_else(|p| p.into_inner());
         let tables = super::super::LIBC
             .iter()
-            .chain(super::super::kuna_libcsigs::LIBC_EXT.iter())
-            .chain(super::super::kuna_libctypes::LIBC_NAMED.iter())
-            .chain(super::super::kuna_libctypes::LIBC_EXT_NAMED.iter())
-            .chain(super::super::kuna_libctypes::LIBC_DEFINED_NAMED.iter())
-            .chain(super::super::kuna_libctypes::LIBC_IMPORTED_OBSTACK.iter());
+            .chain(super::super::libcsigs::LIBC_EXT.iter())
+            .chain(super::super::libctypes::LIBC_NAMED.iter())
+            .chain(super::super::libctypes::LIBC_EXT_NAMED.iter())
+            .chain(super::super::libctypes::LIBC_DEFINED_NAMED.iter())
+            .chain(super::super::libctypes::LIBC_IMPORTED_OBSTACK.iter());
         let mut seen = 0;
         for (name, sig) in tables {
             if let Some(names) = library_names(name) {
@@ -5206,10 +5206,10 @@ mod tests {
         for (name, _) in NAMES {
             assert!(
                 super::super::LIBC.iter().any(|(n, _)| n == name)
-                    || super::super::kuna_libcsigs::LIBC_EXT
+                    || super::super::libcsigs::LIBC_EXT
                         .iter()
                         .any(|(n, _)| n == name)
-                    || super::super::kuna_libctypes::declared_named_prototype(name).is_some(),
+                    || super::super::libctypes::declared_named_prototype(name).is_some(),
                 "{name} has no signature"
             );
         }

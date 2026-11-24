@@ -3,16 +3,16 @@
 //! Stage-aligned module group; declared flatly at the crate root via re-export in
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
-pub mod kuna_aif;
-pub mod kuna_cppsig;
-pub mod kuna_esprom; // (kuna) the Espressif chip whose mask ROM and memory map apply
-pub mod kuna_formatstring;
-pub mod kuna_goreg; // (kuna) name+type the goroutine register as the `g` global (docs/multilang.md W4)
-pub mod kuna_langfamily; // (kuna) the .ldefs processor/size/instruction order FID compares
-pub mod kuna_litpoolconst;
-pub mod kuna_memoryspecs; // (kuna) spec trees supplied from memory
-pub mod kuna_mzdgroup; // (kuna) an MS-DOS executable's functions run with DS holding its data segment
-pub mod kuna_octeonid; // (kuna) Octeon language IDs, built by the loader and read by call recovery
+pub mod aif;
+pub mod cppsig;
+pub mod esprom; // (kuna) the Espressif chip whose mask ROM and memory map apply
+pub mod formatstring;
+pub mod goreg; // (kuna) name+type the goroutine register as the `g` global (docs/multilang.md W4)
+pub mod langfamily; // (kuna) the .ldefs processor/size/instruction order FID compares
+pub mod litpoolconst;
+pub mod memoryspecs; // (kuna) spec trees supplied from memory
+pub mod mzdgroup; // (kuna) an MS-DOS executable's functions run with DS holding its data segment
+pub mod octeonid; // (kuna) Octeon language IDs, built by the loader and read by call recovery
 pub mod raw_arch;
 pub mod sleigh_arch;
 pub mod xml_arch;

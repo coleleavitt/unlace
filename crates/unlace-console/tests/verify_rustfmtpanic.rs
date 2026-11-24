@@ -8,7 +8,7 @@ use unlace_console::ifacedecomp::{
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::kuna_rustfmt::RustFmtMode;
+use unlace_decomp::rustfmt::RustFmtMode;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -157,8 +157,8 @@ fn unsupported_templates_locations_and_names_remain_runtime_calls() {
 #[test]
 fn language_version_and_formatting_options_bound_recovery() {
     for source in [
-        unlace_decomp::kuna_sourcelang::SourceLang::C,
-        unlace_decomp::kuna_sourcelang::SourceLang::Go,
+        unlace_decomp::sourcelang::SourceLang::C,
+        unlace_decomp::sourcelang::SourceLang::Go,
     ] {
         let run = |enabled| {
             decompile(
@@ -168,9 +168,7 @@ fn language_version_and_formatting_options_bound_recovery() {
                 "rust",
                 |arch| {
                     arch.kuna_options
-                        .set(unlace_decomp::kuna_sourcelang::SourceLangForced(Some(
-                            source,
-                        )))
+                        .set(unlace_decomp::sourcelang::SourceLangForced(Some(source)))
                 },
                 |_| {},
             )
@@ -218,7 +216,7 @@ fn language_version_and_formatting_options_bound_recovery() {
             |arch| {
                 arch.rust_display_formatters.clear();
                 arch.kuna_tables
-                    .get_mut::<unlace_decomp::kuna_rustfmtflags::IntegerFormatters>()
+                    .get_mut::<unlace_decomp::rustfmtflags::IntegerFormatters>()
                     .clear();
             },
             |_| {},

@@ -176,7 +176,7 @@ fn got_call_slots(file: &object::File, plt_slots: &HashSet<u64>) -> Vec<PltSym> 
 fn resolve_from_sections(file: &object::File, named_got: &mut HashSet<u64>) -> Vec<PltSym> {
     let arch = file.architecture();
     if arch == Architecture::PowerPc {
-        return super::kuna_ppc32_imports::resolve(file);
+        return super::ppc32_imports::resolve(file);
     }
 
     // MIPS has no regular `.plt` code section and emits NO `R_MIPS_JUMP_SLOT`
@@ -185,7 +185,7 @@ fn resolve_from_sections(file: &object::File, named_got: &mut HashSet<u64>) -> V
     // by relocations.  It therefore runs its own resolver (`resolve_mips_imports`)
     // *before* the relocation-driven path below, which would otherwise early-return
     // on the empty `build_got_name_map`.  See [`resolve_mips_imports`].
-    if super::kuna_mipsabi::is_mips(arch) {
+    if super::mipsabi::is_mips(arch) {
         return resolve_mips_imports(file);
     }
 
@@ -193,7 +193,7 @@ fn resolve_from_sections(file: &object::File, named_got: &mut HashSet<u64>) -> V
     // (kuna ifuncfpret) A statically-linked binary can have NO symbol-named PLT
     // imports yet still carry IFUNC (IRELATIVE) `.plt.sec` stubs to name, so the
     // early-out must also account for the ifunc pass below.
-    let ifunc_enabled = unlace_decomp::kuna_ifuncfpret::ifuncfpret_enabled();
+    let ifunc_enabled = unlace_decomp::ifuncfpret::ifuncfpret_enabled();
     if got_to_name.is_empty() && !(ifunc_enabled && !build_got_ifunc_map(file).is_empty()) {
         return Vec::new();
     }
@@ -315,7 +315,7 @@ fn resolve_from_dynamic_segment(
     named_got: &mut HashSet<u64>,
 ) -> Vec<PltSym> {
     let arch = file.architecture();
-    if super::kuna_mipsabi::is_mips(arch)
+    if super::mipsabi::is_mips(arch)
         || matches!(arch, Architecture::PowerPc | Architecture::PowerPc64)
     {
         return Vec::new();
@@ -515,7 +515,7 @@ fn decode_plt_section(
             out,
             named_got,
         ),
-        Architecture::S390x => super::kuna_s390xplt::decode(vma, data, map, out, named_got),
+        Architecture::S390x => super::s390xplt::decode(vma, data, map, out, named_got),
         // PowerPC's stubs are not in a `.plt*` *code* section (`.plt` is a NOBITS
         // data table; the call stubs live in `.text`), so they are resolved out of
         // band in [`resolve_plt_imports`] via [`decode_ppc_text`], not here.
@@ -1105,7 +1105,7 @@ fn resolve_mips_imports(file: &object::File) -> Vec<PltSym> {
 /// address there at load time, so the 0 is not its value and the slot stays
 /// variable.
 pub(crate) fn mips_got_const_ranges(file: &object::File) -> Vec<(u64, u64)> {
-    if !super::kuna_mipsabi::is_mips(file.architecture()) {
+    if !super::mipsabi::is_mips(file.architecture()) {
         return Vec::new();
     }
     let ptr = if file.is_64() { 8u64 } else { 4u64 };

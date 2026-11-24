@@ -133,7 +133,7 @@ impl Rule for RecordedRemoval {
 fn run_cascade_chain(n: u64, opc: OpCode, cascade: Option<u32>) -> (Vec<u64>, usize, Vec<u64>) {
     let mut arch = ArchContext::new(build_manager());
     arch.kuna_options
-        .set(crate::kuna_coreoptions::DeadCascade(cascade));
+        .set(crate::coreoptions::DeadCascade(cascade));
     let glb = Rc::new(arch);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     ram.clear_flags(addrspace_flags::does_deadcode);

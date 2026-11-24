@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use crate::loader::kuna_dyldcache::{DyldCache, is_dyld_cache_file};
+use crate::loader::dyldcache::{DyldCache, is_dyld_cache_file};
 
 const PAGE: u64 = 0x4000;
 

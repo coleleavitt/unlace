@@ -33,12 +33,12 @@ fn pe64_detached_binding_keeps_locked_float() {
 }
 
 fn check_target(target: &str, weaker: bool, detached: bool) {
+    use unlace_console::console::register_kuna_commands;
     use unlace_console::ifacedecomp::{
         DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
         register_decomp_commands,
     };
     use unlace_console::ifaceterm::IfaceTerm;
-    use unlace_console::kuna_console::register_kuna_commands;
     use unlace_decomp::dtype::type_metatype;
     if process::optional_output(Command::new("clang").arg("--version")).is_none() {
         return;
@@ -257,7 +257,7 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
     arch.kuna_options
         .set(unlace_decomp::printc::Realtypes(true));
     arch.kuna_options
-        .set(unlace_decomp::kuna_coreoptions::CTypes(true));
+        .set(unlace_decomp::coreoptions::CTypes(true));
     let body = arch.with_print(|printer, arch| printer.doc_function_full(fd, arch));
     assert!(body.contains("float v1;"), "locked type was lost:\n{body}");
     let generated = root.join("generated.c");

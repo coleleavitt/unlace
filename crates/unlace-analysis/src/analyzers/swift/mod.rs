@@ -28,14 +28,14 @@
 //! produces nothing, so every other binary is byte-identical.
 
 pub mod descriptors;
-pub mod kuna_swiftcall;
-pub mod kuna_swiftconcurrency;
-pub mod kuna_swifthelpers;
-pub mod kuna_swiftobjcthunk;
-pub mod kuna_swiftoutlined;
-pub mod kuna_swiftruntime;
-pub mod kuna_swifttypes;
-pub mod kuna_swiftwitness;
+pub mod swiftcall;
+pub mod swiftconcurrency;
+pub mod swifthelpers;
+pub mod swiftobjcthunk;
+pub mod swiftoutlined;
+pub mod swiftruntime;
+pub mod swifttypes;
+pub mod swiftwitness;
 
 #[cfg(test)]
 mod tests;
@@ -48,7 +48,7 @@ use descriptors::{
 };
 use object::read::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable};
 
-use crate::demangle::kuna_swift::demangle_swift_name;
+use crate::demangle::swift::demangle_swift_name;
 use crate::objc::sections::MachoImage;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, Phase, SymFact, SymKind};
 
@@ -129,7 +129,7 @@ impl AnalysisPass for SwiftMetadataPass {
         };
         let md = reader.read_all(ctx.file, names, ctx.bytes.len());
         let objc_members = if ctx.file.format() == object::BinaryFormat::MachO {
-            kuna_swiftobjcthunk::members(ctx.file, ctx.bytes, &img, &md, &imports)
+            swiftobjcthunk::members(ctx.file, ctx.bytes, &img, &md, &imports)
         } else {
             Default::default()
         };
@@ -156,18 +156,18 @@ impl AnalysisPass for SwiftMetadataPass {
         let witnesses = ctx
             .arch
             .kuna_options
-            .get::<unlace_decomp::kuna_valuewitness::Valuewitness>()
+            .get::<unlace_decomp::valuewitness::Valuewitness>()
             .0
-            .then(|| kuna_swiftwitness::claim(&reader, &md, ctx.file.architecture(), &namer));
+            .then(|| swiftwitness::claim(&reader, &md, ctx.file.architecture(), &namer));
         let helpers = (ctx
             .arch
             .kuna_options
-            .get::<unlace_decomp::kuna_valuewitness::Valuewitness>()
+            .get::<unlace_decomp::valuewitness::Valuewitness>()
             .0
             && ctx.file.architecture() == object::Architecture::Aarch64)
             .then(|| {
                 let entries = crate::analyzers::entry::collect_entries(ctx.file, ctx.bytes);
-                kuna_swiftoutlined::claim(&reader, &md, &namer, &entries)
+                swiftoutlined::claim(&reader, &md, &namer, &entries)
             });
         let mut metadata_ptr = None;
         out.swift_enum_cases = md
@@ -180,15 +180,15 @@ impl AnalysisPass for SwiftMetadataPass {
         if ctx
             .arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Swifttypes>()
+            .get::<unlace_decomp::analysisgates::Swifttypes>()
             .0
             || ctx
                 .arch
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Swifthelpers>()
+                .get::<unlace_decomp::analysisgates::Swifthelpers>()
                 .0
         {
-            let mut types = kuna_swifttypes::Types::new(
+            let mut types = swifttypes::Types::new(
                 &md,
                 &reader,
                 &imports,
@@ -200,19 +200,19 @@ impl AnalysisPass for SwiftMetadataPass {
             if ctx
                 .arch
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Swifthelpers>()
+                .get::<unlace_decomp::analysisgates::Swifthelpers>()
                 .0
             {
-                kuna_swifthelpers::emit(&types, ctx.file, &mut out);
+                swifthelpers::emit(&types, ctx.file, &mut out);
             }
             if ctx
                 .arch
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Swifttypes>()
+                .get::<unlace_decomp::analysisgates::Swifttypes>()
                 .0
             {
                 types.locate_all();
-                let regs = kuna_swifttypes::Registers::for_arch(ctx.file.architecture());
+                let regs = swifttypes::Registers::for_arch(ctx.file.architecture());
                 types.emit(regs.as_ref(), &mut out);
                 // A global variable's storage symbol (`$s…vp`) names its type:
                 // a typed data object where the image kept its symbols.
@@ -235,7 +235,7 @@ impl AnalysisPass for SwiftMetadataPass {
                 if let (true, Some(regs)) = (
                     ctx.arch
                         .kuna_options
-                        .get::<unlace_decomp::kuna_swiftcall::Swiftcall>()
+                        .get::<unlace_decomp::swiftcall::Swiftcall>()
                         .0,
                     regs.as_ref(),
                 ) {
@@ -248,19 +248,19 @@ impl AnalysisPass for SwiftMetadataPass {
                     let callers = if ctx
                         .arch
                         .kuna_options
-                        .get::<unlace_decomp::kuna_analysisgates::Swiftcallers>()
+                        .get::<unlace_decomp::analysisgates::Swiftcallers>()
                         .0
                     {
-                        kuna_swiftcall::runtime_callers(ctx.file, ctx.bytes, &import_calls)
+                        swiftcall::runtime_callers(ctx.file, ctx.bytes, &import_calls)
                     } else {
                         Vec::new()
                     };
-                    kuna_swiftcall::bind(&types, regs, &symbols, &import_calls, &callers, &mut out);
+                    swiftcall::bind(&types, regs, &symbols, &import_calls, &callers, &mut out);
                     out.swift_types.async_imports =
-                        kuna_swiftcall::async_imports(imports.values().map(String::as_str));
+                        swiftcall::async_imports(imports.values().map(String::as_str));
                 }
                 if let Some(w) = &witnesses {
-                    kuna_swiftwitness::type_tables(w, &types, &mut out);
+                    swiftwitness::type_tables(w, &types, &mut out);
                 }
                 metadata_ptr = types.metadata_struct().and_then(|t| types.pointer_to(t));
             }
@@ -271,10 +271,10 @@ impl AnalysisPass for SwiftMetadataPass {
             tf.get_type_pointer(tf.get_size_of_pointer(), void, 1).ok()
         });
         if let (Some(w), Some(meta)) = (&witnesses, &meta) {
-            kuna_swiftwitness::prototypes(w, &namer, tf, meta, &mut out);
+            swiftwitness::prototypes(w, &namer, tf, meta, &mut out);
         }
         if let (Some(h), Some(meta)) = (&helpers, &meta) {
-            kuna_swiftoutlined::prototypes(h, &namer, tf, meta, &mut out);
+            swiftoutlined::prototypes(h, &namer, tf, meta, &mut out);
         }
         namer.finish(records, &mut out);
         // A witness that carries a symbol (`__swift_memcpy16_8`) keeps it.
@@ -319,9 +319,7 @@ fn import_call_targets(
         .filter_map(|s| Some((s.addr, String::from_utf8(s.name.clone()).ok()?)))
         .collect();
     // A stripped image's stubs keep their imports in the chained binds only.
-    out.extend(crate::loader::kuna_stubbinds::stub_bind_symbols(
-        file, bytes,
-    ));
+    out.extend(crate::loader::stubbinds::stub_bind_symbols(file, bytes));
     out.sort();
     out.dedup();
     out
@@ -394,7 +392,7 @@ fn member_after_protocol(name: &str) -> Option<String> {
 /// (`Module.Point.outlined_destroy`, `outlined_destroy.merged`).
 fn is_value_witness(name: &str) -> bool {
     let name = name.strip_suffix(".merged").unwrap_or(name);
-    name.ends_with("_value_witness") || kuna_swiftoutlined::is_helper_name(name)
+    name.ends_with("_value_witness") || swiftoutlined::is_helper_name(name)
 }
 
 /// The bytes of names the pass builds beyond the image's own length. A
@@ -471,8 +469,8 @@ pub struct Namer<'a> {
     md: &'a Metadata,
     imports: &'a HashMap<u64, String>,
     /// The member name an `@objc` thunk gives a method descriptor
-    /// ([`kuna_swiftobjcthunk::members`]), by descriptor address.
-    objc_members: kuna_swiftobjcthunk::Members,
+    /// ([`swiftobjcthunk::members`]), by descriptor address.
+    objc_members: swiftobjcthunk::Members,
     memo: std::cell::RefCell<HashMap<u64, Option<String>>>,
     code: Vec<(u64, u64)>,
     /// The function bodies the image states
@@ -995,4 +993,4 @@ impl Namer<'_> {
     }
 }
 
-pub use unlace_decomp::kuna_swiftcall::self_first;
+pub use unlace_decomp::swiftcall::self_first;

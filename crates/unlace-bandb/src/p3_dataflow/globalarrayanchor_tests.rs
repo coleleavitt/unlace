@@ -15,14 +15,14 @@ mod module_scope {
     pub(super) use unlace_num::opcodes::OpCode;
 }
 #[allow(unused_imports)]
-use crate::kuna_globalarrayanchor::*;
+use crate::globalarrayanchor::*;
 #[allow(unused_imports)]
 use module_scope::*;
 
 use crate::action::Rule;
 use crate::context::{ArchContext, GlobalEntry, GlobalQuery};
 use crate::dtype::{Datatype, TypeFactory, TypeFactoryImpl};
-use crate::kuna_globalarrayanchor::*;
+use crate::globalarrayanchor::*;
 use crate::ruleaction_3::RuleCollapseConstants;
 use std::rc::Rc;
 use unlace_base::address::RangeList;
@@ -116,7 +116,7 @@ fn fixture_with(
     manager.insert_space(ram.clone()).unwrap();
     let mut arch = ArchContext::new(manager);
     arch.kuna_options
-        .set(crate::kuna_globalarrayanchor::GlobalArrayAnchor(true));
+        .set(crate::globalarrayanchor::GlobalArrayAnchor(true));
     arch.infer_pointers = true;
     arch.opbehaviors
         .resize_with(OpCode::CPUI_MAX as usize, || None);

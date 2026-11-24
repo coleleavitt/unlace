@@ -8,7 +8,7 @@ use std::rc::Rc;
 use object::read::{Object, ObjectSection};
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
-use unlace_decomp::kuna_kalloctype::{KallocView, TYPED_ALLOCATORS};
+use unlace_decomp::kalloctype::{KallocView, TYPED_ALLOCATORS};
 
 use super::{Recovered, in_ranges, is_xnu_image, macho_flags};
 use crate::loader::format::macho::resolve_chained_fixups;

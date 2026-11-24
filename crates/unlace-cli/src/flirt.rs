@@ -5,15 +5,15 @@
 //!   unlace flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]
 //! ```
 //!
-//! The patterns come from `unlace_analysis::flirt::kuna_flirtpat` and the `.sig`
-//! tree from `unlace_analysis::flirt::kuna_flirtsig`. Functions the `.sig` cannot
+//! The patterns come from `unlace_analysis::flirt::flirtpat` and the `.sig`
+//! tree from `unlace_analysis::flirt::flirtsig`. Functions the `.sig` cannot
 //! tell apart are listed on stderr and left out of it.
 
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use unlace_analysis::flirt::kuna_flirtpat::{FuncPattern, Target, patterns_from_object, write_pat};
-use unlace_analysis::flirt::kuna_flirtsig::build_sig;
+use unlace_analysis::flirt::flirtpat::{FuncPattern, Target, patterns_from_object, write_pat};
+use unlace_analysis::flirt::flirtsig::build_sig;
 
 use crate::args::take_value;
 

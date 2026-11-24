@@ -36,7 +36,7 @@
 //! the kernel's own spelling, with the file as a `char *` constant so it prints
 //! as the literal — after which the flow falls through to the next instruction,
 //! or `BUG()`, after which the flow plants the artificial no-return halt a call
-//! that never returns gets ([`kuna_brktrap`](crate::kuna_brktrap)). A table
+//! that never returns gets ([`kuna_brktrap`](crate::brktrap)). A table
 //! without `CONFIG_DEBUG_BUGVERBOSE` has no file or line, and the statement
 //! prints bare.
 //!
@@ -46,7 +46,7 @@
 //!   (an `__builtin_trap`, a KGDB or kprobes breakpoint) keeps its rendering.
 //! * **Only the exact lifted shape.** The BRANCHIND must jump through exactly
 //!   the storage the trap's CALLOTHER wrote in the same instruction
-//!   (`kuna_brktrap::brk_site`'s walk).
+//!   (`brktrap::brk_site`'s walk).
 
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
@@ -92,12 +92,12 @@ pub fn site_producer(
     breakpoint: Option<u32>,
 ) -> Option<OpId> {
     if let Some(bp) = breakpoint {
-        if let Some((callother, imm)) = crate::kuna_brktrap::brk_site(data, op, bp) {
+        if let Some((callother, imm)) = crate::brktrap::brk_site(data, op, bp) {
             return (imm == LINUX_BUG_BRK_IMM).then_some(callother);
         }
     }
     let invalid = invalid?;
-    let id = crate::kuna_brktrap::trap_producer(data, op)?;
+    let id = crate::brktrap::trap_producer(data, op)?;
     let prev = data.obank().get(id)?;
     if prev.num_input() != 1 {
         return None;
@@ -159,10 +159,10 @@ pub fn rewrite(
 }
 
 /// (kuna `kernelbug`) The kernel BUG sites the loader found; an
-/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+/// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type BugSites = Vec<KernelBugSite>;
 crate::kuna_arch_table!(BugSites);
 
 #[cfg(test)]
-#[path = "kuna_kernelbug/tests.rs"]
+#[path = "kernelbug/tests.rs"]
 mod tests;

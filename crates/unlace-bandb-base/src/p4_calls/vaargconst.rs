@@ -49,7 +49,7 @@ pub enum VaArgConst {
     Builtin,
 }
 
-impl crate::kuna_optionset::KunaOption for VaArgConst {
+impl crate::optionset::KunaOption for VaArgConst {
     const NAME: &'static str = "vaargconst";
     crate::kuna_option_id!();
 

@@ -4,9 +4,9 @@
 //! The primary record is the `rustc version` string in ELF `.comment`. An image
 //! without one still names its compiler in every panic location path the
 //! standard library carries (`/rustc/<commit>/library/...`); that commit is
-//! mapped to a stable release through `kuna_rustreleases::RELEASES`.
+//! mapped to a stable release through `rustreleases::RELEASES`.
 
-use super::kuna_rustreleases::RELEASES;
+use super::rustreleases::RELEASES;
 use memchr::memmem;
 use object::{BinaryFormat, Object, ObjectSection};
 
@@ -40,7 +40,7 @@ pub fn fmt_pieces_layout(bytes: &[u8], paths: bool) -> Option<RustFmtPieces> {
     {
         return None;
     }
-    let relro = crate::loader::kuna_dynrelocs::relro_range(bytes)
+    let relro = crate::loader::dynrelocs::relro_range(bytes)
         .and_then(|(lo, hi)| (lo < (hi & !4095)).then_some((lo, hi & !4095)));
     Some(RustFmtPieces { relro })
 }

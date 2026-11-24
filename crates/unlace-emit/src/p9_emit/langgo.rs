@@ -5,8 +5,8 @@ use std::borrow::Cow;
 use std::rc::Rc;
 
 use crate::dtype::{Datatype, type_metatype};
-use crate::kuna_lang::*;
-use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
+use crate::lang::*;
+use crate::langtypes::{SpellCtx, TypeSpeller};
 use crate::printc::tokens;
 use crate::printlanguage::{OpToken, TokenType};
 
@@ -273,7 +273,7 @@ impl GoSpeller {
         if depth > 16 {
             return "unsafe.Pointer".into();
         }
-        if let Some(storage) = super::kuna_gopairreturns::storage_type(cx, ty) {
+        if let Some(storage) = super::gopairreturns::storage_type(cx, ty) {
             return storage;
         }
         match ty.get_metatype() {
@@ -323,7 +323,7 @@ impl GoSpeller {
                 {
                     result.push(' ');
                     result.push_str(
-                        &super::kuna_gopairreturns::result_type(cx, output)
+                        &super::gopairreturns::result_type(cx, output)
                             .unwrap_or_else(|| self.expression(cx, output, depth + 1)),
                     );
                 }
@@ -336,7 +336,7 @@ impl GoSpeller {
                     if ty.get_name().is_empty() {
                         self.anonymous(ty)
                     } else {
-                        path(crate::kuna_gopackage::local_type_name(
+                        path(crate::gopackage::local_type_name(
                             cx.go_package.as_deref(),
                             ty.get_display_name(),
                         ))
@@ -429,7 +429,7 @@ impl PrintC {
         let mut first = 0;
         if arch
             .kuna_options
-            .get::<crate::kuna_analysisgates::Godwarfsig>()
+            .get::<crate::analysisgates::Godwarfsig>()
             .0
             && fd.kuna_go_receiver.as_ref().is_some_and(|receiver| {
                 receiver.symbol == display
@@ -475,7 +475,7 @@ impl PrintC {
             .flatten()
             .filter(|t| t.get_metatype() != type_metatype::TYPE_VOID)
         {
-            let ty = super::kuna_gopairreturns::result_type(&self.rt_ctx, output)
+            let ty = super::gopairreturns::result_type(&self.rt_ctx, output)
                 .unwrap_or_else(|| declarator_parts(output, self.rt_ctx.clone()).0);
             self.emit.print(" ", SyntaxHighlight::NoColor);
             let ret = self.emit.begin_return_type(markup);
@@ -495,7 +495,7 @@ impl PrintC {
         let name = if param.get_name().is_empty() {
             crate::database::kuna_materialized_param_name(
                 arch.kuna_options
-                    .get::<crate::kuna_coreoptions::NameStyleAngr>()
+                    .get::<crate::coreoptions::NameStyleAngr>()
                     .0,
                 index,
                 "",
@@ -1056,7 +1056,7 @@ impl PrintC {
         fd: &Funcdata,
         arch: &Architecture,
         op: OpId,
-        transfer: crate::kuna_bitcast::Transfer,
+        transfer: crate::bitcast::Transfer,
     ) {
         let bits = transfer.size * 8;
         if transfer.to_float {

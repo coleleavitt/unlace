@@ -6,9 +6,9 @@
 
 use crate::context::OpId;
 use crate::dtype::type_metatype;
+use crate::floatslice::Slice;
 use crate::funcdata::Funcdata;
 use crate::funcdata_facing::FuncdataFacingExt;
-use crate::kuna_floatslice::Slice;
 use unlace_num::opcodes::OpCode;
 
 /// The slice and whether the source needs a word cast before shifting (a pointer does).
@@ -31,13 +31,13 @@ pub fn recognize(fd: &Funcdata, op: OpId) -> Option<(Slice, bool)> {
     {
         return None;
     }
-    let target = crate::kuna_stackviews::access_type(fd, output, op, -1)
+    let target = crate::stackviews::access_type(fd, output, op, -1)
         .unwrap_or_else(|| fd.vn_type_def_facing(output));
     let storage = target.get_partial_base().unwrap_or(target);
-    if storage.get_size() < to_size || !super::kuna_bytearrayc::byte_array(&storage) {
+    if storage.get_size() < to_size || !super::bytearrayc::byte_array(&storage) {
         return None;
     }
-    let from = crate::kuna_stackviews::access_type(fd, input, op, operation.get_slot(input))
+    let from = crate::stackviews::access_type(fd, input, op, operation.get_slot(input))
         .or_else(|| crate::printc::declared_variable_type(fd, input))
         .unwrap_or_else(|| fd.vn_type_read_facing(input, op));
     let from = from.get_stripped().unwrap_or(from);

@@ -4,7 +4,7 @@
    (`addrcensus3.py`); compare the sites with IDA's output at the same addresses. Result: the
    `(unsigned long *)&v` residue is 79% a call's return-address push through an alloca-moved
    stack pointer, not a mistyped object (`analysis.md`).
-2. `p4_calls/kuna_callpush.rs`: `RuleCallPush` on STORE, registered in `oppool2` after
+2. `p4_calls/callpush.rs`: `RuleCallPush` on STORE, registered in `oppool2` after
    `storevarnode` (group `stackvars`), gated by the live arch flag `drop_call_push`
    (`option callpush on|off`), plumbed through `Architecture`, the ArchSeam (`ArchContext`),
    `options.rs`, the console's live-value table and `phases.toml`.

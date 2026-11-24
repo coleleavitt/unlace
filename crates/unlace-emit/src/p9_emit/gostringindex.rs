@@ -64,7 +64,7 @@ pub fn prove(fd: &Funcdata, load_id: OpId) -> Option<StringIndex> {
     if (0..proto.num_params()).any(|i| {
         proto
             .get_param(i)
-            .is_some_and(|param| super::kuna_langgo::identifier(param.get_name()) == "unsafe")
+            .is_some_and(|param| super::langgo::identifier(param.get_name()) == "unsafe")
     }) {
         return None;
     }

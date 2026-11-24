@@ -5,7 +5,7 @@ Source: `include/swift/Runtime/Concurrency.h` of the Swift project
 (https://github.com/swiftlang/swift, Apache-2.0 with Runtime Library
 Exception), at the tag named by `TAG`. Every `SWIFT_EXPORT_FROM(swift_Concurrency)
 SWIFT_CC(...)` function declaration becomes one row of
-`crates/unlace-analysis/src/analyzers/swift/kuna_swiftconcurrency.rs`:
+`crates/unlace-analysis/src/analyzers/swift/swiftconcurrency.rs`:
 its name, its return and parameter types reduced to the handful the
 decompiler spells, the parameter names the header gives, and the position
 of the `SWIFT_ASYNC_CONTEXT` parameter when it has one.
@@ -22,7 +22,7 @@ from pathlib import Path
 
 TAG = "swift-6.2-RELEASE"
 URL = f"https://raw.githubusercontent.com/swiftlang/swift/{TAG}/include/swift/Runtime/Concurrency.h"
-OUT = Path(__file__).resolve().parent.parent / "crates/unlace-analysis/src/analyzers/swift/kuna_swiftconcurrency.rs"
+OUT = Path(__file__).resolve().parent.parent / "crates/unlace-analysis/src/analyzers/swift/swiftconcurrency.rs"
 
 DECL = re.compile(r"SWIFT_EXPORT_FROM\(swift_Concurrency\)\s+SWIFT_CC\((\w+)\)\s*([^;{]+?)\s*;", re.S)
 

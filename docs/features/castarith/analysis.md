@@ -215,7 +215,7 @@ is not the type its declaration prints; the integer form cast it at the same pla
 **One structuring decision moves.** The rewrite only removes ops (the integer form's two
 casts become one or none), and three P8 passes run after the cast pass and bound the tail
 they duplicate by its op count, `CAST`s included: `gotoreduce` (8 ops, all counted),
-`taildup` (12 printed ops, `kuna_taildup.rs:310`) and `crossjumprevert` (8 printed ops).
+`taildup` (12 printed ops, `taildup.rs:310`) and `crossjumprevert` (8 printed ops).
 A return tail just over the budget can fit once its casts go, and its `goto` becomes a
 duplicated `return` (`// return-dupe`). taildup preserves the value by design: the copy
 runs the same ops on the one path that reached the goto. `structural.py` (beside this

@@ -48,7 +48,7 @@ pub fn trimmed_rows(
     let mut lowest_target_above: Option<u64> = None;
     for (i, t) in addresstable.iter().enumerate() {
         let off = t.get_offset();
-        if !exec.is_empty() && !crate::kuna_litpoolconst::contains(exec, off, 1) {
+        if !exec.is_empty() && !crate::litpoolconst::contains(exec, off, 1) {
             return i;
         }
         let Some(e) = entry(i) else { return i };
@@ -68,7 +68,7 @@ pub fn trimmed_rows(
     addresstable.len()
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.switchtrim_trimmed_rows = Some(trimmed_rows);
 }

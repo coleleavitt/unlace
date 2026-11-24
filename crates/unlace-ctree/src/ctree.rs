@@ -25,7 +25,7 @@ crate::kuna_flag!(
     shipped: true
 );
 
-pub use crate::kuna_coreoptions::Noretfirst;
+pub use crate::coreoptions::Noretfirst;
 
 crate::kuna_flag!(
     /// (kuna `nestedand`) Print an `if` whose whole body is another `if` (neither with an

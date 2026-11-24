@@ -8,7 +8,7 @@
 //! [`crate::pdb::PdbPass`] turns into `out.fid_names` renames + `out.symbols`.
 //!
 //! This is the NAME tier — stripped `FUN_*` → the real source name; types, locals
-//! and lines are [`super::kuna_pdbtypes`] and [`super::kuna_pdblines`].
+//! and lines are [`super::pdbtypes`] and [`super::pdblines`].
 //!
 //! ## Address resolution
 //!

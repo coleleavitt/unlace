@@ -8,11 +8,11 @@ use crate::dtype::type_metatype::{
 };
 use crate::funcdata::Funcdata;
 use crate::funcdata_facing::FuncdataFacingExt;
-use crate::kuna_rustarrayaddr::{RAW_ADDRESS, array_place};
-use crate::kuna_rusttypes::int_name;
 use crate::prettyprint::Emit;
 use crate::printc::{PrintC, op_key, tokens};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType, modifiers};
+use crate::rustarrayaddr::{RAW_ADDRESS, array_place};
+use crate::rusttypes::int_name;
 use unlace_base::address::{Address, calc_mask};
 use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
@@ -68,7 +68,7 @@ fn exact_field(fd: &Funcdata, def: OpId) -> bool {
             .flatten()
             .filter(|(_, remainder)| *remainder == 0)
             .and_then(|(field, _)| owner.get_field(field))
-            .is_some_and(|field| !crate::kuna_typequal::is_volatile(&field.field_type))
+            .is_some_and(|field| !crate::typequal::is_volatile(&field.field_type))
 }
 
 #[derive(Clone, Copy)]
@@ -213,7 +213,7 @@ impl PrintC {
         if [pointee.as_deref(), base.as_deref()]
             .into_iter()
             .flatten()
-            .any(crate::kuna_typequal::is_volatile)
+            .any(crate::typequal::is_volatile)
         {
             return false;
         }
@@ -292,8 +292,7 @@ impl PrintC {
             if let Some(source_int) = source_int.filter(|_| {
                 convert
                     && node.is_implied()
-                    && crate::kuna_rustintegers::needs_integer_context(fd, value, op, 8)
-                        != Some(false)
+                    && crate::rustintegers::needs_integer_context(fd, value, op, 8) != Some(false)
             }) {
                 self.push_op(&tokens::FUNCTION_CALL, key);
                 self.push_atom(&Atom::with_op(

@@ -1,7 +1,7 @@
 """Reduce gcc -aux-info NC declarations to the protos::Ty vocabulary.
 
 Fixed rule, applied mechanically; a declaration with any slot that has no honest
-width-stable Ty spelling is REJECTED whole (kuna_libcsigs.rs' own rule).
+width-stable Ty spelling is REJECTED whole (libcsigs.rs' own rule).
 """
 import re,json,sys
 

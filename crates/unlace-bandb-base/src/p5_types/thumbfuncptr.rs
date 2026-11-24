@@ -125,5 +125,5 @@ pub fn kuna_preserve_thumb_funcptr(
 }
 
 #[cfg(test)]
-#[path = "kuna_thumbfuncptr/tests.rs"]
+#[path = "thumbfuncptr/tests.rs"]
 mod tests;

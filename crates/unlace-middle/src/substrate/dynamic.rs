@@ -39,7 +39,7 @@
 //! ## (kuna) GH-8467 collision budget
 //!
 //! `unique_hash` takes the same-address collision budget as a parameter; kuna's
-//! own analysis passes `crate::kuna_dynamichashmax::MAX_DUPLICATES` (16, up
+//! own analysis passes `crate::dynamichashmax::MAX_DUPLICATES` (16, up
 //! from upstream's 8), the wire path keeps 8.
 
 use unlace_base::address::Address;
@@ -720,7 +720,7 @@ impl DynamicHash {
     /// encoded when no method yields full uniqueness.
     ///
     /// (kuna GH-8467) the same-address collision budget `maxduplicates` is
-    /// passed in: [`MAX_DUPLICATES`](crate::kuna_dynamichashmax::MAX_DUPLICATES)
+    /// passed in: [`MAX_DUPLICATES`](crate::dynamichashmax::MAX_DUPLICATES)
     /// (16) for kuna's own analysis, upstream's 8 on the wire path.
     pub fn unique_hash(&mut self, root: VarnodeId, maxduplicates: uint4, data: &mut Funcdata) {
         let mut champion: Vec<VarnodeId> = Vec::new();

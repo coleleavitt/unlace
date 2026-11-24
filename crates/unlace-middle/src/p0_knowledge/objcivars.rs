@@ -12,8 +12,7 @@ pub const OBJCIVARS_ENV: &str = "UNLACE_OBJCIVARS";
 
 /// Whether the pass builds the instance layouts.
 pub fn objcivars_enabled() -> bool {
-    crate::kuna_loadoptions::scoped(|o| o.objcivars)
-        .unwrap_or_else(crate::kuna_loadoptions::env::objcivars)
+    crate::loadoptions::scoped(|o| o.objcivars).unwrap_or_else(crate::loadoptions::env::objcivars)
 }
 
 /// Bridge a `set_kuna_option("objcivars", val)` choice to [`OBJCIVARS_ENV`] so

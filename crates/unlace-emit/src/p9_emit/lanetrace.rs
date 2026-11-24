@@ -11,8 +11,8 @@
 //! again in the same way, and is not traced again.
 
 use crate::context::VarnodeId;
+use crate::fasthash::{FxHashMap, FxHashSet};
 use crate::funcdata::Funcdata;
-use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 
 /// The Varnodes a trace from `root` that reached `reached` read: `root`,
 /// every Varnode reached, and every input and output of the ops defining and

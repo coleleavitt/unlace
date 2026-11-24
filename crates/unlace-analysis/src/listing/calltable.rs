@@ -12,7 +12,7 @@
 //! function ([`call_table_run`]), which is where the read ran into the next
 //! table.
 //!
-//! [`scan`] reads the tables with [`super::kuna_switchtable::register_targets`]
+//! [`scan`] reads the tables with [`super::switchtable::register_targets`]
 //! over the decoded Listing and returns both halves: the call-table targets as
 //! new entries, and the discovered (not symbol) entries that sit on a case of a
 //! switch and that no call reaches, which are not functions.
@@ -24,8 +24,8 @@ use unlace_decomp::architecture::Architecture;
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::translate::Translate;
 
-use super::kuna_poolref::PoolImage;
-use super::kuna_switchtable::{
+use super::poolref::PoolImage;
+use super::switchtable::{
     DEFAULT_MAX_ENTRIES, Reach, TableRead, preserved_registers, register_targets,
 };
 use super::xrefs::{FullCapture, decode};
@@ -100,7 +100,7 @@ pub fn scan(
     };
     let exec = listing.exec_ranges().to_vec();
     let entries: BTreeSet<u64> = listing.functions().map(|(&e, _)| e).collect();
-    let tables = super::kuna_switchextent::FunctionTables::new(&pool);
+    let tables = super::switchextent::FunctionTables::new(&pool);
     let next_table = |from: u64, table: u64| {
         let lo = entries.range(..=from).next_back().copied()?;
         let hi = entries.range(from + 1..).next().copied();

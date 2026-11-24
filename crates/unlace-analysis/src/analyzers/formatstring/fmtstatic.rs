@@ -62,8 +62,8 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::types::{int4, uintb};
 use unlace_decomp::architecture::Architecture;
+use unlace_decomp::formatstring::{self, ImageFamily, VarargAbi};
 use unlace_decomp::fspec::{ParameterPieces, ProtoModel, PrototypePieces};
-use unlace_decomp::kuna_formatstring::{self, ImageFamily, VarargAbi};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::PcodeEmit;
@@ -124,15 +124,15 @@ impl AnalysisPass for FormatStringStaticPass {
         if !listing.has_refs() {
             return out;
         }
-        let arm_args = unlace_decomp::kuna_armfloatargs::applies(ctx.arch);
+        let arm_args = unlace_decomp::armfloatargs::applies(ctx.arch);
         let abi = if arm_args {
             VarargAbi::Named
         } else {
             ctx.arch
                 .kuna_tables
-                .get::<unlace_decomp::kuna_formatstring::ImageVarargAbi>()
+                .get::<unlace_decomp::formatstring::ImageVarargAbi>()
                 .unwrap_or_else(|| {
-                    kuna_formatstring::vararg_abi(&ctx.arch.archid, Some(image_family(ctx.bytes)))
+                    formatstring::vararg_abi(&ctx.arch.archid, Some(image_family(ctx.bytes)))
                 })
         };
         if abi == VarargAbi::Nothing {
@@ -263,7 +263,7 @@ impl AnalysisPass for FormatStringStaticPass {
                 ) {
                     Ok(Some(mut pieces)) => {
                         if arm_args
-                            && !unlace_decomp::kuna_armfloatargs::base_inputs(ctx.arch, &mut pieces)
+                            && !unlace_decomp::armfloatargs::base_inputs(ctx.arch, &mut pieces)
                         {
                             continue;
                         }
@@ -282,10 +282,10 @@ impl AnalysisPass for FormatStringStaticPass {
         if ctx
             .arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FormatCallees>()
+            .get::<unlace_decomp::analysisgates::FormatCallees>()
             .0
         {
-            let inputs = super::kuna_fmtcallee::Inputs {
+            let inputs = super::fmtcallee::Inputs {
                 ctx,
                 listing,
                 model: &model,
@@ -295,7 +295,7 @@ impl AnalysisPass for FormatStringStaticPass {
                 dbg,
             };
             out.format_sites
-                .extend(super::kuna_fmtcallee::infer(&inputs, &mut lifts));
+                .extend(super::fmtcallee::infer(&inputs, &mut lifts));
         }
         out.format_sites
             .sort_by(|a, b| (a.func, a.callpoint).cmp(&(b.func, b.callpoint)));

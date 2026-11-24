@@ -34,7 +34,7 @@
 //! * the stack pointer of a return, or of a jump that leaves the function,
 //!   is the entry stack pointer;
 //! * a direct callee whose own returns prove its extrapop
-//!   ([`crate::kuna_calleepurge`]) contributes that constant.
+//!   ([`crate::calleepurge`]) contributes that constant.
 //!
 //! The system is first checked with every call unknown at zero. When that
 //! holds the model is consistent and only the proven extrapops are applied.
@@ -84,11 +84,11 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::architecture::Architecture;
+use crate::calleepurge::{Effect, summary};
 use crate::context::{OpId, VarnodeId};
+use crate::fasthash::FxHashMap as HashMap;
 use crate::fspec::{EXTRAPOP_UNKNOWN, effect_type};
 use crate::funcdata::Funcdata;
-use crate::kuna_calleepurge::{Effect, summary};
-use crate::kuna_fasthash::FxHashMap as HashMap;
 
 /// How many levels of nested direct calls a callee walk reads.
 const DEPTH: u8 = 3;
@@ -108,14 +108,12 @@ const MAX_TESTS: usize = 64;
 /// The most a callee is taken to pop above its return address.
 const MAX_POP: i64 = 0x400;
 
-pub use crate::kuna_calleefacts::CalleeReturns;
+pub use crate::calleefacts::CalleeReturns;
 
 /// `option spsolve` on its target: a loaded x86-32 ELF under a default model
 /// that states its extrapop.
 pub fn applies(arch: &Architecture) -> bool {
-    arch.kuna_options
-        .get::<crate::kuna_coreoptions::SpSolve>()
-        .0
+    arch.kuna_options.get::<crate::coreoptions::SpSolve>().0
         && arch.image_elf
         && arch.archid.starts_with("x86:LE:32:")
         && arch
@@ -1185,7 +1183,7 @@ pub fn settle(data: &mut Funcdata, sp: &Address, size: int4) -> bool {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::SpSolve>()
+        .get::<crate::coreoptions::SpSolve>()
         .0
         || data.is_jumptable_recovery_on()
         || data.num_calls() == 0
@@ -1231,8 +1229,8 @@ pub fn settle(data: &mut Funcdata, sp: &Address, size: int4) -> bool {
     restart
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.spsolve_applies = Some(applies);
 }
 

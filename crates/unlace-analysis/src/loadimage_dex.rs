@@ -5,20 +5,20 @@
 //! instructions where they are, so the one mapping is the whole image. An APK is
 //! a zip of `classes.dex`, `classes2.dex`, ...: its DEX files are mapped one
 //! after another, each at a 64 KiB boundary. The method tables and constant
-//! pools live in [`unlace_decomp::kuna_dex::DexModel`].
+//! pools live in [`unlace_decomp::dex::DexModel`].
 
 use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::AddrSpace;
-use unlace_decomp::kuna_dex::DexModel;
+use unlace_decomp::dex::DexModel;
 use unlace_sleigh::loadimage::{LoadImage, LoadImageSection, section_flags};
 
 /// The language a DEX file decodes with unless the caller names another.
 pub const DEX_LANGUAGE: &str = "Dalvik:LE:32:DEX_Android12";
 
-pub use unlace_decomp::kuna_dex::format::is_dex;
+pub use unlace_decomp::dex::format::is_dex;
 
 /// Alignment of each DEX file's mapping after the first.
 const DEX_ALIGN: u64 = 0x1_0000;

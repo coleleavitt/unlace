@@ -34,7 +34,7 @@ use unlace_num::pcoderaw::VarnodeData;
 use crate::architecture::Architecture;
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
-use crate::kuna_protoorder::RecoveredTypes;
+use crate::protoorder::RecoveredTypes;
 
 const ARG_REGS: [&str; 6] = ["RDI", "RSI", "RDX", "RCX", "R8", "R9"];
 const LOOK_BACK: usize = 16;
@@ -218,10 +218,7 @@ pub fn vote(arch: &Architecture, stub: &Address) -> Option<ImportVote> {
 /// drive seeds the `protoorder` statements. A no-op unless `importvote` is on
 /// and the analysis tier recorded call sites.
 pub fn seed(arch: &mut Architecture, data: &Funcdata) {
-    if !arch
-        .kuna_options
-        .get::<crate::kuna_importvote::Importvote>()
-        .0
+    if !arch.kuna_options.get::<crate::importvote::Importvote>().0
         || arch.kuna_import_sites.is_empty()
     {
         return;
@@ -245,12 +242,12 @@ pub fn seed(arch: &mut Architecture, data: &Funcdata) {
             continue;
         }
         let stub = fc.get_entry_address().clone();
-        let Some(key) = crate::kuna_protoorder::stated_key(&stub) else {
+        let Some(key) = crate::protoorder::stated_key(&stub) else {
             continue;
         };
         if arch
             .kuna_tables
-            .get::<crate::kuna_protoorder::CalleeTypes>()
+            .get::<crate::protoorder::CalleeTypes>()
             .contains_key(&key)
             || arch
                 .symboltab
@@ -264,7 +261,7 @@ pub fn seed(arch: &mut Architecture, data: &Funcdata) {
         };
         if let Some(stated) = statement(arch, v) {
             arch.kuna_tables
-                .get_mut::<crate::kuna_protoorder::CalleeTypes>()
+                .get_mut::<crate::protoorder::CalleeTypes>()
                 .insert(key, Rc::new(stated));
         }
     }

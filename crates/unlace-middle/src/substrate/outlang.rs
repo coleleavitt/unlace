@@ -1,5 +1,5 @@
 //! The surface language P9 renders into, as the option plane and the passes name it. The
-//! per-language policy objects it selects live in `p9_emit/kuna_lang.rs`.
+//! per-language policy objects it selects live in `p9_emit/lang.rs`.
 
 /// The surface language P9 renders the recovered function into.
 ///

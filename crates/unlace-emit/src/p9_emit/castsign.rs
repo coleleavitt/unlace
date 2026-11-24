@@ -1,7 +1,7 @@
 //! (kuna `castsign`) Declare a variable signed when the program only ever reads it
 //! signed, in the places the `signedness` walk leaves alone.
 //!
-//! `signedness auto` ([`crate::kuna_typeround`]) already re-declares a register
+//! `signedness auto` ([`crate::typeround`]) already re-declares a register
 //! local `int` when every signedness-sensitive reader of it is signed.  Four
 //! limits of that walk leave the same cast in place elsewhere:
 //!
@@ -291,7 +291,7 @@ crate::kuna_flag!(
     /// (kuna `castsign`) Let `signedness` declare a frame local or a body local
     /// with an input member signed, and read a same-width pointer conversion or a
     /// pointer-width index as neutral, when every signedness-sensitive use of the
-    /// value is signed.  See [`crate::kuna_castsign`].
+    /// value is signed.  See [`crate::castsign`].
     CastSign,
     "castsign",
     "signed declarations for signed-only locals",

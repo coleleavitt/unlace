@@ -15,7 +15,7 @@
 //! callers' dead-code pass treats as consumed, so a value forwarded to it is
 //! narrowed in the caller too.
 
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::protoorder::FuncdataProtoorderExt;
 use unlace_base::address::{Address, calc_mask};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -174,14 +174,14 @@ pub fn narrow_inputs(data: &mut Funcdata) -> int4 {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_narrowargs::NarrowArgs>()
+        .get::<crate::narrowargs::NarrowArgs>()
         .body
         || data.get_func_proto().is_input_locked()
         || data.bblocks_get_size() == 0
     {
         return 0;
     }
-    let stated = crate::kuna_callerargs::narrow_stated(data);
+    let stated = crate::callerargs::narrow_stated(data);
     let inputs: Vec<VarnodeId> = data
         .vbank()
         .iter_def_flag(crate::varnode::varnode_flags::input)
@@ -308,7 +308,7 @@ pub fn stated_bytes_consumed(data: &Funcdata, fc: &FuncCallSpecs, slot: usize) -
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_narrowargs::NarrowArgs>()
+        .get::<crate::narrowargs::NarrowArgs>()
         .body
     {
         return 0;
@@ -360,7 +360,7 @@ pub struct NarrowArgs {
     pub callers: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for NarrowArgs {
+impl crate::optionset::KunaOption for NarrowArgs {
     const NAME: &'static str = "narrowargs";
     crate::kuna_option_id!();
 

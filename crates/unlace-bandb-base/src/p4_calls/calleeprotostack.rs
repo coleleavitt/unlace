@@ -12,7 +12,7 @@
 //! a model whose own `<prototype extrapop="unknown">` declines to. Nothing in
 //! the tree called it, so a locked prototype left the call at
 //! `extrapop_unknown`, `StackSolver` fell through to a guess, and
-//! [`crate::kuna_calleepop`]'s guess reads the push run in front of
+//! [`crate::calleepop`]'s guess reads the push run in front of
 //! the call. That run is not always the callee's: a Win32 image stages the
 //! arguments of one API and calls a second, argument-less one in the middle of
 //! the run, and every staged push is then credited to the wrong callee. The
@@ -169,7 +169,7 @@ pub fn pointer_input_may_alias(
         else {
             return true;
         };
-        if crate::kuna_stackranges::may_alias(fd, input, offset, size) {
+        if crate::stackranges::may_alias(fd, input, offset, size) {
             return true;
         }
     }
@@ -215,7 +215,7 @@ pub fn declared_pointer_reaches(
         else {
             continue;
         };
-        let Some(pointer) = crate::kuna_stackranges::frame_address(fd, input) else {
+        let Some(pointer) = crate::stackranges::frame_address(fd, input) else {
             if fd.rebound_frame_base_seen() && depends_on_frame(fd, input) {
                 return true;
             }
@@ -294,8 +294,8 @@ pub fn above_callee_frame(offset: uintb, size: int4, addr_size: int4, floor: int
     signed >= floor as i64 && signed.checked_add(size as i64).is_some()
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.calleeprotostack_resolve_declared_extra_pop = Some(resolve_declared_extra_pop);
     hooks.calleeprotostack_above_callee_frame = Some(above_callee_frame);
     hooks.calleeprotostack_declared_caller_frame_floor = Some(declared_caller_frame_floor);

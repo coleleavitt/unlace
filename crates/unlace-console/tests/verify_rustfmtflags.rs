@@ -7,7 +7,7 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_rustfmt::RustFmtMode;
+use unlace_decomp::rustfmt::RustFmtMode;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -39,7 +39,7 @@ fn decompile(
         !program
             .arch()
             .kuna_tables
-            .get::<unlace_decomp::kuna_rustfmtflags::IntegerFormatters>()
+            .get::<unlace_decomp::rustfmtflags::IntegerFormatters>()
             .is_empty()
     );
     program.arch_mut().kuna_options.set(if enabled {
@@ -141,7 +141,7 @@ fn version_identity_and_language_are_required() {
     let no_identity = |enabled| {
         decompile(false, "hex_width", enabled, "rust", |arch| {
             arch.kuna_tables
-                .get_mut::<unlace_decomp::kuna_rustfmtflags::IntegerFormatters>()
+                .get_mut::<unlace_decomp::rustfmtflags::IntegerFormatters>()
                 .clear()
         })
     };

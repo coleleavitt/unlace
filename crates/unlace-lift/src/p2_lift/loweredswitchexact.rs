@@ -1,7 +1,7 @@
 //! (kuna `loweredswitchexact`) Install a re-rolled lowered switch only when it is
 //! the compare tree it replaces.
 //!
-//! [`crate::kuna_loweredswitch`] recovers a case map and a default from a
+//! [`crate::loweredswitch`] recovers a case map and a default from a
 //! comparison cascade, and the install replaces the cascade with a switch over
 //! that map. Three things made the switch a different program. The install kept
 //! one label per case body, so a value sharing its body with another case fell
@@ -28,7 +28,7 @@ use unlace_num::opcodes::OpCode;
 use crate::block::{BlockType, block_get_start};
 use crate::context::{BlockId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::p2_lift::kuna_loweredswitch::KunaLoweredSwitchRecord;
+use crate::p2_lift::loweredswitch::KunaLoweredSwitchRecord;
 
 /// Marshaling element `<loweredswitchexact>` (kuna 4000+ range).
 pub const ELEM_LOWEREDSWITCHEXACT: ElementId = ElementId::new("loweredswitchexact", 4171);
@@ -503,11 +503,11 @@ pub fn block_at_start(data: &Funcdata, addr: &Address) -> Option<BlockId> {
         })
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.loweredswitchexact_raw_install_keeps_values = Some(raw_install_keeps_values);
 }
 
 #[cfg(test)]
-#[path = "kuna_loweredswitchexact/tests.rs"]
+#[path = "loweredswitchexact/tests.rs"]
 mod tests;

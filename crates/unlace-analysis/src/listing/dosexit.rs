@@ -68,7 +68,7 @@ pub fn analyze(
     let noreturn = if sites.is_empty()
         || !arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::NoreturnPropagate>()
+            .get::<unlace_decomp::analysisgates::NoreturnPropagate>()
             .0
     {
         Vec::new()
@@ -77,7 +77,7 @@ pub fn analyze(
             listing,
             &sites,
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::NoreturnReach>()
+                .get::<unlace_decomp::analysisgates::NoreturnReach>()
                 .0,
         )
     };

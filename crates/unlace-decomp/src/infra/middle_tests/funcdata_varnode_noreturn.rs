@@ -12,7 +12,7 @@ use crate::dtype::type_metatype;
 use crate::fspec::effect_type;
 use crate::funcdata::Funcdata;
 use crate::funcdata_varnode::*;
-use crate::kuna_noreturnretuse;
+use crate::noreturnretuse;
 use crate::varnode::DefOpInfo;
 use crate::varnode::VarnodeBank;
 use crate::varnode::varnode_flags;
@@ -103,7 +103,7 @@ fn terminal_noreturn_call_shape_requires_an_adjacent_noreturn_halt() {
         OpCode::CPUI_RETURN,
         crate::op::pcodeop_flags::returns | crate::op::pcodeop_flags::noreturn,
     );
-    assert!(kuna_noreturnretuse::call_ends_in_noreturn_halt(&fd, call));
+    assert!(noreturnretuse::call_ends_in_noreturn_halt(&fd, call));
 
     let mut ordinary = build_fd();
     let root = ordinary.bblocks_root_pub();
@@ -122,9 +122,7 @@ fn terminal_noreturn_call_shape_requires_an_adjacent_noreturn_halt() {
         OpCode::CPUI_RETURN,
         crate::op::pcodeop_flags::returns,
     );
-    assert!(!kuna_noreturnretuse::call_ends_in_noreturn_halt(
-        &ordinary, call
-    ));
+    assert!(!noreturnretuse::call_ends_in_noreturn_halt(&ordinary, call));
 
     let mut nonadjacent = build_fd();
     let root = nonadjacent.bblocks_root_pub();
@@ -144,7 +142,7 @@ fn terminal_noreturn_call_shape_requires_an_adjacent_noreturn_halt() {
         OpCode::CPUI_RETURN,
         crate::op::pcodeop_flags::returns | crate::op::pcodeop_flags::noreturn,
     );
-    assert!(!kuna_noreturnretuse::call_ends_in_noreturn_halt(
+    assert!(!noreturnretuse::call_ends_in_noreturn_halt(
         &nonadjacent,
         call
     ));

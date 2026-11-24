@@ -20,7 +20,7 @@
 //! all the instruction says. Nothing references 0x661bc, so `unlace xrefs --to`
 //! that string answers zero and `unlace strings --json` reports it with
 //! `xrefs_count 0` and no owning function — on a binary whose disassembly plainly
-//! shows which function prints it. This is [`super::kuna_picbase`]'s defect one
+//! shows which function prints it. This is [`super::picbase`]'s defect one
 //! indirection over: there the address is a register plus a displacement, here it
 //! is a word in the image.
 //!
@@ -197,7 +197,7 @@ impl<'a> PoolImage<'a> {
 
     /// The signed 32-bit word at `vma`, when `vma` is 4-byte aligned and lies in
     /// a read-only section — the entry width of a delta-encoded jump table
-    /// ([`super::kuna_switchtable`]), which is 32 bits on every target that
+    /// ([`super::switchtable`]), which is 32 bits on every target that
     /// emits one whatever the pointer width is.
     pub(super) fn word32_at(&self, vma: u64) -> Option<i32> {
         if vma % 4 != 0 {

@@ -6,7 +6,7 @@ use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
-use unlace_decomp::kuna_rustfmt::RustFmtMode;
+use unlace_decomp::rustfmt::RustFmtMode;
 
 fn decompile(
     function: &str,
@@ -56,7 +56,7 @@ fn decompile_fixture(
         program
             .arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_rustfmtflags::IntegerFormatters>()
+            .get_mut::<unlace_decomp::rustfmtflags::IntegerFormatters>()
             .clear();
     }
     program.commit_pending_analysis().unwrap();

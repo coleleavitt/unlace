@@ -9,7 +9,7 @@
 //! from the runtime type data, so the table word becomes a pointer to it and a
 //! call through one of its method slots prints by name.
 
-use unlace_decomp::kuna_goitabcalls::{GoItabCalls, itab_record_name};
+use unlace_decomp::goitabcalls::{GoItabCalls, itab_record_name};
 
 use super::*;
 

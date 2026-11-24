@@ -16,7 +16,7 @@ untyped. Stored values are unsigned bit patterns, so an `unsigned int *` or
 constructor sign-extends it into its 64-bit register, so typing it signed lets
 that extension print without a cast. A doubleword result and the
 store-conditional success byte are unsigned. Type inference and the merge phase's local queries each consult
-`crates/unlace-bandb-base/src/p3_dataflow/kuna_octeoneffects.rs (output_type)`
+`crates/unlace-bandb-base/src/p3_dataflow/octeoneffects.rs (output_type)`
 for a CALLOTHER; the size-only TypeOp dispatch sees no op to ask. Pointer typing requires the address
 operand to have the target RAM width, so N32 does not turn the full physical
 GPR or a 64-bit atomic payload into a 32-bit pointer. Unknown user operations
@@ -52,7 +52,7 @@ is created, and every phase from lift to emission reads it. What lives in
 carries.
 
 The qualifier representation in
-`crates/unlace-middle/src/substrate/kuna_typequal.rs` distinguishes a
+`crates/unlace-middle/src/substrate/typequal.rs` distinguishes a
 volatile pointee from a volatile pointer object. Type ordering prefers the
 qualified form when its underlying type otherwise compares equal, allowing
 pointer copies and pointer arithmetic to retain the pointee qualification.
@@ -413,7 +413,7 @@ element-size representation without truncation. An access whose address cannot
 be peeled within the walk's depth bound also refuses promotion, even if another
 access through the same base was proven.
 
-With stackviews enabled, `crates/unlace-bandb-core/src/p5_types/kuna_stackwordtypes.rs`
+With stackviews enabled, `crates/unlace-bandb-core/src/p5_types/stackwordtypes.rs`
 separates a generated frame backing from the value stored through another
 pointer. A one-, two-, four-, or eight-byte STORE value uses its resolved scalar
 piece, falling back to unsigned bits when the selected view is a byte array or
@@ -433,7 +433,7 @@ committing any pending stack-symbol type recommendations
 type inference has to read (a pointer to a structure, union, array or function,
 or a relative pointer) on every Varnode an operation of the retyped variable
 defines
-(`crates/unlace-bandb-base/src/p6_variables/kuna_stablenames.rs
+(`crates/unlace-bandb-base/src/p6_variables/stablenames.rs
 (lock_retyped)`, chapter 06), so each of them is a seed and a wall.
 
 **The bounded pass count.** The wrapper
@@ -467,7 +467,7 @@ Upstream refuses to build such a chain at the one seam it noticed —
 but the spacebase-PTRSUB arm that actually drives the escalation never routes
 through it. When `ptrdepthcap` is on (shipped OFF in the catalog, ON in the
 `aggressive` preset), every candidate the propagation is about to adopt is put
-through `crates/unlace-bandb-base/src/p5_types/kuna_ptrdepth.rs
+through `crates/unlace-bandb-base/src/p5_types/ptrdepth.rs
 (cap_pointer_depth)`, which applies that same upstream rule at the single
 `propagate_type_edge` funnel: a candidate whose target is itself a
 pointer-to-pointer collapses to `ptr(undefined<N>)`, and `ptr(ptr(undefined<N>))`
@@ -489,7 +489,7 @@ anti-debug stubs, which read and patch a byte of their own callee
 (`v1 = *(code **)g; if (*v1 != 0xcc) (*v1)(); *v1 = f();`) — the LOAD types the
 compared byte, the STORE types the stored one, and `INT_EQUAL` spreads `code`
 to the compared constant as well.
-`crates/unlace-bandb-base/src/p5_types/kuna_codescalar.rs
+`crates/unlace-bandb-base/src/p5_types/codescalar.rs
 (blocks_value_type)` (always on) declines a `TYPE_CODE` pointee on the value side of the
 LOAD/STORE transfer function, so the value keeps the size-correct default the
 access already gives it. The same test is consulted once more in the cast
@@ -527,7 +527,7 @@ and the walk finds a memory-base use and no refusing use, a `void *` candidate i
 `type_order` (`folds_over`). A pointer, float or composite vote keeps its type.
 
 When `ptrfromuse` is `byte` or `void` (shipped `void`),
-`crates/unlace-bandb-core/src/p5_types/kuna_ptrfromuse.rs
+`crates/unlace-bandb-core/src/p5_types/ptrfromuse.rs
 (pointer_from_use)` supplies the missing candidate directly. For each function
 *input* Varnode whose width equals the default data space's address size — eight
 bytes on the 64-bit images the option is named for, four on a 32-bit image, and
@@ -623,12 +623,12 @@ member rendered as an element of an obstack array: offset 0x980 of the 88-byte
 struct printed `&v1[0x1b].field_0x38`. An rsyslog instance record that begins
 with its mutex printed `a0[9].field_0xc`.
 
-`crates/unlace-bandb-core/src/p5_types/kuna_libcfit.rs (overruns)` asks what
+`crates/unlace-bandb-core/src/p5_types/libcfit.rs (overruns)` asks what
 the caller does through the argument before the vote is taken. It walks every
 load, store and derived address reached from the argument Varnode through its
 descendants, with the walker `protoorder` holds its own recovered votes to
 (`accesses_through` in
-`crates/unlace-bandb-core/src/p4_calls/kuna_protoorder.rs`), and declines
+`crates/unlace-bandb-core/src/p4_calls/protoorder.rs`), and declines
 when any of them lies outside the aggregate: an access at a constant offset past
 its end or before its start, a derived address at or past the end (rsyslog hands
 `&v1[1]`, one mutex past the one it initialised, to `pthread_cond_init`), or a
@@ -660,7 +660,7 @@ locals only ever hold a copy of it. They took `obstack *` by propagating it
 down from `kwset`, and with `kwset` declined nothing gives it to them, so grep
 `-O0`'s `kwsprep` loses those locals' names along with the wrong one. The rule speaks
 only about the names `libctypes` can mint or adopt (`AGGREGATE_NAMES` in
-`crates/unlace-middle/src/p0_knowledge/kuna_libctypes.rs`), only while
+`crates/unlace-middle/src/p0_knowledge/libctypes.rs`), only while
 that option is on (`ArchContext::libctypes`), and only about the vote. It never
 touches a type that arrives by another road: a call's OUTPUT (`getpwnam`'s
 `passwd *`), or propagation between Varnodes that are later merged into one
@@ -675,7 +675,7 @@ type. On AArch64 `vr(k, k + 1, 0.5)` moves the constant straight into `d0`
 (`fmov d0,#0.5`), so it printed as `vr(k,0x3fe0000000000000,...)`, which
 compiles back to an integer in `x1`. The storage the call's model chose for the
 argument already says what the value is.
-`crates/unlace-bandb-base/src/p5_types/kuna_varargfloat.rs (argument_vote)`
+`crates/unlace-bandb-base/src/p5_types/varargfloat.rs (argument_vote)`
 gives a `double` vote to an 8-byte argument past the declared parameters of a
 variadic call whose recorded storage (`final_input_storage`, set when the
 argument list is built) is a floating-point entry of the model, and the call
@@ -691,11 +691,11 @@ against, `ActionSetCasts` added no cast and the call printed `pr("%f",u)`,
 which compiles back to an integer in `rsi` or `x1`. No integer travels in a
 floating-point register, so the same storage fact is also what C requires of
 the argument:
-`crates/unlace-bandb-base/src/p5_types/kuna_varargfloat.rs (argument_requirement)`
+`crates/unlace-bandb-base/src/p5_types/varargfloat.rs (argument_requirement)`
 answers the declared-type query the cast pass reads with `double` when the
 vote exists and the argument's printed type is an integer the emitter
 reinterprets
-(`crates/unlace-emit/src/p9_emit/kuna_bitcast.rs (reinterprets_to_float)`:
+(`crates/unlace-emit/src/p9_emit/bitcast.rs (reinterprets_to_float)`:
 a signed, unsigned or undefined integer, but not the result of a call whose
 callee declares nothing it returns).
 The inserted `CAST` prints as the union bit reinterpretation of chapter 09,
@@ -721,7 +721,7 @@ to `strlen` and which kuna prints `void * sub_e680(uint1 *a0)`, the element type
 coming from the byte-wide read its `isspace` test does.
 
 When `charptr` is on (shipped `off`),
-`crates/unlace-bandb-core/src/p5_types/kuna_charptr.rs
+`crates/unlace-bandb-core/src/p5_types/charptr.rs
 (char_pointer_from_evidence)` collects that evidence with the same walk
 `ptrfromuse` uses — the bounded breadth-first worklist over the transitive
 descendants, a visited set, a ten-hop cap, `COPY`/`MULTIEQUAL`/`INDIRECT`/`CAST`
@@ -854,7 +854,7 @@ behind two casts: `*(char *)((unsigned long)*(unsigned char *)((long)v1 +
 0x4020) + (long)dat_4070) = (char)v1;`.
 
 When `elemptr` is on (the default),
-`crates/unlace-bandb-core/src/p5_types/kuna_elemptr.rs (element_pointer)` adds a
+`crates/unlace-bandb-core/src/p5_types/elemptr.rs (element_pointer)` adds a
 `T *` vote to the `getLocalType` fold for four kinds of
 value: a function input the prototype model could place a parameter in; the
 value a `CALL` returns when the callee left the pointee open (a `void *` or an
@@ -873,7 +873,7 @@ vote that already names a pointee — a declared, DWARF, libc, asserted or
 The walk is the bounded breadth-first worklist of `ptrfromuse` — `COPY`, `CAST`,
 `MULTIEQUAL` and `INDIRECT` identity, literal offsets carried as a displacement
 from the base, a ten-hop cap; the walk from a sum of the base and an index
-(`kuna_elemptr.rs (indexed)`) follows `COPY`, `CAST` and an `INDIRECT`'s first
+(`elemptr.rs (indexed)`) follows `COPY`, `CAST` and an `INDIRECT`'s first
 input, so an element address stored to a global still reaches the load through
 the global after a pointer store, which `option indexaliasguard global` gives
 its own `INDIRECT` — and it asks of every use whether it is an
@@ -894,11 +894,11 @@ shifts or orders against a literal, and — when the candidate is already a poin
 A mask elsewhere is not such a use: `(unsigned long)p & 7` is how a program tests
 a pointer's alignment, and taking it for an index's would declare the real index
 `char *` and leave the real pointer an integer. Nor is the right-hand side of a
-difference of two pointers (`kuna_elemptr.rs (is_pointer_difference)`): `b - buf`
+difference of two pointers (`elemptr.rs (is_pointer_difference)`): `b - buf`
 lowers to `b + buf * -1`, and when `b` is a pointer and the sum is compared or
 returned rather than dereferenced, `buf` is the pointer it always was, where
 `end - n`, whose sum is dereferenced, subtracts a number. Nor is an add whose
-other operand subtracts one more pointer than it adds (`kuna_elemptr.rs
+other operand subtracts one more pointer than it adds (`elemptr.rs
 (pointer_balance)`, counted through adds, subtractions, negations and
 multiplications by -1): `b + (-buf - n)` is a difference of two pointers, a
 number, and says nothing about an element of `b`. An operand that is a whole
@@ -918,7 +918,7 @@ width, and an index that is itself a multiple of elements (`p[2 * i]`, `p[2 * i
 `long`s and a `{char *; struct *}` record are both declined rather than guessed.
 
 The element is the integer of width W, and its sign comes only from evidence
-(`kuna_elemptr.rs (element_signed)`), because the sign is not only spelling: a
+(`elemptr.rs (element_signed)`), because the sign is not only spelling: a
 function that returns the element returns it at that type, and its callers widen
 it accordingly. The recovered return type comes first where the function returns
 the element; then the extensions, orderings, shifts and divisions of a loaded
@@ -935,7 +935,7 @@ keeps its `unsigned short`, where a signed default would have its caller's
 A value the program stores into an element keeps its own sign:
 `propagate_type_edge` does not carry the element's type from a `STORE` whose
 pointer this rule typed onto a stored value of the same width and the other sign
-(`kuna_elemptr.rs (keeps_stored_sign)`). C converts the value to the element bit
+(`elemptr.rs (keeps_stored_sign)`). C converts the value to the element bit
 for bit on the store, so an `int` counter stored into an `unsigned` table
 (`bzip2`'s `fmap[j] = i`) stays `int`, where it would otherwise be declared
 `unsigned int` and cast back at each of its signed compares and indexes.
@@ -965,7 +965,7 @@ register is one variable once merging starts, and the pointer type would become
 the function's return type (`libbsd`'s `user_from_uid` reads its hash table into
 the `rax` it returns a record in). So is one whose element the function loads through an address computed in the
 register, at the width, it returns that element in
-(`kuna_elemptr.rs (address_in_returned_register)`): coreutils -O0 `expand`'s
+(`elemptr.rs (address_in_returned_register)`): coreutils -O0 `expand`'s
 `get_next_tab_column` indexes `tab_list` in the `rax` it returns `tab_list[i]` in,
 and typed, its return became `unsigned long *`. A constant is a candidate only
 when every reader indexes through it.
@@ -986,7 +986,7 @@ bytes at a time, and a table one function zero-extends another sign-extends. The
 claim ends up as one declaration in an export's header, which every body is
 compiled against, and a body reads `dat_4020[i]` at the declared element. So
 `decompile-all` and `decompile-project` keep a ledger
-(`kuna_elemptr.rs (Ledger)`, on the `Architecture` beside `calleevote`'s) over two
+(`elemptr.rs (Ledger)`, on the `Architecture` beside `calleevote`'s) over two
 kinds of object (`Obj`): the pointer a global holds (`dat_5068`, typed `char *`)
 and the table at a constant address (`dat_5020`, declared `unsigned char
 dat_5020[]`). Every function of the batch files, for the last type pass of its
@@ -1002,11 +1002,11 @@ terms, and the one declaration would rescale that text: `gp++` prints
 function files a refusal unless every use of the global and of its copies prints
 the same whatever pointer the header declares — copied, dereferenced at its own
 address, stored, passed, returned, compared
-(`kuna_elemptr.rs (held_uses_are_neutral)`); a byte step, an index the walk did
+(`elemptr.rs (held_uses_are_neutral)`); a byte step, an index the walk did
 not type, a mask or a literal offset refuses. A global whose fold vote already
 names a pointee (a callee's `char *`, a libc `FILE *`, a synthesized record)
 files a claim, an element evidence decided, and a vote that is no pointer files
-a refusal (`kuna_elemptr.rs (note_claimed_global)`). A claim counts beside the
+a refusal (`elemptr.rs (note_claimed_global)`). A claim counts beside the
 elements the rule chose, but a function that only claimed the global typed
 nothing, so it is never blocked or decided again: filing claims as types
 decided 135 of bash -O2's functions twice for one refused `FILE *` global
@@ -1015,14 +1015,14 @@ refuses it otherwise reads it two ways in its own body, a conflict, and is
 blocked with every other function that typed it. `globalref` reads a claimed
 global, like one the rule typed, as the pointer its fold names. For a table, a function that reads or
 writes the first element by name (`dat_4040 + 1`) files `Scalar`
-(`kuna_elemptr.rs (note_direct_storage)`): that name is a scalar in its body, and
+(`elemptr.rs (note_direct_storage)`): that name is a scalar in its body, and
 an array declaration would make it the array. A function that names the first
 element and indexes the table too prints the scalar's address, `(&dat_4040)[i]`,
 which the scalar's declaration reads right, so its own verdict is `Scalar` and it
 keeps its type, even where the table is blocked for others
-(`kuna_elemptr.rs (holds_storage_at)`).
+(`elemptr.rs (holds_storage_at)`).
 
-After the batch, `kuna_elemptr.rs (disagreements)` decides each object
+After the batch, `elemptr.rs (disagreements)` decides each object
 (`decide_object`): two elements evidence decided that differ, a `Scalar`, a
 conflict, and a refusal beside a type for a global, block the object for every
 function that typed it; a function whose sign was only the default is decided again at the
@@ -1046,16 +1046,16 @@ and 3.6 s of redo instead of 14.7 s.
 
 Only a batch that decides its functions together types an object at all: the
 callee-first driver of `decompile-all` and `decompile-project`
-(`kuna_elemptr.rs (start)` with `objects`), and a batch of one function (a
+(`elemptr.rs (start)` with `objects`), and a batch of one function (a
 single-function `decompile`, one `--addr`), whose declarations it alone reads.
 Several functions decompiled with nobody to agree on their globals type none of
-them and no table (`kuna_elemptr.rs (without_objects)`, handed to each function by
+them and no table (`elemptr.rs (without_objects)`, handed to each function by
 `seed` as `Funcdata::kuna_elemptr_objects`): a `--jobs` worker, which sees a share
 of the functions, the streamed export, which writes each function as it lands,
 and a serial run that is not callee-first (`--option protoorder off`, a narrowed
 selection, `decompile-graph`), which is what a pool reproduces. Such a function
 also leaves untyped a parameter or call return it stores into a global
-(`kuna_elemptr.rs (reaches_global_storage)`): `gp = malloc(n * 4)` would type the
+(`elemptr.rs (reaches_global_storage)`): `gp = malloc(n * 4)` would type the
 global from this one function, and `gp++` in another steps it by bytes. So a
 `--jobs N` run with `--option protoorder off` prints what `--jobs 1` prints, byte
 for byte, as the pool's contract says (a pool of one function types what a
@@ -1074,9 +1074,9 @@ The rule's evidence is an index, which says nothing about where a byte array
 ends, so a character pointer it typed never makes a constant print as a string
 literal. A callee decompiled before its callers states which of its parameters
 and whether its return value are pointers the rule typed
-(`kuna_elemptr.rs (state)`, `Stated`, beside `protoorder`'s statement), and a
+(`elemptr.rs (state)`, `Stated`, beside `protoorder`'s statement), and a
 character-pointer constant prints as its address rather than as a literal when
-its type comes from the rule alone (`kuna_elemptr.rs (reaches_element_pointer)`):
+its type comes from the rule alone (`elemptr.rs (reaches_element_pointer)`):
 the constant, or a value it is copied to or merged with, is an element pointer
 the rule typed in this function (a table constant keeps the index-bound rule
 above), a global it typed, or a callee's stated parameter or return, and none of
@@ -1163,7 +1163,7 @@ non-zero mask admits values above 1) stops it at the first edge into an
 unconstrained input.
 
 When `boolbyte` is `on` (the default),
-`crates/unlace-bandb-core/src/p5_types/kuna_boolbyte.rs
+`crates/unlace-bandb-core/src/p5_types/boolbyte.rs
 (truth_value_type)` supplies the missing candidate. It applies to a one-byte
 Varnode that is not a constant, not type-locked, not covered by a type-locked
 symbol, and not in the unique space - a temporary there is an expression the
@@ -1238,7 +1238,7 @@ reaches the printer.
   functional arm and emits the raw `SUB41(x,0)` p-code intrinsic - an undeclared
   identifier, and not compilable C, which is the class `subright` (§3.2) exists
   to keep out of the output. The option supplies the missing arm
-  (`kuna_boolbyte.rs (truncation_form)`, consulted by
+  (`boolbyte.rs (truncation_form)`, consulted by
   `printc.rs (subpiece_cast_form)`), so a truncation into a `bool` prints as a
   cast. Which cast depends on the operand, not the destination. A C conversion
   to `bool` tests every bit of its operand while the truncation keeps only the
@@ -1249,7 +1249,7 @@ reaches the printer.
   `(bool)x` only when every bit of `x` above the destination is proven zero, and
   `(bool)(unsigned char)x` otherwise - `(bool)(x & 0x201)` would be 1 for
   `x = 0x200`, where the byte is 0. The proof is the operand's non-zero mask,
-  re-derived at print time (`kuna_boolbyte.rs (value_mask)`) over copies,
+  re-derived at print time (`boolbyte.rs (value_mask)`) over copies,
   casts, extensions, masks, constant shifts and phis, because the stored mask is
   refreshed only inside the main loop and a Varnode created later - a cast, a
   block the return duplication cloned - still carries the all-ones default. The
@@ -1309,7 +1309,7 @@ strchr("([\'`\"",(int)(char)*v1);``, and every gnulib `mbrtowc` wrapper takes
 `unsigned char *a1` only to pass `(char *)a1` on.
 
 When `charbyte` is `on` (shipped `on`),
-`crates/unlace-bandb-core/src/p5_types/kuna_charbyte.rs (note_edge)` watches
+`crates/unlace-bandb-core/src/p5_types/charbyte.rs (note_edge)` watches
 the `LOAD` edges while `run_infer_types` propagates and records the byte of
 each one where the pointer carries `char *` and the byte holds `uint1` only
 because of the zero-extension: an `INT_ZEXT` reads it and no other reader's
@@ -1317,7 +1317,7 @@ because of the zero-extension: an `INT_ZEXT` reads it and no other reader's
 shift, an unsigned division or an `unsigned char` call argument is the program
 using the byte as a number, and such a byte is never recorded. If anything was
 recorded, the pass starts over: the local types are rebuilt,
-`crates/unlace-bandb-core/src/p5_types/kuna_charbyte.rs (seed_char)` seeds
+`crates/unlace-bandb-core/src/p5_types/charbyte.rs (seed_char)` seeds
 each recorded byte `char` - the fold it would have had without the
 zero-extension's vote, unless the byte is type-locked or its storage is covered
 by a type-locked symbol, whose type stands - and propagation runs again from the
@@ -1331,7 +1331,7 @@ still wins it, and the pointer keeps `char *` because the byte now pushes
 `char *`. A fresh propagation can also tip a contest the rule has no stake in -
 on bash -O2 `param_expand` a string pointer joined with an `int *` parameter
 came out `int *` once the byte stopped voting `unsigned char *` - so
-`crates/unlace-bandb-core/src/p5_types/kuna_charbyte.rs (keep_or_restore)`
+`crates/unlace-bandb-core/src/p5_types/charbyte.rs (keep_or_restore)`
 compares the two propagations Varnode by Varnode and keeps the second only if
 every type is unchanged or is the same type with `uint1` read as `char`, through
 any depth of pointers and arrays; otherwise the first propagation's types are
@@ -1343,7 +1343,7 @@ Two kinds of byte are never retyped, whether recorded or only reached through
 a pointer the recorded bytes retyped. The first is a byte that reaches a
 `CALL`, `CALLIND` or `CALLOTHER` argument, a `RETURN`, or the `BRANCHIND` of a
 switch, directly or through copies, joins and one-byte arithmetic
-(`crates/unlace-bandb-core/src/p5_types/kuna_charbyte.rs (read_without_cast)`).
+(`crates/unlace-bandb-core/src/p5_types/charbyte.rs (read_without_cast)`).
 kuna shrinks a call argument to the byte when the `movzx` that widened it folds
 away, and C passes a `char` argument through the default promotions with no cast
 to show it, so `logit("%d",c)` would pass -128 for the byte 0x80 where the
@@ -1352,7 +1352,7 @@ binary passes 128; likewise the switch header prints the byte itself, and a
 both arms; only the declaration moves, which is why the check is on the reader
 and not on the text.
 The second is a counter
-(`crates/unlace-bandb-core/src/p5_types/kuna_charbyte.rs (is_counter)`): a
+(`crates/unlace-bandb-core/src/p5_types/charbyte.rs (is_counter)`): a
 loaded byte whose own one-byte sum or difference is stored back through the
 address it was loaded from (`*p = c + 1`), directly or through copies and joins.
 The only `char *` such a byte meets is the default signed vote of that sum, and
@@ -1403,7 +1403,7 @@ types that register, so inference leaves it an integer and every read through it
 is a magic offset — the anti-debug probe of the PEB's `BeingDebugged` byte prints
 `*(char *)(*(long long *)(v1 + 0x60) + 2)`, and on x86 the base degrades into an
 integer array whose elements are the TEB's fields. The fix is a type lock, placed
-where every other lock comes from: `crates/unlace-bandb-base/src/p5_types/kuna_pebnames.rs
+where every other lock comes from: `crates/unlace-bandb-base/src/p5_types/pebnames.rs
 (ActionPebNames)` runs once per function at the head of the universal schedule,
 before heritage, and when the raw p-code reads the segment-base register and never
 stores through it, it maps a type-locked, name-locked local Symbol `TEB *teb` over
@@ -1413,7 +1413,7 @@ Heritage then creates the input Varnode carrying both locks, and ordinary
 pointer-arithmetic recovery and field rendering do the rest:
 `teb->ProcessEnvironmentBlock->BeingDebugged`, `teb->Self->ProcessEnvironmentBlock->NtGlobalFlag`,
 `teb->ExceptionList`. The structures come from
-`crates/unlace-bandb-base/src/p5_types/kuna_pebnames.rs (teb_pointer_type)`:
+`crates/unlace-bandb-base/src/p5_types/pebnames.rs (teb_pointer_type)`:
 a `PEB` and a `TEB` (with the `NT_TIB` header and the `CLIENT_ID` pair flattened
 in). A field is named only when its offset, name and size agree in every
 PDB-derived layout the Vergilius Project publishes for the architecture — x64
@@ -1509,7 +1509,7 @@ C back-end prints it `void *` under `ctypes` (chapter 09), so every call through
 it reads as a call of a `void *` -- `(**(void **)&tbl[i])()`,
 `void *v1; ... (*v1)(a1,7)` -- which no compiler accepts. The call itself
 states the signature its target must have, and when `calltargettype` is on,
-`crates/unlace-bandb/src/p5_types/kuna_calltargettype.rs
+`crates/unlace-bandb/src/p5_types/calltargettype.rs
 (ActionCallTargetType)` gives the target that type once every variable has its
 final one: it runs once, in the one-shot tail, after `ActionNameVars` and
 directly before `ActionSetCasts`, and never feeds the inference lattice or
@@ -1610,7 +1610,7 @@ In C output, a target that keeps a pointer C cannot call -- its calls disagree,
 it meets a different function-pointer type, it is also used as data, or it is
 read from a field whose declaration says `void *` or `code *` -- is cast to its
 call's type at each call. Every such call records its type per op, and
-`crates/unlace-bandb/src/p5_types/kuna_calltargettype.rs
+`crates/unlace-bandb/src/p5_types/calltargettype.rs
 (uncallable_target_cast)`, consulted by the default arm of `get_input_cast`
 (chapter 09) when `cast_standard` asks for nothing, returns it for a slot-0
 target that is still a pointer to `void` or to prototype-less `code`:
@@ -1760,7 +1760,7 @@ Three (kuna) escapes hook exactly here; the first two are always on:
 - **(kuna GH-6930)** The function-entry escape: the
   bit-transitions rejection is skipped when the constant resolves *exactly* to
   a known function entry
-  (`crates/unlace-bandb-base/src/p5_types/kuna_inferfuncentry.rs
+  (`crates/unlace-bandb-base/src/p5_types/inferfuncentry.rs
   (kuna_is_function_entry)`, wired in `coreaction_render.rs
   (kuna_const_is_function_entry)`) — a function placed at a power-of-two image
   base is a single-bit value, but it is still a function. Ordinary data
@@ -1777,13 +1777,13 @@ Three (kuna) escapes hook exactly here; the first two are always on:
   `uintmax_t` byte counter they bounded became `void *` — in `dump_remainder`,
   and through [`protoorder`](../options.md) into its caller's stack variable.
 
-  `crates/unlace-bandb-base/src/p5_types/kuna_inferfuncentry.rs
+  `crates/unlace-bandb-base/src/p5_types/inferfuncentry.rs
   (entry_escape_applies)` decides this, on two readings of the same value. The
   reader itself must not be arithmetic: an ordering comparison, a multiply, a
   divide, a remainder or a shift reads its constant as a number
-  (`kuna_inferfuncentry.rs (reads_as_integer)`), and C has none of them between
+  (`inferfuncentry.rs (reads_as_integer)`), and C has none of them between
   a function pointer and anything else. A comparison also pins the value one
-  below its literal (`kuna_inferfuncentry.rs (orders_its_constant)`), because the
+  below its literal (`inferfuncentry.rs (orders_its_constant)`), because the
   strict/non-strict rewrite moves the bound by one on the way here: the same
   `MIN (n, BUFSIZ)` arrives as `INT_LESS(0x2000, n)` in `tail` and as
   `INT_LESS(0x2001, n)` in `head`. The reader alone does not settle it,
@@ -1805,7 +1805,7 @@ Three (kuna) escapes hook exactly here; the first two are always on:
   symbol named the array; and `0x3c0` is a single run of set bits. The address
   set is exact starts only, shared from `Architecture::blob_entries`, and the
   skip is declined on the same two readings as the function-entry escape
-  (`kuna_inferfuncentry.rs (entry_escape_applies)`): the reader is not
+  (`inferfuncentry.rs (entry_escape_applies)`): the reader is not
   arithmetic, and the function reads that value as a number nowhere else.
   The escape cannot tell the address from an equal number: a function that
   never touches the file but returns, stores, passes or compares that value
@@ -1818,7 +1818,7 @@ Three (kuna) escapes hook exactly here; the first two are always on:
   is `fn|1`; constant-pointer recovery produces `PTRSUB(fn) + 1`, and the
   simplification rule that normally deletes out-of-bounds PTRSUBs would
   collapse it back to a hex literal. The guard
-  `crates/unlace-bandb-base/src/p5_types/kuna_thumbfuncptr.rs
+  `crates/unlace-bandb-base/src/p5_types/thumbfuncptr.rs
   (kuna_preserve_thumb_funcptr)` — consulted by
   `crates/unlace-bandb/src/p3_dataflow/ruleaction_6.rs
   (RulePtrsubUndo)` — keeps the PTRSUB when the base resolves through the
@@ -1833,7 +1833,7 @@ gives a dereferenced parameter a pointee it can prove and stops there:
 [`structsynth`](../options.md) (`off|param|locals|nest|all`, default `locals`) invents the missing
 layout from the accesses themselves.
 
-`crates/unlace-bandb-core/src/p5_types/kuna_structsynth.rs
+`crates/unlace-bandb-core/src/p5_types/structsynth.rs
 (ActionStructSynth)` runs inside `mainloop` immediately after `ActionInferTypes`
 in the `typerecovery` group, so the pointer-arithmetic pools below rewrite the
 accesses on the same iteration. It fires **once** per function, and only once
@@ -1904,7 +1904,7 @@ committed pointee was measured to lose the record on 137 functions. The
 whole-binary driver marks
 such a function on its `Funcdata` (`kuna_calleevote_closed`; chapter
 [04](04-calls-and-prototypes.md), `calleevote`), and
-`kuna_structsynth.rs (is_lone_field)` admits it. The condition is what keeps
+`structsynth.rs (is_lone_field)` admits it. The condition is what keeps
 the callbacks out: a `qsort` comparator or a hash-table hasher reads one field
 of what it was handed exactly the way gnulib's `hash_get_n_buckets` does, but
 its address is stored or taken, its contract declares `void *`, and it keeps
@@ -1938,7 +1938,7 @@ has a second exception, on by default (`closed`; issue #9 printer sweep: pointer
 -6.6% on twelve DecBench O2-noinline binaries, GED unchanged on the 555 changed functions
 that score). Under `closed` a parameter read at two
 or more constant offsets, none of them zero, is a record in the same closed
-functions the lone field is (`kuna_structheadless.rs (admits)`), when nothing
+functions the lone field is (`structheadless.rs (admits)`), when nothing
 outside the function gave the parameter its pointee (`pointee_is_given`, as
 above) and the parameter did not take the type its callers state for it: a
 `char **` read only at `argv[1]` and `argv[2]` is the vector its callers pass,
@@ -1982,12 +1982,12 @@ is not the same `struct_N` unless the ledger's containment rule answers one with
 the other, and one program object can be given several names. At a call site a
 callee's headless or any other synthesized record does not replace a pointer a
 declared call gives the caller's value -- a named record, a `char **` (chapter
-[04](04-calls-and-prototypes.md), `kuna_structheadless.rs
+[04](04-calls-and-prototypes.md), `structheadless.rs
 (yields_to_a_declared_pointer)`) -- nor is a headless record taken where it types
-as a word a member the function reads through (`kuna_structheadless.rs
+as a word a member the function reads through (`structheadless.rs
 (types_a_pointer_as_a_word)`), and a headless record the caller's own reads
 refuse falls back to the `void *` the callee states without it
-(`kuna_structheadless.rs (bare_pointer_for)`).
+(`structheadless.rs (bare_pointer_for)`).
 
 At a conflicting offset the **widest** access wins. A field wider than an access
 renders as a cast of the field (`(uint4)w->b`); a field narrower than an access
@@ -2095,7 +2095,7 @@ site. The lock is recorded in the P0 override store
 (insert_output_typelock)`), keyed by the CALL op's address, engine-internal
 (not marshaled) like the `/GS` cookie-call and format-call commands, and
 surviving a decompilation restart like every other per-site override.
-`crates/unlace-bandb/src/p5_types/kuna_sitetypelock.rs
+`crates/unlace-bandb/src/p5_types/sitetypelock.rs
 (ActionSiteTypeLock)`, scheduled in the `typerecovery` group directly before
 `ActionInferTypes`, asks the registered clients to contribute sites and then
 pins each pending lock onto the call's output Varnode
@@ -2109,7 +2109,7 @@ output already type-locked (a mapped-symbol or DWARF lock outranks any
 client), and a size mismatch.
 
 The first client, [`gonewtype`](../options.md) (`on|off`, default on;
-`crates/unlace-bandb-base/src/p5_types/kuna_gonewtype.rs (contribute)`),
+`crates/unlace-bandb-base/src/p5_types/gonewtype.rs (contribute)`),
 reads the allocation fact: for each call spec naming a Go allocator entry —
 `runtime.newobject(typ)`, or the size-class `runtime.mallocgc*` family
 (`mallocgc(size, typ, needzero)` and the specializations go1.26+ compilers
@@ -2121,7 +2121,7 @@ complete named record (`TYPE_STRUCT`, non-zero size). The symbol spells a
 named type with its full import path (`type:internal/poll.FD`) and the
 harvest interns the reflection spelling (`poll.FD`), so the directory part of
 the named type's own qualifier, before any type arguments, is dropped first
-(`crates/unlace-bandb-base/src/p5_types/kuna_gonewtype.rs (harvest_spelling)`); a composite spelling keeps its path
+(`crates/unlace-bandb-base/src/p5_types/gonewtype.rs (harvest_spelling)`); a composite spelling keeps its path
 and refuses below. A mallocgc-family site
 must additionally state a constant size equal to the record's. The site is
 then locked to `<name> *` at the output's width. Pointer, array and primitive
@@ -2138,7 +2138,7 @@ the `type:` symbol and the interned record only exist where the Go harvest
 ran.
 
 The second client, the call-site arm of [`swifttypes`](../options.md)
-(`crates/unlace-bandb/src/p5_types/kuna_swiftmetaresult.rs
+(`crates/unlace-bandb/src/p5_types/swiftmetaresult.rs
 (contribute)`), locks the result of every call to a Swift type metadata
 accessor (a callee named `….type_metadata_accessor`) or to an instantiation
 helper (`__swift_instantiateConcreteTypeFromMangledName…`) to
@@ -2166,7 +2166,7 @@ the synthesized `internal/abi.Type` base shell — never a value type anything i
 declared as — so it is provably never a real parameter type: when
 `FuncProto::updateInputTypes` reads a recovered parameter type that is a pointer
 to `go.typedesc`
-(`crates/unlace-bandb-core/src/p4_calls/kuna_calleevote.rs
+(`crates/unlace-bandb-core/src/p4_calls/calleevote.rs
 (is_go_typedesc_pointer)`), it demotes it to the honest untyped word of the same
 width, and the callee-vote plane refuses to monomorphize a parameter to it in
 the first place. The body keeps its local descriptor typing where it genuinely
@@ -2207,7 +2207,7 @@ field prints a cast back to what the program holds in it. With
 [`fieldtype`](../options.md) (`on|off`, default `off`) `structsynth` keeps every
 access of the field's width with the value it loaded or stored
 (`Evidence::record_access`) and, once a base is accepted, asks
-`crates/unlace-bandb-base/src/p5_types/kuna_fieldtype.rs (pointer_fields)`
+`crates/unlace-bandb-base/src/p5_types/fieldtype.rs (pointer_fields)`
 for the field's type.
 
 The evidence is what the program does with a value, not the type the value
@@ -2270,14 +2270,14 @@ merged number as controls, and the compiled round trip in `decompile_all_cli.rs`
 checks the printed C computes what the binary does.
 
 A function's accepted bases ask the ledger for their layouts in the order
-their Varnodes were created (`kuna_structsynth.rs (by_creation)`); with
+their Varnodes were created (`structsynth.rs (by_creation)`); with
 `locals` on, the widest layout asks first and ties keep that order. The order
 of the asks is the order of the names they mint, and a Varnode's id is only the
 arena slot it reused, so an unrelated change to when the function frees
 Varnodes would otherwise swap two structures' numbers.
 
 Names are program-wide `struct_N`, minted and handed out by the **layout
-ledger** (`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/ledger.rs`),
+ledger** (`crates/unlace-bandb-core/src/p5_types/structsynth/ledger.rs`),
 which is the set of `struct_N` the program's `TypeFactory` already holds: the
 ledger probes `find_by_name` from `struct_0` up to the first free name, reads
 each one's layout back, and declines any whose members are not all named
@@ -2480,7 +2480,7 @@ the 9,443 fields; every function taking a pointer to the same record dereference
 number. When nothing held answers a freshly measured layout, the lookup looks for
 a held structure the layout was measured to AGREE with and mints the UNION of the
 two in place of the layout alone
-(`crates/unlace-bandb-core/src/p5_types/kuna_structmerge.rs (merge)`, called
+(`crates/unlace-bandb-core/src/p5_types/structmerge.rs (merge)`, called
 from `ledger.rs (lookup_or_mint)`). The union strictly contains the held
 structure, so that structure is superseded the moment the union exists and the
 convergence sweep above moves its readers onto it.
@@ -2589,7 +2589,7 @@ numbers from `struct_0` again, and so would each worker process of a `--jobs N`
 run if it were left to itself. It is not. The decision a lookup takes reads only
 data -- the measured layout, its members, the bytes it accessed without claiming,
 and the layouts, members and sizes of the structures held -- so
-`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs (Replay)`
+`crates/unlace-bandb-core/src/p5_types/structsynth/shard.rs (Replay)`
 can take it without a factory: it scans the `struct_<n>` slots as the ledger
 does, skipping a name another type holds, calls the same `best_of` and
 `keeps_unclaimed`, and mints at the first free slot. A `--jobs` worker records
@@ -2600,17 +2600,17 @@ answer its own ledger gave, with the lookup that minted that structure in the
 worker. The parent replays the records in target order. A structure is its
 members, so when a function's own answers and the serial ones name structures
 built from the same members, lookup for lookup and one name for one name
-(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb-core/src/p5_types/structsynth/shard.rs
 (renaming)`), the function's text is the serial text with other numbers and
 is renamed. A structure minted from its own function's lookup is the common
 case: the serial run minted the same members under another number. Every other
 function is decompiled again by a worker that has destroyed the structures it
 minted itself and every type built on one, installed the replayed structures in
 mint order
-(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs
+(`crates/unlace-bandb-core/src/p5_types/structsynth/shard.rs
 (install_table)`) and answers each lookup with its replayed name. A named field
 type gets a recipe only if the worker's load created it
-(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/shard.rs (AtLoad)`): a pass
+(`crates/unlace-bandb-core/src/p5_types/structsynth/shard.rs (AtLoad)`): a pass
 that interns a type the first time a function needs it, as `pebnames` does
 `PEB` and `TEB`, leaves it in some workers and not in others, so a structure
 with such a field is named by one ordered worker instead. The unnamed unknown
@@ -2639,7 +2639,7 @@ and field recipes without copying them.
 
 The `.h` of a project export lists the minted structures after every other
 type, in ascending `N`
-(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/ledger.rs
+(`crates/unlace-bandb-core/src/p5_types/structsynth/ledger.rs
 (in_name_order)`). The factory's tree orders two structures of one size field by
 field and then by the ADDRESS of a field's type, and minted structures always
 agree that far on their first field, `field_0x0`; rendered in tree order, the
@@ -2664,7 +2664,7 @@ function's own text.
 the scalar its loads carried, so every read through it is raw offset arithmetic
 again: `fmt`-style code that loads `o->in` and reads it three times prints
 `v1 = a0->field_0x0; ... (long)*(int *)((long)v1 + 0xc)`. The value `nest` of
-`structsynth` (`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/nest.rs
+`structsynth` (`crates/unlace-bandb-core/src/p5_types/structsynth/nest.rs
 (nest_fields)`) also measures the records the pointer fields of an accepted
 record point at. Every `LOAD` of one pointer-sized field is a value of that
 field's type, so the dereferences made through all of them are one base's
@@ -2700,7 +2700,7 @@ calls) gets a record of its own with the same offsets: correct, but a second nam
 A structure that points at itself cannot be completed first, because its own
 field names it, and completing a structure mints a fresh `Rc`. The ledger
 therefore mints it around its incomplete shell
-(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth/ledger.rs (mint)`):
+(`crates/unlace-bandb-core/src/p5_types/structsynth/ledger.rs (mint)`):
 `get_type_struct`, a pointer to the shell, then the members. That is the model
 a DWARF `struct node { struct node *next; }` already lives with (chapter 01), and
 it costs the same thing there: a value loaded through the self pointer has a type
@@ -2709,7 +2709,7 @@ with no members, and every read through it printed as
 Where a `LOAD` or `STORE` value type is a pointer to such a shell, and the
 completed structure of that name is a synthesized one that itself points at that
 exact shell,
-`crates/unlace-bandb-core/src/p5_types/kuna_structsynth.rs (resolve_self_pointer)`
+`crates/unlace-bandb-core/src/p5_types/structsynth.rs (resolve_self_pointer)`
 gives the pointer to the completed structure instead. It is called from the
 propagation edge (`coreaction_infertypes.rs (propagate_load_store)`) and from the
 load and store cast tokens of chapter 09. A DWARF forward declaration, or any
@@ -2739,7 +2739,7 @@ gave it: an allocation it fills in prints as `v1 = (unsigned long *)xmalloc(0x18
 *(char *)((long)v1 + 0x14) = 0x6e;`, and a pointer a lookup returns as
 `(long)(int)v1[2] + v1[1] + *v1`. The value `locals` of `structsynth` makes the
 value a `CALL` or `CALLIND` returns a base too
-(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth.rs (is_call_return)`).
+(`crates/unlace-bandb-core/src/p5_types/structsynth.rs (is_call_return)`).
 Single assignment makes that value the local's only definition, and it is held
 to every condition a parameter is: already a pointer, not type-locked, no phi,
 index or integer use, two offsets including 0, not an array run, settled
@@ -2750,13 +2750,13 @@ its accesses. A callee declared to return a pointer to something (`char *`,
 return is measured.
 
 The value must not end up sharing a variable with anything else
-(`kuna_structsynth.rs (copies_alone)`), because a type-locked member decides the
+(`structsynth.rs (copies_alone)`), because a type-locked member decides the
 type of the whole variable it is merged into. A copy is merged with what it
 copies, a phi input with the phi's other inputs, and a value in address-tied
 storage with everything else stored there, so the value declines when it, or a
 `COPY`/`CAST` of it, reaches a `MULTIEQUAL` or `INDIRECT` or lands in tied
 storage. The return register needs one more look
-(`kuna_structsynth.rs (storage_is_tied)`): it is tied as a whole-function local
+(`structsynth.rs (storage_is_tied)`): it is tied as a whole-function local
 once merging starts
 (`crates/unlace-bandb/src/p6_variables/coreaction_cleanup.rs (mark_output_storage_addr_tied)`),
 long after this pass has run, whenever a phi writes it. So a value whose storage
@@ -2769,7 +2769,7 @@ type would have declared `struct_N *`. `tar`'s `wordsplit_add_segm` is the same
 shape with the status in `rax`.
 
 A function also has one return type, and every value it returns is typed by it
-(`kuna_structsynth.rs (returned_beside_others)`). A record returned on one path
+(`structsynth.rs (returned_beside_others)`). A record returned on one path
 while another `RETURN` returns a different value declines; a constant zero is
 the only other value allowed, since it is the null any pointer can be. Without
 this, `dash`'s `pipeline`, which returns either what `command()` returned or a
@@ -2778,7 +2778,7 @@ new record, cast `command()`'s result to the record
 `getname()` or a filled-in record declared the name a record pointer.
 
 A base whose every access stores text is a string buffer, however unevenly the
-compiler split the copy (`kuna_structsynth.rs (stored_text)`). Text is either
+compiler split the copy (`structsynth.rs (stored_text)`). Text is either
 a constant whose bytes are characters (`bytes_text`) or bytes loaded from a
 read-only string literal, read back from the image: `tar` builds
 `"SCHILY.xattr."` in a fresh allocation as an 8-, a 4- and a 1-byte constant
@@ -2790,7 +2790,7 @@ as often as a string's terminator.
 
 Last, a record ends where this function's accesses end, so a base declines
 when a copy of it forms an address at or past that end
-(`kuna_structsynth.rs (points_past)`). `sortlines` reads a merge node up to the
+(`structsynth.rs (points_past)`). `sortlines` reads a merge node up to the
 byte at 0x54 and passes `&node->lock` at 0x58 to `pthread_mutex_lock`; `mountlist`
 keeps `&me->me_next` as its list tail; a message allocation passes its flexible
 body. Typed on the accesses, each of those addresses prints as `&v1[1]`, and the
@@ -2868,7 +2868,7 @@ in both arms, and an A/A control, a second `param` arm interleaved in the same
 run, reads 6.7% slower than the first with `locals` between the two, so its
 delta is the machine's noise rather than work this value does.
 A sharded run keeps pace because a function asks for its widest layout first
-(`crates/unlace-bandb-core/src/p5_types/kuna_structsynth.rs (synthesize)`).
+(`crates/unlace-bandb-core/src/p5_types/structsynth.rs (synthesize)`).
 A returned record and a parameter of one function are often two layouts of one
 object, and when a later lookup's layout contains an earlier one, the function's
 own ledger supersedes its earlier answer, which a `--jobs` replay cannot
@@ -2956,7 +2956,7 @@ member access from pointer types, and `ruleaction_6.rs (RulePtraddUndo,
 RulePtrsubUndo)` in the main pool reverts them when the types they were built
 from degrade — the visible ping that the 7-pass ceiling exists to bound.
 
-### A static TLS variable is a field of the block at the thread pointer (`kuna_tlsnames.rs`)
+### A static TLS variable is a field of the block at the thread pointer (`tlsnames.rs`)
 
 A local-exec access to a `__thread` variable is a load or store at a constant
 offset from the thread pointer: x86-64 `mov eax, fs:[-0x10]` lowers to
@@ -2968,7 +2968,7 @@ pointer, so the `STT_TLS` symbol with value `v` lives at
 (`crates/unlace-analysis/src/analyzers/tls/mod.rs (TlsNamesPass)`, x86
 and x86-64 ELF images that are not relocatable objects) reads `PT_TLS` from the
 program headers and the defined `STT_TLS` symbols into a
-`crates/unlace-bandb-base/src/p5_types/kuna_tlsnames.rs (TlsLayout)`
+`crates/unlace-bandb-base/src/p5_types/tlsnames.rs (TlsLayout)`
 (symbols sorted, a symbol that overlaps the previous one or runs past the block
 dropped), and the commit stores it on the architecture. `ActionTlsNames` runs
 before heritage like `pebnames`: when every use of the thread-pointer register
@@ -2996,7 +2996,7 @@ the local-exec relocations against the same layout:
 `LDST*_TPREL_LO12` forms get the variable's thread-pointer offset. Before, they
 were left at zero, so every thread-local of an object aliased `tp + 0`.
 
-### A global takes the type of the values stored into it (`kuna_storetype.rs`)
+### A global takes the type of the values stored into it (`storetype.rs`)
 
 A global that only ever receives one kind of value has that value's type, but
 only the function that stores it knows: `gBS = SystemTable->BootServices` types
@@ -3005,7 +3005,7 @@ every other function reads an untyped word and renders each boot-services call
 as an offset off it. `storetype` (default `uefi`) is a whole-program ledger in
 the `elemptr` style. After each decompile of a `decompile-all` or
 `decompile-project` batch,
-`crates/unlace-bandb-base/src/p5_types/kuna_storetype.rs (record)` files,
+`crates/unlace-bandb-base/src/p5_types/storetype.rs (record)` files,
 for every persistent varnode in the processor space, the function as a reader
 of that address, and, when the varnode is written by anything but an
 `INDIRECT`, a `MULTIEQUAL` or a `COPY` from the same address (a call's
@@ -3026,7 +3026,7 @@ decompile records nothing and is unchanged. On EDK2's DiskIoDxe the readers go
 from `(**(code **)(dat_1a70 + 0x30))(v3,v4)` to `(*gBS->FreePages)(v3,v4)`;
 the model is the global-resolution half of IDA 9.5's `uefi.so`.
 
-### A rounding user op takes and returns a float (`kuna_roundingops.rs`)
+### A rounding user op takes and returns a float (`roundingops.rs`)
 
 p-code rounds a float to an integral float only toward minus infinity
 (`FLOAT_FLOOR`), toward plus infinity (`FLOAT_CEIL`) and to nearest with ties
@@ -3041,7 +3041,7 @@ as `unsigned long` and the product through a bit-reinterpreting union.
 Type inference and the cast pass's local type queries give the result and the
 one operand of a CALLOTHER whose user op has one of these names the float of
 the Varnode's width, as they do for `FLOAT_ROUND`
-(`crates/unlace-bandb-base/src/p5_types/kuna_roundingops.rs
+(`crates/unlace-bandb-base/src/p5_types/roundingops.rs
 (output_type, input_type)`). The user-op ids are resolved by name once per
 program, and a width the processor has no float format for (by default anything but
 the 2-, 4- and 8-byte IEEE formats) keeps the untyped default. Such a CALLOTHER is a pure function of
@@ -3053,7 +3053,7 @@ reads prints only the lanes it uses. Two such ops are never merged, and a
 constant operand is not folded. This is a correction, not an option: the ops
 compute on floats by definition.
 
-### A value returned in a float register is a float (`kuna_floatreg.rs`)
+### A value returned in a float register is a float (`floatreg.rs`)
 
 A calling convention that reserves registers for floating point makes the
 register the declaration of what a function returns there: a value returned in
@@ -3067,7 +3067,7 @@ bits' integer value. On a Cortex-M4F the `nanf` crazyflie's libm calls loads
 which is 2143289344.0 where the machine returns a NaN.
 
 This is a correction, not an option.
-`crates/unlace-bandb-core/src/p5_types/kuna_floatreg.rs (float_register_vote)`
+`crates/unlace-bandb-core/src/p5_types/floatreg.rs (float_register_vote)`
 supplies the candidate in `build_localtypes`, after every other vote, for a 4-,
 8- or 10-byte Varnode that is not type-locked, whose fold says no more than an
 integer or raw bytes, and that a RETURN reads from a float-class entry of the
@@ -3080,10 +3080,10 @@ soft-float convention, which has no such entry, is untouched, and a 16-byte
 `double sub_20fea(..) { ... return 0.0; }` for openssh's `sshbuf_put_cstring`.
 An entry narrower than a `double` -- ARM hard-float's `s0` to `s15`, where a
 `double` is a join of two of them -- holds a whole float only when the function
-never uses the pair whole (`kuna_floatreg.rs (pair_used_whole)`): no op other
+never uses the pair whole (`floatreg.rs (pair_used_whole)`): no op other
 than a call's, a return's, an INDIRECT or a MULTIEQUAL reads or writes one value
 spanning both halves. The pair is checked when the function's calls are linked
-(`kuna_floatreg.rs (note_float_pairs)`, from `ActionFuncLink`), before any fold
+(`floatreg.rs (note_float_pairs)`, from `ActionFuncLink`), before any fold
 can remove the write: `vldr d0, [pc]` loads a `double` whose `s1` half dead-code
 removal drops once the constant is folded, and what is left in `s0` is not a
 float.
@@ -3097,7 +3097,7 @@ the integer by value where the machine hands its bits to `xmm0`, and a Cortex-M4
 So the candidate is refused when the value's family (every Varnode joined to it
 by copies, casts, phi-nodes and INDIRECTs) holds one of the function's inputs.
 It is refused where `protoorder` refuses a callee's float vote (chapter 04;
-`crates/unlace-bandb-core/src/p4_calls/kuna_protoorder.rs (input_refuses)`):
+`crates/unlace-bandb-core/src/p4_calls/protoorder.rs (input_refuses)`):
 an integer op computes with the family, it is stored, pieced together or taken
 apart, handed on anywhere a float would print as a conversion, or read from or
 written to a global. A global has one declaration for every function, and
@@ -3107,28 +3107,28 @@ which both print what the machine computes, so `gi_as_f` stays `unsigned int`, a
 does a float constant x86-64 loads from `.rodata` (`return dat_20f8;`).
 
 It is refused where the family crosses a call as anything no declaration or
-recovery makes a float (`kuna_floatreg.rs (crosses_a_call_as_other_than_a_float)`):
+recovery makes a float (`floatreg.rs (crosses_a_call_as_other_than_a_float)`):
 handed to a parameter that is not a float -- by the call's declared prototype,
 or by the type the callee's own decompile stated or recovered for the parameter
-at that position (`kuna_protoorder.rs (reads_a_float)`) -- or produced by a call
+at that position (`protoorder.rs (reads_a_float)`) -- or produced by a call
 whose return is not one: a locked output, the return the callee's decompile
 stated to `callrettype` (even where this caller withdrew the statement), or the
-float return `voidret` recorded for it (`kuna_floatreg.rs (call_returns_a_float)`).
+float return `voidret` recorded for it (`floatreg.rs (call_returns_a_float)`).
 A call the function cannot see the other side of refuses as well. `absf`
 computes on the bits with `andps` and returns `unsigned long`, and a wrapper
 voting float printed `return (float)absf(a0);`, a value conversion. It is
 refused for a value loaded through a pointer the function also moves integers
-through at the load's width (`kuna_protoorder.rs (moves_integers_beside)`): the
+through at the load's width (`protoorder.rs (moves_integers_beside)`): the
 float would type the pointer, and `p[1] = p[0] + 1` beside `return *(float *)p;`
 printed `a0[1] = (float)((int)*a0 + 1)`. And every constant the family's copies
-and joins take in must spell exactly (`kuna_floatreg.rs (spells_exactly)`): the
+and joins take in must spell exactly (`floatreg.rs (spells_exactly)`): the
 printer spells every NaN `NAN` or `-NAN`, which compile back to the canonical
 quiet NaN, so a NaN with any other payload, a signalling NaN included, refuses,
 which is what keeps a literal-pool `vldr s0` of 0x7fc00123 its bits.
 
 The function returns one type in the register, so the candidate for one
 RETURN's value answers for every value a live RETURN hands back in that slot
-(`kuna_floatreg.rs (returned_beside)`): each is checked as above, and a constant
+(`floatreg.rs (returned_beside)`): each is checked as above, and a constant
 returned as it is must spell exactly. `if (k) return packed.f; return 0.0f;`
 compiles to a `ret` on each path; the constant alone voted a float, and the
 global on the other path became one with it (crazyflie's packed-field getters,
@@ -3136,7 +3136,7 @@ global on the other path became one with it (crazyflie's packed-field getters,
 
 An import stub's jump through its slot (`jmp *nanf@GOT`, recovered as a
 `CALLIND` whose result the stub returns) is typed the stub's own return when that
-is a float (`kuna_floatreg.rs (jump_result_type)`, the call's output local type):
+is a float (`floatreg.rs (jump_result_type)`, the call's output local type):
 the stub's declared `double strtod(..)`, or the float its register makes it, the
 jump's own result standing for what the stub returns. Untyped, the stub printed
 `v1 = (float)(*dat_4018)();`, converting what the target handed back.
@@ -3148,7 +3148,7 @@ integer, converts it, hands it to an integer parameter, stores it through an
 integer pointer, or returns it as an integer -- `decompile-all` withdraws the
 vote on that function's return and decompiles it and its readers again
 (`voidret`'s withdrawals, chapter 04; `Funcdata::kuna_float_return_withdrawn`,
-read by `kuna_floatreg.rs (returned_in_a_float_register)`), and the function
+read by `floatreg.rs (returned_in_a_float_register)`), and the function
 returns the integer it did before. A function whose own return then converts the
 voted value from the type its body reads it as does the same. Over the 45-binary
 cast corpus (20,230 functions) it changes 13 return types to a float: the
@@ -3164,7 +3164,7 @@ declaration shows the body multiplying it), and the three callers that never
 set that register pass one argument too few, which the counter reads
 positionally.
 
-### A parameter passed in a float register is a float (`kuna_floatreg.rs`)
+### A parameter passed in a float register is a float (`floatreg.rs`)
 
 The register declares a parameter the same way: one the convention passes in a
 float-class register is a float of that register's width. `void fs(int *p,
@@ -3177,7 +3177,7 @@ where the machine reads `xmm0` (`d0` on AArch64, `fa0` on RISC-V), and a
 a float: `*q = b + 1.0` printed `double`.
 
 This is a correction, not an option.
-`crates/unlace-bandb-core/src/p5_types/kuna_floatreg.rs (float_input_vote)`
+`crates/unlace-bandb-core/src/p5_types/floatreg.rs (float_input_vote)`
 supplies the candidate in `build_localtypes`, beside the return vote, for a 4-
 or 8-byte input Varnode that is not type-locked, of a function whose inputs are
 not locked, whose fold is raw bytes (an integer fold is evidence and stands),
@@ -3187,9 +3187,9 @@ list, under the whole-pair test above for an ARM `s` register. The type is
 into the prototype.
 
 The candidate stands only where every Varnode of the value's family is made and
-used the way a float is (`kuna_floatreg.rs (only_moved_as_a_float)`): copied,
+used the way a float is (`floatreg.rs (only_moved_as_a_float)`): copied,
 joined or cast; stored or loaded through a pointer, unless the function also
-moves integers through it at that width (`kuna_protoorder.rs
+moves integers through it at that width (`protoorder.rs
 (moves_integers_beside)`); computed with by a float op; the result of a call
 that returns a float; another input in a float register; or handed to a call
 that reads a float there -- by declaration or the type the callee's decompile
@@ -3212,7 +3212,7 @@ and a float there would become the function's return type, which `voidret`
 withdraws, with any return its callers forced, as soon as one caller keeps the
 result as an integer. A global, unless a symbol declares it a float of the
 value's width: a Varnode of the default data space, or a load or store through
-a pointer built from a data-space constant (`kuna_floatreg.rs
+a pointer built from a data-space constant (`floatreg.rs
 (addresses_a_global)`, an element of a global array included). A global has one
 declaration for every function, and `void set_gi_bits(float f) { memcpy(&gi,
 &f, 4); }` beside `int use_gi(void) { return gi + 1; }` has none under which
@@ -3237,27 +3237,27 @@ nothing against it, and a caller that hands such a parameter what is not a
 float printed it as it was, which C converts by value. Two rules keep the
 callers in step. An untyped read of read-only memory passed in a float register
 to a parameter that prints as a float of the read's width takes the float type
-(`kuna_floatreg.rs (argument_vote)`, a vote of `call_input_type_local` after
+(`floatreg.rs (argument_vote)`, a vote of `call_input_type_local` after
 `protoorder`'s): x86-64 loads a `double` literal from `.rodata`
 (`movsd dat_2018(%rip),%xmm0`), and `fa(dat_2018,&gi)` reads it as the double
 the source passed. The vote holds only where every other use of the read, and
 of the INDIRECTs that carry it across calls, is one a float has. Any other
 argument that prints as an integer -- integer evidence, or raw bytes no vote
 settled, a word read out of a packed frame or a writable global -- gets a cast
-requirement instead (`kuna_floatreg.rs
+requirement instead (`floatreg.rs
 (argument_requirement)`, from `declared_input_type_local`, after the variadic
-one, `kuna_varargfloat.rs (argument_requirement)`): when the callee's parameter
+one, `varargfloat.rs (argument_requirement)`): when the callee's parameter
 at that position is not type-locked but prints as a float -- the type the
 callee's own decompile stated, of the argument's own width
-(`kuna_protoorder.rs (float_read_width)`) -- and the call passes the argument in
+(`protoorder.rs (float_read_width)`) -- and the call passes the argument in
 a float-class register, a 4- or 8-byte argument whose printed type is an
-integer (`kuna_varargfloat.rs (integer_bits)`, the test the variadic
+integer (`varargfloat.rs (integer_bits)`, the test the variadic
 requirement makes), or that is the result of a call whose callee returns no
-float (`kuna_floatreg.rs (result_of_a_non_float_call)`: a getter of a raw global
+float (`floatreg.rs (result_of_a_non_float_call)`: a getter of a raw global
 prints `unsigned int iget3(void)`, and `use(iget3(),..)` into a `float`
 parameter converted the bits), requires the float of its width, and the cast
 prints as a
-reinterpretation of the bits (`kuna_bitcast.rs`): `fmov s0,w8` after an `eor`
+reinterpretation of the bits (`bitcast.rs`): `fmov s0,w8` after an `eor`
 prints `sink(((union { unsigned int from; float to; }){ .from = ((unsigned int
 *)a0)[1] ^ 0x80000000 }).to,2.0,a1)`. A NaN constant no literal spells gets no
 requirement. The requirement holds as well for a parameter arithmetic already
@@ -3265,16 +3265,16 @@ made a float, whose callers converted the same way: crazyflie's newlib `sinf`
 hands `sub_8004afc` the reduced argument out of a stack slot it types `unsigned
 int` (`vldr s0, [sp]`), and printed it converted.
 
-### A global the program only moves through float registers holds a float (`kuna_floatglobals.rs`)
+### A global the program only moves through float registers holds a float (`floatglobals.rs`)
 
 The float votes above refuse a global because one function cannot see how the
 others use it. Option `floatglobals` (default on) asks the whole program. A
 vote asks only once everything else it checks has held, so the question is put
 only where its answer decides the vote: a global -- a data-space Varnode, or a
 load or store through a constant address -- is then the one objection left.
-`crates/unlace-bandb-core/src/p5_types/kuna_floatglobals.rs (float_only)`
+`crates/unlace-bandb-core/src/p5_types/floatglobals.rs (float_only)`
 takes the float only where the function's own code agrees, which the whole-program scan below can miss
-but the decompiler cannot (`kuna_floatreg.rs (moved_as_a_float_here)`): every
+but the decompiler cannot (`floatreg.rs (moved_as_a_float_here)`): every
 Varnode of the global's storage must be the whole global, every value written
 there must come from a float operation, a float-class register (an input, or a
 call's result), memory or a constant that spells, every value read there must
@@ -3327,7 +3327,7 @@ without a loaded image (the XML datatest corpus) never scans, so every global
 refuses as before.
 
 The scan
-(`crates/unlace-analysis/src/listing/kuna_floatglobals.rs (scan)`)
+(`crates/unlace-analysis/src/listing/floatglobals.rs (scan)`)
 walks every function of the inventory the console stashed at the commit
 boundary, and every function they call, from its entry: fall-through, branches,
 no fall-through past a call to a no-return function, and the cases of a switch.
@@ -3380,10 +3380,10 @@ here or by the decompiler, and stay pointer stores, while RISC-V globals
 addressed with `auipc` or `lui` are scanned like any other.
 
 Three votes accept such a global. The parameter vote's family may store into or
-load from it (`kuna_floatreg.rs (only_moved_as_a_float)`, a data-space Varnode
+load from it (`floatreg.rs (only_moved_as_a_float)`, a data-space Varnode
 or a LOAD/STORE through its constant address, `float_only_through`), so `fy`
 prints `void fy(double a0,unsigned int *a1)`. The argument vote takes a read of
-it the way it takes a read of read-only memory (`kuna_floatreg.rs
+it the way it takes a read of read-only memory (`floatreg.rs
 (argument_vote)`, the read found through its copies by `global_read`), and a
 call that passes it in a float register to a parameter no recovery types is
 not evidence against the float, so `pass` prints `sink(gd2)` instead of
@@ -3392,7 +3392,7 @@ Cortex-M firmware loses most of the union reinterpretations it printed for
 float globals handed to float helpers. The vote also holds when the read
 already carries the float, so a pass that sees its own earlier answer does not
 withdraw it and the lattice settles. And `protoorder`'s float votes no longer
-count such a global in a value's family as a refusal (`kuna_protoorder.rs
+count such a global in a value's family as a refusal (`protoorder.rs
 (family_refuses)`).
 
 The answer is evidence for those votes, never a declaration: the global keeps
@@ -3404,9 +3404,9 @@ functions disagree about what a global holds, but a function takes the float
 only after its own reads and writes of the global -- through its storage, its
 address, and every pointer formed from either -- have passed. With `floatglobals off` every global refuses a float vote, as
 before the option existed.
-### A float helper that works on the bits is a float (`kuna_floatbits.rs`)
+### A float helper that works on the bits is a float (`floatbits.rs`)
 
-(kuna, GH-890, `kuna_floatbits.rs`, always on.) Both votes above refuse a value
+(kuna, GH-890, `floatbits.rs`, always on.) Both votes above refuse a value
 an integer op computes with, and a float helper written on the bits is nothing
 but integer ops. newlib's `fabsf` is `GET_FLOAT_WORD(ix,x);
 SET_FLOAT_WORD(x,ix&0x7fffffff); return x;`, which hard-float ARM compiles to
@@ -3417,7 +3417,7 @@ call as a reinterpretation of its result -- 73 of them for betaflight's -- while
 handing it its float argument as a number. The convention passes the value in
 `s0` and takes it back there, and only a float travels there.
 
-`kuna_floatbits.rs (Plan::of)` decides, once per `build_localtypes` pass, which
+`floatbits.rs (Plan::of)` decides, once per `build_localtypes` pass, which
 inputs and returned values take the float, and the vote follows the two above
 (`Plan::vote`, where the fold says no more than an integer or raw bytes). The
 candidates are the 4- and 8-byte inputs in a float-class entry of the
@@ -3491,7 +3491,7 @@ float and keeps its integer parameters. A returned value in an
 integer register is the classifier's answer and keeps its own type, so
 `isnanf`, `signbit` and newlib's `isfinitef` take a float parameter only. The
 bit ops in the body then read a float, the cast pass inserts the cast each
-needs, and each prints as the reinterpretation of the bits (`kuna_bitcast.rs`);
+needs, and each prints as the reinterpretation of the bits (`bitcast.rs`);
 `RuleFloatSignCleanup`, which reads the new type, turns the sign mask and the
 sign flip into `ABS` and unary minus, so `fabsf` prints `float fabsf(float a0)
 { return ABS(a0); }` and `copysignf` keeps its masks inside two unions.
@@ -3500,23 +3500,23 @@ In `decompile-all` such a return is not the guess `voidret`'s withdrawals
 (chapter 04) exist for. A reader that keeps the bits in an integer of the
 float's width, in the register the helper returns in, gets the
 reinterpretation `callrettype` prints for any float callee
-(`kuna_callrettype.rs (float_held_as_bits)`, chapter 04): betaflight's `vstr s0`
+(`callrettype.rs (float_held_as_bits)`, chapter 04): betaflight's `vstr s0`
 of `fabsf`'s result into a word array prints `v2 = ((union { float from;
 unsigned int to; }){ .from = sub_8008010(v5) }).to;`. A reader that holds, as
 an integer of that width, another register than the helper returns in holds
 what the call left there (betaflight's `bl fabsf; vcmpe.f32 s0, s15; .. pop
 {r4, pc}` returns the `r0` the call left). That files no refusal
-(`kuna_voidret.rs (elsewhere_than_return)`), and the call's output token is
-the helper's float (`kuna_floatbits.rs (held_bits_token)`, from
+(`voidret.rs (elsewhere_than_return)`), and the call's output token is
+the helper's float (`floatbits.rs (held_bits_token)`, from
 `ActionSetCasts`' `get_output_token`), so the integer receives the bits through
 a reinterpretation, as it did from the integer prototype, rather than a C
 conversion of the value. A function returning a float its own arithmetic
 computes does not take the helper's back when its own is withdrawn
-(`kuna_voidret.rs (returns_its_own_float)`): newlib's `powf` returns `fabsf`'s
+(`voidret.rs (returns_its_own_float)`): newlib's `powf` returns `fabsf`'s
 result on one path and products on the rest. A withdrawal takes the helper's
 float parameters back with its return, so every function that called it while
 it was float is decompiled again, a reader of its result or not
-(`Ledger::bits_callers`, `kuna_voidret.rs (stale_readers)`). That costs a
+(`Ledger::bits_callers`, `voidret.rs (stale_readers)`). That costs a
 second decompile of each such caller: a synthetic Cortex-M4F object whose
 helper 200 callers read before one reader withdraws it decompiles 74% slower,
 and no binary of the corpus pays it. A caller that hands the bits to a
@@ -3526,7 +3526,7 @@ keeps the float argument it was printed with, and its result is unused. On betaf
 cleanflight -O2 the unions fall from 305 to 231, 504 to 463 and 49 to 39; the
 x86-64 decbench binaries have no such helper and do not change.
 
-### A narrow value returned zero-extended is unsigned (`kuna_zextreturn.rs`)
+### A narrow value returned zero-extended is unsigned (`zextreturn.rs`)
 
 Dead-code analysis counts only the possibly-nonzero bits of a RETURN as consumed,
 so sub-variable flow trims a return the function zero-extends to the narrow
@@ -3545,9 +3545,9 @@ zero-extension says the value is unsigned, or never has its sign bit set: the
 compiler spec's `inttype` on the output register (ARM, PowerPC, SPARC), or the
 rule `narrowext` states (chapter 04: RISC-V and LoongArch below 32 bits, and
 MIPS and Apple arm64 under `narrowext compiler`). The RETURN pull records that
-on each RETURN it trims (`crates/unlace-bandb-core/src/p5_types/kuna_zextreturn.rs
+on each RETURN it trims (`crates/unlace-bandb-core/src/p5_types/zextreturn.rs
 (unsigned_trim)`), and
-`crates/unlace-bandb-core/src/p5_types/kuna_zextreturn.rs (unsigned_return_vote)`
+`crates/unlace-bandb-core/src/p5_types/zextreturn.rs (unsigned_return_vote)`
 supplies the unsigned integer of the value's width as a candidate in
 `build_localtypes`, after the float-register vote. It is offered only for a value
 that is not type-locked, whose fold is a signed integer or unknown bytes (which
@@ -3566,7 +3566,7 @@ AArch64) or always zero-extends it (the RISC-V spec's own `zero`, which
 type stands. A rule that sign-extends a value of the trimmed width whatever its
 sign (a 32-bit return on RISC-V and LoongArch LP64) admits no such type: there
 the RETURN pull does not trim a zero-extended word whose sign bit may be set
-(`kuna_zextreturn.rs (zero_extended_word)`, chapter
+(`zextreturn.rs (zero_extended_word)`, chapter
 [03](03-ssa-and-simplification.md)), and the function returns the register.
 
 Under those conventions the function's callers can still say it, in
@@ -3578,8 +3578,8 @@ returned `char` or `unsigned` themselves (`movzbl %al,%eax`, `mov %eax,%eax`)
 before they use more of the register, and so do AArch64's. On i386 only a value
 narrower than the register's four bytes can be read wider. The function is then decompiled again with
 the width its callers compute with (`Funcdata::kuna_wide_return`,
-`kuna_zextreturn.rs (read_width)`). Where that is at most four bytes, the value
-keeps its trim and takes the record as above (`kuna_zextreturn.rs
+`zextreturn.rs (read_width)`). Where that is at most four bytes, the value
+keeps its trim and takes the record as above (`zextreturn.rs
 (unsigned_trim)`), so it returns `unsigned char` or `unsigned short`, which C
 promotes to `int` as the binary extends: kmod's `int get_bind(..) { return
 sym->bind; }` over a `uint8_t` printed as `char`, and the caller's `bind ==
@@ -3591,7 +3591,7 @@ an `unsigned char` multiplied by `0x1000001`. So `int z32m(int a0) { return a0
 * 3; }` beside a caller that sign-extended it now reads `unsigned long
 z32m(int a0) { return (unsigned int)(a0 * 3); }`.
 
-### A C++ virtual call goes through a named slot of its class (`kuna_vtabletypes.rs`)
+### A C++ virtual call goes through a named slot of its class (`vtabletypes.rs`)
 
 (kuna `vtabletypes`, default on.) An Itanium virtual call is two loads and a
 CALLIND: the object's first word is the vtable pointer, and the method is the
@@ -3604,7 +3604,7 @@ arguments lost to the CALLIND's trial scoring.
 The analysis tier (chapter 01, `vtabletypes`) reports, per polymorphic class, the
 primary vtable's slots, and for each slot every function the class or a derived
 class holds there. At the commit,
-`crates/unlace-bandb-base/src/p5_types/kuna_vtabletypes.rs (install)` builds
+`crates/unlace-bandb-base/src/p5_types/vtabletypes.rs (install)` builds
 `C_vtbl`, a structure with one function-pointer field per slot named for the
 method (`area`, `dtor`, `deleting_dtor`, or `vfn_<i>` when no symbol names it),
 and completes the class structure `C` with a first field `C_vtbl *vptr` and
@@ -3620,7 +3620,7 @@ alone.
 
 A slot's field carries a prototype when every target with a known one agrees on
 the return type and on the parameters after `this`
-(`kuna_vtabletypes.rs (agreed_prototype)`); `this` becomes `C *`. The CALLIND
+(`vtabletypes.rs (agreed_prototype)`); `this` becomes `C *`. The CALLIND
 reads that field, so the call takes the prototype as any call through a typed
 function pointer does and keeps its arguments: `(*a0->vptr->area)(a0,a1)`.
 Itanium mangling has no return type, so a slot whose methods have no DWARF
@@ -3636,7 +3636,7 @@ to one) loads the slot from a constant address, the load folds to the method's
 entry, and `ActionDeindirect` makes the call direct (chapter 04):
 `(*dat_402268)(v3,a0)` becomes `Tri::area(v3,a0)`.
 
-### An IOKit class is typed like a C++ class (`kuna_vtabletypes.rs`)
+### An IOKit class is typed like a C++ class (`vtabletypes.rs`)
 
 (kuna `iokitclasses on`, the default on an arm64 XNU kernel or kext; inert
 elsewhere.) IOKit C++ in a kernelcache has no RTTI and, in a kext, few symbols,
@@ -3651,13 +3651,13 @@ and reports them in the record the typed vtables above use, with the size set.
 `C` is laid out to that size (up to 0x4000 bytes) with a first field
 `C_vtbl *vtable`, and the rest one field per 8-byte granule: from the
 signature of the class's `kalloc_type` view when a view of that name has the
-class's size (`kuna_kalloctype.rs (granule_fields)`: a pointer granule is a
+class's size (`kalloctype.rs (granule_fields)`: a pointer granule is a
 `void *`, a data granule an undefined word, padding no field), else undefined
 words. The fields are named `field_0x<off>`. Because the name and size match,
 the structure a typed allocation of the class returns (`view_struct`) is this
 one. The slot words are folded and painted read-only as above.
 
-The commit (`crates/unlace-console/src/kuna_iokittypes.rs (commit)`)
+The commit (`crates/unlace-console/src/iokittypes.rs (commit)`)
 then adds three things. Every function a class vtable holds, and every
 constructor and destructor of a recovered class, gets an input hint for `x0`
 named `this` and typed `C *` (`Architecture::kuna_this_hints`, applied in
@@ -3681,7 +3681,7 @@ Not typed: a non-virtual member that is not a constructor or destructor (its
 name cannot tell a static member from one taking `this`), and a class whose
 name two classes of the image share.
 
-### An MSVC class is typed from its RTTI (`kuna_vtabletypes.rs`)
+### An MSVC class is typed from its RTTI (`vtabletypes.rs`)
 
 (kuna `vtabletypes`, default on; PE only.) A Windows C++ image built with RTTI
 (MSVC, or clang-cl) carries no method names, so before this a virtual member
@@ -3693,11 +3693,11 @@ field is named `__vftable`, the name MSVC's own debug information gives it,
 and a slot no symbol named at analysis time takes the method name of the first
 function it holds that the symbol table now names (a PDB or a demangled export
 gives `Square::area`; a placeholder `sub_`, `FUN_`, `thunk_` or the `rtti`
-pass's `vfunc_<i>` does not count) (`kuna_vtabletypes.rs (symbol_method_name)`).
+pass's `vfunc_<i>` does not count) (`vtabletypes.rs (symbol_method_name)`).
 A function a vtable holds is a virtual member here too, so its inferred-tier
 `cppsig` declaration with `this` is applied as if proven.
 
-The commit (`crates/unlace-console/src/kuna_msvcclasses.rs (commit)`) then
+The commit (`crates/unlace-console/src/msvcclasses.rs (commit)`) then
 gives every function the analysis typed an unlocked input hint `this` of type
 `C *` in the first of RCX, ECX, x0 and r0 the language defines, the way the
 IOKit classes are hinted: the member's other parameters are still recovered from
@@ -3710,7 +3710,7 @@ whose slot count is its class's becomes a data object of type `C_vtbl`: the
 else an object `C_vftable` is added.
 
 A vptr store or load types the object it goes through
-(`crates/unlace-bandb-core/src/p5_types/kuna_vtblbase.rs (class_pointer)`).
+(`crates/unlace-bandb-core/src/p5_types/vtblbase.rs (class_pointer)`).
 `TypeOp::propagateToPointer` turns the type of a value stored through, or
 loaded from, a pointer into a pointer to that type, but a pointer value
 becomes a pointer to an undefined word. When the value is a `C_vtbl *` and
@@ -3726,19 +3726,19 @@ A vftable serving a virtual base has no non-virtual base at its offset: the
 virtual base's displacement is stated only by the vbtable, which the analysis
 does not read. MSVC lays the virtual bases out after the non-virtual part, in
 the order of their vbtable entries, so chapter 01 places them by that order
-(`kuna_msvcvtabletypes.rs (vbase_offsets)`), and the methods in such a vftable
+(`msvcvtabletypes.rs (vbase_offsets)`), and the methods in such a vftable
 take the virtual base as `this` (MSVC passes the virtual base's subobject, a
 vtordisp thunk adjusting it first where one is needed). The virtual base is
 still not embedded in the class structure, since its displacement differs
 between the classes that derive from it.
 
 Constructors and destructors
-(`crates/unlace-analysis/src/analyzers/rtti/kuna_msvcctors.rs (run)`, run at
+(`crates/unlace-analysis/src/analyzers/rtti/msvcctors.rs (run)`, run at
 the analysis commit, since it decodes the image) are the functions that store
 their class's vftable through `this`. A candidate is a function the image calls
 directly whose first kilobyte references a vftable. It is walked along its
 fall-through path with the Itanium constructor walker
-(`kuna_itaniumctors.rs (Walker)`), `this` placed by the default convention on
+(`itaniumctors.rs (Walker)`), `this` placed by the default convention on
 x64 and by `__thiscall` (ECX) on x86, and only a vftable stored through `this`
 counts; the class whose offset-0 vftable is stored, every other stored vftable
 being its own or a base's, owns it. A store after a call `this` was not passed
@@ -3755,13 +3755,13 @@ the vftable itself), so a slot of `C`'s offset-0 vftables is also `C::~C` when i
 fall-through walk stores `C`'s own vftable through `this` before any call, every
 other store being a base's, it does not return `this`, and its first 256 bytes
 test bit 0 of the flags argument, the `delete this` request
-(`kuna_msvcctors.rs (tests_delete_flag)`: `test byte ptr [ebp+8], 1`, `[esp+n]` or
+(`msvcctors.rs (tests_delete_flag)`: `test byte ptr [ebp+8], 1`, `[esp+n]` or
 the unoptimized `mov eax, [ebp+8]; and eax, 1` on x86; `test dl, 1`, its `bl`/`dil`
 copy or a frame copy on x64). It returns `this`, as an MSVC deleting destructor
 does. Every walk steps over MSVC's frame-setup helpers (`__EH_prolog3` and its
 forms, `push size; mov eax, handler; call`, and `__SEH_prolog4`, `push size; push
 scopetable; call`): a call target that opens at least two candidate or vftable
-functions in that shape (`kuna_msvcctors.rs (frame_setup_helpers)`). The helper
+functions in that shape (`msvcctors.rs (frame_setup_helpers)`). The helper
 builds the frame and leaves `this` in ECX, so an MFC destructor's vftable store
 after it is still its first act; counted as a call, it disqualified every MFC
 destructor (`CDialog::~CDialog`, `CPaintDC::~CPaintDC`), and with it the deleting
@@ -3776,7 +3776,7 @@ vftable the vbtable order does not account for (a vftable left over, a virtual
 base that finds none, or a slot count that differs from the virtual base's own
 vftable), together with the functions such a vftable holds.
 
-### A COM request's out-parameter is the interface its id names (`kuna_comtyping.rs`)
+### A COM request's out-parameter is the interface its id names (`comtyping.rs`)
 
 `CoCreateInstance(&CLSID_ShellLink, 0, 1, &IID_IShellLinkW, &p)` writes an
 `IShellLinkW *` through its out-parameter, which the API declares `void **`,
@@ -3784,7 +3784,7 @@ so without more the object is an untyped word and every call through it is an
 offset off the table it points at. Under `com` the analysis commits the
 address of every interface id the image holds with the interface struct it
 names (chapter 01), and
-`crates/unlace-bandb-base/src/p5_types/kuna_comtyping.rs (out_param_type)`
+`crates/unlace-bandb-base/src/p5_types/comtyping.rs (out_param_type)`
 answers `TypeOpCall::getInputLocal` for the out-parameter of a request whose
 interface-id argument folds to one of those addresses (through copies, casts and
 a `PTRSUB` off the zero base): the argument is a pointer to a pointer to the
@@ -3793,7 +3793,7 @@ it read `lpVtbl` and a method, and the call prints as
 `p->lpVtbl->SetPath(p, L"...")`. The requests are the imported `ole32`
 entry points that take an interface id, matched by name without a DLL
 qualifier, an `__imp_` prefix or a `stdcall` decoration
-(`crates/unlace-bandb-base/src/p5_types/kuna_comtyping.rs (REQUESTS)`),
+(`crates/unlace-bandb-base/src/p5_types/comtyping.rs (REQUESTS)`),
 and two calls through an object's own table: slot 0 with at least three
 arguments (`QueryInterface(This, riid, ppv)`) and, with at least four, slot 3
 (`IClassFactory::CreateInstance(This, pUnkOuter, riid, ppv)`), each only when
@@ -3809,13 +3809,13 @@ a table the code indexes, or built on the stack) the out-parameter stays
 and `CoGetInstanceFromFile` take a count and an array of `MULTI_QI`
 (`pIID`, `pItf`, `hr`, three pointer-sized words), one interface id per
 element, and fill each `pItf`
-(`crates/unlace-bandb-base/src/p5_types/kuna_comtyping.rs (MULTI_QI_REQUESTS)`).
+(`crates/unlace-bandb-base/src/p5_types/comtyping.rs (MULTI_QI_REQUESTS)`).
 When the count folds to a literal of 1 to 8 and the array's argument is the
 entry stack pointer plus literals (through copies, casts, `INT_ADD`,
 `INT_SUB` and a `PTRSUB` off the stack's base), each element's id is the
 address every pointer-sized write of its first word agrees on: a copy into
 that stack slot or a store through a stack address
-(`crates/unlace-bandb-base/src/p5_types/kuna_comtyping.rs (element_ids)`).
+(`crates/unlace-bandb-base/src/p5_types/comtyping.rs (element_ids)`).
 An element whose id is a known interface id is a `MULTI_QI_<Interface>`
 record whose `pItf` points to the interface; an element without one is
 `MULTI_QI` (the type library's record when it has one of that size, else
@@ -3824,7 +3824,7 @@ to a record of the elements named `MULTI_QI_<I1>_<I2>...` whose fields are
 named after their interfaces (`qi<N>` for an element without one or a
 repeat), so the stack array takes that type and a call through
 `mqi.IShellLinkW.pItf` prints with the interface's method names
-(`crates/unlace-bandb-base/src/p5_types/kuna_comtyping.rs (multi_qi_type)`).
+(`crates/unlace-bandb-base/src/p5_types/comtyping.rs (multi_qi_type)`).
 With no element's id known, or a count that is not a literal, the argument
 keeps its declared type.
 
@@ -3971,7 +3971,7 @@ override surface for this whole section (the `aggregate-union` row in
 can be named, at four places owned by three chapters: the concatenation and
 cleanup-split rules (§3), the partial-symbol walk (§9), and this resolution
 rule. Each place asks one predicate in
-`crates/unlace-bandb-core/src/p5_types/kuna_aggregatefields.rs` (always
+`crates/unlace-bandb-core/src/p5_types/aggregatefields.rs` (always
 on). Single-component structs and arrays retain the whole container when a RETURN
 value matches the function's locked output type and is an unchanged copy of a
 locked input of that container type. Equal-width COPY chains preserve this
@@ -4075,7 +4075,7 @@ whole would exceed 8 bytes as a constant (the `uintb` precision bound, `double.r
 form verifies before rewriting, a wrong fuse is designed out rather than
 detected after.
 
-**Branchless borrow compares.** `crates/unlace-bandb-base/src/p5_types/kuna_borrowcompare.rs (apply_rule)`
+**Branchless borrow compares.** `crates/unlace-bandb-base/src/p5_types/borrowcompare.rs (apply_rule)`
 is one more form, tried from the low-word compare of a split value next to
 `LessThreeWay` and `LessConstForm`. A 64-bit `a < b` on a 32-bit target is
 often not a branch cascade but a subtract with borrow: the low words are
@@ -4106,7 +4106,7 @@ be accounted for, so a tree with any other term is left alone.
 **Branchless equalities.** A 64-bit `a == b` on a 32-bit target is
 `(alo ^ blo) | (ahi ^ bhi)` tested against 0 (`xor`, `xor`, `or`, then
 `sete`/`setne` or a `jne`/`bne`); upstream's `Equal2Form` only knows
-`hi1 == hi2 && lo1 == lo2`. `kuna_borrowcompare.rs (apply_equal_rule)` is
+`hi1 == hi2 && lo1 == lo2`. `borrowcompare.rs (apply_equal_rule)` is
 tried from an INT_XOR or INT_OR reading a piece of a split value, before
 `LogicalForm` on the XOR (which would otherwise build the whole `a ^ b` first)
 and after it on the OR. It reads the INT_OR as one term reading the low piece and
@@ -4122,7 +4122,7 @@ parameters, because nothing marks them as pieces of one value: with no
 prototype, a `long long` parameter on i386 or 32-bit ARM is recovered as two
 `int` parameters and its compare prints as an `SBORROW4` chain. With option
 `pairparam` (default on),
-`kuna_borrowcompare.rs (RuleDoubleInputPair)` fires on the low-word compare or
+`borrowcompare.rs (RuleDoubleInputPair)` fires on the low-word compare or
 carry `c` (`INT_LESS`, `INT_LESSEQUAL`, `INT_CARRY`) when one of its operands is
 an unlocked input, the input word directly above it (same size, next address
 in the space's byte order) is an unlocked input too, the function writes
@@ -4145,12 +4145,12 @@ constants), the input words are joined the same way. Requiring the other
 operand to be a pair keeps the XOR of one parameter's high word from being read
 as the low word of the next parameter. The rule also fires on a PIECE of
 such an input word and the word above it, high word first, when every op
-that reads either word is such a PIECE (`kuna_borrowcompare.rs
+that reads either word is such a PIECE (`borrowcompare.rs
 (piece_input_pair)`): the function only ever uses the eight bytes together,
 as a soft-float caller does with a `double` it hands to `__aeabi_dadd`, which
 printed `CONCAT44(a1,a0)` beside `unsigned int a0,unsigned int a1`. On 32-bit
 ARM the words are argument registers; this trigger fires only on an aligned
-argument register pair under `armpairparam` (`kuna_armpairparam.rs
+argument register pair under `armpairparam` (`armpairparam.rs
 (joined_pair)`), never on stack words, since the i386 callers of the MSVC
 `__stdcall` helpers read their stack words the same way and keep
 `CONCAT44(a1,a0) / CONCAT44(a3,a2)` (stage `kuna-arithhelpers` #9). The rule merges the pair with
@@ -4167,7 +4167,7 @@ words: the high words are compared in one block and the low words in the block
 it falls into, which upstream's `LessThreeWay` and `Equal1Form` fold only
 once the words are pieces of one value. With option `pairbranch` (default
 off; `pairparam` must be on),
-`kuna_borrowcompare.rs (branch_input_pair)` also fires on a low-word
+`borrowcompare.rs (branch_input_pair)` also fires on a low-word
 `INT_LESS`/`INT_LESSEQUAL` that the borrow rule above did not pair, and on a
 low-word `INT_EQUAL`/`INT_NOTEQUAL`, when one operand is an input word with an
 unlocked input word above it (the same `input_above` test) and the condition
@@ -4231,12 +4231,12 @@ half-written.
 
 **(kuna GH-9230/1537) Constant fill —**
 [`memsetrecover`](../options.md)**, default on** (DIV-2).
-`crates/unlace-bandb-base/src/p5_types/kuna_memsetsequence.rs
+`crates/unlace-bandb-base/src/p5_types/memsetsequence.rs
 (RuleMemsetCopy)` extends the same machinery to runs that spell no string: an
 unrolled or SIMD `memset`/`bzero` otherwise renders as dozens of
 `buf[i] = '\0';` stores. It reuses the string driver's collection
 (`constseq.rs (StringSequence)` `build_for_fill`) and applies the fill test
-`kuna_memsetsequence.rs (detect_fill_run)`: sorted by offset, the COPYs must
+`memsetsequence.rs (detect_fill_run)`: sorted by offset, the COPYs must
 tile a contiguous region with one repeated fill byte, with **at least 2 COPYs
 and a 16-byte minimum footprint** — the guard that keeps a lone string NUL
 terminator from being claimed as a memset (the Stack-string ablation in
@@ -4250,7 +4250,7 @@ unit tests. Both paths use the same fill predicate.
 
 **(kuna) Read-only string block copy —**
 [`rodatastring`](../options.md)**, default on** (DIV-113).
-`crates/unlace-bandb-base/src/p5_types/kuna_rodatastring.rs
+`crates/unlace-bandb-base/src/p5_types/rodatastring.rs
 (RuleRodataStringCopy)` covers the third shape of the same idiom: the whole
 literal already exists in read-only memory, so the compiler emits a BLOCK copy
 — one or more wide loads out of `.rodata`/`__cstring` re-stored into the frame
@@ -4285,7 +4285,7 @@ frame carved by the original wide stores.
 
 **Length-carried string literals (kuna, option [`fatstr`](../options.md),
 default auto; `docs/multilang.md` W3/W4).**
-`crates/unlace-bandb-base/src/p5_types/kuna_fatstr.rs (RuleFatStr)`
+`crates/unlace-bandb-base/src/p5_types/fatstr.rs (RuleFatStr)`
 covers the fourth shape: the string never reaches a frame at all, because a
 fat-pointer language passes it as a `(ptr, len)` pair. Rust (`&str`, `&[u8]`)
 and Go (`string`) carry the length beside the pointer and never NUL-terminate
@@ -4317,7 +4317,7 @@ the message glued to the literal after it, so the call printed
 `PTRSUB` the same way and prints `panic("seven is not allowed",0x14,..)`.
 
 **Swift string literals (kuna, option [`swiftstr`](../options.md), default
-auto).** `crates/unlace-bandb-base/src/p5_types/kuna_swiftstr.rs
+auto).** `crates/unlace-bandb-base/src/p5_types/swiftstr.rs
 (RuleSwiftString)` covers the fifth shape: the string is two constant words
 that never point at text at all. A `Swift.String` is `_countAndFlagsBits` and
 `_object`; a literal of up to 15 UTF-8 bytes is a **small string** whose
@@ -4372,7 +4372,7 @@ pairs, a switch and a selected store, off, on, and on with `swiftmetadata`;
 `s == "…"` tests compare both words inline, off and on.
 
 The **language-facet table** the rule consults is the multilang W3 plane's
-first slice (`crates/unlace-middle/src/p0_knowledge/kuna_langfacet.rs
+first slice (`crates/unlace-middle/src/p0_knowledge/langfacet.rs
 (LangFacet)`): a name-keyed side record on the type factory
 (`crates/unlace-middle/src/substrate/dtype.rs
 (kuna_register_lang_facet, kuna_lang_facet)`) stating what a C-shaped type
@@ -4385,7 +4385,7 @@ in this one, so the facet arm of `fatstr`'s evidence test is reachable only
 through an explicit registration today.
 
 The option's second recognizer is analysis-side
-(`crates/unlace-analysis/src/analyzers/strings/kuna_strrecords.rs
+(`crates/unlace-analysis/src/analyzers/strings/strrecords.rs
 (StrRecordPass)`, pass id `fatstrrecords`, registered for a rustc-detected
 image, committed under the same `fatstr` mode gate). rustc packs its
 unterminated literals back to back in `.rodata`, so the NUL-run string scan
@@ -4502,7 +4502,7 @@ without split records, which is the entire current test surface, so no live
 output depends on it yet.
 
 **Type vote** (`typevote`, default on; kuna;
-`crates/unlace-bandb-base/src/p5_types/kuna_typevote.rs (ActionTypeVote)`,
+`crates/unlace-bandb-base/src/p5_types/typevote.rs (ActionTypeVote)`,
 run after the merge passes, before names and casts): a variable whose type is
 still `undefinedN` (1, 2, 4 or 8 bytes, no instance type-locked or constant)
 takes the type the ops on its instances vote for. Logical shifts and zero

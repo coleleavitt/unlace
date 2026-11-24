@@ -8,7 +8,7 @@ control-flow idioms. Rust, Go and Swift binaries violate every one of those
 assumptions, each in its own way. This document is the top-down plan for making
 the *source language* a first-class, per-run-flippable dimension of the
 pipeline — the same move kuna already made for the *output* language
-(`p9_emit/kuna_lang.rs`, PRs #320–#323), applied to the input side.
+(`p9_emit/lang.rs`, PRs #320–#323), applied to the input side.
 
 Everything here builds on seams that already exist. The repeated finding from
 the survey below is that kuna has grown five or six *partial* language planes
@@ -21,12 +21,12 @@ length-carried strings).
 | Area | What exists | Where | Gap |
 |---|---|---|---|
 | Detection | `detect_compiler` → `Compiler{Gcc,Clang,Rustc,Go,Unknown}` | `unlace-analysis/src/analyzers/sourcelang/mod.rs` | Recomputed at **7 call sites**; reaches the engine as only two bools (`Architecture::source_is_rust/source_is_go`, set at `unlace-console/src/engine.rs:4343`); no Swift variant |
-| ABI | `rustabi` option (ScalarPair returns); vendored **golang cspecs** for x86-64/x86-32/AArch64 (`abi-internal`, `abi0`, `gcwrite_*`, `duffzero/duffcopy`) | `p4_calls/kuna_rustabi.rs`; `specs/.../x86-64-golang.cspec` etc. | The golang cspec loads only via an explicit `--target …:golang`; detection never selects it; no Swift models anywhere; no way to bind a prototype *model* to a symbol without a full signature |
-| CFG idioms | Rust panic/drop handling: `cleanupcode`, `securitycheck`; plus the stripper family (`stackguard`, `msvcstackguard`, `devectorize`, `msvcstrappend`, `strlenscan`, `outline`) | `p2_lift/kuna_cleanupcode.rs`, `p7_regions/kuna_securitycheck.rs`, … | All hand-coded; **no generic subgraph matcher**; nothing for Go (`morestack`, write barriers, `panicIndex`) or Swift (ARC, exclusivity) |
-| Types | Rust DWARF enum layouts parsed into `VariantLayout` side table | `analyzers/dwarf/kuna_dwarfvariants.rs`, `p0_knowledge/kuna_dwarfvariants.rs` | **Nothing reads the table yet**; no notion of slices/fat pointers/interfaces/tuples; zero-sized fields dropped; sizes are `int4` so unsized types unrepresentable |
+| ABI | `rustabi` option (ScalarPair returns); vendored **golang cspecs** for x86-64/x86-32/AArch64 (`abi-internal`, `abi0`, `gcwrite_*`, `duffzero/duffcopy`) | `p4_calls/rustabi.rs`; `specs/.../x86-64-golang.cspec` etc. | The golang cspec loads only via an explicit `--target …:golang`; detection never selects it; no Swift models anywhere; no way to bind a prototype *model* to a symbol without a full signature |
+| CFG idioms | Rust panic/drop handling: `cleanupcode`, `securitycheck`; plus the stripper family (`stackguard`, `msvcstackguard`, `devectorize`, `msvcstrappend`, `strlenscan`, `outline`) | `p2_lift/cleanupcode.rs`, `p7_regions/securitycheck.rs`, … | All hand-coded; **no generic subgraph matcher**; nothing for Go (`morestack`, write barriers, `panicIndex`) or Swift (ARC, exclusivity) |
+| Types | Rust DWARF enum layouts parsed into `VariantLayout` side table | `analyzers/dwarf/dwarfvariants.rs`, `p0_knowledge/dwarfvariants.rs` | **Nothing reads the table yet**; no notion of slices/fat pointers/interfaces/tuples; zero-sized fields dropped; sizes are `int4` so unsized types unrepresentable |
 | Strings | NUL-terminated scan (`StringLiteralPass`), NUL-terminated render (`StringManagerUnicode::get_string_data`) | `analyzers/strings/mod.rs`, `p9_emit/stringmanage.rs` | Go/Rust strings carry length, not NUL; Go rodata is one unterminated blob. BUT: a bounded, NUL-free literal path already exists — `Funcdata::get_internal_string` → `BUILTIN_STRINGDATA` (used only by `constseq.rs`) |
 | Symbols | pclntab pass (names + extents, go1.2–1.20); Rust v0/legacy + Itanium + MSVC demangling; per-language no-return lists | `analyzers/pclntab/`, `analyzers/demangle/`, `loader/noreturn.rs` + `data/{Rust,Golang}FunctionsThatDoNotReturn` | No Go runtime type info (typelinks/moduledata); Swift demangler done (`kuna_swift`, `$s` + `_Tt`); `__swift5_*` metadata naming done (`analyzers/swift`, option `swiftmetadata`); struct/class layouts from static type metadata done (`swifttypes`; symbolic references resolved); `__swiftcall` / `__swiftcall_throws` models (derived from each AArch64 and x86-64 spec's default) with model-only bindings and an unlocked `self` hint (`swiftcall`), throwing calls detected by the caller's zeroing of the error register; the error value is still an anonymous local, not a second return |
-| Output | Full outlang plane: `OutLang{C,Rust}`, `LangProfile`, `TypeSpeller`, `LangAbi` (stub: `extern_marker` only, doc names Go multi-return as the known omission) | `p9_emit/kuna_lang.rs`, `kuna_langrust.rs`, `p4_calls/kuna_langabi.rs` | Rust output has no type definitions renderer; no tuple/multi-return form |
+| Output | Full outlang plane: `OutLang{C,Rust}`, `LangProfile`, `TypeSpeller`, `LangAbi` (stub: `extern_marker` only, doc names Go multi-return as the known omission) | `p9_emit/lang.rs`, `langrust.rs`, `p4_calls/langabi.rs` | Rust output has no type definitions renderer; no tuple/multi-return form |
 
 Two structural facts shape the whole design:
 
@@ -35,7 +35,7 @@ Two structural facts shape the whole design:
    override of the detected language therefore has to be a *loadtime-tier*
    option (env binding via `unlace-cli/src/loadtime.rs`), like `goabi`.
 2. **`type_metatype` is effectively closed** (~3.7k references across 380
-   files, mostly non-exhaustive matches; `kuna_dwarfvariants.rs` already
+   files, mostly non-exhaustive matches; `dwarfvariants.rs` already
    examined and rejected adding a variant). Language type semantics must ride
    *beside* the C-shaped type, not inside the metatype lattice.
 
@@ -66,7 +66,7 @@ options, with no new mechanism of its own.
   `Architecture` and copied into `ArchContext` — replacing the
   `source_is_rust`/`source_is_go` bools and the 7 scattered `detect_compiler`
   re-parses (engine bootstrap, `decompile_all.rs:1812` outlang auto-policy,
-  `runtime_hints.rs`, wasm `resolve_language`, `kuna_addrtakenentry.rs`, …).
+  `runtime_hints.rs`, wasm `resolve_language`, `addrtakenentry.rs`, …).
 - **Override**: `sourcelang auto|c|cpp|rust|go|swift` as a loadtime-tier
   option (env binding), because pass selection (`passes_for(compiler,format)`)
   happens during `load file`. The existing Mach-O `_R`-prefix false-positive
@@ -184,7 +184,7 @@ typed_data/prototypes` seam):
   the single highest-value type provider in the plan and is pure analysis-tier
   code (new `analyzers/gotypes/`).
 - Swift `__swift5_*` reflection metadata (field descriptors + mangled type
-  names) — **done** as `swifttypes` (`analyzers/swift/kuna_swifttypes.rs`):
+  names) — **done** as `swifttypes` (`analyzers/swift/swifttypes.rs`):
   layouts from the static type metadata, field types through
   `kuna_swift::demangle_swift_type` with its symbolic references resolved.
 - **Synthesized well-known shells** registered by each pack even with no
@@ -310,7 +310,7 @@ panic no-return lists, securitycheck, DWARF variants):
 
 **Swift pack** (third: most new infrastructure, smallest immediate corpus):
 - Prereqs the others don't need: a Swift demangler (**done**: the pure-Rust
-  `analyzers/demangle/kuna_swift.rs`, verified against
+  `analyzers/demangle/swift.rs`, verified against
   `swift-demangle`; every crate alternative builds Apple's C++ demangler, which
   `unlace-wasm` cannot carry), `__swift5_*` metadata walker (**done**:
   `analyzers/swift`, option `swiftmetadata` names accessors, vtable slots,

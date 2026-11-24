@@ -7,7 +7,7 @@
   "selector": "0x26a0",
   "source_decompiler": "kuna",
   "phase": "P1 (program prep, entry discovery / prototype source)",
-  "module": "decompiler/crates/kuna-analysis/src/analyzers/entry/kuna_elfmain.rs (ElfMainPass)",
+  "module": "decompiler/crates/kuna-analysis/src/analyzers/entry/elfmain.rs (ElfMainPass)",
   "change_kind": "correctness-fix",
   "tier": "analysis",
   "option": "elfmain",
@@ -138,7 +138,7 @@
     "reading": "All three are inside +-0.5%, and the witness is closer to zero than the control. The pass's per-load work is one pass over the symbol names (which the refusals need anyway) and one more entry in a locked prototype."
   },
   "tests": {
-    "unit": "decompiler/crates/kuna-analysis/src/analyzers/entry/kuna_elfmain.rs (6 tests over main_claim: both x86-64 encodings, all four oracle-4 architectures, the two non-PIE ARM shapes, the extra-register fixture, the unstripped-ELF refusal, the non-ELF and no-crt1 refusals)",
+    "unit": "decompiler/crates/kuna-analysis/src/analyzers/entry/elfmain.rs (6 tests over main_claim: both x86-64 encodings, all four oracle-4 architectures, the two non-PIE ARM shapes, the extra-register fixture, the unstripped-ELF refusal, the non-ELF and no-crt1 refusals)",
     "stage_test": "tests/stages/kuna-elfmain.xml (8 assertions, two-pass over two fixtures: `option elfmain off` = the bug, default = the fix, over the full load file -> decompile path. #1-#4 stripped_dynamic_x86_64 (the headline); #5-#8 elfmainextra_x86_64, which pins what the lock COSTS -- a six-parameter body-driven signature off, and on, the named/declared main with `unsigned long v1; // r9` assigned nowhere plus a call that passes three arguments where the body passes four)",
     "cli": "tests/cli/elf-libc-start-main-unnamed.json (the x86-64 acceptance), tests/cli/elf-libc-start-main-drops.json (the ARM regression the review found: a main that FORWARDS its third argument register without touching it -- a two-parameter park deleted that parameter and left `unsigned int v4; // r2` assigned nowhere, still passed to __printf_chk), tests/cli/elf-main-extra-register-args.json (the cost class, on elfmainextra_x86_64: the demoted r9 local and the dropped r8 call argument) and tests/cli/define-function-name-outranks-analysis.json (a declared `--define-function 0x1405=stage1` outranks the `main` this pass supplies at the same address, which keeps it as an alias). make test-cli 176/176",
     "corpus_count": "decompiler/crates/kuna-base/src/xml.rs 293 -> 295 (this branch's stage test plus the one main gained in the same window; the round-3 assertions went into the SAME file, so the count did not move again). docs/baseline-stages.json re-recorded 1017 -> 1021.",
@@ -153,7 +153,7 @@
     "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/elfmainextra_x86_64 (+ elfmainextra_x86_64.s, the assembler source and the two-line build command): a stripped x86-64 PIE with the crt1 idiom whose main forwards r8 into a call argument and stores r9 to a global, so the body-driven signature has six parameters"
   },
   "counts": {
-    "settables": "206 -> 209 after two rounds of merging origin/main, which added three options of its own in the same window (impliedrefs/termdup, then bytehonest); phases.toml, kuna_phases/tests.rs, catalog_bytecompat.rs and tests/fixtures/phase_catalog.json all re-derived on a fresh build with `counters --rederive`/`--fix`, never by arithmetic. The bytehonest merge's settable assert auto-merged SILENTLY at 208 on both sides (the known trap) and was resolved to 209.",
+    "settables": "206 -> 209 after two rounds of merging origin/main, which added three options of its own in the same window (impliedrefs/termdup, then bytehonest); phases.toml, phases/tests.rs, catalog_bytecompat.rs and tests/fixtures/phase_catalog.json all re-derived on a fresh build with `counters --rederive`/`--fix`, never by arithmetic. The bytehonest merge's settable assert auto-merged SILENTLY at 208 on both sides (the known trap) and was resolved to 209.",
     "tiers": "(66, 78, 61) -> (67, 80, 62): +2 transform (impliedrefs/termdup) and +1 core (bytehonest) from origin/main, +1 analysis from this branch",
     "catalog_rows": "205 -> 208 comma-terminated rows",
     "catalog_buckets": "unchanged (source_decompiler kuna, change_kind correctness-fix)",

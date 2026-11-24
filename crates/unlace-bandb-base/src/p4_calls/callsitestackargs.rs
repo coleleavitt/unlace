@@ -43,5 +43,5 @@ pub fn outside_caller_local_range(
 }
 
 #[cfg(test)]
-#[path = "kuna_callsitestackargs/tests.rs"]
+#[path = "callsitestackargs/tests.rs"]
 mod tests;

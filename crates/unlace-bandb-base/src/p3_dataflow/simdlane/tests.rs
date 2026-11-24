@@ -67,7 +67,7 @@ fn an_out_of_range_lane_is_declined() {
     assert_eq!(shuffle_lane_source(0, 16, 16, -1), None);
 }
 
-// --- harness (mirrors kuna_booleanmask/tests.rs) ----------------------------
+// --- harness (mirrors booleanmask/tests.rs) ----------------------------
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();

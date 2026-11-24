@@ -18,7 +18,7 @@
 //! COPYs in upstream's order leaves every Varnode's readers in upstream's order.
 
 use crate::context::{OpId, VarnodeId};
-use crate::kuna_fasthash::{FxHashMap, FxHashSet};
+use crate::fasthash::{FxHashMap, FxHashSet};
 use unlace_base::address::Address;
 use unlace_base::types::int4;
 

@@ -54,7 +54,7 @@
 //! # What is deliberately NOT here
 //!
 //! The issue's first direction — reject a candidate bracketed by a known function —
-//! is [`super::kuna_aifbracket`]. Approximated from the Listing's entry-ordered
+//! is [`super::aifbracket`]. Approximated from the Listing's entry-ordered
 //! function model ("no known entry lies in `(hole_start, next_code]`") it swallows
 //! whole unexplored regions on a sparsely discovered image: u-boot A32 has 314
 //! discovered entries for 2,836 real functions, and that predicate costs it 195 of

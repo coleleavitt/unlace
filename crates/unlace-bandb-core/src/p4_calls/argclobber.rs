@@ -71,7 +71,7 @@
 //!   default at all;
 //! * the callee's own body neither **reads** those register bytes before writing
 //!   them nor can **forward** them to a read its recovery never saw
-//!   ([`crate::kuna_calleedeadarg::resolve_forward_transfer`]). A
+//!   ([`crate::calleedeadarg::resolve_forward_transfer`]). A
 //!   recovered parameter list accounts for the reads in the body and for the
 //!   arguments of every call whose target had a prototype — so the register has
 //!   to be written already wherever control leaves for anything else: an
@@ -83,11 +83,11 @@
 //! * it is **trailing** -- no used trial follows it -- so the argument list keeps
 //!   its positional shape and no later argument moves;
 //! * at least one used argument remains, since an empty list is
-//!   [`kuna_calleearityfwd`](crate::kuna_calleearityfwd)'s failure
+//!   [`kuna_calleearityfwd`](crate::calleearityfwd)'s failure
 //!   shape, not this one's;
 //! * no already-final call to the same callee entry in this function passed an
 //!   argument in that storage. This is the subtractive twin of
-//!   [`kuna_calleearity`](crate::kuna_calleearity)'s witness rule and
+//!   [`kuna_calleearity`](crate::calleearity)'s witness rule and
 //!   it is what orders this pass against the additive family: a slot a sibling
 //!   really used outranks the clobber evidence here.
 //!
@@ -132,7 +132,7 @@
 //! nothing on the caller's side can say whether the callee wanted it. Only the
 //! callee can, and the statement that settles it is the callee's own **recovered
 //! prototype**: the parameter list kuna gets from decompiling that function,
-//! which [`crate::kuna_protoorder`] parks for every callee it
+//! which [`crate::protoorder`] parks for every callee it
 //! decompiles before its callers. A prototype with a parameter overlapping the
 //! register says the callee takes an argument there, and the drop is declined
 //! whatever the caller's side looks like.
@@ -166,12 +166,12 @@
 //! surviving-argument accounting above are what answer for it.
 //!
 //! The callee's BODY is read twice more, and both are required, not optional.
-//! [`crate::kuna_calleedeadarg`] decodes each callee once per image; a
+//! [`crate::calleedeadarg`] decodes each callee once per image; a
 //! bounded entry walk that positively sees those register bytes read before they
 //! are written declines the drop (`proves_input`), and a walk that cannot show
 //! the register is dead wherever the callee forwards it to something nothing
 //! accounts for declines it too
-//! ([`crate::kuna_calleedeadarg::resolve_forward_transfer`]). Neither
+//! ([`crate::calleedeadarg::resolve_forward_transfer`]). Neither
 //! can admit a drop the clauses above refused.
 //!
 //! # Why a recovered prototype is not enough on its own
@@ -214,8 +214,8 @@
 //! `docs/features/argclobber/` holds the six programs and the corpus
 //! measurement that bounds the rule.
 
-use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::calleedeadarg::FuncdataCalleedeadargExt;
+use crate::protoorder::FuncdataProtoorderExt;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::ElementId;
@@ -485,13 +485,13 @@ fn storage_overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool 
 /// clobber is what put a value in its register.
 ///
 /// Called from [`build_input_from_trials`](crate::funcdata_callsite::build_input_from_trials)
-/// after `kuna_calleearity::unify_with_sibling_call`, so a slot the sibling rule
+/// after `calleearity::unify_with_sibling_call`, so a slot the sibling rule
 /// just promoted is visible here and declined. Inert with the option off.
 pub fn drop_clobber_tail_arg(fc: &mut FuncCallSpecs, data: &mut Funcdata) {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_argclobber::ArgClobber>()
+        .get::<crate::argclobber::ArgClobber>()
         .0
     {
         return;
@@ -597,7 +597,7 @@ pub fn drop_clobber_tail_arg(fc: &mut FuncCallSpecs, data: &mut Funcdata) {
     }
     // A sibling call to the same callee that really passed an argument here
     // outranks the clobber evidence.
-    let witness = crate::kuna_calleearity::best_witness_for(&entry, op, data);
+    let witness = crate::calleearity::best_witness_for(&entry, op, data);
     if witness.iter().any(|(a, _)| *a == addr) {
         return;
     }
@@ -605,11 +605,11 @@ pub fn drop_clobber_tail_arg(fc: &mut FuncCallSpecs, data: &mut Funcdata) {
 }
 
 /// (kuna) Drop a trailing register argument a previous call's clobber put
-/// there (option `argclobber`).  See [`crate::kuna_argclobber`].
+/// there (option `argclobber`).  See [`crate::argclobber`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct ArgClobber(pub bool);
 
-impl crate::kuna_optionset::KunaOption for ArgClobber {
+impl crate::optionset::KunaOption for ArgClobber {
     const NAME: &'static str = "argclobber";
     crate::kuna_option_id!();
 
@@ -622,7 +622,7 @@ impl crate::kuna_optionset::KunaOption for ArgClobber {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_argclobber::OptionArgClobber.apply(value)?;
+        let (v, msg) = crate::argclobber::OptionArgClobber.apply(value)?;
         Ok((ArgClobber(v), msg))
     }
 }

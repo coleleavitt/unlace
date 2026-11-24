@@ -4,7 +4,7 @@ Owning phase: **P1 code/data partition**, ARM discovery Stage 3b, inside the
 Listing tier (`docs/spec/01-program-prep.md` §1.6). Option: `ptrentry`, tier
 `analysis`, `change_kind` `analysis-enablement`, default-OFF.
 
-## 1. The pass — `analyzers/aif/kuna_ptrentry.rs` (new module)
+## 1. The pass — `analyzers/aif/ptrentry.rs` (new module)
 
 * `code_pointer_sites(file, exec_ranges) -> BTreeMap<target, Vec<site>>` — every
   4-byte-aligned word in every allocated section whose bit 0 is set and whose
@@ -62,7 +62,7 @@ corroboration. It cannot separate switch tables (a switch table is a run) and co
   "kuna"` (this came from kuna's own recall measurement), `inspiration` prefixed
   `decbench:`.
 * Hard-coded catalog counts, every one **derived from a fresh `phase catalog`
-  capture on the rebased tree rather than by arithmetic**: `kuna_phases/tests.rs`
+  capture on the rebased tree rather than by arithmetic**: `phases/tests.rs`
   (settable 87 -> 88, analysis tier 26 -> 27, the `PASS_GATES` list, the JSON row
   count 86 -> 87) and `catalog_bytecompat.rs` (87 -> 88 plus the recaptured
   `tests/fixtures/phase_catalog.json`). The live-value count stays at **29** —
@@ -75,7 +75,7 @@ corroboration. It cannot separate switch tables (a switch table is a run) and co
 
 ## 4. Tests
 
-* Unit (`kuna_ptrentry.rs`): the collector over the committed fixture — every code
+* Unit (`ptrentry.rs`): the collector over the committed fixture — every code
   pointer found with its site list, the shared-target case, the non-candidate cases
   (even word, zero slot, target outside the executable ranges), and the ARM gate
   proven load-bearing (the scan itself is architecture-blind).

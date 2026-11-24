@@ -3,7 +3,7 @@
 //!
 //! # The gap
 //!
-//! [`super::kuna_poolref`] follows a pool word as an **absolute** pointer. In a
+//! [`super::poolref`] follows a pool word as an **absolute** pointer. In a
 //! position-independent ARM image the pool holds no pointer at all: it holds the
 //! signed distance from the `add` that consumes it to the datum, and the address
 //! only exists once the two are put together.
@@ -23,7 +23,7 @@
 //! is not one site either: the filing image forms every one of its four string
 //! references this way.
 //!
-//! This is [`super::kuna_picbase`]'s defect with a per-site base instead of a
+//! This is [`super::picbase`]'s defect with a per-site base instead of a
 //! module-wide one. There the PIC base is a register a prologue establishes once
 //! and the whole function inherits; here each reference carries its own base —
 //! the PC of its own `add` — so there is nothing to detect once and nothing to
@@ -106,13 +106,13 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use unlace_base::space::{AddrSpace, spacetype};
-use unlace_decomp::kuna_fasthash::FxBuildHasher;
+use unlace_decomp::fasthash::FxBuildHasher;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
 use object::read::{Object, ObjectSection};
 
-use super::kuna_poolref::PoolImage;
+use super::poolref::PoolImage;
 use super::xrefs::{FullOp, XrefKind, in_range, looks_like_address};
 
 /// The file bytes of `.got`, which [`PoolImage`] leaves out because the section
@@ -319,7 +319,7 @@ pub(super) struct Verdict {
 
 impl PicPool {
     /// Consume one decoded instruction, and answer the pool word it loaded and
-    /// carries on, whose [`super::kuna_poolref`] pointer edge waits for
+    /// carries on, whose [`super::poolref`] pointer edge waits for
     /// [`Verdict::displaced`].
     ///
     /// Called for every instruction of the function in whatever order the walk

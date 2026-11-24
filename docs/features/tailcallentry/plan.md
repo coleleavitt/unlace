@@ -4,7 +4,7 @@ Owning phase: **P1 code/data partition**, the Listing tier's recursive-descent
 walk (`docs/spec/01-program-prep.md` §1.6). Option: `tailcallentry`, tier
 `analysis`, `change_kind` `analysis-enablement`, default-OFF.
 
-## 1. The pass — `listing/kuna_tailcallentry.rs` (new module)
+## 1. The pass — `listing/tailcallentry.rs` (new module)
 
 Sits next to `walk.rs`, because it is the walk's missing tail-call notion, and
 reads the walk's completed output rather than running inside it. `analysis.md` §3
@@ -71,7 +71,7 @@ effect when it runs.
   "kuna"` (this came from kuna's own recall measurement), `inspiration` prefixed
   `decbench:`.
 * Hard-coded catalog counts, all re-derived from a green build rather than by
-  arithmetic after the rebase onto merged `ptrentry`: `kuna_phases/tests.rs`
+  arithmetic after the rebase onto merged `ptrentry`: `phases/tests.rs`
   (settable 88 -> 89, analysis tier 27 -> 28, the `PASS_GATES` list, the JSON row
   count 87 -> 88) and `catalog_bytecompat.rs` (88 -> 89 plus the recaptured
   `tests/fixtures/phase_catalog.json`, re-captured from `decomp_dbg` after the
@@ -83,7 +83,7 @@ effect when it runs.
 
 ## 4. Tests
 
-* Unit (`kuna_tailcallentry.rs`): the entry-ordered region lookup, the
+* Unit (`tailcallentry.rs`): the entry-ordered region lookup, the
   containment predicate in both directions (same region ⇒ not a tail call, across
   a discovered entry ⇒ tail call, no containing entry ⇒ reject), and the
   epilogue-shape matcher including its near-misses (`ldmia r3!` is not a stack

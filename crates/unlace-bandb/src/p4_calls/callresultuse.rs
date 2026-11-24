@@ -54,8 +54,8 @@
 //! function returns in another storage class ([`yield_to_own_value`]), keeps
 //! the strict reading in every mode.
 
-use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::calleedeadarg::FuncdataCalleedeadargExt;
+use crate::protoorder::FuncdataProtoorderExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -195,7 +195,7 @@ fn returns_value(
             if data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_passthrough::PassThrough>()
+                .get::<crate::passthrough::PassThrough>()
                 .0 =>
         {
             Evidence::No
@@ -206,8 +206,8 @@ fn returns_value(
 
 /// Does the callee of `fc` take an argument in `[addr, addr+size)`? Its body
 /// says so when the bounded entry decode covered it
-/// ([`CalleeEntryDead::never_takes`](crate::kuna_calleedeadarg::CalleeEntryDead::never_takes),
-/// [`CalleeEntryDead::proves_input`](crate::kuna_calleedeadarg::CalleeEntryDead::proves_input)),
+/// ([`CalleeEntryDead::never_takes`](crate::calleedeadarg::CalleeEntryDead::never_takes),
+/// [`CalleeEntryDead::proves_input`](crate::calleedeadarg::CalleeEntryDead::proves_input)),
 /// and a stated recovery does by the registers it lists.
 fn takes_argument(
     data: &Funcdata,
@@ -346,7 +346,7 @@ fn in_x0(data: &Funcdata, addr: &Address) -> bool {
 pub fn call_result_root(data: &Funcdata, root: VarnodeId) -> bool {
     data.get_arch()
         .kuna_options
-        .get::<crate::kuna_callresultuse::CallResultUse>()
+        .get::<crate::callresultuse::CallResultUse>()
         != CallResultUse::Off
         && walk_call_results(data, root).is_some()
 }
@@ -355,7 +355,7 @@ pub fn call_result_root(data: &Funcdata, root: VarnodeId) -> bool {
 /// accepts, and at least one? With the answer, whether every one of those
 /// callees is known to return a value there ([`returns_value`]).
 fn walk_call_results(data: &Funcdata, root: VarnodeId) -> Option<bool> {
-    let mut seen = crate::kuna_fasthash::FxHashSet::default();
+    let mut seen = crate::fasthash::FxHashSet::default();
     let mut stack = vec![root];
     let mut any = false;
     let mut known = true;
@@ -400,7 +400,7 @@ fn scores_def(data: &Funcdata, def: OpId) -> Option<Evidence> {
                 .get_in(0)
                 .and_then(|v| data.vbank().get(v))
                 .is_some_and(|v| !v.is_indirect_zero());
-            if !possible_output || !crate::kuna_retcallhalf::created_by_call(data, op) {
+            if !possible_output || !crate::retcallhalf::created_by_call(data, op) {
                 return None;
             }
             let iop = op.get_in(1).and_then(|v| data.vbank().get(v))?;
@@ -464,7 +464,7 @@ pub fn scoring_return(data: &Funcdata, opmatch: OpId, root: VarnodeId) -> bool {
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_callresultuse::CallResultUse>()
+        .get::<crate::callresultuse::CallResultUse>()
         != CallResultUse::All
     {
         return false;
@@ -498,7 +498,7 @@ fn every_return_hands_back(
 
 /// A run-time helper with no effect but its result: the RTABI32 and libgcc
 /// arithmetic, comparison and conversion routines
-/// ([`crate::kuna_armfloatreturn::base_pcs_helper`]) and libgcc's machine-mode
+/// ([`crate::armfloatreturn::base_pcs_helper`]) and libgcc's machine-mode
 /// integer routines ([`libgcc_integer`]), not the memory helpers, the
 /// unaligned stores, the flag-setting comparisons or the ones that read or
 /// change other state.
@@ -518,7 +518,7 @@ fn pure_helper(name: &str) -> bool {
         "__aeabi_idiv0",
     ];
     libgcc_integer(name)
-        || crate::kuna_armfloatreturn::base_pcs_helper(name)
+        || crate::armfloatreturn::base_pcs_helper(name)
             && name != "__aeabi_ldiv0"
             && !EFFECTS.iter().any(|p| name.starts_with(p))
 }
@@ -556,7 +556,7 @@ fn libgcc_integer(name: &str) -> bool {
 /// the function also tests (`bl __aeabi_fcmplt; cbz r0,L; ...; L: bx lr`) is
 /// used there, and keeps the strict reading.
 fn pure_helper_result(data: &Funcdata, root: VarnodeId) -> bool {
-    let mut seen = crate::kuna_fasthash::FxHashSet::default();
+    let mut seen = crate::fasthash::FxHashSet::default();
     let mut stack = vec![root];
     let mut results = Vec::new();
     while let Some(vn) = stack.pop() {
@@ -591,7 +591,7 @@ fn pure_helper_result(data: &Funcdata, root: VarnodeId) -> bool {
     if results.is_empty() {
         return false;
     }
-    let mut seen = crate::kuna_fasthash::FxHashSet::default();
+    let mut seen = crate::fasthash::FxHashSet::default();
     let mut stack = results;
     while let Some(vn) = stack.pop() {
         if !seen.insert(vn) {
@@ -650,7 +650,7 @@ pub fn scoring_argument(data: &Funcdata, opmatch: OpId, root: VarnodeId) -> bool
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_callresultuse::CallResultUse>()
+        .get::<crate::callresultuse::CallResultUse>()
         == CallResultUse::Off
         || !data
             .obank()
@@ -675,7 +675,7 @@ pub fn scoring_argument(data: &Funcdata, opmatch: OpId, root: VarnodeId) -> bool
 /// RETURN: a branch on it, a store of it as the stored value, or another
 /// RETURN? The same uses `voidret` lets a forced return have.
 pub fn returned_use(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
-    crate::kuna_voidret::returned_use(data, op, vn)
+    crate::voidret::returned_use(data, op, vn)
 }
 
 /// Mark the active return trials that hold a call result on every path
@@ -693,7 +693,7 @@ pub fn yield_to_own_value(
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_callresultuse::CallResultUse>()
+        .get::<crate::callresultuse::CallResultUse>()
         == CallResultUse::Off
     {
         return;
@@ -722,7 +722,7 @@ pub fn yield_to_own_value(
                 })
         })
         .collect();
-    if !mine.is_empty() && crate::kuna_passthrough::returns_own_value(data, active, &mine) {
+    if !mine.is_empty() && crate::passthrough::returns_own_value(data, active, &mine) {
         for i in mine {
             active.get_trial_mut(i).mark_inactive();
         }
@@ -745,7 +745,7 @@ pub fn plant(data: &mut Funcdata) {
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_callresultuse::CallResultUse>()
+        .get::<crate::callresultuse::CallResultUse>()
         == CallResultUse::Off
         || data.get_active_output().is_none()
         || data.get_func_proto().is_output_locked()
@@ -758,12 +758,12 @@ pub fn plant(data: &mut Funcdata) {
     };
     if named(data, &addr, size)
         || first_call_input(data, &addr, size)
-        || crate::kuna_voidret::planted_overlaps(data, &addr, size)
+        || crate::voidret::planted_overlaps(data, &addr, size)
     {
         return;
     }
-    crate::kuna_voidret::plant_piece(data, addr.clone(), size);
-    if crate::kuna_voidret::planted_overlaps(data, &addr, size) {
+    crate::voidret::plant_piece(data, addr.clone(), size);
+    if crate::voidret::planted_overlaps(data, &addr, size) {
         data.kuna_note_callresultuse_planted(addr, size);
     }
 }
@@ -787,7 +787,7 @@ pub fn settle_planted(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
     let keep = data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_callresultuse::CallResultUse>()
+        .get::<crate::callresultuse::CallResultUse>()
         == CallResultUse::All
         && every_return_hands_back_a_call_result(data, slot);
     if keep {
@@ -801,7 +801,7 @@ pub fn settle_planted(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
 /// Heritage then visits the range on its own, and the trials it registers
 /// are scored as they always were.
 fn named(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    crate::kuna_passthrough::touched(data, addr, size)
+    crate::passthrough::touched(data, addr, size)
 }
 
 /// Is `register` a stated input of a call no other call can execute before
@@ -810,7 +810,7 @@ fn named(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// function's parameter handed through; planting a RETURN read there would
 /// turn the claim into a trial of the function's own output.
 fn first_call_input(data: &Funcdata, register: &Address, size: int4) -> bool {
-    let first = crate::kuna_passthrough::first_calls(data);
+    let first = crate::passthrough::first_calls(data);
     (0..data.num_calls()).any(|idx| {
         let fc = data.get_call_specs(idx);
         first.contains(&fc.get_op())
@@ -839,30 +839,30 @@ fn result_register(data: &Funcdata) -> Option<(Address, int4)> {
     ))
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.callresultuse_scores_trial = Some(scores_trial);
     hooks.callresultuse_scoring_argument = Some(scoring_argument);
     hooks.callresultuse_scoring_return = Some(scoring_return);
 }
 
-impl crate::kuna_optionset::KunaOption for CallResultUse {
+impl crate::optionset::KunaOption for CallResultUse {
     const NAME: &'static str = "callresultuse";
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::kuna_callresultuse::CallResultUse::Off
+        crate::callresultuse::CallResultUse::Off
     }
 
     fn shipped() -> Self {
-        crate::kuna_callresultuse::CallResultUse::Off
+        crate::callresultuse::CallResultUse::Off
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        Ok(crate::kuna_callresultuse::OptionCallResultUse.apply(value)?)
+        Ok(crate::callresultuse::OptionCallResultUse.apply(value)?)
     }
 }
 
 #[cfg(test)]
-#[path = "kuna_callresultuse/tests.rs"]
+#[path = "callresultuse/tests.rs"]
 mod tests;

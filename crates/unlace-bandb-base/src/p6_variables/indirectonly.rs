@@ -133,7 +133,7 @@ impl OptionIndirectOnly {
 #[derive(Clone, Debug, PartialEq)]
 pub struct MarkIndirectOnly(pub bool);
 
-impl crate::kuna_optionset::KunaOption for MarkIndirectOnly {
+impl crate::optionset::KunaOption for MarkIndirectOnly {
     const NAME: &'static str = "indirectonly";
     crate::kuna_option_id!();
 
@@ -146,11 +146,11 @@ impl crate::kuna_optionset::KunaOption for MarkIndirectOnly {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_indirectonly::OptionIndirectOnly.apply(value)?;
+        let (v, msg) = crate::indirectonly::OptionIndirectOnly.apply(value)?;
         Ok((MarkIndirectOnly(v), msg))
     }
 }
 
 #[cfg(test)]
-#[path = "kuna_indirectonly/tests.rs"]
+#[path = "indirectonly/tests.rs"]
 mod tests;

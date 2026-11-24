@@ -1,5 +1,5 @@
 // Tests for the `kuna_stackguard` port (included into `mod tests` in
-// kuna_stackguard.rs).
+// stackguard.rs).
 //
 // Covered:
 //   - the option decision body (`OptionStackGuard::apply`): on/off flips

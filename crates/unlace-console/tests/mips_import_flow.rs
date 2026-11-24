@@ -9,7 +9,7 @@ use unlace_console::{
 #[test]
 fn only_concrete_got_import_declarations_supply_type_only_prototypes() {
     use std::rc::Rc;
-    use unlace_decomp::{dtype::type_metatype, kuna_qualifiedcall};
+    use unlace_decomp::{dtype::type_metatype, qualifiedcall};
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     for image in [
         "flow-mips32r2-be-local-ssp-stripped.so",
@@ -41,7 +41,7 @@ fn only_concrete_got_import_declarations_supply_type_only_prototypes() {
             .clone();
         let pieces = ctx.callee_proto_pieces(&entry).unwrap();
         assert!(pieces.input_storage.is_empty() && pieces.output_storage.is_none());
-        let proto = kuna_qualifiedcall::prototype(&ctx, &entry).unwrap();
+        let proto = qualifiedcall::prototype(&ctx, &entry).unwrap();
         assert!(proto.is_output_locked() && proto.get_output().get_size() > 0);
         assert_eq!(proto.num_params(), 1);
         let void = prog.arch().types().get_type_void().unwrap();
@@ -56,29 +56,26 @@ fn only_concrete_got_import_declarations_supply_type_only_prototypes() {
             prog.arch_mut()
                 .set_function_prototype_pieces_at(&entry, incomplete);
             let ctx = prog.arch().build_arch_handle();
-            assert!(
-                kuna_qualifiedcall::prototype(&ctx, &entry).is_none(),
-                "{image}"
-            );
+            assert!(qualifiedcall::prototype(&ctx, &entry).is_none(), "{image}");
         }
         let mut variadic = pieces.clone();
         variadic.first_var_arg_slot = 1;
         prog.arch_mut()
             .set_function_prototype_pieces_at(&entry, variadic);
         assert!(
-            kuna_qualifiedcall::prototype(&prog.arch().build_arch_handle(), &entry).is_none(),
+            qualifiedcall::prototype(&prog.arch().build_arch_handle(), &entry).is_none(),
             "a variadic declaration fixes no arity: {image}"
         );
         let mut incomplete = pieces.clone();
         incomplete.intypes[0] = unknown;
         prog.arch_mut()
             .set_function_prototype_pieces_at(&entry, incomplete);
-        assert!(kuna_qualifiedcall::prototype(&prog.arch().build_arch_handle(), &entry).is_none());
+        assert!(qualifiedcall::prototype(&prog.arch().build_arch_handle(), &entry).is_none());
         prog.arch_mut()
             .set_function_prototype_pieces_at(&entry, pieces);
         prog.arch_mut().loader_mips_imports = Rc::default();
         assert!(
-            kuna_qualifiedcall::prototype(&prog.arch().build_arch_handle(), &entry).is_none(),
+            qualifiedcall::prototype(&prog.arch().build_arch_handle(), &entry).is_none(),
             "an entry without GOT import provenance must keep the code-type lookup"
         );
     }

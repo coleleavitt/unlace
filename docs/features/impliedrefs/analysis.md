@@ -73,7 +73,7 @@ explicit-marking pass. Two other readers take it off the same field:
 * `substrate/funcdata_block.rs` `Funcdata::bb_is_complex` — upstream
   `BlockBasic::isComplex`, the statement-count test that decides whether
   `CollapseStructure::rule_block_or` may absorb an OR-clause block;
-* `p8_structure/kuna_condfold.rs` — the same printed-width test for the
+* `p8_structure/condfold.rs` — the same printed-width test for the
   short-circuit fold.
 
 So `impliedrefs` loosens those two structure tests along with the marking, exactly

@@ -1,6 +1,6 @@
 {
  "opportunity": "foldcallret (default on) folded a call into the right-hand operand of the && / || the printer emits for a same-block BOOL_AND/BOOL_OR, so the printed C skipped a call the binary always makes: gcc -O0 `int r = tick(a); if ((r == 0) & (a > 5)) puts(\"A\");` printed `if (a0 <= 5 || tick(a0)) return;` and `gflag = (r == 0) & (a > 5)` printed `gflag = (unsigned int)(5 < a0 && !tick(a0));` (GH-684).",
- "test_name": "kuna-cli/tests/decompile_all_cli.rs a_call_in_a_short_circuit_operand_round_trips_through_the_printed_c (fixtures foldcallret_sc_{gcc_O0,clang_O0,clang_O2}_x86_64) + tests/stages/kuna-foldcallret-shortcircuit.xml (8 assertions; main 2/8, fix 8/8) + kuna_callretfold/tests.rs shortcircuit::*",
+ "test_name": "kuna-cli/tests/decompile_all_cli.rs a_call_in_a_short_circuit_operand_round_trips_through_the_printed_c (fixtures foldcallret_sc_{gcc_O0,clang_O0,clang_O2}_x86_64) + tests/stages/kuna-foldcallret-shortcircuit.xml (8 assertions; main 2/8, fix 8/8) + callretfold/tests.rs shortcircuit::*",
  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/foldcallret_sc_gcc_O0_x86_64 (and the clang -O0 / clang -O2 builds of the same foldcallret_sc_x86_64.c)",
  "selector": "w1f,w4f",
  "option": null,
@@ -8,12 +8,12 @@
  "change_kind": "strict correctness fix (no option: the old output skips a call the binary always makes)",
  "tier": "transform",
  "source_decompiler": "kuna",
- "inspiration": "foldcallretphi's own guard (#681, kuna_foldcallretphi.rs chain_reaches_short_circuit_rhs), now shared",
+ "inspiration": "foldcallretphi's own guard (#681, foldcallretphi.rs chain_reaches_short_circuit_rhs), now shared",
  "default_on": true,
  "ablation_changed": 0,
  "parity": "OK",
- "root_cause": "foldcallret's print-point check (kuna_callretfold.rs print_point_is_order_safe) asked only whether anything between the call and the statement the folded expression lands in is a barrier. Every op of CALL -> INT_EQUAL -> BOOL_AND sits in one block, so it passed; but p-code BOOL_AND/BOOL_OR evaluate both operands while the printer emits C's && / ||, which skip input 1 when input 0 decides. foldcallretphi (#681) carried this guard for its own folds; plain foldcallret did not.",
- "fix": "chain_reaches_short_circuit_rhs moves from kuna_foldcallretphi.rs to kuna_callretfold.rs (pub(crate)) and both print-point checks call it: a fold declines when the call's value, followed op by op along print_chain, reaches input >= 1 of a BOOL_AND/BOOL_OR. Input 0 is printed on the left and always evaluated, so it still folds (clang -O0). The printer's other conditional contexts (the second block of a two-block BlockCondition, iteregion ?: arms, iteboolean) are separate blocks the binary also runs conditionally, and a fold never leaves the call's block; op_flip_in_place_execute swaps BOOL_AND/BOOL_OR without swapping operands, so the side checked is the side printed.",
+ "root_cause": "foldcallret's print-point check (callretfold.rs print_point_is_order_safe) asked only whether anything between the call and the statement the folded expression lands in is a barrier. Every op of CALL -> INT_EQUAL -> BOOL_AND sits in one block, so it passed; but p-code BOOL_AND/BOOL_OR evaluate both operands while the printer emits C's && / ||, which skip input 1 when input 0 decides. foldcallretphi (#681) carried this guard for its own folds; plain foldcallret did not.",
+ "fix": "chain_reaches_short_circuit_rhs moves from foldcallretphi.rs to callretfold.rs (pub(crate)) and both print-point checks call it: a fold declines when the call's value, followed op by op along print_chain, reaches input >= 1 of a BOOL_AND/BOOL_OR. Input 0 is printed on the left and always evaluated, so it still folds (clang -O0). The printer's other conditional contexts (the second block of a two-block BlockCondition, iteregion ?: arms, iteboolean) are separate blocks the binary also runs conditionally, and a fold never leaves the call's block; op_flip_in_place_execute swaps BOOL_AND/BOOL_OR without swapping operands, so the side checked is the side printed.",
  "roundtrip": {
   "method": "decompile-all <fixture> --functions w1f,w4f, compile the printed C with a driver defining `int calls, gflag; int tick(int x) { calls++; return x - 3; }`, call w1f(1); w4f(1); print calls and gflag; each fixture binary prints `2 0`",
   "main": {
@@ -107,9 +107,9 @@
   "options_md": "byte-fresh"
  },
  "files": [
-  "decompiler/crates/kuna-decomp/src/p6_variables/kuna_callretfold.rs",
-  "decompiler/crates/kuna-decomp/src/p6_variables/kuna_foldcallretphi.rs",
-  "decompiler/crates/kuna-decomp/src/p6_variables/kuna_callretfold/tests.rs",
+  "decompiler/crates/kuna-decomp/src/p6_variables/callretfold.rs",
+  "decompiler/crates/kuna-decomp/src/p6_variables/foldcallretphi.rs",
+  "decompiler/crates/kuna-decomp/src/p6_variables/callretfold/tests.rs",
   "decompiler/crates/kuna-cli/tests/decompile_all_cli.rs",
   "decompiler/crates/kuna-analysis/tests/fixtures/foldcallret_sc_x86_64.c",
   "decompiler/crates/kuna-analysis/tests/fixtures/foldcallret_sc_{gcc_O0,clang_O0,clang_O2}_x86_64",

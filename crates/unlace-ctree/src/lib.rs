@@ -7,8 +7,8 @@
 //!
 //! Lints are inherited from the workspace (`[lints] workspace = true`).
 
-pub mod kuna_ctree;
-pub mod kuna_ctreebuild;
+pub mod ctree;
+pub mod ctreebuild;
 
 #[doc(hidden)]
 pub use unlace_middle::*;
@@ -18,7 +18,7 @@ pub use unlace_middle::*;
 /// each hook a higher crate provides (`KunaHookSlots::finish_with_stubs`).
 #[cfg(test)]
 mod unprovided {
-    use unlace_middle::kuna_passhooks::{KunaHookSlots, KunaHooks};
+    use unlace_middle::passhooks::{KunaHookSlots, KunaHooks};
 
     #[unsafe(no_mangle)]
     fn __unlace_default_pass_hooks() -> &'static KunaHooks {

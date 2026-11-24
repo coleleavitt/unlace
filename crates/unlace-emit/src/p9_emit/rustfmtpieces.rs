@@ -2,8 +2,8 @@
 
 use std::rc::Rc;
 
-use super::kuna_rustfmtargs::{self, Plan, constant_word, stack_offset};
-use super::kuna_rustfmtflags::Trait;
+use super::rustfmtargs::{self, Plan, constant_word, stack_offset};
+use super::rustfmtflags::Trait;
 use crate::architecture::Architecture;
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
@@ -15,10 +15,10 @@ use unlace_num::opcodes::OpCode;
 pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .get::<crate::rustfmt::RustFmtMode>()
         .recovers()
         || !arch.rustc_pieces_layout
-        || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
+        || arch.source_lang() != crate::sourcelang::SourceLang::Rust
     {
         return None;
     }
@@ -26,12 +26,12 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if call.code() != OpCode::CPUI_CALL || call.num_input() != 2 || call.get_out().is_some() {
         return None;
     }
-    let stderr = super::kuna_rustfmtliteral::print_sink(fd, id)?;
+    let stderr = super::rustfmtliteral::print_sink(fd, id)?;
     let base = stack_offset(fd, call.get_in(1)?)?;
     if base % 8 != 0 {
         return None;
     }
-    let cells = kuna_rustfmtargs::stack_cells(fd, id, base, 5)?;
+    let cells = rustfmtargs::stack_cells(fd, id, base, 5)?;
     let table = constant_word(fd, cells[0])?;
     let pieces = usize::try_from(constant_word(fd, cells[1])?).ok()?;
     let count = usize::try_from(constant_word(fd, cells[3])?).ok()?;
@@ -51,7 +51,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
         (Vec::new(), Vec::new())
     } else {
         let array = stack_offset(fd, cells[2])?;
-        let result = kuna_rustfmtargs::primitive_arguments(fd, arch, id, array, count)?;
+        let result = rustfmtargs::primitive_arguments(fd, arch, id, array, count)?;
         if result
             .1
             .iter()
@@ -73,7 +73,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
         }
         literals.push(String::from_utf8(read_constant(fd, arch, pointer, length)?).ok()?);
     }
-    kuna_rustfmtargs::render_pieces(literals, arguments, formatters, stderr)
+    rustfmtargs::render_pieces(literals, arguments, formatters, stderr)
 }
 
 fn read_constant(

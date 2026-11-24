@@ -55,7 +55,7 @@ is faithful. The escalation here does not go through LOAD/STORE, so the rule nev
 
 `ptrdepthcap` calls that same rule at the one funnel every adopted type passes through
 (`propagate_type_edge`, right before the `0 > type_order` adoption test), in a new
-`p5_types/kuna_ptrdepth.rs`. The collapsed type is *less* specific than the concrete pointer
+`p5_types/ptrdepth.rs`. The collapsed type is *less* specific than the concrete pointer
 already held, so the order test rejects it and the lattice settles instead of escalating.
 Depth 1 and depth 2 over a concrete base are untouched, so `char **argv` keeps its spelling.
 
@@ -81,7 +81,7 @@ in the need's Decision log:
   (7 `char ****` spellings: 6 declarations + 1 cast); `option ptrdepthcap on` settles it. Assert
   #2 pins **every** three-or-more-star spelling across BOTH passes to exactly those 7, so any
   leak back into the capped pass raises the count and fails.
-* 8 unit tests in `p5_types/kuna_ptrdepth/tests.rs`, including the two that matter: the capped
+* 8 unit tests in `p5_types/ptrdepth/tests.rs`, including the two that matter: the capped
   type is **idempotent**, and `ptr(capped)` collapses **back** one level — the two properties
   that make the propagation settle rather than oscillate.
 * **`verify --promote` refuses this acceptance and that is correct**: its target is

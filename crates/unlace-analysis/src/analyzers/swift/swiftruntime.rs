@@ -24,7 +24,7 @@
 //! (the key-path accessors) are left to recovery.
 //!
 //! The concurrency runtime's entry points come from the generated table
-//! ([`super::kuna_swiftconcurrency`]). Most are plain prototypes too; the
+//! ([`super::swiftconcurrency`]). Most are plain prototypes too; the
 //! ones that suspend the calling task (`swift_task_switch`,
 //! `swift_asyncLet_get`, `swift_task_future_wait`, ...) are `swiftasync`
 //! functions that take the caller's context in the `swiftasync` register
@@ -1003,7 +1003,7 @@ pub fn concurrency(
 ) -> (Vec<PrototypePieces>, Vec<ContextProto>) {
     let types = Types { tf, ptr_size };
     let (mut plain, mut context) = (Vec::new(), Vec::new());
-    'entries: for e in super::kuna_swiftconcurrency::CONCURRENCY {
+    'entries: for e in super::swiftconcurrency::CONCURRENCY {
         let Some(outtype) = types.of(e.ret) else {
             continue;
         };
@@ -1098,7 +1098,7 @@ mod tests {
 
     #[test]
     fn concurrency_table_is_sorted_and_apart_from_the_runtime_table() {
-        let table = super::super::kuna_swiftconcurrency::CONCURRENCY;
+        let table = super::super::swiftconcurrency::CONCURRENCY;
         assert!(table.windows(2).all(|w| w[0].name < w[1].name));
         assert!(
             table

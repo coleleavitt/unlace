@@ -57,12 +57,12 @@
 //! `run_default_analyses`.
 
 pub mod codeview;
-pub(crate) mod kuna_pdbframe;
-pub mod kuna_pdbinterior;
-pub mod kuna_pdblines;
-pub(crate) mod kuna_pdbtpi;
-pub mod kuna_pdbtypes;
 pub mod locate;
+pub(crate) mod pdbframe;
+pub mod pdbinterior;
+pub mod pdblines;
+pub(crate) mod pdbtpi;
+pub mod pdbtypes;
 pub mod walk;
 
 use object::read::pe::{ImageNtHeaders, PeFile, PeFile32, PeFile64};

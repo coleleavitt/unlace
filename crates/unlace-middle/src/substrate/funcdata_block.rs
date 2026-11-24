@@ -1164,9 +1164,9 @@ impl Funcdata {
                 if self
                     .get_arch()
                     .kuna_options
-                    .get::<crate::kuna_condcallpush::CondCallPush>()
+                    .get::<crate::condcallpush::CondCallPush>()
                     .0
-                    && crate::kuna_condcallpush::is_call_push(self, inst)
+                    && crate::condcallpush::is_call_push(self, inst)
                 {
                     continue;
                 }
@@ -3547,11 +3547,11 @@ impl Funcdata {
                     // (kuna `retsplitglobal`) upstream never looks at the COPY's
                     // OUTPUT, so a shared epilogue that stores to globals reads
                     // as a bare epilogue and gets cloned into every predecessor.
-                    // See `crate::p8_structure::kuna_retsplitglobal`.
+                    // See `crate::p8_structure::retsplitglobal`.
                     // (kuna `retsplitglobal`) upstream never looks at the COPY's
                     // OUTPUT, so a shared epilogue that stores to globals reads
                     // as a bare epilogue and gets cloned into every predecessor.
-                    // See `crate::p8_structure::kuna_retsplitglobal`.
+                    // See `crate::p8_structure::retsplitglobal`.
                     let outvn = o.get_out().and_then(|ov| self.vbank().get(ov));
                     let same_storage =
                         match (outvn, o.get_in(0).and_then(|iv| self.vbank().get(iv))) {
@@ -3587,7 +3587,7 @@ impl Funcdata {
         !(self.hooks().retsplitglobal_split_is_declined)(
             self.get_arch()
                 .kuna_options
-                .get::<crate::kuna_coreoptions::RetSplitGlobal>()
+                .get::<crate::coreoptions::RetSplitGlobal>()
                 .0,
             global_stores,
         )
@@ -3693,7 +3693,7 @@ impl Funcdata {
     /// (kuna) Duplicate a shared **bare-epilogue** RETURN block into each of its
     /// predecessors but one — kuna's analog of angr's SAILR gotoless
     /// `ReturnDuplicatorHigh` (driver for
-    /// [`ActionReturnDup`](crate::p8_structure::kuna_returndup::ActionReturnDup),
+    /// [`ActionReturnDup`](crate::p8_structure::returndup::ActionReturnDup),
     /// option `returndup`).  Returns the number of edges split.
     ///
     /// Unlike [`Self::return_split_apply`] (the goto-driven `ReturnDuplicatorLow`
@@ -3836,7 +3836,7 @@ impl Funcdata {
             if self
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_coreoptions::RetTriangle>()
+                .get::<crate::coreoptions::RetTriangle>()
                 .0
                 && (self.hooks().rettriangle_is_triangle_join)(self, parent)
             {
@@ -3855,11 +3855,11 @@ impl Funcdata {
         let bool_only = self
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_orchainbool::OrchainBool>()
+            .get::<crate::orchainbool::OrchainBool>()
             .0;
         if parents.iter().any(|&p| {
             shared.contains(&p)
-                && !(bool_only && crate::kuna_orchainbool::returns_nonbool_const(self, p))
+                && !(bool_only && crate::orchainbool::returns_nonbool_const(self, p))
         }) {
             return 0;
         }
@@ -3949,9 +3949,9 @@ impl Funcdata {
     /// last remaining edge (leaves the variable body merged).
     ///
     /// The shared core behind both [`Self::earlyreturn_apply`] (the narrow diamond, capped
-    /// at 16 in-edges by [`ActionEarlyReturn`](crate::p8_structure::kuna_earlyreturn)) and
+    /// at 16 in-edges by [`ActionEarlyReturn`](crate::p8_structure::earlyreturn)) and
     /// [`Self::switchreturn_apply`] (the wide multi-case switch-phi that exceeds that cap,
-    /// gated by [`ActionSwitchReturn`](crate::p8_structure::kuna_switchreturn)) — the ONLY
+    /// gated by [`ActionSwitchReturn`](crate::p8_structure::switchreturn)) — the ONLY
     /// difference between the two is the `max_inedges` / `max_splits` caps.
     fn const_return_peel(&mut self, max_splits: int4, max_inedges: int4) -> int4 {
         let mut count = 0;
@@ -5215,7 +5215,7 @@ crate::kuna_flag!(
     /// (kuna `gotonext`) Leave out a `goto` whose target is the block that runs
     /// next anyway, print one to the block after the enclosing loop or switch as
     /// `break;`, and keep switch fall-thru chains in case order
-    /// (`p8_structure/kuna_gotonext.rs`). Default on.
+    /// (`p8_structure/gotonext.rs`). Default on.
     GotoNext,
     "gotonext",
     "goto-to-next suppression",

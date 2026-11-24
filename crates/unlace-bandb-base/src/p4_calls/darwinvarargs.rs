@@ -5,7 +5,7 @@
 //!
 //! Apple's arm64 ABI ("Writing ARM64 code for Apple platforms") passes every
 //! variadic argument on the stack, in 8-byte slots from `[sp]`, and never in
-//! `x1`-`x7`. [`varargstackargs`](crate::kuna_varargstackargs) already
+//! `x1`-`x7`. [`varargstackargs`](crate::varargstackargs) already
 //! scores such a call's stack tail as its own `fillinMap` section, so the empty
 //! registers in front of it stop ending the argument list, but only for a call
 //! whose prototype says `...`. A callee nothing declares, such as XNU's `panic`
@@ -70,9 +70,9 @@ use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::{PcodeEmit, Translate};
 
 use crate::architecture::Architecture;
+use crate::formatstring::VarargAbi;
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::kuna_formatstring::VarargAbi;
 
 /// The most instructions [`probe`] decodes from a callee's entry.
 const MAX_PROBE_INSTRUCTIONS: usize = 24;
@@ -84,13 +84,13 @@ pub fn applies(arch: &Architecture) -> bool {
         && (arch.archid.contains("AppleSilicon")
             || *arch
                 .kuna_tables
-                .get::<crate::kuna_formatstring::ImageVarargAbi>()
+                .get::<crate::formatstring::ImageVarargAbi>()
                 == Some(VarargAbi::Nothing))
 }
 
 /// Record, for every direct call in `data`, whether its callee runs Apple's
 /// `va_start`. Taken before the action pipeline for the reason
-/// [`crate::kuna_calleedeadarg::seed_callee_entry_dead`] is: the
+/// [`crate::calleedeadarg::seed_callee_entry_dead`] is: the
 /// pipeline's `ArchContext` has no translator. Cached per run on the
 /// `Architecture`.
 pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
@@ -317,5 +317,5 @@ fn overlaps(a: Loc, b: Loc) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_darwinvarargs/tests.rs"]
+#[path = "darwinvarargs/tests.rs"]
 mod tests;

@@ -292,9 +292,9 @@ fn run_full(stem: &str, which: usize) -> Result<(XmlArchitecture, Funcdata), Str
     // (DIV-23) and fires on boolless, so disable it here to match the datatest opt-out
     // (`option earlyreturn off` in tests/datatests/boolless.xml).
     arch.kuna_options
-        .set(unlace_decomp::kuna_earlyreturn::EarlyReturn(false));
+        .set(unlace_decomp::earlyreturn::EarlyReturn(false));
     arch.kuna_options
-        .set(unlace_decomp::kuna_switchreturn::SwitchReturn(false)); // (kuna) also opt out of switchreturn (DIV-25 default-on)
+        .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (kuna) also opt out of switchreturn (DIV-25 default-on)
     let fd = decompile_func(arch, &name, entry, 0).map_err(|e| format!("decompile: {e}"))?;
     Ok((xarch, fd))
 }

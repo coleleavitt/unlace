@@ -227,8 +227,8 @@ pub fn vector_type(
     size: i32,
     kind: u8,
 ) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
-    let name = match crate::kuna_neonintrin::decode_kind(kind) {
-        Some((elem, lane)) => crate::kuna_neonintrin::vector_type_name(size, elem, lane)?,
+    let name = match crate::neonintrin::decode_kind(kind) {
+        Some((elem, lane)) => crate::neonintrin::vector_type_name(size, elem, lane)?,
         None if kind & 0x80 != 0 => return None,
         None => vector_type_name(size, kind)?,
     };
@@ -264,8 +264,8 @@ fn rest_fma((kind, form, ty): (&str, &str, &str), w: &str) -> (String, Vec<usize
     (format!("_mm{w}_f{kind}_{ty}"), order)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.avxintrin_element_kind = Some(element_kind);
     hooks.avxintrin_intrinsic = Some(intrinsic);
 }

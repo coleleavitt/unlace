@@ -17,7 +17,7 @@ pub fn intersect(fd: &Funcdata, guards: &[GuardRecord], vn: VarnodeId, range: &m
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.switchguardrange_intersect = Some(intersect);
 }

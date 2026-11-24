@@ -99,7 +99,7 @@ fn a_varnode_that_is_not_a_function_input_is_not_a_parameter() {
     assert!(!is_input_parameter(&fd, vn));
 }
 
-/// The placement test lives in `kuna_returnuncomputed::computes_from`, but its
+/// The placement test lives in `returnuncomputed::computes_from`, but its
 /// two inputs are this predicate's answer and an address comparison, so pin the
 /// address comparison here: a terminal at the return half's OWN storage is the
 /// caller's register passing straight through, never a placed argument.

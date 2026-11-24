@@ -84,7 +84,7 @@ fn decompile(binary: &Path, names: &[&str], options: &[&str]) -> Vec<String> {
     }
     let mut status = ConsoleCommands::into_status(commands);
     register_decomp_commands(&mut status);
-    unlace_console::kuna_console::register_kuna_commands(&mut status);
+    unlace_console::console::register_kuna_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
         .unwrap()

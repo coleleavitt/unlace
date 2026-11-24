@@ -5,7 +5,7 @@
 //! allocated for it, and a malformed module is an error, never a panic. The
 //! function bodies are not decoded here: [`Body::code`] is the file range of
 //! one body's instruction stream, which
-//! [`crate::loader::kuna_wasmlower`] turns into register form.
+//! [`crate::loader::wasmlower`] turns into register form.
 
 use std::collections::BTreeMap;
 use std::ops::Range;

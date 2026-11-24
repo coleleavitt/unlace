@@ -8,7 +8,7 @@
 //! above its last argument.
 //!
 //! The extent comes from the same walk that proves a callee's pop
-//! ([`crate::kuna_calleepurge`]): the highest byte at or above the
+//! ([`crate::calleepurge`]): the highest byte at or above the
 //! first argument slot that a load or store touches, through the stack pointer
 //! or any register holding a stack address the walk placed exactly, rounded up
 //! to a whole slot. A nested direct call whose own extent is known touches its
@@ -51,8 +51,8 @@ use unlace_num::opcodes::OpCode;
 
 use crate::architecture::Architecture;
 use crate::context::VarnodeId;
+use crate::fasthash::FxHashMap as HashMap;
 use crate::funcdata::Funcdata;
-use crate::kuna_fasthash::FxHashMap as HashMap;
 
 /// `option calleeargs on|off` (default on).
 pub struct OptionCalleeArgs;
@@ -76,15 +76,15 @@ pub fn callee_stack_arg_bytes(
     arch: &Architecture,
     entry: &Address,
     call_at: &Address,
-) -> Option<crate::kuna_calleepurge::StackArgs> {
+) -> Option<crate::calleepurge::StackArgs> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+        .get::<crate::calleestackargs::KunaCalleeargs>()
         .0
     {
         return None;
     }
-    crate::kuna_calleepurge::callee_arg_bytes(arch, entry, call_at)
+    crate::calleepurge::callee_arg_bytes(arch, entry, call_at)
 }
 
 /// For a direct callee `entry` that states no extent, the stack bytes its
@@ -92,12 +92,12 @@ pub fn callee_stack_arg_bytes(
 pub fn callee_stack_window(arch: &Architecture, entry: &Address, call_at: &Address) -> Option<u32> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+        .get::<crate::calleestackargs::KunaCalleeargs>()
         .0
     {
         return None;
     }
-    crate::kuna_calleepurge::callee_window(arch, entry, call_at)
+    crate::calleepurge::callee_window(arch, entry, call_at)
 }
 
 /// For a direct callee `entry` that states no extent, the stack bytes its
@@ -106,12 +106,12 @@ pub fn callee_stack_window(arch: &Architecture, entry: &Address, call_at: &Addre
 pub fn callee_return_pop(arch: &Architecture, entry: &Address) -> Option<u32> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+        .get::<crate::calleestackargs::KunaCalleeargs>()
         .0
     {
         return None;
     }
-    crate::kuna_calleepurge::callee_return_pop(arch, entry)
+    crate::calleepurge::callee_return_pop(arch, entry)
 }
 
 /// Does the direct callee `entry` move its caller's stack pointer? The solver
@@ -119,9 +119,9 @@ pub fn callee_return_pop(arch: &Architecture, entry: &Address) -> Option<u32> {
 /// are guesses, and no extent is applied there.
 pub fn callee_moves_stack(arch: &Architecture, entry: &Address) -> bool {
     arch.kuna_options
-        .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+        .get::<crate::calleestackargs::KunaCalleeargs>()
         .0
-        && crate::kuna_calleepurge::moves_stack(arch, entry)
+        && crate::calleepurge::moves_stack(arch, entry)
 }
 
 /// Would a call in `data` whose callee states no extent take `vn`, the stored
@@ -319,7 +319,7 @@ fn stored(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
 #[derive(Clone, Debug, PartialEq)]
 pub struct KunaCalleeargs(pub bool);
 
-impl crate::kuna_optionset::KunaOption for KunaCalleeargs {
+impl crate::optionset::KunaOption for KunaCalleeargs {
     const NAME: &'static str = "calleeargs";
     crate::kuna_option_id!();
 
@@ -332,7 +332,7 @@ impl crate::kuna_optionset::KunaOption for KunaCalleeargs {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_calleestackargs::OptionCalleeArgs.apply(value)?;
+        let (v, msg) = crate::calleestackargs::OptionCalleeArgs.apply(value)?;
         Ok((KunaCalleeargs(v), msg))
     }
 }
@@ -343,7 +343,7 @@ impl crate::kuna_optionset::KunaOption for KunaCalleeargs {
 #[derive(Clone, Debug, PartialEq)]
 pub struct KunaCalleeargsMsvc(pub bool);
 
-impl crate::kuna_optionset::KunaOption for KunaCalleeargsMsvc {
+impl crate::optionset::KunaOption for KunaCalleeargsMsvc {
     const NAME: &'static str = "calleeargsmsvc";
     crate::kuna_option_id!();
 

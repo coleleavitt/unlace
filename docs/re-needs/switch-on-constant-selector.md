@@ -10,7 +10,7 @@ instances: 0
 rounds: [1]
 first_seen_round: 1
 attempts: 1
-touches: [crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs]
+touches: [crates/unlace-decomp/src/p2_lift/loweredswitch.rs]
 scope: small
 closed_in_round: 1
 closing_pr: 367

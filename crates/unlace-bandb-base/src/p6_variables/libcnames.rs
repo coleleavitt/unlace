@@ -41,12 +41,12 @@
 //! rename took or vacated is handed to no other local, and a local whose
 //! spelling a rename took prints its number.
 //!
-//! [`crate::kuna_contextnames`] adds evidence of its own (loop counters, the
-//! returned local) under `option contextnames`, and [`crate::kuna_flownames`]
+//! [`crate::contextnames`] adds evidence of its own (loop counters, the
+//! returned local) under `option contextnames`, and [`crate::flownames`]
 //! (structure fields, the local's type) under `option flownames`; evidence an
 //! option prints is preferred to evidence only a directive may use.
 
-use crate::kuna_stablenames::FuncdataStablenamesExt;
+use crate::stablenames::FuncdataStablenamesExt;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -112,8 +112,8 @@ const ROLE_NAMES: &[&str] = &[
 const FOLD_DEPTH: usize = 4;
 
 /// Evidence kinds, strongest first: the value a library call returns, a loop
-/// counter ([`crate::kuna_contextnames`]), a library argument named for what
-/// it is, a structure field ([`crate::kuna_flownames`]), a role name, the
+/// counter ([`crate::contextnames`]), a library argument named for what
+/// it is, a structure field ([`crate::flownames`]), a role name, the
 /// value the function returns, and the local's type.
 const RET: u8 = 0;
 #[doc(hidden)]
@@ -330,7 +330,7 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
     let shown = fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_libcnames::LibcNames>()
+        .get::<crate::libcnames::LibcNames>()
         .0;
     let mut note = |target: Target, high: HighVariableId, scalar: bool, e: Evidence| {
         found
@@ -401,18 +401,18 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
     if fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_contextnames::ContextNames>()
+        .get::<crate::contextnames::ContextNames>()
         .0
     {
-        crate::kuna_contextnames::evidence(fd, &mut context);
+        crate::contextnames::evidence(fd, &mut context);
     }
     if fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_flownames::FlowNames>()
+        .get::<crate::flownames::FlowNames>()
         .0
     {
-        crate::kuna_flownames::evidence(fd, &mut context);
+        crate::flownames::evidence(fd, &mut context);
     }
     {
         for (high, evidence) in context {
@@ -534,18 +534,12 @@ pub struct LibraryAlias {
 /// (a naming record is being taken or replayed).
 pub fn candidates(fd: &mut Funcdata) -> Vec<Candidate> {
     let arch = fd.get_arch();
-    if !arch
-        .kuna_options
-        .get::<crate::kuna_libcnames::LibcNames>()
-        .0
+    if !arch.kuna_options.get::<crate::libcnames::LibcNames>().0
         && !arch
             .kuna_options
-            .get::<crate::kuna_contextnames::ContextNames>()
+            .get::<crate::contextnames::ContextNames>()
             .0
-        && !arch
-            .kuna_options
-            .get::<crate::kuna_flownames::FlowNames>()
-            .0
+        && !arch.kuna_options.get::<crate::flownames::FlowNames>().0
         && !fd.kuna_record_names()
         && fd.kuna_prior_names().is_empty()
     {
@@ -622,14 +616,14 @@ pub fn apply(fd: &mut Funcdata, candidates: &[Candidate]) {
                 .map(|s| s.name.clone()),
         };
         let Some(number) = number else { continue };
-        let Some(index) = crate::kuna_stablenames::default_name_index(&number, angr) else {
+        let Some(index) = crate::stablenames::default_name_index(&number, angr) else {
             continue;
         };
         if out.iter().any(|a| a.number == number) || chosen(fd, &prior, &number) {
             continue;
         }
         let before = match c.target {
-            Target::Local(high) => crate::kuna_stablenames::best(fd, high).unwrap_or(index),
+            Target::Local(high) => crate::stablenames::best(fd, high).unwrap_or(index),
             Target::Object(_) => index,
         };
         let alias = match prior.aliases.get(&before) {
@@ -674,7 +668,7 @@ pub fn apply(fd: &mut Funcdata, candidates: &[Candidate]) {
 /// Did a directive or the binary choose `name`, though it is shaped like a
 /// number (`name fd v9`, a DWARF local `v1`): a rename gave it, or a
 /// name-locked Symbol of the scope holds it. Such a local keeps it.
-fn chosen(fd: &Funcdata, prior: &crate::kuna_stablenames::PriorNames, name: &str) -> bool {
+fn chosen(fd: &Funcdata, prior: &crate::stablenames::PriorNames, name: &str) -> bool {
     prior.renames.values().any(|given| given == name)
         || prior.given.contains(name)
         || fd.get_scope_local().is_some_and(|lm| {
@@ -706,7 +700,7 @@ pub fn shown_number(fd: &Funcdata, high: HighVariableId) -> Option<&str> {
 
 crate::kuna_flag!(
     /// (kuna `libcnames`) Name locals from the library calls they meet.
-    /// See [`crate::kuna_libcnames`].
+    /// See [`crate::libcnames`].
     LibcNames,
     "libcnames",
     "library-call local names",
@@ -717,23 +711,23 @@ crate::kuna_flag!(
 /// (kuna `libcnames`) The library names the naming pass gave numbered locals, kept across
 /// `Funcdata::clear`.
 #[derive(Default)]
-struct AliasSlot(Vec<crate::kuna_libcnames::LibraryAlias>);
+struct AliasSlot(Vec<crate::libcnames::LibraryAlias>);
 crate::kuna_func_state!(AliasSlot, keep_across_clear: true);
 
 /// The `kuna_libcnames` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataLibcnamesExt {
     /// (kuna `libcnames`) The library names the naming pass gave numbered locals.
-    fn kuna_library_aliases(&self) -> &[crate::kuna_libcnames::LibraryAlias];
-    fn set_kuna_library_aliases(&mut self, aliases: Vec<crate::kuna_libcnames::LibraryAlias>);
+    fn kuna_library_aliases(&self) -> &[crate::libcnames::LibraryAlias];
+    fn set_kuna_library_aliases(&mut self, aliases: Vec<crate::libcnames::LibraryAlias>);
 }
 
 impl FuncdataLibcnamesExt for crate::funcdata::Funcdata {
     /// (kuna `libcnames`) The library names the naming pass gave numbered locals.
-    fn kuna_library_aliases(&self) -> &[crate::kuna_libcnames::LibraryAlias] {
+    fn kuna_library_aliases(&self) -> &[crate::libcnames::LibraryAlias] {
         &self.kuna_state::<AliasSlot>().0
     }
-    fn set_kuna_library_aliases(&mut self, aliases: Vec<crate::kuna_libcnames::LibraryAlias>) {
+    fn set_kuna_library_aliases(&mut self, aliases: Vec<crate::libcnames::LibraryAlias>) {
         self.kuna_state_mut::<AliasSlot>().0 = aliases;
     }
 }

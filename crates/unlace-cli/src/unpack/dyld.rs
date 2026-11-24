@@ -9,7 +9,7 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-use unlace_analysis::loader::kuna_dyldcache::{DyldCache, read_selected_image};
+use unlace_analysis::loader::dyldcache::{DyldCache, read_selected_image};
 
 use crate::jsonfmt::{Json, dumps_indent2};
 
@@ -43,7 +43,7 @@ pub(super) fn run(binary: &str, output: Option<&str>, list: bool, json: bool) ->
             return 1;
         }
     };
-    let mut name = unlace_base::env::var(unlace_decomp::kuna_dyldcache::DYLDIMAGE_ENV)
+    let mut name = unlace_base::env::var(unlace_decomp::dyldcache::DYLDIMAGE_ENV)
         .unwrap_or_default()
         .trim()
         .to_string();

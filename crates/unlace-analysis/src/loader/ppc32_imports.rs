@@ -7,11 +7,11 @@ use object::{
     RelocationTarget, SectionFlags, SectionKind, SymbolKind,
 };
 use std::collections::{BTreeMap, HashSet};
-use unlace_decomp::kuna_ppc32piccalls::{Stub, stub};
+use unlace_decomp::ppc32piccalls::{Stub, stub};
 
 /// Relocation slots for caller-local PIC recovery. These are data, not executable
 /// function symbols; no r30-relative stub receives a global identity.
-pub fn pic_slots(file: &object::File<'_>) -> Vec<unlace_decomp::kuna_ppc32piccalls::ImportSlot> {
+pub fn pic_slots(file: &object::File<'_>) -> Vec<unlace_decomp::ppc32piccalls::ImportSlot> {
     let (bss, slots) = slots(file);
     if bss {
         return Vec::new();
@@ -20,7 +20,7 @@ pub fn pic_slots(file: &object::File<'_>) -> Vec<unlace_decomp::kuna_ppc32piccal
         .into_iter()
         .filter_map(|(address, name)| {
             let name = String::from_utf8(name).ok()?;
-            Some(unlace_decomp::kuna_ppc32piccalls::ImportSlot {
+            Some(unlace_decomp::ppc32piccalls::ImportSlot {
                 address,
                 no_return: super::noreturn::elf_name_is_noreturn(&name),
                 name,
@@ -112,7 +112,7 @@ pub fn resolve_with_pic_abi(file: &object::File<'_>) -> Vec<super::format::Impor
 }
 
 pub(super) fn resolve(file: &object::File<'_>) -> Vec<PltSym> {
-    resolve_impl(file, unlace_decomp::kuna_ppc32picimports::abi_enabled())
+    resolve_impl(file, unlace_decomp::ppc32picimports::abi_enabled())
 }
 
 fn resolve_impl(file: &object::File<'_>, prove_pic: bool) -> Vec<PltSym> {
@@ -142,7 +142,7 @@ fn resolve_impl(file: &object::File<'_>, prove_pic: bool) -> Vec<PltSym> {
         })
         .collect();
     if prove_pic {
-        out.extend(super::kuna_ppc32picimports::resolve(file, &slots, &out));
+        out.extend(super::ppc32picimports::resolve(file, &slots, &out));
     }
     out
 }

@@ -64,7 +64,7 @@ const CONSTANTS: &[(&str, f64, usize)] = &[
 /// the unit tests' string literals.
 #[test]
 fn the_fixture_carries_all_four_spellings_and_each_decodes() {
-    use unlace_analysis::loader::kuna_msvcfpconst::decode;
+    use unlace_analysis::loader::msvcfpconst::decode;
     for (name, want, size) in CONSTANTS {
         let c = decode(name).unwrap_or_else(|| panic!("{name} must decode"));
         assert_eq!(c.size, *size, "{name} storage width");

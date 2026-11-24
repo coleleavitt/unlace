@@ -12,7 +12,7 @@
 //! nothing in the emitted C would show it.
 
 use super::classt;
-use super::kuna_objcrefs::section_slots;
+use super::objcrefs::section_slots;
 use super::sections::MachoImage;
 
 const SEC_CATLIST: &str = "__objc_catlist";
@@ -145,7 +145,7 @@ mod tests {
         let bytes = std::fs::read(path).expect("read fixture");
         for size in [0x0800_0000_0000_0000u64, u64::MAX] {
             let patched =
-                super::super::kuna_objcrefs::with_section_size(bytes.clone(), SEC_CATLIST, size);
+                super::super::objcrefs::with_section_size(bytes.clone(), SEC_CATLIST, size);
             let file = object::File::parse(patched.as_slice()).expect("parse Mach-O");
             let img = MachoImage::with_fixups(&file, resolve_chained_fixups(&file, &patched));
             assert!(categories(&img, &file).len() <= 2, "size {size:#x}");

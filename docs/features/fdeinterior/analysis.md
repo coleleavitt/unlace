@@ -90,7 +90,7 @@ stripped. So:
 
 > a discovered entry that falls **strictly inside** an FDE body is not a function.
 
-`kuna_fdeinterior.rs` reuses `scan_eh_frame_starts`'s record walk and additionally
+`fdeinterior.rs` reuses `scan_eh_frame_starts`'s record walk and additionally
 decodes `pcRange` - the field immediately after `pcBegin`, in the CIE's `R`
 encoding but as a *length*, so it is decoded with the encoding's format bits only
 and never its pc-relative application. The commit filters the **fully merged**

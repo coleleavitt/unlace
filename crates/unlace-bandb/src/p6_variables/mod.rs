@@ -4,17 +4,17 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod coreaction_cleanup;
-pub mod kuna_fputruncviews;
-pub mod kuna_globalorder;
-pub mod kuna_loadorder;
-pub mod kuna_savedregisterspills;
-pub mod kuna_stackalias;
-pub mod kuna_stackloadcover;
-pub mod kuna_stackvalueorder;
+pub mod fputruncviews;
+pub mod globalorder;
+pub mod loadorder;
+pub mod savedregisterspills;
+pub mod stackalias;
+pub mod stackloadcover;
+pub mod stackvalueorder;
 
 #[cfg(test)]
-mod kuna_calltransport_tests;
+mod calltransport_tests;
 #[cfg(test)]
-mod kuna_nulterminator_tests;
+mod nulterminator_tests;
 #[cfg(test)]
-mod kuna_registerepochs_tests;
+mod registerepochs_tests;

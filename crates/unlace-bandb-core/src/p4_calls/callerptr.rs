@@ -17,12 +17,12 @@
 //! type where every pointer they pass is the same type, and `void *` where they
 //! differ. The statement is `calleevote`'s: it is decided over the same closed
 //! caller set and taken through the same vote, so the callee's own uses still
-//! refuse it (`kuna_protoorder::input_refuses` -- an integer operation on the
+//! refuse it (`protoorder::input_refuses` -- an integer operation on the
 //! value, a load or store the pointee does not cover, a family member that is
 //! declared, global or frame memory).
 
-use crate::kuna_calleevote::FuncdataCalleevoteExt;
-use crate::kuna_fasthash::FxHashSet;
+use crate::calleevote::FuncdataCalleevoteExt;
+use crate::fasthash::FxHashSet;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
@@ -30,10 +30,10 @@ use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
 use crate::architecture::Architecture;
+use crate::calleevote::{CallSite, Typed, committed, same_type, trace};
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_calleevote::{CallSite, Typed, committed, same_type, trace};
 
 /// How far [`dereferenced`] follows a value through copies and literal offsets.
 const HOP_CAP: usize = 10;
@@ -41,13 +41,10 @@ const HOP_CAP: usize = 10;
 /// The target's `void *`, or `None` when nothing is decided: the option or
 /// `calleevote` is off.
 pub fn void_pointer(arch: &Architecture) -> Option<Rc<Datatype>> {
-    if !arch
-        .kuna_options
-        .get::<crate::kuna_callerptr::CallerPtr>()
-        .0
+    if !arch.kuna_options.get::<crate::callerptr::CallerPtr>().0
         || !arch
             .kuna_options
-            .get::<crate::kuna_calleevote::CalleeVoteMode>()
+            .get::<crate::calleevote::CalleeVoteMode>()
             .is_on()
     {
         return None;
@@ -116,7 +113,7 @@ pub fn pointer_vote(
 }
 
 /// Does anything the callee does with its input `vn` outrank the callers'
-/// pointer `ct`? `calleevote`'s refusals ([`crate::kuna_protoorder::input_refuses`]),
+/// pointer `ct`? `calleevote`'s refusals ([`crate::protoorder::input_refuses`]),
 /// except that a call the value is handed to speaks only through a declared
 /// prototype: another recovery's integer for the same slot says no more than
 /// "a pointer-width value", and a function that converts the pointer it holds
@@ -126,8 +123,8 @@ pub fn pointer_vote(
 /// `uintptr_t`).
 #[doc(hidden)]
 pub fn refuses(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
-    crate::kuna_protoorder::input_refuses_declared(data, vn, ct)
-        || masks_a_derived_address(data, &crate::kuna_protoorder::value_family(data, vn))
+    crate::protoorder::input_refuses_declared(data, vn, ct)
+        || masks_a_derived_address(data, &crate::protoorder::value_family(data, vn))
 }
 
 /// Does the callee derive an address from a member of `family` by a literal
@@ -350,7 +347,7 @@ fn dereferenced(data: &Funcdata, family: &[VarnodeId]) -> bool {
 
 /// Is `v` a string literal: a constant, or the engine's `PTRSUB` off the
 /// constant zero, that resolves to a character array kuna recovered
-/// (`kuna_charptr::constant_is_string`)? Any other constant is a number as
+/// (`charptr::constant_is_string`)? Any other constant is a number as
 /// often as an address -- `0x2000` is a buffer size and the address of
 /// `.init` -- so it proves nothing.
 fn addresses_a_string(data: &Funcdata, v: VarnodeId) -> bool {
@@ -373,7 +370,7 @@ fn addresses_a_string(data: &Funcdata, v: VarnodeId) -> bool {
         (def, base)
     };
     match (reader, constant) {
-        (Some(op), Some(c)) => crate::kuna_charptr::constant_is_string(data, op, c),
+        (Some(op), Some(c)) => crate::charptr::constant_is_string(data, op, c),
         _ => false,
     }
 }

@@ -1,6 +1,6 @@
 //! Preserve full VFP parameter/return storage when the ARM container states that ABI.
-use crate::kuna_passthrough::FuncdataPassthroughExt;
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::passthrough::FuncdataPassthroughExt;
+use crate::protoorder::FuncdataProtoorderExt;
 use crate::{
     architecture::Architecture,
     context::VarnodeId,
@@ -37,15 +37,15 @@ pub fn park_float_library_prototypes(arch: &mut Architecture) {
         return;
     }
     let pending = std::mem::take(&mut arch.arm_float_library_prototypes);
-    if !applies(arch) && crate::kuna_typedcallabi::image_evidence(arch) != Some(false) {
+    if !applies(arch) && crate::typedcallabi::image_evidence(arch) != Some(false) {
         let withheld = arch
             .kuna_tables
-            .get_mut::<unlace_lift::kuna_honestgaps::WithheldPrototypes>();
+            .get_mut::<unlace_lift::honestgaps::WithheldPrototypes>();
         for (at, pieces) in &pending {
             withheld.record(
                 at.as_ref().map(|a| a.get_offset()),
                 &pieces.name,
-                unlace_lift::kuna_honestgaps::WithheldCause::FloatConvention,
+                unlace_lift::honestgaps::WithheldCause::FloatConvention,
             );
         }
         return;
@@ -205,7 +205,7 @@ pub fn closed_recovery<'a>(
     arch: &Architecture,
     pieces: &'a PrototypePieces,
 ) -> Cow<'a, PrototypePieces> {
-    if applies(arch) || crate::kuna_armfloatargs::applies(arch) {
+    if applies(arch) || crate::armfloatargs::applies(arch) {
         Cow::Owned(PrototypePieces {
             first_var_arg_slot: -1,
             ..pieces.clone()
@@ -915,7 +915,7 @@ pub fn unlock_unspelled(data: &mut Funcdata) {
     if !forwards_core
         && returned
             .iter()
-            .all(|&vn| crate::kuna_floatreg::spells_exactly(data, vn))
+            .all(|&vn| crate::floatreg::spells_exactly(data, vn))
     {
         return;
     }
@@ -969,7 +969,7 @@ fn unspelled_constants(
         return false;
     };
     if value.is_constant() {
-        if !crate::kuna_floatreg::spells(data, vn) && !out.contains(&vn) {
+        if !crate::floatreg::spells(data, vn) && !out.contains(&vn) {
             out.push(vn);
         }
         return true;
@@ -1204,8 +1204,8 @@ pub fn call_input_allowed(
         })
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.armfloatreturn_declared_helper_model = Some(declared_helper_model);
     hooks.armfloatreturn_applies = Some(applies);
     hooks.armfloatreturn_base_pcs_helper = Some(base_pcs_helper);
@@ -1217,7 +1217,7 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ArmFloatReturn(pub bool);
 
-impl crate::kuna_optionset::KunaOption for ArmFloatReturn {
+impl crate::optionset::KunaOption for ArmFloatReturn {
     const NAME: &'static str = "armfloatreturn";
     crate::kuna_option_id!();
 

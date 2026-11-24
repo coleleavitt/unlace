@@ -33,7 +33,7 @@
 //! survives every header check the loader applies: a denial of analysis for the
 //! price of a few `.strtab` bytes, on the same
 //! `read_loader_symbols`-inside-`load file` seam that
-//! [`crate::kuna_symbolnamerepair`] (GH-335) covers for a *different* mechanism
+//! [`crate::symbolnamerepair`] (GH-335) covers for a *different* mechanism
 //! (a rejected name, not an unbounded one).
 //!
 //! ## What the bound does

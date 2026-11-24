@@ -3,13 +3,13 @@
 //!
 //! # The structural gap
 //!
-//! [`ActionIteRegion`](crate::kuna_iteregion::ActionIteRegion) and
-//! [`ActionIteBoolean`](crate::kuna_iteboolean::ActionIteBoolean) both
+//! [`ActionIteRegion`](crate::iteregion::ActionIteRegion) and
+//! [`ActionIteBoolean`](crate::iteboolean::ActionIteBoolean) both
 //! require the condition component of the 3-component
 //! [`BlockIf`](crate::block::BlockType::If) to bottom out in a single leaf — a lone
 //! `CBRANCH`-terminated basic block, or (for `iteboolean`) a folded
 //! [`BlockCondition`](crate::block::BlockType::Condition).  Their shared helper
-//! [`leaf_bblock`](crate::kuna_iteregion::leaf_bblock) descends a
+//! [`leaf_bblock`](crate::iteregion::leaf_bblock) descends a
 //! `BlockList` of **one** component but returns `None` for a list of two or more.
 //!
 //! That bail is what makes kuna re-roll only **every other** diamond in a run of

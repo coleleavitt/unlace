@@ -17,9 +17,9 @@ use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::Translate;
 
-use super::kuna_poolref::PoolImage;
-use super::kuna_switchtable::{DEFAULT_MAX_ENTRIES, Key, MIN_ENTRIES, is_constant, key_of};
 use super::model::FlowKind;
+use super::poolref::PoolImage;
+use super::switchtable::{DEFAULT_MAX_ENTRIES, Key, MIN_ENTRIES, is_constant, key_of};
 use super::walk::WalkState;
 use super::xrefs::{FullCapture, FullOp, decode};
 
@@ -116,7 +116,7 @@ struct CandidateBudget {
 
 impl CandidateBudget {
     fn new(state: &WalkState) -> Option<Self> {
-        let limit = unlace_decomp::kuna_hostmem::available()
+        let limit = unlace_decomp::hostmem::available()
             .map_or(128 * 1024 * 1024, |available| available.bytes / 4)
             .min(MAX_CANDIDATE_BYTES);
         let initial_bytes = (state.insns.len() as u64)
@@ -130,7 +130,7 @@ impl CandidateBudget {
         (initial_bytes <= limit).then(|| Self {
             original_insns: state.insns.len(),
             initial_bytes,
-            resident: unlace_decomp::kuna_hostmem::resident_bytes(),
+            resident: unlace_decomp::hostmem::resident_bytes(),
             limit,
         })
     }
@@ -144,7 +144,7 @@ impl CandidateBudget {
         if used > self.limit {
             return false;
         }
-        match (self.resident, unlace_decomp::kuna_hostmem::resident_bytes()) {
+        match (self.resident, unlace_decomp::hostmem::resident_bytes()) {
             (Some(before), Some(now)) => now.saturating_sub(before) <= self.limit,
             _ => true,
         }
@@ -354,7 +354,7 @@ impl<'a> X86Tables<'a> {
         {
             return None;
         }
-        let cases = super::kuna_switchtable::targets(
+        let cases = super::switchtable::targets(
             base,
             dispatch,
             &self.pool,
@@ -418,7 +418,7 @@ impl<'a> X86Tables<'a> {
         {
             return None;
         }
-        let cases = super::kuna_switchtable::targets(
+        let cases = super::switchtable::targets(
             base,
             dispatch,
             &self.pool,

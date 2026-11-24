@@ -115,5 +115,5 @@ pub fn declares_from_high(fd: &Funcdata, high: HighVariableId) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_declhightype/tests.rs"]
+#[path = "declhightype/tests.rs"]
 mod tests;

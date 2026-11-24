@@ -120,7 +120,7 @@ The seam is `build_input_from_trials`, immediately after
 `kuna_calleearity::unify_with_sibling_call` — not `check_input_trial_use`, where
 the trials are not yet sorted or entry-assigned and "trailing" is not computable
 (`active.sort_trials()` runs at the tail of `fillin_map_standard`). Shipped as
-`p4_calls/kuna_argclobber.rs`, option **`argclobber`, default off**, with eight
+`p4_calls/argclobber.rs`, option **`argclobber`, default off**, with eight
 clauses:
 
 1. **register trial, `is_ind_create_formed()`** — the upstream return-side test,

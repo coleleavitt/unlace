@@ -378,7 +378,7 @@ fn deadcode_sweep_stops_once_the_budget_is_spent() {
     assert_eq!(swept.obank().iter_alive().count(), 0);
 
     let mut cut_off = fd_with_a_dead_copy();
-    let _drive = crate::kuna_budget::DeadlineScope::enter(Some(std::time::Instant::now()));
+    let _drive = crate::budget::DeadlineScope::enter(Some(std::time::Instant::now()));
     deadcode_apply(&mut cut_off);
     assert_eq!(cut_off.obank().iter_alive().count(), 1);
 }

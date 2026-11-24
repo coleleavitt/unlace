@@ -10,7 +10,7 @@ that post-hoc proxy is the first number below.
 
 ## 1. The predicate
 
-`p8_structure/kuna_orchain.rs (shortcircuit_shared_targets)` is a read-only replay of
+`p8_structure/orchain.rs (shortcircuit_shared_targets)` is a read-only replay of
 `CollapseStructure::collapse_conditions` on the **bblocks** CFG, run inside
 `returndup_apply` before the first `node_split`. It mirrors `rule_block_or`'s own
 admission test rather than approximating it. A *condition node* starts as one basic

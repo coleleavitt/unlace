@@ -7,7 +7,7 @@
 //! normal way out of the body. They compile `try { body } finally { F }` to the
 //! body under a catch-all whose handler is `move-exception e; F; throw e`, with
 //! a copy of F where each protected range ends. Both are read here from the
-//! instruction bytes and the try table; `printc/kuna_javasyncprint.rs` prints
+//! instruction bytes and the try table; `printc/javasyncprint.rs` prints
 //! the `try` the handler opens as `synchronized (x) { }` or with a
 //! `finally { }` clause and leaves out what the idiom stands for: the monitor
 //! operations, or the copies of F and the rethrow.
@@ -19,8 +19,8 @@
 
 use std::collections::BTreeMap;
 
+use crate::dex::{DexModel, TryBlock};
 use crate::funcdata::Funcdata;
-use crate::kuna_dex::{DexModel, TryBlock};
 
 crate::kuna_flag!(
     /// (kuna) Print a DEX catch-all that releases a monitor as `synchronized`
@@ -240,9 +240,8 @@ fn finally(
             next >= end
                 && starts(code, end, next).is_some_and(|list| {
                     list.iter().all(|&a| {
-                        op_at(code, a).is_some_and(|(op, _)| {
-                            straight(op) && !crate::kuna_javatry::can_throw(op)
-                        })
+                        op_at(code, a)
+                            .is_some_and(|(op, _)| straight(op) && !crate::javatry::can_throw(op))
                     })
                 })
         });
@@ -325,7 +324,7 @@ pub fn method_idioms(data: &Funcdata) -> BTreeMap<u64, JavaIdiom> {
             }
         }
     }
-    let blocks = crate::kuna_javatry::canonical_blocks(model, entry);
+    let blocks = crate::javatry::canonical_blocks(model, entry);
     idioms(model, (entry, code_end), &blocks)
 }
 

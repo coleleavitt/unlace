@@ -40,18 +40,18 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_decodekit::{EngineRecipe, build_decode_engine_traced};
-use unlace_decomp::kuna_hostmem::peak_resident_bytes;
-use unlace_sleigh::kuna_ctxsnapshot::{ContextValueSnapshot, snapshot_context};
-use unlace_sleigh::kuna_sharedbytes::UnmappedTripwire;
+use unlace_decomp::decodekit::{EngineRecipe, build_decode_engine_traced};
+use unlace_decomp::hostmem::peak_resident_bytes;
+use unlace_sleigh::ctxsnapshot::{ContextValueSnapshot, snapshot_context};
 use unlace_sleigh::loadimage::ImageBytes;
+use unlace_sleigh::sharedbytes::UnmappedTripwire;
 use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::Translate;
 
 use super::ListingDetail;
 use super::context::ContextPainter;
 use super::decode::decode_one;
-use super::kuna_insnstore::InstructionStore;
+use super::insnstore::InstructionStore;
 use super::model::{DiscoveredFunction, Insn, InsnLite, Mnemonic, MnemonicPool, Reference};
 use super::walk::{
     self, CallbackEvidence, CallbackSink, InsnSink, RefCollector, StepCtx, Successors, WalkPolicy,
@@ -1321,8 +1321,8 @@ pub(super) fn compare(parallel: &WalkState, serial: &WalkState) -> usize {
         }
     }
 
-    let left = super::kuna_compactrefs::ReferenceIndex::new(parallel.refs.clone());
-    let right = super::kuna_compactrefs::ReferenceIndex::new(serial.refs.clone());
+    let left = super::compactrefs::ReferenceIndex::new(parallel.refs.clone());
+    let right = super::compactrefs::ReferenceIndex::new(serial.refs.clone());
     for (edge, in_lanes) in left.differences(&right) {
         let side = if in_lanes { "lanes" } else { "serial walk" };
         report(format!(
@@ -1516,7 +1516,7 @@ mod tests {
         for &(from, to, kind) in &edges {
             single.file(from, to, kind);
         }
-        let want = super::super::kuna_compactrefs::ReferenceIndex::new(single.into_edges());
+        let want = super::super::compactrefs::ReferenceIndex::new(single.into_edges());
 
         // ...against three shards that each filed a slice of it.
         let mut shards: Vec<IntervalState> = (0..3).map(|_| IntervalState::new(true)).collect();
@@ -1524,13 +1524,13 @@ mod tests {
             shards[i % 3].refs.file(from, to, kind);
         }
         let (st, _) = reconcile(shards, &[], &BTreeMap::new()).expect("no collision");
-        let got = super::super::kuna_compactrefs::ReferenceIndex::new(st.refs);
+        let got = super::super::compactrefs::ReferenceIndex::new(st.refs);
         assert_eq!(got, want);
     }
 
     #[test]
     fn callback_evidence_survives_the_split_and_the_cap() {
-        let cap = super::super::kuna_callbackentry::MAX_CALLBACK_EVIDENCE;
+        let cap = super::super::callbackentry::MAX_CALLBACK_EVIDENCE;
         let count = cap + 64;
         // One walk that saw every site.
         let mut want = CallbackEvidence::default();

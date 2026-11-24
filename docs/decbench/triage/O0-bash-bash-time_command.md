@@ -151,7 +151,7 @@ plus constant 0/1 arms back into a boolean expression:
   This bail is *correct at the IR level*: hoisting the guarded operand out of the
   branch would evaluate `command->flags` when `command == 0`. The short-circuit
   must stay in the CFG; only C's own `&&`/`||` can express it.
-- P8 `iteregion` (`p8_structure/kuna_iteregion.rs`) is the pass that does collapse
+- P8 `iteregion` (`p8_structure/iteregion.rs`) is the pass that does collapse
   a two-arm assignment diamond after structuring, but `cond_cbranch()` /
   `leaf_bblock()` require the condition component to reduce to a single
   `Basic`/`Copy` leaf ending in the CBRANCH. Here the condition component is the
@@ -189,7 +189,7 @@ matcher with a boolean-assignment case, behind a new option (`iteboolean`,
 default-off until an ablation earns the flip — same judgment-call category as
 `iteregion`/DIV-17, since the source may genuinely have written the `if/else`):
 
-1. In `match_ite_assignment` (`p8_structure/kuna_iteregion.rs`), accept a
+1. In `match_ite_assignment` (`p8_structure/iteregion.rs`), accept a
    condition component of `BlockType::Condition` (the folded `&&`/`||` chain), not
    only a single-CBRANCH leaf. The condition is already printed as a C expression
    inside the `if (...)` today, so it is renderable as an r-value unchanged.
@@ -202,7 +202,7 @@ default-off until an ablation earns the flip — same judgment-call category as
 3. Printer: reuse `PrintC::emit_block_if`'s existing `kuna_iteregion` path in
    `p9_emit/printc.rs`; this is the same print-only marking, no p-code mutation.
 
-**Owning files.** `decompiler/crates/unlace-decomp/src/p8_structure/kuna_iteregion.rs`,
+**Owning files.** `decompiler/crates/unlace-decomp/src/p8_structure/iteregion.rs`,
 `src/p9_emit/printc.rs`, `phases.toml` + `p0_knowledge/options.rs` (new settable
 row + the hard-coded catalog counts), `docs/spec/08-structuring.md` (the
 `iteregion` section) and `docs/spec/09-emission.md`, plus a two-pass

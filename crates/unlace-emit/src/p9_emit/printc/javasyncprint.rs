@@ -1,7 +1,7 @@
 //! (kuna `javasync`) Printing a `try` whose catch-all is a `synchronized`
 //! block's monitor release or a `finally` clause.
 //!
-//! `p2_lift/kuna_javasync.rs` reads the idiom of each catch-all handler from
+//! `p2_lift/javasync.rs` reads the idiom of each catch-all handler from
 //! the DEX code. A `try` whose one clause is a monitor release prints as
 //! `synchronized (x) { }`. The `monitorEnter(x)` it stands for ends the list
 //! element before the `try`, which prints first, so a list about to print
@@ -17,7 +17,7 @@ use unlace_num::opcodes::OpCode;
 use super::{Architecture, Funcdata, OpId, PrintC};
 use crate::block::BlockType;
 use crate::context::BlockId;
-use crate::kuna_javasync::JavaIdiom;
+use crate::javasync::JavaIdiom;
 use crate::prettyprint::{Emit, SyntaxHighlight};
 
 /// How a `try` statement prints under `javasync`.

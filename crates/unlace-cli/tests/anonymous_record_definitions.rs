@@ -5,7 +5,7 @@ use common::process;
 use std::{collections::HashSet, process::Command, rc::Rc};
 use unlace_console::grammar::{DataOrg, parse_c};
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeFactoryImpl, type_metatype as Meta};
-use unlace_decomp::kuna_langtypes::SpellCtx;
+use unlace_decomp::langtypes::SpellCtx;
 
 #[test]
 fn nested_anonymous_members_compile() {
@@ -141,7 +141,7 @@ fn definitions(ty: &Rc<Datatype>, seen: &mut HashSet<*const Datatype>, text: &mu
         definitions(&field.field_type, seen, text);
         i += 1;
     }
-    if unlace_decomp::kuna_structdefs::is_definable(ty) {
+    if unlace_decomp::structdefs::is_definable(ty) {
         if ty.get_typedef().is_none() {
             let keyword = match ty.get_metatype() {
                 Meta::TYPE_STRUCT => Some("struct"),
@@ -152,7 +152,7 @@ fn definitions(ty: &Rc<Datatype>, seen: &mut HashSet<*const Datatype>, text: &mu
                 text.push_str(&format!("typedef {keyword} {0} {0};\n", ty.get_name()));
             }
         }
-        text.push_str(&unlace_decomp::kuna_structdefs::definition_text(
+        text.push_str(&unlace_decomp::structdefs::definition_text(
             ty,
             SpellCtx::OFF,
         ));

@@ -15,11 +15,11 @@ use std::path::PathBuf;
 use unlace_base::address::Address;
 use unlace_console::assertions::{self, Body, Directive};
 use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
-use unlace_console::kuna_retcallchain::{
+use unlace_console::project::decompile_targets;
+use unlace_console::retcallchain::{
     CHAIN_MAX_INSNS, CHAIN_MAX_SITES, kuna_chain_sites, kuna_entry_chain_sites,
     kuna_push_immediate_ret,
 };
-use unlace_console::project::decompile_targets;
 
 /// `chain_entry`, and the `ret` of each of its three links.
 const CHAIN_ENTRY: u64 = 0x0804_900e;

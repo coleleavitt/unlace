@@ -38,7 +38,7 @@ pub(super) fn collect(file: &object::File<'_>, symbols: &[(u64, Option<String>)]
                 }
                 let offset = usize::try_from(address.checked_sub(section.address())?).ok()?;
                 let bytes = section.data().ok()?.get(offset..offset.checked_add(18)?)?;
-                unlace_decomp::kuna_rustfmtstr::forwarded_target(address, bytes)
+                unlace_decomp::rustfmtstr::forwarded_target(address, bytes)
             })?;
             (names.get(&target) == Some(&"core::fmt::Formatter::pad")).then_some(address)
         })

@@ -931,5 +931,5 @@ fn write(field: &mut [u8], le: bool, value: u64) {
 }
 
 #[cfg(test)]
-#[path = "kuna_mipsreloc_tests.rs"]
+#[path = "mipsreloc_tests.rs"]
 mod tests;

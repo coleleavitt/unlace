@@ -42,7 +42,7 @@ use object::{Object, ObjectSection, ObjectSymbol};
 
 use super::descriptors::{Context, ContextKind, Metadata, MethodKind, Target};
 use crate::objc::sections::MachoImage;
-use crate::objc::{classt, kuna_objcprops, methods};
+use crate::objc::{classt, methods, objcprops};
 
 /// The longest thunk body scanned. A bridging thunk retains, converts and
 /// releases each argument around one call; none comes near this.
@@ -328,10 +328,10 @@ fn swift_class(
     for (ro, class_method) in [(Some(class.ro), false), (meta, true)] {
         let Some(ro) = ro else { continue };
         for (name, attrs) in classt::base_properties(img, ro)
-            .map(|l| kuna_objcprops::properties(img, l))
+            .map(|l| objcprops::properties(img, l))
             .unwrap_or_default()
         {
-            let mut sels = kuna_objcprops::from_attributes(&name, &attrs)
+            let mut sels = objcprops::from_attributes(&name, &attrs)
                 .into_iter()
                 .map(|(s, _)| s);
             if let Some(getter) = sels.next() {

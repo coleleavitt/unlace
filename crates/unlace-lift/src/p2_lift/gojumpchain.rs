@@ -46,9 +46,9 @@ fn follow(data: &Funcdata, mut block: BlockId) -> (BlockId, Vec<BlockId>) {
 }
 
 fn barrier_forwarders(data: &Funcdata) -> Option<Vec<BlockId>> {
-    if !(0..data.num_calls()).any(|i| {
-        crate::kuna_gowritebarrier::is_write_barrier_name(data.get_call_specs(i).get_name())
-    }) {
+    if !(0..data.num_calls())
+        .any(|i| crate::gowritebarrier::is_write_barrier_name(data.get_call_specs(i).get_name()))
+    {
         return None;
     }
     for index in 0..data.bblocks_get_size() {
@@ -85,7 +85,7 @@ fn barrier_forwarders(data: &Funcdata) -> Option<Vec<BlockId>> {
                 })
                 .collect();
             if calls.len() != 1
-                || !crate::kuna_gowritebarrier::is_write_barrier_name(calls[0].get_name())
+                || !crate::gowritebarrier::is_write_barrier_name(calls[0].get_name())
             {
                 continue;
             }
@@ -128,9 +128,9 @@ impl Action for ActionGoJumpChain {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data.get_arch().source_lang.is_go()
-            || data.is_settled(crate::kuna_maturity::Fact::Ssa)
+            || data.is_settled(crate::maturity::Fact::Ssa)
             || data.num_calls() == 0
-            || !crate::kuna_gowritebarrier::live(data)
+            || !crate::gowritebarrier::live(data)
         {
             return 0;
         }

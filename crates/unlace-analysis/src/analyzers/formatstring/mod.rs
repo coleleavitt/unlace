@@ -64,9 +64,9 @@
 
 pub mod apply;
 
-pub mod kuna_fmtstatic;
+pub mod fmtstatic;
 
-pub mod kuna_fmtcallee;
+pub mod fmtcallee;
 
 use std::rc::Rc;
 

@@ -25,7 +25,7 @@
     },
     {
       "what": "the matcher is MOVED, not duplicated",
-      "detail": "kuna_stringinv.rs already carried `scan_utf16_run` for `kuna strings --encoding utf16`, and its module docs already named this exact defect ('the L\"ntdll.dll\" argument of LoadLibraryW stops at the NUL after n'). It moved into the new kuna_widestrings.rs and both callers now use it, so the inventory a user reads and the markup the engine commits stay one scan rather than two that can drift."
+      "detail": "stringinv.rs already carried `scan_utf16_run` for `kuna strings --encoding utf16`, and its module docs already named this exact defect ('the L\"ntdll.dll\" argument of LoadLibraryW stops at the NUL after n'). It moved into the new widestrings.rs and both callers now use it, so the inventory a user reads and the markup the engine commits stay one scan rather than two that can drift."
     },
     {
       "what": "the 1-byte arm's failure mode is preserved exactly",

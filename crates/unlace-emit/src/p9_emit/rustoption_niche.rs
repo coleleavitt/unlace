@@ -9,7 +9,7 @@ fn complete(ty: &Datatype, meta: type_metatype) -> bool {
     ty.get_metatype() == meta
         && ty.get_size() == 8
         && !ty.is_incomplete()
-        && !crate::kuna_typequal::is_volatile(ty)
+        && !crate::typequal::is_volatile(ty)
 }
 
 fn reference_layout(arch: &Architecture, ty: &Datatype) -> Option<()> {
@@ -113,8 +113,8 @@ impl PrintC {
         if name.is_empty()
             || name.contains("::")
             || matches!(name.as_str(), "_" | "self" | "Self" | "super" | "crate")
-            || crate::kuna_rustuserop::raw_keyword(&name)
-            || crate::kuna_rusttypes::sanitize_path(&name) != name
+            || crate::rustuserop::raw_keyword(&name)
+            || crate::rusttypes::sanitize_path(&name) != name
         {
             return None;
         }
@@ -189,7 +189,7 @@ impl PrintC {
         arch: &Architecture,
         branch: OpId,
     ) -> Option<(String, VarnodeId, OpId, bool)> {
-        if self.out_lang != crate::kuna_lang::OutLang::Rust
+        if self.out_lang != crate::lang::OutLang::Rust
             || !arch.source_lang().is_rust()
             || !arch.archid.starts_with("x86:LE:64:")
         {

@@ -1,4 +1,4 @@
-//! (kuna `msvcsig`) The MSVC arm of [`super::kuna_cppsig`]: read everything an
+//! (kuna `msvcsig`) The MSVC arm of [`super::cppsig`]: read everything an
 //! MSVC-mangled name declares, and apply it to the defined functions AND the PE
 //! imports that carry one.
 //!
@@ -56,13 +56,13 @@ use object::{Architecture, BinaryFormat};
 use unlace_base::types::{int4, uint4};
 use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
-use unlace_decomp::kuna_msvcbyval::{Builder, ByvalDecl};
+use unlace_decomp::msvcbyval::{Builder, ByvalDecl};
 
-use super::demangle_raw;
-use super::kuna_cppsig::{
+use super::cppsig::{
     is_identifier, last_token, primitive_type, split_params, split_top_level, strip_qualifier_word,
     strip_template_args,
 };
+use super::demangle_raw;
 use crate::pass::{AnalysisCtx, CppSigFacts};
 
 /// An MSVC calling convention this arm can name a prototype model for.

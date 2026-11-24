@@ -11,7 +11,7 @@ admission is sealed MIPS only; ARM remains an unchanged refusal control.
 ## Decision and initial scope
 
 Add `callwide off|on`, initially default off, owned by one P4 module,
-`kuna-decomp/src/p4_calls/kuna_callwide.rs`. With `callwide on` and
+`kuna-decomp/src/p4_calls/callwide.rs`. With `callwide on` and
 `bejoin evidence`, a complete proof may retain both output words and give a
 producer and all its calls one ABI-order eight-byte integer representation.
 `callwide off` preserves current output. Existing `bejoin off` and `bejoin on`
@@ -218,7 +218,7 @@ Paths below are relative to `decompiler/crates/`.
 
 | Area | Change |
 |---|---|
-| `kuna-decomp/src/p4_calls/kuna_callwide.rs` (new) | bounded proof, MIPS admission, immutable verdict and refusal reasons |
+| `kuna-decomp/src/p4_calls/callwide.rs` (new) | bounded proof, MIPS admission, immutable verdict and refusal reasons |
 | `kuna-decomp/src/p4_calls/kuna_bejoin{,/evidence}.rs` | combine source-specific verdicts; consistent joins and high-only reads |
 | `kuna-decomp/src/p4_calls/coreaction_protos.rs` | narrow proven-pair retention hook before output-map derivation |
 | `kuna-decomp/src/infra/{architecture,decompile_drive}.rs`, `substrate/funcdata.rs` | dependency lifetime, per-drive views and restart seeding |

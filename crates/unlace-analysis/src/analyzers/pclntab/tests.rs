@@ -1145,7 +1145,7 @@ fn wiped_magic_table_is_read_from_moduledata() {
             "{ver:?}: the wiped header no longer parses"
         );
         let (vma, got) =
-            kuna_gomoduledata::scan(&img, data_vma, &data, 8, End::Little).expect("record found");
+            gomoduledata::scan(&img, data_vma, &data, 8, End::Little).expect("record found");
         assert_eq!((vma, got.ver), (table_vma, ver));
         assert_eq!(decode_functions(&img, &got), want, "{ver:?}");
         assert_eq!(functab_end(&img, &got), Some(text + 0x300), "{ver:?}");
@@ -1154,7 +1154,7 @@ fn wiped_magic_table_is_read_from_moduledata() {
         let off = data.len() - 24 * 8 + if ver == GoVer::Go12 { 11 } else { 21 } * 8;
         data[off..off + 8].copy_from_slice(&(text + 0x2f0).to_le_bytes());
         assert!(
-            kuna_gomoduledata::scan(&img, data_vma, &data, 8, End::Little).is_none(),
+            gomoduledata::scan(&img, data_vma, &data, 8, End::Little).is_none(),
             "{ver:?}"
         );
     }

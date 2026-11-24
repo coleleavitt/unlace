@@ -329,5 +329,5 @@ pub fn const_signed(data: &Funcdata, vn: Option<VarnodeId>) -> Option<int4> {
 }
 
 #[cfg(test)]
-#[path = "kuna_calleepop/tests.rs"]
+#[path = "calleepop/tests.rs"]
 mod tests;

@@ -58,11 +58,11 @@
 
 use unlace_base::types::int4;
 
-pub use crate::kuna_specnames::CORTEXMPRIV_USEROP as USEROP_NAME;
+pub use crate::specnames::CORTEXMPRIV_USEROP as USEROP_NAME;
 
-pub use crate::kuna_specnames::CORTEXMPRIV_OUTPUT as OUTPUT_NAME;
+pub use crate::specnames::CORTEXMPRIV_OUTPUT as OUTPUT_NAME;
 
-pub use crate::kuna_specnames::CORTEXMPRIV_SNIPPET as SNIPPET;
+pub use crate::specnames::CORTEXMPRIV_SNIPPET as SNIPPET;
 
 /// Whether `injectid` is the payload this module registered, given the id parked
 /// on the architecture at bootstrap. Used by the consumption gate so that

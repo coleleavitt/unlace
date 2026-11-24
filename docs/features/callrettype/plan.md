@@ -2,13 +2,13 @@
 
 ## The seams
 
-- `p4_calls/kuna_callrettype.rs (record)`: after a function's final decompile
+- `p4_calls/callrettype.rs (record)`: after a function's final decompile
   in callee-first order (`kuna-console` `project.rs`, where
   `park_recovered_proto` is set), keep its recovered return (storage, width,
   type) when it has no declared prototype, the type is a pointer, an integer
   wider than a byte or a float, and every live RETURN hands back a computed
   value (`kuna_returnuncomputed::every_return_computes_with`, globals count).
-- `p4_calls/kuna_callrettype.rs (seed)`: copy the statements for every callee
+- `p4_calls/callrettype.rs (seed)`: copy the statements for every callee
   onto the caller's `Funcdata` at `protoorder`'s two seed points, minus the
   ones `refuse` withdrew for this caller; also the loader's data ranges.
 - `p5_types/coreaction_infertypes.rs (call_output_type_local)`: an unlocked

@@ -30,7 +30,7 @@ pub const DEFAULT_LIMIT: u64 = 1 << 20;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RetSplitLimit(pub Option<u64>);
 
-impl crate::kuna_optionset::KunaOption for RetSplitLimit {
+impl crate::optionset::KunaOption for RetSplitLimit {
     const NAME: &'static str = "retsplitlimit";
     crate::kuna_option_id!();
 
@@ -81,16 +81,12 @@ pub fn split_is_declined(limit: Option<u64>, ops: usize, edges: usize) -> bool {
 }
 
 /// [`split_is_declined`] under the run's [`RetSplitLimit`].
-fn declined_by_option(
-    options: &crate::kuna_optionset::OptionSet,
-    ops: usize,
-    edges: usize,
-) -> bool {
+fn declined_by_option(options: &crate::optionset::OptionSet, ops: usize, edges: usize) -> bool {
     split_is_declined(options.get::<RetSplitLimit>().0, ops, edges)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.retsplitlimit_split_is_declined = Some(declined_by_option);
 }
 

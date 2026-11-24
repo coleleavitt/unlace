@@ -269,7 +269,7 @@ fn mips_fp_any_does_not_conflict_with_concrete_declarations() {
                     format!("MIPS:{endian}:64:{suffix}:o32").as_bytes()
                 );
                 let file = object::File::parse(bytes.as_slice()).unwrap();
-                assert_eq!(super::kuna_floatabi::float_arg_registers(&file), carrier);
+                assert_eq!(super::floatabi::float_arg_registers(&file), carrier);
             }
         }
         let bytes = mips_float_image(
@@ -294,7 +294,7 @@ fn processor_specific_profiles_are_not_selected_as_generic_mips() {
         for machine in [0x008b_0000, 0x008d_0000, 0x008e_0000] {
             let bytes = image(Architecture::Mips, little, 0x8000_0020 | machine);
             let file = object::File::parse(bytes.as_slice()).unwrap();
-            assert_eq!(super::kuna_mipstarget::language_id(&file).unwrap(), None);
+            assert_eq!(super::mipstarget::language_id(&file).unwrap(), None);
         }
         for extension in [2u32, 3, 5, 19] {
             let mut record = mips_fp_record(2, 3);
@@ -305,7 +305,7 @@ fn processor_specific_profiles_are_not_selected_as_generic_mips() {
             });
             let bytes = mips_float_image(little, 0x8000_0020, &[(b".MIPS.abiflags", record)]);
             let file = object::File::parse(bytes.as_slice()).unwrap();
-            assert_eq!(super::kuna_mipstarget::language_id(&file).unwrap(), None);
+            assert_eq!(super::mipstarget::language_id(&file).unwrap(), None);
         }
     }
 }
@@ -376,7 +376,7 @@ fn segment_only_abi_records_select_fpr_width_and_exclude_processor_extensions() 
                 format!("MIPS:{endian}:64:{variant}:o32").as_bytes()
             );
             let file = object::File::parse(bytes.as_slice()).unwrap();
-            assert_eq!(super::kuna_floatabi::float_arg_registers(&file), Some(true));
+            assert_eq!(super::floatabi::float_arg_registers(&file), Some(true));
         }
         let mut record = mips_fp_record(2, 3);
         record[8..12].copy_from_slice(&if little {
@@ -386,7 +386,7 @@ fn segment_only_abi_records_select_fpr_width_and_exclude_processor_extensions() 
         });
         let bytes = mips_segment_image(little, &[record]);
         let file = object::File::parse(bytes.as_slice()).unwrap();
-        assert_eq!(super::kuna_mipstarget::language_id(&file).unwrap(), None);
+        assert_eq!(super::mipstarget::language_id(&file).unwrap(), None);
     }
 }
 

@@ -53,10 +53,10 @@
 pub mod build;
 pub mod db;
 pub mod extent;
+pub mod fidapply;
+pub mod fidproto;
+mod fidstrict;
 pub mod hash;
-pub mod kuna_fidapply;
-pub mod kuna_fidproto;
-mod kuna_fidstrict;
 pub mod skipper;
 
 use std::rc::Rc;
@@ -73,7 +73,7 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, FidProtoF
 /// kept out of the per-decompilation `--option` surface in v1 (a real `--fidb
 /// <path>` flag is deferred, `docs/history/fid-design.md` §7.2). Absent / empty ⇒ the pass
 /// is inert (no DB to match against).
-pub const FID_DB_ENV: &str = unlace_decomp::kuna_loadoptions::FID_DB_ENV;
+pub const FID_DB_ENV: &str = unlace_decomp::loadoptions::FID_DB_ENV;
 
 /// The FID matching consumer pass — the kuna analog of Ghidra's FID identification
 /// analyzer (`FidServiceImpl` over the function-id query service), the third
@@ -109,7 +109,7 @@ impl AnalysisPass for FidPass {
         let Some(path) = fid_db_path() else {
             return out;
         };
-        let (report, db) = kuna_fidapply::open(&path, ctx.arch);
+        let (report, db) = fidapply::open(&path, ctx.arch);
         out.fid_databases.push(report);
         let Some(db) = db else {
             return out;
@@ -118,9 +118,9 @@ impl AnalysisPass for FidPass {
         let chunks = ctx
             .arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Funcchunks>()
+            .get::<unlace_decomp::analysisgates::Funcchunks>()
             .0
-            .then(|| crate::listing::kuna_funcchunks::ChunkModel::build(listing));
+            .then(|| crate::listing::funcchunks::ChunkModel::build(listing));
         for (&entry, _) in listing.functions() {
             let Ok(quad) = fingerprint_function_in(listing, ctx.arch, entry, chunks.as_ref())
             else {
@@ -130,7 +130,7 @@ impl AnalysisPass for FidPass {
             let Some(name) = pick_unique_name(records, &quad) else {
                 continue;
             };
-            if let Some(record) = kuna_fidproto::pick(records, &quad) {
+            if let Some(record) = fidproto::pick(records, &quad) {
                 out.fid_prototypes.push(FidProtoFact {
                     addr: entry,
                     name: name.clone(),
@@ -146,9 +146,9 @@ impl AnalysisPass for FidPass {
             if ctx
                 .arch
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .get::<unlace_decomp::analysisgates::Fid>()
                 .strict
-                && !kuna_fidstrict::supports_rename(records, &quad)
+                && !fidstrict::supports_rename(records, &quad)
             {
                 out.signature_vetoes.push(fact);
             } else {
@@ -163,7 +163,7 @@ impl AnalysisPass for FidPass {
 /// The `.fid` database the load names: `LoadOptions::fid_db`, else
 /// [`FID_DB_ENV`]. `None` when neither names one.
 fn fid_db_path() -> Option<std::path::PathBuf> {
-    use unlace_decomp::kuna_loadoptions::{env, scoped};
+    use unlace_decomp::loadoptions::{env, scoped};
     scoped(|o| o.fid_db.clone()).unwrap_or_else(env::fid_db)
 }
 
@@ -176,9 +176,9 @@ pub fn fingerprint_function(
 ) -> Result<FidHashQuad, &'static str> {
     let chunks = arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Funcchunks>()
+        .get::<unlace_decomp::analysisgates::Funcchunks>()
         .0
-        .then(|| crate::listing::kuna_funcchunks::ChunkModel::build(listing));
+        .then(|| crate::listing::funcchunks::ChunkModel::build(listing));
     fingerprint_function_in(listing, arch, entry, chunks.as_ref())
 }
 
@@ -188,7 +188,7 @@ pub fn fingerprint_function_in(
     listing: &crate::listing::Listing,
     arch: &unlace_decomp::architecture::Architecture,
     entry: u64,
-    chunks: Option<&crate::listing::kuna_funcchunks::ChunkModel>,
+    chunks: Option<&crate::listing::funcchunks::ChunkModel>,
 ) -> Result<FidHashQuad, &'static str> {
     let extent = match chunks {
         Some(model) => extent::chunk_extent(listing, model, entry),

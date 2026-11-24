@@ -70,45 +70,45 @@ fn kuna_anchor_flags_default_to_div_values() {
     // DIV-2/DIV-3 default-on (architecture.cc:1430-1451).
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_memsetsequence::MemsetRecover>()
+            .get::<crate::memsetsequence::MemsetRecover>()
             .0
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_arraystride::RecoverArrayStride>()
+            .get::<crate::arraystride::RecoverArrayStride>()
             .0
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_loweredswitch::LoweredSwitchMode>()
+            .get::<crate::loweredswitch::LoweredSwitchMode>()
             .enabled()
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_coreoptions::NameStyleAngr>()
+            .get::<crate::coreoptions::NameStyleAngr>()
             .0
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_compareform::PresentLessequal>()
+            .get::<crate::compareform::PresentLessequal>()
             .0
     );
     // (kuna) signedness ships `auto` -- a declaration is re-signed when every
     // signedness-sensitive reader of the value agrees.
     assert_eq!(
-        arch.kuna_options.get::<crate::kuna_typeround::SignPolicy>(),
-        crate::kuna_typeround::SignPolicy::Auto
+        arch.kuna_options.get::<crate::typeround::SignPolicy>(),
+        crate::typeround::SignPolicy::Auto
     );
     // (kuna) DIV-13 default-on sweep: the 10 angr structuring/switch flags are now
     // default-on (per-test opt-out keeps the datatest/stage corpora at parity).
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_tailcalljump::TailCallJump>()
+            .get::<crate::tailcalljump::TailCallJump>()
             .jumps
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_tailcalljump::TailCallJump>()
+            .get::<crate::tailcalljump::TailCallJump>()
             .tables
     );
     assert!(
@@ -122,28 +122,27 @@ fn kuna_anchor_flags_default_to_div_values() {
             .0
     );
     assert_eq!(
-        arch.kuna_options
-            .get::<crate::kuna_gotoreduce::GotoReduceMode>(),
-        crate::kuna_gotoreduce::GotoReduceMode::On
+        arch.kuna_options.get::<crate::gotoreduce::GotoReduceMode>(),
+        crate::gotoreduce::GotoReduceMode::On
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_ifelseflatten::FlattenIfelse>()
+            .get::<crate::ifelseflatten::FlattenIfelse>()
             .0
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_crossjumpreverter::RevertCrossJumps>()
+            .get::<crate::crossjumpreverter::RevertCrossJumps>()
             .0
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_dedupitetail::DedupIteTail>()
+            .get::<crate::dedupitetail::DedupIteTail>()
             .0
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_callretfold::FoldCallReturns>()
+            .get::<crate::callretfold::FoldCallReturns>()
             .0
     );
     // (kuna) foldcallretphi default-on (docs/features/foldcallretphi/flip.md).
@@ -154,12 +153,12 @@ fn kuna_anchor_flags_default_to_div_values() {
     // parity; noreturn_propagate is Listing-gated so it is inert on every gate.
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_stackguard::StripStackGuard>()
+            .get::<crate::stackguard::StripStackGuard>()
             .0
     ); // stackguard (REMOVES CODE)
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_analysisgates::NoreturnPropagate>()
+            .get::<crate::analysisgates::NoreturnPropagate>()
             .0
     ); // noreturn_propagate (REMOVES CODE, Listing-gated)
     assert!(
@@ -169,21 +168,16 @@ fn kuna_anchor_flags_default_to_div_values() {
     ); // switchsharedcase
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_sparcstructret::SparcStructReturn>()
+            .get::<crate::sparcstructret::SparcStructReturn>()
             .0
     ); // sparcstructret (SPARC-gated)
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_v850indbranch::V850IndirectBranch>()
+            .get::<crate::v850indbranch::V850IndirectBranch>()
             .0
     ); // v850indirectbranch (V850-gated)
     // default-off (upstream byte-identical).
-    assert!(
-        !arch
-            .kuna_options
-            .get::<crate::kuna_returnpair::ReturnSingle>()
-            .0
-    );
+    assert!(!arch.kuna_options.get::<crate::returnpair::ReturnSingle>().0);
     assert!(
         !arch
             .kuna_options
@@ -204,14 +198,14 @@ fn reset_defaults_is_idempotent_after_mutation() {
     let mut arch = Architecture::new("t", bare_sleigh());
     arch.max_instructions = 7;
     arch.kuna_options
-        .set(crate::kuna_typeround::SignPolicy::Upstream);
+        .set(crate::typeround::SignPolicy::Upstream);
     arch.reset_defaults();
     assert_eq!(arch.max_instructions, 100000);
     // (kuna) `signedness` ships `auto`: the struct literal holds the inert
     // `Upstream` arm, so only reset_defaults puts the shipped value in place.
     assert_eq!(
-        arch.kuna_options.get::<crate::kuna_typeround::SignPolicy>(),
-        crate::kuna_typeround::SignPolicy::Auto
+        arch.kuna_options.get::<crate::typeround::SignPolicy>(),
+        crate::typeround::SignPolicy::Auto
     );
 }
 
@@ -219,20 +213,15 @@ fn reset_defaults_is_idempotent_after_mutation() {
 fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
     let mut arch = Architecture::new("test:LE:32", bare_sleigh());
     // Off-by-default under the shipped defaults.
-    assert!(
-        !arch
-            .kuna_options
-            .get::<crate::kuna_analysisgates::Listing>()
-            .0
-    );
+    assert!(!arch.kuna_options.get::<crate::analysisgates::Listing>().0);
     assert_eq!(
-        arch.kuna_options.get::<crate::kuna_aif::AifMode>(),
-        crate::kuna_aif::AifMode::Off
+        arch.kuna_options.get::<crate::aif::AifMode>(),
+        crate::aif::AifMode::Off
     );
     assert!(
         !arch
             .kuna_options
-            .get::<crate::kuna_analysisgates::FastFuncdisc>()
+            .get::<crate::analysisgates::FastFuncdisc>()
             .0
     );
     assert!(
@@ -244,7 +233,7 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
     assert!(
         !arch
             .kuna_options
-            .get::<crate::kuna_analysisgates::DwarfLines>()
+            .get::<crate::analysisgates::DwarfLines>()
             .0
     );
 
@@ -252,18 +241,14 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
         .expect("aggressive mode applies");
 
     // Representative aggressive members turned on.
-    assert!(
-        arch.kuna_options
-            .get::<crate::kuna_analysisgates::Listing>()
-            .0
-    );
+    assert!(arch.kuna_options.get::<crate::analysisgates::Listing>().0);
     assert_eq!(
-        arch.kuna_options.get::<crate::kuna_aif::AifMode>(),
-        crate::kuna_aif::AifMode::Strict
+        arch.kuna_options.get::<crate::aif::AifMode>(),
+        crate::aif::AifMode::Strict
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_analysisgates::FastFuncdisc>()
+            .get::<crate::analysisgates::FastFuncdisc>()
             .0
     );
     assert!(
@@ -275,17 +260,17 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
     // preset re-enables it after an earlier `--option returndup off`.
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_returndup::ReturnDup>()
+            .get::<crate::returndup::ReturnDup>()
             .shared
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_sparcstructret::SparcStructReturn>()
+            .get::<crate::sparcstructret::SparcStructReturn>()
             .0
     ); // SPARC-idiom-gated, safe to enable
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_v850indbranch::V850IndirectBranch>()
+            .get::<crate::v850indbranch::V850IndirectBranch>()
             .0
     ); // V850-gated, listed so the preset owns it
     // The exclusion: annotates every statement of a `-g` binary with a
@@ -293,7 +278,7 @@ fn apply_mode_aggressive_flips_offdefault_flags_but_not_dwarf_lines() {
     assert!(
         !arch
             .kuna_options
-            .get::<crate::kuna_analysisgates::DwarfLines>()
+            .get::<crate::analysisgates::DwarfLines>()
             .0
     );
 }
@@ -304,19 +289,14 @@ fn apply_mode_reliable_is_a_no_op() {
     arch.apply_mode("reliable").expect("reliable mode applies");
     // reliable == shipped defaults: nothing off-default gets flipped, and nothing
     // on-default gets cleared.
-    assert!(
-        !arch
-            .kuna_options
-            .get::<crate::kuna_analysisgates::Listing>()
-            .0
-    );
+    assert!(!arch.kuna_options.get::<crate::analysisgates::Listing>().0);
     assert_eq!(
-        arch.kuna_options.get::<crate::kuna_aif::AifMode>(),
-        crate::kuna_aif::AifMode::Off
+        arch.kuna_options.get::<crate::aif::AifMode>(),
+        crate::aif::AifMode::Off
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_returndup::ReturnDup>()
+            .get::<crate::returndup::ReturnDup>()
             .shared
     ); // DIV-54 shipped default survives
 }
@@ -324,38 +304,32 @@ fn apply_mode_reliable_is_a_no_op() {
 #[test]
 fn apply_mode_fast_replaces_exhaustive_with_bounded_discovery() {
     let mut arch = Architecture::new("test:LE:32", bare_sleigh());
+    arch.kuna_options.set(crate::analysisgates::Listing(true));
     arch.kuna_options
-        .set(crate::kuna_analysisgates::Listing(true));
-    arch.kuna_options
-        .set(crate::kuna_analysisgates::FuncstartPatterns(true));
-    arch.kuna_options.set(crate::kuna_aif::AifMode::Strict);
+        .set(crate::analysisgates::FuncstartPatterns(true));
+    arch.kuna_options.set(crate::aif::AifMode::Strict);
 
     arch.apply_mode("fast").expect("fast mode applies");
 
+    assert!(!arch.kuna_options.get::<crate::analysisgates::Listing>().0);
     assert!(
         !arch
             .kuna_options
-            .get::<crate::kuna_analysisgates::Listing>()
-            .0
-    );
-    assert!(
-        !arch
-            .kuna_options
-            .get::<crate::kuna_analysisgates::FuncstartPatterns>()
+            .get::<crate::analysisgates::FuncstartPatterns>()
             .0
     );
     assert_eq!(
-        arch.kuna_options.get::<crate::kuna_aif::AifMode>(),
-        crate::kuna_aif::AifMode::Off
+        arch.kuna_options.get::<crate::aif::AifMode>(),
+        crate::aif::AifMode::Off
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_analysisgates::FastFuncdisc>()
+            .get::<crate::analysisgates::FastFuncdisc>()
             .0
     );
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_analysisgates::NoreturnPropagate>()
+            .get::<crate::analysisgates::NoreturnPropagate>()
             .0
     );
     assert!(

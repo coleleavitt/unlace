@@ -70,10 +70,10 @@ use unlace_decomp::inject_sleigh::SleighPayload;
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
-pub mod kuna_armgscookiesig;
-pub mod kuna_msvcarithsig;
-pub mod kuna_msvcftolsig;
-pub mod kuna_thumb1casesig;
+pub mod armgscookiesig;
+pub mod msvcarithsig;
+pub mod msvcftolsig;
+pub mod thumb1casesig;
 
 /// Prefix Ghidra strips from a conflicting library-imported function name before
 /// the target-map probe (`CallFixupAnalyzer.java:207-209`,
@@ -118,29 +118,26 @@ fn fixup_map(arch: &Architecture, gated: bool) -> Vec<(String, String)> {
             continue;
         };
         if gated
-            && fixup_name.starts_with(unlace_decomp::kuna_arithhelpers::FIXUP_PREFIX)
+            && fixup_name.starts_with(unlace_decomp::arithhelpers::FIXUP_PREFIX)
             && !arch
                 .kuna_options
-                .get::<unlace_decomp::kuna_arithhelpers::ArithHelpers>()
+                .get::<unlace_decomp::arithhelpers::ArithHelpers>()
                 .0
         {
             continue;
         }
         if gated
-            && fixup_name.starts_with(unlace_decomp::kuna_aeabifloat::FIXUP_PREFIX)
+            && fixup_name.starts_with(unlace_decomp::aeabifloat::FIXUP_PREFIX)
             && !arch
                 .kuna_options
-                .get::<unlace_decomp::kuna_aeabifloat::AeabiFloat>()
+                .get::<unlace_decomp::aeabifloat::AeabiFloat>()
                 .0
         {
             continue;
         }
         if gated
-            && fixup_name.starts_with(unlace_decomp::kuna_objcarc::FIXUP_PREFIX)
-            && !arch
-                .kuna_options
-                .get::<unlace_decomp::kuna_objcarc::ObjcArc>()
-                .0
+            && fixup_name.starts_with(unlace_decomp::objcarc::FIXUP_PREFIX)
+            && !arch.kuna_options.get::<unlace_decomp::objcarc::ObjcArc>().0
         {
             continue;
         }
@@ -261,10 +258,10 @@ impl AnalysisPass for CallFixupPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = scan_call_fixups(ctx.file, ctx.bytes, ctx.arch);
-        kuna_msvcftolsig::scan(ctx.file, &mut out);
-        kuna_msvcarithsig::scan(ctx.file, &mut out);
-        kuna_thumb1casesig::scan(ctx.file, &mut out);
-        kuna_armgscookiesig::scan(ctx.file, &mut out);
+        msvcftolsig::scan(ctx.file, &mut out);
+        msvcarithsig::scan(ctx.file, &mut out);
+        thumb1casesig::scan(ctx.file, &mut out);
+        armgscookiesig::scan(ctx.file, &mut out);
         out
     }
 }

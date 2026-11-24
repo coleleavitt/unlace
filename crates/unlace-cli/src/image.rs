@@ -1,7 +1,7 @@
 //! Shared object-file view, including Mach-O slice selection, the PE view of
 //! a TE image, and MZ refusal.
 
-use unlace_analysis::loader::kuna_kernelcache::FilesetMap;
+use unlace_analysis::loader::kernelcache::FilesetMap;
 use unlace_analysis::loader::macho_fat::SlicePref;
 
 /// Inspect a thin Mach-O through its mapping; retain legacy reads for other inputs.
@@ -74,13 +74,13 @@ pub(crate) fn image_bytes_and_repairs(
 /// the `retroimage` formats).
 fn object_view(binary: &str, bytes: Vec<u8>) -> Result<Vec<u8>, String> {
     if unlace_analysis::loadimage_te::is_te_image(&bytes) {
-        return unlace_analysis::loader::kuna_objectview::te_as_pe(&bytes)
+        return unlace_analysis::loader::objectview::te_as_pe(&bytes)
             .ok_or_else(|| format!("{binary}: UEFI TE section table does not fit the file"));
     }
     if unlace_analysis::loadimage_mz::is_mz_dos_image(&bytes) {
         return Err(mz_object_view_error(binary));
     }
-    if unlace_analysis::loader::kuna_retroimage::is_retro_image(&bytes) {
+    if unlace_analysis::loader::retroimage::is_retro_image(&bytes) {
         return Err(retro_object_view_error(binary));
     }
     if unlace_analysis::loadimage_wasm::is_wasm_module(&bytes) {
@@ -220,10 +220,8 @@ impl RawFlags {
         let base = self.base.unwrap_or(0);
         let entry = self.entries.first().copied().unwrap_or(base);
         let language = target.unwrap_or_default();
-        let view = unlace_analysis::loader::kuna_objectview::raw_as_elf(
-            &bytes, base, entry, language,
-        )
-        .ok_or_else(|| {
+        let view = unlace_analysis::loader::objectview::raw_as_elf(&bytes, base, entry, language)
+            .ok_or_else(|| {
             format!(
                 "{binary}: --target {language:?} does not name a processor:endian:size language"
             )

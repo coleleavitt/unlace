@@ -20,7 +20,7 @@
   ],
   "tests": {
     "stages": "tests/stages/tailcallframe.xml (two-pass, 4 assertions; 605 -> 609)",
-    "unit": "decompiler/crates/kuna-decomp/src/p2_lift/kuna_tailcallframe/tests.rs (10 tests)",
+    "unit": "decompiler/crates/kuna-decomp/src/p2_lift/tailcallframe/tests.rs (10 tests)",
     "e2e": "decompiler/crates/kuna-console/tests/verify_tailcallframe.rs (3 tests, real ELF)",
     "cli_probe": "tests/cli/direct-address-keyboard-handler.json (in-repo twin of the dataset acceptance)"
   },

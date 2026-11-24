@@ -17,7 +17,7 @@
   "div": null,
   "scope": "small",
   "files": [
-    "decompiler/crates/kuna-analysis/src/listing/kuna_picpool.rs",
+    "decompiler/crates/kuna-analysis/src/listing/picpool.rs",
     "decompiler/crates/kuna-analysis/src/listing/xrefs.rs",
     "decompiler/crates/kuna-analysis/src/listing/mod.rs",
     "decompiler/crates/kuna-analysis/tests/fixtures/picpool_arm_le32",

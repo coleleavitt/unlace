@@ -23,7 +23,7 @@ use crate::{
     dtype::{TypeFactory, type_class, type_metatype},
     fspec::{FuncProto, ProtoModel, PrototypePieces},
     funcdata::Funcdata,
-    kuna_narrowext::Widen,
+    narrowext::Widen,
 };
 use std::rc::Rc;
 use unlace_base::{
@@ -43,7 +43,7 @@ pub fn image_evidence(arch: &Architecture) -> Option<bool> {
     if x86_or_aarch64(arch) {
         return Some(true);
     }
-    if let Some(hard) = crate::kuna_octeonid::hard_float(&arch.archid) {
+    if let Some(hard) = crate::octeonid::hard_float(&arch.archid) {
         return Some(hard);
     }
     arch.translate()
@@ -124,7 +124,7 @@ pub fn without_fpu(arch: &Architecture) -> bool {
 /// `r0:r1`, and its callers hold that as a 64-bit integer. A hard-float ARM
 /// image under `armfloatreturn` returns it whole in `d0`.
 pub fn returns_doubles_whole(arch: &Architecture) -> bool {
-    x86_or_aarch64(arch) || crate::kuna_armfloatreturn::applies(arch)
+    x86_or_aarch64(arch) || crate::armfloatreturn::applies(arch)
 }
 
 /// Does `pieces` declare a `float` or `double` parameter or return value?
@@ -142,12 +142,12 @@ pub fn declares_a_float(pieces: &PrototypePieces) -> bool {
 /// when the default model would put a parameter or the return value of `pieces`
 /// in its floating-point registers; the default model with the base standard's
 /// variadic return rules for a variadic declaration on an ARM image that states
-/// the VFP variant ([`crate::kuna_vfpvariadic`]).
+/// the VFP variant ([`crate::vfpvariadic`]).
 pub fn undeclared_model(arch: &ArchContext, pieces: &PrototypePieces) -> Option<Rc<ProtoModel>> {
-    if arch.vfp_variadic && crate::kuna_vfpvariadic::moves_return(pieces) {
+    if arch.vfp_variadic && crate::vfpvariadic::moves_return(pieces) {
         return arch
             .variadic_declarations
-            .get_or_init(|| crate::kuna_vfpvariadic::model(arch.default_fp()?, arch.manage()))
+            .get_or_init(|| crate::vfpvariadic::model(arch.default_fp()?, arch.manage()))
             .clone();
     }
     let soft = arch.soft_float_declarations.as_ref()?;
@@ -165,8 +165,8 @@ pub fn undeclared_model_for(
     arch: &Architecture,
     pieces: &PrototypePieces,
 ) -> Option<Rc<ProtoModel>> {
-    if crate::kuna_vfpvariadic::moves_return(pieces) && crate::kuna_vfpvariadic::applies(arch) {
-        return crate::kuna_vfpvariadic::declarations(arch);
+    if crate::vfpvariadic::moves_return(pieces) && crate::vfpvariadic::applies(arch) {
+        return crate::vfpvariadic::declarations(arch);
     }
     if !may_use_float_storage(pieces) || !without_fpu(arch) {
         return None;
@@ -326,7 +326,7 @@ fn abi_extended_return(rule: Option<Widen>, proto: &FuncProto) -> bool {
     };
     let mut container = VarnodeData::default();
     let list = proto.model().output();
-    crate::kuna_narrowext::extension(
+    crate::narrowext::extension(
         rule,
         list,
         &output.get_address(),
@@ -381,8 +381,8 @@ fn rebuild(arch: &ArchContext, proto: &FuncProto) -> Option<Rc<FuncProto>> {
     Some(Rc::new(soft))
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.typedcallabi_caller_extends_from = Some(caller_extends_from);
     hooks.typedcallabi_image_evidence = Some(image_evidence);
     hooks.typedcallabi_soft_model = Some(soft_model);

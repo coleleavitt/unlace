@@ -41,10 +41,10 @@ pub fn guarded(data: &Funcdata, flags: uint4, addr: &Address) -> bool {
 /// system calls, the Octeon operations the mode selects, then the atomic
 /// builtins.
 pub fn memory_ops(data: &Funcdata) -> Vec<OpId> {
-    let mut ops = crate::kuna_syscallregs::memory_calls(data);
-    ops.extend(crate::kuna_x64syscall::memory_calls(data));
-    ops.extend(crate::kuna_octeoneffects::memory_ops(data));
-    ops.extend(crate::kuna_atomics::memory_ops(data));
+    let mut ops = crate::syscallregs::memory_calls(data);
+    ops.extend(crate::x64syscall::memory_calls(data));
+    ops.extend(crate::octeoneffects::memory_ops(data));
+    ops.extend(crate::atomics::memory_ops(data));
     ops
 }
 
@@ -98,7 +98,7 @@ fn guard(
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.memoryguard_guard_memory = Some(guard_memory);
 }

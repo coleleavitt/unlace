@@ -9,7 +9,7 @@ structure-recovery`, tier `transform`, default `off`. Registered in
 
 ## Code
 
-* `p5_types/kuna_structheadless.rs` -- the mode and option parse; `admits`
+* `p5_types/structheadless.rs` -- the mode and option parse; `admits`
   (a parameter of a closed function, under `closed`, that did not take the type
   its callers state); `is_headless` (two or more offsets, none zero);
   `yields_to_a_declared_pointer` (a callee's synthesized record does not replace
@@ -17,22 +17,22 @@ structure-recovery`, tier `transform`, default `off`. Registered in
   `gives_a_pointee`; `types_a_pointer_as_a_word` (a headless record typing a
   dereferenced member as a word is refused as a vote); `bare_pointer_for` (a
   refused headless record is offered again as `void *`).
-* `p4_calls/kuna_calleevote.rs` -- `uncommitted_under` / `decide_ledger_under`:
+* `p4_calls/calleevote.rs` -- `uncommitted_under` / `decide_ledger_under`:
   under `closed` a headless record is open to the callers' vote, for a type from
   outside the recovery only (`char *`, `char **`, a declared record), and
   `input_vote` lets such a statement replace it.
-* `p5_types/kuna_structsynth.rs` -- `accepts` computes `headless` (closed, the
+* `p5_types/structsynth.rs` -- `accepts` computes `headless` (closed, the
   pointee not given from outside, and no address formed past the accesses,
   `points_past`) and passes it to `accepts_record`, which waives the offset-0
   condition for it; `wants_settle_pass` asks for the extra propagation pass for a
   headless candidate as it does for a lone field; `points_at_synthesized_record`
   and `points_at_headless_record` for the call-site rules.
-* `p4_calls/kuna_protoorder.rs` -- `call_argument_vote` is split into the vote
+* `p4_calls/protoorder.rs` -- `call_argument_vote` is split into the vote
   and `vote_holds`, so the `void *` fallback is held to every refusal the record
   was; the declared-pointer rule is one more refusal there, and
   `pointee_refuses` refuses a headless record that types as a word a member the
   function loads and reads through.
-* `p5_types/kuna_structmerge.rs` -- doc only: a headless layout has no claim at
+* `p5_types/structmerge.rs` -- doc only: a headless layout has no claim at
   0, and the agreement floor is unchanged.
 
 ## Tests

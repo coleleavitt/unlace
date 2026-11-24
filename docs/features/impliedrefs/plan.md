@@ -2,7 +2,7 @@
 
 ## 1. The change
 
-One new module, `p6_variables/kuna_impliedrefs.rs`, holding the two option
+One new module, `p6_variables/impliedrefs.rs`, holding the two option
 parse bodies and the shared bound parser:
 
 ```rust
@@ -30,7 +30,7 @@ PTRSUB, so nothing above it can mean anything new.
 A three-or-more-valued option carries no `live_field`: the codegen live reader is
 a `flag ? live_true : live_false` ternary, which cannot express an integer. Both
 names therefore join the no-live-reader allow-list in
-`kuna_phases/tests.rs::option_values_live_value_present_for_85`, next to
+`phases/tests.rs::option_values_live_value_present_for_85`, next to
 `int3pad`, `warnstyle` and `namestyle`, and that count does not move.
 
 ## 3. Default identity

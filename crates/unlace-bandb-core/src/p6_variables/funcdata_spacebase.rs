@@ -19,7 +19,7 @@
 //! shared `Rc<AddrSpace>` and `VarnodeId` arena ids, and reaches the type
 //! factory through `glb.types()` (W6).  `uintb` is `u64` with wrapping ops.
 
-use crate::kuna_storereach::FuncdataStorereachExt;
+use crate::storereach::FuncdataStorereachExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -84,13 +84,13 @@ trait FuncdataSpacebaseLocalExt {
         space: &Rc<unlace_base::space::AddrSpace>,
         state: &mut crate::varmap::MapState,
         bounds: Option<&crate::varmap::ProtoBoundaries>,
-    ) -> Vec<super::kuna_arrayextent::OpenBase>;
+    ) -> Vec<super::arrayextent::OpenBase>;
     fn add_guard(
         &self,
         state: &mut crate::varmap::MapState,
         guard: &crate::heritage::LoadGuard,
         opc: OpCode,
-    ) -> Option<super::kuna_arrayextent::OpenBase>;
+    ) -> Option<super::arrayextent::OpenBase>;
     fn sync_varnodes_with_symbol(
         &mut self,
         group: &[VarnodeId],
@@ -444,7 +444,7 @@ impl FuncdataSpacebaseExt for Funcdata {
             for j in 0..numparam {
                 // (kuna) `msvcbyval`: a by-value slot a constructor builds is an
                 // object as well as an argument.
-                if crate::kuna_msvcbyval::keeps_slot_mapped(self, call_op, j) {
+                if crate::msvcbyval::keeps_slot_mapped(self, call_op, j) {
                     continue;
                 }
                 let (addr, psize) = {
@@ -680,36 +680,36 @@ impl FuncdataSpacebaseExt for Funcdata {
             None => Vec::new(),
         };
         state.gather_symbols(&hints);
-        crate::kuna_arrayextent::extend_unbounded(self, &mut state, &space, &unbounded);
+        crate::arrayextent::extend_unbounded(self, &mut state, &space, &unbounded);
 
-        super::kuna_callarrayextent::coalesce_delay_slot_init(self, &mut state, &space);
-        super::kuna_callarrayextent::coalesce(self, &mut state, &space);
-        crate::kuna_arraysize::gather(self, &mut state, &space);
+        super::callarrayextent::coalesce_delay_slot_init(self, &mut state, &space);
+        super::callarrayextent::coalesce(self, &mut state, &space);
+        crate::arraysize::gather(self, &mut state, &space);
 
         let reach_checks = match self.get_arch().types_rc() {
-            Some(t) => crate::kuna_storereach::prepare_hints(self, &mut state, &space, t.as_ref()),
+            Some(t) => crate::storereach::prepare_hints(self, &mut state, &space, t.as_ref()),
             None => Default::default(),
         };
 
         // (kuna) `endptrbound`: a stack pointer walk's `[start, end)` is one buffer.
-        let endptr_walks = crate::kuna_endptrbound::gather_walks(self, &space);
+        let endptr_walks = crate::endptrbound::gather_walks(self, &space);
         if let (false, Some(t)) = (endptr_walks.is_empty(), self.get_arch().types_rc()) {
-            crate::kuna_endptrbound::coalesce_hints(&mut state, &endptr_walks, &space, t.as_ref());
+            crate::endptrbound::coalesce_hints(&mut state, &endptr_walks, &space, t.as_ref());
         }
 
         if self
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_castobject::CastObject>()
+            .get::<crate::castobject::CastObject>()
             .0
         {
-            let declared = crate::kuna_castobject::declare_out_params(self, &mut state, &space);
+            let declared = crate::castobject::declare_out_params(self, &mut state, &space);
             self.record_cast_objects(declared);
         }
 
-        crate::kuna_stackviews::gather(self, &mut state, &space);
+        crate::stackviews::gather(self, &mut state, &space);
 
-        super::kuna_stackstruct::coalesce(self, &mut state, &space);
+        super::stackstruct::coalesce(self, &mut state, &space);
 
         // overlapProblems = restructure(state).  Clone the type factory `Rc` out
         // first so the &mut ScopeLocal borrow does not alias the &self arch read.
@@ -717,7 +717,7 @@ impl FuncdataSpacebaseExt for Funcdata {
         if let (Some(t), Some(lm)) = (types_rc, self.get_scope_local_mut()) {
             let _ = lm.restructure(&mut state, t.as_ref());
         }
-        let rebased = crate::kuna_endptrbound::rebase_bounds(self, &space, &endptr_walks);
+        let rebased = crate::endptrbound::rebase_bounds(self, &space, &endptr_walks);
         self.note_store_reach_checks(reach_checks);
 
         // C++ `restructureVarnode` tail (varmap.cc:1272-1285).  The unlocked-category
@@ -1092,7 +1092,7 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
             ));
         }
         self.record_frame_slots(slots);
-        crate::kuna_slotptr::record_pass(self, space);
+        crate::slotptr::record_pass(self, space);
     }
 
     /// The alias-overlap decision of C++ `ScopeLocal::checkUnaliasedReturn`
@@ -1196,7 +1196,7 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
                         && self
                             .get_arch()
                             .kuna_options
-                            .get::<crate::kuna_nulterminator::NulTerminator>()
+                            .get::<crate::nulterminator::NulTerminator>()
                             .0
                     {
                         let zero = in0
@@ -1357,11 +1357,11 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
         space: &Rc<unlace_base::space::AddrSpace>,
         state: &mut crate::varmap::MapState,
         bounds: Option<&crate::varmap::ProtoBoundaries>,
-    ) -> Vec<super::kuna_arrayextent::OpenBase> {
+    ) -> Vec<super::arrayextent::OpenBase> {
         let extent = self
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_arrayextent::ArrayExtent>()
+            .get::<crate::arrayextent::ArrayExtent>()
             .0;
         let mut unbounded = Vec::new();
         // checker.gather(&fd, spaceid, false): build the alias base/offset lists.
@@ -1405,34 +1405,27 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
                 }
             }
             if ct.as_ref().is_some_and(|c| c.get_size() == 0)
-                && crate::kuna_stablenames::holds_retype(self, base)
+                && crate::stablenames::holds_retype(self, base)
             {
-                match crate::kuna_stablenames::printed_pointee(self, base) {
+                match crate::stablenames::printed_pointee(self, base) {
                     Some(pointee) => ct = Some(pointee),
                     None => continue,
                 }
             }
-            crate::kuna_wrappedstackaggregate::map(
-                self,
-                space,
-                offset,
-                index.is_some(),
-                ct.as_ref(),
-            );
+            crate::wrappedstackaggregate::map(self, space, offset, index.is_some(), ct.as_ref());
             // If there is an index Varnode, assume at least the 4 values [0,3].
             let mut min_items = if index.is_some() { 3 } else { -1 };
-            if index.is_some() && extent >= super::kuna_arrayextent::LEVEL_BOUND {
+            if index.is_some() && extent >= super::arrayextent::LEVEL_BOUND {
                 let elem = ct
                     .as_ref()
                     .map(|c| c.get_align_size())
                     .filter(|&s| s > 0)
                     .unwrap_or(1);
-                let next = super::kuna_arrayextent::next_base(space, &base_offsets, offset);
-                match super::kuna_arrayextent::bounded_items(self, space, base, offset, next, elem)
-                {
+                let next = super::arrayextent::next_base(space, &base_offsets, offset);
+                match super::arrayextent::bounded_items(self, space, base, offset, next, elem) {
                     Some(items) => min_items = min_items.max(items - 1),
-                    None if extent >= super::kuna_arrayextent::LEVEL_ON => {
-                        unbounded.push(super::kuna_arrayextent::OpenBase {
+                    None if extent >= super::arrayextent::LEVEL_ON => {
+                        unbounded.push(super::arrayextent::OpenBase {
                             start: offset,
                             elem,
                         });
@@ -1446,7 +1439,7 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
         // heritage-recorded indexed LOAD/STORE guard contributes an open hint.
         // A guard only carries a bound once the ValueSet refinement has run
         // (`addGuard` bails on `step == 0`).
-        let follow = extent >= super::kuna_arrayextent::LEVEL_ON;
+        let follow = extent >= super::arrayextent::LEVEL_ON;
         let load_guards: Vec<crate::heritage::LoadGuard> = self.get_load_guards().to_vec();
         for guard in &load_guards {
             if let Some(base) = self.add_guard(state, guard, OpCode::CPUI_LOAD) {
@@ -1473,7 +1466,7 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
         state: &mut crate::varmap::MapState,
         guard: &crate::heritage::LoadGuard,
         opc: OpCode,
-    ) -> Option<super::kuna_arrayextent::OpenBase> {
+    ) -> Option<super::arrayextent::OpenBase> {
         if !guard.is_valid(self, opc) {
             return None;
         }
@@ -1555,7 +1548,7 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
                 crate::varmap::RangeType::Open,
                 3,
             );
-            Some(super::kuna_arrayextent::OpenBase {
+            Some(super::arrayextent::OpenBase {
                 start: guard.get_minimum(),
                 elem,
             })
@@ -1816,7 +1809,7 @@ impl FuncdataAliasExt for Funcdata {
         exempt_scramble: bool,
     ) {
         use std::collections::BTreeSet;
-        let skip_reads = exempt_scramble && crate::kuna_calleereginputs::skips_read_operands(self);
+        let skip_reads = exempt_scramble && crate::calleereginputs::skips_read_operands(self);
         // (base, index) queue.
         let mut vnqueue: Vec<(VarnodeId, Option<VarnodeId>)> = vec![(startvn, None)];
         let mut marked: BTreeSet<VarnodeId> = BTreeSet::new();
@@ -1901,10 +1894,9 @@ impl FuncdataAliasExt for Funcdata {
                         // (kuna) A stack-pointer scramble against a live value
                         // (MSVC's `/GS` cookie) is not an address, so it does
                         // not open an escape site for the call-site checker.
-                        nonadduse |=
-                            crate::kuna_cookiescramble::is_escape_site(exempt_scramble, code)
-                                && !(skip_reads
-                                    && crate::kuna_calleereginputs::is_read_operand(self, op, vn));
+                        nonadduse |= crate::cookiescramble::is_escape_site(exempt_scramble, code)
+                            && !(skip_reads
+                                && crate::calleereginputs::is_read_operand(self, op, vn));
                     }
                 }
             }
@@ -2067,8 +2059,8 @@ fn stack_slot_aliased(
         || checker.has_parameter_alias(offset, &mut access)
 }
 
-/// Fill the spacebase and stack-alias hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill the spacebase and stack-alias hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.find_spacebase_input = Some(Funcdata::find_spacebase_input);
     hooks.build_alias_checker_deferred = Some(Funcdata::build_alias_checker_deferred);
     hooks.stack_slot_aliased = Some(stack_slot_aliased);

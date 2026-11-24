@@ -1,4 +1,4 @@
-//! Unit tests for the kuna phase registry (`kuna_phases.rs`).
+//! Unit tests for the kuna phase registry (`phases.rs`).
 //!
 //! Parity targets (origin: `decompiler/cpp/kuna_stages.cc`, since grown):
 //! group/subphase/surface/settable counts read from `phases.toml` itself, plus the phase-code

@@ -22,10 +22,10 @@
 //! 4.5 KB re2c scanner in cmark-gfm became 104 bytes and five `sub_`s.
 //!
 //! [`A64Tables::targets`] reads the dispatch the way the xrefs walk does, with
-//! [`super::kuna_switchtable::register_targets`] over the instructions the
+//! [`super::switchtable::register_targets`] over the instructions the
 //! walk has decoded ahead of it, bounded by the range check or, for a table
 //! with none (Swift's enum dispatch), by the next address the function's code
-//! forms ([`super::kuna_switchextent`]). The function's extent for that bound
+//! forms ([`super::switchextent`]). The function's extent for that bound
 //! runs between the seeds around the dispatch.
 
 use std::rc::Rc;
@@ -35,9 +35,9 @@ use unlace_decomp::architecture::Architecture;
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::translate::Translate;
 
-use super::kuna_poolref::PoolImage;
-use super::kuna_switchextent::FunctionTables;
-use super::kuna_switchtable::{
+use super::poolref::PoolImage;
+use super::switchextent::FunctionTables;
+use super::switchtable::{
     DEFAULT_MAX_ENTRIES, Reach, TableRead, preserved_registers, register_targets,
 };
 use super::xrefs::{FullCapture, decode, in_range};

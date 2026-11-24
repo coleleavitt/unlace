@@ -142,11 +142,11 @@ fn the_console_command_overlays_and_says_so() {
 /// Drive `commands` through a console wired like the datatest runner, with the fixture
 /// installed as the current program.
 fn drive_console(commands: &[&str]) -> String {
+    use unlace_console::console::register_kuna_commands;
     use unlace_console::ifacedecomp::{
         DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
     };
     use unlace_console::ifaceterm::ConsoleCommands;
-    use unlace_console::kuna_console::register_kuna_commands;
 
     let program = load();
     let cmds: Vec<String> = commands.iter().map(|s| s.to_string()).collect();

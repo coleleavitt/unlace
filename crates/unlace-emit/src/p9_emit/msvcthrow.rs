@@ -36,12 +36,7 @@ pub fn is_throw_callee(name: &str) -> bool {
 /// The throw the direct CALL `op` to `callee` performs, when `msvceh` is on and
 /// the call passes both arguments.
 pub fn recover(fd: &Funcdata, arch: &Architecture, op: OpId, callee: &str) -> Option<Throw> {
-    if !arch
-        .kuna_options
-        .get::<crate::kuna_analysisgates::Msvceh>()
-        .0
-        || !is_throw_callee(callee)
-    {
+    if !arch.kuna_options.get::<crate::analysisgates::Msvceh>().0 || !is_throw_callee(callee) {
         return None;
     }
     let o = fd.obank().get(op)?;

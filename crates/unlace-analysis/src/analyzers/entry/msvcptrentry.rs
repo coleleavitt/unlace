@@ -33,7 +33,7 @@ use object::FileKind;
 use object::read::Object;
 use object::read::pe::PeFile32;
 
-use super::kuna_mfcmsgmap::{Image, relocated_rvas};
+use super::mfcmsgmap::{Image, relocated_rvas};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 /// (kuna) The relocated-prologue-pointer pass (`msvcptrentry`), gated at the

@@ -12,8 +12,8 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::AddrSpace;
+use unlace_sleigh::ctxsnapshot::{ContextValueSnapshot, restore_context, snapshot_context};
 use unlace_sleigh::globalcontext::ContextInternal;
-use unlace_sleigh::kuna_ctxsnapshot::{ContextValueSnapshot, restore_context, snapshot_context};
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
 

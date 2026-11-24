@@ -2,9 +2,9 @@
 
 use super::*;
 use crate::funcdata_facing::FuncdataFacingExt;
-use crate::kuna_lang::OutLang;
-use crate::kuna_langgo::GO_SPELLER;
-use crate::kuna_langtypes::TypeSpeller;
+use crate::lang::OutLang;
+use crate::langgo::GO_SPELLER;
+use crate::langtypes::TypeSpeller;
 
 #[derive(Clone, Copy)]
 enum Carrier {
@@ -175,7 +175,7 @@ impl PrintC {
     ) -> bool {
         if !arch
             .kuna_options
-            .get::<crate::kuna_analysisgates::Godwarfsig>()
+            .get::<crate::analysisgates::Godwarfsig>()
             .0
             || target.get_metatype() != type_metatype::TYPE_STRUCT
             || !arch.archid.starts_with("x86:LE:64:")

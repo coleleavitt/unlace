@@ -42,11 +42,11 @@ use unlace_decomp::dtype::Datatype;
 use unlace_decomp::fspec::PrototypePieces;
 
 use super::descriptors::{Target, TypeRef};
-use super::kuna_swifttypes::Types;
-use crate::demangle::kuna_swift::demangle_swift_tree;
-use crate::demangle::kuna_swift::demangle_swift_type;
-use crate::demangle::kuna_swift::name::print_name;
-use crate::demangle::kuna_swift::node::{Kind, Node, NodeRef};
+use super::swifttypes::Types;
+use crate::demangle::swift::demangle_swift_tree;
+use crate::demangle::swift::demangle_swift_type;
+use crate::demangle::swift::name::print_name;
+use crate::demangle::swift::node::{Kind, Node, NodeRef};
 use crate::pass::{AnalysisOutput, FidMatch, SymFact, SymKind, TypedDataFact};
 
 #[derive(Default, Debug)]
@@ -763,7 +763,7 @@ impl CalleeNames<'_, '_, '_> {
                 match c.protocol {
                     Target::Direct(p) => self.types.context_node(p, 0),
                     Target::Slot(s) => {
-                        super::kuna_swifttypes::imported_node(self.types.imports.get(&s)?)
+                        super::swifttypes::imported_node(self.types.imports.get(&s)?)
                     }
                 }
             }

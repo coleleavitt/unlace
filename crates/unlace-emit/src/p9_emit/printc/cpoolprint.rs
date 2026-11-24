@@ -12,7 +12,7 @@ use super::{
 };
 use crate::cpool::cpool_tag;
 use crate::dtype::type_metatype;
-use crate::kuna_lang::OutLang;
+use crate::lang::OutLang;
 use crate::printlanguage::SyntaxHighlight;
 
 impl PrintC {
@@ -77,7 +77,7 @@ impl PrintC {
                     .map(|t| t.get_display_name().to_string())
                     .unwrap_or_default();
                 if self.java() {
-                    self.push_op(&crate::kuna_langjava::INSTANCEOF, Some(op_key(op)));
+                    self.push_op(&crate::langjava::INSTANCEOF, Some(op_key(op)));
                     if let Some(vn) = vn0 {
                         self.push_vn_ir(fd, arch, vn, op);
                     }
@@ -186,7 +186,7 @@ impl PrintC {
         let Some(v) = fd.vbank().get(vn) else {
             return false;
         };
-        if !crate::kuna_langjava::is_array_type(v.get_type()) {
+        if !crate::langjava::is_array_type(v.get_type()) {
             return false;
         }
         if v.is_explicit() || !v.is_written() {
@@ -290,7 +290,7 @@ impl PrintC {
                 op_key(op),
             )),
             None if ctor.is_some() => {
-                let keyword = if ctor == Some(crate::kuna_javanew::CtorCall::This) {
+                let keyword = if ctor == Some(crate::javanew::CtorCall::This) {
                     "this"
                 } else {
                     "super"

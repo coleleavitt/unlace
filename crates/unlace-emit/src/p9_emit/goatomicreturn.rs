@@ -1,14 +1,14 @@
 //! One typed atomic addition whose new value is the entire Go return body.
 
+use crate::atomicxadd::FuncdataAtomicxaddExt;
 use crate::funcdata_facing::FuncdataFacingExt;
-use crate::kuna_atomicxadd::FuncdataAtomicxaddExt;
 use std::collections::HashSet;
 
 use crate::architecture::Architecture;
+use crate::atomicxadd::Instruction;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_atomicxadd::Instruction;
 use unlace_num::opcodes::OpCode;
 
 #[doc(hidden)]
@@ -25,7 +25,7 @@ pub struct Plan {
 fn signed(ty: &Datatype, width: i32) -> bool {
     ty.get_metatype() == type_metatype::TYPE_INT
         && ty.get_size() == width
-        && !crate::kuna_typequal::is_volatile(ty)
+        && !crate::typequal::is_volatile(ty)
 }
 
 fn constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
@@ -50,7 +50,7 @@ fn parameter(fd: &Funcdata, vn: VarnodeId) -> bool {
                 && p.get_address() == *v.get_addr()
                 && p.get_size() == v.get_size()
                 && p.get_type()
-                    .is_some_and(|ty| !crate::kuna_typequal::is_volatile(ty))
+                    .is_some_and(|ty| !crate::typequal::is_volatile(ty))
         })
 }
 
@@ -256,7 +256,7 @@ pub fn plan(fd: &Funcdata, arch: &Architecture) -> Option<Plan> {
     let address = store.get_in(1)?;
     let ptr_type = fd.vn_type_read_facing(address, proof.store);
     if ptr_type.get_metatype() != type_metatype::TYPE_PTR
-        || crate::kuna_typequal::is_volatile(&ptr_type)
+        || crate::typequal::is_volatile(&ptr_type)
         || !ptr_type
             .get_ptr_to()
             .is_some_and(|ty| signed(&ty, proof.width))

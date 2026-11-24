@@ -1,5 +1,5 @@
 // Tests for `kuna_gowritebarrier` (included into `mod tests` in
-// kuna_gowritebarrier.rs).
+// gowritebarrier.rs).
 //
 // Covered:
 //   - `GoWriteBarrierMode`: parse vocabulary, u8 round-trip, default.
@@ -23,7 +23,7 @@ use unlace_base::space::{
 
 use crate::action::ActionContext;
 use crate::context::ArchContext;
-use crate::kuna_sourcelang::SourceLang;
+use crate::sourcelang::SourceLang;
 
 fn build_fd(mode: GoWriteBarrierMode, lang: SourceLang) -> Funcdata {
     let mut m = AddrSpaceManager::new();

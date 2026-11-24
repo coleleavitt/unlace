@@ -21,7 +21,7 @@
 //! the `else if` collapse are separate, pre-existing forms and stay untouched;
 //! else arms and loop/switch bodies always keep their braces.
 //!
-//! Following the kuna-option idiom ([`crate::kuna_arraynotation::OptionArrayNotation`]),
+//! Following the kuna-option idiom ([`crate::arraynotation::OptionArrayNotation`]),
 //! this module owns only the option struct that flips
 //! [`crate::printc::PrintCOptions::brace_elide`]; the caller
 //! (`Architecture::set_kuna_option`) writes the live flag.
@@ -59,5 +59,5 @@ impl OptionBraceElide {
 }
 
 #[cfg(test)]
-#[path = "kuna_braceelide/tests.rs"]
+#[path = "braceelide/tests.rs"]
 mod tests;

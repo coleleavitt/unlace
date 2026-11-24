@@ -7,12 +7,12 @@
 //! classes, has no closed form; equality saturation searches for it instead.
 //!
 //! 1. The tree under the root op is collected the deep way (see
-//!    [`kuna_mba::collect_deep`]: arithmetic under bitwise ops, ops of several
+//!    [`mba::collect_deep`]: arithmetic under bitwise ops, ops of several
 //!    readers inlined, constants as numbers, at most six leaves and 48 nodes)
 //!    and added to an e-graph ([egg](https://egraphs-good.github.io/)), one
 //!    e-class per distinct subterm.
 //! 2. Every subterm the `mba` solvers fold (linear or polynomial) is merged
-//!    with its folded form, and the root with [`kuna_mba::nonlinear_simplify`]'s
+//!    with its folded form, and the root with [`mba::nonlinear_simplify`]'s
 //!    proven candidate, so the closed forms are rewrites of the search too.
 //! 3. The e-graph is saturated with [`rules`]: ring and boolean-algebra
 //!    identities and the MBA identities obfuscators use, each an identity of
@@ -23,7 +23,7 @@
 //! 4. The expression with the fewest ops is extracted. It replaces the tree
 //!    only when it has fewer ops than the tree keeps for itself, agrees on 64
 //!    random full-width inputs and on every input at a small width (2^16
-//!    combinations at most), and is not refuted by [`kuna_mba::prove_equal`]
+//!    combinations at most), and is not refuted by [`mba::prove_equal`]
 //!    (run for at most three leaves, where it proves equality at the full
 //!    width). The checks guard the lowering in both directions; equality
 //!    itself follows from the rules being identities.
@@ -42,7 +42,7 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{ActionGroupList, Rule};
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
-use crate::kuna_mba::{self, Expr, MAX_LEAVES, MAX_NONLINEAR_LEAVES};
+use crate::mba::{self, Expr, MAX_LEAVES, MAX_NONLINEAR_LEAVES};
 
 /// Most e-nodes saturation grows to.
 const NODE_LIMIT: usize = 4000;
@@ -237,11 +237,11 @@ fn mba_seed(e: &Expr, n: usize, mask: u64) -> Option<Expr> {
         return None;
     }
     let s = if e.is_linear() {
-        kuna_mba::simplify(e, n, mask)
+        mba::simplify(e, n, mask)
     } else {
-        kuna_mba::from_poly(&kuna_mba::to_poly(e, n, mask)?, n, mask)
+        mba::from_poly(&mba::to_poly(e, n, mask)?, n, mask)
     };
-    (s.ops() < e.ops() && kuna_mba::agree(e, &s, n, mask)).then_some(s)
+    (s.ops() < e.ops() && mba::agree(e, &s, n, mask)).then_some(s)
 }
 
 fn leaf_symbol(i: usize) -> Symbol {
@@ -394,7 +394,7 @@ pub(crate) fn saturate(
     let mut eg: EGraph<Bv, Fold> = EGraph::new(Fold { mask });
     let root = add(&mut eg, f, n, mask, true);
     if n <= MAX_NONLINEAR_LEAVES
-        && let Some(s) = kuna_mba::nonlinear_simplify(f, n, bits, budget)
+        && let Some(s) = mba::nonlinear_simplify(f, n, bits, budget)
     {
         let s = add(&mut eg, &s, n, mask, false);
         eg.union(root, s);
@@ -405,13 +405,13 @@ pub(crate) fn saturate(
         let simple = lower(&best, best.root())?;
         if simple.ops() >= budget
             || bitwise_ops(&simple) >= bit_budget
-            || !kuna_mba::agree(f, &simple, n, mask)
+            || !mba::agree(f, &simple, n, mask)
         {
             return None;
         }
         // A proof at the full width makes the small-width check redundant.
         let proof = (n <= MAX_NONLINEAR_LEAVES)
-            .then(|| kuna_mba::prove_equal(f, &simple, n, bits))
+            .then(|| mba::prove_equal(f, &simple, n, bits))
             .flatten();
         let ok = match proof {
             Some(p) => p,
@@ -491,7 +491,7 @@ impl Rule for RuleEgraphSimplify {
         let Some(code) = data.obank().get(op).map(|o| o.code()) else {
             return 0;
         };
-        if size > 8 || !kuna_mba::is_candidate(code) {
+        if size > 8 || !mba::is_candidate(code) {
             return 0;
         }
         // A tree whose one reader is an op of the set is part of that reader's
@@ -500,7 +500,7 @@ impl Rule for RuleEgraphSimplify {
             .lone_descend(out)
             .and_then(|r| data.obank().get(r))
             .is_some_and(|r| {
-                kuna_mba::is_candidate(r.code())
+                mba::is_candidate(r.code())
                     && r.get_out()
                         .and_then(|o| data.vbank().get(o))
                         .is_some_and(|v| v.get_size() == size)
@@ -508,7 +508,7 @@ impl Rule for RuleEgraphSimplify {
         if in_reader {
             return 0;
         }
-        let Some(t) = kuna_mba::collect_deep(data, op, code, size) else {
+        let Some(t) = mba::collect_deep(data, op, code, size) else {
             return 0;
         };
         if !t.mixed || t.budget < 2 {
@@ -517,7 +517,7 @@ impl Rule for RuleEgraphSimplify {
         // The ops under an op with several readers stay; count them all as bitwise.
         let kept = t.expr.ops().saturating_sub(t.budget);
         let bit_budget = bitwise_ops(&t.expr).saturating_sub(kept);
-        let fp = t.fingerprint(kuna_mba::mask_of(size));
+        let fp = t.fingerprint(mba::mask_of(size));
         let key = (fp, t.expr.ops(), t.budget);
         if self.barren.contains(&key) {
             return 0;
@@ -525,7 +525,7 @@ impl Rule for RuleEgraphSimplify {
         // A tree with one bitwise op has no MBA identity to compose; the
         // closed forms of `mba` are all it gets, without an e-graph.
         let simple = if bitwise_ops(&t.expr) < 2 {
-            mba_seed(&t.expr, t.n, kuna_mba::mask_of(size)).filter(|s| s.ops() < t.budget)
+            mba_seed(&t.expr, t.n, mba::mask_of(size)).filter(|s| s.ops() < t.budget)
         } else {
             // A tree already regrouped once may only lose bitwise ops now,
             // which saturation checks before the evaluations do.
@@ -548,7 +548,7 @@ impl Rule for RuleEgraphSimplify {
             return 0;
         }
         let rw = t.into_rewrite(simple);
-        kuna_mba::replace(data, op, &rw, size)
+        mba::replace(data, op, &rw, size)
     }
 }
 
@@ -587,7 +587,7 @@ mod tests {
         );
         let s = saturate(&f, 2, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
         assert_eq!(s.ops(), 1);
-        assert!(kuna_mba::agree(&f, &s, 2, 0xffff_ffff));
+        assert!(mba::agree(&f, &s, 2, 0xffff_ffff));
     }
 
     #[test]
@@ -598,7 +598,7 @@ mod tests {
         );
         let s = saturate(&f, 1, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
         assert_eq!(s.ops(), 1);
-        assert_eq!(kuna_mba::prove_equal(&f, &s, 1, 32), Some(true));
+        assert_eq!(mba::prove_equal(&f, &s, 1, 32), Some(true));
     }
 
     #[test]
@@ -624,8 +624,8 @@ mod tests {
         );
         let s = saturate(&f, 3, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
         assert_eq!(s.ops(), 2);
-        assert!(kuna_mba::agree(&f, &s, 3, 0xffff_ffff));
-        assert_eq!(kuna_mba::prove_equal(&f, &s, 3, 32), Some(true));
+        assert!(mba::agree(&f, &s, 3, 0xffff_ffff));
+        assert_eq!(mba::prove_equal(&f, &s, 3, 32), Some(true));
     }
 
     #[test]
@@ -667,7 +667,7 @@ mod tests {
                 panic!("rule {} is not a pattern", r.name);
             };
             let (a, b) = (pattern_expr(lhs), pattern_expr(rhs));
-            assert!(kuna_mba::agree(&a, &b, 3, u64::MAX), "rule {}", r.name);
+            assert!(mba::agree(&a, &b, 3, u64::MAX), "rule {}", r.name);
             assert!(agree_exhaustive(&a, &b, 3), "rule {}", r.name);
         }
     }

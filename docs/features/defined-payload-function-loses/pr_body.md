@@ -50,7 +50,7 @@ address-taken `lea` is not a call site.
 ## The fix
 
 New option `calleearitybody` (P4, default on, `0/675`), in
-`p4_calls/kuna_calleearitybody.rs`.
+`p4_calls/calleearitybody.rs`.
 
 - The witness becomes the **callee's own body** — the same bounded entry decode
   `calleedeadarg` already takes — instead of a sibling call. The recovered list

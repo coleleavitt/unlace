@@ -52,8 +52,8 @@
 //!
 //! * **Only `int 0x29`.** `INT1`/`INT3`/`INTO` carry a `return [0:1]` in their own
 //!   SLEIGH semantics and genuinely do return (`int3` is named, not halted, by
-//!   [`int3pad`](crate::kuna_int3pad)); `int 0x80` is a Linux syscall and is
-//!   [`linuxsyscall`](crate::kuna_linuxsyscall)'s. The vector must be the 1-byte
+//!   [`int3pad`](crate::int3pad)); `int 0x80` is a Linux syscall and is
+//!   [`linuxsyscall`](crate::linuxsyscall)'s. The vector must be the 1-byte
 //!   constant `0x29`.
 //! * **Only a Windows image.** `int 0x29` is `__fastfail` by Windows convention
 //!   alone. The gate is the compiler-spec component of the resolved language id
@@ -103,7 +103,7 @@ pub fn archid_is_windows(archid: &str) -> bool {
 /// `None` for a null `UserPcodeOp *`).  Runs at flow-classification time, before
 /// basic blocks exist, so the `CALLOTHER` is located by the same positional
 /// backward walk over the raw dead list that
-/// [`kuna_sparcstructret`](crate::kuna_sparcstructret) uses — pre-SSA there is no
+/// [`kuna_sparcstructret`](crate::sparcstructret) uses — pre-SSA there is no
 /// def-use edge to follow, the `CALLIND`'s input being a free Varnode.
 pub fn is_fastfail_callind<F>(data: &Funcdata, op: OpId, userop_name: F) -> bool
 where
@@ -117,7 +117,7 @@ where
 ///
 /// The shape walk [`is_fastfail_callind`] is built on, read for the vector rather
 /// than tested against `0x29`, so a sibling pass over another vector
-/// ([`kuna_int3pad`](crate::kuna_int3pad)) shares one copy of the lowering's
+/// ([`kuna_int3pad`](crate::int3pad)) shares one copy of the lowering's
 /// structure.
 pub fn swi_vector_of_callind<F>(data: &Funcdata, op: OpId, userop_name: F) -> Option<uintb>
 where
@@ -177,11 +177,11 @@ where
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.fastfailnoreturn_archid_is_windows = Some(archid_is_windows);
 }
 
 #[cfg(test)]
-#[path = "kuna_fastfailnoreturn/tests.rs"]
+#[path = "fastfailnoreturn/tests.rs"]
 mod tests;

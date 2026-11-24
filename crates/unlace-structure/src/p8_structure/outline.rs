@@ -53,7 +53,7 @@
 //! # The seam
 //!
 //! Pre-heritage `bblocks` surgery, self-gated on `get_heritage_pass() == 0`
-//! (the documented pre-SSA window, as [`crate::kuna_loweredswitch`] uses).
+//! (the documented pre-SSA window, as [`crate::loweredswitch`] uses).
 //! Before SSA there are no `MULTIEQUAL`s to patch when edges move, and
 //! `ActionFuncLink` still runs afterwards to materialize the call's argument and
 //! return varnodes. Doing this later, as a P8 print-tree edit, would be wrong:
@@ -113,7 +113,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::kuna_regiongraph::{
+use crate::regiongraph::{
     KunaIncrementalDominators, KunaNodeId, KunaNodePool, KunaNodeSet, KunaRegionGraph, NodeKind,
     kuna_subgraph_between_nodes,
 };
@@ -235,14 +235,14 @@ impl Action for ActionOutline {
         let raw = data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_outline::OutlineOption>()
+            .get::<crate::outline::OutlineOption>()
             .0
             .clone();
         if raw.is_empty() || raw == "off" {
             return 0;
         }
         // The pre-SSA window: before heritage there are no MULTIEQUALs to patch.
-        if data.is_settled(crate::kuna_maturity::Fact::Ssa) {
+        if data.is_settled(crate::maturity::Fact::Ssa) {
             return 0;
         }
         if data.bblocks_get_size() < 2 {
@@ -694,7 +694,7 @@ fn outline_one(data: &mut Funcdata, run: &OutlineRun) -> KunaResult<bool> {
     data.op_insert_end(callop, call_bl);
 
     // The region has lost its only entry from outside, so the unreachable sweep
-    // collects it (never block_remove_internal directly - kuna_stackguard.rs:326
+    // collects it (never block_remove_internal directly - stackguard.rs:326
     // is the idiom).
     data.remove_unreachable_blocks(false, true)?;
     data.structure_reset();
@@ -716,9 +716,9 @@ fn outline_one(data: &mut Funcdata, run: &OutlineRun) -> KunaResult<bool> {
 // Region substrate
 //
 // `kuna_check_region` is transcribed from the private
-// `KunaRegionIdentifier::check_region` (`p7_regions/kuna_regionid.rs:1504`, angr RI
+// `KunaRegionIdentifier::check_region` (`p7_regions/regionid.rs:1504`, angr RI
 // `_check_region`) so this pass can run the predicate over a scratch graph it owns.
-// `kuna_regionid.rs` is a line-faithful port pinned by `docs/spec/07-regions.md`
+// `regionid.rs` is a line-faithful port pinned by `docs/spec/07-regions.md`
 // and is deliberately not modified to expose it.
 //===========================================================================
 
@@ -788,9 +788,9 @@ fn build_scratch(data: &Funcdata) -> Scratch {
 /// Is `[start, end)` a single-entry region of `g`?
 ///
 /// Transcribed from the private `KunaRegionIdentifier::check_region`
-/// (`p7_regions/kuna_regionid.rs:1504`, angr RI `_check_region`) so this pass can
+/// (`p7_regions/regionid.rs:1504`, angr RI `_check_region`) so this pass can
 /// run the predicate over a scratch graph it owns and may mutate edge-by-edge.
-/// `kuna_regionid.rs` is a line-faithful port pinned by `docs/spec/07-regions.md`
+/// `regionid.rs` is a line-faithful port pinned by `docs/spec/07-regions.md`
 /// and is deliberately not modified to expose it.
 fn kuna_check_region(
     pool: &KunaNodePool,
@@ -902,7 +902,7 @@ impl OptionOutline {
 /// own condition is not charged and a folded operand can render more than one
 /// call.  That is deliberate and is a readability bound, not a soundness bound —
 /// see
-/// [`MAX_PREFIX_ROOT_CALLS`](crate::kuna_condfold::MAX_PREFIX_ROOT_CALLS).
+/// [`MAX_PREFIX_ROOT_CALLS`](crate::condfold::MAX_PREFIX_ROOT_CALLS).
 /// Rule B charges every call op.
 ///
 /// Two effects are accepted rather than fixed: this is **not a monotone goto
@@ -914,18 +914,18 @@ impl OptionOutline {
 /// The value is the **shared printed-width budget**, which doubles as the whole
 /// option's policy level: `0` = `option condfold off` (byte-identical to
 /// upstream: the precompute is skipped and every gate disjunct is dead), `5`
-/// ([`MAX_PREFIX_STMTS_ANGR`](crate::kuna_condfold::MAX_PREFIX_STMTS_ANGR))
+/// ([`MAX_PREFIX_STMTS_ANGR`](crate::condfold::MAX_PREFIX_STMTS_ANGR))
 /// = `on` (angr parity), `9`
-/// ([`MAX_PREFIX_STMTS_WIDE`](crate::kuna_condfold::MAX_PREFIX_STMTS_WIDE))
+/// ([`MAX_PREFIX_STMTS_WIDE`](crate::condfold::MAX_PREFIX_STMTS_WIDE))
 /// = `wide` (absorbs kuna's finer printed-statement granularity).  The level moves
 /// the budget for BOTH rules and nothing else.  Default-OFF opt-in.  See
-/// [`crate::kuna_condfold`].
+/// [`crate::condfold`].
 /// (kuna) `outline` region spec, empty when off.  See
-/// [`crate::kuna_outline`].
+/// [`crate::outline`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct OutlineOption(pub String);
 
-impl crate::kuna_optionset::KunaOption for OutlineOption {
+impl crate::optionset::KunaOption for OutlineOption {
     const NAME: &'static str = "outline";
     crate::kuna_option_id!();
 
@@ -938,7 +938,7 @@ impl crate::kuna_optionset::KunaOption for OutlineOption {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_outline::OptionOutline.apply(value)?;
+        let (v, msg) = crate::outline::OptionOutline.apply(value)?;
         Ok((OutlineOption(v), msg))
     }
 }

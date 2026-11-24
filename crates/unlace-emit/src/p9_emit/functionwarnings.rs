@@ -8,7 +8,7 @@
 //! storage or name comment) is never recorded, whatever it spells. Taken with
 //! [`PrintC::take_warnings`](crate::printc::PrintC::take_warnings).
 
-use crate::kuna_decodehalt::{
+use crate::decodehalt::{
     BAD_INSTRUCTION_HEADER, BAD_INSTRUCTION_WARNING, UNIMPLEMENTED_HEADER,
     UNIMPLEMENTED_IGNORED_HEADER, UNIMPLEMENTED_WARNING,
 };

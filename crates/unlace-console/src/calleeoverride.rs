@@ -4,7 +4,7 @@
 //! A reader who knows the destination of `call *(%rax)` states it as
 //! `callee [<func>::]<callsite> <name|address>`. [`plant`] checks the fact
 //! against the image and parks it for the engine
-//! (`unlace_decomp::kuna_calleeoverride`), which rebuilds the call as a direct
+//! (`unlace_decomp::calleeoverride`), which rebuilds the call as a direct
 //! call so the callee's name and prototype apply to it.
 //!
 //! The call site must decode to an indirect call or an indirect jump; a direct

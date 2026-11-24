@@ -8,14 +8,14 @@
 //! which now keeps only thin dispatchers so its existing free-function callers
 //! and their tests are unchanged.
 
-use crate::kuna_typequal::DatatypeQualExt;
+use crate::typequal::DatatypeQualExt;
 use std::borrow::Cow;
 use std::rc::Rc;
 
 use unlace_base::types::int4;
 
 use crate::dtype::{Datatype, type_metatype};
-use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
+use crate::langtypes::{SpellCtx, TypeSpeller};
 
 /// The c-language type speller.
 pub struct CSpeller;
@@ -53,7 +53,7 @@ impl CDeclarator {
             self.pointer();
             return;
         }
-        let text = crate::kuna_typequal::spelling(qualifiers);
+        let text = crate::typequal::spelling(qualifiers);
         let gap = if self.front.is_empty() { "" } else { " " };
         self.front.insert_str(0, &format!("* {text}{gap}"));
         self.ungrouped_pointer = true;
@@ -97,7 +97,7 @@ impl TypeSpeller for CSpeller {
         if !cx.ctypes || !dt.is_core_type() {
             return None;
         }
-        crate::kuna_ctypes::core_type_spelling(
+        crate::ctypes::core_type_spelling(
             &cx.model,
             dt.get_metatype(),
             dt.get_size(),
@@ -170,12 +170,12 @@ impl TypeSpeller for CSpeller {
         } else if base.get_name().is_empty() {
             self.anonymous(base)
         } else if cx.cpp_short_names {
-            crate::kuna_cppshortnames::short_type(base.get_display_name()).into_owned()
+            crate::cppshortnames::short_type(base.get_display_name()).into_owned()
         } else {
             base.get_display_name().to_string()
         };
 
-        let qualifier_text = crate::kuna_typequal::spelling(*qualifiers);
+        let qualifier_text = crate::typequal::spelling(*qualifiers);
         let base_name = if qualifier_text.is_empty() {
             base_name
         } else {
@@ -209,7 +209,7 @@ impl TypeSpeller for CSpeller {
                     for i in 0..proto.num_params() {
                         let ty = proto
                             .get_param(i)
-                            .and_then(|param| crate::kuna_indirectargs::source_type(proto, param));
+                            .and_then(|param| crate::indirectargs::source_type(proto, param));
                         let text = ty
                             .map(|ty| {
                                 let (front, back) = self.declarator(cx, &ty);
@@ -354,7 +354,7 @@ mod tests {
 
         use crate::dtype::{Datatype, DatatypeKind, type_metatype};
         use crate::fspec::{FuncProto, ParameterPieces};
-        use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
+        use crate::langtypes::{SpellCtx, TypeSpeller};
 
         let pointer = |to| {
             let mut ty = Datatype::new(8, type_metatype::TYPE_PTR);

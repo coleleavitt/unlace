@@ -877,7 +877,7 @@ pub fn compute_condfold_sets(data: &Funcdata, max_stmts: int4) -> CondFoldSets {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CondFold(pub int4);
 
-impl crate::kuna_optionset::KunaOption for CondFold {
+impl crate::optionset::KunaOption for CondFold {
     const NAME: &'static str = "condfold";
     crate::kuna_option_id!();
 

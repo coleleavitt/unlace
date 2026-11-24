@@ -1,15 +1,15 @@
 //! Incoming parameter values and later objects share frame storage, not variable identity.
 
 use crate::funcdata_union::FuncdataUnionExt;
-use crate::kuna_stackobjects::FuncdataStackobjectsExt;
-use crate::kuna_stackviews::FuncdataStackviewsExt;
+use crate::stackobjects::FuncdataStackobjectsExt;
+use crate::stackviews::FuncdataStackviewsExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use crate::context::{HighVariableId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_stackobjects::{ByteSource, SourcePoint, StackObject};
+use crate::stackobjects::{ByteSource, SourcePoint, StackObject};
 use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 
@@ -85,7 +85,7 @@ pub fn record_store(fd: &mut Funcdata, address: &Address, size: i32) {
     if fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
         || size <= 0
         || !fd.get_func_proto().has_store()
@@ -230,7 +230,7 @@ pub fn backing_for_address(
     address: &Address,
     size: i32,
 ) -> Option<crate::varmap::LinkEntryInfo> {
-    if !crate::kuna_stackviews::enabled(fd) || size <= 0 {
+    if !crate::stackviews::enabled(fd) || size <= 0 {
         return None;
     }
     let scope = fd.get_scope_local()?;
@@ -344,7 +344,7 @@ fn initialize_parameters(
         fd.set_union_field(backing, op, -1, resolution);
         fd.stack_write_views_mut().insert(
             op,
-            crate::kuna_stackviews::StorageView {
+            crate::stackviews::StorageView {
                 backing: Rc::clone(backing),
                 offset,
             },
@@ -359,7 +359,7 @@ fn initialize_parameters(
 /// Scalar slots also need backing when their addresses have wider observers.
 #[doc(hidden)]
 pub fn needs_backing(fd: &Funcdata, start: u64, size: i32) -> bool {
-    let aliases = |input| crate::kuna_stackranges::may_alias(fd, input, start, size);
+    let aliases = |input| crate::stackranges::may_alias(fd, input, start, size);
     for id in fd.obank().iter_alive() {
         let Some(op) = fd.obank().get(id) else {
             continue;
@@ -370,7 +370,7 @@ pub fn needs_backing(fd: &Funcdata, start: u64, size: i32) -> bool {
                     let Some(input) = op.get_in(slot).filter(|&input| aliases(input)) else {
                         continue;
                     };
-                    let Some(address) = crate::kuna_stackranges::frame_address(fd, input) else {
+                    let Some(address) = crate::stackranges::frame_address(fd, input) else {
                         return true;
                     };
                     if address.first != address.last
@@ -380,7 +380,7 @@ pub fn needs_backing(fd: &Funcdata, start: u64, size: i32) -> bool {
                             .manage()
                             .get_stack_space()
                             .is_none_or(|space| space.wrap_offset(address.first as u64) != start)
-                        || crate::kuna_stackviews::declared_view(fd, id, slot)
+                        || crate::stackviews::declared_view(fd, id, slot)
                             .is_none_or(|ty| ty.get_size() != size)
                     {
                         return true;
@@ -462,7 +462,7 @@ fn bind_values(fd: &mut Funcdata, info: &crate::varmap::LinkEntryInfo) {
 }
 
 fn aliases(fd: &Funcdata, input: VarnodeId, object: &StackObject) -> bool {
-    crate::kuna_stackranges::may_alias(fd, input, object.address.get_offset(), object.size)
+    crate::stackranges::may_alias(fd, input, object.address.get_offset(), object.size)
 }
 
 fn closed_reuse(fd: &Funcdata, object: &StackObject) -> bool {
@@ -526,7 +526,7 @@ fn closed_reuse(fd: &Funcdata, object: &StackObject) -> bool {
 
 #[doc(hidden)]
 pub fn separates_parameter(fd: &Funcdata, first: HighVariableId, second: HighVariableId) -> bool {
-    if !crate::kuna_stackviews::enabled(fd) || first == second {
+    if !crate::stackviews::enabled(fd) || first == second {
         return false;
     }
     [(first, second), (second, first)]
@@ -696,7 +696,7 @@ pub fn prepare_casts(fd: &mut Funcdata) {
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
     {
         let mut backings = BTreeMap::new();
@@ -796,7 +796,7 @@ fn bind_uses(
         let Some(input) = fd.obank().get(call).and_then(|op| op.get_in(use_.slot)) else {
             continue;
         };
-        let Some(address) = crate::kuna_stackranges::frame_address(fd, input) else {
+        let Some(address) = crate::stackranges::frame_address(fd, input) else {
             continue;
         };
         if address.first != address.last
@@ -821,7 +821,7 @@ fn bind_uses(
                 })
             });
             if let Some(value) = member.and_then(|member| {
-                crate::kuna_stackobjectasserts::backing_view(
+                crate::stackobjectasserts::backing_view(
                     fd,
                     call,
                     width,
@@ -868,8 +868,8 @@ fn bind_uses(
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.stackparamviews_separates_parameter = Some(separates_parameter);
     hooks.stackparamviews_backing_for_address = Some(backing_for_address);
 }

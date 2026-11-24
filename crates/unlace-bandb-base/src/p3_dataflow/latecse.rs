@@ -125,7 +125,7 @@ impl Action for ActionLateCse {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_latecse::LateCse>()
+            .get::<crate::latecse::LateCse>()
             .0
         {
             return 0;

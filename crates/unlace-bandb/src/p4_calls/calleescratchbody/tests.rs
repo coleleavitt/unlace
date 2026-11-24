@@ -7,7 +7,7 @@
 //! lives in `tests/stages/kuna-calleescratchbody.toml`.
 
 use super::*;
-use crate::kuna_rustabi::FuncdataRustabiExt;
+use crate::rustabi::FuncdataRustabiExt;
 
 use std::rc::Rc;
 
@@ -16,10 +16,10 @@ use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
+use crate::calleepreserves::callee_preserves_range;
 use crate::context::{ArchContext, TypeOp};
 use crate::fspec::{EffectRecord, FuncCallSpecs, ProtoModel, effect_type};
-use crate::kuna_calleepreserves::callee_preserves_range;
-use crate::kuna_rustabi::CalleeReturnWrites;
+use crate::rustabi::CalleeReturnWrites;
 use unlace_num::opcodes::OpCode;
 
 /// x86-64-win's shape, reduced to what the rule reads: RBX (0x18) preserved,

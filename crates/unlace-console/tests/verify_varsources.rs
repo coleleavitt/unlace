@@ -30,7 +30,7 @@ fn decompile(name: &str, setup: &[&str]) -> String {
     let count = commands.len();
     let mut status = ConsoleCommands::into_status(commands);
     register_decomp_commands(&mut status);
-    unlace_console::kuna_console::register_kuna_commands(&mut status);
+    unlace_console::console::register_kuna_commands(&mut status);
     let data = status.get_data_mut(DECOMPILE_MODULE).unwrap();
     data.as_any_mut()
         .downcast_mut::<IfaceDecompData>()

@@ -8,7 +8,7 @@
 //! run takes the properties of the region of the chip's memory map
 //! ([`super::esprom`]) it loads into.
 
-use unlace_decomp::kuna_esprom::EspChip;
+use unlace_decomp::esprom::EspChip;
 use unlace_sleigh::loadimage::section_flags;
 
 use super::esprom::{self, RegionKind};

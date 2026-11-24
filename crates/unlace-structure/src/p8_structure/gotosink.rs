@@ -21,7 +21,7 @@
 //! that shape.
 //!
 //! Both rewrites only move list members under a new node; a label no carrier
-//! reaches any more is released (`kuna_gotolabel::release_converted_labels`).
+//! reaches any more is released (`gotolabel::release_converted_labels`).
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::block::{BlockGraph, BlockKind, BlockType, block_flags};
@@ -308,7 +308,7 @@ pub fn gotosink_apply(data: &mut Funcdata) -> i32 {
         }
     }
     if !released.is_empty() {
-        crate::kuna_gotolabel::release_converted_labels(data, &released);
+        crate::gotolabel::release_converted_labels(data, &released);
         // A new loop prints its head's label above itself, as ActionFinalStructure
         // arranges for the loops collapse built.
         data.sblocks_mut().mark_label_bump_up(root, false);
@@ -382,7 +382,7 @@ impl Action for ActionGotoSink {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_gotosink::GotoSink>()
+            .get::<crate::gotosink::GotoSink>()
             .0
             || data.sblocks_get_size() == 0
         {

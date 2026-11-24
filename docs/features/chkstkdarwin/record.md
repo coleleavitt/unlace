@@ -24,7 +24,7 @@ int _big_frame(void)                       // source: int big_frame(int k)
 
 ## The change
 
-`p2_lift/kuna_chkstkdarwin.rs` removes the probe call from the raw p-code
+`p2_lift/chkstkdarwin.rs` removes the probe call from the raw p-code
 before FuncLink and heritage (`option chkstkdarwin`, default on, destructive,
 an AArch64 language on an Apple image only: Mach-O, fat Mach-O or dyld shared
 cache). A jump to the probe that the flow turned into a call (the

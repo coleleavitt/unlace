@@ -8,10 +8,10 @@ use unlace_base::address::Address;
 use unlace_base::types::int4;
 
 use crate::architecture::Architecture;
+use crate::bejoin::WidePair;
 use crate::context::OpId;
 use crate::fspec::{FuncCallSpecs, FuncProto, ParamActive, ProtoModel};
 use crate::funcdata::Funcdata;
-use crate::kuna_bejoin::WidePair;
 
 pub mod mips;
 mod proof;
@@ -115,11 +115,11 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
     let proof = if arch.kuna_options.get::<CallWide>().0
         && arch
             .kuna_options
-            .get::<crate::kuna_bejoin::BeJoinMode>()
+            .get::<crate::bejoin::BeJoinMode>()
             .proves()
     {
         arch.kuna_tables
-            .get::<crate::kuna_callwide::ProofSlot>()
+            .get::<crate::callwide::ProofSlot>()
             .0
             .as_ref()
             .filter(|proof| {
@@ -135,8 +135,7 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
 
 /// The same verdict is read by the producer's own return and every direct call.
 pub fn proven(data: &Funcdata, entry: &Address) -> bool {
-    if !data.get_arch().kuna_options.get::<CallWide>().0 || !crate::kuna_bejoin::mode(data).proves()
-    {
+    if !data.get_arch().kuna_options.get::<CallWide>().0 || !crate::bejoin::mode(data).proves() {
         return false;
     }
     let Some(space) = entry.get_space() else {
@@ -305,8 +304,8 @@ fn export_return_integer(ty: &crate::dtype::Datatype) -> Option<bool> {
             && !ty.is_char_print()
             && !ty.is_enum_type()
             && !ty.is_variable_length()
-            && (crate::kuna_passhooks::default_pass_hooks().lang_unknown_base)(
-                crate::kuna_outlang::OutLang::C,
+            && (crate::passhooks::default_pass_hooks().lang_unknown_base)(
+                crate::outlang::OutLang::C,
                 8,
                 false,
                 false,
@@ -500,7 +499,7 @@ pub fn retain_pair(data: &Funcdata, active: &mut ParamActive, returns: &[OpId]) 
     if !data.get_func_proto().has_matching_model(&proof.model) {
         return;
     }
-    crate::kuna_bejoin::mark_written_pair(data, active, returns, &proof.pair, false);
+    crate::bejoin::mark_written_pair(data, active, returns, &proof.pair, false);
 }
 
 /// Reconcile the entire sealed MIPS image before granting its return-mode proof.
@@ -514,12 +513,12 @@ pub fn publish_mips(
     declarations: &[Declaration],
 ) -> usize {
     arch.kuna_tables
-        .get_mut::<crate::kuna_callwide::ProofSlot>()
+        .get_mut::<crate::callwide::ProofSlot>()
         .clear();
     if !arch.kuna_options.get::<CallWide>().0
         || !arch
             .kuna_options
-            .get::<crate::kuna_bejoin::BeJoinMode>()
+            .get::<crate::bejoin::BeJoinMode>()
             .proves()
         || arch.archid != "MIPS:BE:32:default:default"
     {
@@ -542,55 +541,51 @@ pub fn publish_mips(
         declarations,
         proof::Authority::SealedMips,
     );
-    arch.kuna_tables
-        .get_mut::<crate::kuna_callwide::ProofSlot>()
-        .0 = proven;
-    arch.kuna_tables
-        .get::<crate::kuna_callwide::ProofSlot>()
-        .len()
+    arch.kuna_tables.get_mut::<crate::callwide::ProofSlot>().0 = proven;
+    arch.kuna_tables.get::<crate::callwide::ProofSlot>().len()
 }
 
 /// (kuna `callwide`) The function's call-width ledger, kept across `Funcdata::clear`.
 #[derive(Default)]
-struct LedgerSlot(Option<std::rc::Rc<crate::kuna_callwide::Ledger>>);
+struct LedgerSlot(Option<std::rc::Rc<crate::callwide::Ledger>>);
 crate::kuna_func_state!(LedgerSlot, keep_across_clear: true);
 
 /// The `kuna_callwide` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataCallwideExt {
-    fn kuna_set_callwide(&mut self, proof: Option<std::rc::Rc<crate::kuna_callwide::Ledger>>);
-    fn kuna_callwide(&self) -> Option<&crate::kuna_callwide::Ledger>;
+    fn kuna_set_callwide(&mut self, proof: Option<std::rc::Rc<crate::callwide::Ledger>>);
+    fn kuna_callwide(&self) -> Option<&crate::callwide::Ledger>;
 }
 
 impl FuncdataCallwideExt for crate::funcdata::Funcdata {
-    fn kuna_set_callwide(&mut self, proof: Option<std::rc::Rc<crate::kuna_callwide::Ledger>>) {
+    fn kuna_set_callwide(&mut self, proof: Option<std::rc::Rc<crate::callwide::Ledger>>) {
         self.kuna_state_mut::<LedgerSlot>().0 = proof;
     }
-    fn kuna_callwide(&self) -> Option<&crate::kuna_callwide::Ledger> {
+    fn kuna_callwide(&self) -> Option<&crate::callwide::Ledger> {
         self.kuna_state::<LedgerSlot>().0.as_deref()
     }
 }
 
 crate::kuna_arch_table!(ProofSlot);
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.callwide_clear = Some(clear_proof);
     hooks.callwide_revoke = Some(revoke_proof);
 }
 
 /// Drop the architecture's whole-image caller proof.
-fn clear_proof(tables: &mut crate::kuna_archstate::ArchTables) {
+fn clear_proof(tables: &mut crate::archstate::ArchTables) {
     tables.get_mut::<ProofSlot>().clear();
 }
 
 /// Revoke the architecture's whole-image caller proof.
-fn revoke_proof(tables: &crate::kuna_archstate::ArchTables) {
+fn revoke_proof(tables: &crate::archstate::ArchTables) {
     tables.get::<ProofSlot>().revoke();
 }
 
 #[cfg(test)]
-#[path = "kuna_callwide/tests.rs"]
+#[path = "callwide/tests.rs"]
 mod tests;
 
 crate::kuna_flag!(

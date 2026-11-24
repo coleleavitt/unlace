@@ -1,6 +1,6 @@
 //! (kuna `formatcallees`) Format-string typing for callees no table knows.
 //!
-//! [`super::kuna_fmtstatic`] types a call whose callee the built-in libc tables
+//! [`super::fmtstatic`] types a call whose callee the built-in libc tables
 //! declare variadic with a format parameter. A program's own format functions
 //! are declared nowhere: a logger `log_msg(int level, const char *fmt, ...)`
 //! that hands its arguments to `vfprintf`, an `xasprintf` or a `die`. Without
@@ -46,14 +46,14 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 
 use unlace_decomp::dtype::{Datatype, type_metatype};
+use unlace_decomp::formatstring::VarargAbi;
 use unlace_decomp::fspec::{ProtoModel, PrototypePieces};
-use unlace_decomp::kuna_formatstring::VarargAbi;
 use unlace_num::opcodes::OpCode;
 
 use crate::listing::{Listing, RefKind};
 use crate::pass::{AnalysisCtx, FormatSiteFact};
 
-use super::kuna_fmtstatic::{self as fmtstatic, Key, LiftCache};
+use super::fmtstatic::{self as fmtstatic, Key, LiftCache};
 use super::{Spec, apply};
 
 /// How many leading argument slots may hold the format.
@@ -271,8 +271,7 @@ fn sysv_al(ctx: &AnalysisCtx) -> Option<Key> {
     let archid = &ctx.arch.archid;
     if !archid.starts_with("x86:LE:64")
         || archid.ends_with(":windows")
-        || fmtstatic::image_family(ctx.bytes)
-            == unlace_decomp::kuna_formatstring::ImageFamily::Windows
+        || fmtstatic::image_family(ctx.bytes) == unlace_decomp::formatstring::ImageFamily::Windows
     {
         return None;
     }
@@ -410,8 +409,8 @@ fn site_pieces(
     let mut pieces =
         apply::build_override_pieces(name, None, &fixed, specs, types, word_size, inp.abi)
             .ok()??;
-    if unlace_decomp::kuna_armfloatargs::applies(inp.ctx.arch)
-        && !unlace_decomp::kuna_armfloatargs::base_inputs(inp.ctx.arch, &mut pieces)
+    if unlace_decomp::armfloatargs::applies(inp.ctx.arch)
+        && !unlace_decomp::armfloatargs::base_inputs(inp.ctx.arch, &mut pieces)
     {
         return None;
     }

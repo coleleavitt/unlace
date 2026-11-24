@@ -24,27 +24,27 @@ pub use unlace_bandb_base::*;
 /// The pass hooks this crate's own modules provide: each module's `provide`, in the driver's
 /// order. The driver composes the crates' tables into the default pipeline's
 /// (`unlace_decomp::PASS_HOOKS`); a crate's unit tests compose the crates at or below it.
-pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
+pub fn provide_all(slots: &mut crate::passhooks::KunaHookSlots) {
     crate::funcdata_spacebase::provide(slots);
     crate::funcdata_facing::provide(slots);
-    crate::kuna_calleereginputs::provide(slots);
-    crate::kuna_stackparamviews::provide(slots);
-    crate::kuna_stackviews::provide(slots);
-    crate::kuna_voidret::provide(slots);
+    crate::calleereginputs::provide(slots);
+    crate::stackparamviews::provide(slots);
+    crate::stackviews::provide(slots);
+    crate::voidret::provide(slots);
     crate::coreaction_infertypes::provide(slots);
-    crate::kuna_armfloatargs::provide(slots);
-    crate::kuna_armfloatreturn::provide(slots);
-    crate::kuna_calleememory::provide(slots);
-    crate::kuna_localstackviews::provide(slots);
-    crate::kuna_passthrough::provide(slots);
-    crate::kuna_typedcallabi::provide(slots);
-    crate::kuna_vfpvariadic::provide(slots);
-    crate::kuna_stackstoreguard::provide(slots);
-    crate::kuna_arrayextent::provide(slots);
-    crate::kuna_bejoin::provide(slots);
-    crate::kuna_callwide::provide(slots);
-    crate::kuna_inputhints::provide(slots);
-    crate::kuna_globalcallranges::provide(slots);
+    crate::armfloatargs::provide(slots);
+    crate::armfloatreturn::provide(slots);
+    crate::calleememory::provide(slots);
+    crate::localstackviews::provide(slots);
+    crate::passthrough::provide(slots);
+    crate::typedcallabi::provide(slots);
+    crate::vfpvariadic::provide(slots);
+    crate::stackstoreguard::provide(slots);
+    crate::arrayextent::provide(slots);
+    crate::bejoin::provide(slots);
+    crate::callwide::provide(slots);
+    crate::inputhints::provide(slots);
+    crate::globalcallranges::provide(slots);
 }
 
 /// This crate's unit tests link without the driver, so they define the driver's hook symbol
@@ -52,7 +52,7 @@ pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
 /// itself, for each hook a higher crate provides (`KunaHookSlots::finish_with_stubs`).
 #[cfg(test)]
 mod unprovided {
-    use unlace_middle::kuna_passhooks::{KunaHookSlots, KunaHooks};
+    use unlace_middle::passhooks::{KunaHookSlots, KunaHooks};
 
     #[unsafe(no_mangle)]
     fn __unlace_default_pass_hooks() -> &'static KunaHooks {

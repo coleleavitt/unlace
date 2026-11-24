@@ -9,7 +9,7 @@ mod module_scope {
         Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, ruleflags,
     };
     pub(super) use crate::funcdata::Funcdata;
-    pub(super) use crate::kuna_stablenames::FuncdataStablenamesExt;
+    pub(super) use crate::stablenames::FuncdataStablenamesExt;
     pub(super) use unlace_base::types::int4;
     pub(super) use unlace_num::opcodes::OpCode;
 }

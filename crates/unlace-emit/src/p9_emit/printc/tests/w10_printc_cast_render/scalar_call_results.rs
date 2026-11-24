@@ -1,8 +1,8 @@
 //! Calls retain the low result bytes of their emitted callee's wider integer.
 use super::*;
-use crate::kuna_callrettype::FuncdataCallrettypeExt;
-use crate::kuna_callrettype::StatedReturn;
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::callrettype::FuncdataCallrettypeExt;
+use crate::callrettype::StatedReturn;
+use crate::protoorder::FuncdataProtoorderExt;
 
 fn call(
     source: Rc<Datatype>,
@@ -242,7 +242,7 @@ fn computed_untyped_returns_use_the_parameter_recovery_snapshot() {
     let entry = Address::new(ram(&fd), 0x3000);
     retarget(&mut fd, op, &entry);
     let storage = Address::new(ram(&fd), 0x400);
-    let mut recovered = crate::kuna_protoorder::RecoveredTypes {
+    let mut recovered = crate::protoorder::RecoveredTypes {
         inputs: Vec::new(),
         arity_sound: false,
         output: None,

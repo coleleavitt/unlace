@@ -54,7 +54,7 @@ its name and leaves `v4 = (void *)0x3ff0;` among three named siblings.
 
 What separates them is the rest of the function: `dump_remainder` orders `0x2000`
 against `n_remaining`, and nothing in `od`'s dispatch ever orders `0x3ff0`. So the
-rule is read twice — `p5_types/kuna_inferfuncentry.rs`:
+rule is read twice — `p5_types/inferfuncentry.rs`:
 
 * `reads_as_integer(opcode)` — an ordering comparison, a multiply, a divide, a
   remainder or a shift reads its constant as a number.

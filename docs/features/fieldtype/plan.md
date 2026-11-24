@@ -5,7 +5,7 @@
    type (`census4.py` over `decompile-project` headers), and every synthesized
    field's accesses (`KUNA_FIELDTYPE_TRACE`, `ftanalyze.py`); analysis.md section 1.
 2. Keep every access of a field's widest width in structsynth's evidence and let
-   `p5_types/kuna_fieldtype.rs` declare a field the program uses as a pointer as
+   `p5_types/fieldtype.rs` declare a field the program uses as a pointer as
    the most specific pointer those uses carry, option `fieldtype on|off`; a type
    merged into a value is not evidence, and a field used as a number stays one
    (analysis.md section 2.1).

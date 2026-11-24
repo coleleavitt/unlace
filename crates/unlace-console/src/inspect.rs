@@ -8,8 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_decomp::decompile_drive::VarInfo;
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::kuna_srcmap::{self, CodeToken};
 use unlace_decomp::prettyprint::EmitToken;
+use unlace_decomp::srcmap::{self, CodeToken};
 use unlace_sleigh::loadimage::section_flags;
 
 use crate::disasm::{self, Row, Window, mapped_run_end};
@@ -52,8 +52,8 @@ impl FuncDetail {
         code: &str,
         variables: &[VarInfo],
     ) -> Self {
-        let mut tokens = kuna_srcmap::resolve(fd, var_refs, raw, untrimmed, variables);
-        if let Err(error) = kuna_srcmap::verify(&tokens, code) {
+        let mut tokens = srcmap::resolve(fd, var_refs, raw, untrimmed, variables);
+        if let Err(error) = srcmap::verify(&tokens, code) {
             return FuncDetail {
                 tokens_error: Some(error),
                 ..FuncDetail::default()
@@ -279,7 +279,7 @@ pub fn function_xrefs(prog: &ConsoleProgram, file: &object::File, entry: u64) ->
         &inventory,
         prog.arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0,
     );
     let index = xr::build_with_focus(file, prog.arch(), prog.arch().translate(), &seeds, &[entry]);
@@ -475,7 +475,7 @@ impl UseWalk {
             &inventory,
             prog.arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+                .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
                 .0,
         );
         let index = xr::build(file, prog.arch(), prog.arch().translate(), &seeds);

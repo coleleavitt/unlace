@@ -165,5 +165,5 @@ pub fn thumb_paints(file: &object::File) -> Vec<ContextPaint> {
 }
 
 #[cfg(test)]
-#[path = "kuna_armexidx/tests.rs"]
+#[path = "armexidx/tests.rs"]
 mod tests;

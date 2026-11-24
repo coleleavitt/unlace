@@ -108,7 +108,7 @@
   "speed_method": "CLI wall clock including image load; 21 interleaved alternating pairs, two warmups",
   "stage": "tests/stages/kuna-gobounds.xml",
   "source_files": [
-    "decompiler/crates/kuna-decomp/src/p7_regions/kuna_gobounds.rs"
+    "decompiler/crates/kuna-decomp/src/p7_regions/gobounds.rs"
   ],
   "fixture_urls": {
     "builtins-go122": "https://raw.githubusercontent.com/angr/binaries/76ad9e296dde8f82b8ede93ce06a578cd1933639/tests/x86_64/go/go1.22.5/builtins",

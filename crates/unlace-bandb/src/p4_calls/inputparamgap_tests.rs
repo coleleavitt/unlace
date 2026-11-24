@@ -9,7 +9,7 @@ mod module_scope {
 }
 use crate::dtype::type_class;
 use crate::fspec::{ParamListKind, ParamListStandard};
-use crate::kuna_inputparamgap::*;
+use crate::inputparamgap::*;
 use module_scope::*;
 use unlace_base::address::Address;
 use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};

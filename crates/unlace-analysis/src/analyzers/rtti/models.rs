@@ -26,7 +26,7 @@
 #[cfg(test)]
 use super::refkind::End;
 use super::refkind::RefKind;
-use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
+use unlace_decomp::fasthash::{FxHashMap, FxHashSet};
 
 /// A view over the loaded image's bytes addressable by virtual address — the
 /// loadable sections, sorted, so a `read(vma, len)` resolves through whichever

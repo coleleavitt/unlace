@@ -75,7 +75,7 @@ pub(crate) fn language_ids() -> impl Iterator<Item = String> {
 }
 
 pub(crate) fn language_id(file: &object::File<'_>) -> Option<String> {
-    language_id_when(file, unlace_decomp::kuna_ppcapu::ppcapu_enabled())
+    language_id_when(file, unlace_decomp::ppcapu::ppcapu_enabled())
 }
 
 /// An unclassifiable note keeps the generic decoder; [`notes`] reports it.
@@ -93,7 +93,7 @@ pub(crate) fn notes(file: &object::File<'_>, language: &str, explicit: bool) -> 
         file,
         language,
         explicit,
-        unlace_decomp::kuna_ppcapu::ppcapu_enabled(),
+        unlace_decomp::ppcapu::ppcapu_enabled(),
     )
 }
 

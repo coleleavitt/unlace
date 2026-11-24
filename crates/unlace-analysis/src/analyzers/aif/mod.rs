@@ -111,26 +111,26 @@ use crate::listing::{
     decode::{Decoded, decode_one_with_assembly},
 };
 
-pub(crate) mod kuna_addrtakenentry;
-pub mod kuna_aifbracket;
-pub mod kuna_aifcorroborate;
-pub mod kuna_aifnoppad;
-mod kuna_aifpoolslide;
-pub mod kuna_aifstrict;
-pub(crate) mod kuna_aifstringveto;
-mod kuna_armprologue;
-pub(crate) mod kuna_entrychecks;
-mod kuna_framecache;
-mod kuna_framecalls;
-pub(crate) mod kuna_frameflow;
-mod kuna_framepool;
-pub mod kuna_framereplay;
-pub(crate) mod kuna_frameretain;
-pub mod kuna_poolentry;
-mod kuna_sparcprologue;
-mod kuna_thumbframes;
-pub(crate) use kuna_framecache::ArmFrames;
-pub mod kuna_ptrentry;
+pub(crate) mod addrtakenentry;
+pub mod aifbracket;
+pub mod aifcorroborate;
+pub mod aifnoppad;
+mod aifpoolslide;
+pub mod aifstrict;
+pub(crate) mod aifstringveto;
+mod armprologue;
+pub(crate) mod entrychecks;
+mod framecache;
+mod framecalls;
+pub(crate) mod frameflow;
+mod framepool;
+pub mod framereplay;
+pub(crate) mod frameretain;
+pub mod poolentry;
+mod sparcprologue;
+mod thumbframes;
+pub(crate) use framecache::ArmFrames;
+pub mod ptrentry;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 /// Ghidra's `MINIMUM_FUNCTION_COUNT`: AIF does nothing on a program with fewer
@@ -212,7 +212,7 @@ struct GapDecoder<'a> {
     frame_instructions: Option<Rc<BTreeMap<u64, Rc<ProbedInsn>>>>,
     /// Context-certified decodes shared across one frame recovery; used only
     /// while `keep_ops` is off.
-    memo: Option<Rc<crate::listing::kuna_decodememo::DecodeMemo>>,
+    memo: Option<Rc<crate::listing::decodememo::DecodeMemo>>,
     full_capture: Option<crate::listing::xrefs::FullCapture>,
     /// Keep each certified decode's p-code for a later replay.
     keep_ops: bool,
@@ -283,7 +283,7 @@ struct ProbedInsn {
     flows: Vec<u64>,
     mnemonic: Rc<str>,
     operands: String,
-    reusable: Option<Rc<crate::listing::kuna_decodereuse::ReusableDecode>>,
+    reusable: Option<Rc<crate::listing::decodereuse::ReusableDecode>>,
 }
 
 impl<'a> GapDecoder<'a> {
@@ -322,7 +322,7 @@ impl<'a> GapDecoder<'a> {
     }
 
     /// Decode through `memo`, certifying the context of each new decode.
-    fn share(&mut self, memo: Option<&Rc<crate::listing::kuna_decodememo::DecodeMemo>>) {
+    fn share(&mut self, memo: Option<&Rc<crate::listing::decodememo::DecodeMemo>>) {
         if let Some(memo) = memo {
             self.full_capture.get_or_insert_with(Default::default);
             self.keep_ops = false;
@@ -458,7 +458,7 @@ impl<'a> GapDecoder<'a> {
             return None;
         }
         let mut reusable = if let Some(capture) = &mut self.full_capture {
-            crate::listing::kuna_decodereuse::capture(
+            crate::listing::decodereuse::capture(
                 self.translate,
                 vma,
                 &self.code_space,
@@ -1001,7 +1001,7 @@ pub fn run_aif(
     exec_ranges: &[(u64, u64)],
     aifstrict: bool,
     aifcorroborate: bool,
-    aifbracket: Option<&kuna_aifbracket::BracketEvidence>,
+    aifbracket: Option<&aifbracket::BracketEvidence>,
     aifpoolslide: Option<&unlace_decomp::architecture::Architecture>,
 ) -> Vec<u64> {
     run_aif_sharing(
@@ -1026,9 +1026,9 @@ pub(crate) fn run_aif_sharing(
     exec_ranges: &[(u64, u64)],
     aifstrict: bool,
     aifcorroborate: bool,
-    aifbracket: Option<&kuna_aifbracket::BracketEvidence>,
+    aifbracket: Option<&aifbracket::BracketEvidence>,
     aifpoolslide: Option<&unlace_decomp::architecture::Architecture>,
-    memo: Option<&Rc<crate::listing::kuna_decodememo::DecodeMemo>>,
+    memo: Option<&Rc<crate::listing::decodememo::DecodeMemo>>,
 ) -> Vec<u64> {
     let _probe = arm_gap_probe_scope(translate);
     let poolslide = aifpoolslide.map(|arch| (arch, Rc::clone(&code_space)));
@@ -1061,10 +1061,10 @@ pub(crate) fn run_aif_after_frames(
     code_space: Rc<AddrSpace>,
     aifstrict: bool,
     aifcorroborate: bool,
-    aifbracket: Option<&kuna_aifbracket::BracketEvidence>,
+    aifbracket: Option<&aifbracket::BracketEvidence>,
     aifpoolslide: Option<&unlace_decomp::architecture::Architecture>,
     mut straight_line: Option<&mut BTreeSet<u64>>,
-    memo: Option<&Rc<crate::listing::kuna_decodememo::DecodeMemo>>,
+    memo: Option<&Rc<crate::listing::decodememo::DecodeMemo>>,
 ) -> Vec<u64> {
     let _probe = arm_gap_probe_scope(translate);
     let poolslide = aifpoolslide.map(|arch| (arch, Rc::clone(&code_space)));
@@ -1098,7 +1098,7 @@ pub(crate) fn run_aif_after_frames(
 /// Probe ARM gaps without publishing their modes; local IT state remains active.
 pub(crate) fn arm_gap_probe_scope(
     translate: &dyn Translate,
-) -> Option<unlace_sleigh::kuna_contextscope::ContextScope<'_>> {
+) -> Option<unlace_sleigh::contextscope::ContextScope<'_>> {
     let scope = translate.context_scope()?;
     scope.protect_variable(b"TMode").ok()?;
     Some(scope)
@@ -1110,7 +1110,7 @@ fn run_aif_with_decoder(
     decoder: &mut GapDecoder,
     aifstrict: bool,
     aifcorroborate: bool,
-    aifbracket: Option<&kuna_aifbracket::BracketEvidence>,
+    aifbracket: Option<&aifbracket::BracketEvidence>,
 ) -> Vec<u64> {
     let gap_walk = GapWalk {
         strict: aifstrict,
@@ -1135,7 +1135,7 @@ fn run_aif_with_decoder(
 struct GapWalk<'e> {
     strict: bool,
     corroborate: bool,
-    bracket: Option<&'e kuna_aifbracket::BracketEvidence>,
+    bracket: Option<&'e aifbracket::BracketEvidence>,
     noppad: bool,
     poolslide: Option<(&'e unlace_decomp::architecture::Architecture, Rc<AddrSpace>)>,
 }
@@ -1159,15 +1159,14 @@ fn aif_candidates(
         poolslide,
     } = policy;
     let bracket = bracket.filter(|_| roots.is_none());
-    let mut padding =
-        (noppad && roots.is_none()).then(|| kuna_aifnoppad::PaddingRuns::new(decoder));
+    let mut padding = (noppad && roots.is_none()).then(|| aifnoppad::PaddingRuns::new(decoder));
     let mut literals = if roots.is_some() {
-        kuna_framepool::literals(listing, decoder, frames, poolslide)
+        framepool::literals(listing, decoder, frames, poolslide)
     } else {
         poolslide.map(|(arch, code_space)| {
-            kuna_aifpoolslide::LiteralWords::from_listing(
+            aifpoolslide::LiteralWords::from_listing(
                 listing,
-                kuna_poolentry::DecodeMode { arch, code_space },
+                poolentry::DecodeMode { arch, code_space },
             )
         })
     };
@@ -1233,27 +1232,27 @@ fn aif_candidates(
         // boundary rather than the next byte, and only an aligned address or a
         // hole's first byte is a candidate at all.
         let mut advanced = if aifstrict {
-            kuna_aifstrict::next_probe_after(gap_start, gap_hi)
+            aifstrict::next_probe_after(gap_start, gap_hi)
         } else {
             gap_start.saturating_add(1)
         };
-        let probe_here = (!aifstrict || kuna_aifstrict::probe_allowed(listing, gap_start))
+        let probe_here = (!aifstrict || aifstrict::probe_allowed(listing, gap_start))
             && listing.is_undefined(gap_start)
             && !claimed.contains(&gap_start);
         // (kuna, `aifnoppad`) No entry starts on filler: filler in front of a known
         // function or zero fill is not probed, and an accept moves past padding.
         let filler = match &mut padding {
             Some(runs) if probe_here => runs.classify(listing, decoder, gap_start),
-            _ => kuna_aifnoppad::Filler::No,
+            _ => aifnoppad::Filler::No,
         };
-        if probe_here && filler != kuna_aifnoppad::Filler::Refuse {
+        if probe_here && filler != aifnoppad::Filler::Refuse {
             // (kuna, `aifbracket`) A fragment of the enclosing known function is
             // refused but, like an `aif precise` refusal, consumes its body.
             let probe =
                 match probe_gap_start(decoder, listing, &hist, gap_start, gap_hi, aifcorroborate) {
                     Probe::Accept(body)
                         if bracket.is_some_and(|evidence| {
-                            kuna_aifbracket::rejects(listing, decoder, evidence, gap_start, &body)
+                            aifbracket::rejects(listing, decoder, evidence, gap_start, &body)
                         }) =>
                     {
                         Probe::Uncorroborated(body)
@@ -1284,12 +1283,12 @@ fn aif_candidates(
                 Probe::Accept(mut body) => {
                     let mut entry = match (pool_end, filler) {
                         (Some(end), _) => end,
-                        (None, kuna_aifnoppad::Filler::Before(at)) if body.contains(&at) => at,
+                        (None, aifnoppad::Filler::Before(at)) if body.contains(&at) => at,
                         _ => gap_start,
                     };
                     if roots.is_none() && entry == gap_start {
                         if let Some(prefix) =
-                            kuna_sparcprologue::prefix(decoder, listing, &claimed, entry)
+                            sparcprologue::prefix(decoder, listing, &claimed, entry)
                         {
                             body.extend([prefix, prefix + 4]);
                             entry = prefix;
@@ -1393,7 +1392,7 @@ fn probe_gap_start(
     else {
         return Probe::Reject;
     };
-    if aifcorroborate && !kuna_aifcorroborate::accepts(corroborated, count) {
+    if aifcorroborate && !aifcorroborate::accepts(corroborated, count) {
         return Probe::Uncorroborated(body);
     }
     Probe::Accept(body)
@@ -1482,7 +1481,7 @@ pub fn raw_thumb_prologue_seeds(
     code_space: Rc<AddrSpace>,
     exec_ranges: &[(u64, u64)],
 ) -> Vec<u64> {
-    kuna_thumbframes::seeds(file, listing, translate, code_space, exec_ranges)
+    thumbframes::seeds(file, listing, translate, code_space, exec_ranges)
 }
 
 /// `memo`, for the inventory's recovery, shares every decode with the rest of
@@ -1496,7 +1495,7 @@ pub(crate) fn raw_arm_frames(
     code_space: Rc<AddrSpace>,
     exec_ranges: &[(u64, u64)],
     capture_xrefs: bool,
-    memo: Option<&Rc<crate::listing::kuna_decodememo::DecodeMemo>>,
+    memo: Option<&Rc<crate::listing::decodememo::DecodeMemo>>,
 ) -> ArmFrames {
     use object::read::Object;
     if file.architecture() != object::Architecture::Arm {
@@ -1530,7 +1529,7 @@ pub(crate) fn raw_arm_frames(
         while off + 1 < data.len() {
             let vma = sec_addr + off as u64;
             if listing.is_undefined(vma)
-                && kuna_armprologue::matches(little, arch, &decoder.code_space, vma, &data, off)
+                && armprologue::matches(little, arch, &decoder.code_space, vma, &data, off)
             {
                 candidates.insert(vma);
             }
@@ -1563,7 +1562,7 @@ pub(crate) fn raw_arm_frames(
         claimed.extend(spans.iter().copied());
         if arch
             .kuna_options
-            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .get::<unlace_decomp::aif::AifMode>()
             .enabled()
             || capture_xrefs
         {
@@ -1575,12 +1574,12 @@ pub(crate) fn raw_arm_frames(
 
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_aif::AifMode>()
+        .get::<unlace_decomp::aif::AifMode>()
         .enabled()
         && !accepted.is_empty()
         && listing.function_count() >= MINIMUM_FUNCTION_COUNT
     {
-        let policy = kuna_framepool::policy(arch, Rc::clone(&decoder.code_space));
+        let policy = framepool::policy(arch, Rc::clone(&decoder.code_space));
         let replacements = frames.reconcile(listing, listing, &mut decoder, &accepted, &[], policy);
         accepted.retain(|root| !replacements.contains_key(root));
         accepted.extend(replacements.values().copied());
@@ -1599,14 +1598,14 @@ pub(crate) fn arm_frame_prefixes(
     corpus: &Listing,
     roots: &BTreeSet<u64>,
     focused: &[u64],
-    frame_context: Option<&unlace_sleigh::kuna_contextscope::ContextScope<'_>>,
+    frame_context: Option<&unlace_sleigh::contextscope::ContextScope<'_>>,
     arch: &unlace_decomp::architecture::Architecture,
     translate: &dyn Translate,
     code_space: Rc<AddrSpace>,
 ) -> BTreeMap<u64, u64> {
     if !arch
         .kuna_options
-        .get::<unlace_decomp::kuna_aif::AifMode>()
+        .get::<unlace_decomp::aif::AifMode>()
         .enabled()
         || roots.is_empty()
         || corpus.function_count() < MINIMUM_FUNCTION_COUNT
@@ -1622,7 +1621,7 @@ pub(crate) fn arm_frame_prefixes(
     let mut decoder = GapDecoder::new(translate, code_space, listing.exec_ranges());
     decoder.frame_probe = true;
     decoder.prologue_starts = Some(Rc::new(roots.clone()));
-    let policy = kuna_framepool::policy(arch, Rc::clone(&decoder.code_space));
+    let policy = framepool::policy(arch, Rc::clone(&decoder.code_space));
     frames.reconcile(listing, corpus, &mut decoder, roots, focused, policy)
 }
 

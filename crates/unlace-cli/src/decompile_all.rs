@@ -37,9 +37,9 @@ use unlace_console::project::{
 // section/segment walks the zero-discovery diagnosis reads.
 use object::{Object, ObjectSection, ObjectSegment};
 use unlace_decomp::decompile_drive::{LineMapping, TypeInfo, VarInfo, print_c_types};
-use unlace_decomp::kuna_option_dispatch::KUNA_OPTION_NAMES;
-use unlace_decomp::kuna_structsynth::shard::{self, ShardHook};
+use unlace_decomp::option_dispatch::KUNA_OPTION_NAMES;
 use unlace_decomp::options::OptionDatabase;
+use unlace_decomp::structsynth::shard::{self, ShardHook};
 
 use regex::Regex;
 
@@ -752,7 +752,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
     let faults = jobs::Faults::from_env();
     let mut prog = load_program(args, DriverDefaults::Decompile)?;
     if !args.jobs_objects {
-        unlace_decomp::kuna_elemptr::without_objects(prog.arch_mut());
+        unlace_decomp::elemptr::without_objects(prog.arch_mut());
     }
     let inventory = dir.join(jobs::INVENTORY_FILE);
     if !args.jobs_full_load && inventory.is_file() {
@@ -760,7 +760,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
     } else if !args.jobs_full_load {
         prog.callwide_unavailable("worker did not receive a complete function inventory");
     }
-    unlace_console::kuna_callwide::prepare(&mut prog);
+    unlace_console::callwide::prepare(&mut prog);
     faults.after_load(dir);
     arm_fn_budgets(&mut prog, args);
     // (kuna `structsynth`) A recording worker reports every ledger lookup and
@@ -784,7 +784,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
         None => prog
             .arch_mut()
             .kuna_states
-            .remove::<std::cell::RefCell<unlace_decomp::kuna_structsynth::shard::ShardHook>>(),
+            .remove::<std::cell::RefCell<unlace_decomp::structsynth::shard::ShardHook>>(),
     }
     let converge = args.jobs_synth == Some(jobs::SynthWorker::Serial);
 
@@ -980,12 +980,12 @@ fn seed_worker_inventory(prog: &mut ConsoleProgram, path: &str) -> Result<(), St
     let callwide_inventory = prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_callwide::CallWide>()
+        .get::<unlace_decomp::callwide::CallWide>()
         .0
         .then(|| {
             inventory
                 .iter()
-                .map(|entry| unlace_console::kuna_callwide::InventoryEntry {
+                .map(|entry| unlace_console::callwide::InventoryEntry {
                     address: entry.addr,
                     size: entry.size,
                     name: entry.name.clone(),
@@ -1010,7 +1010,7 @@ fn seed_worker_inventory(prog: &mut ConsoleProgram, path: &str) -> Result<(), St
         )
     })?;
     if let Some(inventory) = callwide_inventory {
-        unlace_console::kuna_callwide::replay_inventory(prog, inventory);
+        unlace_console::callwide::replay_inventory(prog, inventory);
     }
     Ok(())
 }
@@ -1078,7 +1078,7 @@ fn replay_worker_arm_frames(prog: &mut ConsoleProgram, args: &Args) -> Result<()
             path.display()
         )
     })?;
-    let record = unlace_analysis::aif::kuna_framereplay::ArmFrameReplay::decode(&text)
+    let record = unlace_analysis::aif::framereplay::ArmFrameReplay::decode(&text)
         .map_err(|e| format!("{}: {e}", path.display()))?;
     prog.replay_arm_frames(record);
     Ok(())
@@ -1090,7 +1090,7 @@ fn replay_worker_arm_frames(prog: &mut ConsoleProgram, args: &Args) -> Result<()
 pub(crate) fn synth_base(prog: &ConsoleProgram) -> Option<shard::Replay> {
     prog.arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_structsynth::StructSynthMode>()
+        .get::<unlace_decomp::structsynth::StructSynthMode>()
         .fires()
         .then(|| shard::Replay::probe(prog.arch().types()))
 }
@@ -1175,12 +1175,12 @@ pub(crate) fn report_rejected_assertions(outcomes: &[unlace_console::assertions:
     let mut any = false;
     report_sdk_declarations(outcomes);
     for outcome in outcomes.iter().filter(|o| o.status == "rejected") {
-        if unlace_console::kuna_cheader::sdk_origin(&outcome.directive).is_some() {
+        if unlace_console::cheader::sdk_origin(&outcome.directive).is_some() {
             continue;
         }
         let reason = outcome.detail.as_deref().unwrap_or("no reason given");
         let reason = reason.lines().next().unwrap_or(reason);
-        if let Some(declaration) = unlace_console::kuna_cheader::origin(&outcome.directive) {
+        if let Some(declaration) = unlace_console::cheader::origin(&outcome.directive) {
             eprintln!("warning: --types {declaration}: rejected: {reason}");
             continue;
         }
@@ -1523,7 +1523,7 @@ fn decompile_all(args: &Args, filters: &Filters) -> Result<AllRun, String> {
         && prog
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>()
+            .get::<unlace_decomp::protoorder::ProtoOrderMode>()
             .is_on()
         && !whole
     {
@@ -1553,16 +1553,16 @@ fn decompile_all(args: &Args, filters: &Filters) -> Result<AllRun, String> {
 /// Arm the per-function budgets `args` asks for: the wall-clock watchdog on the
 /// architecture, and the memory limit process-wide, since what it measures is
 /// the process's resident set. With no `--max-fn-memory` the process takes the
-/// cgroup default ([`unlace_decomp::kuna_fnmemory::use_cgroup_default`]), the
+/// cgroup default ([`unlace_decomp::fnmemory::use_cgroup_default`]), the
 /// serial run and every `--jobs` worker alike.
 pub(crate) fn arm_fn_budgets(prog: &mut ConsoleProgram, args: &Args) {
     if args.max_fn_seconds > 0 {
         prog.arch_mut().kuna_fn_budget = Some(std::time::Duration::from_secs(args.max_fn_seconds));
     }
     match args.max_fn_memory {
-        Some(mib) => unlace_decomp::kuna_fnmemory::set_limit_mib(mib),
+        Some(mib) => unlace_decomp::fnmemory::set_limit_mib(mib),
         None => {
-            unlace_decomp::kuna_fnmemory::use_cgroup_default();
+            unlace_decomp::fnmemory::use_cgroup_default();
         }
     }
 }
@@ -1574,7 +1574,7 @@ pub(crate) fn parse_max_fn_memory(v: &str) -> Result<u64, String> {
         .trim()
         .parse::<u64>()
         .map_err(|_| format!("invalid --max-fn-memory value {v:?} (MiB)"))?;
-    if mib > 0 && !unlace_decomp::kuna_fnmemory::supported() {
+    if mib > 0 && !unlace_decomp::fnmemory::supported() {
         return Err(
             "--max-fn-memory needs the resident set, which this platform does not report".into(),
         );
@@ -1647,7 +1647,7 @@ pub(crate) fn callee_first_decision(
     let on = prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>()
+        .get::<unlace_decomp::protoorder::ProtoOrderMode>()
         .is_on()
         && selected > 1
         && (explicit || (whole && !args.raw_image));
@@ -1691,7 +1691,7 @@ fn is_custom(value: &str) -> bool {
 /// (kuna `calleereginputs custom`) Say so when the run names `custom` but is not
 /// the whole-binary callee-first run that decides it.
 pub(crate) fn note_custom_inert(prog: &ConsoleProgram, selected: usize) {
-    if unlace_decomp::kuna_calleereginputs::custom_applies(prog.arch()) {
+    if unlace_decomp::calleereginputs::custom_applies(prog.arch()) {
         eprintln!(
             "note: --option calleereginputs custom acts only on a whole-binary callee-first \
              run; this run decompiles {selected} selected entries without that order, so no \
@@ -1718,7 +1718,7 @@ fn list_functions(args: &Args) -> Result<(ConsoleProgram, Vec<FunctionEntry>), S
 /// `path` installs, read off one load of it (`unlace unpack --protocols`).
 pub(crate) fn uefi_installs(
     path: &std::path::Path,
-) -> Result<Vec<unlace_decomp::kuna_uefiprotocols::InstalledInterface>, String> {
+) -> Result<Vec<unlace_decomp::uefiprotocols::InstalledInterface>, String> {
     let args = parse_args(&[path.to_string_lossy().into_owned()], "functions")?;
     let prog = load_program(&args, DriverDefaults::Functions)?;
     Ok(prog.arch().kuna_uefi_installs.clone())
@@ -1946,7 +1946,7 @@ pub(crate) fn load_program_segments(
 fn load_program_with_rust_profiles(
     args: &Args,
     defaults: DriverDefaults,
-    request: Option<unlace_analysis::flirt::kuna_rustprofiles::Request>,
+    request: Option<unlace_analysis::flirt::rustprofiles::Request>,
     segments: Option<Vec<(u64, Vec<u8>, u32)>>,
 ) -> Result<ConsoleProgram, String> {
     let binary = std::fs::canonicalize(&args.binary)
@@ -2099,9 +2099,9 @@ fn load_program_with_rust_profiles(
         crate::funcdecl::warn_unmapped(&prog, &binary);
         crate::fid::report::warn(&prog, &binary);
     }
-    crate::kuna_allocrelease::after_analysis();
+    crate::allocrelease::after_analysis();
     if args.jobs_worker.is_none() {
-        unlace_console::kuna_callwide::prepare(&mut prog);
+        unlace_console::callwide::prepare(&mut prog);
     }
     Ok(prog)
 }
@@ -2278,7 +2278,7 @@ pub fn detected_output_language(
             || (head.starts_with(b"PK\x03\x04")
                 && std::fs::read(binary)
                     .is_ok_and(|bytes| unlace_analysis::loadimage_dex::is_apk(&bytes)))
-            || unlace_decomp::kuna_jvm::is_class(head)
+            || unlace_decomp::jvm::is_class(head)
             || (head.starts_with(b"PK\x03\x04")
                 && std::fs::read(binary)
                     .is_ok_and(|bytes| unlace_analysis::loadimage_class::is_jar(&bytes)))
@@ -2289,7 +2289,7 @@ pub fn detected_output_language(
     // runs in the parent process, before the loadtime environment is bound
     // onto the engine (sub)process, so the options list is consulted directly.
     let compiler = match crate::loadtime::last_option_value(options, "sourcelang")
-        .and_then(unlace_decomp::kuna_sourcelang::SourceLang::parse_forced)
+        .and_then(unlace_decomp::sourcelang::SourceLang::parse_forced)
     {
         Some(lang) => unlace_analysis::sourcelang::Compiler::from_forced_lang(lang),
         None => crate::image::inspect(binary, |bytes| {
@@ -2312,12 +2312,12 @@ pub fn parse_language_flag(v: &str) -> Result<Option<&'static str>, String> {
     if v.eq_ignore_ascii_case("auto") {
         return Ok(None);
     }
-    unlace_decomp::kuna_lang::OutLang::from_print_name(v)
+    unlace_decomp::lang::OutLang::from_print_name(v)
         .map(|l| Some(l.print_name()))
         .ok_or_else(|| {
             format!(
                 "unknown output language {v:?} (expected auto, or one of: {})",
-                unlace_decomp::kuna_lang::OutLang::names().join(", ")
+                unlace_decomp::lang::OutLang::names().join(", ")
             )
         })
 }
@@ -2592,7 +2592,7 @@ pub(crate) fn write_selected_json(
     omit: Omit,
 ) -> std::io::Result<()> {
     let language = crate::loadtime::explicit_output_language(options)
-        .and_then(unlace_decomp::kuna_lang::OutLang::from_print_name)
+        .and_then(unlace_decomp::lang::OutLang::from_print_name)
         .map(|lang| lang.print_name())
         .unwrap_or("c-language");
     let (head, tail) = document_fields(
@@ -2678,7 +2678,7 @@ fn error_json(error: Option<&str>) -> Json {
         .unwrap_or(Json::Null)
 }
 
-fn stack_object_json(object: &unlace_decomp::kuna_stackobjectinfo::StackObjectInfo) -> Json {
+fn stack_object_json(object: &unlace_decomp::stackobjectinfo::StackObjectInfo) -> Json {
     Json::Object(vec![
         ("id".into(), Json::Str(object.id.clone())),
         ("name".into(), Json::Str(object.name.clone())),
@@ -2891,7 +2891,7 @@ fn function_json(
 fn report_sdk_declarations(outcomes: &[unlace_console::assertions::Outcome]) {
     let sdk: Vec<_> = outcomes
         .iter()
-        .filter(|o| unlace_console::kuna_cheader::sdk_origin(&o.directive).is_some())
+        .filter(|o| unlace_console::cheader::sdk_origin(&o.directive).is_some())
         .collect();
     if sdk.is_empty() {
         return;
@@ -2909,7 +2909,7 @@ fn report_sdk_declarations(outcomes: &[unlace_console::assertions::Outcome]) {
     if let Some(first) = rejected.first() {
         let reason = first.detail.as_deref().unwrap_or("no reason given");
         let reason = reason.lines().next().unwrap_or(reason);
-        let at = unlace_console::kuna_cheader::sdk_origin(&first.directive).unwrap_or_default();
+        let at = unlace_console::cheader::sdk_origin(&first.directive).unwrap_or_default();
         line.push_str(&format!(" (first: {at}: {reason})"));
     }
     eprintln!("{line}");
@@ -2919,7 +2919,7 @@ fn assertions_json(outcomes: &[unlace_console::assertions::Outcome]) -> Json {
     Json::Array(
         outcomes
             .iter()
-            .filter(|o| unlace_console::kuna_cheader::sdk_origin(&o.directive).is_none())
+            .filter(|o| unlace_console::cheader::sdk_origin(&o.directive).is_none())
             .map(|o| {
                 Json::Object(vec![
                     ("directive".into(), Json::Str(o.directive.clone())),
@@ -2938,7 +2938,7 @@ fn assertions_json(outcomes: &[unlace_console::assertions::Outcome]) -> Json {
     )
 }
 
-fn warning_json(warning: &unlace_decomp::kuna_functionwarnings::Warning) -> Json {
+fn warning_json(warning: &unlace_decomp::functionwarnings::Warning) -> Json {
     Json::Object(vec![
         ("kind".into(), Json::Str(warning.kind())),
         ("message".into(), Json::Str(warning.message())),
@@ -3225,7 +3225,7 @@ mod provenance_json_tests {
 
     #[test]
     fn a_record_lists_its_warnings_and_a_failed_one_none() {
-        use unlace_decomp::kuna_functionwarnings::Warning;
+        use unlace_decomp::functionwarnings::Warning;
         let warned = FuncResult {
             warnings: vec![
                 Warning {
@@ -3279,7 +3279,7 @@ mod provenance_json_tests {
 
     #[test]
     fn warning_kinds_totals_each_kind_over_the_records() {
-        use unlace_decomp::kuna_functionwarnings::Warning;
+        use unlace_decomp::functionwarnings::Warning;
         let gap = |text: &str| Warning {
             address: Some(0x401000),
             text: text.into(),
@@ -3423,10 +3423,10 @@ fn mode_and_options_for_binary(
     let requested = mode.unwrap_or("auto");
     let size = if unlace_decomp::modes::mode_is_automatic(requested) {
         let image = match crate::loadtime::last_option_value(&explicit, "dyldimage") {
-            Some(value) => unlace_decomp::kuna_dyldcache::image_name(value).map(str::to_string),
-            None => unlace_decomp::kuna_dyldcache::selected_image(),
+            Some(value) => unlace_decomp::dyldcache::image_name(value).map(str::to_string),
+            None => unlace_decomp::dyldcache::selected_image(),
         };
-        match unlace_analysis::loader::kuna_dyldcache::image_size(
+        match unlace_analysis::loader::dyldcache::image_size(
             std::path::Path::new(binary),
             image.as_deref(),
         )
@@ -3723,7 +3723,7 @@ pub(crate) fn parse_args_with_filters(
         stored.append(&mut assertions);
         assertions = stored;
     }
-    let sdk = crate::kuna_sdktypes::directives(
+    let sdk = crate::sdktypes::directives(
         &binary,
         &options,
         slice.as_deref(),

@@ -52,7 +52,7 @@
 //! what keeps it off the call.
 //!
 //! Then the callee's own body, read by the entry-liveness walk
-//! [`crate::kuna_calleedeadarg`] already caches for every direct
+//! [`crate::calleedeadarg`] already caches for every direct
 //! call, has to agree. The stub is a TRAMPOLINE
 //! ([`CalleeEntryDead::is_trampoline`]): every path it has leaves through an
 //! indirect jump (`br x16` through a GOT slot), none returns or calls, and it
@@ -81,9 +81,9 @@
 //! argument register the caller left unset, with actively staged registers
 //! after it, and on both parity corpora none is.
 
+use crate::calleedeadarg::FuncdataCalleedeadargExt;
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
 
 /// Before `fillinMap`, hand `call`'s trials the callee's entry-liveness probe
 /// and mark every register trial the caller scored definitely-not-used that
@@ -97,7 +97,7 @@ pub fn mark(call: &mut FuncCallSpecs, data: &Funcdata) {
     let dead = (data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_calleefilledarg::CalleeFilledArg>()
+        .get::<crate::calleefilledarg::CalleeFilledArg>()
         .0
         && is_selector_stub(call.get_name()))
     .then(|| data.kuna_callee_entry_dead_shared(call.get_entry_address()))
@@ -133,7 +133,7 @@ fn is_selector_stub(name: &str) -> bool {
 crate::kuna_flag!(
     /// (kuna) `option calleefilledarg`: an unfilled argument register an
     /// Objective-C selector stub loads itself ends no argument list.  See
-    /// [`crate::kuna_calleefilledarg`].
+    /// [`crate::calleefilledarg`].
     CalleeFilledArg,
     "calleefilledarg",
     "Callee-filled argument slots",

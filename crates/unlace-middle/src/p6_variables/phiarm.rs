@@ -133,7 +133,7 @@ impl OptionPhiArm {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PhiArmSplit(pub bool);
 
-impl crate::kuna_optionset::KunaOption for PhiArmSplit {
+impl crate::optionset::KunaOption for PhiArmSplit {
     const NAME: &'static str = "phiarm";
     crate::kuna_option_id!();
 
@@ -154,7 +154,7 @@ impl crate::kuna_optionset::KunaOption for PhiArmSplit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kuna_optionset::KunaOption;
+    use crate::optionset::KunaOption;
 
     #[test]
     fn option_parses_and_ships_off() {

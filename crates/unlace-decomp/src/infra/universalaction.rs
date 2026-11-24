@@ -22,10 +22,10 @@ use crate::action::{
     Action, ActionDatabase, ActionGroup, ActionPool, ActionRestartGroup, Rule, RuleState,
     UNIVERSAL_NAME, ruleflags,
 };
-use crate::kuna_hooks::HookRegistry;
-use crate::kuna_maturity::Maturity;
-use crate::kuna_passhooks::{KunaHookSlots, KunaHooks};
-use crate::kuna_phases::KunaPhase;
+use crate::hooks::HookRegistry;
+use crate::maturity::Maturity;
+use crate::passhooks::{KunaHookSlots, KunaHooks};
+use crate::phases::KunaPhase;
 
 /// Metadata for an omitted upstream pass, retained for API compatibility.
 #[derive(Debug, Clone, Copy)]
@@ -61,7 +61,7 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
         .unwrap_or_else(|missing| panic!("pass hooks with no provider: {}", missing.join(", ")))
 });
 
-/// The IR's handle on [`PASS_HOOKS`] ([`crate::kuna_passhooks::default_pass_hooks`]): defined
+/// The IR's handle on [`PASS_HOOKS`] ([`crate::passhooks::default_pass_hooks`]): defined
 /// here so the driver supplies the table at link time.
 #[unsafe(no_mangle)]
 pub fn __unlace_default_pass_hooks() -> &'static KunaHooks {
@@ -81,7 +81,7 @@ fn universal_action(arch: &crate::architecture::Architecture) -> Box<dyn Action>
         stackspace_index,
         Vec::new(),
         truncated,
-        arch.kuna_tables.get::<crate::kuna_hooks::HookRegistry>(),
+        arch.kuna_tables.get::<crate::hooks::HookRegistry>(),
     )
 }
 
@@ -581,7 +581,7 @@ pub fn universal_sched_hooked(
         rrow!(
             "maskjoin",
             "analysis",
-            crate::kuna_maskjoin::RuleMaskJoin::new("analysis")
+            crate::maskjoin::RuleMaskJoin::new("analysis")
         ),
         rrow!(
             "andorlump",
@@ -629,7 +629,7 @@ pub fn universal_sched_hooked(
         rrow!(
             "wideslice",
             "analysis",
-            crate::kuna_wideslice::RuleWideSlice::new("analysis")
+            crate::wideslice::RuleWideSlice::new("analysis")
         ),
         rrow!(
             "doubleshift",
@@ -650,107 +650,107 @@ pub fn universal_sched_hooked(
         rrow!(
             "boolsignshift",
             "analysis",
-            crate::kuna_booleanmask::RuleBoolSignShift::with_group("analysis")
+            crate::booleanmask::RuleBoolSignShift::with_group("analysis")
         ),
         rrow!(
             "mba",
             "analysis",
-            crate::kuna_mba::RuleMbaSimplify::new("analysis")
+            crate::mba::RuleMbaSimplify::new("analysis")
         ),
         rrow!(
             "egraph",
             "analysis",
-            crate::kuna_egraph::RuleEgraphSimplify::new("analysis")
+            crate::egraph::RuleEgraphSimplify::new("analysis")
         ),
         rrow!(
             "pairlocal",
             "analysis",
-            crate::kuna_pairphi::RulePairPhi::new("analysis")
+            crate::pairphi::RulePairPhi::new("analysis")
         ),
         rrow!(
             "simdshufflelane",
             "analysis",
-            crate::kuna_simdlane::RuleSimdShuffleLane::with_group("analysis")
+            crate::simdlane::RuleSimdShuffleLane::with_group("analysis")
         ),
         rrow!(
             "constspaceload",
             "analysis",
-            crate::kuna_constspaceload::RuleConstSpaceLoad::with_group("analysis")
+            crate::constspaceload::RuleConstSpaceLoad::with_group("analysis")
         ),
         rrow!(
             "boxedcompare",
             "analysis",
-            crate::kuna_boxedcompare::RuleBoxedCompare::new("analysis")
+            crate::boxedcompare::RuleBoxedCompare::new("analysis")
         ),
         rrow!(
             "x87truncate",
             "analysis",
-            crate::kuna_x87truncate::RuleX87Truncate::new("analysis")
+            crate::x87truncate::RuleX87Truncate::new("analysis")
         ),
         rrow!(
             "satconvert",
             "analysis",
-            crate::kuna_satconvert::RuleSatConvert::new("analysis")
+            crate::satconvert::RuleSatConvert::new("analysis")
         ),
         rrow!(
             "selectdiv",
             "analysis",
-            crate::kuna_selectdiv::RuleSelectDiv::new("analysis")
+            crate::selectdiv::RuleSelectDiv::new("analysis")
         ),
         rrow!(
             "comparemerge",
             "analysis",
-            crate::kuna_cmpmerge::RuleCompareMerge::new("analysis")
+            crate::cmpmerge::RuleCompareMerge::new("analysis")
         ),
         rrow!(
             "bitidioms",
             "analysis",
-            crate::kuna_bitidioms::RuleBitIdioms::new("analysis")
+            crate::bitidioms::RuleBitIdioms::new("analysis")
         ),
         rrow!(
             "alloca",
             "analysis",
-            crate::kuna_alloca::RuleAlloca::new("analysis")
+            crate::alloca::RuleAlloca::new("analysis")
         ),
         rrow!(
             "allocaprobe",
             "analysis",
-            crate::kuna_alloca::RuleAllocaProbe::new("analysis")
+            crate::alloca::RuleAllocaProbe::new("analysis")
         ),
         rrow!(
             "intabs",
             "analysis",
-            crate::kuna_bitidioms::RuleIntAbs::new("analysis")
+            crate::bitidioms::RuleIntAbs::new("analysis")
         ),
         rrow!(
             "satmul",
             "analysis",
-            crate::kuna_satmul::RuleSaturatedMul::new("analysis")
+            crate::satmul::RuleSaturatedMul::new("analysis")
         ),
         rrow!(
             "strcpychain",
             "analysis",
-            crate::kuna_helperrole::RuleStrcpyChain::new("analysis")
+            crate::helperrole::RuleStrcpyChain::new("analysis")
         ),
         rrow!(
             "dynalloca",
             "analysis",
-            crate::kuna_dynalloca::RuleDynAlloca::new("analysis")
+            crate::dynalloca::RuleDynAlloca::new("analysis")
         ),
         rrow!(
             "gobool",
             "analysis",
-            crate::kuna_gobool::RuleGoBoolReturn::with_group(false, "analysis")
+            crate::gobool::RuleGoBoolReturn::with_group(false, "analysis")
         ),
         rrow!(
             "boolsignless",
             "analysis",
-            crate::kuna_flagcompare::RuleBoolSignLess::with_group("analysis")
+            crate::flagcompare::RuleBoolSignLess::with_group("analysis")
         ),
         rrow!(
             "sborrowge",
             "analysis",
-            crate::kuna_flagcompare::RuleSborrowGe::with_group("analysis")
+            crate::flagcompare::RuleSborrowGe::with_group("analysis")
         ),
         rrow!(
             "shiftcompare",
@@ -770,7 +770,7 @@ pub fn universal_sched_hooked(
         rrow!(
             "addcarrychain",
             "analysis",
-            crate::kuna_addcarrychain::RuleAddCarryChain::with_group("analysis")
+            crate::addcarrychain::RuleAddCarryChain::with_group("analysis")
         ),
         rrow!(
             "multicollapse",
@@ -837,7 +837,7 @@ pub fn universal_sched_hooked(
         rrow!(
             "arraystride",
             "analysis",
-            crate::kuna_arraystride::RuleArrayStride::with_group(false, "analysis")
+            crate::arraystride::RuleArrayStride::with_group(false, "analysis")
         ),
         rrow!(
             "collapseconstants",
@@ -1035,12 +1035,12 @@ pub fn universal_sched_hooked(
         rrow!(
             "ovlesssimplify",
             "analysis",
-            crate::kuna_ovlesssimplify::RuleOvLessSimplify::with_group("analysis")
+            crate::ovlesssimplify::RuleOvLessSimplify::with_group("analysis")
         ),
         rrow!(
             "opaquepredicate",
             "analysis",
-            crate::kuna_opaquepredicate::RuleOpaquePredicate::new("analysis")
+            crate::opaquepredicate::RuleOpaquePredicate::new("analysis")
         ),
         rrow!(
             "floatrange",
@@ -1192,7 +1192,7 @@ pub fn universal_sched_hooked(
         rrow!(
             "doubleinputpair",
             "doubleprecis",
-            crate::kuna_borrowcompare::RuleDoubleInputPair::new("doubleprecis")
+            crate::borrowcompare::RuleDoubleInputPair::new("doubleprecis")
         ),
         rrow!(
             "doublein",
@@ -1207,7 +1207,7 @@ pub fn universal_sched_hooked(
         rrow!(
             "stackprobeloop",
             "analysis",
-            crate::kuna_stackprobeloop::RuleStackProbeLoop::new("analysis")
+            crate::stackprobeloop::RuleStackProbeLoop::new("analysis")
         ),
     ];
     oppool1_rules.extend(extra_pool_rules);
@@ -1245,7 +1245,7 @@ pub fn universal_sched_hooked(
         rrow!(
             "callpush",
             "stackvars",
-            crate::kuna_callpush::RuleCallPush::with_group("stackvars")
+            crate::callpush::RuleCallPush::with_group("stackvars")
         ),
     ];
 
@@ -1325,22 +1325,22 @@ pub fn universal_sched_hooked(
         rrow!(
             "memsetcopy",
             "constsequence",
-            crate::kuna_memsetsequence::RuleMemsetCopy::with_group(false, "constsequence")
+            crate::memsetsequence::RuleMemsetCopy::with_group(false, "constsequence")
         ),
         rrow!(
             "rodatastringcopy",
             "constsequence",
-            crate::kuna_rodatastring::RuleRodataStringCopy::with_group(false, "constsequence")
+            crate::rodatastring::RuleRodataStringCopy::with_group(false, "constsequence")
         ),
         rrow!(
             "fatstr",
             "constsequence",
-            crate::kuna_fatstr::RuleFatStr::with_group(false, "constsequence")
+            crate::fatstr::RuleFatStr::with_group(false, "constsequence")
         ),
         rrow!(
             "swiftstr",
             "constsequence",
-            crate::kuna_swiftstr::RuleSwiftString::with_group(false, "constsequence")
+            crate::swiftstr::RuleSwiftString::with_group(false, "constsequence")
         ),
         rrow!(
             "bitfield_store",
@@ -1372,7 +1372,7 @@ pub fn universal_sched_hooked(
     // `loweredStore`): the Detect half (fullloop) writes it, the Install half
     // (mainloop) reads it on the restart.  Cloned into both action closures so
     // they reference the same inner table.
-    let lowered_store = crate::kuna_loweredswitch::new_shared_store();
+    let lowered_store = crate::loweredswitch::new_shared_store();
     let lowered_store_install = lowered_store.clone();
     let lowered_store_detect = lowered_store;
 
@@ -1403,7 +1403,7 @@ pub fn universal_sched_hooked(
         name: "mainloop",
         children: vec![
             act!(ActionUnreachable::boxed("base")),
-            act!(crate::kuna_stackbytecopy::ActionStackByteCopy::boxed()),
+            act!(crate::stackbytecopy::ActionStackByteCopy::boxed()),
             // (kuna) cleanupcode (option `cleanupcode`, default-ON, DIV-81): delete
             // the Rust drop/deallocate call sites (SEFCOM Oxidizer's
             // CleanupCodeRemover, whose STAGE is BEFORE_VARIABLE_RECOVERY).  Runs at
@@ -1413,28 +1413,20 @@ pub fn universal_sched_hooked(
             // ordinary ActionDeadCode fixpoint collect the argument setup that only
             // fed the drop.  Before `outline`, so a region whose only call was drop
             // glue becomes outline-eligible.  Inert on a non-Rust binary.
-            act!(crate::kuna_cleanupcode::ActionRemoveCleanupCode::boxed(
+            act!(crate::cleanupcode::ActionRemoveCleanupCode::boxed(
                 "deadcode"
             )),
-            act!(crate::kuna_gojumpchain::ActionGoJumpChain::boxed(
+            act!(crate::gojumpchain::ActionGoJumpChain::boxed("deadcode")),
+            act!(crate::gomorestack::ActionGoMorestack::boxed("deadcode")),
+            act!(crate::gowritebarrier::ActionGoWriteBarrier::boxed(
                 "deadcode"
             )),
-            act!(crate::kuna_gomorestack::ActionGoMorestack::boxed(
-                "deadcode"
-            )),
-            act!(crate::kuna_gowritebarrier::ActionGoWriteBarrier::boxed(
-                "deadcode"
-            )),
-            act!(crate::kuna_ptrauthtrap::ActionPtrAuthTrap::boxed(
-                "deadcode"
-            )),
-            act!(crate::kuna_chkstkdarwin::ActionChkstkDarwin::boxed(
-                "deadcode"
-            )),
+            act!(crate::ptrauthtrap::ActionPtrAuthTrap::boxed("deadcode")),
+            act!(crate::chkstkdarwin::ActionChkstkDarwin::boxed("deadcode")),
             // (kuna) llscfold (option `llscfold`, default-OFF): an AArch64
             // load/store-exclusive retry loop becomes the atomic builtin of its
             // successful iteration. Pre-SSA, so heritage guards memory across it.
-            act!(crate::kuna_atomics::ActionLlscLoop::boxed("deadcode")),
+            act!(crate::atomics::ActionLlscLoop::boxed("deadcode")),
             // (kuna) outline (option `outline`, default-OFF - destructive, and inert
             // with no region supplied).  Excise a SUPPLIED single-entry region and
             // emit a call to a synthesized pseudofunction in its place.
@@ -1445,25 +1437,23 @@ pub fn universal_sched_hooked(
             // varnodeprops -> lowerswitchinstall -> heritage run below is a ported
             // C++ adjacency (coreaction.cc:5751-5756) pinned by
             // verify_w8x_allowlist.rs.  A kuna-only pass does not get to split it.
-            act!(crate::kuna_outline::ActionOutline::boxed("blockrecovery")),
+            act!(crate::outline::ActionOutline::boxed("blockrecovery")),
             // (kuna) armhoist (option `armhoist`, default-OFF): move the ops both
             // arms of a branch share at their head or tail out of the arms, so
             // structuring sees one copy. Pre-SSA like outline (self-gated on the
             // Ssa fact) and before varnodeprops, outside its pinned adjacency.
-            act!(crate::kuna_armhoist::ActionArmHoist::boxed("blockrecovery")),
+            act!(crate::armhoist::ActionArmHoist::boxed("blockrecovery")),
             act!(ActionVarnodeProps::boxed("base")),
             // (kuna) Install a previously-detected lowered switch BEFORE heritage
             // (coreaction.cc:5755).  `enabled` resolves the C++
             // `glb->recover_lowered_switch` gate (default-on, DIV-3); the gate does
             // not affect the dump.
             SchedNode::Action(Box::new(move || {
-                Box::new(
-                    crate::kuna_loweredswitch::ActionLowerSwitchInstall::with_store(
-                        false,
-                        "switchnorm",
-                        lowered_store_install.clone(),
-                    ),
-                )
+                Box::new(crate::loweredswitch::ActionLowerSwitchInstall::with_store(
+                    false,
+                    "switchnorm",
+                    lowered_store_install.clone(),
+                ))
             })),
             act!(ActionHeritage::boxed("base")),
             act!(ActionParamDouble::boxed("protorecovery")),
@@ -1483,11 +1473,11 @@ pub fn universal_sched_hooked(
             // types onto the call output Varnodes before the first
             // `buildLocaltypes`, so the lattice seeds from them and neither
             // propagation nor structsynth can replace them.
-            act!(crate::kuna_sitetypelock::ActionSiteTypeLock::boxed(
+            act!(crate::sitetypelock::ActionSiteTypeLock::boxed(
                 "typerecovery"
             )),
             act!(ActionInferTypes::boxed("typerecovery")),
-            act!(crate::kuna_indexrescale::ActionIndexRescale::boxed(
+            act!(crate::indexrescale::ActionIndexRescale::boxed(
                 "typerecovery"
             )),
             // (kuna) structsynth: once propagation has settled, complete a
@@ -1496,16 +1486,12 @@ pub fn universal_sched_hooked(
             // so the pointer-arithmetic pools below (`oppool1`'s ptr*undo,
             // `oppool2`'s ptrarith/structoffset0) rewrite the accesses into field
             // references on this same iteration.  Default OFF.
-            act!(crate::kuna_structsynth::ActionStructSynth::boxed(
-                "typerecovery"
-            )),
+            act!(crate::structsynth::ActionStructSynth::boxed("typerecovery")),
             act!(ActionRestructureVarnode::boxed("localrecovery")),
             stackstall,
-            act!(crate::kuna_savedregisterspills::ActionRestrictLocalSavedLanes::boxed()),
+            act!(crate::savedregisterspills::ActionRestrictLocalSavedLanes::boxed()),
             act!(ActionRedundBranch::boxed("deadcontrolflow")),
-            act!(crate::kuna_looprotate::ActionLoopRotate::boxed(
-                "blockrecovery"
-            )),
+            act!(crate::looprotate::ActionLoopRotate::boxed("blockrecovery")),
             act!(ActionBlockStructure::boxed("blockrecovery")),
             act!(ActionConstantPtr::boxed("typerecovery")),
             SchedNode::Pool {
@@ -1521,15 +1507,11 @@ pub fn universal_sched_hooked(
             ))),
             // (kuna) option `phithread` (default off): thread a join that branches
             // on a merged constant, splitting the arms that feed it.
-            act!(crate::kuna_phithread::ActionPhiThread::boxed(
-                "conditionalexe"
-            )),
+            act!(crate::phithread::ActionPhiThread::boxed("conditionalexe")),
             act!(ActionConditionalConst::boxed("analysis")),
-            act!(crate::kuna_rangefold::ActionRangeFold::boxed("unreachable")),
-            act!(crate::kuna_cmpmerge::ActionBranchMerge::boxed(
-                "unreachable"
-            )),
-            act!(crate::kuna_latecse::ActionLateCse::boxed("unreachable")),
+            act!(crate::rangefold::ActionRangeFold::boxed("unreachable")),
+            act!(crate::cmpmerge::ActionBranchMerge::boxed("unreachable")),
+            act!(crate::latecse::ActionLateCse::boxed("unreachable")),
         ],
     };
 
@@ -1545,23 +1527,22 @@ pub fn universal_sched_hooked(
             act!(ActionDeadCode::boxed_narrowing("deadcode")),
             act!(ActionDoNothing::boxed("deadcontrolflow")),
             act!(ActionSwitchNorm::boxed("switchnorm")),
-            act!(crate::kuna_switchguardmerge::ActionSwitchGuardMerge::boxed(
+            act!(crate::switchguardmerge::ActionSwitchGuardMerge::boxed(
                 "switchnorm"
             )),
             SchedNode::Action(Box::new(move || {
-                Box::new(
-                    crate::kuna_loweredswitch::ActionLowerSwitchDetect::with_store(
-                        false,
-                        "switchnorm",
-                        lowered_store_detect.clone(),
-                    ),
-                )
+                Box::new(crate::loweredswitch::ActionLowerSwitchDetect::with_store(
+                    false,
+                    "switchnorm",
+                    lowered_store_detect.clone(),
+                ))
             })),
-            act!(Box::new(
-                crate::kuna_stackguard::ActionStripStackGuard::new(false, "returnsplit")
-            )),
-            act!(crate::kuna_vastart::ActionVaStart::boxed("returnsplit")),
-            act!(crate::kuna_vaarg::ActionVaArg::boxed("returnsplit")),
+            act!(Box::new(crate::stackguard::ActionStripStackGuard::new(
+                false,
+                "returnsplit"
+            ))),
+            act!(crate::vastart::ActionVaStart::boxed("returnsplit")),
+            act!(crate::vaarg::ActionVaArg::boxed("returnsplit")),
             // (kuna) msvcstackguard (option `msvcstackguard`, default-OFF): the
             // Windows sibling of ActionStripStackGuard.  MSVC `/GS` puts the
             // compare inside `__security_check_cookie`, so the guarded function
@@ -1572,7 +1553,7 @@ pub fn universal_sched_hooked(
             // mainloop's RuleIndirectCollapse and dead-code passes over the
             // reduced function before P8 structures it.
             act!(Box::new(
-                crate::kuna_msvcstackguard::ActionStripMsvcStackGuard::new(false, "returnsplit")
+                crate::msvcstackguard::ActionStripMsvcStackGuard::new(false, "returnsplit")
             )),
             // (kuna) SEFCOM Oxidizer `SecurityCheckRemover` (option `securitycheck`,
             // DIV-82 default-ON): sever the CBRANCH edge to a diverging block whose
@@ -1581,9 +1562,9 @@ pub fn universal_sched_hooked(
             // because it is the same edge-removal primitive pair on a different
             // trigger; the repeating fullloop re-runs mainloop's dead-code and type
             // passes over the reduced graph before P8 structures it.
-            act!(crate::kuna_gobounds::ActionGoBounds::boxed("returnsplit")),
+            act!(crate::gobounds::ActionGoBounds::boxed("returnsplit")),
             act!(Box::new(
-                crate::kuna_securitycheck::ActionRemoveSecurityCheck::new(false, "returnsplit")
+                crate::securitycheck::ActionRemoveSecurityCheck::new(false, "returnsplit")
             )),
             // (kuna) the post-SSA Go write-barrier arm fold (option
             // `gowritebarrier`, same judgment as the pre-SSA one-hop fold in
@@ -1591,7 +1572,7 @@ pub fn universal_sched_hooked(
             // phis are only provably bookkeeping once SSA is mature, so this
             // stripper sits with the edge-removal family and lets the repeating
             // fullloop re-run dead-code and type passes over the reduced graph.
-            act!(Box::new(crate::kuna_gowbphi::ActionGoWriteBarrierPhi::new(
+            act!(Box::new(crate::gowbphi::ActionGoWriteBarrierPhi::new(
                 false,
                 "returnsplit"
             ))),
@@ -1602,7 +1583,7 @@ pub fn universal_sched_hooked(
             // strippers above for the same reason: the repeating fullloop re-runs
             // mainloop's dead-code passes over the reduced graph before P8
             // structures it.
-            act!(Box::new(crate::kuna_devectorize::ActionDevectorize::new(
+            act!(Box::new(crate::devectorize::ActionDevectorize::new(
                 false,
                 "returnsplit"
             ))),
@@ -1612,31 +1593,27 @@ pub fn universal_sched_hooked(
             // its never-taken count-exhausted exit.  Here with the edge-removal
             // passes above: mainloop has settled the count and the searched byte
             // to constants, and the repeating fullloop folds what it leaves.
-            act!(Box::new(crate::kuna_strlenscan::ActionStrlenScan::new(
+            act!(Box::new(crate::strlenscan::ActionStrlenScan::new(
                 false,
                 "returnsplit"
             ))),
             // (kuna) bitidioms: the one-instruction bsf/tzcnt/bsr loop becomes
             // ctz / LZCOUNT, removed the same way.
-            act!(Box::new(crate::kuna_bitidioms::ActionBitScanLoop::new(
+            act!(Box::new(crate::bitidioms::ActionBitScanLoop::new(
                 "returnsplit"
             ))),
             // (kuna) repstring (option `repstring`): the same loop shape for
             // `rep movs`, `rep stos` and `repz cmpsb`, collapsed into a copy,
             // fill or compare builtin by removing the edge into the body.
-            act!(Box::new(crate::kuna_repstring::ActionRepString::new(
+            act!(Box::new(crate::repstring::ActionRepString::new(
                 "returnsplit"
             ))),
             // (kuna) copyrun (option `copyrun`): an unrolled run of element
             // copies within one block, collapsed into memcpy.
-            act!(Box::new(crate::kuna_copyrun::ActionCopyRun::new(
-                "returnsplit"
-            ))),
+            act!(Box::new(crate::copyrun::ActionCopyRun::new("returnsplit"))),
             // (kuna) javatry: drop the DEX exceptional edges that bring their
             // handler no value of its own; the next mainloop splices the halves.
-            act!(crate::kuna_javatry::ActionJavaThrowPrune::boxed(
-                "returnsplit"
-            )),
+            act!(crate::javatry::ActionJavaThrowPrune::boxed("returnsplit")),
             act!(ActionReturnSplit::boxed("returnsplit")),
             // (kuna) angr SAILR gotoless `ReturnDuplicatorHigh` (option `returndup`,
             // default-OFF).  Runs right after ActionReturnSplit (the goto-driven
@@ -1648,10 +1625,10 @@ pub fn universal_sched_hooked(
             // in the `returnsplit` group so its duplicated returns flow through the
             // same merge/naming passes and are re-structured by the next fullloop
             // iteration (and the final ActionBlockStructure).
-            act!(crate::kuna_returndup::ActionReturnDup::boxed("returnsplit")),
+            act!(crate::returndup::ActionReturnDup::boxed("returnsplit")),
             // (kuna) `returndup calls`: split a cross-jumped `call f; return`
             // block per predecessor.
-            act!(crate::kuna_returndupcalls::ActionReturnDupCalls::boxed(
+            act!(crate::returndupcalls::ActionReturnDupCalls::boxed(
                 "returnsplit"
             )),
             // (kuna) angr SAILR `ReturnDuplicatorHigh`, per-edge const narrowing (option
@@ -1660,16 +1637,14 @@ pub fn universal_sched_hooked(
             // variable body return merged — the early-return-guard shape the whole-block
             // returndup gate structurally cannot reach.  branchflip + ifelseflatten do the
             // hoist downstream.
-            act!(crate::kuna_earlyreturn::ActionEarlyReturn::boxed(
-                "returnsplit"
-            )),
+            act!(crate::earlyreturn::ActionEarlyReturn::boxed("returnsplit")),
             // (kuna) The direct continuation of ActionEarlyReturn: the SAME per-edge const
             // peel (option `switchreturn`, default-OFF), but with the in-edge cap lifted so
             // the WIDE multi-way switch-phi that overflows earlyreturn's 16-edge limit
             // (`switch (x) { case A: v = K0; break; … } return v;` with > 16 cases) is
             // reached too, hoisting each case to its own `return K`.  Registered right after
             // earlyreturn so the narrower pass consumes the ≤16-edge diamonds first.
-            act!(crate::kuna_switchreturn::ActionSwitchReturn::boxed(
+            act!(crate::switchreturn::ActionSwitchReturn::boxed(
                 "returnsplit"
             )),
             act!(ActionUnjustifiedParams::boxed("protorecovery")),
@@ -1694,44 +1669,42 @@ pub fn universal_sched_hooked(
             // it builds is input-LOCKED, so it has to exist before ActionFuncLink
             // materializes the argument Varnodes and before ActionExtraPopSetup
             // reads its extrapop.  Inert on every language but x86-32.
-            act!(crate::kuna_linuxsyscall::ActionLinuxSyscall::boxed(
+            act!(crate::linuxsyscall::ActionLinuxSyscall::boxed(
                 "protorecovery"
             )),
             // (kuna) evmcalls (option `evmcalls`, default-OFF): each recovered
             // EVM internal call removes its callee's stack effect, which has to
             // be the call's extrapop before ActionExtraPopSetup reads it. Inert
             // on every language without an `evmstack` space.
-            act!(crate::kuna_evmcalls::ActionEvmCalls::boxed("protorecovery")),
+            act!(crate::evmcalls::ActionEvmCalls::boxed("protorecovery")),
             // (kuna) x64syscall (option `x64syscall`, default-OFF): give the
             // x86-64 `SYSCALL` user-op the Linux ABI's register effects.  Here
             // for the same two reasons as its i386 neighbour above: the op is
             // matched on the RAW p-code, and adding a register read or write to
             // it is only legal before heritage builds SSA.  Inert on every
             // language but x86-64 and on any function with no SYSCALL.
-            act!(crate::kuna_x64syscall::ActionX64Syscall::boxed(
-                "protorecovery"
-            )),
+            act!(crate::x64syscall::ActionX64Syscall::boxed("protorecovery")),
             // (kuna) syscallregs (option `syscallregs`): the same rewrite for the
             // ARM, AArch64, RISC-V, MIPS and PowerPC system-call user-op, here for
             // the same reasons.
-            act!(crate::kuna_syscallregs::ActionSyscallRegs::boxed(
+            act!(crate::syscallregs::ActionSyscallRegs::boxed(
                 "protorecovery"
             )),
             // (kuna) pebnames (option `pebnames`, default `auto`): map `TEB *teb`
             // over the Windows segment-base register input.  Here because the
             // Symbol must exist before heritage creates the input Varnode, which
             // is when its type and name locks are read.
-            act!(crate::kuna_pebnames::ActionPebNames::boxed("typerecovery")),
-            act!(crate::kuna_tlsnames::ActionTlsNames::boxed("typerecovery")),
+            act!(crate::pebnames::ActionPebNames::boxed("typerecovery")),
+            act!(crate::tlsnames::ActionTlsNames::boxed("typerecovery")),
             // (kuna) msvcstrappend (option `msvcstrappend`, default-OFF): collapse
             // an inlined MSVC x64 `std::string` push_back/append capacity diamond
             // into one call.  Here for linuxsyscall's reasons: the diamond is
             // proved over the RAW p-code, and the call it leaves carries a
             // LOCKED prototype that ActionFuncLink must materialize.
-            act!(crate::kuna_msvcstrappend::ActionMsvcStrAppend::boxed(
+            act!(crate::msvcstrappend::ActionMsvcStrAppend::boxed(
                 "protorecovery"
             )),
-            act!(crate::kuna_rustprobestack::ActionRustProbestack::boxed(
+            act!(crate::rustprobestack::ActionRustProbestack::boxed(
                 "protorecovery"
             )),
             // (kuna) chkstkdarwin (option `chkstkdarwin`, default on): remove the
@@ -1739,7 +1712,7 @@ pub fn universal_sched_hooked(
             // rustprobestack is: the call is matched on the RAW p-code and must be
             // gone before FuncLink gives it trials and heritage kills the argument
             // registers at it.
-            act!(crate::kuna_chkstkdarwin::ActionChkstkDarwin::boxed(
+            act!(crate::chkstkdarwin::ActionChkstkDarwin::boxed(
                 "protorecovery"
             )),
             act!(ActionNormalizeSetup::boxed("normalanalysis")),
@@ -1760,9 +1733,7 @@ pub fn universal_sched_hooked(
             // defined after a throwing Swift call and read before a throwing
             // return. After FuncLink, which gives each call its model; before
             // heritage, which links the new write and read.
-            act!(crate::kuna_swifterror::ActionSwiftError::boxed(
-                "protorecovery"
-            )),
+            act!(crate::swifterror::ActionSwiftError::boxed("protorecovery")),
             settles(Maturity::BandB, fullloop),
             hooks.boundary(KunaPhase::P3),
             hooks.boundary(KunaPhase::P4),
@@ -1780,13 +1751,11 @@ pub fn universal_sched_hooked(
             act!(ActionPreferComplement::boxed("blockrecovery", true)),
             act!(ActionStructureTransform::boxed("blockrecovery", true)),
             act!(ActionNormalizeBranches::boxed("normalizebranches")),
-            act!(crate::kuna_armfloatargs::ActionArmFloatArgs::boxed("merge")),
-            act!(crate::kuna_returnselector::ActionReturnSelector::boxed(
-                "merge"
-            )),
+            act!(crate::armfloatargs::ActionArmFloatArgs::boxed("merge")),
+            act!(crate::returnselector::ActionReturnSelector::boxed("merge")),
             // (kuna) spphistack: a bare input stack pointer a phi reads becomes
             // PTRSUB(sp, 0), before HighVariables are assigned and merged.
-            act!(crate::kuna_spphistack::ActionSpPhiStack::boxed("merge")),
+            act!(crate::spphistack::ActionSpPhiStack::boxed("merge")),
             act!(ActionAssignHigh::boxed("merge")),
             act!(ActionMergeRequired::boxed("merge")),
             act!(ActionMarkExplicit::boxed("merge")),
@@ -1801,7 +1770,7 @@ pub fn universal_sched_hooked(
             act!(ActionHideShadow::boxed("merge")),
             settles(Maturity::Merged, act!(ActionCopyMarker::boxed("merge"))),
             hooks.boundary(KunaPhase::P6),
-            act!(crate::kuna_typevote::ActionTypeVote::boxed("typerecovery")),
+            act!(crate::typevote::ActionTypeVote::boxed("typerecovery")),
             act!(ActionLateDoNothing::boxed("blockrecovery")),
             settles(
                 Maturity::Structured,
@@ -1815,9 +1784,10 @@ pub fn universal_sched_hooked(
             // `preferComplement` has normalized the positive-flip cases — so we
             // only catch the residual `if (x == 0)` / equality guards.
             act!(ActionBranchFlip::boxed("blockrecovery", false)),
-            act!(Box::new(
-                crate::kuna_compareform::ActionPresentCompareForm::new(false, "presentcompare")
-            )),
+            act!(Box::new(crate::compareform::ActionPresentCompareForm::new(
+                false,
+                "presentcompare"
+            ))),
             act!(ActionOutputPrototype::boxed("localrecovery")),
             settles(
                 Maturity::PrototypeFixed,
@@ -1830,40 +1800,38 @@ pub fn universal_sched_hooked(
             // high is final here, so an indirect call's target takes the
             // function-pointer type its arguments and output state, just before
             // ActionSetCasts checks every use against it.
-            act!(crate::kuna_calltargettype::ActionCallTargetType::boxed(
+            act!(crate::calltargettype::ActionCallTargetType::boxed(
                 "typerecovery"
             )),
             settles(Maturity::Casts, act!(ActionSetCasts::boxed("casts"))),
             act!(ActionFinalStructure::boxed("blockrecovery")),
-            act!(crate::kuna_postinc::ActionPostIncrement::boxed(
-                "blockrecovery"
-            )),
+            act!(crate::postinc::ActionPostIncrement::boxed("blockrecovery")),
             // (kuna) angr SAILR return-tail goto-reduction (option `gotoreduce`):
             // call-free return tails at `return`, then return tails with a call
             // (`free(p); return;`) at `on`.  Runs after the tree is final + goto
             // targets labelled.
-            act!(crate::kuna_gotoreduce::ActionGotoReduce::boxed(
-                "blockrecovery"
-            )),
-            act!(crate::kuna_taildup::ActionTailDup::boxed("blockrecovery")),
+            act!(crate::gotoreduce::ActionGotoReduce::boxed("blockrecovery")),
+            act!(crate::taildup::ActionTailDup::boxed("blockrecovery")),
             // (kuna) angr `IfElseFlattener`: after the tree is final + goto
             // targets labelled (and after gotoreduce), drop the `else` arm of a
             // 3-component `if` whose true-clause terminates, re-parenting the
             // else body as a follower (option `ifelseflatten`, default-OFF).
-            act!(crate::kuna_ifelseflatten::ActionIfElseFlatten::boxed(
+            act!(crate::ifelseflatten::ActionIfElseFlatten::boxed(
                 "blockrecovery"
             )),
             // (kuna) angr SAILR cross-jump reversion (option `crossjumprevert`,
             // default-OFF).  Runs *after* gotoreduce — per the CrossJumpReverter
             // docstring it is the last deoptimization, so return tails are already
             // structured early returns and only true cross-jump tails remain.
-            act!(crate::kuna_crossjumpreverter::ActionCrossJumpReverter::boxed("blockrecovery")),
+            act!(crate::crossjumpreverter::ActionCrossJumpReverter::boxed(
+                "blockrecovery"
+            )),
             // (kuna) angr structurer ITE region-dedup (option `dedupitetail`,
             // default-OFF).  The inverse of the duplication passes above: after the
             // tree is final + goto targets labelled, merge a duplicated `if/else`
             // tail (shared prefix/suffix of statement-equivalent leaves across both
             // arms) by hoisting the shared blocks out of the `if`, emitting one copy.
-            act!(crate::kuna_dedupitetail::ActionDedupIteTail::boxed(
+            act!(crate::dedupitetail::ActionDedupIteTail::boxed(
                 "blockrecovery"
             )),
             // (kuna) angr ITERegionConverter (option `iteregion`, default-OFF — a
@@ -1872,17 +1840,13 @@ pub fn universal_sched_hooked(
             // both arms a single COPY to the same variable) so the S9 printer emits
             // it as a `?:` ternary (`v = c ? A : B;`).  Print-only mark; no p-code
             // is touched, so OFF is byte-identical.
-            act!(crate::kuna_iteregion::ActionIteRegion::boxed(
-                "blockrecovery"
-            )),
+            act!(crate::iteregion::ActionIteRegion::boxed("blockrecovery")),
             // (kuna) iteboolean (option `iteboolean`, default-OFF - a runtime
             // choice).  Mark a `0`/`1` select diamond whose condition is a folded
             // short-circuit chain so the S9 printer emits `v = (a && b);` instead
             // of the constant if/else P3 RuleConditionalMove cannot fold.
             // Print-only mark; no p-code is touched, so OFF is byte-identical.
-            act!(crate::kuna_iteboolean::ActionIteBoolean::boxed(
-                "blockrecovery"
-            )),
+            act!(crate::iteboolean::ActionIteBoolean::boxed("blockrecovery")),
             // (kuna) paramcopyhoist (option `paramcopyhoist`, default-OFF - a runtime
             // choice).  Re-anchors an unmodified incoming parameter's trim COPY in the
             // entry block so its copy-shadow prints with the other parameter spills.
@@ -1890,16 +1854,14 @@ pub fn universal_sched_hooked(
             // final: the Cover legality test sees the variable's complete live range,
             // and no merge or structuring decision can be perturbed by the move --
             // only which basic block's statement list holds the COPY changes.
-            act!(crate::kuna_gotosink::ActionGotoSink::boxed("blockrecovery")),
-            act!(crate::kuna_crossjumptail::ActionCrossJumpTail::boxed(
+            act!(crate::gotosink::ActionGotoSink::boxed("blockrecovery")),
+            act!(crate::crossjumptail::ActionCrossJumpTail::boxed(
                 "blockrecovery"
             )),
-            act!(crate::kuna_guardedloop::ActionGuardedLoop::boxed(
+            act!(crate::guardedloop::ActionGuardedLoop::boxed(
                 "blockrecovery"
             )),
-            act!(crate::kuna_paramcopyhoist::ActionParamCopyHoist::boxed(
-                "merge"
-            )),
+            act!(crate::paramcopyhoist::ActionParamCopyHoist::boxed("merge")),
             hooks.boundary(KunaPhase::P8),
             act!(ActionPrototypeWarnings::boxed("protorecovery")),
             settles(Maturity::Complete, act!(ActionStop::boxed("base"))),

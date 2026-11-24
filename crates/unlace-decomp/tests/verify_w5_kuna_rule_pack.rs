@@ -34,13 +34,13 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use unlace_decomp::action::Rule;
+use unlace_decomp::addcarrychain::RuleAddCarryChain;
+use unlace_decomp::arraystride::RuleArrayStride;
+use unlace_decomp::booleanmask::RuleBoolSignShift;
 use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
 use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::kuna_addcarrychain::RuleAddCarryChain;
-use unlace_decomp::kuna_arraystride::RuleArrayStride;
-use unlace_decomp::kuna_booleanmask::RuleBoolSignShift;
-use unlace_decomp::kuna_ovlesssimplify::RuleOvLessSimplify;
+use unlace_decomp::ovlesssimplify::RuleOvLessSimplify;
 use unlace_decomp::varnode::{DefOpInfo, VarnodeBank};
 
 fn build_manager() -> AddrSpaceManager {

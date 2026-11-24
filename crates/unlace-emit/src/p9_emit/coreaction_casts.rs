@@ -57,7 +57,7 @@ use crate::funcdata_facing::FuncdataFacingExt;
 use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::funcdata_union::FuncdataUnionExt;
-use crate::kuna_stackviews::FuncdataStackviewsExt;
+use crate::stackviews::FuncdataStackviewsExt;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -388,8 +388,8 @@ pub fn get_input_cast(
     slot: int4,
 ) -> Option<Rc<Datatype>> {
     get_input_cast_op(data, strat, op, slot)
-        .or_else(|| crate::kuna_signedread::cast(data, op, slot))
-        .or_else(|| crate::kuna_unsignedread::cast(data, strat, op, slot))
+        .or_else(|| crate::signedread::cast(data, op, slot))
+        .or_else(|| crate::unsignedread::cast(data, strat, op, slot))
 }
 
 /// The per-op-code body of [`get_input_cast`].
@@ -466,23 +466,21 @@ fn get_input_cast_op(
             let contract = (data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_coreoptions::StackViews>()
+                .get::<crate::coreoptions::StackViews>()
                 .0
                 && opc == OpCode::CPUI_CALLOTHER)
-                .then(|| crate::kuna_stackuses::input_contract(data, op, slot))
+                .then(|| crate::stackuses::input_contract(data, op, slot))
                 .flatten();
             let declared_storage = contract.is_some();
             let reqtype = contract.unwrap_or_else(|| input_type_local(data, op, slot));
             let curtype = data.vn_high_type_read_facing(invn, op);
             let care_ptr_uint = declared_storage
                 || reqtype.get_metatype() != type_metatype::TYPE_UNKNOWN
-                || crate::kuna_unknowncasts::declared_argument(data, op, slot);
+                || crate::unknowncasts::declared_argument(data, op, slot);
             strat
                 .cast_standard(&reqtype, &curtype, false, care_ptr_uint)
-                .or_else(|| {
-                    crate::kuna_calltargettype::uncallable_target_cast(data, op, slot, &curtype)
-                })
-                .or_else(|| crate::kuna_truncarg::narrowed_arg_cast(data, strat, op, slot))
+                .or_else(|| crate::calltargettype::uncallable_target_cast(data, op, slot, &curtype))
+                .or_else(|| crate::truncarg::narrowed_arg_cast(data, strat, op, slot))
         }
     }
 }
@@ -513,8 +511,8 @@ fn get_input_cast_load(
     }
     let reqtype = tlst
         .get_qualified_type(
-            crate::kuna_typequal::unqualified_value(reqtype),
-            crate::kuna_typequal::effective_qualifiers(&curtype),
+            crate::typequal::unqualified_value(reqtype),
+            crate::typequal::effective_qualifiers(&curtype),
         )
         .ok()?;
     if !Rc::ptr_eq(&curtype, &reqtype) && curtype.get_size() == reqtype.get_size() {
@@ -573,11 +571,11 @@ fn get_input_cast_store(
     } else {
         (Rc::clone(&pointer_type), -1)
     };
-    let qualifiers = crate::kuna_typequal::effective_qualifiers(&pointed_to);
+    let qualifiers = crate::typequal::effective_qualifiers(&pointed_to);
     let access_type = |ty| {
         tlst.get_qualified_type(
-            crate::kuna_typequal::unqualified_value(ty),
-            qualifiers & !crate::kuna_typequal::CONST,
+            crate::typequal::unqualified_value(ty),
+            qualifiers & !crate::typequal::CONST,
         )
         .ok()
     };
@@ -590,12 +588,12 @@ fn get_input_cast_store(
         return None;
     }
     if slot == 1 {
-        if qualifiers & crate::kuna_typequal::CONST != 0 {
+        if qualifiers & crate::typequal::CONST != 0 {
             return tlst
                 .get_type_pointer(pointer_size, access_type(pointed_to)?, wordsize)
                 .ok();
         }
-        if let Some(value) = super::kuna_floatstore::pointer(data, &pointed_to, &value_type) {
+        if let Some(value) = super::floatstore::pointer(data, &pointed_to, &value_type) {
             return tlst
                 .get_type_pointer(pointer_size, access_type(value)?, wordsize)
                 .ok();
@@ -624,7 +622,7 @@ fn get_input_cast_store(
     // value typed by its own width, the pointee still demands a cast to
     // `code`, which prints `(void)`.  A `code` destination is not a value type,
     // so the store needs no cast at all.
-    if crate::kuna_codescalar::blocks_value_type(&pointed_to) {
+    if crate::codescalar::blocks_value_type(&pointed_to) {
         return None;
     }
     strat.cast_standard(&pointed_to, &value_type, false, true)
@@ -757,7 +755,7 @@ fn float_compare_is_exact(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
     };
     [(a, b), (b, a)]
         .into_iter()
-        .any(|(c, v)| crate::kuna_floatbits::compares_as_a_float(data, c) || zero_against_abs(c, v))
+        .any(|(c, v)| crate::floatbits::compares_as_a_float(data, c) || zero_against_abs(c, v))
 }
 
 /// (kuna) The integer type an `INT_EQUAL`/`INT_NOTEQUAL` with a float input
@@ -1077,14 +1075,14 @@ pub fn get_output_token(data: &mut Funcdata, strat: &CastStrategyC, op: OpId) ->
             None => output_type_local(data, op),
         },
         OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-            if let Some(ct) = crate::kuna_floatbits::held_bits_token(data, op) {
+            if let Some(ct) = crate::floatbits::held_bits_token(data, op) {
                 return ct;
             }
             let local = output_type_local(data, op);
             if local.get_metatype() != type_metatype::TYPE_UNKNOWN {
                 return local;
             }
-            crate::kuna_callrettype::refused_token(data, op).unwrap_or(local)
+            crate::callrettype::refused_token(data, op).unwrap_or(local)
         }
         // TypeOp::getOutputToken default.
         _ => output_type_local(data, op),
@@ -1331,10 +1329,10 @@ fn subpiece_composite_byte_offset(data: &Funcdata, op: OpId) -> i64 {
 
 /// (kuna `structsynth nest`) `ct`, or the completed record when `ct` is a
 /// synthesized record's pointer to its own shell
-/// (`kuna_structsynth::resolve_self_pointer`).
+/// (`structsynth::resolve_self_pointer`).
 fn resolve_self_pointer(data: &Funcdata, ct: Rc<Datatype>) -> Rc<Datatype> {
     match data.get_arch().types() {
-        Some(tlst) => crate::kuna_structsynth::resolve_self_pointer(tlst, &ct).unwrap_or(ct),
+        Some(tlst) => crate::structsynth::resolve_self_pointer(tlst, &ct).unwrap_or(ct),
         None => ct,
     }
 }
@@ -1401,8 +1399,8 @@ fn load_store_space(data: &Funcdata, op: OpId) -> Option<Rc<unlace_base::space::
 // ActionSetCasts driver + helpers (coreaction.cc:2407-2872), on Funcdata.
 // =============================================================================
 
-/// Fill the cast hook ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill the cast hook ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.action_set_casts = Some(Funcdata::action_set_casts);
 }
 
@@ -1444,8 +1442,8 @@ impl FuncdataCastExt for Funcdata {
     /// CAST/PTRSUB ops the rendered C needs.  Returns the number of changes made.
     fn action_set_casts(&mut self) -> int4 {
         self.start_cast_phase();
-        crate::kuna_stackversions::prepare(self);
-        crate::kuna_stackviews::prepare_casts(self);
+        crate::stackversions::prepare(self);
+        crate::stackviews::prepare_casts(self);
         let tlst = match self.get_arch().types_rc() {
             Some(t) => t as Rc<dyn crate::dtype::TypeFactory>,
             None => return 0,
@@ -1469,7 +1467,7 @@ impl FuncdataCastExt for Funcdata {
                     Some(o) => o,
                     None => continue,
                 };
-                if o.not_printed() || crate::kuna_stackmarkers::nonprinting(self, op) {
+                if o.not_printed() || crate::stackmarkers::nonprinting(self, op) {
                     continue;
                 }
                 let opc = o.code();
@@ -1485,26 +1483,26 @@ impl FuncdataCastExt for Funcdata {
                 if self
                     .get_arch()
                     .kuna_options
-                    .get::<crate::kuna_coreoptions::CastArith>()
+                    .get::<crate::coreoptions::CastArith>()
                     .0
                     && self.obank().get(op).map(|o| o.code()) == Some(OpCode::CPUI_INT_ADD)
                 {
-                    crate::kuna_castarith::rewrite(self, op);
+                    crate::castarith::rewrite(self, op);
                 }
                 // (kuna `castindex`) So does a variable index, and a byte-pointer difference.
                 let mut diff_token = None;
                 if self
                     .get_arch()
                     .kuna_options
-                    .get::<crate::kuna_coreoptions::CastIndex>()
+                    .get::<crate::coreoptions::CastIndex>()
                     .0
                 {
                     match self.obank().get(op).map(|o| o.code()) {
                         Some(OpCode::CPUI_INT_ADD) => {
-                            crate::kuna_castarith::rewrite_index(self, &strat, op);
+                            crate::castarith::rewrite_index(self, &strat, op);
                         }
                         Some(OpCode::CPUI_INT_SUB) => {
-                            diff_token = crate::kuna_castarith::pointer_difference(self, op).ok();
+                            diff_token = crate::castarith::pointer_difference(self, op).ok();
                         }
                         _ => {}
                     }
@@ -1884,10 +1882,10 @@ impl FuncdataCastLocalExt for Funcdata {
 
     /// `ActionSetCasts::castOutput` (coreaction.cc:2624-2704).
     fn cast_output(&mut self, op: OpId, strat: &CastStrategyC) -> int4 {
-        if let Some((wide, unsigned)) = crate::kuna_voidret::narrowed_call_result(self, op) {
+        if let Some((wide, unsigned)) = crate::voidret::narrowed_call_result(self, op) {
             return self.cast_narrowed_call(op, wide, unsigned);
         }
-        if let Some(float) = crate::kuna_callrettype::float_held_as_bits(self, op) {
+        if let Some(float) = crate::callrettype::float_held_as_bits(self, op) {
             return self.cast_narrowed_call(op, float, false);
         }
         let tokenct = get_output_token(self, strat, op);
@@ -1911,10 +1909,10 @@ impl FuncdataCastLocalExt for Funcdata {
     /// (kuna `voidret`) Make the call `op` write its callee's whole result,
     /// typed `wide`, into a temporary its output then truncates with a CAST,
     /// which prints the conversion, to an unsigned word where `unsigned` asks
-    /// ([`crate::kuna_voidret::narrowed_call_result`]).  (kuna
+    /// ([`crate::voidret::narrowed_call_result`]).  (kuna
     /// `callrettype`) A float the caller holds as bits goes through the same
     /// CAST at its own width, which prints the reinterpretation
-    /// ([`crate::kuna_callrettype::float_held_as_bits`]).
+    /// ([`crate::callrettype::float_held_as_bits`]).
     fn cast_narrowed_call(&mut self, op: OpId, wide: Rc<Datatype>, unsigned: bool) -> int4 {
         let Some((outvn, addr)) = self
             .obank()
@@ -1967,7 +1965,7 @@ impl FuncdataCastLocalExt for Funcdata {
                     .get_type(),
             ),
         };
-        let storage_type = crate::kuna_stackviews::access_type(self, outvn, op, -1);
+        let storage_type = crate::stackviews::access_type(self, outvn, op, -1);
         if Rc::ptr_eq(&tokenct, storage_type.as_ref().unwrap_or(&out_high_type)) {
             if tokenct.needs_resolution() {
                 let resolve = ResolvedUnion::new(Rc::clone(&tokenct));

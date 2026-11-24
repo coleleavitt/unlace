@@ -144,7 +144,7 @@ fn find(data: &Funcdata) -> Option<VaStart> {
                     Some((fop, fp)) => (vec![op, fop], gp, fp),
                     // gcc leaves fp_offset unwritten when no va_arg reads a double;
                     // taken only with vaargconst on, which leaves that shape behind
-                    None if crate::kuna_vaargconst::enabled(data)
+                    None if crate::vaargconst::enabled(data)
                         && at(x.wrapping_add(4), 4).next().is_none() =>
                     {
                         (vec![op], gp, 48)
@@ -341,7 +341,7 @@ impl Action for ActionVaStart {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_vastart::VaStartRewrite>()
+            .get::<crate::vastart::VaStartRewrite>()
             .0
         {
             return 0;

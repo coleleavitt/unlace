@@ -108,7 +108,7 @@ impl Action for ActionIfElseFlatten {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_ifelseflatten::FlattenIfelse>()
+            .get::<crate::ifelseflatten::FlattenIfelse>()
             .0
         {
             return 0;
@@ -304,7 +304,7 @@ impl OptionIfElseFlatten {
 #[derive(Clone, Debug, PartialEq)]
 pub struct FlattenIfelse(pub bool);
 
-impl crate::kuna_optionset::KunaOption for FlattenIfelse {
+impl crate::optionset::KunaOption for FlattenIfelse {
     const NAME: &'static str = "ifelseflatten";
     crate::kuna_option_id!();
 
@@ -317,7 +317,7 @@ impl crate::kuna_optionset::KunaOption for FlattenIfelse {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_ifelseflatten::OptionIfElseFlatten.apply(value)?;
+        let (v, msg) = crate::ifelseflatten::OptionIfElseFlatten.apply(value)?;
         Ok((FlattenIfelse(v), msg))
     }
 }

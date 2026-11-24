@@ -38,7 +38,7 @@
 //! pushes and the fixed allocation `S_FRAMEPROC` records (`cbSaveRegs + cbFrame`,
 //! the convention both MSVC and LLVM write); an x64 frame register (`RBP`,
 //! `R13`) points where the function's unwind data puts it
-//! ([`super::kuna_pdbframe`]); and an i386 `EBP` frame pointer is the entry stack
+//! ([`super::pdbframe`]); and an i386 `EBP` frame pointer is the entry stack
 //! pointer less the pushed `EBP`. Under i386 frame-pointer omission the virtual
 //! frame `$T0` is the address of the return address, and the stack pointer is
 //! placed like the x64 one, both only when the locals and the parameters share a
@@ -60,7 +60,7 @@ use object::Object;
 use pdb::FallibleIterator;
 use unlace_decomp::dtype::{Datatype, type_metatype};
 
-use super::kuna_pdbtpi::TpiMapper;
+use super::pdbtpi::TpiMapper;
 use crate::pass::{
     AnalysisCtx, AnalysisOutput, AnalysisPass, LocalFact, ModelFact, Phase, RegLocalFact,
     TypedDataFact,
@@ -191,7 +191,7 @@ fn register_base(family: Family, reg: u16) -> Option<Base> {
 /// Where `base` points in kuna stack coordinates during the procedure body (0
 /// is the return-address slot), when it is known: the x64 stack pointer from
 /// `S_FRAMEPROC`, the x64 frame register from the function's unwind data
-/// (`frame_register`, [`super::kuna_pdbframe`]), the i386 `EBP` frame.
+/// (`frame_register`, [`super::pdbframe`]), the i386 `EBP` frame.
 pub(crate) fn base_offset(
     family: Family,
     base: Base,
@@ -512,7 +512,7 @@ fn collect(
     };
     let (_, word_size) = ctx.arch.data_org();
     let frame_registers = if family == Family::X64 {
-        super::kuna_pdbframe::x64_frame_registers(ctx.bytes)
+        super::pdbframe::x64_frame_registers(ctx.bytes)
     } else {
         BTreeMap::new()
     };

@@ -23,7 +23,7 @@
     "released_element_id": 4114,
     "measured_against_main": "d09f21ce (the six-PR IDA-parity stack: DWARF prototypes, DWARF enums by member name, mid-string literals, ELF data-global naming, return-pair repair, x86 direction-flag folding). EVERY number in this file was re-measured on that main AFTER the review-feedback round (the shared printed-width budget); none is carried over from #193, #194, or the pre-review consolidation.",
     "why_one_option": "Both PRs relax THE IDENTICAL GATE -- the is_complex(orblock) decline inside rule_block_or (p8_structure/blockaction.rs) and its verbatim twin try_block_or (p8_structure/region_structurer.rs). The shared root cause is Ghidra's BlockBasic::isComplex >2-statement readability budget. They collided hard: both added a CollapseStructure field named condfold_blocks, both added a builder named with_condfold_blocks, condjoin's entry point was even named compute_condfold_blocks, and both bumped the option count 76 -> 77. They differed only in the admission predicate and the value surface.",
-    "predicate_is_the_union": "A sibling must fit the level's PRINTED-WIDTH BUDGET (<=5 comma elements at `on`, <=9 at `wide`, measured by kuna_condfold.rs printed_shape with the printer's own skip rules) and then be taken by EITHER rule. Rule A (from #193) is the bounded-prefix rule; Rule B (from #194) is the statement-shape allowlist. Neither subsumes the other -- Rule A admits a 5-to-9-statement straight-line prefix Rule B's shape/scored caps refuse, Rule B admits a second call and a NESTED BlockCondition (what a guard CASCADE needs) that Rule A never takes. Rule A is tried first at the fold site.",
+    "predicate_is_the_union": "A sibling must fit the level's PRINTED-WIDTH BUDGET (<=5 comma elements at `on`, <=9 at `wide`, measured by condfold.rs printed_shape with the printer's own skip rules) and then be taken by EITHER rule. Rule A (from #193) is the bounded-prefix rule; Rule B (from #194) is the statement-shape allowlist. Neither subsumes the other -- Rule A admits a 5-to-9-statement straight-line prefix Rule B's shape/scored caps refuse, Rule B admits a second call and a NESTED BlockCondition (what a guard CASCADE needs) that Rule A never takes. Rule A is tried first at the fold site.",
     "condjoin_disappears": "There is no `condjoin` option name, no cond_join Architecture/ArchContext field, no kuna_condjoin.rs, and no second spec section. Exactly ONE net new option: 76 -> 77."
   },
   "soundness": {
@@ -61,7 +61,7 @@
         "CollapseStructure/shape: fold BlockId(2v1) with complex BlockId(7v1)"
       ],
       "acceptance_check_rule_b_stubbed_out": "shape_score made to always decline, rebuilt, `make test-stages`: 274/278, FAILURES = condfold-ruleb #1..#4, REGRESSED (4), PARITY FAIL, make exit 1.  Restored: 278/278, PARITY OK.  ghangr-condfold.xml and ghangr-condfold-newbury.xml both stayed GREEN under the stub, reproducing the reviewer's finding verbatim.",
-      "also_added": "Seven unit tests in kuna_condfold.rs that run printed_shape / prefix_eligible / shape_score / compute_condfold_sets over REAL hand-built op lists (real type_op_for flags).  The pre-existing unit tests only covered the gate (condfold_ok / shape_admits) against synthetic CondFoldSets and never ran the scorers.",
+      "also_added": "Seven unit tests in condfold.rs that run printed_shape / prefix_eligible / shape_score / compute_condfold_sets over REAL hand-built op lists (real type_op_for flags).  The pre-existing unit tests only covered the gate (condfold_ok / shape_admits) against synthetic CondFoldSets and never ran the scorers.",
       "nested_condition_confirmed_not_inferred": "A throwaway probe printing self.graph.block(orblock).get_type() at the admit site reports `orblock BlockId(3v1) type Copy leaves 1` for the first fold and `orblock BlockId(7v1) type Condition leaves 2` for the second, in BOTH engines -- so the witness covers both of Rule B's exclusive properties (the two-statement-root-call leaf and the nested BlockCondition operand) in one run."
     },
     "round_3_defect_2_ops_trace_off_by_one": {
@@ -75,7 +75,7 @@
     },
     "round_2_defect_1_rule_b_cap_did_not_bound_printed_width": {
       "finding": "Rule B's only length cap was MAX_SHAPE_STMTS = 2 *calc_explicit-scored* statements, which is not a printed width. On the PR's own headline witness KUNA_CONDFOLD_DEBUG reported `admit(shape) BlockId(7v1) @ 0x40242e: 2 statement(s)` for a block that renders SEVEN statements plus the branch. Consequences: the widest emitted comma operand was 7 elements at BOTH `on` and `wide`; `on` and `wide` were byte-identical on all four named targets; an operator following `try on first` got the option's WIDEST folds at the conservative setting.",
-      "fix": "A single shared width measure, kuna_condfold.rs (printed_shape), factored out of Rule A's walk and enforced by BOTH rules against the policy level's cap (5 at `on`, 9 at `wide`). Rule B's shape allowlist and call cap are UNCHANGED (they are the soundness-relevant half and are byte-identical to #194). The calc_explicit score is kept only because the cross-leaf caps MAX_JOIN_LEAVES / MAX_JOIN_TOTAL_STMTS are expressed in it.",
+      "fix": "A single shared width measure, condfold.rs (printed_shape), factored out of Rule A's walk and enforced by BOTH rules against the policy level's cap (5 at `on`, 9 at `wide`). Rule B's shape allowlist and call cap are UNCHANGED (they are the soundness-relevant half and are byte-identical to #194). The calc_explicit score is kept only because the cross-leaf caps MAX_JOIN_LEAVES / MAX_JOIN_TOTAL_STMTS are expressed in it.",
       "value_surface_restored": {
         "widest_comma_operand_condfold_CREATES": {
           "on": 5,
@@ -91,7 +91,7 @@
       "debug_facility": "KUNA_CONDFOLD_DEBUG=1 now prints BOTH measures on every admit (`scored N, prints M (budget B)`) and the numbers on every decline; KUNA_CONDFOLD_DEBUG=ops additionally lists every op printed_shape charges, so a measured width can be reconciled op by op against the emitted chain. The reviewer had to reconstruct that by hand."
     },
     "round_2_defect_2_stale_measurement_text": {
-      "finding": "kuna_condfold.rs listed #193's `newbury::network_init 3 -> 4` and `newbury::lshpack_enc_encode 16 -> 17`, contradicted by record.json in the same commit.",
+      "finding": "condfold.rs listed #193's `newbury::network_init 3 -> 4` and `newbury::lshpack_enc_encode 16 -> 17`, contradicted by record.json in the same commit.",
       "fix": "Re-measured after the Defect-1 change and rewritten in the module docs, architecture.rs, phases.toml use_when and docs/spec/08-structuring.md. phases.toml and docs/options.md had the round-1 numbers, which are also now stale and were rewritten. Every surface now carries the SAME freshly measured set.",
       "measured_now": {
         "clientloop.o::process_escapes": {
@@ -136,7 +136,7 @@
       "decision": "KEEP the statement-root semantics; make them unmistakable rather than tighten.",
       "actions": [
         "constant renamed MAX_PREFIX_CALLS -> MAX_PREFIX_ROOT_CALLS so the name IS the contract",
-        "docs in kuna_condfold.rs, architecture.rs, phases.toml summary/use_when and docs/spec/08-structuring.md all state statement-root counting explicitly"
+        "docs in condfold.rs, architecture.rs, phases.toml summary/use_when and docs/spec/08-structuring.md all state statement-root counting explicitly"
       ],
       "still_true_after_round_2": "Yes. The width budget bounds the number of comma ELEMENTS, not how many calls hide inside one of them."
     },
@@ -631,7 +631,7 @@
     "arch_seam_copy": "ctx.cond_fold = self.cond_fold in build_arch_handle -- present and verified (a per-function config flag not copied into the seam is silently ignored)",
     "apply_mode": "self.cond_fold = 0 (default-OFF opt-in) in the mode reset",
     "counts_bumped": {
-      "kuna_phases/tests.rs": "settable_count_is_77, tier_counts_are_16_core_37_transform_24_analysis, emit_catalog_json_static_form_brackets_and_commas 76, suppressed-live-value list +condfold",
+      "phases/tests.rs": "settable_count_is_77, tier_counts_are_16_core_37_transform_24_analysis, emit_catalog_json_static_form_brackets_and_commas 76, suppressed-live-value list +condfold",
       "tests/catalog_bytecompat.rs": "fixture_has_all_77_settables",
       "tests/fixtures/phase_catalog.json": "regenerated byte-exact from decomp_dbg `phase catalog` with no program loaded (the phases.toml prose changed in the review round)",
       "tests/stages/kuna-catalog.xml": "#6 source_decompiler angr 30 -> 31, #7 change_kind structure-recovery 19 -> 20",

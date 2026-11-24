@@ -383,7 +383,7 @@ impl Rule for RuleBitIdioms {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_bitidioms::BitIdioms>()
+            .get::<crate::bitidioms::BitIdioms>()
             .0
         {
             return 0;
@@ -515,7 +515,7 @@ impl Rule for RuleIntAbs {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_bitidioms::BitIdioms>()
+            .get::<crate::bitidioms::BitIdioms>()
             .0
         {
             return 0;
@@ -685,7 +685,7 @@ fn scan_samples(width: i32) -> Vec<u64> {
         0xffff_ffff,
         0x8000_0000_0000_0001,
     ]);
-    let m = crate::kuna_regioneval::mask(width);
+    let m = crate::regioneval::mask(width);
     out.into_iter().map(|v| v & m).filter(|&v| v != 0).collect()
 }
 
@@ -693,7 +693,7 @@ fn scan_samples(width: i32) -> Vec<u64> {
 /// running it: for every sample source the counter the head hands to the exit
 /// is the lowest (or highest) set bit index.
 fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
-    use crate::kuna_regioneval::{eval, op, size, taken};
+    use crate::regioneval::{eval, op, size, taken};
     let hb = data.bblocks_ref().block(head);
     if hb.size_in() != 2 || hb.size_out() != 2 {
         return None;
@@ -736,7 +736,7 @@ fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
             .and_then(|p| p.get_parent())
             .is_some_and(|b| region.contains(&b))
     };
-    let is_const = |v: VarnodeId| crate::kuna_regioneval::copied_constant(data, v).is_some();
+    let is_const = |v: VarnodeId| crate::regioneval::copied_constant(data, v).is_some();
     // The source: the one non-constant value entering the loop.
     let mut leaves: Vec<VarnodeId> = phis.iter().map(|p| p.1).filter(|&v| !is_const(v)).collect();
     for &o in &ops {
@@ -771,7 +771,7 @@ fn match_bitscan(data: &Funcdata, head: BlockId) -> Option<BitScan> {
                 if p.1 == source {
                     Some(x)
                 } else {
-                    crate::kuna_regioneval::copied_constant(data, p.1)
+                    crate::regioneval::copied_constant(data, p.1)
                 }
             })
             .collect::<Option<Vec<_>>>()?;
@@ -945,7 +945,7 @@ impl crate::action::Action for ActionBitScanLoop {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_bitidioms::BitIdioms>()
+            .get::<crate::bitidioms::BitIdioms>()
             .0
         {
             return 0;
@@ -969,7 +969,7 @@ impl crate::action::Action for ActionBitScanLoop {
 
 crate::kuna_flag!(
     /// (kuna `bitidioms`) Fold shift/OR byte swaps and rotates into `bswap` /
-    /// `rotl` (see [`crate::kuna_bitidioms`]).
+    /// `rotl` (see [`crate::bitidioms`]).
     BitIdioms,
     "bitidioms",
     "Byte-swap and rotate idioms",

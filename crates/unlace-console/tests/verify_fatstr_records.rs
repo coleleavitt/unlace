@@ -11,7 +11,7 @@
 //! the glued NUL-run symbol is what remains.
 //!
 //! The hermetic record-matcher logic is pinned by the unit tests in
-//! `unlace-analysis/src/analyzers/strings/kuna_strrecords.rs` (no rustc
+//! `unlace-analysis/src/analyzers/strings/strrecords.rs` (no rustc
 //! needed); this gate is the detection-driven path over a genuine PIE's
 //! dynamic relocations. Guarded on `rustc` being on PATH; an installed
 //! compiler must build the fixture successfully.

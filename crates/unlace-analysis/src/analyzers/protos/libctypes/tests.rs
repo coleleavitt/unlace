@@ -196,7 +196,7 @@ fn a_retarget_only_names_a_void_pointer() {
     let shipped = |name: &str| {
         super::super::LIBC
             .iter()
-            .chain(super::super::kuna_libcsigs::LIBC_EXT.iter())
+            .chain(super::super::libcsigs::LIBC_EXT.iter())
             .find(|(n, _)| *n == name)
             .map(|(_, sig)| sig)
     };
@@ -289,7 +289,7 @@ fn uflow_is_new_to_this_table() {
     assert!(matches!(sig.params[0], Ty::NamedPtr("FILE")));
     assert!(
         !super::super::LIBC.iter().any(|(n, _)| *n == "__uflow")
-            && !super::super::kuna_libcsigs::LIBC_EXT
+            && !super::super::libcsigs::LIBC_EXT
                 .iter()
                 .any(|(n, _)| *n == "__uflow"),
         "a name only this table carries"
@@ -345,7 +345,7 @@ fn the_defined_table_is_obstack_entry_points_only() {
         );
         assert!(
             !super::super::LIBC.iter().any(|(n, _)| n == name)
-                && !super::super::kuna_libcsigs::LIBC_EXT
+                && !super::super::libcsigs::LIBC_EXT
                     .iter()
                     .any(|(n, _)| n == name),
             "{name}: a name only this table carries, so `libctypes off` is unchanged"
@@ -486,8 +486,8 @@ fn the_account_database_slots_name_both_aggregates() {
 fn the_declared_lookup_follows_the_gate() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let types = factory();
-    unlace_decomp::kuna_libctypes::set_libctypes_env_layout(
-        unlace_decomp::kuna_libctypes::LibcTypesLayout::Off,
+    unlace_decomp::libctypes::set_libctypes_env_layout(
+        unlace_decomp::libctypes::LibcTypesLayout::Off,
     );
     let off = super::super::declared_libc_prototype("fopen", &types, 1, Layout::Opaque)
         .expect("fopen off");
@@ -497,8 +497,8 @@ fn the_declared_lookup_follows_the_gate() {
         Some(type_metatype::TYPE_VOID),
         "off: the shipped void * signature"
     );
-    unlace_decomp::kuna_libctypes::set_libctypes_env_layout(
-        unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque,
+    unlace_decomp::libctypes::set_libctypes_env_layout(
+        unlace_decomp::libctypes::LibcTypesLayout::Opaque,
     );
     let on = super::super::declared_libc_prototype("fopen", &types, 1, Layout::Opaque)
         .expect("fopen on");
@@ -509,7 +509,7 @@ fn the_declared_lookup_follows_the_gate() {
         "on: the named signature"
     );
     // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::remove_var(unlace_decomp::kuna_libctypes::LIBCTYPES_ENV) };
+    unsafe { std::env::remove_var(unlace_decomp::libctypes::LIBCTYPES_ENV) };
 }
 
 /// A declared name whose named form cannot be built degrades to the width-stable
@@ -519,8 +519,8 @@ fn the_declared_lookup_follows_the_gate() {
 fn a_declined_aggregate_degrades_to_the_width_stable_signature() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let types = factory();
-    unlace_decomp::kuna_libctypes::set_libctypes_env_layout(
-        unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque,
+    unlace_decomp::libctypes::set_libctypes_env_layout(
+        unlace_decomp::libctypes::LibcTypesLayout::Opaque,
     );
     let shell = types.get_type_struct("stat").expect("shell");
     let int4t = types.get_base(4, type_metatype::TYPE_INT).expect("int");
@@ -542,7 +542,7 @@ fn a_declined_aggregate_degrades_to_the_width_stable_signature() {
         "degraded to void *"
     );
     // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::remove_var(unlace_decomp::kuna_libctypes::LIBCTYPES_ENV) };
+    unsafe { std::env::remove_var(unlace_decomp::libctypes::LIBCTYPES_ENV) };
 }
 
 // -- the `glibc` field layouts ---------------------------------------------
@@ -795,7 +795,7 @@ fn no_layout_names_a_reserved_member() {
 /// buy a 216-byte x86-64 `FILE`.
 #[test]
 fn a_refused_target_cannot_reach_the_glibc_layouts() {
-    use unlace_decomp::kuna_libctypes::{LIBCTYPES_ENV, LibcTypesLayout, set_libctypes_env_layout};
+    use unlace_decomp::libctypes::{LIBCTYPES_ENV, LibcTypesLayout, set_libctypes_env_layout};
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
 
     // The run asked for `glibc` and the program looks the part. The load-time
@@ -1079,7 +1079,7 @@ fn only_an_x86_64_glibc_abi_takes_the_widths() {
 /// `void *` tables, and so does a name the operator declares there.
 #[test]
 fn a_refused_target_is_off_whatever_was_asked() {
-    use unlace_decomp::kuna_libctypes::{LIBCTYPES_ENV, LibcTypesLayout, set_libctypes_env_layout};
+    use unlace_decomp::libctypes::{LIBCTYPES_ENV, LibcTypesLayout, set_libctypes_env_layout};
     let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     for asked in [LibcTypesLayout::Opaque, LibcTypesLayout::Glibc] {
         set_libctypes_env_layout(asked);
@@ -1119,7 +1119,7 @@ fn a_refused_target_is_off_whatever_was_asked() {
     );
 }
 
-/// The P5 fit rule (`unlace_decomp::kuna_libcfit`) recognises this table's
+/// The P5 fit rule (`unlace_decomp::libcfit`) recognises this table's
 /// aggregates by name, from a list kept beside the option's gate; it must name
 /// exactly what this table can mint or adopt.
 #[test]
@@ -1128,7 +1128,7 @@ fn the_fit_rule_knows_every_aggregate_this_table_names() {
         .iter()
         .flat_map(|a| std::iter::once(a.name).chain(a.dwarf_alias))
         .collect();
-    let mut theirs = unlace_decomp::kuna_libctypes::AGGREGATE_NAMES.to_vec();
+    let mut theirs = unlace_decomp::libctypes::AGGREGATE_NAMES.to_vec();
     ours.sort_unstable();
     theirs.sort_unstable();
     assert_eq!(ours, theirs);

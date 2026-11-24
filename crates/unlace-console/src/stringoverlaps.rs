@@ -96,7 +96,7 @@ fn array_view<'a>(
     names: &BTreeMap<&str, BTreeSet<u64>>,
 ) -> Option<&'a GlobalInfo> {
     let first = *entries.first()?;
-    if !crate::kuna_projectfunctionnames::identifier(&first.name)
+    if !crate::projectfunctionnames::identifier(&first.name)
         || names.get(first.name.as_str())?.len() != 1
         || first.size <= 0
         || first.declaration != format!("char {}[{}]", first.name, first.size)
@@ -205,5 +205,5 @@ fn words(text: &str) -> impl Iterator<Item = (usize, &str)> {
 }
 
 #[cfg(test)]
-#[path = "kuna_stringoverlaps/tests.rs"]
+#[path = "stringoverlaps/tests.rs"]
 mod tests;

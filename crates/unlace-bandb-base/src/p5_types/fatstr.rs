@@ -29,7 +29,7 @@
 //!   literal), so the rendered literal is a fact of the binary;
 //! * the bytes decode as UTF-8 **text**: no control characters beyond
 //!   `\n`/`\t`/`\r`, at least one alphanumeric — or the pointer's facing type
-//!   carries a text [`LangFacet`](crate::kuna_langfacet::LangFacet) (the W3
+//!   carries a text [`LangFacet`](crate::langfacet::LangFacet) (the W3
 //!   side table), in which case valid UTF-8 alone suffices, the facet being a
 //!   type provider's statement rather than a guess.
 //!
@@ -323,7 +323,7 @@ pub fn specs() -> Vec<RuleSpec> {
     }]
 }
 
-impl crate::kuna_optionset::KunaOption for FatStrMode {
+impl crate::optionset::KunaOption for FatStrMode {
     const NAME: &'static str = "fatstr";
     crate::kuna_option_id!();
 
@@ -341,5 +341,5 @@ impl crate::kuna_optionset::KunaOption for FatStrMode {
 }
 
 #[cfg(test)]
-#[path = "kuna_fatstr/tests.rs"]
+#[path = "fatstr/tests.rs"]
 mod tests;

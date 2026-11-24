@@ -9,7 +9,7 @@
 //! after the merges have run. Those two are carried here by storage and
 //! width, and the merge reads the carried set beside the Symbols.
 
-use crate::kuna_stablenames::FuncdataStablenamesExt;
+use crate::stablenames::FuncdataStablenamesExt;
 use std::collections::BTreeSet;
 
 use unlace_base::address::Address;
@@ -58,7 +58,7 @@ pub fn holds(fd: &Funcdata, high: HighVariableId) -> bool {
         })
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.isolated_holds = Some(holds);
 }

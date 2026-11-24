@@ -17,9 +17,9 @@ use crate::block::BlockType;
 use crate::context::BlockId;
 use crate::context::OpId;
 use crate::context::VarnodeId;
-use crate::kuna_ctree::{CMaturity, ExprId, ExprKind, StmtId, StmtKind};
-use crate::kuna_iteboolean::IteBoolMatch;
-use crate::kuna_iteregion::IteAssignMatch;
+use crate::ctree::{CMaturity, ExprId, ExprKind, StmtId, StmtKind};
+use crate::iteboolean::IteBoolMatch;
+use crate::iteregion::IteAssignMatch;
 
 /// The form `emit_block_if` gives a two-arm assignment diamond.
 pub(super) enum IteForm {
@@ -152,16 +152,16 @@ impl PrintC {
             return;
         };
         self.ctree_take_plans();
-        let bool_return = arch.kuna_options.get::<crate::kuna_ctree::Boolreturn>().0
-            && self.out_lang == crate::kuna_lang::OutLang::C;
-        let ret_ternary = arch.kuna_options.get::<crate::kuna_ctree::Retternary>().0
-            && self.out_lang == crate::kuna_lang::OutLang::C;
-        let noret_first = arch.kuna_options.get::<crate::kuna_ctree::Noretfirst>().0
-            && self.out_lang == crate::kuna_lang::OutLang::C;
-        let or_exit = arch.kuna_options.get::<crate::kuna_ctree::Orexit>().0
-            && self.out_lang == crate::kuna_lang::OutLang::C;
-        let nested_and = arch.kuna_options.get::<crate::kuna_ctree::Nestedand>().0
-            && self.out_lang == crate::kuna_lang::OutLang::C;
+        let bool_return = arch.kuna_options.get::<crate::ctree::Boolreturn>().0
+            && self.out_lang == crate::lang::OutLang::C;
+        let ret_ternary = arch.kuna_options.get::<crate::ctree::Retternary>().0
+            && self.out_lang == crate::lang::OutLang::C;
+        let noret_first = arch.kuna_options.get::<crate::ctree::Noretfirst>().0
+            && self.out_lang == crate::lang::OutLang::C;
+        let or_exit = arch.kuna_options.get::<crate::ctree::Orexit>().0
+            && self.out_lang == crate::lang::OutLang::C;
+        let nested_and = arch.kuna_options.get::<crate::ctree::Nestedand>().0
+            && self.out_lang == crate::lang::OutLang::C;
         for id in ids {
             let Some(blk) = self.ctree.as_ref().and_then(|tree| {
                 let blk = tree.stmt(id).origin?;
@@ -307,9 +307,9 @@ impl PrintC {
             };
             return match &tree.expr(*value).kind {
                 ExprKind::Ternary(..) => {
-                    crate::kuna_iteregion::match_ite_assignment(fd, blk).map(IteForm::Ternary)
+                    crate::iteregion::match_ite_assignment(fd, blk).map(IteForm::Ternary)
                 }
-                _ => crate::kuna_iteboolean::match_ite_boolean(fd, blk).map(IteForm::Bool),
+                _ => crate::iteboolean::match_ite_boolean(fd, blk).map(IteForm::Bool),
             };
         }
         if let Some(m) = self.ite_boolean_match(fd, blk) {
@@ -377,7 +377,7 @@ impl PrintC {
             }
             if let Some(out) = o.get_out()
                 && fd.vbank().get(out).is_some_and(|v| v.is_implied())
-                && crate::kuna_stackbytes::assignment(fd, inst).is_none()
+                && crate::stackbytes::assignment(fd, inst).is_none()
             {
                 continue;
             }
@@ -853,7 +853,7 @@ impl PrintC {
     /// and does not print as a bare truth test: `truthycond` prints `x != 0` as `x`, but
     /// `x == 0` as `!x`, which is `0` or `1` (an unflipped `==` or a flipped `!=`).
     fn cond_is_boolean(&self, fd: &Funcdata, cond: BlockId) -> bool {
-        let tail = crate::kuna_itecondlist::cond_list_tail(fd, cond);
+        let tail = crate::itecondlist::cond_list_tail(fd, cond);
         let sb = fd.sblocks_ref();
         if sb.block(tail).get_type() == BlockType::Condition {
             return true;
@@ -1328,7 +1328,7 @@ impl PrintC {
 
     /// The `&&`/`||` chain the tree gave the condition of the `BlockIf` `blk` (`nestedand`,
     /// `orexit`).
-    pub(super) fn and_condition(&self, blk: BlockId) -> Option<crate::kuna_ctree::ExprId> {
+    pub(super) fn and_condition(&self, blk: BlockId) -> Option<crate::ctree::ExprId> {
         let tree = self.ctree.as_ref()?;
         let StmtKind::If { cond, .. } = &tree.stmt(tree.stmt_for(blk)?).kind else {
             return None;
@@ -1386,7 +1386,7 @@ fn combine_return(cond: BlockId, arm: &RunTerm, rest: &RunTerm) -> Option<RunTer
 }
 
 /// The tree expression of a folded run value; `None` for a bare constant.
-fn add_run_term(tree: &mut crate::kuna_ctree::CTree, term: &RunTerm) -> Option<ExprId> {
+fn add_run_term(tree: &mut crate::ctree::CTree, term: &RunTerm) -> Option<ExprId> {
     Some(match term {
         RunTerm::Const(_) => return None,
         RunTerm::Cond(block, negate) => {
@@ -1412,7 +1412,7 @@ fn add_run_term(tree: &mut crate::kuna_ctree::CTree, term: &RunTerm) -> Option<E
 }
 
 /// The first condition block a returned value names.
-fn first_branch(tree: &crate::kuna_ctree::CTree, expr: ExprId) -> Option<BlockId> {
+fn first_branch(tree: &crate::ctree::CTree, expr: ExprId) -> Option<BlockId> {
     match tree.expr(expr).kind {
         ExprKind::Branch(block) => Some(block),
         ExprKind::Not(inner) => first_branch(tree, inner),
@@ -1424,7 +1424,7 @@ fn first_branch(tree: &crate::kuna_ctree::CTree, expr: ExprId) -> Option<BlockId
 }
 
 /// Every statement of `tree`, last added first (an `if` before the statements inside it).
-fn ids_rev(tree: Option<&crate::kuna_ctree::CTree>) -> Vec<StmtId> {
+fn ids_rev(tree: Option<&crate::ctree::CTree>) -> Vec<StmtId> {
     let mut ids = tree.map(|tree| tree.stmt_ids()).unwrap_or_default();
     ids.reverse();
     ids
@@ -1432,7 +1432,7 @@ fn ids_rev(tree: Option<&crate::kuna_ctree::CTree>) -> Vec<StmtId> {
 
 /// A condition `emit_cond_expr` prints: a `Branch`, or an `And` or `Or` whose left operand is
 /// one of these and whose right operand is a `Branch`.
-fn is_and_chain(tree: &crate::kuna_ctree::CTree, expr: crate::kuna_ctree::ExprId) -> bool {
+fn is_and_chain(tree: &crate::ctree::CTree, expr: crate::ctree::ExprId) -> bool {
     match tree.expr(expr).kind {
         ExprKind::Branch(_) => true,
         ExprKind::And(left, right) | ExprKind::Or(left, right) => {

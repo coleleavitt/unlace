@@ -137,7 +137,7 @@ pub fn eligible_fde_bodies(file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)>
     let named = existing_function_addrs(file, bytes);
     let starts: Vec<u64> = all.iter().map(|&(start, _)| start).collect();
     let stubs = stub_ranges(file);
-    let stub_starts = crate::loader::kuna_ppc32_imports::stub_starts(file);
+    let stub_starts = crate::loader::ppc32_imports::stub_starts(file);
     all.iter()
         .copied()
         .filter(|&(start, end)| {

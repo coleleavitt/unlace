@@ -24,7 +24,7 @@ use unlace_sleigh::translate::Translate;
 
 use super::ListingDetail;
 use super::context::ContextPainter;
-use super::kuna_insnstore::InstructionStore;
+use super::insnstore::InstructionStore;
 use super::model::{
     DiscoveredFunction, FlowKind, FlowType, Insn, InsnLite, Mnemonic, RefKind, Reference,
 };
@@ -43,7 +43,7 @@ pub(super) struct WalkState {
     /// during the walk. The value is the lowest source address for that target.
     pub stack_callback_refs: BTreeMap<u64, u64>,
     /// The `(start, end, mode)` ARM decode-mode runs the commit paints over the
-    /// context database (see [`super::kuna_flowmode`]).
+    /// context database (see [`super::flowmode`]).
     pub mode_runs: Vec<(u64, u64, u32)>,
 }
 
@@ -182,7 +182,7 @@ impl CallbackSink for CallbackEvidence {
         let rank = callback_rank(target);
         self.refs.insert(target, source);
         self.ranks.insert((rank, target));
-        if self.refs.len() > super::kuna_callbackentry::MAX_CALLBACK_EVIDENCE {
+        if self.refs.len() > super::callbackentry::MAX_CALLBACK_EVIDENCE {
             if let Some(worst) = self.ranks.pop_last() {
                 self.refs.remove(&worst.1);
             }
@@ -215,7 +215,7 @@ pub(super) trait Successors {
 #[derive(Debug, Clone, Copy)]
 pub(super) struct WalkPolicy {
     /// Harvest x86 `PUSH imm` callback evidence (see
-    /// [`super::kuna_callbackentry`]). Decided by the caller, which alone sees
+    /// [`super::callbackentry`]). Decided by the caller, which alone sees
     /// the parsed object's architecture.
     pub stack_callbacks: bool,
 }
@@ -246,13 +246,13 @@ pub(super) struct StepCtx<'a> {
     /// What the build captures beyond the partition.
     pub detail: ListingDetail,
     /// `thumbswitch`: the table reader for a Thumb `tbb`/`tbh` dispatch.
-    pub tables: Option<&'a super::kuna_thumbswitch::HalfwordTables<'a>>,
+    pub tables: Option<&'a super::thumbswitch::HalfwordTables<'a>>,
     /// `armframes`: the table reader for an A32 jump-table dispatch.
-    pub a32_tables: Option<&'a super::kuna_a32switch::A32Tables<'a>>,
+    pub a32_tables: Option<&'a super::a32switch::A32Tables<'a>>,
     /// The table reader for an AArch64 compact jump-table dispatch.
-    pub a64_tables: Option<&'a super::kuna_a64switch::A64Tables<'a>>,
+    pub a64_tables: Option<&'a super::a64switch::A64Tables<'a>>,
     /// `armframes`: the decodes certified by earlier frame-recovery rounds.
-    pub memo: Option<&'a super::kuna_decodememo::DecodeMemo>,
+    pub memo: Option<&'a super::decodememo::DecodeMemo>,
 }
 
 impl StepCtx<'_> {
@@ -302,7 +302,7 @@ where
 
     // An undecodable or zero-length decode stops this path (mark gap).
     let Some((decoded, mut c)) =
-        super::kuna_decodememo::decode(ctx, vma, &mut |text| insns.intern_mnemonic(text))
+        super::decodememo::decode(ctx, vma, &mut |text| insns.intern_mnemonic(text))
     else {
         return false;
     };
@@ -369,7 +369,7 @@ where
             // the claim decides (where there is a reference model at all);
             // only the function claim is withheld.
             if !ctx.local_entries.contains_key(&t)
-                && super::kuna_unmappedentry::admits_call_entry(ctx.exec_ranges, t)
+                && super::unmappedentry::admits_call_entry(ctx.exec_ranges, t)
             {
                 funcs.claim(t);
                 out.func(t);
@@ -386,7 +386,7 @@ where
         refs.file(vma, fall, RefKind::Code);
     }
     // (kuna) `thumbswitch`: the case bodies of a Thumb `tbb`/`tbh` are this
-    // function's own successors. See [`super::kuna_thumbswitch`].
+    // function's own successors. See [`super::thumbswitch`].
     if let Some(tables) = ctx
         .tables
         .filter(|_| c.flow.is_computed && c.flow.is_jump && c.flows.is_empty())
@@ -429,7 +429,7 @@ where
         }
     }
     // The case bodies of an AArch64 compact table are this function's own
-    // successors. See [`super::kuna_a64switch`].
+    // successors. See [`super::a64switch`].
     if let Some(tables) = ctx
         .a64_tables
         .filter(|_| c.flow.is_computed && c.flow.is_jump && !c.flow.is_call && c.flows.is_empty())
@@ -474,11 +474,11 @@ impl Successors for Worklists<'_> {
 /// it a Thumb/MIPS16 function misdecodes as A32/MIPS32. On x86-64 (no decode-mode
 /// context) the painter is empty and this is a no-op.
 ///
-/// `flow_mode`, when present, runs [`super::kuna_flowmode::disagreeing_runs`]
+/// `flow_mode`, when present, runs [`super::flowmode::disagreeing_runs`]
 /// after the walk, which leaves the walk's own result as it is.
 ///
 /// `arm_walk`, when present, carries the ARM decode mode along the walk's
-/// control flow (see [`super::kuna_armwalkmode`]).
+/// control flow (see [`super::armwalkmode`]).
 ///
 /// `local_entries` is the PPC64 ELFv2 local-entry fold (`ppclocalentry`), keyed
 /// by the local entry VMA: a CALL landing on one of those is a call into the
@@ -502,20 +502,20 @@ pub(super) fn walk(
     seeds: &[u64],
     seed_funcs: &BTreeMap<u64, DiscoveredFunction>,
     painter: &ContextPainter,
-    flow_mode: Option<&super::kuna_flowmode::FlowMode>,
-    arm_walk: Option<&super::kuna_armwalkmode::ArmWalkMode>,
+    flow_mode: Option<&super::flowmode::FlowMode>,
+    arm_walk: Option<&super::armwalkmode::ArmWalkMode>,
     local_entries: &BTreeMap<u64, u64>,
     tail_transfers: &BTreeMap<u64, u64>,
     detail: ListingDetail,
     want_stack_callbacks: bool,
-    plan: &super::kuna_pdecode::WalkPlan,
-    frames: Option<&mut super::kuna_framemode::FrameModes>,
+    plan: &super::pdecode::WalkPlan,
+    frames: Option<&mut super::framemode::FrameModes>,
     resumed: Option<WalkState>,
-    tables: Option<&super::kuna_thumbswitch::HalfwordTables<'_>>,
-    a32_tables: Option<&super::kuna_a32switch::A32Tables<'_>>,
-    a64_tables: Option<&super::kuna_a64switch::A64Tables<'_>>,
-    x86_tables: Option<&super::kuna_x86listingswitch::X86Tables<'_>>,
-    memo: Option<&super::kuna_decodememo::DecodeMemo>,
+    tables: Option<&super::thumbswitch::HalfwordTables<'_>>,
+    a32_tables: Option<&super::a32switch::A32Tables<'_>>,
+    a64_tables: Option<&super::a64switch::A64Tables<'_>>,
+    x86_tables: Option<&super::x86listingswitch::X86Tables<'_>>,
+    memo: Option<&super::decodememo::DecodeMemo>,
 ) -> WalkState {
     // Paint the decode-mode context (ARM TMode / MIPS ISA_MODE) into the engine's
     // ContextDatabase BEFORE we decode a single instruction — the timing the
@@ -548,12 +548,12 @@ pub(super) fn walk(
         &ctx, arch, seeds, seed_funcs, painter, plan, frames, arm_walk, resumed,
     );
     let mut st = match x86_tables {
-        Some(tables) => super::kuna_x86listingswitch::reconcile(tables, &ctx, st),
+        Some(tables) => super::x86listingswitch::reconcile(tables, &ctx, st),
         None => st,
     };
     if let Some(mode) = flow_mode {
         st.mode_runs
-            .extend(super::kuna_flowmode::disagreeing_runs(&ctx, arch, mode));
+            .extend(super::flowmode::disagreeing_runs(&ctx, arch, mode));
     }
     st
 }
@@ -621,9 +621,9 @@ fn walk_plain(
     seeds: &[u64],
     seed_funcs: &BTreeMap<u64, DiscoveredFunction>,
     painter: &ContextPainter,
-    plan: &super::kuna_pdecode::WalkPlan,
-    frames: Option<&mut super::kuna_framemode::FrameModes>,
-    arm_walk: Option<&super::kuna_armwalkmode::ArmWalkMode>,
+    plan: &super::pdecode::WalkPlan,
+    frames: Option<&mut super::framemode::FrameModes>,
+    arm_walk: Option<&super::armwalkmode::ArmWalkMode>,
     resumed: Option<WalkState>,
 ) -> WalkState {
     let StepCtx {
@@ -637,7 +637,7 @@ fn walk_plain(
         ..
     } = *ctx;
     if plan.lanes() > 1 && frames.is_none() && arm_walk.is_none() && resumed.is_none() {
-        let inputs = super::kuna_pdecode::ParallelInputs {
+        let inputs = super::pdecode::ParallelInputs {
             arch,
             translate,
             code_space,
@@ -650,12 +650,12 @@ fn walk_plain(
             policy,
             detail,
         };
-        if let Some(parallel) = super::kuna_pdecode::try_parallel(plan, &inputs) {
-            let Some(abort) = super::kuna_pdecode::selfcheck() else {
+        if let Some(parallel) = super::pdecode::try_parallel(plan, &inputs) {
+            let Some(abort) = super::pdecode::selfcheck() else {
                 return parallel;
             };
             let serial = walk_serial(ctx, seeds, seed_funcs, detail, arch, None, None, None);
-            let differences = super::kuna_pdecode::compare(&parallel, &serial);
+            let differences = super::pdecode::compare(&parallel, &serial);
             assert!(
                 differences == 0 || !abort,
                 "UNLACE_DECODE_SELFCHECK=abort: {differences} differences against the serial walk"
@@ -679,11 +679,11 @@ fn walk_serial(
     seed_funcs: &BTreeMap<u64, DiscoveredFunction>,
     detail: ListingDetail,
     arch: &Architecture,
-    mut frames: Option<&mut super::kuna_framemode::FrameModes>,
-    arm_walk: Option<&super::kuna_armwalkmode::ArmWalkMode>,
+    mut frames: Option<&mut super::framemode::FrameModes>,
+    arm_walk: Option<&super::armwalkmode::ArmWalkMode>,
     resumed: Option<WalkState>,
 ) -> WalkState {
-    let mut walk_context = super::kuna_walkcontext::WalkContext::new(
+    let mut walk_context = super::walkcontext::WalkContext::new(
         frames.is_some(),
         ctx.translate,
         arch,
@@ -778,7 +778,7 @@ fn walk_serial(
             if insns.contains_key(&vma) {
                 continue;
             }
-            let selection = super::kuna_walkcontext::InstructionMode::select(
+            let selection = super::walkcontext::InstructionMode::select(
                 arch,
                 ctx.translate,
                 ctx.code_space,
@@ -857,7 +857,7 @@ struct WalkSinks<'a> {
 fn walk_carried(
     ctx: &StepCtx<'_>,
     arch: &Architecture,
-    mode: &super::kuna_armwalkmode::ArmWalkMode,
+    mode: &super::armwalkmode::ArmWalkMode,
     func_worklist: &mut Vec<u64>,
     visited_funcs: &mut BTreeSet<u64>,
     sinks: &mut WalkSinks<'_>,
@@ -890,7 +890,7 @@ fn walk_carried(
 /// database), filing what it decodes as [`step`] does.
 fn walk_items(
     ctx: &StepCtx<'_>,
-    modes: &mut super::kuna_armwalkmode::WalkModes<'_>,
+    modes: &mut super::armwalkmode::WalkModes<'_>,
     start: Vec<(u64, Option<u32>)>,
     func_worklist: &mut Vec<u64>,
     sinks: &mut WalkSinks<'_>,
@@ -996,7 +996,7 @@ mod tests {
 
     #[test]
     fn callback_evidence_cap_is_deduplicated_and_order_independent() {
-        let count = super::super::kuna_callbackentry::MAX_CALLBACK_EVIDENCE + 32;
+        let count = super::super::callbackentry::MAX_CALLBACK_EVIDENCE + 32;
         let mut forward = CallbackEvidence::default();
         let mut reverse = CallbackEvidence::default();
         for target in 0..count as u64 {
@@ -1007,7 +1007,7 @@ mod tests {
         }
         assert_eq!(
             forward.refs.len(),
-            super::super::kuna_callbackentry::MAX_CALLBACK_EVIDENCE
+            super::super::callbackentry::MAX_CALLBACK_EVIDENCE
         );
         assert_eq!(
             forward.refs.keys().collect::<Vec<_>>(),

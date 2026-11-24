@@ -4,8 +4,8 @@
 //! # Why this axis is thin, deliberately
 //!
 //! The other two output-language axes are thick because they have to be: every
-//! statement has a shape (`kuna_lang::LangForms`) and every value has a
-//! type (`kuna_langtypes::TypeSpeller`). The ABI axis is thin because
+//! statement has a shape (`lang::LangForms`) and every value has a
+//! type (`langtypes::TypeSpeller`). The ABI axis is thin because
 //! `extern "Rust"` is **unspecified** and, for the scalar arguments a decompiler
 //! actually recovers, System-V-shaped -- the same convention the cspec already
 //! describes. A `build_param_list("rust")` strategy would encode a guess as an

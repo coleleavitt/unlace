@@ -44,7 +44,7 @@ schedules the global store before the arithmetic in every C form of it.
 
 ## The fix
 
-Two clauses, in `p6_variables/kuna_callretfold.rs`:
+Two clauses, in `p6_variables/callretfold.rs`:
 
 1. `op_is_barrier` — the call-to-use span — also stops at an op whose **output
    varnode is persistent or address-tied** (`op_writes_tied_storage`, the helper
@@ -79,7 +79,7 @@ not reorderings:
   barrier (`op_is_self_copy`; a volatile location is excluded, since there the
   access itself is the effect). Without this, `gh275-spillargtrial` and
   `kuna-libctypes` lose a fold each to an artifact. Eight unit tests in
-  `kuna_callretfold/tests.rs` pin the predicate: a constant or an arithmetic
+  `callretfold/tests.rs` pin the predicate: a constant or an arithmetic
   result written into a global is a barrier, `glob = COPY glob` is not, a copy
   between two globals or at a different width or of a volatile location is, a
   write to an untied temporary is not, and a `LOAD` is a barrier on the first span
@@ -105,11 +105,11 @@ one store, in exactly the order the folded text prints.
 of `foldcallret`'s: every opcode, the storage test with no self-copy exemption, no
 chain exemption, and the INDIRECT question over the whole distance including the
 landing statement. An earlier revision of this branch moved that guard into
-`kuna_callretfold.rs` and shared it, which silently relaxed it — with
+`callretfold.rs` and shared it, which silently relaxed it — with
 `--option foldcallretphi on`, `ssh` O2 `0xcdd0` and `dpkg` O2 `0x2e170` each
 *gained* a fold that `origin/main` declines.
 
-`kuna_foldcallretphi.rs` now composes its guard exactly as it shipped; only
+`foldcallretphi.rs` now composes its guard exactly as it shipped; only
 `print_point` and the raw storage test delegate to `kuna_callretfold`, so the two
 options share the helpers without sharing the policy. Since that guard is strictly
 wider than the second `foldcallret` span, a phi-discounted fold is decided exactly

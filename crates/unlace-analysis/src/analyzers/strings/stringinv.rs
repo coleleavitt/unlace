@@ -34,7 +34,7 @@
 //! Ghidra's `StringsAnalyzer` and says so: "UTF-16/32 is a documented seam,
 //! skipped". Read as ASCII, a UTF-16LE literal is a one-character string — the
 //! `L"ntdll.dll"` argument of `LoadLibraryW` stops at the NUL after `n`. So
-//! [`scan_utf16_run`](super::kuna_widestrings::scan_utf16_run) is the missing
+//! [`scan_utf16_run`](super::widestrings::scan_utf16_run) is the missing
 //! width, mirroring the 1-byte matcher exactly:
 //! the same [`super::is_string_char`] recognizer, the same require-NUL-end rule,
 //! the same minimum length — over 2-byte units instead of bytes. It is a widened
@@ -51,7 +51,7 @@
 //! ends a run and a literal that opens with a non-ASCII character is reported
 //! starting after its last multi-byte sequence — an address nothing in the image
 //! refers to, which is why such a row also arrives with no references and no
-//! owning function. [`scan_utf8_runs`](super::kuna_utf8strings::scan_utf8_runs)
+//! owning function. [`scan_utf8_runs`](super::utf8strings::scan_utf8_runs)
 //! is the same 1-byte matcher with well-formed UTF-8 sequences admitted as
 //! characters, and it is a strict superset of the ASCII one: no accepted
 //! sequence can swallow a byte the ASCII matcher would have taken. So the two
@@ -62,8 +62,8 @@
 
 use object::read::{Object, ObjectSection, ObjectSegment};
 
-use super::kuna_utf8strings::scan_utf8_runs;
-use super::kuna_widestrings::scan_utf16_runs;
+use super::utf8strings::scan_utf8_runs;
+use super::widestrings::scan_utf16_runs;
 use super::{Run, is_loaded_initialized, scan_runs};
 
 pub use super::Termination;
@@ -74,11 +74,11 @@ pub enum Encoding {
     /// 1-byte characters — [`super::StringLiteralPass`]'s own width.
     Ascii,
     /// 1-byte characters plus multi-byte UTF-8 sequences
-    /// (`kuna_utf8strings::scan_utf8_runs`). Only a row that actually holds a
+    /// (`utf8strings::scan_utf8_runs`). Only a row that actually holds a
     /// multi-byte sequence is reported at this width; a pure-ASCII row found by
     /// the same scan is [`Encoding::Ascii`].
     Utf8,
-    /// 2-byte little-endian code units (`kuna_widestrings::scan_utf16_run`).
+    /// 2-byte little-endian code units (`widestrings::scan_utf16_run`).
     Utf16,
 }
 
@@ -411,7 +411,7 @@ fn inventory_with_ranges(
 mod tests {
     use super::*;
     use crate::pass::StringFact;
-    use crate::strings::kuna_widestrings::scan_utf16_run;
+    use crate::strings::widestrings::scan_utf16_run;
     use crate::strings::{scan_run, scan_strings};
 
     /// The pass-faithful query, so a test says which policy it is asserting.

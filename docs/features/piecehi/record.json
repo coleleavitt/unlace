@@ -1,6 +1,6 @@
 {
  "opportunity": "A 64-bit value a function builds in its one return register from two 32-bit halves lost a half and the argument that fed it: `((u64)hi << 32) | lo` at gcc/clang -O0 printed `unsigned int join_lo_hi(unsigned int a0) { return a0; }`, and `((u64)(a + 1) << 32) | b` at -O2 printed `int join_hi_sum(int a0) { return a0 + 1; }` (the high half returned as the whole value).",
- "test_name": "tests/stages/kuna-returnpiece.xml (10 assertions; 9 fail on main, the control passes on both) + kuna-cli/tests/decompile_all_cli.rs a_value_built_in_one_return_register_round_trips_through_the_printed_c + kuna_returnuncomputed/tests.rs (3 new unit tests)",
+ "test_name": "tests/stages/kuna-returnpiece.xml (10 assertions; 9 fail on main, the control passes on both) + kuna-cli/tests/decompile_all_cli.rs a_value_built_in_one_return_register_round_trips_through_the_printed_c + returnuncomputed/tests.rs (3 new unit tests)",
  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/piecehi_{gcc,clang}_{O0,O2}_x86_64 built from piecehi_x86_64.c",
  "selector": "join_lo_hi",
  "func_addr": "0x1189 (gcc -O0)",
@@ -130,9 +130,9 @@
   "ci": "PR #755 with full-ci, pre-rebase head: cargo workspace suite pass (33m23s), parity gates pass"
  },
  "files": [
-  "decompiler/crates/kuna-decomp/src/p4_calls/kuna_returnuncomputed.rs",
-  "decompiler/crates/kuna-decomp/src/p4_calls/kuna_returnuncomputed/tests.rs",
-  "decompiler/crates/kuna-decomp/src/p4_calls/kuna_retinputhalf.rs",
+  "decompiler/crates/kuna-decomp/src/p4_calls/returnuncomputed.rs",
+  "decompiler/crates/kuna-decomp/src/p4_calls/returnuncomputed/tests.rs",
+  "decompiler/crates/kuna-decomp/src/p4_calls/retinputhalf.rs",
   "decompiler/crates/kuna-cli/tests/decompile_all_cli.rs",
   "decompiler/crates/kuna-analysis/tests/fixtures/piecehi_x86_64.c",
   "decompiler/crates/kuna-analysis/tests/fixtures/piecehi_gcc_O0_x86_64",

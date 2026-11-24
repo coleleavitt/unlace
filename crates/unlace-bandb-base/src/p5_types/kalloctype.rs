@@ -135,7 +135,7 @@ pub fn allocated_type(data: &Funcdata, op: OpId, fc: &FuncCallSpecs) -> Option<R
         .iter()
         .find(|(n, returns, _)| *returns && *n == name)?;
     let view = data.obank().get(op)?.get_in(1)?;
-    let v = kalloc.get(&crate::kuna_objcrettype::constant_address(data, view, 0)?)?;
+    let v = kalloc.get(&crate::objcrettype::constant_address(data, view, 0)?)?;
     let types = arch.types()?;
     let space = arch.manage.get_default_data_space()?;
     let (ptr_size, word) = (space.get_addr_size() as i32, space.get_word_size());
@@ -153,7 +153,7 @@ crate::kuna_arch_state!(KallocTypes);
 
 /// The image's kalloc_type views, shared through the architecture's states; empty before the
 /// loader commits them.
-pub fn kalloc_types(states: &crate::kuna_archstate::ArchStates) -> Rc<KallocTypes> {
+pub fn kalloc_types(states: &crate::archstate::ArchStates) -> Rc<KallocTypes> {
     states.get_rc::<KallocTypes>().unwrap_or_default()
 }
 

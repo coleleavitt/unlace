@@ -15,7 +15,7 @@ use crate::funcdata::Funcdata;
 /// has likely cut a wider object in two.
 #[doc(hidden)]
 pub fn object_type(fd: &Funcdata, high: HighVariableId) -> Option<Rc<Datatype>> {
-    if crate::kuna_paramrefdecl::references_parameter_symbol(fd, high) {
+    if crate::paramrefdecl::references_parameter_symbol(fd, high) {
         return None;
     }
     let h = fd.high_bank().get(high)?;

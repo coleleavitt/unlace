@@ -23,7 +23,7 @@
 //!
 //! The language id is composed inside `load file`, upstream of every
 //! per-function `option` command — the same seam as `sourcelang` — so it
-//! reads `LoadOptions::goabi` ([`crate::kuna_loadoptions`]), which the CLI
+//! reads `LoadOptions::goabi` ([`crate::loadoptions`]), which the CLI
 //! carries in [`GOABI_ENV`].
 //!
 //! ## Per-function stack ABI
@@ -46,7 +46,7 @@ pub const GOABI_ENV: &str = "UNLACE_GOABI";
 
 /// Whether golang-cspec auto-selection is enabled for the load in progress.
 pub fn goabi_env_enabled() -> bool {
-    crate::kuna_loadoptions::scoped(|o| o.goabi).unwrap_or_else(crate::kuna_loadoptions::env::goabi)
+    crate::loadoptions::scoped(|o| o.goabi).unwrap_or_else(crate::loadoptions::env::goabi)
 }
 
 /// Export a `set_kuna_option("goabi", val)` toggle to [`GOABI_ENV`] so a later
@@ -71,7 +71,7 @@ pub fn parse_goabi(value: &str) -> Result<bool, String> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GoAbi(pub bool);
 
-impl crate::kuna_optionset::KunaOption for GoAbi {
+impl crate::optionset::KunaOption for GoAbi {
     const NAME: &'static str = "goabi";
     crate::kuna_option_id!();
 

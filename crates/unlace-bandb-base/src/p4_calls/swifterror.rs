@@ -37,10 +37,10 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
-use crate::kuna_x64syscall::overlaps;
 use crate::op::{PcodeOpBank, pcodeop_flags};
 use crate::userop::{BUILTIN_SWIFT_ERROR, BUILTIN_SWIFT_THROW};
 use crate::varnode::VarnodeBank;
+use crate::x64syscall::overlaps;
 
 /// Is `op` the `swift_error()` this action placed after a throwing call?
 pub fn is_error(data: &Funcdata, op: OpId) -> bool {
@@ -164,7 +164,7 @@ impl Action for ActionSwiftError {
         let Some(abi) = data
             .get_arch()
             .kuna_states
-            .get_rc::<crate::kuna_swiftcall::SwiftAbi>()
+            .get_rc::<crate::swiftcall::SwiftAbi>()
         else {
             return 0;
         };
@@ -197,7 +197,7 @@ impl Action for ActionSwiftError {
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.swifterror_is_error_op = Some(is_error_op);
 }

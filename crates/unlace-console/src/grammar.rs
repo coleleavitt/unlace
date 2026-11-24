@@ -62,7 +62,7 @@ use unlace_base::types::{int4, uint4, uintb};
 use unlace_decomp::dtype::{Datatype, TypeBitField, TypeFactory, TypeField, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
-mod kuna_enumlayout;
+mod enumlayout;
 
 // =============================================================================
 // Default-data-space context (the `glb->getDefaultDataSpace()` info the C++
@@ -906,7 +906,7 @@ pub mod flags {
 /// Only `volatile` reaches the type: `const` and `restrict` are accepted and dropped.
 fn type_qualifiers(flags: uint4) -> u8 {
     if flags & self::flags::F_VOLATILE != 0 {
-        unlace_decomp::kuna_typequal::VOLATILE
+        unlace_decomp::typequal::VOLATILE
     } else {
         0
     }
@@ -1192,7 +1192,7 @@ pub enum DocType {
 /// Upstream's grammar has no scalar keywords at all: a base type is whatever
 /// `TypeFactory::findByName` answers, so only Ghidra's own `int4` / `uint8` /
 /// `float8` vocabulary parses.  kuna's printer, however, spells core types the
-/// way the target's compiler would (`p9_emit/kuna_ctypes.rs`), so the C it
+/// way the target's compiler would (`p9_emit/ctypes.rs`), so the C it
 /// emits could not be fed back to it.  These keywords are the inverse of that
 /// speller and read the same `<data_organization>` widths.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1838,7 +1838,7 @@ impl<'a> CParse<'a> {
     /// or `None` if the combination is not a C type.
     ///
     /// The widths come from the compiler spec's `<data_organization>` (the same
-    /// source `p9_emit/kuna_ctypes.rs` spells them back out from), never from a
+    /// source `p9_emit/ctypes.rs` spells them back out from), never from a
     /// hard-coded table, so `long` is 8 bytes on LP64 and 4 on LLP64.
     fn resolve_scalar(&self, kws: &[ScalarKw]) -> KunaResult<Option<Rc<Datatype>>> {
         use type_metatype::{TYPE_BOOL, TYPE_FLOAT, TYPE_INT, TYPE_UINT};
@@ -2721,9 +2721,9 @@ impl<'a> CParse<'a> {
         vecenum: Vec<Enumerator>,
         underlying: Option<Rc<Datatype>>,
     ) -> KunaResult<Rc<Datatype>> {
-        let vallist = kuna_enumlayout::enum_constants(&vecenum);
+        let vallist = enumlayout::enum_constants(&vecenum);
         if let Some(tp) = &underlying {
-            if let Some(name) = kuna_enumlayout::enumerator_out_of_range(tp, &vecenum, &vallist) {
+            if let Some(name) = enumlayout::enumerator_out_of_range(tp, &vecenum, &vallist) {
                 self.set_error(&format!(
                     "Enumerator {name} does not fit the underlying type"
                 ));
@@ -2735,8 +2735,7 @@ impl<'a> CParse<'a> {
             Some((size, meta)) => self.factory.get_type_enum_sized(ident, size, meta)?,
             None => self.factory.get_type_enum(ident)?,
         };
-        let (namelist, vallist) =
-            kuna_enumlayout::named_constants(&vecenum, &vallist, res.get_size());
+        let (namelist, vallist) = enumlayout::named_constants(&vecenum, &vallist, res.get_size());
         let assignlist = vec![true; namelist.len()];
         // C++ TypeEnum::assignValues (the value map; no duplicate remains).
         match Datatype::assign_values(
@@ -2861,7 +2860,7 @@ pub fn parse_type_with_volatile(
     let ty = decl.build_type(factory, &org)?;
     let mut object = Rc::clone(&ty);
     let volatile = loop {
-        if unlace_decomp::kuna_typequal::is_volatile(&object) {
+        if unlace_decomp::typequal::is_volatile(&object) {
             break true;
         }
         let Some(element) = object.get_array_base() else {

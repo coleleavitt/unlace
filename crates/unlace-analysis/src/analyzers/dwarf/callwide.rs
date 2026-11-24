@@ -9,7 +9,7 @@ use unlace_decomp::architecture::Architecture;
 use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
-use super::{DieSnap, Reader, build_pieces, kuna_dwarfbyref, snapshot_unit_for_abi};
+use super::{DieSnap, Reader, build_pieces, dwarfbyref, snapshot_unit_for_abi};
 
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_ABBREV_BYTES: usize = 128 * 1024;
@@ -101,7 +101,7 @@ pub fn declarations(
         &names,
         arch.types(),
         word_size,
-        kuna_dwarfbyref::argument_abi(file.format(), file.architecture()),
+        dwarfbyref::argument_abi(file.format(), file.architecture()),
         total,
     )
 }
@@ -402,7 +402,7 @@ fn collect(
     names: &Names<'_>,
     types: &dyn TypeFactory,
     word_size: uint4,
-    abi: kuna_dwarfbyref::ArgumentAbi,
+    abi: dwarfbyref::ArgumentAbi,
     section_bytes: usize,
 ) -> Option<Vec<(u64, PrototypePieces)>> {
     let plans = prewalk(dwarf, names, section_bytes)?;
@@ -653,7 +653,7 @@ mod tests {
             &names,
             &types,
             1,
-            kuna_dwarfbyref::ArgumentAbi::default(),
+            dwarfbyref::ArgumentAbi::default(),
             bytes,
         )
     }

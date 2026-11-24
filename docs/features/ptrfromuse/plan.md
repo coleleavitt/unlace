@@ -19,8 +19,8 @@ is neutral, one below the space's pointer lower bound is a field offset.
 
 | file | what |
 |---|---|
-| `decompiler/crates/kuna-decomp/src/p5_types/kuna_ptrfromuse.rs` | the rule: `PtrFromUseMode`, `OptionPtrFromUse`, `pointer_from_use`, the descendant walk and its refusal list |
-| `decompiler/crates/kuna-decomp/src/p5_types/kuna_ptrfromuse/tests.rs` | 5 unit tests (option parse, the fold precedence in both directions, `Rc` stability) |
+| `decompiler/crates/kuna-decomp/src/p5_types/ptrfromuse.rs` | the rule: `PtrFromUseMode`, `OptionPtrFromUse`, `pointer_from_use`, the descendant walk and its refusal list |
+| `decompiler/crates/kuna-decomp/src/p5_types/ptrfromuse/tests.rs` | 5 unit tests (option parse, the fold precedence in both directions, `Rc` stability) |
 | `decompiler/crates/kuna-decomp/src/p5_types/coreaction_infertypes.rs` | the one call site, in `build_localtypes` after the seed/`get_local_type` choice |
 | `decompiler/crates/kuna-decomp/src/infra/architecture.rs` | `ptr_from_use` field, default, `reset_defaults`, `set_kuna_option`, the `ArchSeam` copy |
 | `decompiler/crates/kuna-decomp/src/substrate/context.rs` | the `ArchSeam` field the pass reads |
@@ -52,7 +52,7 @@ is neutral, one below the space's pointer lower bound is a field offset.
 `tests/stages/kuna-catalog.toml` `#6 source_decompiler angr` 32 → 33 and
 `#8 change_kind opt-in-tool` 20 → 21, corpus file count 300 → 301 (one file),
 `docs/baseline-stages.json` re-recorded, `docs/options.md` regenerated.
-`ptrfromuse` is added to the no-live-reader allowlist in `kuna_phases/tests.rs`
+`ptrfromuse` is added to the no-live-reader allowlist in `phases/tests.rs`
 (its three values cannot be expressed by the codegen's bool `live_true`/`live_false`
 pair — the same reason `pebnames` is there), so
 `option_values_live_value_present_for_87` does **not** move.

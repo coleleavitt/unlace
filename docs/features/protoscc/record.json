@@ -13,8 +13,8 @@
  "base_commit": "2888a2a94 (origin/main)",
  "modules": [
   "decompiler/crates/kuna-cli/src/decompile_all.rs (callee_first_plan, plan_from_components, cycle_order)",
-  "decompiler/crates/kuna-decomp/src/p4_calls/kuna_protoorder.rs (ProtoOrderMode::Cycles)",
-  "decompiler/crates/kuna-decomp/src/p4_calls/kuna_protoorder.rs (forget_statements_naming, seed_protoorder_types: no function reads its own statement)",
+  "decompiler/crates/kuna-decomp/src/p4_calls/protoorder.rs (ProtoOrderMode::Cycles)",
+  "decompiler/crates/kuna-decomp/src/p4_calls/protoorder.rs (forget_statements_naming, seed_protoorder_types: no function reads its own statement)",
   "decompiler/crates/kuna-cli/src/decompile_all.rs (converge_callee_first: forget stale statements before the sweep)"
  ],
  "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/protoorder_cycles_x86_64 (sha256 6a45512de067c0fb7e56097c5cd3c0dbd7c605e113c4ff3a4d23b5d5767570ff)",

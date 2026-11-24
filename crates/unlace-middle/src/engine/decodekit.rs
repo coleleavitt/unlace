@@ -6,7 +6,7 @@
 //! building another one — the `.sla` bytes, the `.ldefs` space truncations, the
 //! context database's values, and the image bytes behind an `Arc` — all of them
 //! plain data. [`EngineRecipe`] is the first two;
-//! [`unlace_sleigh::kuna_ctxsnapshot::ContextValueSnapshot`] is the third;
+//! [`unlace_sleigh::ctxsnapshot::ContextValueSnapshot`] is the third;
 //! [`ImageBytes`] is the fourth.
 //!
 //! The engine this builds is a bare [`Sleigh`], not an `Architecture`: a decode
@@ -22,10 +22,10 @@ use std::sync::Arc;
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::AddrSpace;
+use unlace_sleigh::ctxsnapshot::{ContextValueSnapshot, restore_context};
 use unlace_sleigh::globalcontext::ContextInternal;
-use unlace_sleigh::kuna_ctxsnapshot::{ContextValueSnapshot, restore_context};
-use unlace_sleigh::kuna_sharedbytes::{SharedBytesImage, UnmappedTripwire};
 use unlace_sleigh::loadimage::{ImageBytes, LoadImage};
+use unlace_sleigh::sharedbytes::{SharedBytesImage, UnmappedTripwire};
 use unlace_sleigh::sleigh::Sleigh;
 
 /// Everything needed to rebuild a decode-equivalent SLEIGH engine. Plain data

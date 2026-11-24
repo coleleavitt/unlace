@@ -21,7 +21,7 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::dtype::type_metatype;
-use unlace_decomp::kuna_langfacet::LangFacet;
+use unlace_decomp::langfacet::LangFacet;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -402,10 +402,8 @@ fn check_named_struct(arch: &str) {
     // The definition renders as C for the type surfaces — the rendering is
     // also how the field names and layout are asserted (the field payload is
     // private to the factory).
-    let text = unlace_decomp::kuna_structdefs::definition_text(
-        &pt,
-        unlace_decomp::kuna_langtypes::SpellCtx::OFF,
-    );
+    let text =
+        unlace_decomp::structdefs::definition_text(&pt, unlace_decomp::langtypes::SpellCtx::OFF);
     // The C renderer uses declared aliases for the tag and the string-header member type.
     for needle in [
         "main_Point".to_string(),

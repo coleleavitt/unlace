@@ -85,18 +85,18 @@ pub fn read(arch: &Architecture, data: &Funcdata) -> Option<(Address, int4)> {
         .kuna_call_returns
         .partition_point(|&(callee, _)| callee < off);
     let mut found: Option<(usize, int4)> = None;
-    let x87 = crate::kuna_x87emptyreturn::storage(arch)
-        .filter(|_| arch.kuna_options.get::<crate::kuna_x87depth::X87Depth>().0);
+    let x87 = crate::x87emptyreturn::storage(arch)
+        .filter(|_| arch.kuna_options.get::<crate::x87depth::X87Depth>().0);
     let sites = arch.kuna_call_returns[lo..]
         .iter()
         .take_while(|&&(callee, _)| callee == off);
     for &(_, back) in sites.take(MAX_CALL_SITES) {
         let at = Address::new(std::rc::Rc::clone(code), back);
         let probe =
-            crate::kuna_calleedeadarg::probe_entry(arch.translate(), &at, reg.get_index(), false);
+            crate::calleedeadarg::probe_entry(arch.translate(), &at, reg.get_index(), false);
         let leaves = x87
             .as_ref()
-            .and_then(|s| crate::kuna_x87depth::call_leaves(arch.translate(), &at, s, s.free));
+            .and_then(|s| crate::x87depth::call_leaves(arch.translate(), &at, s, s.free));
         let read = outputs.iter().enumerate().find_map(|(k, (addr, size))| {
             let top = x87.as_ref().is_some_and(|s| {
                 addr.get_space().is_some_and(|sp| {
@@ -135,7 +135,7 @@ pub fn read(arch: &Architecture, data: &Funcdata) -> Option<(Address, int4)> {
 pub fn force(arch: &mut Architecture, entry: &Address, storage: (Address, int4)) {
     if let Some(space) = entry.get_space() {
         arch.kuna_tables
-            .get_mut::<crate::kuna_voidret::Ledger>()
+            .get_mut::<crate::voidret::Ledger>()
             .forced
             .insert((space.get_index(), entry.get_offset()), storage);
     }
@@ -145,7 +145,7 @@ pub fn force(arch: &mut Architecture, entry: &Address, storage: (Address, int4))
 pub fn release(arch: &mut Architecture, entry: &Address) {
     if let Some(space) = entry.get_space() {
         arch.kuna_tables
-            .get_mut::<crate::kuna_voidret::Ledger>()
+            .get_mut::<crate::voidret::Ledger>()
             .forced
             .remove(&(space.get_index(), entry.get_offset()));
     }

@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use unlace_console::engine::{EntryProvenance, ObjectLocation};
 use unlace_console::project::FuncResult;
-use unlace_decomp::kuna_structsynth::shard::{self, Replay, SynthRequest};
+use unlace_decomp::structsynth::shard::{self, Replay, SynthRequest};
 
 mod scratch;
 mod synth;
@@ -62,7 +62,7 @@ const RECYCLE_AFTER: usize = 4096;
 const MAX_AUTO_JOBS: usize = 16;
 
 /// The decode-lane cap, which is the engine's, not the pool's.
-const MAX_DECODE_LANES: usize = unlace_analysis::listing::kuna_pdecode::MAX_DECODE_LANES;
+const MAX_DECODE_LANES: usize = unlace_analysis::listing::pdecode::MAX_DECODE_LANES;
 
 /// The parent's word for "no more chunks", and the worker's for "chunk done".
 /// Both travel as whole lines over the pipes the pool already needs for
@@ -1254,7 +1254,7 @@ impl Worker {
         // a worker must not run N more of them. Forced rather than merely left
         // unset, because the variable can also reach a worker from the user's
         // environment or through `--jobs-full-load`.
-        cmd.env(unlace_analysis::listing::kuna_pdecode::DECODE_JOBS_ENV, "1");
+        cmd.env(unlace_analysis::listing::pdecode::DECODE_JOBS_ENV, "1");
         // stdin carries the assignments AND the liveness signal; stdout carries
         // the acknowledgements; stderr is the user's, shared with the parent.
         cmd.stdin(Stdio::piped())
@@ -1630,12 +1630,12 @@ fn anomaly_lines(
 ///
 /// `auto` is a promise not to wreck the machine, so it yields; an explicit
 /// number is an instruction, so it is obeyed with a warning. Free memory is
-/// [`unlace_decomp::kuna_hostmem::available`]: under a cgroup v2 `memory.max`
+/// [`unlace_decomp::hostmem::available`]: under a cgroup v2 `memory.max`
 /// it is that cap's headroom when the cap is the tighter bound.
 fn affordable_jobs(cfg: &PoolConfig, tag: &str) -> usize {
     let (Some(per_worker), Some(free)) = (
         worker_estimate(cfg.full_load),
-        unlace_decomp::kuna_hostmem::available(),
+        unlace_decomp::hostmem::available(),
     ) else {
         return cfg.jobs;
     };
@@ -1688,8 +1688,8 @@ fn affordable_jobs(cfg: &PoolConfig, tag: &str) -> usize {
 /// constant costs dominate and the ratio means nothing.
 fn worker_estimate(full_load: bool) -> Option<u64> {
     Some(worker_estimate_from(
-        unlace_decomp::kuna_hostmem::peak_resident_bytes()?,
-        unlace_analysis::listing::kuna_pdecode::lane_peak_excess_bytes(),
+        unlace_decomp::hostmem::peak_resident_bytes()?,
+        unlace_analysis::listing::pdecode::lane_peak_excess_bytes(),
         full_load,
     ))
 }
@@ -2275,7 +2275,7 @@ mod tests {
             proto: Some("void main(void);".into()),
             emitted_c_name: Some("main_linkage".into()),
             call_declarations: vec!["int external_value(int value);".into()],
-            callwide_prototypes: vec![unlace_decomp::kuna_callwide::ExportPrototype {
+            callwide_prototypes: vec![unlace_decomp::callwide::ExportPrototype {
                 name: "proved".into(),
                 entry: 0x401020,
                 signed: true,
@@ -2326,13 +2326,13 @@ mod tests {
                 definition: "struct mystruct {\n    int a;\n};\n".into(),
                 size: 4,
             }],
-            stack_objects: vec![unlace_decomp::kuna_stackobjectinfo::StackObjectInfo {
+            stack_objects: vec![unlace_decomp::stackobjectinfo::StackObjectInfo {
                 id: "object_401004_1".into(),
                 name: "frame_é".into(),
                 stack_offset: -0x18,
                 size: 8,
                 defined: false,
-                uses: vec![unlace_decomp::kuna_stackobjectinfo::StackObjectUseInfo {
+                uses: vec![unlace_decomp::stackobjectinfo::StackObjectUseInfo {
                     address: 0x401004,
                     slot: 1,
                     type_name: "struct Pair".into(),
@@ -2351,12 +2351,12 @@ mod tests {
                 integer: true,
             }],
             field_calls: vec![
-                unlace_decomp::kuna_calltargettype::FieldDecl {
+                unlace_decomp::calltargettype::FieldDecl {
                     record: "struct_3".into(),
                     field: "field_0x8".into(),
                     declaration: Some("int (*field_0x8)(unsigned int,long)".into()),
                 },
-                unlace_decomp::kuna_calltargettype::FieldDecl {
+                unlace_decomp::calltargettype::FieldDecl {
                     record: "struct_3".into(),
                     field: "field_0x10".into(),
                     declaration: None,
@@ -2456,25 +2456,25 @@ mod tests {
         let path = dir.path().join("r.bin").to_string_lossy().into_owned();
         let mut a = sample_result();
         a.synth = Some(Default::default());
-        a.pointerargs = Some(unlace_decomp::kuna_pointerargs::Record {
+        a.pointerargs = Some(unlace_decomp::pointerargs::Record {
             entry: ("ram".into(), a.byte_address),
             parameters: vec![
                 None,
-                Some(unlace_decomp::kuna_pointerargs::Parameter {
+                Some(unlace_decomp::pointerargs::Parameter {
                     storage: (("register".into(), 0x38), 8),
                     spelling: "unsigned char *".into(),
                 }),
             ],
-            calls: vec![unlace_decomp::kuna_pointerargs::Call {
+            calls: vec![unlace_decomp::pointerargs::Call {
                 callee: ("ram".into(), 0x1000),
                 index: 1,
                 storage: (("register".into(), 0x38), 8),
                 actual: "unsigned long *".into(),
-                position: unlace_decomp::kuna_pointerargs::Position { line: 3, column: 7 },
+                position: unlace_decomp::pointerargs::Position { line: 3, column: 7 },
                 expression: "&v1".into(),
             }],
         });
-        let warning = |address, text: &str, line| unlace_decomp::kuna_functionwarnings::Warning {
+        let warning = |address, text: &str, line| unlace_decomp::functionwarnings::Warning {
             address,
             text: text.into(),
             line,
@@ -2627,7 +2627,7 @@ mod tests {
 
     #[test]
     fn a_malformed_warnings_block_does_not_cross_the_worker_boundary() {
-        use unlace_decomp::kuna_functionwarnings::Warning;
+        use unlace_decomp::functionwarnings::Warning;
         let at = Warning {
             address: Some(0x8877_6655_4433_2211),
             text: "WARNING: Bad instruction".into(),
@@ -2649,9 +2649,9 @@ mod tests {
             b"\x15\x16\x17\x18\x19\x1a\x1b\x1c",
         ]
         .concat();
-        let pointerargs = unlace_decomp::kuna_pointerargs::Record {
+        let pointerargs = unlace_decomp::pointerargs::Record {
             entry: ("ram".into(), 0x401000),
-            parameters: vec![Some(unlace_decomp::kuna_pointerargs::Parameter {
+            parameters: vec![Some(unlace_decomp::pointerargs::Parameter {
                 storage: (("register".into(), 0x38), 8),
                 spelling: "unsigned char *".into(),
             })],
@@ -3607,7 +3607,7 @@ mod tests {
             over_reported * 2 < serial,
             "this is the defect: {over_reported} against {serial}"
         );
-        // Bounded by the lanes' own footprint (`kuna_pdecode::lane_footprint`),
+        // Bounded by the lanes' own footprint (`pdecode::lane_footprint`),
         // the same load reports what the lanes hold and the estimate lands
         // within a tenth of the serial one.
         let bounded = worker_estimate_from(kb(17_727_772), kb(4_257_000), false);

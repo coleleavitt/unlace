@@ -670,7 +670,7 @@ pub fn startup_ds(
         .iter()
         .find(|&&(linear, _)| linear == image.entry)
         .map(|&(_, cs)| cs)?;
-    let startup = crate::loader::kuna_realmodecs::without_commits(arch, translate, || {
+    let startup = crate::loader::realmodecs::without_commits(arch, translate, || {
         walk(image, entry_cs, |vma| {
             sleigh_step(translate, code_space, &regs, vma)
         })

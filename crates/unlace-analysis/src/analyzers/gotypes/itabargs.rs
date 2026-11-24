@@ -18,8 +18,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_decomp::kuna_goitabcalls::itab_record_name;
-use unlace_decomp::kuna_langfacet::LangFacet;
+use unlace_decomp::goitabcalls::itab_record_name;
+use unlace_decomp::langfacet::LangFacet;
 
 use crate::listing::Listing;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, InputHintFact, Phase};

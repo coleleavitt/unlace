@@ -33,7 +33,7 @@
 //! most [`MAX_HOPS`] instructions, is dropped when its register is written with
 //! anything the evaluation cannot follow, and survives a call only in a register
 //! the calling convention preserves and the call instruction itself did not
-//! write (a link register). Three shapes are read, as [`super::kuna_picbase`]
+//! write (a link register). Three shapes are read, as [`super::picbase`]
 //! reads them:
 //!
 //!  * the address a `LOAD` reads, a [`XrefKind::Read`];
@@ -79,7 +79,7 @@
 //! The floor tells a number from an address among immediates, so a value
 //! computed from the PC is exempt from it everywhere (GH #1364): in a zero-based
 //! image `adrp x0,0x0; add x0,x0,#0x378` forms `0x378`. A PC-relative value is
-//! one [`super::kuna_pcform`] recomputed from the instruction's encoding
+//! one [`super::pcform`] recomputed from the instruction's encoding
 //! (`adrp`'s page 0), or the instruction's own address as the operand of an add
 //! (`auipc`'s `(imm << 12) + inst_start`), plus or minus a value that is not
 //! one. A difference of two (`sub eax,r13d` after two `lea [rip]`) is a
@@ -114,12 +114,12 @@ use std::rc::Rc;
 
 use smallvec::SmallVec;
 use unlace_base::space::{AddrSpace, spacetype};
-use unlace_decomp::kuna_fasthash::FxBuildHasher;
+use unlace_decomp::fasthash::FxBuildHasher;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use super::kuna_pcform::Formed;
-use super::kuna_poolref::PoolImage;
+use super::pcform::Formed;
+use super::poolref::PoolImage;
 use super::xrefs::{FullOp, XrefKind, in_range, looks_like_address};
 
 /// How many instructions a carried value may reach past the one that formed
@@ -380,7 +380,7 @@ pub(super) struct Insn<'a> {
     /// Some op is a `CALL` or `CALLIND`.
     pub calls: bool,
     /// The values the instruction folded from its own address
-    /// ([`super::kuna_pcform`]).
+    /// ([`super::pcform`]).
     pub formed: Formed,
 }
 
@@ -398,7 +398,7 @@ struct Val {
     age: u8,
     /// Computed from the instruction's own address.
     pc: bool,
-    /// An address relative to the PC: a value [`super::kuna_pcform`] folded,
+    /// An address relative to the PC: a value [`super::pcform`] folded,
     /// or the PC plus or minus something that is not one ([`fold`]), kept
     /// through a truncation to [`ADDR_BYTES`] or wider. Exempt from the
     /// `checkOperands` floor.
@@ -1129,7 +1129,7 @@ impl Tracker {
 mod tests {
     use super::*;
 
-    /// `(constant, register, unique)`, as [`super::super::kuna_picbase`]'s tests
+    /// `(constant, register, unique)`, as [`super::super::picbase`]'s tests
     /// build them; a `LOAD`/`STORE` names the data space by index 2.
     fn spaces() -> (Rc<AddrSpace>, Rc<AddrSpace>, Rc<AddrSpace>) {
         (
@@ -1301,7 +1301,7 @@ mod tests {
     const LOW: [(u64, u64); 1] = [(0x200, 0x2000)];
 
     /// [`walk`] over [`LOW`] from 0x1000, each instruction with the value it
-    /// folded from its own address ([`super::super::kuna_pcform`]), if any.
+    /// folded from its own address ([`super::super::pcform`]), if any.
     fn walk_low(
         isa: &Isa,
         pc_only: bool,
@@ -1863,7 +1863,7 @@ mod tests {
     /// the run also uses at offset 0, or never completes, is the page's own datum.
     #[test]
     fn an_adrp_page_the_pair_completes_elsewhere_is_superseded() {
-        use super::super::kuna_poolref::PoolImage;
+        use super::super::poolref::PoolImage;
         let isa = Isa::new();
         // `adrp x16, ..`, then three `nop`s.
         let adrp: [u8; 16] = [

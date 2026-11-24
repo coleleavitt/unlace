@@ -7,7 +7,7 @@
 mod module_scope {
     pub(super) use crate::{context::VarnodeId, funcdata::Funcdata};
 }
-use crate::kuna_stackaddrargtrial::*;
+use crate::stackaddrargtrial::*;
 use crate::{
     dtype::type_class,
     fspec::{ParamActive, ParamEntry, ParamListKind, ParamListStandard},

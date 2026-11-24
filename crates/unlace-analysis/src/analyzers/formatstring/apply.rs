@@ -18,8 +18,8 @@ use std::rc::Rc;
 use unlace_base::error::KunaResult;
 use unlace_base::types::uint4;
 use unlace_decomp::dtype::{Datatype, TypeFactory};
+use unlace_decomp::formatstring::VarargAbi;
 use unlace_decomp::fspec::PrototypePieces;
-use unlace_decomp::kuna_formatstring::VarargAbi;
 
 use super::{Spec, spec_to_datatype};
 

@@ -567,7 +567,7 @@ fn aligned_float_aggregates_skip_the_same_slots_in_both_register_classes() {
 
 #[test]
 fn octeon_integer_promotions_keep_type_sign_and_the_32_bit_abi_exception() {
-    use unlace_decomp::kuna_narrowext::{Widen, extension, rules};
+    use unlace_decomp::narrowext::{Widen, extension, rules};
     use unlace_num::{opcodes::OpCode, pcoderaw::VarnodeData};
     for n32 in [true, false] {
         for model in if n32 {
@@ -577,7 +577,7 @@ fn octeon_integer_promotions_keep_type_sign_and_the_32_bit_abi_exception() {
         } {
             let prog = program_with_model("octeon3", n32, model);
             assert_eq!(
-                unlace_decomp::kuna_typedcallabi::image_evidence(prog.arch()),
+                unlace_decomp::typedcallabi::image_evidence(prog.arch()),
                 Some(model == "hard")
             );
             let rules = rules(prog.arch());
@@ -798,7 +798,7 @@ fn soft_float_aliases_preserve_unsigned_argument_extension_with_explicit_selecti
                 )
                 .unwrap();
                 assert_eq!(
-                    unlace_decomp::kuna_typedcallabi::image_evidence(prog.arch()),
+                    unlace_decomp::typedcallabi::image_evidence(prog.arch()),
                     Some(false),
                     "{compiler} {variant}:{model}"
                 );

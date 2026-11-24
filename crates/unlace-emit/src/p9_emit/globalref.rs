@@ -28,7 +28,7 @@
 //! the declared object's pointer is not exactly the conversion the cast
 //! performed.
 
-use crate::kuna_elemptr::FuncdataElemptrExt;
+use crate::elemptr::FuncdataElemptrExt;
 use std::collections::{BTreeMap, HashSet};
 use std::rc::Rc;
 
@@ -40,8 +40,8 @@ use unlace_num::opcodes::OpCode;
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
+use crate::elemptr::{GlobalVerdict, Obj};
 use crate::funcdata::Funcdata;
-use crate::kuna_elemptr::{GlobalVerdict, Obj};
 use crate::options::on_or_off;
 
 /// `globalref on|off`.
@@ -166,7 +166,7 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
     let mut direct = Vec::new();
     let mut pointees: BTreeMap<u64, Seen> = BTreeMap::new();
     let mut indexed = HashSet::new();
-    let elem_held = if arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0 {
+    let elem_held = if arch.kuna_options.get::<crate::elemptr::ElemPtr>().0 {
         fd.kuna_elemptr_verdicts()
     } else {
         BTreeMap::new()
@@ -192,7 +192,7 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
                     continue;
                 }
                 let Some(to) = ct.get_ptr_to() else { continue };
-                if arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0
+                if arch.kuna_options.get::<crate::elemptr::ElemPtr>().0
                     && fd.kuna_elemptr_objects()
                     && is_indexed_base(fd, op, vn)
                 {
@@ -204,7 +204,7 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
                     Seen::merge(
                         seen,
                         to,
-                        arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0,
+                        arch.kuna_options.get::<crate::elemptr::ElemPtr>().0,
                     ),
                 );
             }
@@ -220,7 +220,7 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
             // pointee and which nothing uses as a number, is used only as that
             // pointer: one of another type (its value before a call, which
             // nothing prints) is not a read of it at that type.
-            let elem = arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0
+            let elem = arch.kuna_options.get::<crate::elemptr::ElemPtr>().0
                 && matches!(
                     elem_held.get(&Obj::Held(v.get_offset())),
                     Some(GlobalVerdict::Typed { .. } | GlobalVerdict::Claimed { .. })
@@ -263,7 +263,7 @@ fn is_indexed_base(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
 
 /// Does `opcode` read its operand as a number rather than as an address?
 fn reads_as_number(opcode: OpCode) -> bool {
-    crate::kuna_inferfuncentry::reads_as_integer(opcode)
+    crate::inferfuncentry::reads_as_integer(opcode)
 }
 
 impl Plan {
@@ -540,9 +540,9 @@ fn void_reader_converts(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
         OpCode::CPUI_CALLOTHER => {
             fd.get_arch()
                 .kuna_options
-                .get::<crate::kuna_repstring::RepString>()
+                .get::<crate::repstring::RepString>()
                 .0
-                && crate::kuna_repstring::input_type(fd, op, slot).is_some()
+                && crate::repstring::input_type(fd, op, slot).is_some()
         }
         OpCode::CPUI_COPY => ty_of(o.get_out()).is_some_and(|t| is_void_pointer(&t)),
         OpCode::CPUI_STORE => {
@@ -563,5 +563,5 @@ fn void_reader_converts(fd: &Funcdata, op: OpId, vn: VarnodeId) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_globalref/tests.rs"]
+#[path = "globalref/tests.rs"]
 mod tests;

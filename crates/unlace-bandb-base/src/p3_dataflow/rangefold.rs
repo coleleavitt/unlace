@@ -305,7 +305,7 @@ impl Action for ActionRangeFold {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_rangefold::RangeFold>()
+            .get::<crate::rangefold::RangeFold>()
             .0
         {
             return 0;
@@ -318,7 +318,7 @@ impl Action for ActionRangeFold {
 crate::kuna_flag!(
     /// (kuna) Fold a comparison or mask whose outcome the ranges dominating
     /// branches establish fixes (option `rangefold`).  See
-    /// [`crate::kuna_rangefold`].
+    /// [`crate::rangefold`].
     RangeFold,
     "rangefold",
     "dominating-range folding",

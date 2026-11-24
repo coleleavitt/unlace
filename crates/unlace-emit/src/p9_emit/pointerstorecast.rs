@@ -62,16 +62,11 @@ pub fn target(
                 )
             })
             .cloned()
-            .or_else(|| super::kuna_bitcast::declared_member_type(fd, output))?;
+            .or_else(|| super::bitcast::declared_member_type(fd, output))?;
         let offset = high
             .map(|high| high.kuna_symbol_offset().max(0))
             .unwrap_or(0);
-        crate::kuna_stackviews::scalar_piece(
-            fd.get_arch().types()?,
-            declared,
-            offset,
-            value.get_size(),
-        )
+        crate::stackviews::scalar_piece(fd.get_arch().types()?, declared, offset, value.get_size())
     })?;
     let pointer_to_word = source.get_metatype() == type_metatype::TYPE_PTR
         && matches!(

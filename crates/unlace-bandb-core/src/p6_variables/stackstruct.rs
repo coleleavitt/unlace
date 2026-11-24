@@ -103,7 +103,7 @@ fn stored(fd: &Funcdata, def: OpId, width: int4) -> Stored {
     let bytes: Vec<u8> = (0..n)
         .map(|i| ((v.get_offset() >> (8 * i)) & 0xff) as u8)
         .collect();
-    match crate::kuna_structsynth::bytes_text(&bytes) {
+    match crate::structsynth::bytes_text(&bytes) {
         None => Stored::Zero,
         Some(true) => Stored::Text,
         Some(false) => Stored::Other,
@@ -146,7 +146,7 @@ fn accesses(fd: &Funcdata, space: &Rc<AddrSpace>, lo: intb, hi: intb) -> Vec<Acc
             && def
                 .iter()
                 .chain(reader_ops.iter())
-                .any(|o| crate::kuna_ptrfromuse::carries_float(fd, vn, *o));
+                .any(|o| crate::ptrfromuse::carries_float(fd, vn, *o));
         out.push(Access {
             off,
             size: v.get_size(),
@@ -475,7 +475,7 @@ fn is_decided(h: &RangeHint) -> bool {
     }
     match h.type_.get_metatype() {
         type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION => {
-            !crate::kuna_structsynth::ledger::is_minted(&h.type_)
+            !crate::structsynth::ledger::is_minted(&h.type_)
         }
         type_metatype::TYPE_ARRAY => h
             .type_
@@ -525,7 +525,7 @@ pub fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_stackstruct::StackStruct>()
+        .get::<crate::stackstruct::StackStruct>()
         .0
         || space.get_word_size() != 1
     {
@@ -612,7 +612,7 @@ fn mint(
     fields: Vec<TypeField>,
 ) -> Option<StackRecord> {
     let size = (end - start) as int4;
-    let record = crate::kuna_structsynth::answer_frame(fd, types, fields, size)?;
+    let record = crate::structsynth::answer_frame(fd, types, fields, size)?;
     Some(StackRecord {
         start,
         size,
@@ -622,7 +622,7 @@ fn mint(
 
 crate::kuna_flag!(
     /// (kuna `stackstruct`) Lay out an address-taken frame record as one
-    /// structure. See [`crate::kuna_stackstruct`].
+    /// structure. See [`crate::stackstruct`].
     StackStruct,
     "stackstruct",
     "Address-taken frame record layout",
@@ -633,25 +633,25 @@ crate::kuna_flag!(
 /// (kuna `stackstruct`) Every frame record a `restructure_varnode` pass laid out; later passes
 /// keep it while no access contradicts its bounds. Kept across `Funcdata::clear`.
 #[derive(Default)]
-struct RecordsSlot(std::cell::RefCell<Vec<crate::kuna_stackstruct::StackRecord>>);
+struct RecordsSlot(std::cell::RefCell<Vec<crate::stackstruct::StackRecord>>);
 crate::kuna_func_state!(RecordsSlot, keep_across_clear: true);
 
 /// The `kuna_stackstruct` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataStackstructExt {
     /// (kuna `stackstruct`) The frame records earlier passes laid out.
-    fn stack_records(&self) -> Vec<crate::kuna_stackstruct::StackRecord>;
+    fn stack_records(&self) -> Vec<crate::stackstruct::StackRecord>;
     /// (kuna `stackstruct`) Remember a frame record, replacing one at the same start.
-    fn record_stack_record(&self, r: crate::kuna_stackstruct::StackRecord);
+    fn record_stack_record(&self, r: crate::stackstruct::StackRecord);
 }
 
 impl FuncdataStackstructExt for crate::funcdata::Funcdata {
     /// (kuna `stackstruct`) The frame records earlier passes laid out.
-    fn stack_records(&self) -> Vec<crate::kuna_stackstruct::StackRecord> {
+    fn stack_records(&self) -> Vec<crate::stackstruct::StackRecord> {
         self.kuna_state::<RecordsSlot>().0.borrow().clone()
     }
     /// (kuna `stackstruct`) Remember a frame record, replacing one at the same start.
-    fn record_stack_record(&self, r: crate::kuna_stackstruct::StackRecord) {
+    fn record_stack_record(&self, r: crate::stackstruct::StackRecord) {
         let mut all = self.kuna_state::<RecordsSlot>().0.borrow_mut();
         all.retain(|o| o.start != r.start);
         all.push(r);

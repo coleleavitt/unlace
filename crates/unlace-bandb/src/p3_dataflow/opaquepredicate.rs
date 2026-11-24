@@ -377,8 +377,8 @@ fn constant_result(data: &Funcdata, op: OpId) -> Option<bool> {
         prove_low_bits(data, code, in0, in1)
     };
     low_bits
-        .or_else(|| crate::kuna_opaquedomain::prove(data, op))
-        .or_else(|| crate::kuna_opaqueimplied::prove(data, op))
+        .or_else(|| crate::opaquedomain::prove(data, op))
+        .or_else(|| crate::opaqueimplied::prove(data, op))
 }
 
 /// Replace a comparison that is constant for every input by that constant.
@@ -417,7 +417,7 @@ impl Rule for RuleOpaquePredicate {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_coreoptions::OpaquePredicate>()
+            .get::<crate::coreoptions::OpaquePredicate>()
             .on
             || data.is_jumptable_recovery_on()
         {
@@ -433,9 +433,7 @@ impl Rule for RuleOpaquePredicate {
                 .get(op)
                 .and_then(|o| o.get_in(1))
                 .and_then(|c| data.vbank().get(c));
-            if decided.is_none_or(|c| c.is_constant())
-                || !crate::kuna_opaquearms::identical(data, op)
-            {
+            if decided.is_none_or(|c| c.is_constant()) || !crate::opaquearms::identical(data, op) {
                 return 0;
             }
             let constant = data.new_constant(1, 0);

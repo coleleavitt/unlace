@@ -13,7 +13,7 @@ and before `boolbyte`. From there upstream does the rest: propagation carries `T
 to the copies, `RulePtrArith` turns `INT_ADD(p, i)` into `PTRADD(p, i, #W)`, and the
 printer prints a subscript. No new `Action` is scheduled.
 
-## 2. The rule (`p5_types/kuna_elemptr.rs`)
+## 2. The rule (`p5_types/elemptr.rs`)
 
 - Candidates: a function input the prototype model could place a parameter in; a
   `CALL` output whose callee left the pointee open, alone in its variable (no phi but
@@ -82,7 +82,7 @@ per call it lives across.
 
 ## 5. Tests
 
-Unit tests (`kuna_elemptr/tests.rs`), the two-pass stage test
+Unit tests (`elemptr/tests.rs`), the two-pass stage test
 `tests/stages/kuna-elemptr.toml` on the compiled fixture, four `tests/cli` probes (one
 runs a batch that must leave a byte-stepped global and a first-element-named table
 untyped, one a caller passing a table with a zero byte to a typed callee), the

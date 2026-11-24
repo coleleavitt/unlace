@@ -88,8 +88,8 @@
 //! instruction calls itself (the placeholder an unrelocated call in an
 //! object file leaves).
 
+use crate::bejoin::FuncdataBejoinExt;
 pub use crate::heritage::WidePair;
-use crate::kuna_bejoin::FuncdataBejoinExt;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
@@ -668,12 +668,12 @@ pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
     let Some(model) = arch.default_fp().cloned() else {
         return;
     };
-    let mut cache = std::mem::take(arch.kuna_tables.get_mut::<crate::kuna_bejoin::WideCache>());
+    let mut cache = std::mem::take(arch.kuna_tables.get_mut::<crate::bejoin::WideCache>());
     if cache.pair.is_none() {
         cache.pair = Some(wide_pair(&model, arch.manage()));
     }
     let Some(Some(pair)) = cache.pair.clone() else {
-        *arch.kuna_tables.get_mut::<crate::kuna_bejoin::WideCache>() = cache;
+        *arch.kuna_tables.get_mut::<crate::bejoin::WideCache>() = cache;
         return;
     };
     let mut entries: Vec<Entry> = Vec::new();
@@ -702,7 +702,7 @@ pub fn seed(arch: &mut Architecture, data: &mut Funcdata) {
         verdicts,
         missed: Default::default(),
     });
-    *arch.kuna_tables.get_mut::<crate::kuna_bejoin::WideCache>() = cache;
+    *arch.kuna_tables.get_mut::<crate::bejoin::WideCache>() = cache;
 }
 
 /// After a pass of the pipeline: did a call ask about a callee no verdict was
@@ -720,12 +720,12 @@ pub fn missed_proven(arch: &mut Architecture, data: &Funcdata) -> bool {
     let Some(model) = arch.default_fp().cloned() else {
         return false;
     };
-    let mut cache = std::mem::take(arch.kuna_tables.get_mut::<crate::kuna_bejoin::WideCache>());
+    let mut cache = std::mem::take(arch.kuna_tables.get_mut::<crate::bejoin::WideCache>());
     let mut any = false;
     for k in missed {
         any |= take(arch, &mut cache, &model, &view.pair, k);
     }
-    *arch.kuna_tables.get_mut::<crate::kuna_bejoin::WideCache>() = cache;
+    *arch.kuna_tables.get_mut::<crate::bejoin::WideCache>() = cache;
     any
 }
 
@@ -736,7 +736,7 @@ pub fn proven(data: &Funcdata, entry: &Address) -> bool {
     let Some(sp) = entry.get_space() else {
         return false;
     };
-    crate::kuna_callwide::proven(data, entry)
+    crate::callwide::proven(data, entry)
         || data
             .kuna_wide()
             .is_some_and(|w| w.get((sp.get_index(), entry.get_offset())))
@@ -862,11 +862,10 @@ fn proves_wide(
 
 /// Does `option bejoinpass whole` read a function that hands back, at every
 /// path end, the pair a proven callee left in place as that callee's whole
-/// value ([`crate::kuna_bejoinpass::settle_return`])?
+/// value ([`crate::bejoinpass::settle_return`])?
 fn hands_back_whole(arch: &Architecture, pair: &WidePair) -> bool {
-    arch.kuna_options
-        .get::<crate::kuna_bejoinpass::BeJoinPassMode>()
-        == crate::kuna_bejoinpass::BeJoinPassMode::Whole
+    arch.kuna_options.get::<crate::bejoinpass::BeJoinPassMode>()
+        == crate::bejoinpass::BeJoinPassMode::Whole
         && pair.hi.1 == 4
         && pair.lo.1 == 4
 }
@@ -1291,7 +1290,7 @@ impl<'a> Walk<'a> {
                         }
                         if target
                             .as_ref()
-                            .is_some_and(|t| crate::kuna_calleenoreturn::is_no_return(self.arch, t))
+                            .is_some_and(|t| crate::calleenoreturn::is_no_return(self.arch, t))
                         {
                             self.reads.append(&mut path.reads);
                             return Some(false);
@@ -1879,9 +1878,9 @@ pub fn build_high_read(
     let Some(call_addr) = data.obank().get(op).map(|o| o.get_addr().clone()) else {
         return false;
     };
-    let Some(joinaddr) = crate::kuna_rustabi::pair_join_address(
-        data, &hi_addr, hi_size, &lo_addr, lo_size, &call_addr,
-    ) else {
+    let Some(joinaddr) =
+        crate::rustabi::pair_join_address(data, &hi_addr, hi_size, &lo_addr, lo_size, &call_addr)
+    else {
         return false;
     };
     let Ok(whole) = data.new_varnode_out(lo_size + hi_size, &joinaddr, op) else {

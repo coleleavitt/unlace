@@ -169,10 +169,10 @@ pub fn capture(data: &mut Funcdata) {
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_x87depth::X87Depth>()
+        .get::<crate::x87depth::X87Depth>()
         .0
     {
-        let facts = crate::kuna_x87depth::facts(data, &storage);
+        let facts = crate::x87depth::facts(data, &storage);
         data.kuna_x87_empty_returns = facts.empty_returns;
         data.kuna_x87_float_returns = facts.float_returns;
         data.kuna_x87_float_calls = facts.float_calls;
@@ -256,7 +256,7 @@ pub fn drop_empty(data: &Funcdata, active: &mut ParamActive, returns: &[OpId]) {
         .iter()
         .filter_map(|&id| data.obank().get(id).map(|o| (id, o)))
         .filter(|&(id, o)| {
-            !o.is_dead() && o.get_halt_type() == 0 && !crate::kuna_bejoin::never_reached(data, id)
+            !o.is_dead() && o.get_halt_type() == 0 && !crate::bejoin::never_reached(data, id)
         })
         .collect();
     if ordinary.is_empty()
@@ -274,15 +274,15 @@ pub fn drop_empty(data: &Funcdata, active: &mut ParamActive, returns: &[OpId]) {
         );
         if trial.get_address() == &addr
             && trial.get_size() == storage.top.size as i32
-            && !crate::kuna_voidret::forced(data, trial.get_address(), trial.get_size())
+            && !crate::voidret::forced(data, trial.get_address(), trial.get_size())
         {
             active.get_trial_mut(i).mark_inactive();
         }
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.x87emptyreturn_storage = Some(storage);
 }
 

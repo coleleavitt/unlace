@@ -84,8 +84,8 @@ pub(crate) fn query(args: &BlobArgs) -> Result<String, String> {
         crate::loadtime::apply_to_process(&options, args.slice.as_deref(), 1, false);
     let raw = unlace_analysis::loadimage_object::parse_object(&bytes)
         .map_err(|e| format!("could not parse {}: {e}", args.binary))?;
-    let view = unlace_analysis::loader::kuna_relocrebase::rebased_view(&raw, &bytes);
-    let (file, _) = unlace_analysis::loader::kuna_relocrebase::select(raw, &bytes, &view);
+    let view = unlace_analysis::loader::relocrebase::rebased_view(&raw, &bytes);
+    let (file, _) = unlace_analysis::loader::relocrebase::select(raw, &bytes, &view);
     let (mut regions, from_segments) = blobs::mapped_regions(&file);
     if let Some(want) = &args.section {
         let names: Vec<String> = regions.iter().filter_map(|r| r.name.clone()).collect();

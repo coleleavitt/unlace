@@ -28,7 +28,7 @@ use object::{Object, ObjectSection};
 use unlace_analysis::loader::macho_fat::SlicePref;
 use unlace_base::address::Address;
 use unlace_console::engine::ConsoleProgram;
-use unlace_decomp::kuna_calleereginputs::CUSTOM;
+use unlace_decomp::calleereginputs::CUSTOM;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::PcodeEmit;
@@ -87,7 +87,7 @@ impl Decision {
     /// both maps on the architecture; a callee left out states nothing, on either
     /// side.
     pub(crate) fn install(&self, prog: &mut ConsoleProgram, kept: &BTreeSet<u64>) {
-        use unlace_decomp::kuna_calleereginputs::key_registers;
+        use unlace_decomp::calleereginputs::key_registers;
         let mut models: BTreeMap<u16, std::rc::Rc<unlace_decomp::fspec::ProtoModel>> =
             BTreeMap::new();
         let mut map: BTreeMap<u64, u16> = BTreeMap::new();
@@ -146,7 +146,7 @@ pub(crate) fn analyze(
     binary: &str,
     pref: SlicePref,
 ) -> CustomRegPlan {
-    if !unlace_decomp::kuna_calleereginputs::custom_applies(prog.arch()) {
+    if !unlace_decomp::calleereginputs::custom_applies(prog.arch()) {
         return CustomRegPlan::empty();
     }
     let entries: Vec<(u64, u64)> = graph.entry_extents().to_vec();
@@ -173,7 +173,7 @@ pub(crate) fn analyze(
 /// Join the callee half the first pass recorded with the caller half, decoding
 /// only the callers of callees that read a custom register.
 pub(crate) fn decide(prog: &ConsoleProgram, plan: &CustomRegPlan) -> Decision {
-    use unlace_decomp::kuna_calleereginputs::{KEY_CUSTOM_SHIFT, READS_ECX_EDX, ecx_edx_key};
+    use unlace_decomp::calleereginputs::{KEY_CUSTOM_SHIFT, READS_ECX_EDX, ecx_edx_key};
     let mut decision = Decision {
         keys: BTreeMap::new(),
         callers: BTreeMap::new(),
@@ -205,7 +205,7 @@ pub(crate) fn decide(prog: &ConsoleProgram, plan: &CustomRegPlan) -> Decision {
             continue;
         }
         let addr = Address::new(code.clone(), entry);
-        if unlace_decomp::kuna_calleepurge::moves_stack(prog.arch(), &addr)
+        if unlace_decomp::calleepurge::moves_stack(prog.arch(), &addr)
             || ecx_edx_key(prog.arch(), &addr) != 0
         {
             continue;

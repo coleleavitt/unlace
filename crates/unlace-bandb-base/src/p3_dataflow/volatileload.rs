@@ -148,14 +148,14 @@ pub fn is_volatile_with(data: &Funcdata, id: OpId, memo: &mut Memo) -> bool {
         let node = data.vbank().get(pointer);
         if node
             .and_then(|node| node.get_type().get_ptr_to())
-            .is_some_and(|ty| crate::kuna_typequal::is_volatile(&ty))
+            .is_some_and(|ty| crate::typequal::is_volatile(&ty))
         {
             return true;
         }
         let mut budget = BUDGET;
-        if crate::kuna_typequal::address_type(data, pointer, &mut budget)
+        if crate::typequal::address_type(data, pointer, &mut budget)
             .and_then(|ty| ty.get_ptr_to())
-            .is_some_and(|ty| crate::kuna_typequal::is_volatile(&ty))
+            .is_some_and(|ty| crate::typequal::is_volatile(&ty))
         {
             return true;
         }

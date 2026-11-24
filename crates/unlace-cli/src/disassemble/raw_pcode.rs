@@ -77,7 +77,7 @@ fn with_target<R>(
     walk: impl FnOnce(&ConsoleProgram, &DisArgs, Region) -> Result<R, String>,
 ) -> Result<R, String> {
     let (mut prog, region) = load_target(args, ViewRequest::Code, bounded)?;
-    unlace_decomp::kuna_mipsunaligned::paint(prog.arch_mut());
+    unlace_decomp::mipsunaligned::paint(prog.arch_mut());
     let Some(vma) = thumb_pointer(&prog, args)? else {
         return walk(&prog, args, region);
     };

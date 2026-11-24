@@ -5,7 +5,7 @@
 //! accumulator per lane, a horizontal fold after it, a guard `length >= S` in
 //! front of it, and a scalar copy of the loop that either finishes the
 //! remainder `[length & -S, length)` or, when the guard failed, runs from zero.
-//! Once [`kuna_wideslice`](crate::kuna_wideslice) has reduced the lanes to byte
+//! Once [`kuna_wideslice`](crate::wideslice) has reduced the lanes to byte
 //! reads of the loaded word, the vector arm is S copies of the scalar body in a
 //! different order, and reading it means reconstructing the source loop by
 //! hand.
@@ -75,7 +75,7 @@ impl Action for ActionDevectorize {
             && !data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_devectorize::DevectorizeReduction>()
+                .get::<crate::devectorize::DevectorizeReduction>()
                 .0
         {
             return 0;
@@ -760,7 +760,7 @@ crate::kuna_flag!(
     /// (kuna) Re-roll a vectorized integer reduction (guard, stride loop with
     /// one accumulator per lane, fold, scalar remainder loop) into its scalar
     /// loop (option `devectorize`, opt-in default-off).  See
-    /// [`crate::kuna_devectorize`].
+    /// [`crate::devectorize`].
     DevectorizeReduction,
     "devectorize",
     "Vectorized reduction re-roll",

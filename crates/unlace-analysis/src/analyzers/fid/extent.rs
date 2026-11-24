@@ -32,7 +32,7 @@
 //!   (ascending) and collect them. kuna substitutes the `[entry, next)` clip for
 //!   `func.getBody()`.
 
-use crate::listing::kuna_funcchunks::ChunkModel;
+use crate::listing::funcchunks::ChunkModel;
 use crate::listing::{Insn, Listing};
 
 /// Reconstruct the extent of the function entered at `entry`: the decoded

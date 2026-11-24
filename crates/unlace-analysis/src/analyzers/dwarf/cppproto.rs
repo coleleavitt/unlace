@@ -79,7 +79,7 @@ use unlace_base::types::uint4;
 use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
-use super::kuna_typedepth::TypeWalk;
+use super::typedepth::TypeWalk;
 use super::{DieSnap, build_datatype};
 
 /// A subprogram definition fused with the declaration it points at — the reduced
@@ -244,7 +244,7 @@ pub(super) fn build_pieces(
         let origin = p.origin_ref.and_then(|o| dies.get(&o));
         let type_ref = p.type_ref.or_else(|| origin.and_then(|o| o.type_ref));
         let ty = build_param_type(type_ref, dies, types, word_size, &mut walk)?;
-        let ty = super::kuna_dwarfbyref::parameter_type(p, ty, types, word_size)?;
+        let ty = super::dwarfbyref::parameter_type(p, ty, types, word_size)?;
         let name = if p.name.is_empty() {
             origin.map(|o| o.name.clone()).unwrap_or_default()
         } else {
@@ -328,11 +328,11 @@ pub(super) fn collect_fbreg_locals(
     cfa: i64,
     out: &mut Vec<crate::pass::LocalFact>,
 ) {
-    let Some(base) = super::kuna_dwarfscopes::frame_base_offset(sub.frame_base, cfa) else {
+    let Some(base) = super::dwarfscopes::frame_base_offset(sub.frame_base, cfa) else {
         return;
     };
     let mut walk = TypeWalk::new();
-    let scopes = super::kuna_dwarfscopes::enabled();
+    let scopes = super::dwarfscopes::enabled();
     let mut pending: Vec<usize> = sub.children.iter().rev().copied().collect();
     while let Some(coff) = pending.pop() {
         let Some(child) = dies.get(&coff) else {

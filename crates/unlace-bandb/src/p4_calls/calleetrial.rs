@@ -16,7 +16,7 @@
 //! is one trial on that storage like any other, which is the case a
 //! dominance-shaped gate misses.
 
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::protoorder::FuncdataProtoorderExt;
 use unlace_base::address::Address;
 use unlace_base::types::int4;
 

@@ -68,7 +68,7 @@
 //!
 //! folding `helper(g)` into the last statement evaluates it *after* `k = 42` and
 //! changes what it returns.
-//! [`op_writes_tied_storage`](crate::kuna_callretfold::op_writes_tied_storage)
+//! [`op_writes_tied_storage`](crate::callretfold::op_writes_tied_storage)
 //! is the missing barrier, and every span this module clears is tested with it —
 //! for a frame slot as well, since the callee can reach one whenever the frame
 //! address escaped into the call.  (The same hole is reachable through
@@ -89,7 +89,7 @@
 //! block behind a branch.  The rejection this module discounts is sometimes the
 //! only thing holding such a call in place, so the discount re-derives the real
 //! print point (the end of
-//! [`print_chain`](crate::kuna_callretfold::print_chain)) and
+//! [`print_chain`](crate::callretfold::print_chain)) and
 //! re-runs the span guard over the whole distance the call would move.  A print
 //! point outside the call's own block, or one with a barrier or a global write
 //! in between, declines.  So does a chain into the right-hand operand of a
@@ -174,13 +174,13 @@ pub fn conflict_is_self_call_effect(
 /// `use_op`; this re-runs the guard over the span from the call to the statement
 /// the folded expression actually lands in, which is where it is evaluated at
 /// run time, and adds the memory-write barrier
-/// [`op_writes_tied_storage`](crate::kuna_callretfold::op_writes_tied_storage)
+/// [`op_writes_tied_storage`](crate::callretfold::op_writes_tied_storage)
 /// that the opcode test misses.  The print point itself is not a barrier — the
 /// folded expression is evaluated as its operand, before it — but its *other*
 /// operands must not read an effect of the call, so the INDIRECT test covers it
 /// too.  A chain into the right-hand operand of a short-circuit operator
 /// declines: see
-/// [`chain_reaches_short_circuit_rhs`](crate::kuna_callretfold::chain_reaches_short_circuit_rhs).
+/// [`chain_reaches_short_circuit_rhs`](crate::callretfold::chain_reaches_short_circuit_rhs).
 ///
 /// This is wider than either span `foldcallret` clears — every opcode, the
 /// storage test with no self-copy exemption, no exemption for the ops the
@@ -188,17 +188,17 @@ pub fn conflict_is_self_call_effect(
 /// — and stays that way on purpose: the folds it releases are ones the merge
 /// machinery was holding, so they are the ones with the furthest to travel.
 fn print_point_is_order_safe(data: &Funcdata, call: OpId, use_op: OpId) -> bool {
-    let Some(chain) = crate::kuna_callretfold::print_chain(data, use_op) else {
+    let Some(chain) = crate::callretfold::print_chain(data, use_op) else {
         return false;
     };
-    if crate::kuna_callretfold::chain_reaches_short_circuit_rhs(data, call, &chain) {
+    if crate::callretfold::chain_reaches_short_circuit_rhs(data, call, &chain) {
         return false;
     }
     let point = *chain.last().expect("print_chain: non-empty");
-    let Some(blk) = crate::kuna_callretfold::op_parent(data, call) else {
+    let Some(blk) = crate::callretfold::op_parent(data, call) else {
         return false;
     };
-    if crate::kuna_callretfold::op_parent(data, point) != Some(blk) {
+    if crate::callretfold::op_parent(data, point) != Some(blk) {
         return false;
     }
     let ops = data.bb_ops(blk);
@@ -212,11 +212,11 @@ fn print_point_is_order_safe(data: &Funcdata, call: OpId, use_op: OpId) -> bool 
         return false;
     }
     let span_clear = !ops[ci + 1..pi].iter().any(|&mid| {
-        crate::kuna_callretfold::op_is_barrier(data, mid)
-            || crate::kuna_callretfold::op_writes_tied_storage(data, mid)
-            || crate::kuna_callretfold::op_reads_indirect_output_of(data, mid, call)
+        crate::callretfold::op_is_barrier(data, mid)
+            || crate::callretfold::op_writes_tied_storage(data, mid)
+            || crate::callretfold::op_reads_indirect_output_of(data, mid, call)
     });
-    span_clear && !crate::kuna_callretfold::op_reads_indirect_output_of(data, point, call)
+    span_clear && !crate::callretfold::op_reads_indirect_output_of(data, point, call)
 }
 
 /// (kuna) Does `call`'s output carry the whole value its callee returns?

@@ -36,7 +36,7 @@
 //!    jump table, a function-pointer table or a word map ([`IndexedBases`]),
 //! 5. emit a [`crate::pass::StringFact`] (a typed `char[N]`) when the target is a
 //!    NUL-terminated printable run that is not a pointer-aligned slot holding an
-//!    address of the image ([`crate::strings::kuna_ptrslot`]) nor the head of a
+//!    address of the image ([`crate::strings::ptrslot`]) nor the head of a
 //!    wider array: a sized data object of another size ([`DataObjects`]), or
 //!    an array of 2- or 4-byte character codes ([`wide_element_neighbour`]),
 //!    plus a `readonly` range over it — reusing the
@@ -825,7 +825,7 @@ fn scan(
 /// `readonly` range over it — so the printer renders the reference as the string
 /// literal. Targets that are not printable runs are skipped (no type to plant),
 /// and so is a target whose pointer-sized slot holds an address of the image
-/// ([`crate::strings::kuna_ptrslot`]): an entry of a vtable or of a pointer table.
+/// ([`crate::strings::ptrslot`]): an entry of a vtable or of a pointer table.
 /// (kuna) So is a run where a sized data object of another size starts
 /// ([`DataObjects`]), and a one-character run that opens an array of wider
 /// character codes ([`wide_element_neighbour`]) whose second element is no
@@ -837,7 +837,7 @@ fn scan(
 /// a literal whose neighbour has none is refused with the array.
 /// Pure — the unit tests assert it directly.
 fn emit_facts(file: &object::File, refs: &[ScalarRef]) -> AnalysisOutput {
-    let slots = crate::strings::kuna_ptrslot::PointerSlots::new(file);
+    let slots = crate::strings::ptrslot::PointerSlots::new(file);
     let objects = DataObjects::new(file);
     let mut targets: Vec<u64> = refs.iter().map(|r| r.to).collect();
     targets.sort_unstable();
@@ -927,7 +927,7 @@ impl AnalysisPass for OperandRefsPass {
         if !ctx
             .arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Widestrings32>()
+            .get::<unlace_decomp::analysisgates::Widestrings32>()
             .0
         {
             return emit_facts(
@@ -953,7 +953,7 @@ fn wide_strings32(
     let mut targets: Vec<u64> = refs.iter().map(|r| r.to).collect();
     targets.sort_unstable();
     targets.dedup();
-    crate::strings::kuna_widestrings32::wide_string32_facts(file, &targets, tables)
+    crate::strings::widestrings32::wide_string32_facts(file, &targets, tables)
 }
 
 /// (kuna `widestrings32`) The 4-byte string facts alone, for a run with

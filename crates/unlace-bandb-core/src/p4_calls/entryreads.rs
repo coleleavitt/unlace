@@ -20,8 +20,8 @@
 //! read where the bounded entry decode cannot finish, and beside it where the
 //! decode cannot see past a call.
 
-use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::calleedeadarg::FuncdataCalleedeadargExt;
+use crate::protoorder::FuncdataProtoorderExt;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
@@ -206,7 +206,7 @@ pub fn capture(data: &mut Funcdata) {
 /// split it into around a narrower read (`mov %rdi,%rax` beside `add
 /// %edi,%eax`), as its storage.
 fn reassembled(data: &Funcdata, o: &crate::op::PcodeOp) -> Option<(Address, int4)> {
-    crate::kuna_armfloatargs::incoming_storage(data, o.get_out()?)
+    crate::armfloatargs::incoming_storage(data, o.get_out()?)
 }
 
 /// Is `o`'s result the same whatever the value of its register operands: one
@@ -434,7 +434,7 @@ pub fn final_forwards(data: &Funcdata) -> Vec<(Address, int4, Address)> {
         }
         for k in 1..o.num_input() {
             let Some(vn) = o.get_in(k) else { continue };
-            let Some((addr, size)) = crate::kuna_armfloatargs::incoming_storage(data, vn) else {
+            let Some((addr, size)) = crate::armfloatargs::incoming_storage(data, vn) else {
                 continue;
             };
             if addr
@@ -475,29 +475,29 @@ pub fn reads_through(
 /// (kuna `passthrough`) The incoming registers the first heritage saw the body read; reset by
 /// `Funcdata::clear`.
 #[derive(Default)]
-struct ReadsSlot(Option<crate::kuna_entryreads::EntryReads>);
+struct ReadsSlot(Option<crate::entryreads::EntryReads>);
 crate::kuna_func_state!(ReadsSlot, keep_across_clear: false);
 
 /// The `kuna_entryreads` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataEntryreadsExt {
     /// (kuna `passthrough`) Record what the first heritage saw the body read.
-    fn kuna_set_entry_reads(&mut self, reads: crate::kuna_entryreads::EntryReads);
+    fn kuna_set_entry_reads(&mut self, reads: crate::entryreads::EntryReads);
     /// (kuna `passthrough`) The incoming registers the body reads, once heritage ran.
-    fn kuna_entry_reads(&self) -> Option<&crate::kuna_entryreads::EntryReads>;
+    fn kuna_entry_reads(&self) -> Option<&crate::entryreads::EntryReads>;
 }
 
 impl FuncdataEntryreadsExt for crate::funcdata::Funcdata {
     /// (kuna `passthrough`) Record what the first heritage saw the body read.
-    fn kuna_set_entry_reads(&mut self, reads: crate::kuna_entryreads::EntryReads) {
+    fn kuna_set_entry_reads(&mut self, reads: crate::entryreads::EntryReads) {
         self.kuna_state_mut::<ReadsSlot>().0 = Some(reads);
     }
     /// (kuna `passthrough`) The incoming registers the body reads, once heritage ran.
-    fn kuna_entry_reads(&self) -> Option<&crate::kuna_entryreads::EntryReads> {
+    fn kuna_entry_reads(&self) -> Option<&crate::entryreads::EntryReads> {
         self.kuna_state::<ReadsSlot>().0.as_ref()
     }
 }
 
 #[cfg(test)]
-#[path = "kuna_entryreads/tests.rs"]
+#[path = "entryreads/tests.rs"]
 mod tests;

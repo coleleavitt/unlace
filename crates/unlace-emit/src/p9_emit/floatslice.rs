@@ -41,12 +41,12 @@ pub fn recognize(fd: &Funcdata, op: OpId) -> Option<Slice> {
     {
         return None;
     }
-    let target = crate::kuna_stackviews::access_type(fd, output, op, -1)
+    let target = crate::stackviews::access_type(fd, output, op, -1)
         .unwrap_or_else(|| fd.vn_type_def_facing(output));
     if target.get_size() != width || target.get_metatype() != type_metatype::TYPE_FLOAT {
         return None;
     }
-    let from = crate::kuna_stackviews::access_type(fd, input, op, operation.get_slot(input))
+    let from = crate::stackviews::access_type(fd, input, op, operation.get_slot(input))
         .or_else(|| crate::printc::declared_variable_type(fd, input))
         .unwrap_or_else(|| fd.vn_type_read_facing(input, op));
     let from = from.get_stripped().unwrap_or(from);
@@ -60,7 +60,7 @@ pub fn recognize(fd: &Funcdata, op: OpId) -> Option<Slice> {
         )
         || from.get_metatype() == type_metatype::TYPE_UNKNOWN
             && source.is_implied()
-            && !crate::kuna_bitcast::reinterprets_to_float(fd, input)
+            && !crate::bitcast::reinterprets_to_float(fd, input)
     {
         return None;
     }

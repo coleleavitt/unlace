@@ -5,9 +5,9 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::funcdata_facing::FuncdataFacingExt;
-use crate::kuna_rustintegers::needs_integer_context;
 use crate::printc::{PrintC, op_key, op_token, tokens};
 use crate::printlanguage::{Atom, OpToken, SyntaxHighlight, TagType, TokenType, modifiers};
+use crate::rustintegers::needs_integer_context;
 use unlace_num::opcodes::OpCode;
 
 #[doc(hidden)]

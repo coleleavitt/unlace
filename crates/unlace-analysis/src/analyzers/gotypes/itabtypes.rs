@@ -25,9 +25,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_decomp::fspec::PrototypePieces;
-use unlace_decomp::kuna_goitabcalls::{ITAB_FUN_OFFSET_64, itab_record_name};
+use unlace_decomp::goitabcalls::{ITAB_FUN_OFFSET_64, itab_record_name};
 
-use super::kuna_typeglobals::{global_name_ok, linker_name, reachable};
+use super::typeglobals::{global_name_ok, linker_name, reachable};
 use super::*;
 
 /// The header fields of the record, named as `runtime.itab` names them.
@@ -339,7 +339,7 @@ pub(super) fn intern(
         return 0;
     }
     let itab_interfaces: Vec<u64> =
-        super::kuna_itabs::locate_itabs(img, anchor, meta.types, meta.etypes)
+        super::itabs::locate_itabs(img, anchor, meta.types, meta.etypes)
             .unwrap_or_default()
             .into_iter()
             .filter_map(|vma| word(img, vma))

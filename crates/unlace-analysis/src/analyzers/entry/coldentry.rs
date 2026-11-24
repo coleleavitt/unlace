@@ -21,7 +21,7 @@
 //! ## What counts as one
 //!
 //! An address `t` strictly inside a single-function FDE body `[b, e)` (the same
-//! eligibility [`super::kuna_fdeinterior`] uses) is an entry when:
+//! eligibility [`super::fdeinterior`] uses) is an entry when:
 //!
 //! 1. a direct `jmp rel32` / `jcc rel32` OUTSIDE `[b, e)` targets it — found by a
 //!    byte scan of the executable sections for the `E9` / `0F 8x` encodings, then
@@ -63,7 +63,7 @@ use crate::listing::classify::classify;
 use crate::listing::decode::decode_one;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
-use super::kuna_fdeinterior::{eligible_fde_bodies, scan_fde_bodies};
+use super::fdeinterior::{eligible_fde_bodies, scan_fde_bodies};
 use super::{executable_sections, existing_function_addrs};
 
 /// The longest FDE body this pass will linearly decode.

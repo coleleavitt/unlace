@@ -1,7 +1,7 @@
 //! (kuna `callerreads`) Where each direct call returns to.
 //!
 //! A function decompiled alone may return what its callers read after calling
-//! it (`unlace_decomp::kuna_callerreads`). The walk already files every direct
+//! it (`unlace_decomp::callerreads`). The walk already files every direct
 //! call as a [`RefKind::Call`] edge, so this reads the completed Listing and
 //! pairs each edge's target with the address the calling instruction falls
 //! through to. The decompile step decodes the callers from those addresses only

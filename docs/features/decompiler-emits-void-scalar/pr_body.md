@@ -32,7 +32,7 @@ shape on a different binary's byte-XOR decode loop.
   recovered function pointer adopts `code` as the *value* type, `INT_EQUAL`
   spreads it to the compared `0xcc`, and the C back-end prints that widthless
   scalar `void`.
-- `kuna_codescalar.rs (blocks_value_type)` declines a `TYPE_CODE` pointee on the
+- `codescalar.rs (blocks_value_type)` declines a `TYPE_CODE` pointee on the
   value side of the LOAD/STORE transfer function. The *pointer* is untouched, so
   the indirect call still renders `(*v1)()`, and a `code **` load never reaches
   the test.

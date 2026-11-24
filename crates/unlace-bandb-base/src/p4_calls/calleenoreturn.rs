@@ -18,30 +18,30 @@ pub fn is_no_return(arch: &Architecture, entry: &Address) -> bool {
     if let Some(name) = name.as_deref() {
         if arch
             .kuna_options
-            .get::<crate::kuna_analysisgates::NoreturnKnown>()
+            .get::<crate::analysisgates::NoreturnKnown>()
             .0
-            && crate::kuna_noreturn_externmatch::is_known_noreturn_name(name)
+            && crate::noreturn_externmatch::is_known_noreturn_name(name)
         {
             return true;
         }
-        if arch.kuna_options.get::<crate::kuna_gobounds::GoBounds>().0
+        if arch.kuna_options.get::<crate::gobounds::GoBounds>().0
             && arch.source_lang().is_go()
-            && crate::kuna_gobounds::is_go_check_name(name)
+            && crate::gobounds::is_go_check_name(name)
         {
             return true;
         }
         if arch
             .kuna_options
-            .get::<crate::kuna_securitycheck::StripSecurityCheck>()
+            .get::<crate::securitycheck::StripSecurityCheck>()
             .0
-            && crate::kuna_securitycheck::is_security_check_name(name)
+            && crate::securitycheck::is_security_check_name(name)
         {
             return true;
         }
     }
     if arch
         .kuna_options
-        .get::<crate::kuna_analysisgates::NoreturnKnown>()
+        .get::<crate::analysisgates::NoreturnKnown>()
         .0
     {
         let name = arch
@@ -52,14 +52,14 @@ pub fn is_no_return(arch: &Architecture, entry: &Address) -> bool {
             .or(name);
         return name
             .as_deref()
-            .is_some_and(crate::kuna_noreturnextern::matches_noreturn_extern_name);
+            .is_some_and(crate::noreturnextern::matches_noreturn_extern_name);
     }
     false
 }
 
 /// Under `noreturn_known`, a direct call at `call` (falling through to
 /// `fallthrough`) to a `<prefix>__<entry>` proxy stub is no-return when it is the
-/// last instruction of its sized function (`kuna_noreturn_externmatch.rs`).
+/// last instruction of its sized function (`noreturn_externmatch.rs`).
 #[doc(hidden)]
 pub fn is_proxy_no_return_at(
     arch: &Architecture,
@@ -67,11 +67,9 @@ pub fn is_proxy_no_return_at(
     call: &Address,
     fallthrough: &Address,
 ) -> bool {
-    use crate::kuna_noreturn_externmatch::{
-        call_ends_function, is_proxy_noreturn_name, is_stub_body,
-    };
+    use crate::noreturn_externmatch::{call_ends_function, is_proxy_noreturn_name, is_stub_body};
     arch.kuna_options
-        .get::<crate::kuna_analysisgates::NoreturnKnown>()
+        .get::<crate::analysisgates::NoreturnKnown>()
         .0
         && call_ends_function(arch, call, fallthrough)
         && arch

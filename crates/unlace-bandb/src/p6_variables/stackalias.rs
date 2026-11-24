@@ -14,7 +14,7 @@ use unlace_num::opcodes::OpCode;
 
 /// Whether this Varnode is a physical write in this function's frame space.
 pub fn holds_store(fd: &Funcdata, id: VarnodeId) -> bool {
-    if crate::kuna_localstackviews::publication(fd, id) {
+    if crate::localstackviews::publication(fd, id) {
         return true;
     }
     let full = fd
@@ -25,10 +25,10 @@ pub fn holds_store(fd: &Funcdata, id: VarnodeId) -> bool {
         || fd
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_coreoptions::StackViews>()
+            .get::<crate::coreoptions::StackViews>()
             .0;
     if !full
-        && !crate::kuna_localstackviews::active(fd)
+        && !crate::localstackviews::active(fd)
         && fd
             .stack_parameter_store_extents
             .values()
@@ -42,8 +42,8 @@ pub fn holds_store(fd: &Funcdata, id: VarnodeId) -> bool {
     fd.vbank().get(id).is_some_and(|v| {
         v.is_stack_store()
             && (full
-                || crate::kuna_stackparamviews::preserves_range(fd, v.get_addr(), v.get_size())
-                || crate::kuna_localstackviews::preserves_range(fd, v.get_addr(), v.get_size()))
+                || crate::stackparamviews::preserves_range(fd, v.get_addr(), v.get_size())
+                || crate::localstackviews::preserves_range(fd, v.get_addr(), v.get_size()))
             && v.get_space().get_index() == scope.get_space_id().get_index()
             && !v.has_no_local_alias()
             && fd
@@ -64,10 +64,10 @@ pub fn prepare(fd: &mut Funcdata) -> i32 {
         || fd
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_coreoptions::StackViews>()
+            .get::<crate::coreoptions::StackViews>()
             .0;
     if !full
-        && !crate::kuna_localstackviews::active(fd)
+        && !crate::localstackviews::active(fd)
         && fd
             .stack_parameter_store_extents
             .values()
@@ -90,8 +90,8 @@ pub fn prepare(fd: &mut Funcdata) -> i32 {
         if !v.is_stack_store()
             || v.has_no_local_alias()
             || (!full
-                && !crate::kuna_stackparamviews::preserves_range(fd, v.get_addr(), v.get_size())
-                && !crate::kuna_localstackviews::preserves_range(fd, v.get_addr(), v.get_size()))
+                && !crate::stackparamviews::preserves_range(fd, v.get_addr(), v.get_size())
+                && !crate::localstackviews::preserves_range(fd, v.get_addr(), v.get_size()))
         {
             continue;
         }
@@ -219,7 +219,7 @@ fn unobserved_bytes(
 ) -> Option<u32> {
     let op = fd.obank().get(id)?;
     if op.code() == OpCode::CPUI_CALL {
-        wanted = crate::kuna_calleememory::unobserved(fd, id, start, size, wanted)?;
+        wanted = crate::calleememory::unobserved(fd, id, start, size, wanted)?;
     }
     if matches!(
         op.code(),
@@ -304,5 +304,5 @@ impl StackAliasOption {
 }
 
 #[cfg(test)]
-#[path = "kuna_stackalias/tests.rs"]
+#[path = "stackalias/tests.rs"]
 mod tests;

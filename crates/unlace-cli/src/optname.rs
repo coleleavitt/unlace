@@ -17,7 +17,7 @@
 //! unknown name at `decompile_all.rs (apply_one_option)`; checking up front
 //! makes every surface answer the same way, and answer before the load.
 
-use unlace_decomp::kuna_option_dispatch::KUNA_OPTION_NAMES;
+use unlace_decomp::option_dispatch::KUNA_OPTION_NAMES;
 use unlace_decomp::options::UPSTREAM_OPTION_ELEMENTS;
 
 /// Whether `name` is a settable option name the engine will dispatch on.

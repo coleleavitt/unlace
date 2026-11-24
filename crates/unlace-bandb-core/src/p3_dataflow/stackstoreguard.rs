@@ -45,7 +45,7 @@ pub fn frame_unresolved(
             })
         })
         .collect();
-    !stores.is_empty() && crate::kuna_storereach::frame_unresolved(fd, spc, &stores)
+    !stores.is_empty() && crate::storereach::frame_unresolved(fd, spc, &stores)
 }
 
 /// May an indexed stack STORE overwrite a value this function wrote to the
@@ -85,7 +85,7 @@ fn store_bound(
 ) -> Option<(u64, u64)> {
     *bounds
         .entry(guard.op)
-        .or_insert_with(|| crate::kuna_storereach::store_window(fd, guard.op, &guard.spc))
+        .or_insert_with(|| crate::storereach::store_window(fd, guard.op, &guard.spc))
 }
 
 /// Can this STORE overlap `[lo, lo + size)`? Unanalyzed guards may write
@@ -290,8 +290,8 @@ pub fn keeps_store_indirect_whole(
         })
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.stackstoreguard_enabled = Some(enabled);
     hooks.stackstoreguard_frame_unresolved = Some(frame_unresolved);
     hooks.stackstoreguard_indexed_enabled = Some(indexed_enabled);
@@ -300,5 +300,5 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 }
 
 #[cfg(test)]
-#[path = "kuna_stackstoreguard/tests.rs"]
+#[path = "stackstoreguard/tests.rs"]
 mod tests;

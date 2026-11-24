@@ -6,7 +6,7 @@
 //! budget, out-of-bounds flow) and an unrecovered jump table leave a warning at
 //! the site, and `--json` lists every warning with its kind. Two losses stayed
 //! silent, and this option names them, each as a warning comment with a
-//! lowercase tag so `kuna_functionwarnings::Warning::kind` files it under its
+//! lowercase tag so `functionwarnings::Warning::kind` files it under its
 //! own kind:
 //!
 //! * `notmodelled`: under the `ignoreunimplemented` policy an instruction

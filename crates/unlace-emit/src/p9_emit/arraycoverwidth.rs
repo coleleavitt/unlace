@@ -43,5 +43,5 @@ pub fn spans_multiple_elements(ct: &Datatype, sz: int4) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_arraycoverwidth/tests.rs"]
+#[path = "arraycoverwidth/tests.rs"]
 mod tests;

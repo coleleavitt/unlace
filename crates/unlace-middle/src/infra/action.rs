@@ -249,7 +249,7 @@ pub struct ActionBase {
     pub basegroup: String,
     /// (kuna) The maturity level a function reaches when this action completes, set by the
     /// driver on the schedule nodes that settle one (`docs/spec/00-overview.md` §0.10).
-    pub settles: Option<crate::kuna_maturity::Maturity>,
+    pub settles: Option<crate::maturity::Maturity>,
 }
 
 impl ActionBase {
@@ -650,12 +650,12 @@ impl ActionContext {
 
     /// (unlace decompile-all watchdog) `true` once the cooperative per-function
     /// [`deadline`](ActionContext::deadline) has passed or the drive went over
-    /// its memory limit ([`budget_spent`](crate::kuna_budget::budget_spent)).
+    /// its memory limit ([`budget_spent`](crate::budget::budget_spent)).
     /// `None` (no budget — every console/parity path) short-circuits without
     /// touching the clock.
     #[inline]
     pub fn deadline_expired(&self) -> bool {
-        self.abandon || self.deadline.is_some_and(crate::kuna_budget::budget_spent)
+        self.abandon || self.deadline.is_some_and(crate::budget::budget_spent)
     }
 
     /// (unlace) Count one repeat pass of a `rule_repeatapply` action; `true`
@@ -672,12 +672,12 @@ impl ActionContext {
     }
 
     /// [`deadline_expired`](Self::deadline_expired), naming `site` as where the
-    /// budget ran out ([`note_budget_site`](crate::kuna_budget::note_budget_site)).
+    /// budget ran out ([`note_budget_site`](crate::budget::note_budget_site)).
     #[inline]
     pub fn deadline_expired_at(&self, site: impl FnOnce() -> String) -> bool {
         let expired = self.deadline_expired();
         if expired && !self.abandon {
-            crate::kuna_budget::note_budget_site(site);
+            crate::budget::note_budget_site(site);
         }
         expired
     }
@@ -1296,7 +1296,7 @@ pub struct ActionPool {
     /// ops read, kept when removal was all that pass changed.
     wave_seed: Option<(Vec<OpId>, Vec<crate::context::VarnodeId>)>,
     /// (kuna `deadwaves`) The ops a wave pass offers the rules, while it is one.
-    wave: Option<crate::kuna_fasthash::FxHashSet<OpId>>,
+    wave: Option<crate::fasthash::FxHashSet<OpId>>,
     /// (kuna `deadwaves`) The opcodes a rule that walks far fires on
     /// ([`Rule::walks_far`]), indexed by opcode.
     far: Vec<bool>,
@@ -1619,7 +1619,7 @@ impl ActionPool {
 #[doc(hidden)]
 pub fn add_wave_ops(
     data: &Funcdata,
-    wave: &mut crate::kuna_fasthash::FxHashSet<OpId>,
+    wave: &mut crate::fasthash::FxHashSet<OpId>,
     ops: &[OpId],
     vns: &[crate::context::VarnodeId],
 ) {
@@ -1738,7 +1738,7 @@ impl Action for ActionPool {
             let cascade = data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_coreoptions::DeadCascade>()
+                .get::<crate::coreoptions::DeadCascade>()
                 .0
                 .is_some_and(|n| self.run_passes > n);
             data.set_dead_cascade_now(cascade);
@@ -1754,7 +1754,7 @@ impl Action for ActionPool {
             self.wave = None;
             data.start_dead_wave_log();
             if let Some((ops, vns)) = seed.filter(|_| !self.has_breakpoints()) {
-                let mut wave = crate::kuna_fasthash::FxHashSet::default();
+                let mut wave = crate::fasthash::FxHashSet::default();
                 add_wave_ops(data, &mut wave, &ops, &vns);
                 self.wave = Some(wave);
             }

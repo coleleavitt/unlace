@@ -59,7 +59,7 @@
 //! (`Some`, `Ok`, `Err`, `None`), and a five-function witness carries four
 //! distinct `Some` DIEs of sizes 16, 24, 16 and 12. So aggregates are interned
 //! under their **parent-qualified** name (`core::option::Option<usize>::Some`,
-//! reusing [`super::kuna_cppproto`]'s ancestry walk) and, if a name is STILL
+//! reusing [`super::cppproto`]'s ancestry walk) and, if a name is STILL
 //! held by an aggregate of a different size, under a size-suffixed variant
 //! ([`resolve_name`]). A name held by a non-aggregate (kuna registers a core type
 //! called `code`; zlib typedefs a struct to exactly that) is likewise stepped
@@ -81,7 +81,7 @@
 //! tagged-enum encoding — are not read here: with the member walk alone a Rust
 //! enum gets its correct `DW_AT_byte_size` and no fields, exactly as any
 //! aggregate whose members this pass cannot ground. The sibling
-//! [`super::kuna_dwarfvariants`] arm reads them, runs
+//! [`super::dwarfvariants`] arm reads them, runs
 //! FIRST, and falls through to this module whenever it refuses; four of this
 //! module's helpers ([`aggregate_size`], [`qualified_name`], [`resolve_name`],
 //! [`aggregate_alignment`]) are shared with it rather than restated.
@@ -93,7 +93,7 @@ use unlace_base::types::{int4, uint4};
 use unlace_decomp::dtype::{Datatype, TypeBitField, TypeFactory, TypeField, type_metatype};
 
 use super::DieSnap;
-use super::kuna_typedepth::TypeWalk;
+use super::typedepth::TypeWalk;
 
 /// Ancestry-walk bound for [`qualified_name`] (a nesting depth no real program
 /// reaches).

@@ -2,7 +2,7 @@
 
 ## 1. The change
 
-New module `p6_variables/kuna_indirectonly.rs`, a faithful port of two upstream
+New module `p6_variables/indirectonly.rs`, a faithful port of two upstream
 `Funcdata` methods, named after their originals:
 
 * `check_indirect_use` = `Funcdata::checkIndirectUse` (`funcdata_varnode.cc:801-844`)
@@ -50,7 +50,7 @@ than a porting error.
   `take` (the escaped slot's entry value reaches only call INDIRECTs) and `keep`
   (identical, except the same slot is read straight into a global first). Pass 1
   `off`, pass 2 `on`. `take` changes; `keep` must not.
-* `kuna_indirectonly/tests.rs` — 8 unit tests: the accepting case, the
+* `indirectonly/tests.rs` — 8 unit tests: the accepting case, the
   direct-read counterexample, MULTIEQUAL transparency, the STORE-INDIRECT
   continuation, a plain INDIRECT's output *not* being followed, no-reads-at-all,
   the directwrite skip, and a MULTIEQUAL cycle terminating.

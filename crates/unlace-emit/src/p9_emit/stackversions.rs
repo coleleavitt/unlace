@@ -9,7 +9,7 @@ use unlace_num::opcodes::OpCode;
 
 #[doc(hidden)]
 pub fn prepare(fd: &mut Funcdata) {
-    if !crate::kuna_stackviews::enabled(fd) {
+    if !crate::stackviews::enabled(fd) {
         return;
     }
     let mut versions = HashSet::new();

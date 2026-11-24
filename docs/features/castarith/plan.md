@@ -14,7 +14,7 @@ demoted is seen too) and before that op's inputs and output are cast. No new
 `Action` is scheduled, so `universal_sched` and its listing oracle are untouched.
 The ported `CastStrategyC` decision matrix is not modified.
 
-## 2. The rule (`p9_emit/kuna_castarith.rs`)
+## 2. The rule (`p9_emit/castarith.rs`)
 
 `plan` accepts `INT_ADD(p, #K)` when `p` is a non-constant whose merged type is a
 pointer into a byte-addressed space and the sum is used as a `T *`:
@@ -63,7 +63,7 @@ Rust back-end never sees the rewrite.
 - `tests/stages/kuna-castarith.toml`: pass 1 `option castarith off` (the bug), pass 2
   on, pass 3 `arraynotation off`; controls for a non-whole offset; a byte and a word
   widened under the subscript (castimplied).
-- 25 unit tests in `p9_emit/kuna_castarith/tests.rs`: every width and sign, float,
+- 25 unit tests in `p9_emit/castarith/tests.rs`: every width and sign, float,
   negative offset, a negative index of 2^31 elements or more (kept), an enum element of
   every width through a load, a passed and a compared pointer (kept), an element C sizes
   differently (a 4-byte pointer, a 16-byte float; kept), non-whole offset, direct base, other-width base, retargeted cast,

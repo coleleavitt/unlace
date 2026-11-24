@@ -33,7 +33,7 @@ fn native_pointer(ty: &Datatype, size: i32) -> bool {
             type_metatype::TYPE_PTR | type_metatype::TYPE_PTRREL
         )
         && ty.get_word_size() == Some(1)
-        && !crate::kuna_typequal::is_volatile(ty)
+        && !crate::typequal::is_volatile(ty)
 }
 
 fn peel(fd: &Funcdata, mut value: VarnodeId, mut reader: OpId, size: i32) -> Option<Operand> {
@@ -47,7 +47,7 @@ fn peel(fd: &Funcdata, mut value: VarnodeId, mut reader: OpId, size: i32) -> Opt
             return None;
         }
         let ty = fd.vn_type_read_facing(value, reader);
-        if crate::kuna_typequal::is_volatile(&ty)
+        if crate::typequal::is_volatile(&ty)
             || !matches!(
                 ty.get_metatype(),
                 type_metatype::TYPE_PTR
@@ -120,7 +120,7 @@ fn operation(
     let offset_node = fd.vbank().get(offset.value)?;
     if offset_node.is_implied()
         || offset_type.get_size() != size
-        || crate::kuna_typequal::is_volatile(&offset_type)
+        || crate::typequal::is_volatile(&offset_type)
         || !matches!(
             offset_type.get_metatype(),
             type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
@@ -148,7 +148,7 @@ impl PrintC {
         reader: OpId,
         target: &Rc<Datatype>,
     ) -> bool {
-        if self.out_lang != crate::kuna_lang::OutLang::Go
+        if self.out_lang != crate::lang::OutLang::Go
             || self.options.nocasts
             || !native_pointer(target, arch.types().get_size_of_pointer())
         {
@@ -174,7 +174,7 @@ impl PrintC {
         op: OpId,
         target: &Rc<Datatype>,
     ) -> bool {
-        if self.out_lang != crate::kuna_lang::OutLang::Go
+        if self.out_lang != crate::lang::OutLang::Go
             || self.options.nocasts
             || !native_pointer(target, arch.types().get_size_of_pointer())
         {

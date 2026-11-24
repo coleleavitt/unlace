@@ -158,12 +158,12 @@ fn overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
     a.overlap(0, b, bsize) >= 0 || b.overlap(0, a, asize) >= 0
 }
 
-pub use crate::kuna_specnames::SWIFTASYNCCALL;
-pub use crate::kuna_specnames::SWIFTASYNCCALL_THROWS;
-pub use crate::kuna_specnames::SWIFTCALL;
-pub use crate::kuna_specnames::SWIFTCALL_THROWS;
+pub use crate::specnames::SWIFTASYNCCALL;
+pub use crate::specnames::SWIFTASYNCCALL_THROWS;
+pub use crate::specnames::SWIFTCALL;
+pub use crate::specnames::SWIFTCALL_THROWS;
 
-pub use crate::kuna_specnames::SWIFT_MODELS as MODELS;
+pub use crate::specnames::SWIFT_MODELS as MODELS;
 
 /// How many ops before the call the zeroing store is looked for.
 const MAX_SCAN: usize = 64;
@@ -215,7 +215,7 @@ pub fn throwing_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
     let abi = data
         .get_arch()
         .kuna_states
-        .get::<crate::kuna_swiftcall::SwiftAbi>()?;
+        .get::<crate::swiftcall::SwiftAbi>()?;
     let (reg, size) = &abi.error_reg;
     (zeroed_before(data, call, reg, *size) && tested_after(data, call, reg, *size))
         .then(|| Rc::clone(&abi.throws))
@@ -399,7 +399,7 @@ pub fn stale_self(data: &Funcdata, idx: int4, slot: int4, addr: &Address, size: 
     let Some(abi) = data
         .get_arch()
         .kuna_states
-        .get::<crate::kuna_swiftcall::SwiftAbi>()
+        .get::<crate::swiftcall::SwiftAbi>()
     else {
         return false;
     };
@@ -435,7 +435,7 @@ pub fn stale_self(data: &Funcdata, idx: int4, slot: int4, addr: &Address, size: 
 pub fn is_self_storage(data: &Funcdata, addr: &Address, size: int4) -> bool {
     data.get_arch()
         .kuna_states
-        .get::<crate::kuna_swiftcall::SwiftAbi>()
+        .get::<crate::swiftcall::SwiftAbi>()
         .is_some_and(|abi| &abi.self_reg.0 == addr && abi.self_reg.1 == size)
 }
 
@@ -456,7 +456,7 @@ pub fn passes_own_self(data: &Funcdata, idx: int4, slot: int4, addr: &Address, s
     let Some(abi) = data
         .get_arch()
         .kuna_states
-        .get::<crate::kuna_swiftcall::SwiftAbi>()
+        .get::<crate::swiftcall::SwiftAbi>()
     else {
         return false;
     };
@@ -521,7 +521,7 @@ pub fn indirect_self(
     let abi = data
         .get_arch()
         .kuna_states
-        .get::<crate::kuna_swiftcall::SwiftAbi>()?;
+        .get::<crate::swiftcall::SwiftAbi>()?;
     if addr != &abi.self_reg.0 || size != abi.self_reg.1 {
         return None;
     }
@@ -596,7 +596,7 @@ pub fn indirect_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
     let abi = data
         .get_arch()
         .kuna_states
-        .get::<crate::kuna_swiftcall::SwiftAbi>()?;
+        .get::<crate::swiftcall::SwiftAbi>()?;
     let op = data.obank().get(call)?;
     if op.code() != OpCode::CPUI_CALLIND {
         return None;
@@ -712,7 +712,7 @@ fn may_take_self(data: &Funcdata, id: OpId) -> bool {
     let free = data
         .get_arch()
         .kuna_states
-        .get::<crate::kuna_swiftcall::SwiftAbi>()
+        .get::<crate::swiftcall::SwiftAbi>()
         .is_some_and(|abi| {
             entry
                 .get_space()
@@ -886,7 +886,7 @@ fn first_touch(
 /// per-function `ArchContext` carries no translator, so the bodies are read
 /// here, once per image. Inert outside an image the convention is bound in.
 pub fn seed_self_readers(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
-    let Some(abi) = arch.kuna_states.get_rc::<crate::kuna_swiftcall::SwiftAbi>() else {
+    let Some(abi) = arch.kuna_states.get_rc::<crate::swiftcall::SwiftAbi>() else {
         return;
     };
     if abi.maybe_self.is_empty() || data.num_calls() < 2 {
@@ -1154,8 +1154,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.swiftcall_swift_registers = Some(swift_registers);
     hooks.swiftcall_derive_model = Some(derive_model);
 }

@@ -272,7 +272,7 @@ the full four-field key for un-mapped locals where storage cannot disambiguate.
 **Owning files.**
 * `decompiler/crates/unlace-decomp/src/p9_emit/printc.rs` — `emit_local_var_decls`
   (the `seen_sym` retain, ~printc.rs:2585) and `local_decl_type_and_comment`.
-* `decompiler/crates/unlace-decomp/src/p9_emit/kuna_dedupvardecls.rs` — the
+* `decompiler/crates/unlace-decomp/src/p9_emit/dedupvardecls.rs` — the
   `DeclSignature` key and its module doc, which currently *documents* the residual
   collision as intentional and would need to be updated.
 * Spec chapter owning `p9_emit/` (find via its `Anchors:` header) — the collapse

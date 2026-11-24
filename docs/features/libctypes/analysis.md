@@ -29,13 +29,13 @@ its width-only generosity table.
 
 An option `libctypes` (`off|opaque`, default **off**), a P1 analysis-tier
 enablement, owning one new module
-`kuna-analysis/src/analyzers/protos/kuna_libctypes.rs` and one new `Ty` variant.
+`kuna-analysis/src/analyzers/protos/libctypes.rs` and one new `Ty` variant.
 
 * **One new variant, pointer-only.** `Ty::NamedPtr(&'static str)`. No slot in
   these tables is taken or returned by value, because no libc declaration
   restated here does that — but that is a property of the TABLE, not of the
   emitted C, and it is the WIDTH that makes the by-value case safe. Both hazards
-  `kuna_dwarfstructs.rs` documents are hazards of a SIZELESS aggregate: a
+  `dwarfstructs.rs` documents are hazards of a SIZELESS aggregate: a
   by-value parameter of unknown width degrades to a raw integer, and a sizeless
   aggregate RETURN is classified as a hidden-return-buffer call that grows a
   phantom first parameter. Type propagation does reach by-value positions on its
@@ -243,7 +243,7 @@ timespec sub_10210(void)     { timespec v1;  clock_gettime(0,&v1); return v1; }
 
 The `on` rendering is right: gnulib's `gettime` really does return a
 `struct timespec`, 16 bytes, in `RAX:RDX`. It is right because the shell is
-SIZED — both hazards `kuna_dwarfstructs.rs` documents are hazards of a
+SIZED — both hazards `dwarfstructs.rs` documents are hazards of a
 SIZELESS aggregate, and the second of them is exactly this slot: an aggregate
 RETURN whose width the ABI classifier cannot see is classified as a
 hidden-return-buffer call, which grows a phantom `rethidden` first parameter and

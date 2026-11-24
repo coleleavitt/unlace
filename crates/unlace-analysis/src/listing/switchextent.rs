@@ -7,7 +7,7 @@
 //! dispatch: Swift's `switch` over a multi-payload enum indexes a halfword
 //! offset table straight with the case `swift_getEnumCaseMultiPayload`
 //! returned, and clang does the same for a C `switch` whose `default` is
-//! `__builtin_unreachable()`. [`super::kuna_switchtable::guard_limit`] then
+//! `__builtin_unreachable()`. [`super::switchtable::guard_limit`] then
 //! finds no bound, the walk stops at the `br`, and the case bodies become
 //! gaps the aggressive instruction finder fills with functions of their own.
 //!
@@ -18,7 +18,7 @@
 //! are emitted together, back to back in one read-only section, so a table
 //! runs exactly to the lowest table of the same function above it. The
 //! function's extent, from its entry to the next known entry, is decoded
-//! linearly and folded with the [`super::kuna_switchtable`] lattice, and
+//! linearly and folded with the [`super::switchtable`] lattice, and
 //! every computed jump the fold proves reads a table names that table. A
 //! function's last table has no such bound and is left as it was: an object
 //! the function merely reads (a lookup array, a constant) may sit anywhere
@@ -38,8 +38,8 @@ use unlace_base::space::{AddrSpace, spacetype};
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::translate::Translate;
 
-use super::kuna_poolref::PoolImage;
-use super::kuna_switchtable::{Key, MAX_TRACKED, Val, fold, invalidate, key_of, value_of};
+use super::poolref::PoolImage;
+use super::switchtable::{Key, MAX_TRACKED, Val, fold, invalidate, key_of, value_of};
 use super::xrefs::{FullCapture, decode, in_range};
 
 /// How far past an entry the linear decode reaches when no known entry ends

@@ -53,7 +53,7 @@ parameter too.
 
 Three refusals were added, and one detection bug fixed:
 
-1. **vararg tail** (`p4_calls/kuna_varargtail.rs`). A callee parameter whose
+1. **vararg tail** (`p4_calls/varargtail.rs`). A callee parameter whose
    value, through value-preserving operations, only ever reaches an argument slot
    of a variadic call — one the callee set up as variadic, or a declared `...`
    prototype past its named parameters — is recorded with the statement and never

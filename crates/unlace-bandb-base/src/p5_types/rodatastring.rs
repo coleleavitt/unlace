@@ -117,7 +117,7 @@ impl Rule for RuleRodataStringCopy {
             && !data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_rodatastring::RodataString>()
+                .get::<crate::rodatastring::RodataString>()
                 .0
         {
             return 0;
@@ -413,7 +413,7 @@ pub fn specs() -> Vec<RuleSpec> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct RodataString(pub bool);
 
-impl crate::kuna_optionset::KunaOption for RodataString {
+impl crate::optionset::KunaOption for RodataString {
     const NAME: &'static str = "rodatastring";
     crate::kuna_option_id!();
 
@@ -426,12 +426,12 @@ impl crate::kuna_optionset::KunaOption for RodataString {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_rodatastring::parse_rodata_string_form(value)
+        let (v, msg) = crate::rodatastring::parse_rodata_string_form(value)
             .map(|(form, msg)| (form.rodata_string(), msg))?;
         Ok((RodataString(v), msg))
     }
 }
 
 #[cfg(test)]
-#[path = "kuna_rodatastring/tests.rs"]
+#[path = "rodatastring/tests.rs"]
 mod tests;

@@ -34,7 +34,7 @@ const OUTPUT_RULES: &str = concat!(
 
 /// The image is ARM and states the VFP variant.
 pub fn applies(arch: &Architecture) -> bool {
-    arch.archid.starts_with("ARM:") && crate::kuna_typedcallabi::image_evidence(arch) == Some(true)
+    arch.archid.starts_with("ARM:") && crate::typedcallabi::image_evidence(arch) == Some(true)
 }
 
 /// A variadic declaration whose return value the base standard may place
@@ -120,7 +120,7 @@ pub fn parked_output(arch: &ArchContext, pieces: &PrototypePieces) -> Option<Par
     })
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.vfpvariadic_applies = Some(applies);
 }

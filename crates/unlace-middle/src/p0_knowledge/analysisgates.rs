@@ -211,7 +211,7 @@ crate::kuna_flag!(
 
 crate::kuna_flag!(
     /// (kuna) List the handlers of a 32-bit PE's MFC message maps as functions
-    /// (option `mfcmsgmap`).  See `unlace_analysis::entry::kuna_mfcmsgmap`.
+    /// (option `mfcmsgmap`).  See `unlace_analysis::entry::mfcmsgmap`.
     Mfcmsgmap,
     "mfcmsgmap",
     "MFC message-map handler discovery",
@@ -222,7 +222,7 @@ crate::kuna_flag!(
 crate::kuna_flag!(
     /// (kuna) A relocated pointer to an MSVC frame prologue on a 32-bit PE is a
     /// function entry (option `msvcptrentry`).  See
-    /// `unlace_analysis::entry::kuna_msvcptrentry`.
+    /// `unlace_analysis::entry::msvcptrentry`.
     Msvcptrentry,
     "msvcptrentry",
     "Relocated MSVC prologue-pointer function discovery",
@@ -232,7 +232,7 @@ crate::kuna_flag!(
 
 crate::kuna_flag!(
     /// (kuna) Withhold an exception-cleanup `.cold` fragment from the function
-    /// list (option `ehcold`).  See `unlace_analysis::entry::kuna_ehcold`.
+    /// list (option `ehcold`).  See `unlace_analysis::entry::ehcold`.
     Ehcold,
     "ehcold",
     "Exception-cleanup .cold fragment suppression",
@@ -243,7 +243,7 @@ crate::kuna_flag!(
 crate::kuna_flag!(
     /// (kuna) Keep every single-owner `.cold` part out of the function list, as IDA
     /// keeps a function tail (option `functails`). See
-    /// `unlace_analysis::entry::kuna_ehcold::cold_tails`.
+    /// `unlace_analysis::entry::ehcold::cold_tails`.
     Functails,
     "functails",
     "Single-owner .cold parts kept as their owner's tails",
@@ -461,7 +461,7 @@ crate::kuna_flag!(
     /// (kuna `formatcallees`) Let the load-time format resolver also type the
     /// calls to format functions no table declares (a program's own logger that
     /// forwards to `vfprintf`, a `*printf*`-named import). See
-    /// `unlace_analysis::formatstring::kuna_fmtcallee`.
+    /// `unlace_analysis::formatstring::fmtcallee`.
     FormatCallees,
     "formatcallees",
     "format-string typing of undeclared format functions",
@@ -583,7 +583,7 @@ crate::kuna_flag!(
 
 crate::kuna_flag!(
     /// (kuna) Label MSVC `ThrowInfo` chains and comment x64 throw sites (option
-    /// `msvceh`). See `unlace_analysis::entry::kuna_msvceh`.
+    /// `msvceh`). See `unlace_analysis::entry::msvceh`.
     Msvceh,
     "msvceh",
     "MSVC C++ exception metadata",
@@ -792,7 +792,7 @@ crate::kuna_flag!(
 
 crate::kuna_flag!(
     /// (kuna `panicloc`) Rust images only: type and name the panic `Location`
-    /// records (`unlace-analysis` `strings/kuna_panicloc.rs`). Default on.
+    /// records (`unlace-analysis` `strings/panicloc.rs`). Default on.
     Panicloc,
     "panicloc",
     "Rust panic Location record pass",
@@ -954,7 +954,7 @@ pub struct FlowMode {
     pub after_call: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for FlowMode {
+impl crate::optionset::KunaOption for FlowMode {
     const NAME: &'static str = "flowmode";
     crate::kuna_option_id!();
 
@@ -1002,7 +1002,7 @@ pub struct CvfTrace {
     pub lines: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for CvfTrace {
+impl crate::optionset::KunaOption for CvfTrace {
     const NAME: &'static str = "cvftrace";
     crate::kuna_option_id!();
 
@@ -1050,7 +1050,7 @@ pub struct GoPcln {
     pub lines: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for GoPcln {
+impl crate::optionset::KunaOption for GoPcln {
     const NAME: &'static str = "gopcln";
     crate::kuna_option_id!();
 
@@ -1098,7 +1098,7 @@ pub struct Fid {
     pub strict: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for Fid {
+impl crate::optionset::KunaOption for Fid {
     const NAME: &'static str = "fid";
     crate::kuna_option_id!();
 
@@ -1148,7 +1148,7 @@ pub struct IokitClasses {
     pub types: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for IokitClasses {
+impl crate::optionset::KunaOption for IokitClasses {
     const NAME: &'static str = "iokitclasses";
     crate::kuna_option_id!();
 
@@ -1191,7 +1191,7 @@ pub struct CfStrings {
     pub annotate: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for CfStrings {
+impl crate::optionset::KunaOption for CfStrings {
     const NAME: &'static str = "cfstrings";
     crate::kuna_option_id!();
 
@@ -1235,7 +1235,7 @@ pub struct ArmFrames {
     pub full: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for ArmFrames {
+impl crate::optionset::KunaOption for ArmFrames {
     const NAME: &'static str = "armframes";
     crate::kuna_option_id!();
 
@@ -1289,7 +1289,7 @@ pub enum MovwPairs {
     On,
 }
 
-impl crate::kuna_optionset::KunaOption for MovwPairs {
+impl crate::optionset::KunaOption for MovwPairs {
     const NAME: &'static str = "movwpairs";
     crate::kuna_option_id!();
 

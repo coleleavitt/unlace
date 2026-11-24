@@ -1,7 +1,7 @@
 //! Coalesced register instances keep the scalar view of their shared frame symbol.
 
 use crate::funcdata_union::FuncdataUnionExt;
-use crate::kuna_stackviews::FuncdataStackviewsExt;
+use crate::stackviews::FuncdataStackviewsExt;
 use std::rc::Rc;
 
 use crate::dtype::{TypeFactory, type_metatype};
@@ -52,7 +52,7 @@ pub fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
                             && aggregate.get_metatype() == type_metatype::TYPE_ARRAY);
                     if declared_aggregate
                         || backing.get_depend(member).is_some_and(|member| {
-                            crate::kuna_stackviews::scalar_piece(
+                            crate::stackviews::scalar_piece(
                                 factory,
                                 member,
                                 offset,
@@ -73,7 +73,7 @@ pub fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
                 _ => type_metatype::TYPE_UINT,
             };
             let piece = |index| {
-                crate::kuna_stackviews::scalar_piece(
+                crate::stackviews::scalar_piece(
                     factory,
                     backing.get_depend(index)?,
                     offset,
@@ -101,7 +101,7 @@ pub fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
         fd.set_union_field(&backing, id, slot, resolution);
         if slot < 0 {
             fd.stack_write_views_mut()
-                .insert(id, crate::kuna_stackviews::StorageView { backing, offset });
+                .insert(id, crate::stackviews::StorageView { backing, offset });
         }
     }
 }

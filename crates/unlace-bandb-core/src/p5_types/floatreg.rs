@@ -47,8 +47,8 @@
 //! is cast, which prints as a reinterpretation of its bits; an untyped read of
 //! read-only memory passed there takes the float type.
 
-use crate::kuna_callrettype::FuncdataCallrettypeExt;
-use crate::kuna_voidret::FuncdataVoidretExt;
+use crate::callrettype::FuncdataCallrettypeExt;
+use crate::voidret::FuncdataVoidretExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -111,7 +111,7 @@ pub fn float_input_vote(data: &Funcdata, vn: VarnodeId, ct: &Rc<Datatype>) -> Op
 /// a global that is not declared a float of its width -- is evidence the vote
 /// loses to.
 fn only_moved_as_a_float(data: &Funcdata, vn: VarnodeId) -> bool {
-    let family = crate::kuna_protoorder::value_family(data, vn);
+    let family = crate::protoorder::value_family(data, vn);
     if family.len() >= 128 {
         return false;
     }
@@ -163,7 +163,7 @@ fn only_moved_as_a_float(data: &Funcdata, vn: VarnodeId) -> bool {
                 OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_MULTIEQUAL => true,
                 OpCode::CPUI_INDIRECT => !o.is_indirect_creation(),
                 OpCode::CPUI_LOAD => {
-                    !crate::kuna_protoorder::moves_integers_beside(data, d, node.get_size())
+                    !crate::protoorder::moves_integers_beside(data, d, node.get_size())
                         && o.get_in(1)
                             .is_some_and(|p| through_a_global(d, p, node.get_size()))
                 }
@@ -183,7 +183,7 @@ fn only_moved_as_a_float(data: &Funcdata, vn: VarnodeId) -> bool {
                 OpCode::CPUI_STORE => {
                     o.get_in(1) != Some(v)
                         && o.get_in(0) != Some(v)
-                        && !crate::kuna_protoorder::moves_integers_beside(data, r, node.get_size())
+                        && !crate::protoorder::moves_integers_beside(data, r, node.get_size())
                         && o.get_in(1)
                             .is_some_and(|p| through_a_global(r, p, node.get_size()))
                 }
@@ -192,12 +192,10 @@ fn only_moved_as_a_float(data: &Funcdata, vn: VarnodeId) -> bool {
                         && (1..o.num_input())
                             .filter(|&s| o.get_in(s) == Some(v))
                             .all(|s| {
-                                crate::kuna_protoorder::float_read_width(data, r, s)
+                                crate::protoorder::float_read_width(data, r, s)
                                     == Some(node.get_size())
-                                    || (!crate::kuna_protoorder::reads_a_float(data, r, s)
-                                        && !crate::kuna_protoorder::reads_other_than_a_float(
-                                            data, r, s,
-                                        )
+                                    || (!crate::protoorder::reads_a_float(data, r, s)
+                                        && !crate::protoorder::reads_other_than_a_float(data, r, s)
                                         && passed_in_a_float_register(data, r, s))
                             })
                 }
@@ -209,7 +207,7 @@ fn only_moved_as_a_float(data: &Funcdata, vn: VarnodeId) -> bool {
         && globals
             .into_inner()
             .iter()
-            .all(|(at, size)| crate::kuna_floatglobals::float_only(data, at, *size))
+            .all(|(at, size)| crate::floatglobals::float_only(data, at, *size))
 }
 
 /// Is the pointer `ptr` the address of a global, or of an element or field of
@@ -244,7 +242,7 @@ fn addresses_a_global(data: &Funcdata, ptr: VarnodeId) -> bool {
             OpCode::CPUI_INT_ADD => {
                 for i in (0..2).filter_map(|k| o.get_in(k)) {
                     if data.vbank().get(i).is_some_and(|n| n.is_constant()) {
-                        if crate::kuna_ptrfromuse::constant_may_be_global_base(data, d, i) {
+                        if crate::ptrfromuse::constant_may_be_global_base(data, d, i) {
                             return true;
                         }
                     } else {
@@ -339,7 +337,7 @@ pub fn moved_as_a_float_here(data: &Funcdata, addr: &Address, size: int4) -> boo
     moved
 }
 
-type MovedMemo = crate::kuna_fasthash::FxHashMap<(u64, int4), bool>;
+type MovedMemo = crate::fasthash::FxHashMap<(u64, int4), bool>;
 
 thread_local! {
     static MOVED: std::cell::RefCell<Option<MovedMemo>> = const { std::cell::RefCell::new(None) };
@@ -468,8 +466,8 @@ fn used_as_an_address(
 ) -> bool {
     let start = data.vbank().get(vn).map(|n| n.get_offset());
     let mut work = vec![(vn, start, own)];
-    let mut seen: crate::kuna_fasthash::FxHashMap<VarnodeId, (Option<u64>, bool)> =
-        crate::kuna_fasthash::FxHashMap::default();
+    let mut seen: crate::fasthash::FxHashMap<VarnodeId, (Option<u64>, bool)> =
+        crate::fasthash::FxHashMap::default();
     while let Some((v, at, kept)) = work.pop() {
         let (at, kept) = match seen.get(&v) {
             None => (at, kept),
@@ -548,8 +546,7 @@ fn used_as_an_address(
 fn written_as_a_float(data: &Funcdata, vn: VarnodeId) -> bool {
     let proto = data.get_func_proto();
     let mut work = vec![vn];
-    let mut seen: crate::kuna_fasthash::FxHashSet<VarnodeId> =
-        crate::kuna_fasthash::FxHashSet::default();
+    let mut seen: crate::fasthash::FxHashSet<VarnodeId> = crate::fasthash::FxHashSet::default();
     while let Some(v) = work.pop() {
         if !seen.insert(v) {
             continue;
@@ -609,8 +606,7 @@ fn written_as_a_float(data: &Funcdata, vn: VarnodeId) -> bool {
 fn read_as_a_float(data: &Funcdata, vn: VarnodeId) -> bool {
     let proto = data.get_func_proto();
     let mut work = vec![vn];
-    let mut seen: crate::kuna_fasthash::FxHashSet<VarnodeId> =
-        crate::kuna_fasthash::FxHashSet::default();
+    let mut seen: crate::fasthash::FxHashSet<VarnodeId> = crate::fasthash::FxHashSet::default();
     while let Some(v) = work.pop() {
         if !seen.insert(v) {
             continue;
@@ -711,12 +707,12 @@ pub fn argument_vote(
     let float_global = global.is_some();
     let float_argument = |call: crate::context::OpId, s: int4| {
         passed_in_a_float_register(data, call, s)
-            && (crate::kuna_protoorder::float_read_width(data, call, s) == Some(size)
+            && (crate::protoorder::float_read_width(data, call, s) == Some(size)
                 || (float_global
-                    && !crate::kuna_protoorder::reads_a_float(data, call, s)
-                    && !crate::kuna_protoorder::reads_other_than_a_float(data, call, s)))
+                    && !crate::protoorder::reads_a_float(data, call, s)
+                    && !crate::protoorder::reads_other_than_a_float(data, call, s)))
     };
-    let family = crate::kuna_protoorder::value_family(data, vn);
+    let family = crate::protoorder::value_family(data, vn);
     if family.len() >= 128 {
         return None;
     }
@@ -745,7 +741,7 @@ pub fn argument_vote(
                 })
             })
     });
-    if !floats || global.is_some_and(|at| !crate::kuna_floatglobals::float_only(data, &at, size)) {
+    if !floats || global.is_some_and(|at| !crate::floatglobals::float_only(data, &at, size)) {
         return None;
     }
     data.get_arch()
@@ -780,9 +776,8 @@ pub fn argument_requirement(
     let size = data.vbank().get(vn)?.get_size();
     if !matches!(size, 4 | 8)
         || !passed_in_a_float_register(data, op, slot)
-        || crate::kuna_protoorder::float_read_width(data, op, slot) != Some(size)
-        || !(crate::kuna_varargfloat::integer_bits(data, op, vn)
-            || result_of_a_non_float_call(data, vn))
+        || crate::protoorder::float_read_width(data, op, slot) != Some(size)
+        || !(crate::varargfloat::integer_bits(data, op, vn) || result_of_a_non_float_call(data, vn))
         || !spells(data, vn)
     {
         return None;
@@ -942,11 +937,11 @@ fn refuses(
     if data.vbank().get(vn).is_some_and(|n| n.is_constant()) {
         return !spells(data, vn);
     }
-    let family = crate::kuna_protoorder::value_family(data, vn);
+    let family = crate::protoorder::value_family(data, vn);
     family
         .iter()
         .any(|&v| data.vbank().get(v).is_some_and(|n| n.is_input()))
-        || crate::kuna_protoorder::input_refuses(data, vn, float)
+        || crate::protoorder::input_refuses(data, vn, float)
         || family
             .iter()
             .any(|&v| crosses_a_call_as_other_than_a_float(data, v, jump))
@@ -1007,7 +1002,7 @@ fn crosses_a_call_as_other_than_a_float(
             matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND)
                 && (1..o.num_input())
                     .filter(|&s| o.get_in(s) == Some(v))
-                    .any(|s| !crate::kuna_protoorder::reads_a_float(data, r, s))
+                    .any(|s| !crate::protoorder::reads_a_float(data, r, s))
         })
     });
     if handed {
@@ -1044,7 +1039,7 @@ fn loaded_beside_integers(data: &Funcdata, v: VarnodeId) -> bool {
         data.obank()
             .get(d)
             .is_some_and(|o| o.code() == OpCode::CPUI_LOAD)
-            && crate::kuna_protoorder::moves_integers_beside(data, d, node.get_size())
+            && crate::protoorder::moves_integers_beside(data, d, node.get_size())
     })
 }
 
@@ -1072,7 +1067,7 @@ fn call_returns_a_float(data: &Funcdata, op: crate::context::OpId) -> bool {
     };
     match data.kuna_callret_stated(k) {
         Some(stated) => float(&stated.ct),
-        None => data.kuna_callee_returns(k) == Some(crate::kuna_voidret::Returns::Float),
+        None => data.kuna_callee_returns(k) == Some(crate::voidret::Returns::Float),
     }
 }
 
@@ -1242,7 +1237,7 @@ pub fn returned_in_a_float_register(data: &Funcdata, vn: VarnodeId, node: &Varno
 /// other payload, and a signalling NaN, has no spelling.
 #[doc(hidden)]
 pub fn spells_exactly(data: &Funcdata, vn: VarnodeId) -> bool {
-    crate::kuna_protoorder::value_family(data, vn)
+    crate::protoorder::value_family(data, vn)
         .into_iter()
         .all(|v| {
             let Some(def) = data

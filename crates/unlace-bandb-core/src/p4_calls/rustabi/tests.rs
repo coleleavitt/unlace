@@ -8,7 +8,7 @@
 //! `unlace-console/tests/verify_rustabi_pair.rs`.
 
 use super::*;
-use crate::kuna_rustabi::FuncdataRustabiExt;
+use crate::rustabi::FuncdataRustabiExt;
 
 use std::rc::Rc;
 
@@ -49,9 +49,9 @@ fn build_fd_lang(mode: RustAbiMode, is_rust: bool) -> Funcdata {
     let mut ctx = ArchContext::new(m);
     ctx.kuna_options.set(mode);
     ctx.source_lang = if is_rust {
-        crate::kuna_sourcelang::SourceLang::Rust
+        crate::sourcelang::SourceLang::Rust
     } else {
-        crate::kuna_sourcelang::SourceLang::Unknown
+        crate::sourcelang::SourceLang::Unknown
     };
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
@@ -390,9 +390,9 @@ fn build_call_fd_gates(mode: RustAbiMode, is_rust: bool) -> Funcdata {
     let mut ctx = ArchContext::new(m);
     ctx.kuna_options.set(mode);
     ctx.source_lang = if is_rust {
-        crate::kuna_sourcelang::SourceLang::Rust
+        crate::sourcelang::SourceLang::Rust
     } else {
-        crate::kuna_sourcelang::SourceLang::Unknown
+        crate::sourcelang::SourceLang::Unknown
     };
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());

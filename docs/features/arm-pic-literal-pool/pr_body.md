@@ -26,7 +26,7 @@ way, so the whole function references nothing.
 
 ## The fix
 
-- `kuna_picpool.rs` composes the two decode-time constants the pair already
+- `picpool.rs` composes the two decode-time constants the pair already
   carries: the read-only pool word and the constant the `add` materialised from
   its own address. The composed address is filed as a `Data` edge from the
   `add`, which is what gives it an owning function.
@@ -53,7 +53,7 @@ into the engine, and its consumers are `kuna strings` / `kuna xrefs` /
 `verify_picpool.rs` over a new 1,297-byte vendored fixture: the adjacent pair,
 the pair a scheduler separated, and the refusal (`add r0,r0,#4` whose sum *is* a
 mapped literal — only the missing PC separates it from a reference). Eight unit
-tests in `kuna_picpool.rs` cover the fold and the four other refusals.
+tests in `picpool.rs` cover the fold and the four other refusals.
 `tests/cli/arm-pic-literal-pool.json` is the promoted acceptance, re-pointed at
 that fixture; it reports `functions: []` on the unpatched build.
 

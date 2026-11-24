@@ -121,7 +121,7 @@ the database.
 
 ## The fix
 
-`p6_variables/kuna_undefname.rs`, called from the tail of `name_local_highs_angr` --
+`p6_variables/undefname.rs`, called from the tail of `name_local_highs_angr` --
 the same place the port already resolves this class of hazard.
 
 1. **`assign_scope_default_names`** wires `Database::assign_default_names` through a new

@@ -8,7 +8,7 @@
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_indexaliasguard::LEVEL_GLOBAL;
+use crate::indexaliasguard::LEVEL_GLOBAL;
 use unlace_num::opcodes::OpCode;
 
 pub fn declines(data: &Funcdata, op: OpId, global: VarnodeId, source: VarnodeId) -> bool {
@@ -45,7 +45,7 @@ pub fn declines(data: &Funcdata, op: OpId, global: VarnodeId, source: VarnodeId)
 pub fn load_order_enabled(data: &Funcdata) -> bool {
     data.get_arch()
         .kuna_options
-        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         == LEVEL_GLOBAL
 }

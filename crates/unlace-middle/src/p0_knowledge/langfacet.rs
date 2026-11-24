@@ -6,7 +6,7 @@
 //! separately; nothing in the `type_metatype` lattice can say which. kuna
 //! never extends the metatype enum for this — its ~3,700 consumers match it
 //! non-exhaustively, so a new variant would silently take default branches
-//! (`kuna_dwarfvariants.rs` documents the same decision). Instead a facet is
+//! (`dwarfvariants.rs` documents the same decision). Instead a facet is
 //! a **name-keyed side record on the type factory**, the `VariantLayout`
 //! pattern: the underlying type stays a plain struct every existing pass
 //! handles, and the few places where language meaning changes behavior (the
@@ -54,14 +54,14 @@ pub enum LangFacet {
     GoIntErrorResults,
     /// A per-interface Go itab layout (`go.itab.<interface>`): the
     /// `internal/abi.ITab` header, then one function-pointer slot per method
-    /// of `interface`, named after the method (`crate::kuna_goitabcalls`).
+    /// of `interface`, named after the method (`crate::goitabcalls`).
     GoItab {
         /// The interface, spelled as the linker spells it (`io.Writer`).
         interface: String,
     },
     /// A named Go struct's interface-typed fields: `(byte offset, interface)`
     /// for each, the interface spelled as the linker spells it. The field's
-    /// first word is the itab pointer (`crate::kuna_goitabcalls`).
+    /// first word is the itab pointer (`crate::goitabcalls`).
     GoInterfaceFields {
         /// `(byte offset, interface)` per interface-typed field, in field order.
         fields: Vec<(i32, String)>,
@@ -91,7 +91,7 @@ impl LangFacet {
             || ty.has_bitfields()
             || ty.num_depend() != 2
             || !matches!(&ty.kind, DatatypeKind::Struct { bitfield, .. } if bitfield.is_empty())
-            || crate::kuna_typequal::is_volatile(ty)
+            || crate::typequal::is_volatile(ty)
         {
             return None;
         }
@@ -106,7 +106,7 @@ impl LangFacet {
                 || field.name != ["result0", "result1"][index]
                 || field.field_type.get_size() != 8
                 || field.field_type.get_metatype() != meta
-                || crate::kuna_typequal::is_volatile(&field.field_type)
+                || crate::typequal::is_volatile(&field.field_type)
             {
                 return None;
             }
@@ -128,7 +128,7 @@ impl LangFacet {
             || ty.has_bitfields()
             || ty.num_depend() != 3
             || !matches!(&ty.kind, DatatypeKind::Struct { bitfield, .. } if bitfield.is_empty())
-            || crate::kuna_typequal::is_volatile(ty)
+            || crate::typequal::is_volatile(ty)
         {
             return None;
         }
@@ -140,7 +140,7 @@ impl LangFacet {
                 || field_type.get_size() != 8
                 || field_type.is_incomplete()
                 || field_type.has_bitfields()
-                || crate::kuna_typequal::is_volatile(field_type)
+                || crate::typequal::is_volatile(field_type)
             {
                 return None;
             }
@@ -164,7 +164,7 @@ impl LangFacet {
                 if ptrto.get_metatype() != type_metatype::TYPE_VOID
                     || ptrto.get_size() != 0
                     || ptrto.is_incomplete()
-                    || crate::kuna_typequal::is_volatile(ptrto)
+                    || crate::typequal::is_volatile(ptrto)
                 {
                     return None;
                 }
@@ -317,7 +317,7 @@ mod tests {
                 2 => carrier.metatype = TYPE_UNION,
                 3 => carrier.flags |= flags::type_incomplete,
                 4 => carrier.flags |= flags::has_bitfields,
-                5 => carrier.qualifiers = crate::kuna_typequal::VOLATILE,
+                5 => carrier.qualifiers = crate::typequal::VOLATILE,
                 6 => carrier.kind = DatatypeKind::Base,
                 _ => {
                     let DatatypeKind::Struct { field, bitfield } = &mut carrier.kind else {
@@ -363,7 +363,7 @@ mod tests {
                     2 => ty.size = 4,
                     3 => ty.metatype = TYPE_UINT,
                     4 => ty.flags |= flags::type_incomplete,
-                    5 => ty.qualifiers = crate::kuna_typequal::VOLATILE,
+                    5 => ty.qualifiers = crate::typequal::VOLATILE,
                     6 => ty.flags |= flags::has_bitfields,
                     _ if index == 0 => continue,
                     _ => {
@@ -375,7 +375,7 @@ mod tests {
                         };
                         match change {
                             7 => *ptrto = Rc::new(Datatype::new_with_align(8, 8, TYPE_INT)),
-                            8 => Rc::make_mut(ptrto).qualifiers = crate::kuna_typequal::VOLATILE,
+                            8 => Rc::make_mut(ptrto).qualifiers = crate::typequal::VOLATILE,
                             _ => *wordsize = 2,
                         }
                     }

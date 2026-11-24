@@ -6,7 +6,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::VarnodeId;
 
-use super::kuna_varargforward::{constant_value, declared_value};
+use super::varargforward::{constant_value, declared_value};
 use crate::dtype::type_metatype;
 use crate::fspec::{FuncCallSpecs, ParameterPieces, PrototypePieces};
 use crate::funcdata::Funcdata;
@@ -99,12 +99,8 @@ pub fn arguments(data: &Funcdata, fc: &FuncCallSpecs) -> Vec<ParameterPieces> {
         let call = data.obank().get(fc.get_op())?;
         let vn = call.get_in(active.get_trial(index).get_slot())?;
         let (value, width) = constant_value(data, vn, 0)?;
-        let format = crate::kuna_formatwitness::pointed_readonly_format(
-            data,
-            value,
-            width,
-            call.get_addr(),
-        )?;
+        let format =
+            crate::formatwitness::pointed_readonly_format(data, value, width, call.get_addr())?;
         let args = integer_arguments(&format)?;
         if args.is_empty() {
             return None;
@@ -276,7 +272,7 @@ pub fn activate_trial(data: &mut Funcdata, idx: int4, i: int4, args: &[Parameter
     let trial = fc.active_input().get_trial(i);
     if trial.is_definitely_not_used()
         || trial.is_unref()
-        || crate::kuna_passthrough::claimed_range(data, trial.get_address(), trial.get_size())
+        || crate::passthrough::claimed_range(data, trial.get_address(), trial.get_size())
     {
         return false;
     }
@@ -326,11 +322,7 @@ pub fn activate_trial(data: &mut Funcdata, idx: int4, i: int4, args: &[Parameter
         let previous = fc.active_input().get_trial(index);
         if previous.is_definitely_not_used()
             || previous.is_unref()
-            || crate::kuna_passthrough::claimed_range(
-                data,
-                previous.get_address(),
-                previous.get_size(),
-            )
+            || crate::passthrough::claimed_range(data, previous.get_address(), previous.get_size())
             || previous.get_address().justified_contain(
                 previous.get_size(),
                 &preceding.addr,

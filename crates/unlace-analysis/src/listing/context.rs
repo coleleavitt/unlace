@@ -85,7 +85,7 @@ impl ContextPainter {
         paints.extend(scan_arm_markers(file).context_paints);
         let mut a32_extents = Vec::new();
         if !arch.input_arm_isa_override {
-            let funcmode = crate::loader::kuna_armfuncmode::arm_func_mode_paints(file);
+            let funcmode = crate::loader::armfuncmode::arm_func_mode_paints(file);
             a32_extents = funcmode
                 .iter()
                 .filter_map(|paint| Some((paint.addr, paint.end.filter(|_| paint.value == 0)?)))

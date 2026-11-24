@@ -111,7 +111,7 @@ impl Rule for RuleBoolNegate {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if crate::kuna_floatnegation::fold_guarded_negate(data, op) {
+        if crate::floatnegation::fold_guarded_negate(data, op) {
             return 1;
         }
         let vn = data
@@ -940,7 +940,7 @@ impl Rule for RulePtrArith {
         if slot == num_input {
             return 0;
         }
-        if crate::kuna_valuewitness::keeps_offset(data, op, slot) {
+        if crate::valuewitness::keeps_offset(data, op, slot) {
             return 0;
         }
         if evaluate_pointer_expression(data, op, slot) != 2 {

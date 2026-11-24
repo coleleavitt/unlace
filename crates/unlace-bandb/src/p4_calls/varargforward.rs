@@ -28,7 +28,7 @@
 //!
 //! A floating-point register is refused where the caller states how many it
 //! filled (`al` on x86-64 SysV, CR bit 6 on 32-bit PowerPC: those registers are
-//! [`crate::kuna_varargretreg`]'s) and where it only shadows a general
+//! [`crate::varargretreg`]'s) and where it only shadows a general
 //! register (64-bit PowerPC).
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
@@ -40,7 +40,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{type_class, type_metatype};
 use crate::fspec::{FuncCallSpecs, ParameterPieces, PrototypePieces};
 use crate::funcdata::Funcdata;
-use crate::kuna_varargretreg::{VarargFloats, float_register_count};
+use crate::varargretreg::{VarargFloats, float_register_count};
 
 /// Is the input trial `[addr, addr + size)` at `slot` of variadic call spec `idx`
 /// a declared parameter of the calling function, or the declared result of
@@ -120,7 +120,7 @@ pub fn narrow_undeclared_upper(data: &mut Funcdata, idx: int4, i: int4) {
         return;
     };
     if !undeclared_bytes(data, vn, width, size - width, &mut 64)
-        || !super::kuna_varargformat::defined_bytes(data, vn, 0, width, &mut 64)
+        || !super::varargformat::defined_bytes(data, vn, 0, width, &mut 64)
     {
         return;
     }
@@ -293,7 +293,7 @@ fn format_stops_before(
         return false;
     };
     let Some(count) =
-        crate::kuna_formatwitness::pointed_format_count(data, value, width, call.get_addr())
+        crate::formatwitness::pointed_format_count(data, value, width, call.get_addr())
     else {
         return false;
     };

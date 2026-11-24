@@ -31,7 +31,7 @@
 //! locks, `OptionDatabase::set`, symbol retype/rename) and the console parsing
 //! of `<args>` land with the console wave on top of [`Dispatch`].
 
-use crate::kuna_phases::{KunaPhase, KunaStrength, lookup_subphase};
+use crate::phases::{KunaPhase, KunaStrength, lookup_subphase};
 use unlace_base::error::{KunaError, KunaResult};
 
 /// (kuna) One recorded typed assertion (session log entry) — C++ `KunaAssertion`.

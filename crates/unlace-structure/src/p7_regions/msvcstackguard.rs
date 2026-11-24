@@ -1,5 +1,5 @@
 //! (kuna `msvcstackguard`) Strip the MSVC `/GS` frame-cookie boilerplate — the
-//! sibling of [`kuna_stackguard`](crate::kuna_stackguard) for the Windows shape.
+//! sibling of [`kuna_stackguard`](crate::stackguard) for the Windows shape.
 //!
 //! # Why the glibc matcher cannot see this
 //!
@@ -101,9 +101,9 @@
 //!
 //! The prologue init is released the same way `stackguard` releases the glibc
 //! canary init:
-//! [`collect_value_slots`](crate::kuna_stackguard::collect_value_slots)
+//! [`collect_value_slots`](crate::stackguard::collect_value_slots)
 //! resolves the addrtied stack storage the scrambled cookie was written to, and
-//! [`release_canary_slots`](crate::kuna_stackguard::release_canary_slots)
+//! [`release_canary_slots`](crate::stackguard::release_canary_slots)
 //! clears its `addrforce` (plus `ScopeLocal::markNotMapped` on the slot) so the
 //! store, the cookie read and the entry-side scramble die through the ordinary
 //! consume fixpoint instead of surviving as `v5 = dat_140074040 ^ (unsigned
@@ -130,7 +130,7 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_stackguard::{collect_value_slots, release_canary_slots};
+use crate::stackguard::{collect_value_slots, release_canary_slots};
 
 /// How far the structural derivation recurses before giving up.
 #[doc(hidden)]
@@ -530,7 +530,7 @@ impl Action for ActionStripMsvcStackGuard {
             || data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_msvcstackguard::StripMsvcStackGuard>()
+                .get::<crate::msvcstackguard::StripMsvcStackGuard>()
                 .0;
         if data.num_calls() == 0 {
             return 0;
@@ -602,5 +602,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_msvcstackguard/tests.rs"]
+#[path = "msvcstackguard/tests.rs"]
 mod tests;

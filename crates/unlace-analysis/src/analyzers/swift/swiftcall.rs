@@ -13,7 +13,7 @@
 //! it passes.
 //!
 //! The engine derives `__swiftcall` from the compiler spec's default model
-//! (`unlace_decomp::kuna_swiftcall`): the C model with `swiftself` added as an
+//! (`unlace_decomp::swiftcall`): the C model with `swiftself` added as an
 //! input resource section of its own, so recovery declares `self` exactly
 //! when the body reads it and never forces the argument registers around
 //! it; `__swiftcall_throws` also returns the error register to the caller.
@@ -47,15 +47,15 @@ use std::collections::{BTreeMap, HashSet};
 use std::rc::Rc;
 
 use unlace_decomp::dtype::Datatype;
-use unlace_decomp::kuna_swiftcall::{
+use unlace_decomp::swiftcall::{
     SWIFTASYNCCALL, SWIFTASYNCCALL_THROWS, SWIFTCALL, SWIFTCALL_THROWS,
 };
 
 use super::descriptors::{ContextKind, Target, TypeRef};
-use super::kuna_swifttypes::{Registers, Types};
-use crate::demangle::kuna_swift::node::{Kind, Node, NodeRef};
-use crate::demangle::kuna_swift::print::print_full;
-use crate::demangle::kuna_swift::{demangle_swift_name, demangle_swift_tree};
+use super::swifttypes::{Registers, Types};
+use crate::demangle::swift::node::{Kind, Node, NodeRef};
+use crate::demangle::swift::print::print_full;
+use crate::demangle::swift::{demangle_swift_name, demangle_swift_tree};
 use crate::pass::{AnalysisOutput, InputHintFact, ModelFact};
 
 #[derive(Default, Debug)]
@@ -566,7 +566,7 @@ fn generic_trailing(sig: &NodeRef) -> Vec<(String, bool)> {
         match c.kind {
             Kind::DependentGenericParamCount => {
                 for i in 0..c.get_index() {
-                    let name = crate::demangle::kuna_swift::parse::generic_parameter_name(depth, i);
+                    let name = crate::demangle::swift::parse::generic_parameter_name(depth, i);
                     out.push((name, true));
                 }
                 depth += 1;

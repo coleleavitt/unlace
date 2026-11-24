@@ -1,7 +1,7 @@
 //! (kuna `mzsweep`) The raw-image call sweep over an MS-DOS executable keeps
 //! only the calls a DOS program can make.
 //!
-//! [`super::kuna_rawdiscover`] decodes the whole mapped image straight through
+//! [`super::rawdiscover`] decodes the whole mapped image straight through
 //! and takes the target of every direct call it sees as a function. That suits
 //! a firmware image, which is mostly code. A DOS load module is mostly data:
 //! the far data segments a large-model program declares (bitmaps, fonts,

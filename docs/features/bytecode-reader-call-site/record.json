@@ -4,7 +4,7 @@
   "scope": "small",
   "option": "calleearitycut",
   "default": "on",
-  "module": "decompiler/crates/kuna-decomp/src/p4_calls/kuna_calleearitycut.rs",
+  "module": "decompiler/crates/kuna-decomp/src/p4_calls/calleearitycut.rs",
   "witness": "crackme.x86_64.elf (ELF x86-64 `Layers`, challenge 673da52e9b533b4c22bd2eeb) sub_9d9c0 -> sub_875e0 @0x9d9d8, reduced and vendored as decompiler/crates/kuna-analysis/tests/fixtures/calleearitycut_x86_64",
   "decisions": [
     "The need filed no hypothesis. The measured cause has two halves, and neither is the one the title suggests (`calleearity`/`varargstackargs` being on is irrelevant -- both are default-on already and neither can reach this site).",

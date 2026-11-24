@@ -4,7 +4,7 @@
   "scope": "small",
   "option": "calleepop",
   "default": "on",
-  "module": "decompiler/crates/kuna-decomp/src/p6_variables/kuna_calleepop.rs",
+  "module": "decompiler/crates/kuna-decomp/src/p6_variables/calleepop.rs",
   "witness": "Imagination.exe (PE32 x86, MSVC) sub_401290, vendored as decompiler/crates/kuna-analysis/tests/fixtures/stdcallpop_pe_i386.exe",
   "decisions": [
     "Hypothesis H1 ('possibly incorrect x86 Windows callee stack-cleanup tracking') is UPHELD and now located exactly: StackSolver::build (coreaction.cc:238) contributes the guessed equation `extrapop = 4` for every call whose model carries extrapop=unknown, which is every call under x86win.cspec's __stdcall default. Measured drift on the witness: hFile off by 8 (LocalAlloc's 2 args), the ReadFile buffer/count off by 24 (LocalAlloc+SetFilePointer), the checksum load off by 44 (+ReadFile+GetLastError) -- exactly the cumulative unpopped argument bytes.",

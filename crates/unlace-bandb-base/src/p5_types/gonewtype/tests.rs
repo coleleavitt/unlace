@@ -1,4 +1,4 @@
-// Tests for `kuna_gonewtype` (included into `mod tests` in kuna_gonewtype.rs).
+// Tests for `kuna_gonewtype` (included into `mod tests` in gonewtype.rs).
 //
 // Covered:
 //   - `descriptor_offset`: a constant, a COPY of a constant, and the refusals
@@ -38,7 +38,7 @@ fn build_fd(go_new_type: bool) -> Funcdata {
     .unwrap();
     let mut ctx = ArchContext::new(m);
     ctx.kuna_options
-        .set(crate::kuna_gonewtype::GoNewType(go_new_type));
+        .set(crate::gonewtype::GoNewType(go_new_type));
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     let addr = Address::new(ram, 0x1000);

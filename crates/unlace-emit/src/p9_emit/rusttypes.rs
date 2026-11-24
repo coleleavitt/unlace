@@ -1,6 +1,6 @@
 //! (kuna) The Rust type speller: how a recovered `Datatype` is spelled in Rust.
 //!
-//! The sibling of [`crate::kuna_langc`]'s `CSpeller`, and the reason
+//! The sibling of [`crate::langc`]'s `CSpeller`, and the reason
 //! `TypeSpeller::declarator` is specified as `<front><name><back>` rather than
 //! as a C declarator: Rust types are **pure prefixes**, so `back` is always
 //! empty and the whole type is built by wrapping inward-out (`*mut [u8; 4]`)
@@ -35,7 +35,7 @@ use std::rc::Rc;
 use unlace_base::types::int4;
 
 use crate::dtype::{Datatype, type_metatype};
-use crate::kuna_langtypes::{SpellCtx, TypeSpeller};
+use crate::langtypes::{SpellCtx, TypeSpeller};
 
 /// The rust-language type speller.
 pub struct RustSpeller;

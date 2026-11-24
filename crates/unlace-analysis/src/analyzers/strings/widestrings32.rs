@@ -8,7 +8,7 @@
 //! one-character string, and at 2-byte width it is `68 00` and a terminator, so
 //! neither existing width marks it up and a call that hands it to the image's own
 //! function printed its address (`lenw(&dat_2004)`). [`scan_utf32_runs`] is the
-//! 1-byte matcher widened to 4-byte code units, as [`super::kuna_widestrings`]
+//! 1-byte matcher widened to 4-byte code units, as [`super::widestrings`]
 //! widens it to 2: a run of units that each hold a [`super::is_string_char`]
 //! value, read in the image's byte order on 4-aligned addresses and closed by a
 //! zero unit.
@@ -473,8 +473,8 @@ mod tests {
         let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
         let bytes = std::fs::read(path).expect("read widestr32 fixture");
         let raw = object::File::parse(bytes.as_slice()).expect("parse widestr32 fixture");
-        let view = crate::loader::kuna_relocrebase::rebased_view(&raw, &bytes);
-        let (file, _) = crate::loader::kuna_relocrebase::select(raw, &bytes, &view);
+        let view = crate::loader::relocrebase::rebased_view(&raw, &bytes);
+        let (file, _) = crate::loader::relocrebase::select(raw, &bytes, &view);
         let mut facts: Vec<(u64, u32)> = wide_string32_facts(&file, targets, tables)
             .iter()
             .map(|f| (f.addr, f.len))

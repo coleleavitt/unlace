@@ -1,6 +1,6 @@
 {
  "opportunity": "A function parameter the body only ever dereferences is declared as an integer, and whether it gets a pointer type depends on nothing but whether the first field the compiler reads sits at offset 0. Three lines of C under stock gcc -O2: `struct S { long pad; int a; int b; }; int sum(struct S *s) { return s->a + s->b; }` is `int sum(long a0) { return *(int *)(a0 + 8) + *(int *)(a0 + 0xc); }`, while moving `a` to offset 0 makes the same parameter `int *a0`. On coreutils fmt -O2 with `libctypes off` the same split shows on two neighbouring functions: put_word is `void sub_3000(unsigned long *a0)` and get_line is `void sub_3420(long a0, unsigned int a1)`, ground truth `FILE *` for both.",
- "test_name": "tests/stages/kuna-ptrfromuse.xml (11 assertions, three passes, one witness and three controls) + 5 hermetic unit tests in p5_types/kuna_ptrfromuse/tests.rs",
+ "test_name": "tests/stages/kuna-ptrfromuse.xml (11 assertions, three passes, one witness and three controls) + 5 hermetic unit tests in p5_types/ptrfromuse/tests.rs",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2/coreutils/stripped/fmt",
  "selector": "0x3420",
  "func_addr": "0x3420",
@@ -403,8 +403,8 @@
   "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
   "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
   "decompiler/crates/kuna-decomp/src/p5_types/coreaction_infertypes.rs",
-  "decompiler/crates/kuna-decomp/src/p5_types/kuna_ptrfromuse.rs",
-  "decompiler/crates/kuna-decomp/src/p5_types/kuna_ptrfromuse/tests.rs",
+  "decompiler/crates/kuna-decomp/src/p5_types/ptrfromuse.rs",
+  "decompiler/crates/kuna-decomp/src/p5_types/ptrfromuse/tests.rs",
   "decompiler/crates/kuna-decomp/src/substrate/context.rs",
   "docs/features/ptrfromuse/analysis.md",
   "docs/features/ptrfromuse/plan.md",
@@ -420,7 +420,7 @@
   "kuna-catalog.xml #8 change_kind opt-in-tool": "20 -> 21",
   "stage corpus files": "300 -> 301 (one new file; the review added two assertions to it, not a second file)",
   "phase_catalog.json": "recaptured",
-  "option_values_live_value_present_for_87": "unchanged (no live reader; ptrfromuse added to the kuna_phases/tests.rs allowlist beside pebnames)"
+  "option_values_live_value_present_for_87": "unchanged (no live reader; ptrfromuse added to the phases/tests.rs allowlist beside pebnames)"
  },
  "notes": "Five defects were found by the measurements and fixed before shipping. (1) The rule typed the x86-64 FS_OFFSET segment base, which is a function input but not a parameter, and that stopped `stackguard` recognising the canary on coreutils ls sub_d820 -- fixed by FuncProto::possible_input_param. (2) Not following PTRADD/PTRSUB made the candidate oscillate against the pointer-arithmetic rewrite and run the seven-pass settle ceiling. (3) Overriding a vote that is already a pointer replaced `free`'s correct `void *` with `undefined1 *` and was the entire `worse` column of the first typesweep. (4) [review] An INT_ADD whose constant addend was itself a global object address forwarded the walk, so a parameter indexing a byte table was typed `char *` and the named global was replaced in the body by its raw address. (5) [review] The first fix for (4) refused on the pointer bound alone, which cost nine correct bzFile * declarations in bzip2; it now grades the constant instead.",
  "preset_decision": "default `void` (docs/features/ptrfromuse/default-on-evaluation.md); multi-valued, so outside aggressive_carries_every_default_off_option, and in no preset: the default applies under every mode",

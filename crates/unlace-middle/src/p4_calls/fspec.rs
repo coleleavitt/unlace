@@ -1206,7 +1206,7 @@ impl ParamTrial {
     }
     /// (kuna `passthrough`) Record that the call reads the function's own
     /// incoming register here, untouched; see
-    /// [`crate::p4_calls::kuna_passthrough::forwarded_in_place`].
+    /// [`crate::p4_calls::passthrough::forwarded_in_place`].
     pub fn set_forwarded_input(&mut self) {
         self.flags |= param_trial_flags::FORWARDED_INPUT;
     }
@@ -1214,8 +1214,8 @@ impl ParamTrial {
         self.flags & param_trial_flags::FORWARDED_INPUT != 0
     }
     /// (kuna `passthrough`) Record that the active trial is not set up for the
-    /// call; see [`crate::p4_calls::kuna_passthrough::survives_call`] and
-    /// [`crate::p4_calls::kuna_passthrough::set_before_branch`].
+    /// call; see [`crate::p4_calls::passthrough::survives_call`] and
+    /// [`crate::p4_calls::passthrough::set_before_branch`].
     pub fn set_live_past_call(&mut self) {
         self.flags |= param_trial_flags::LIVE_PAST_CALL;
     }
@@ -1232,7 +1232,7 @@ impl ParamTrial {
     }
     /// (kuna `passthrough`) Record that the active stack trial holds a
     /// constant the function stored; see
-    /// [`crate::p4_calls::kuna_passthrough::ends_rescued_run`].
+    /// [`crate::p4_calls::passthrough::ends_rescued_run`].
     pub fn set_stored_constant(&mut self) {
         self.flags |= param_trial_flags::STORED_CONSTANT;
     }
@@ -1404,38 +1404,38 @@ pub struct ParamActive {
     /// (kuna) `varargstackargs`: score the stack tail of a `fillinMap` resource
     /// section separately from its register prefix, because these trials belong
     /// to a VARIADIC call whose variable arguments the ABI passes on the stack.
-    /// Set by `ActionActiveParam`; see [`crate::p4_calls::kuna_varargstackargs`].
+    /// Set by `ActionActiveParam`; see [`crate::p4_calls::varargstackargs`].
     vararg_stack_split: bool,
     /// (kuna) `inputparamgap`: are these the trials of the FUNCTION'S OWN input
     /// recovery, with the register-gap tolerance enabled?  Set by
-    /// `ActionInputPrototype`; see [`crate::p4_calls::kuna_inputparamgap`].
+    /// `ActionInputPrototype`; see [`crate::p4_calls::inputparamgap`].
     own_input_gap: bool,
     /// (kuna) `stackarggap`: may an UNREFERENCED argument register end this CALL
     /// SITE's argument list when the next slot is on the stack?  Set by
-    /// `ActionActiveParam`; see [`crate::p4_calls::kuna_stackarggap`].
+    /// `ActionActiveParam`; see [`crate::p4_calls::stackarggap`].
     stack_arg_gap: bool,
     /// (kuna) `passthrough`: which forwarded argument registers at this CALL
     /// SITE stay out of the inactive-chain count, `None` for none.  Set by
     /// `ActionActiveParam`; see
-    /// [`crate::p4_calls::kuna_passthrough::neutral_in_chain`].
+    /// [`crate::p4_calls::passthrough::neutral_in_chain`].
     forwarded_neutral: Option<NeutralScope>,
     /// (kuna `calleereginputs`) Does the callee read every register parameter
     /// of the model these trials are scored against?  Set by
-    /// `ActionActiveParam`; see [`crate::p4_calls::kuna_calleereginputs`].
+    /// `ActionActiveParam`; see [`crate::p4_calls::calleereginputs`].
     callee_reads_registers: bool,
     /// (kuna) `condexeret`: where the output trials stand with respect to the one
-    /// retry pass; see [`crate::p4_calls::kuna_condexeret`].
+    /// retry pass; see [`crate::p4_calls::condexeret`].
     cond_exe_retry: CondExeRetry,
     /// (kuna) `armfloatargs`: the callee's stated single-precision inputs, which a
     /// hole below a later double keeps as words; see
-    /// [`crate::p4_calls::kuna_armfloatargs`].
+    /// [`crate::p4_calls::armfloatargs`].
     single_floats: Vec<Address>,
     /// (kuna) `armfloatargs`: s-registers the function's body reads on entry,
     /// which are parameters even where they would be a back-fill slot.
     read_singles: Vec<Address>,
     /// (kuna) `calleefilledarg`: the callee's entry-liveness probe, which says
     /// which argument registers it loads itself; see
-    /// [`crate::p4_calls::kuna_calleefilledarg`].
+    /// [`crate::p4_calls::calleefilledarg`].
     callee_filled: Option<Rc<dyn EntryLiveness>>,
 }
 
@@ -1577,7 +1577,7 @@ impl ParamActive {
     /// (kuna) `inputparamgap`: are these the function's OWN input trials, with
     /// the unused-register-run tolerance enabled?  Read by
     /// [`Self::force_inactive_chain`](ParamListStandard) through
-    /// [`crate::p4_calls::kuna_inputparamgap::gap_slot_is_exempt`].
+    /// [`crate::p4_calls::inputparamgap::gap_slot_is_exempt`].
     pub fn is_own_input_gap(&self) -> bool {
         self.own_input_gap
     }
@@ -1592,7 +1592,7 @@ impl ParamActive {
     /// (kuna) `stackarggap`: may an unreferenced argument register end this call
     /// site's argument list?  Read by
     /// [`Self::force_inactive_chain`](ParamListStandard) through
-    /// [`crate::p4_calls::kuna_stackarggap::ends_argument_list`].
+    /// [`crate::p4_calls::stackarggap::ends_argument_list`].
     pub fn is_stack_arg_gap(&self) -> bool {
         self.stack_arg_gap
     }
@@ -3328,7 +3328,7 @@ impl ParamListStandard {
     /// (kuna `calleereginputs`) Every register parameter the callee reads is an
     /// argument: its trial is active, a register the caller never wrote included
     /// (the callee receives the caller's own value). See
-    /// [`crate::p4_calls::kuna_calleereginputs`].
+    /// [`crate::p4_calls::calleereginputs`].
     fn activate_register_entries(
         &self,
         active: &mut ParamActive,
@@ -3529,7 +3529,7 @@ impl ParamListStandard {
         for i in start..stop {
             if active.is_callee_filled(i) {
                 // (kuna) `calleefilledarg`: not a slot of this callee.
-                // See [`crate::p4_calls::kuna_calleefilledarg`].
+                // See [`crate::p4_calls::calleefilledarg`].
                 continue;
             }
             let (entry, defnouse) = {
@@ -3640,7 +3640,7 @@ impl ParamListStandard {
                 // wrote, with the stack as its next slot, is the end of the
                 // argument list -- the ABI reaches the stack only past a full
                 // register file -- not a hole to fill on the way to a stack
-                // trial.  See [`crate::p4_calls::kuna_stackarggap`].
+                // trial.  See [`crate::p4_calls::stackarggap`].
                 if (crate::architecture::default_pass_hooks().stackarggap_ends_argument_list)(
                     active,
                     i,
@@ -3666,7 +3666,7 @@ impl ParamListStandard {
                 };
                 // (kuna) `passthrough`: a forwarded register is not a run of
                 // empty slots.  See
-                // [`crate::p4_calls::kuna_passthrough::neutral_in_chain`].
+                // [`crate::p4_calls::passthrough::neutral_in_chain`].
                 up_len += step;
                 if forwarded {
                     continue;
@@ -3680,7 +3680,7 @@ impl ParamListStandard {
                 // (kuna) `passthrough`: a run upstream vetoes is let through
                 // only when every register in it is forwarded, and from then on
                 // only to trials that may end one.  See
-                // [`crate::p4_calls::kuna_passthrough::anchors_neutral_run`].
+                // [`crate::p4_calls::passthrough::anchors_neutral_run`].
                 if up_len > maxchain {
                     rescued = true;
                     seenchain |= mixed || !opens;
@@ -3766,7 +3766,7 @@ impl ParamListStandard {
         // structurally empty, so the stack tail of a section is scored as its
         // own section.  Off (and for every non-variadic call) this leaves
         // `trial_start`/`resource_start` exactly as `separate_sections` built
-        // them.  See [`crate::p4_calls::kuna_varargstackargs`].
+        // them.  See [`crate::p4_calls::varargstackargs`].
         let mut group_start: Vec<int4> = (0..trial_start.len() - 1)
             .map(|i| self.resource_start[i])
             .collect();
@@ -7330,7 +7330,7 @@ pub const OFFSET_UNKNOWN: uintb = 0xBADBEEF;
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_restartlog::{KunaRestartReason, RestartLog};
+use crate::restartlog::{KunaRestartReason, RestartLog};
 
 /// A class for analyzing parameters to a sub-function call (C++
 /// `FuncCallSpecs`, `fspec.hh:1645`).
@@ -7391,38 +7391,38 @@ pub struct FuncCallSpecs {
     /// temporary), never the location, and the trials that knew the location are
     /// cleared right after — so a later call to the same callee has no other way
     /// to ask what its sibling recovered.  See
-    /// [`crate::p4_calls::kuna_calleearity`].
+    /// [`crate::p4_calls::calleearity`].
     final_input_storage: Vec<(Address, int4)>,
     /// (kuna) `truncarg`: inputs a subvariable-flow trim narrowed by dropping
     /// only known-zero bits, as `(slot, size, number of inputs)` at the trim.
-    /// See [`crate::p9_emit::kuna_truncarg`].
+    /// See [`crate::p9_emit::truncarg`].
     zext_trimmed: Vec<(int4, int4, int4)>,
     /// (kuna `formatstring`) The argument count a resolved format string
     /// declares, while this call still carries the open tail it sheds after
-    /// trial scoring. See [`crate::p4_calls::kuna_formattail`].
+    /// trial scoring. See [`crate::p4_calls::formattail`].
     format_arity: Option<int4>,
     /// (kuna `tailcalljump`) The register that carried a computed jump's target
     /// into this tail call.  Its value is the callee's own address, so input
     /// recovery never takes it as an argument.
     jump_target_storage: Option<(Address, int4)>,
     /// (kuna `pltlocal`) The PLT stub a call through it was built past, at the
-    /// definition the stub is bound to. See [`crate::p4_calls::kuna_pltlocal`].
+    /// definition the stub is bound to. See [`crate::p4_calls::pltlocal`].
     plt_stub: Option<Address>,
     /// (kuna) The model the direct callee's register inputs select. See
-    /// [`crate::p4_calls::kuna_calleereginputs`].
+    /// [`crate::p4_calls::calleereginputs`].
     callee_reg_model: Option<Rc<ProtoModel>>,
     /// (kuna) How many of EAX, ECX and EDX the direct callee reads before
-    /// writing them. See [`crate::p4_calls::kuna_calleereginputs`].
+    /// writing them. See [`crate::p4_calls::calleereginputs`].
     callee_arg_registers: u8,
     /// (kuna) The extrapop the direct callee's own returns state. See
-    /// [`crate::p4_calls::kuna_calleepurge`].
+    /// [`crate::p4_calls::calleepurge`].
     callee_purge: Option<int4>,
     /// (kuna `spsolve`) What the direct callee's own returns do to the stack
-    /// pointer. See [`crate::p4_calls::kuna_spsolve`].
-    callee_returns: Option<crate::kuna_calleefacts::CalleeReturns>,
+    /// pointer. See [`crate::p4_calls::spsolve`].
+    callee_returns: Option<crate::calleefacts::CalleeReturns>,
     /// (kuna `calleeargs`) The stack-argument bytes the direct callee reads. See
-    /// [`crate::p4_calls::kuna_calleestackargs`].
-    callee_stack_arg_bytes: Option<crate::kuna_calleefacts::StackArgs>,
+    /// [`crate::p4_calls::calleestackargs`].
+    callee_stack_arg_bytes: Option<crate::calleefacts::StackArgs>,
     /// (kuna `calleeargs`) The direct callee moves its caller's stack pointer.
     callee_moves_stack: bool,
     /// (kuna `calleeargs`) For a direct callee with no stated extent, the stack
@@ -7432,7 +7432,7 @@ pub struct FuncCallSpecs {
     /// bytes its own reached returns pop above the return address.
     callee_return_pop: Option<u32>,
     /// (kuna `calleereginputs`) The stack bytes the caller removes right after
-    /// this indirect call. See [`crate::p4_calls::kuna_calleereginputs`].
+    /// this indirect call. See [`crate::p4_calls::calleereginputs`].
     callind_cleanup: u32,
 }
 
@@ -7911,25 +7911,22 @@ impl FuncCallSpecs {
 
     /// (kuna `spsolve`) What the direct callee's own returns do to the stack
     /// pointer, if read.
-    pub fn callee_returns(&self) -> Option<crate::kuna_calleefacts::CalleeReturns> {
+    pub fn callee_returns(&self) -> Option<crate::calleefacts::CalleeReturns> {
         self.callee_returns
     }
 
     /// (kuna `spsolve`) Record what the direct callee's own returns do.
-    pub fn set_callee_returns(&mut self, returns: Option<crate::kuna_calleefacts::CalleeReturns>) {
+    pub fn set_callee_returns(&mut self, returns: Option<crate::calleefacts::CalleeReturns>) {
         self.callee_returns = returns;
     }
 
     /// The stack-argument bytes the direct callee reads, if measured.
-    pub fn callee_stack_arg_bytes(&self) -> Option<crate::kuna_calleefacts::StackArgs> {
+    pub fn callee_stack_arg_bytes(&self) -> Option<crate::calleefacts::StackArgs> {
         self.callee_stack_arg_bytes
     }
 
     /// Record the stack-argument bytes the direct callee reads.
-    pub fn set_callee_stack_arg_bytes(
-        &mut self,
-        bytes: Option<crate::kuna_calleefacts::StackArgs>,
-    ) {
+    pub fn set_callee_stack_arg_bytes(&mut self, bytes: Option<crate::calleefacts::StackArgs>) {
         self.callee_stack_arg_bytes = bytes;
     }
 
@@ -9061,7 +9058,7 @@ fn overlap_addr(addr: &Address, size: int4, op: &Address, opsize: int4) -> int4 
 }
 
 /// (kuna `calleefilledarg`) What a callee body's entry-liveness probe proves
-/// (`kuna_calleedeadarg::CalleeEntryDead`), as `ParamActive` reads it.
+/// (`calleedeadarg::CalleeEntryDead`), as `ParamActive` reads it.
 pub trait EntryLiveness: std::fmt::Debug {
     /// Is every byte of `addr`/`size` written on every path before the callee reads it?
     fn proves_dead(&self, addr: &Address, size: int4) -> bool;
@@ -9098,17 +9095,17 @@ pub struct Extension {
     pub opcode: OpCode,
 }
 
-/// Which forwarded registers at one call site [`neutral_in_chain`](crate::kuna_passthrough::neutral_in_chain) lets out of
+/// Which forwarded registers at one call site [`neutral_in_chain`](crate::passthrough::neutral_in_chain) lets out of
 /// the inactive-chain count.
 #[derive(Debug, Clone, Default)]
 pub struct NeutralScope {
-    /// No other call can run before this one ([`first_calls`](crate::kuna_passthrough::first_calls)), so an argument
+    /// No other call can run before this one ([`first_calls`](crate::passthrough::first_calls)), so an argument
     /// register no op names, or one this pass claimed, still holds the
     /// function's own input here.
     pub unref: bool,
     /// The argument registers a direct callee is known not to take: its own
     /// body never reads them
-    /// ([`crate::kuna_calleedeadarg::CalleeEntryDead::never_takes`]), or its
+    /// ([`crate::calleedeadarg::CalleeEntryDead::never_takes`]), or its
     /// `protoorder` statement leaves them out.
     pub untaken: Vec<(Address, int4)>,
 }

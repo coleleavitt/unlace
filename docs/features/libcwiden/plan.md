@@ -3,7 +3,7 @@
 ## Scope
 
 One change: 333 rows appended to `LIBC_EXT` in
-`decompiler/crates/kuna-analysis/src/analyzers/protos/kuna_libcsigs.rs`. No new
+`decompiler/crates/kuna-analysis/src/analyzers/protos/libcsigs.rs`. No new
 module, no new inference, no new option -- `libcsigs` already gates the table and
 its `off` arm declares exactly the names the 28-entry base table carries. The
 call-site placeholder strip that came with it is ungated and runs in both arms.

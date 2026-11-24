@@ -7,18 +7,18 @@ use std::rc::Rc;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::dtype::{Datatype, TypeField, type_metatype};
 use unlace_decomp::fspec::{ParameterPieces, PrototypePieces};
-use unlace_decomp::kuna_gostringinput::GoStringInput;
-use unlace_decomp::kuna_langfacet::LangFacet;
-use unlace_decomp::kuna_symbolnamechars::{NameChars, sanitize_symbol_name};
+use unlace_decomp::gostringinput::GoStringInput;
+use unlace_decomp::langfacet::LangFacet;
+use unlace_decomp::symbolnamechars::{NameChars, sanitize_symbol_name};
 
-use super::{DieSnap, Reader, TypeWalk, build_datatype, kuna_dwarfbyref};
+use super::{DieSnap, Reader, TypeWalk, build_datatype, dwarfbyref};
 use object::{Object, ObjectSection};
 
-mod kuna_arm64;
-mod kuna_goerror;
-mod kuna_goiface;
-mod kuna_pointerreceiver;
-pub(super) use kuna_arm64::capture_compressed as capture_arm64_compressed;
+mod arm64;
+mod goerror;
+mod goiface;
+mod pointerreceiver;
+pub(super) use arm64::capture_compressed as capture_arm64_compressed;
 
 const INTEGER_REGISTERS: &[(u16, &str)] = &[
     (0, "RAX"),
@@ -52,7 +52,7 @@ enum Location {
     RegisterPair([u16; 2]),
 }
 
-mod kuna_gostringinput;
+mod gostringinput;
 
 #[derive(Clone, Default)]
 struct Extra {
@@ -151,7 +151,7 @@ impl UnitExtras {
         entry: &gimli::DebuggingInformationEntry<Reader<'_>>,
         function_entry: Option<u64>,
     ) -> Extra {
-        let kind = (!self.metadata_only || kuna_arm64::type_tag(entry.tag()))
+        let kind = (!self.metadata_only || arm64::type_tag(entry.tag()))
             .then(|| {
                 entry
                     .attr_value(gimli::DwAt(0x2900))
@@ -168,7 +168,7 @@ impl UnitExtras {
                 .attr_value(gimli::DW_AT_location)
                 .map(|location| {
                     if let Some(expression) =
-                        kuna_dwarfbyref::location_at_entry(dwarf, unit, &location, function_entry)
+                        dwarfbyref::location_at_entry(dwarf, unit, &location, function_entry)
                     {
                         simple_location(expression, unit.encoding())
                     } else if self.metadata_only {
@@ -321,7 +321,7 @@ pub struct Materialized {
     pub entry: u64,
     pub pieces: PrototypePieces,
     pub status_site: Option<u64>,
-    pub pointer_receiver: Option<unlace_decomp::kuna_gopointermethod::Receiver>,
+    pub pointer_receiver: Option<unlace_decomp::gopointermethod::Receiver>,
     pub string_input: Option<GoStringInput>,
 }
 
@@ -379,7 +379,7 @@ impl Facts {
     pub fn materialize(
         &self,
         arch: &Architecture,
-        methods: &BTreeMap<u64, crate::gotypes::kuna_pointermethods::LinkedMethod>,
+        methods: &BTreeMap<u64, crate::gotypes::pointermethods::LinkedMethod>,
     ) -> Vec<Materialized> {
         let compressed = self.compressed.as_deref();
         let entries = compressed.and_then(|stored| stored.arm64_entries.as_ref());
@@ -398,7 +398,7 @@ impl Facts {
         }
         if let Some(compressed) = compressed {
             let facts = if let Some(entries) = entries {
-                kuna_arm64::decode_compressed(compressed, entries, self.names)
+                arm64::decode_compressed(compressed, entries, self.names)
             } else {
                 compressed.decode(self.names)
             };
@@ -412,7 +412,7 @@ impl Facts {
     fn materialize_decoded(
         &self,
         arch: &Architecture,
-        methods: &BTreeMap<u64, crate::gotypes::kuna_pointermethods::LinkedMethod>,
+        methods: &BTreeMap<u64, crate::gotypes::pointermethods::LinkedMethod>,
         arm64_entries: Option<&TextSymbols>,
     ) -> Vec<Materialized> {
         let mut repeated = BTreeSet::new();
@@ -565,11 +565,11 @@ impl Facts {
         offset: usize,
         arch: &Architecture,
         unique: bool,
-        method: Option<&crate::gotypes::kuna_pointermethods::LinkedMethod>,
+        method: Option<&crate::gotypes::pointermethods::LinkedMethod>,
     ) -> Option<(
         PrototypePieces,
         Option<u64>,
-        Option<unlace_decomp::kuna_gopointermethod::Receiver>,
+        Option<unlace_decomp::gopointermethod::Receiver>,
         Option<GoStringInput>,
     )> {
         let sub = self.dies.get(&offset)?;
@@ -737,7 +737,7 @@ impl Facts {
                 let source = sanitize_symbol_name(&parameter.name, self.names);
                 if let Some(words) = self
                     .interface_input(parameter.type_ref?)
-                    .and_then(|interface| kuna_goiface::input_types(arch, &interface))
+                    .and_then(|interface| goiface::input_types(arch, &interface))
                 {
                     let pointer = Scalar {
                         size: 8,
@@ -891,7 +891,7 @@ impl Facts {
         let outtype = if let Some(pointer) = &error_pointer {
             let mut storage = Datatype::new_with_align(24, 8, type_metatype::TYPE_STRUCT);
             storage.set_struct_fields(
-                kuna_goerror::fields(outtypes[0].as_ref()?, pointer),
+                goerror::fields(outtypes[0].as_ref()?, pointer),
                 Vec::new(),
                 24,
                 8,
@@ -939,7 +939,7 @@ impl Facts {
             }
         }
         if let Some(pointer) = &error_pointer {
-            if !kuna_goerror::storage_matches(arch, &assigned[0]) {
+            if !goerror::storage_matches(arch, &assigned[0]) {
                 return None;
             }
             let name = "__kuna_go_int_error_result";
@@ -958,7 +958,7 @@ impl Facts {
                         return None;
                     }
                     let shell = types.get_type_struct(name).ok()?;
-                    let fields = kuna_goerror::fields(outtypes[0].as_ref()?, pointer);
+                    let fields = goerror::fields(outtypes[0].as_ref()?, pointer);
                     let result = types
                         .set_fields_struct_raw(&shell, fields, Vec::new(), 24, 8, 0)
                         .ok()?;
@@ -1093,7 +1093,7 @@ impl Facts {
         {
             return None;
         }
-        let site = unlace_decomp::kuna_gochanrecv::status_site(arch, entry)?;
+        let site = unlace_decomp::gochanrecv::status_site(arch, entry)?;
         let types = arch.types();
         let handle = types
             .get_type_pointer(8, types.get_type_void().ok()?, 1)
@@ -1329,7 +1329,7 @@ impl Deferred {
             let dies = super::snapshot_unit_with_go(
                 &dwarf,
                 &unit,
-                kuna_dwarfbyref::ArgumentAbi::default(),
+                dwarfbyref::ArgumentAbi::default(),
                 Some(&mut extra),
             );
             facts.append_unit(dies, extra);

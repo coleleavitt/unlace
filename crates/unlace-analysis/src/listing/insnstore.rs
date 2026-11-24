@@ -10,7 +10,7 @@
 use std::ops::RangeBounds;
 use std::rc::Rc;
 
-use super::kuna_insnindex::InstructionIndex;
+use super::insnindex::InstructionIndex;
 use super::model::{Insn, Mnemonic, MnemonicPool};
 
 const CHUNK_ROWS: usize = 1024;

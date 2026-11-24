@@ -76,11 +76,11 @@ Loader tier, P1, `unlace-analysis`. No change to the decompiler core.
 
 | File | Role |
 |---|---|
-| `unlace-analysis/src/loader/kuna_dyldcache.rs` | The cache view: header, sub-caches, mappings, images, `VA -> bytes`. |
-| `unlace-analysis/src/loader/kuna_dyldcache/slide.rs` | Slide info v1/v2/v3/v4/v5 page-chain walkers, rewriting pointers to unslid targets. |
-| `unlace-analysis/src/loader/kuna_dyldcache/extract.rs` | Rebuild one image as a thin Mach-O. |
-| `unlace-analysis/src/loader/kuna_dyldcache/xrefs.rs` | Stub-island, foreign-stub and coalesced-GOT resolution to target names. |
-| `unlace-decomp/src/p0_knowledge/kuna_dyldcache.rs` | The `dyldimage` and `dyldcrossrefs` env-bridged options. |
+| `unlace-analysis/src/loader/dyldcache.rs` | The cache view: header, sub-caches, mappings, images, `VA -> bytes`. |
+| `unlace-analysis/src/loader/dyldcache/slide.rs` | Slide info v1/v2/v3/v4/v5 page-chain walkers, rewriting pointers to unslid targets. |
+| `unlace-analysis/src/loader/dyldcache/extract.rs` | Rebuild one image as a thin Mach-O. |
+| `unlace-analysis/src/loader/dyldcache/xrefs.rs` | Stub-island, foreign-stub and coalesced-GOT resolution to target names. |
+| `unlace-decomp/src/p0_knowledge/dyldcache.rs` | The `dyldimage` and `dyldcrossrefs` env-bridged options. |
 | `unlace-cli/src/unpack.rs` | `--list` / `--image` arms. |
 
 The cache is peeled at the same two points as a fat Mach-O
@@ -194,8 +194,8 @@ two-pass stage test.
 
 ## Implemented (branch `apple/dyld-cache`, commits e5c5feec, 61812981)
 
-- Files: `unlace-analysis/src/loader/kuna_dyldcache.rs` (+ `kuna_dyldcache/{extract,slide,xrefs,tests}.rs`),
-  `unlace-decomp/src/p0_knowledge/kuna_dyldcache.rs`, `unlace-cli/src/unpack/dyld.rs`,
+- Files: `unlace-analysis/src/loader/dyldcache.rs` (+ `dyldcache/{extract,slide,xrefs,tests}.rs`),
+  `unlace-decomp/src/p0_knowledge/dyldcache.rs`, `unlace-cli/src/unpack/dyld.rs`,
   fixture generator `unlace-analysis/tests/fixtures/dyld_cache_arm64e.py` (29 KB of
   output), stage test `tests/stages/kuna-dyldcrossrefs.toml`.
 - Options: `dyldimage` (`none|<install-name>`, default `none`) and `dyldcrossrefs`

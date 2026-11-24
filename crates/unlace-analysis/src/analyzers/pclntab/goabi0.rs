@@ -273,7 +273,7 @@ pub(super) fn model_facts(
         || ctx.file.format() != BinaryFormat::Elf
         || ctx.arch.archid != "x86:LE:64:default:golang"
         || !ctx.arch.has_model("abi0")
-        || !unlace_decomp::kuna_goabi::goabi_env_enabled()
+        || !unlace_decomp::goabi::goabi_env_enabled()
     {
         return Vec::new();
     }

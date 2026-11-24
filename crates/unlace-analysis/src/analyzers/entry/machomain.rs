@@ -18,7 +18,7 @@
 //!   already consults for the ELF `_INIT_<i>`/`_DT_INIT` names;
 //! - the **prototype** `int main(int argc, char **argv)`, parked by that name.
 //!
-//! The prototype is the Mach-O analog of what [`super::kuna_entrymainproto`]
+//! The prototype is the Mach-O analog of what [`super::entrymainproto`]
 //! recovers on a PE, and it exists for the same reason: kuna reads a callee's
 //! parameters out of the callee's OWN body, so a `main` that ignores its
 //! arguments never reads `rdi`/`rsi` and is declared `void(void)`. On a PE the

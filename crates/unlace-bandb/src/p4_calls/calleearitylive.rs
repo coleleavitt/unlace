@@ -3,8 +3,8 @@
 //!
 //! # The gap
 //!
-//! [`calleearity`](crate::kuna_calleearity) and
-//! [`calleearityfwd`](crate::kuna_calleearityfwd) reconcile a call
+//! [`calleearity`](crate::calleearity) and
+//! [`calleearityfwd`](crate::calleearityfwd) reconcile a call
 //! site against a sibling call to the same callee, and both refuse a site that
 //! recovered *any* argument. That limit is not arbitrary — it is what the
 //! whole-corpus sweep bought, and the module that carries it records the two
@@ -35,7 +35,7 @@
 //! The sibling alone cannot settle this: it is exactly the evidence the sweep
 //! showed was not enough. The usual discriminator is the **callee's own body**, read
 //! with the same bounded decode
-//! [`calleedeadarg`](crate::kuna_calleedeadarg) already takes for the
+//! [`calleedeadarg`](crate::calleedeadarg) already takes for the
 //! subtractive direction — and read for two things at once:
 //!
 //! * every register the witness claims **beyond** this site's own list is read
@@ -49,12 +49,12 @@
 //!   argument registers its prototype names and no more.
 //!
 //! A stripped printf-like body is variadic and cannot pass that test. For that
-//! case [`kuna_formatwitness`](crate::kuna_formatwitness) accepts the
+//! case [`kuna_formatwitness`](crate::formatwitness) accepts the
 //! sibling only when both calls carry the same constant first argument, its
 //! bytes parse as a conservative printf format, and the sibling's final arity
 //! exactly matches the format.
 //!
-//! Everything else is [`calleearity`](crate::kuna_calleearity)'s,
+//! Everything else is [`calleearity`](crate::calleearity)'s,
 //! unchanged: register storage only, real Varnodes only, all-or-nothing, and
 //! never subtractive. Two further limits are this module's own:
 //!
@@ -71,7 +71,7 @@
 //! Inert unless both `calleearity` and `calleearitylive` are on: this completes
 //! that rule rather than adding a second one.
 
-use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
+use crate::calleedeadarg::FuncdataCalleedeadargExt;
 use unlace_base::address::Address;
 use unlace_base::marshal::ElementId;
 use unlace_base::space::spacetype;
@@ -79,10 +79,10 @@ use unlace_base::types::int4;
 
 use unlace_num::opcodes::OpCode;
 
+use crate::calleearity::best_witness_for;
 use crate::context::{OpId, VarnodeId};
 use crate::fspec::{FuncCallSpecs, ParamEntry};
 use crate::funcdata::Funcdata;
-use crate::kuna_calleearity::best_witness_for;
 
 /// Marshaling element `<calleearitylive>` (kuna 4000+ range; 4145 = arraycoverwidth).
 pub const ELEM_CALLEEARITYLIVE: ElementId = ElementId::new("calleearitylive", 4146);
@@ -280,7 +280,7 @@ fn extend_one(data: &mut Funcdata, p: &PendingExtend) -> bool {
             if !o.is_dead() && o.code() == OpCode::CPUI_CALL && o.num_input() == keep as int4 => {}
         _ => return false,
     }
-    let format_witness = crate::kuna_formatwitness::best_witness(&p.entry, p.op, data);
+    let format_witness = crate::formatwitness::best_witness(&p.entry, p.op, data);
     let format_agrees = !format_witness.is_empty();
     let witness = if format_agrees {
         format_witness
@@ -349,5 +349,5 @@ fn extend_one(data: &mut Funcdata, p: &PendingExtend) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_calleearitylive/tests.rs"]
+#[path = "calleearitylive/tests.rs"]
 mod tests;

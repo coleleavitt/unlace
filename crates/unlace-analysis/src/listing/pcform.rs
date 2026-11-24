@@ -44,8 +44,8 @@
 //!    safe because the value must match.
 //!
 //! RISC-V `auipc` and A32 register reads of `pc` keep the PC visible in the
-//! p-code (`inst_start + imm`), and [`super::kuna_regcarry`] reads those
-//! directly; [`super::kuna_picbase`] and [`super::kuna_picpool`] compose their
+//! p-code (`inst_start + imm`), and [`super::regcarry`] reads those
+//! directly; [`super::picbase`] and [`super::picpool`] compose their
 //! values from a proven PC base.
 //!
 //! Only an image that maps something below the floor builds a [`PcForm`]; every
@@ -53,7 +53,7 @@
 
 use object::Object;
 
-use super::kuna_poolref::PoolImage;
+use super::poolref::PoolImage;
 
 /// The `checkOperands` floor the exemption is about: an image that maps
 /// nothing below it is never affected.

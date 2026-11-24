@@ -130,7 +130,7 @@ impl Action for ActionReturnDup {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_returndup::ReturnDup>()
+            .get::<crate::returndup::ReturnDup>()
             .shared
         {
             return 0;
@@ -156,7 +156,7 @@ impl Action for ActionReturnDup {
 
 /// The `returndup on|off|calls` ArchOption (angr SAILR gotoless
 /// `ReturnDuplicatorHigh` shared-bare-epilogue return duplication; `calls` adds
-/// [`crate::kuna_returndupcalls`]).
+/// [`crate::returndupcalls`]).
 pub struct OptionReturnDup;
 
 impl OptionReturnDup {
@@ -184,14 +184,14 @@ impl OptionReturnDup {
 }
 
 /// (kuna `returndup`) Duplicate shared bare epilogues (`shared`), and call
-/// tails too (`calls`, [`crate::kuna_returndupcalls`]).
+/// tails too (`calls`, [`crate::returndupcalls`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReturnDup {
     pub shared: bool,
     pub calls: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for ReturnDup {
+impl crate::optionset::KunaOption for ReturnDup {
     const NAME: &'static str = "returndup";
     crate::kuna_option_id!();
 

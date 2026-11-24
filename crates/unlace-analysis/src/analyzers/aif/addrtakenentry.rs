@@ -16,7 +16,7 @@
 //!    immediate;
 //! 2. on a PE, a base-relocated word holds it and it lies before the first
 //!    `RUNTIME_FUNCTION` of its section — the span the relocation oracle's
-//!    `.pdata` hull guard leaves out (see `entry::kuna_pereloccode`).
+//!    `.pdata` hull guard leaves out (see `entry::pereloccode`).
 //!
 //! Either way the address may still be a label or data, so a candidate becomes
 //! an entry only when all of these hold:
@@ -61,7 +61,7 @@ use unlace_sleigh::translate::Translate;
 
 use crate::listing::{FlowKind, Listing};
 
-use super::kuna_aifnoppad::{is_padding, is_zero_fill};
+use super::aifnoppad::{is_padding, is_zero_fill};
 use super::{GapDecoder, MAX_FOLLOW_INSNS, ProbedInsn};
 
 /// How many re-walks the accepted entries may trigger.
@@ -88,7 +88,7 @@ impl AddrTaken {
             return None;
         }
         let texts = crate::entry::executable_sections(file);
-        let relocated = crate::entry::kuna_pereloccode::pre_record_code_pointers(bytes, &texts);
+        let relocated = crate::entry::pereloccode::pre_record_code_pointers(bytes, &texts);
         Some(AddrTaken { texts, relocated })
     }
 

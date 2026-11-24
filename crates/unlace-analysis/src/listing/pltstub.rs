@@ -47,7 +47,7 @@ use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
 use super::xrefs::{FullOp, XrefKind, in_range};
-use crate::analyzers::entry::kuna_fdeinterior::STUB_SECTIONS;
+use crate::analyzers::entry::fdeinterior::STUB_SECTIONS;
 
 /// The most constant adds a chain may take before its load: one in the
 /// standard entry, two with `--long-plt`.

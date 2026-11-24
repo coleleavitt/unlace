@@ -27,8 +27,8 @@ use object::read::Object;
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
-use super::kuna_coldentry::{containing_body, rel32_branches};
-use super::kuna_fdeinterior::scan_fde_bodies;
+use super::coldentry::{containing_body, rel32_branches};
+use super::fdeinterior::scan_fde_bodies;
 use super::{executable_sections, existing_function_addrs, scan_eh_frame_landing_pads_owned};
 
 /// How far into a landing pad its jump to the cold part may sit.

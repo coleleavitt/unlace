@@ -5,7 +5,7 @@
 One decision point: `check_implied_cover`'s `Merge::inflate_test` arm, for a call
 output that `foldcallret` has already accepted. Nothing else moves.
 
-- `p6_variables/kuna_foldcallretphi.rs` (new): `conflict_is_self_call_effect`
+- `p6_variables/foldcallretphi.rs` (new): `conflict_is_self_call_effect`
   plus the option gate.
 - `p6_variables/coreaction_cleanup.rs`: one guarded call in the inflate loop.
   Short-circuited on `Architecture::fold_call_ret_phi`, so the option OFF is

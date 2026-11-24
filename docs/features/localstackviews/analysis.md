@@ -148,7 +148,7 @@ The relevant decision chain is:
 
 1. `p3_dataflow/ruleaction_4.rs::RuleStoreVarnode::apply_op` converts a resolved
    STORE into a COPY and marks its output `stack_store`.
-2. `p6_variables/kuna_stackalias.rs::{prepare,holds_store}` protects aliased
+2. `p6_variables/stackalias.rs::{prepare,holds_store}` protects aliased
    physical writes when full `stackviews`/`stackalias` is on, or for #1122's
    separately eligible narrow formal ranges. General local objects have no
    default admission. `ActionDeadCode` consumes this policy, and

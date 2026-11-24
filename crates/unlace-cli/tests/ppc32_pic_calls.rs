@@ -221,7 +221,7 @@ fn slots_are_metadata_without_enabling_pic_resolution() {
         f.unwind_padding = 4;
         let bytes = f.bytes();
         let file = object::File::parse(bytes.as_slice()).unwrap();
-        let slots = unlace_analysis::loader::kuna_ppc32_imports::pic_slots(&file);
+        let slots = unlace_analysis::loader::ppc32_imports::pic_slots(&file);
         assert_eq!(slots.len(), 2);
         assert_eq!(
             (slots[0].address, slots[0].name.as_str(), slots[0].no_return),
@@ -241,7 +241,7 @@ fn slots_are_metadata_without_enabling_pic_resolution() {
             let bytes = f.bytes();
             let file = object::File::parse(bytes.as_slice()).unwrap();
             assert!(
-                !unlace_analysis::loader::kuna_ppc32_imports::pic_slots(&file)
+                !unlace_analysis::loader::ppc32_imports::pic_slots(&file)
                     .iter()
                     .any(|s| s.address == 0x3000)
             );

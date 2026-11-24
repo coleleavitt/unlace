@@ -363,7 +363,7 @@ fn a_default_style_name_survives_a_namestyle_flip() {
     program
         .arch_mut()
         .kuna_options
-        .set(unlace_decomp::kuna_coreoptions::NameStyleAngr(false));
+        .set(unlace_decomp::coreoptions::NameStyleAngr(false));
     assert_eq!(
         program.arch().name_function(
             &program

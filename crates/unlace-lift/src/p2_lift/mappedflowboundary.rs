@@ -54,7 +54,7 @@ pub fn unmapped_overlap_step(
         return None;
     }
     let step = translate.instruction_length(addr).ok()?;
-    if !crate::kuna_overlapbranch::kuna_overlaps_pending_branch(
+    if !crate::overlapbranch::kuna_overlaps_pending_branch(
         enabled,
         addr.get_offset(),
         step,

@@ -6,7 +6,7 @@
 //! `tests/stages/kuna-calleepreserves.toml` and `tests/cli/get-pc-helper-loses.json`.
 
 use super::*;
-use crate::kuna_rustabi::FuncdataRustabiExt;
+use crate::rustabi::FuncdataRustabiExt;
 
 use std::rc::Rc;
 
@@ -16,7 +16,7 @@ use unlace_base::space::{
 
 use crate::context::{ArchContext, TypeOp};
 use crate::fspec::{EffectRecord, ProtoModel, effect_type};
-use crate::kuna_rustabi::CalleeReturnWrites;
+use crate::rustabi::CalleeReturnWrites;
 use unlace_num::opcodes::OpCode;
 
 /// x86gcc's shape, reduced to what the rule reads: EBX (0x10) preserved, EDX

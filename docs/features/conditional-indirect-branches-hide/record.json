@@ -10,7 +10,7 @@
  "source_decompiler": "kuna",
  "inspiration": "RE-friction round 5, needs conditional-indirect-branches-hide (2 instances, blocker). Precedent named by the refuter: option v850indirectbranch, the same class of surgery on a different cause.",
  "phase": "P2 (switch-model)",
- "module": "decompiler/crates/kuna-decomp/src/p2_lift/kuna_constselectjump.rs",
+ "module": "decompiler/crates/kuna-decomp/src/p2_lift/constselectjump.rs",
  "change_kind": "structure-recovery",
  "option": "constselectjump",
  "flag": "const_select_jump",

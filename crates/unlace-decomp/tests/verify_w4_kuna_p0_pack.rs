@@ -26,11 +26,11 @@ use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 
+use unlace_decomp::assert::{AssertLog, KunaAssertion};
 use unlace_decomp::context::ArchContext;
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::kuna_assert::{AssertLog, KunaAssertion};
-use unlace_decomp::kuna_phases::{KunaPhase, KunaSettable, KunaStrength, emit_settable_json};
-use unlace_decomp::kuna_restartlog::{KunaRestartReason, RestartLog};
+use unlace_decomp::phases::{KunaPhase, KunaSettable, KunaStrength, emit_settable_json};
+use unlace_decomp::restartlog::{KunaRestartReason, RestartLog};
 
 // A bare settable used to drive the JSON emitter with hand-built `values`.
 fn settable_with_values(values: &'static str, shipped: &'static str) -> KunaSettable {
@@ -288,7 +288,7 @@ fn w4_kuna_p0_pack_assertlog_hint_via_hard_annotation_gate() {
     assert!(out.contains("strength=-  rewind->P3"), "got: {out}");
 }
 
-// --- test harness (mirrors src/kuna_restartlog/tests.rs) ---------------------
+// --- test harness (mirrors src/restartlog/tests.rs) ---------------------
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();

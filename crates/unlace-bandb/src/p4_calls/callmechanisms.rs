@@ -177,10 +177,9 @@ pub fn evaluation_model(data: &crate::funcdata::Funcdata) -> Option<Rc<crate::fs
     // takes a callee-saved register as a custom argument evaluates its own
     // prototype under the synthesized model, so its printed parameters are the
     // ones its callers pass.
-    if let Some(model) = crate::kuna_calleereginputs::own_register_model(
-        data.get_arch(),
-        &data.get_address().clone(),
-    ) {
+    if let Some(model) =
+        crate::calleereginputs::own_register_model(data.get_arch(), &data.get_address().clone())
+    {
         return Some(model);
     }
     data.get_arch().eval_fp_current().cloned().or_else(|| {
@@ -452,7 +451,7 @@ pub fn apply_entry(data: &mut crate::funcdata::Funcdata) -> KunaResult<()> {
     Ok(())
 }
 
-pub use crate::kuna_emittedop::Operation;
+pub use crate::emittedop::Operation;
 
 #[derive(Default)]
 struct Operations(Vec<Operation>);
@@ -638,7 +637,7 @@ fn validate_template(template: &unlace_sleigh::semantics::ConstructTpl) -> KunaR
 }
 
 /// Immutable compiled mechanisms shared by every function in an architecture, kept in its
-/// [`ArchStates`](crate::kuna_archstate::ArchStates).
+/// [`ArchStates`](crate::archstate::ArchStates).
 #[derive(Debug, Default)]
 pub struct Mechanisms {
     payloads: std::collections::BTreeMap<
@@ -717,7 +716,7 @@ fn mechanisms(arch: &crate::context::ArchContext) -> Rc<Mechanisms> {
 }
 
 /// A context's `(call_mechanism_effects, call_mechanism_reload_only)`.
-fn effects(options: &crate::kuna_optionset::OptionSet, image_elfv1_toc: bool) -> (bool, bool) {
+fn effects(options: &crate::optionset::OptionSet, image_elfv1_toc: bool) -> (bool, bool) {
     let mode = options.get::<CallMechanismMode>();
     (mode.fires(image_elfv1_toc), mode == CallMechanismMode::Auto)
 }
@@ -742,8 +741,8 @@ fn register_in(
     register(xml, manager, &mut arch.pcodeinjectlib)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.callmechanisms_effects = Some(effects);
     hooks.callmechanisms_load = Some(load);
     hooks.callmechanisms_compiled_ids = Some(compiled_ids_in);
@@ -753,20 +752,20 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.callmechanisms_install_at_entry = Some(install_at_entry);
 }
 
-impl crate::kuna_optionset::KunaOption for CallMechanismMode {
+impl crate::optionset::KunaOption for CallMechanismMode {
     const NAME: &'static str = "callmechanisms";
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::kuna_callmechanisms::CallMechanismMode::Off
+        crate::callmechanisms::CallMechanismMode::Off
     }
 
     fn shipped() -> Self {
-        crate::kuna_callmechanisms::CallMechanismMode::Auto
+        crate::callmechanisms::CallMechanismMode::Auto
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        Ok(crate::kuna_callmechanisms::OptionCallMechanisms.apply(value)?)
+        Ok(crate::callmechanisms::OptionCallMechanisms.apply(value)?)
     }
 }
 

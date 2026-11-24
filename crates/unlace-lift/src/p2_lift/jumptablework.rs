@@ -21,7 +21,7 @@ pub const DEFAULT_LIMIT: u64 = 250_000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct JumpTableWork(pub Option<u64>);
 
-impl crate::kuna_optionset::KunaOption for JumpTableWork {
+impl crate::optionset::KunaOption for JumpTableWork {
     const NAME: &'static str = "jumptablework";
     crate::kuna_option_id!();
 

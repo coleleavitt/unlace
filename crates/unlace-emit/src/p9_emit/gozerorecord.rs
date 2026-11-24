@@ -3,12 +3,12 @@
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_langgo::GO_SPELLER;
-use crate::kuna_langtypes::TypeSpeller;
+use crate::langgo::GO_SPELLER;
+use crate::langtypes::TypeSpeller;
 use crate::printc::{PrintC, op_key};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
 
-use super::kuna_gopairreturns::is_zero_word_carrier;
+use super::gopairreturns::is_zero_word_carrier;
 
 fn pointer_pair(ty: &Datatype) -> bool {
     ty.get_metatype() == type_metatype::TYPE_STRUCT

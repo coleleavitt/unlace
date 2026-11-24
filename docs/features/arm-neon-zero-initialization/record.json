@@ -8,7 +8,7 @@
   "div": "DIV-158",
   "phase": "P3",
   "subphase": "simplification-quiescence",
-  "module": "decompiler/crates/kuna-decomp/src/p3_dataflow/kuna_constspaceload.rs",
+  "module": "decompiler/crates/kuna-decomp/src/p3_dataflow/constspaceload.rs",
   "symptom": "ARM NEON zero initialization becomes near-null memory reads (major, 1 instance, crackmes.one 68d40081224c0ec5dcedc2d2 ARM32 ELF trap, _start_main @0x4d4)",
   "witness": {
     "binary": "crackmes.one 68d40081224c0ec5dcedc2d2 bin/trap",
@@ -28,7 +28,7 @@
   ],
   "tests": {
     "stage": "tests/stages/ghdec-constspaceload.xml (2 passes, 5 assertions)",
-    "unit": "decompiler/crates/kuna-decomp/src/p3_dataflow/kuna_constspaceload/tests.rs (6 tests)",
+    "unit": "decompiler/crates/kuna-decomp/src/p3_dataflow/constspaceload/tests.rs (6 tests)",
     "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/neonimm_arm_le32 (+ .py generator)",
     "promoted_probe": {
       "path": "tests/cli/arm-neon-zero-initialization.json",

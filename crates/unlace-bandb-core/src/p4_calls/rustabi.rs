@@ -261,7 +261,7 @@ pub fn classify_return_pair(data: &Funcdata, second: VarnodeId, first: VarnodeId
 /// function returns a boolean and the second return register merely still holds
 /// whatever it held. Two terminals say leftover — a Varnode the function never
 /// wrote, and a callee's INDIRECT creation — and they are the same two
-/// [`crate::kuna_returnuncomputed`] exists to drop. Asking here as well keeps
+/// [`crate::returnuncomputed`] exists to drop. Asking here as well keeps
 /// this rule from holding a pair alive for the phantom-killer to have to undo.
 fn carries_a_payload(data: &Funcdata, vn: VarnodeId) -> bool {
     let Some(v) = data.vbank().get(vn) else {
@@ -342,7 +342,7 @@ fn traces_to_incoming_pointer(data: &Funcdata, vn: VarnodeId, depth: u32) -> boo
 /// logical bits and drop the other register entirely -- which is not a narrower
 /// rendering of the same value, it is a different value.
 ///
-/// The later uncomputed-half repair ([`crate::kuna_returnuncomputed`]) still runs
+/// The later uncomputed-half repair ([`crate::returnuncomputed`]) still runs
 /// on the pair this keeps alive, so a half that is genuine leftover is still
 /// dropped -- just by the rule that can tell, instead of by a width heuristic.
 pub fn holds_scalar_pair(data: &Funcdata, vn: VarnodeId) -> bool {
@@ -358,7 +358,7 @@ pub fn holds_scalar_pair(data: &Funcdata, vn: VarnodeId) -> bool {
     let Some((hi, lo)) = pair_pieces(data, vn, 0) else {
         return false;
     };
-    let high_first = crate::kuna_bejoin::first_register_holds_high(data, vn);
+    let high_first = crate::bejoin::first_register_holds_high(data, vn);
     let (second, first) = if high_first { (lo, hi) } else { (hi, lo) };
     classify_return_pair(data, second, first) == ReturnRepr::ScalarPair
 }
@@ -733,7 +733,7 @@ impl ProbeEmit {
         if vars.len() != 2 || self.const_value(&vars[0]) != Some(swi as u64) {
             return false;
         }
-        if self.const_value(&vars[1]) != Some(crate::kuna_fastfailnoreturn::FASTFAIL_VECTOR) {
+        if self.const_value(&vars[1]) != Some(crate::fastfailnoreturn::FASTFAIL_VECTOR) {
             return false;
         }
         let Some(o) = outvar else { return false };
@@ -780,7 +780,7 @@ impl unlace_sleigh::translate::PcodeEmit for ProbeEmit {
             // `swi` CALLOTHER and the CALLIND reading its `intloc` are the end of
             // the walk rather than a transfer to code it cannot read.  Same gate
             // and same shape as the flow builder's
-            // [`kuna_fastfailnoreturn`](crate::kuna_fastfailnoreturn).  ARM's and
+            // [`kuna_fastfailnoreturn`](crate::fastfailnoreturn).  ARM's and
             // MIPS's `setISAMode` only marks the mode bit of a PC write the same
             // instruction then transfers through (`bx lr`, `pop {..,pc}`, `jr ra`).
             OpCode::CPUI_CALLOTHER => {
@@ -1079,7 +1079,7 @@ pub fn seed_callee_return_writes(
 ///
 /// The gate belongs to the caller: this is shared by
 /// [`seed_callee_return_writes`] and
-/// [`crate::kuna_calleepreserves::seed_callee_preserves`], and the
+/// [`crate::calleepreserves::seed_callee_preserves`], and the
 /// per-image cache means whichever runs first pays for the decode.
 pub fn seed_callee_write_probe(arch: &mut crate::architecture::Architecture, data: &mut Funcdata) {
     let userops = ProbeUserOps {
@@ -1100,10 +1100,10 @@ pub fn seed_callee_write_probe(arch: &mut crate::architecture::Architecture, dat
     for e in entries {
         let Some(sp) = e.get_space() else { continue };
         let key = (sp.get_index(), e.get_offset());
-        let no_return = |target: &Address| crate::kuna_calleenoreturn::is_no_return(arch, target);
+        let no_return = |target: &Address| crate::calleenoreturn::is_no_return(arch, target);
         let reusable = arch
             .kuna_tables
-            .get::<crate::kuna_rustabi::CalleeWriteCache>()
+            .get::<crate::rustabi::CalleeWriteCache>()
             .get(&key)
             .is_some_and(|w| {
                 w.call_facts
@@ -1113,12 +1113,12 @@ pub fn seed_callee_write_probe(arch: &mut crate::architecture::Architecture, dat
         if !reusable {
             let probed = probe_callee_return_writes(arch.translate(), &e, userops, no_return);
             arch.kuna_tables
-                .get_mut::<crate::kuna_rustabi::CalleeWriteCache>()
+                .get_mut::<crate::rustabi::CalleeWriteCache>()
                 .insert(key, Rc::new(probed));
         }
         if let Some(w) = arch
             .kuna_tables
-            .get::<crate::kuna_rustabi::CalleeWriteCache>()
+            .get::<crate::rustabi::CalleeWriteCache>()
             .get(&key)
         {
             data.kuna_set_callee_ret_writes(&e, Rc::clone(w));
@@ -1136,11 +1136,11 @@ const MODE_SWITCH_USEROP: &str = "setISAMode";
 /// `is_fastfail_callind`): the compiler-spec component of the resolved language
 /// id, because `int 0x29` is `__fastfail` by Windows convention alone.
 fn fastfail_swi_userop(arch: &crate::architecture::Architecture) -> Option<u32> {
-    if !crate::kuna_fastfailnoreturn::archid_is_windows(arch.get_description()) {
+    if !crate::fastfailnoreturn::archid_is_windows(arch.get_description()) {
         return None;
     }
     arch.userops
-        .get_op_by_name(crate::kuna_fastfailnoreturn::SWI_USEROP.as_bytes())
+        .get_op_by_name(crate::fastfailnoreturn::SWI_USEROP.as_bytes())
         .map(|uo| uo.get_index() as u32)
 }
 
@@ -1160,7 +1160,7 @@ fn fastfail_swi_userop(arch: &crate::architecture::Architecture) -> Option<u32> 
 ///
 /// [`ParamActive::join_pair_order`]: crate::fspec::ParamActive::join_pair_order
 ///
-/// The arm is open on every image ([`crate::kuna_callretpair`]);
+/// The arm is open on every image ([`crate::callretpair`]);
 /// `option rustabi auto|always` also governs the producer-side pair.
 pub fn build_call_output_pair(
     callop: OpId,
@@ -1233,7 +1233,7 @@ pub fn pair_join_address(
     let addr = manage
         .construct_join_address(rl.as_ref(), hi, hi_size, lo, lo_size)
         .ok()?;
-    if addr.is_join() || !crate::kuna_bejoin::live(data) {
+    if addr.is_join() || !crate::bejoin::live(data) {
         return Some(addr);
     }
     let persist = crate::varnode::varnode_flags::persist;
@@ -1287,7 +1287,7 @@ fn register_piece(data: &Funcdata, vn: VarnodeId) -> Option<(Address, int4)> {
     Some((v.get_addr().clone(), v.get_size()))
 }
 
-impl crate::kuna_optionset::KunaOption for RustAbiMode {
+impl crate::optionset::KunaOption for RustAbiMode {
     const NAME: &'static str = "rustabi";
     crate::kuna_option_id!();
 
@@ -1311,7 +1311,7 @@ impl crate::kuna_optionset::KunaOption for RustAbiMode {
 struct CalleeWritesSlot(
     std::collections::HashMap<
         (unlace_base::types::int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
+        std::rc::Rc<crate::rustabi::CalleeReturnWrites>,
     >,
 );
 crate::kuna_func_state!(CalleeWritesSlot, keep_across_clear: true);
@@ -1324,13 +1324,13 @@ pub trait FuncdataRustabiExt {
     fn kuna_set_callee_ret_writes(
         &mut self,
         entry: &unlace_base::address::Address,
-        writes: std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
+        writes: std::rc::Rc<crate::rustabi::CalleeReturnWrites>,
     );
     /// (kuna `rustabi`) The recorded probe of `entry`'s body, if one was taken.
     fn kuna_callee_ret_writes(
         &self,
         entry: &unlace_base::address::Address,
-    ) -> Option<&crate::kuna_rustabi::CalleeReturnWrites>;
+    ) -> Option<&crate::rustabi::CalleeReturnWrites>;
 }
 
 impl FuncdataRustabiExt for crate::funcdata::Funcdata {
@@ -1339,7 +1339,7 @@ impl FuncdataRustabiExt for crate::funcdata::Funcdata {
     fn kuna_set_callee_ret_writes(
         &mut self,
         entry: &unlace_base::address::Address,
-        writes: std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
+        writes: std::rc::Rc<crate::rustabi::CalleeReturnWrites>,
     ) {
         if let Some(sp) = entry.get_space() {
             self.kuna_state_mut::<CalleeWritesSlot>()
@@ -1351,7 +1351,7 @@ impl FuncdataRustabiExt for crate::funcdata::Funcdata {
     fn kuna_callee_ret_writes(
         &self,
         entry: &unlace_base::address::Address,
-    ) -> Option<&crate::kuna_rustabi::CalleeReturnWrites> {
+    ) -> Option<&crate::rustabi::CalleeReturnWrites> {
         let sp = entry.get_space()?;
         self.kuna_state::<CalleeWritesSlot>()
             .0
@@ -1361,13 +1361,13 @@ impl FuncdataRustabiExt for crate::funcdata::Funcdata {
 }
 
 /// (kuna `rustabi`) The run-wide cache of callee return-write probes, by callee `(space index,
-/// entry offset)`; an [`ArchTable`](crate::kuna_archstate::ArchTable).
+/// entry offset)`; an [`ArchTable`](crate::archstate::ArchTable).
 pub type CalleeWriteCache = std::collections::HashMap<
     (unlace_base::types::int4, unlace_base::types::uintb),
-    std::rc::Rc<crate::kuna_rustabi::CalleeReturnWrites>,
+    std::rc::Rc<crate::rustabi::CalleeReturnWrites>,
 >;
 crate::kuna_arch_table!(CalleeWriteCache);
 
 #[cfg(test)]
-#[path = "kuna_rustabi/tests.rs"]
+#[path = "rustabi/tests.rs"]
 mod tests;

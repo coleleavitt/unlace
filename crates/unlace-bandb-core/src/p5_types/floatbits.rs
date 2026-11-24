@@ -37,7 +37,7 @@
 //! `float_held_as_bits`, and in a register the call only left behind through
 //! [`held_bits_token`].
 
-use crate::kuna_callrettype::FuncdataCallrettypeExt;
+use crate::callrettype::FuncdataCallrettypeExt;
 use std::collections::HashSet;
 use std::rc::Rc;
 
@@ -76,7 +76,7 @@ impl Plan {
                 data.vbank().get(v).is_some_and(|n| {
                     matches!(n.get_size(), 4 | 8)
                         && !n.is_type_lock()
-                        && crate::kuna_floatreg::float_class(data, list, n)
+                        && crate::floatreg::float_class(data, list, n)
                 })
             })
             .collect();
@@ -146,7 +146,7 @@ impl Plan {
 /// `ActionSetCasts` hands it to the integer through a cast, printed as a
 /// reinterpretation of its bits where C would convert the value.  That output
 /// is what the call left in the register, which `voidret` does not count
-/// against the float (`kuna_voidret.rs (elsewhere_than_return)`): betaflight's
+/// against the float (`voidret.rs (elsewhere_than_return)`): betaflight's
 /// `bl fabsf; vcmpe.f32 s0, s15; .. pop {r4, pc}` returns the `r0` the call left.
 #[doc(hidden)]
 pub fn held_bits_token(data: &mut Funcdata, op: crate::context::OpId) -> Option<Rc<Datatype>> {
@@ -197,7 +197,7 @@ fn walk(data: &Funcdata, input: VarnodeId, candidates: &[VarnodeId]) -> Option<W
             return None;
         }
         let node = data.vbank().get(v)?;
-        if (node.is_type_lock() && !crate::kuna_armfloatreturn::float_locked_return(data, v))
+        if (node.is_type_lock() && !crate::armfloatreturn::float_locked_return(data, v))
             || node.is_persist()
             || in_data_space(data, node)
         {
@@ -289,13 +289,13 @@ fn walk(data: &Funcdata, input: VarnodeId, candidates: &[VarnodeId]) -> Option<W
                     None
                 }
                 OpCode::CPUI_RETURN => {
-                    if crate::kuna_floatreg::float_class(
+                    if crate::floatreg::float_class(
                         data,
                         data.get_func_proto().model().output_list(),
                         node,
                     ) {
                         if node.get_size() != size
-                            || !crate::kuna_floatreg::returned_in_a_float_register(data, v, node)
+                            || !crate::floatreg::returned_in_a_float_register(data, v, node)
                         {
                             return None;
                         }
@@ -311,7 +311,7 @@ fn walk(data: &Funcdata, input: VarnodeId, candidates: &[VarnodeId]) -> Option<W
                         && (1..o.num_input())
                             .filter(|&s| o.get_in(s) == Some(v))
                             .all(|s| {
-                                crate::kuna_protoorder::float_read_width(data, r, s)
+                                crate::protoorder::float_read_width(data, r, s)
                                     == Some(node.get_size())
                             });
                     if !float_argument {
@@ -319,7 +319,7 @@ fn walk(data: &Funcdata, input: VarnodeId, candidates: &[VarnodeId]) -> Option<W
                     }
                     None
                 }
-                code if crate::kuna_floatreg::reads_a_float(code) => None,
+                code if crate::floatreg::reads_a_float(code) => None,
                 _ => return None,
             };
             if let Some(raw) = next {
@@ -476,20 +476,19 @@ fn returned_beside_ok(
     accepted: &[VarnodeId],
 ) -> Option<Vec<VarnodeId>> {
     let node = data.vbank().get(vn)?;
-    if !crate::kuna_floatreg::returned_in_a_float_register(data, vn, node) {
+    if !crate::floatreg::returned_in_a_float_register(data, vn, node) {
         return None;
     }
     let size = node.get_size();
-    let beside = crate::kuna_floatreg::returned_beside(data, vn);
+    let beside = crate::floatreg::returned_beside(data, vn);
     beside
         .iter()
         .all(|&w| {
             data.vbank().get(w).is_some_and(|n| {
                 n.get_size() == size
-                    && (!n.is_type_lock()
-                        || crate::kuna_armfloatreturn::float_locked_return(data, w))
+                    && (!n.is_type_lock() || crate::armfloatreturn::float_locked_return(data, w))
                     && if n.is_constant() {
-                        crate::kuna_floatreg::spells(data, w)
+                        crate::floatreg::spells(data, w)
                     } else {
                         bits_of(data, w, accepted, true)
                     }
@@ -517,7 +516,7 @@ fn bits_of(data: &Funcdata, vn: VarnodeId, inputs: &[VarnodeId], value: bool) ->
             return false;
         };
         if node.is_constant() {
-            if value && !crate::kuna_floatreg::spells(data, v) {
+            if value && !crate::floatreg::spells(data, v) {
                 return false;
             }
             continue;

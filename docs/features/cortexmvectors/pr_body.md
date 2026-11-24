@@ -43,7 +43,7 @@ lying at or above the table base.
 nothing, so an image that already resolved a table resolves the same section with the same
 harvest. The option can add entries; it cannot remove one.
 
-New module `decompiler/crates/kuna-analysis/src/analyzers/entry/kuna_cortexmvectors.rs`,
+New module `decompiler/crates/kuna-analysis/src/analyzers/entry/cortexmvectors.rs`,
 carrying a standalone `CortexMVectorsPass` (`id() == "cortexmvectors"`) stashed at load and
 gated at commit by `engine.rs::analysis_pass_enabled` — the `eh_frame_full` /
 `funcstart_patterns` shape.

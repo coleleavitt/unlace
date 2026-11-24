@@ -95,7 +95,7 @@ pub enum ConstSelectMode {
     On,
 }
 
-impl crate::kuna_optionset::KunaOption for ConstSelectMode {
+impl crate::optionset::KunaOption for ConstSelectMode {
     const NAME: &'static str = "constselectjump";
     crate::kuna_option_id!();
 
@@ -279,8 +279,7 @@ impl JumpModelConstSelect {
             return false;
         };
         let ceiling = self.walk_ceiling(maxtablesize);
-        let Some(found) = crate::kuna_indirectreturn::destinations(fd, root, encoding, ceiling)
-        else {
+        let Some(found) = crate::indirectreturn::destinations(fd, root, encoding, ceiling) else {
             return false;
         };
         let stub = branch_offset.wadd(1);
@@ -469,7 +468,7 @@ impl JumpModel for JumpModelConstSelect {
 }
 
 #[cfg(test)]
-#[path = "kuna_constselectjump/tests.rs"]
+#[path = "constselectjump/tests.rs"]
 mod tests;
 
 /// (kuna) The constant-select model needs `constselectjump on`, except on a
@@ -504,8 +503,8 @@ fn from_flow_targets(dests: Vec<uintb>, stub: Option<uintb>) -> Box<dyn JumpMode
     Box::new(JumpModelConstSelect::from_flow_targets(dests, stub))
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.constselectjump_destination_is_local = Some(kuna_destination_is_local);
     hooks.constselectjump_from_flow_targets = Some(from_flow_targets);
     hooks.constselectjump_recover = Some(recover);

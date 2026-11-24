@@ -44,5 +44,5 @@ impl PrintEmit {
 }
 
 #[cfg(test)]
-#[path = "kuna_labelstmt/tests.rs"]
+#[path = "labelstmt/tests.rs"]
 mod tests;

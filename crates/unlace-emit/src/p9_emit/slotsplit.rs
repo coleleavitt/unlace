@@ -26,8 +26,8 @@
 
 use std::collections::HashMap;
 
-use crate::kuna_funcreport::VarInfo;
-use crate::kuna_slotreport::DeclaredSlots;
+use crate::funcreport::VarInfo;
+use crate::slotreport::DeclaredSlots;
 
 /// Replace each row of `out` listed in `candidates` (width-only frame rows)
 /// with its pieces, where declarations lie inside it.  The offsets the rows

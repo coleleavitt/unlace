@@ -16,8 +16,8 @@ stays accepted as a spelling of `full` (that is what it meant when the option wa
 
 | file | what |
 |---|---|
-| `kuna-decomp/src/p1_partition/kuna_formatstring.rs` | `FormatStringMode` + `parse_formatstring_mode` (the `cppsig` value-option idiom) |
-| `kuna-analysis/src/analyzers/formatstring/kuna_fmtstatic.rs` | `FormatStringStaticPass` — the load-time resolver |
+| `kuna-decomp/src/p1_partition/formatstring.rs` | `FormatStringMode` + `parse_formatstring_mode` (the `cppsig` value-option idiom) |
+| `kuna-analysis/src/analyzers/formatstring/fmtstatic.rs` | `FormatStringStaticPass` — the load-time resolver |
 | `kuna-analysis/src/analyzers/protos/mod.rs` | `variadic_format_prototype` (the declaration-driven format-function predicate) + `effective_libctypes_layout` |
 | `kuna-analysis/src/analyzers/formatstring/apply.rs` | override parameters are anonymous |
 | `kuna-analysis/src/pass.rs` | `FormatSiteFact` + `AnalysisOutput::format_sites` |

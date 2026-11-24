@@ -20,31 +20,31 @@ pub use unlace_middle::*;
 /// The pass hooks this crate's own modules provide: each module's `provide`, in the driver's
 /// order. The driver composes the crates' tables into the default pipeline's
 /// (`unlace_decomp::PASS_HOOKS`); a crate's unit tests compose the crates at or below it.
-pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
-    crate::kuna_syscallregs::provide(slots);
-    crate::kuna_indirectreturn::provide(slots);
-    crate::kuna_loweredswitchexact::provide(slots);
+pub fn provide_all(slots: &mut crate::passhooks::KunaHookSlots) {
+    crate::syscallregs::provide(slots);
+    crate::indirectreturn::provide(slots);
+    crate::loweredswitchexact::provide(slots);
     crate::flow::provide(slots);
-    crate::kuna_highslice_guard::provide(slots);
-    crate::kuna_switchextent::provide(slots);
-    crate::kuna_switchtrim::provide(slots);
-    crate::kuna_chkstkdarwin::provide(slots);
-    crate::kuna_fastfailnoreturn::provide(slots);
-    crate::kuna_litpoolconst::provide(slots);
-    crate::kuna_fpuemu::provide(slots);
-    crate::kuna_goreg::provide(slots);
-    crate::kuna_lanefuse::provide(slots);
-    crate::kuna_mzdgroup::provide(slots);
-    crate::kuna_msvcftol::provide(slots);
-    crate::kuna_objcarc::provide(slots);
-    crate::kuna_switchrunon::provide(slots);
-    crate::kuna_arithhelpers::provide(slots);
-    crate::kuna_switchguardrange::provide(slots);
-    crate::kuna_loweredswitchvalue::provide(slots);
-    crate::kuna_constselectjump::provide(slots);
-    crate::kuna_rawswitch::provide(slots);
-    crate::kuna_jumpassist::provide(slots);
-    crate::kuna_atomics::provide(slots);
+    crate::highslice_guard::provide(slots);
+    crate::switchextent::provide(slots);
+    crate::switchtrim::provide(slots);
+    crate::chkstkdarwin::provide(slots);
+    crate::fastfailnoreturn::provide(slots);
+    crate::litpoolconst::provide(slots);
+    crate::fpuemu::provide(slots);
+    crate::goreg::provide(slots);
+    crate::lanefuse::provide(slots);
+    crate::mzdgroup::provide(slots);
+    crate::msvcftol::provide(slots);
+    crate::objcarc::provide(slots);
+    crate::switchrunon::provide(slots);
+    crate::arithhelpers::provide(slots);
+    crate::switchguardrange::provide(slots);
+    crate::loweredswitchvalue::provide(slots);
+    crate::constselectjump::provide(slots);
+    crate::rawswitch::provide(slots);
+    crate::jumpassist::provide(slots);
+    crate::atomics::provide(slots);
 }
 
 /// This crate's unit tests link without the driver, so they define the driver's hook symbol
@@ -52,7 +52,7 @@ pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
 /// itself, for each hook a higher crate provides (`KunaHookSlots::finish_with_stubs`).
 #[cfg(test)]
 mod unprovided {
-    use unlace_middle::kuna_passhooks::{KunaHookSlots, KunaHooks};
+    use unlace_middle::passhooks::{KunaHookSlots, KunaHooks};
 
     #[unsafe(no_mangle)]
     fn __unlace_default_pass_hooks() -> &'static KunaHooks {

@@ -65,7 +65,7 @@ pub fn call_ends_in_noreturn_halt(data: &Funcdata, call: OpId) -> bool {
         .is_some_and(|op| (op.get_halt_type() & crate::op::pcodeop_flags::noreturn) != 0)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.noreturnretuse_call_cannot_reach_return = Some(call_cannot_reach_return);
 }

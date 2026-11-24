@@ -11,7 +11,7 @@
 //! contributes the `Headers/` of every framework the image links
 //! (`LC_LOAD_DYLIB`), any other directory every `.h` up to eight directories
 //! below it. Nothing derived from the headers is written anywhere. The C
-//! functions the same headers declare are read by `protos::kuna_sdkprotos`.
+//! functions the same headers declare are read by `protos::sdkprotos`.
 //!
 //! The grammar read is the declaration subset: `@interface` / `@protocol`
 //! (categories included) bodies, `- (ret)sel:(T)a …;` methods and `@property
@@ -32,7 +32,7 @@ use std::path::{Path, PathBuf};
 
 use object::FileKind;
 use object::read::macho::{LoadCommandVariant, MachHeader};
-use unlace_decomp::kuna_objcrettype::{ObjcClass, ObjcMethod, ObjcReturn};
+use unlace_decomp::objcrettype::{ObjcClass, ObjcMethod, ObjcReturn};
 
 /// What the headers under `root` that this image's frameworks reach declare.
 #[derive(Default)]
@@ -40,7 +40,7 @@ pub struct Sdk {
     /// `selector → type encoding`; `None` marks a selector declared two ways.
     pub signatures: HashMap<String, Option<String>>,
     /// Every `@interface` (categories merged into their class), by name.
-    pub classes: HashMap<String, unlace_decomp::kuna_objcrettype::ObjcClass>,
+    pub classes: HashMap<String, unlace_decomp::objcrettype::ObjcClass>,
 }
 
 pub fn read(root: &Path, frameworks: &[String]) -> Sdk {

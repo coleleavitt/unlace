@@ -31,10 +31,10 @@ use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
 use crate::cpool::{CPoolRecord, cpool_tag};
+use crate::dex::format::{java_type_name, simple_class_name};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
+use crate::emittedop::Operation;
 use crate::fspec::PrototypePieces;
-use crate::kuna_dex::format::{java_type_name, simple_class_name};
-use crate::kuna_emittedop::Operation;
 
 pub use format::{ClassFile, Code, Constant, is_class, is_wide, method_descriptor};
 

@@ -1,8 +1,8 @@
 //! Native-use assertions for logical objects over shared physical frame storage.
 
 use crate::funcdata_union::FuncdataUnionExt;
-use crate::kuna_stackobjects::FuncdataStackobjectsExt;
-use crate::kuna_stackviews::FuncdataStackviewsExt;
+use crate::stackobjects::FuncdataStackobjectsExt;
+use crate::stackviews::FuncdataStackviewsExt;
 use crate::unionresolve::FuncdataUnionresolveExt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
@@ -11,7 +11,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::Datatype;
 use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_stackobjects::{ByteSource, SourcePoint};
+use crate::stackobjects::{ByteSource, SourcePoint};
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
@@ -76,7 +76,7 @@ pub fn apply(
     newname: &str,
     datatype: Option<Rc<Datatype>>,
 ) -> Result<bool, String> {
-    let objects = crate::kuna_stackobjects::objects(fd);
+    let objects = crate::stackobjects::objects(fd);
     let original: Vec<_> = objects
         .iter()
         .enumerate()
@@ -178,12 +178,12 @@ pub fn validate(fd: &Funcdata) -> Result<(), String> {
         if !fd
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_coreoptions::StackViews>()
+            .get::<crate::coreoptions::StackViews>()
             .0
         {
             return Err("Logical stack object assertions require stackviews on".to_string());
         }
-        let found = crate::kuna_stackobjects::objects(fd).iter().any(|object| {
+        let found = crate::stackobjects::objects(fd).iter().any(|object| {
             object.address == assertion.address
                 && object.size == assertion.size
                 && object.bytes == assertion.bytes
@@ -205,7 +205,7 @@ pub fn validate(fd: &Funcdata) -> Result<(), String> {
                 .obank()
                 .iter_alive()
                 .filter(|&op| SourcePoint::op(fd, op) == Some(use_.point))
-                .filter(|&op| crate::kuna_stackviews::declared_view(fd, op, use_.slot).is_some())
+                .filter(|&op| crate::stackviews::declared_view(fd, op, use_.slot).is_some())
                 .collect();
             if !fd
                 .stack_object_bound_uses()
@@ -229,7 +229,7 @@ fn selected_view(fd: &Funcdata, call: OpId, use_: &UseAnchor, assertion: &Object
         return false;
     };
     for _ in 0..16 {
-        if crate::kuna_stackobjectalias::matches(fd, input, assertion, use_) {
+        if crate::stackobjectalias::matches(fd, input, assertion, use_) {
             return true;
         }
         let Some(v) = fd.vbank().get(input) else {
@@ -297,7 +297,7 @@ fn bind_use(
     aliases: &mut BTreeMap<(String, u64, i32), VarnodeId>,
 ) -> Option<()> {
     let input = fd.obank().get(call)?.get_in(use_.slot)?;
-    let address = crate::kuna_stackranges::frame_address(fd, input)?;
+    let address = crate::stackranges::frame_address(fd, input)?;
     let space = assertion.address.get_space()?.clone();
     if address.first != address.last
         || !address.terms.is_empty()
@@ -305,15 +305,14 @@ fn bind_use(
     {
         return None;
     }
-    let info =
-        crate::kuna_stackparamviews::backing_for_address(fd, &assertion.address, assertion.size)
-            .or_else(|| {
-                fd.get_scope_local()?.query_container_for_link_width(
-                    &assertion.address,
-                    assertion.size,
-                    &Address::new_invalid(),
-                )
-            })?;
+    let info = crate::stackparamviews::backing_for_address(fd, &assertion.address, assertion.size)
+        .or_else(|| {
+            fd.get_scope_local()?.query_container_for_link_width(
+                &assertion.address,
+                assertion.size,
+                &Address::new_invalid(),
+            )
+        })?;
     let backing = info.sym_type.as_ref()?.clone();
     let ty = assertion.datatype.as_ref().unwrap_or(&use_.datatype);
     let name = assertion.view_name(ty);
@@ -327,7 +326,7 @@ fn bind_use(
             *alias
         } else {
             let alias =
-                crate::kuna_stackobjectalias::create(fd, assertion, use_, &info, width, factory)?;
+                crate::stackobjectalias::create(fd, assertion, use_, &info, width, factory)?;
             aliases.insert(key, alias);
             alias
         };
@@ -406,8 +405,8 @@ pub fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
             let calls: Vec<_> = fd
                 .obank()
                 .iter_alive()
-                .filter(|&op| crate::kuna_stackobjects::SourcePoint::op(fd, op) == Some(use_.point))
-                .filter(|&op| crate::kuna_stackviews::declared_view(fd, op, use_.slot).is_some())
+                .filter(|&op| crate::stackobjects::SourcePoint::op(fd, op) == Some(use_.point))
+                .filter(|&op| crate::stackviews::declared_view(fd, op, use_.slot).is_some())
                 .collect();
             if calls.len() == 1
                 && bind_use(fd, &assertion, use_, calls[0], factory, &mut aliases).is_some()
@@ -477,7 +476,7 @@ pub fn seed_writes(
                 if field.name != name {
                     return false;
                 }
-                let Some(piece) = crate::kuna_stackviews::scalar_piece(
+                let Some(piece) = crate::stackviews::scalar_piece(
                     factory,
                     Rc::clone(&field.field_type),
                     offset,
@@ -487,7 +486,7 @@ pub fn seed_writes(
                 };
                 match piece.get_metatype() {
                     type_metatype::TYPE_INT | type_metatype::TYPE_UINT => {
-                        !crate::kuna_stackviews::pointer_origin(fd, id)
+                        !crate::stackviews::pointer_origin(fd, id)
                             && op
                                 .get_in(0)
                                 .and_then(|id| fd.vbank().get(id))
@@ -500,7 +499,7 @@ pub fn seed_writes(
                                     )
                                 })
                     }
-                    type_metatype::TYPE_PTR => crate::kuna_stackviews::pointer_origin(fd, id),
+                    type_metatype::TYPE_PTR => crate::stackviews::pointer_origin(fd, id),
                     type_metatype::TYPE_FLOAT => op
                         .get_in(0)
                         .and_then(|id| fd.vbank().get(id))
@@ -524,7 +523,7 @@ pub fn seed_writes(
             .insert(ResolveEdge::new_op(backing, time, -1), resolution);
         fd.stack_write_views_mut().insert(
             op,
-            crate::kuna_stackviews::StorageView {
+            crate::stackviews::StorageView {
                 backing: Rc::clone(backing),
                 offset,
             },
@@ -534,25 +533,25 @@ pub fn seed_writes(
 
 /// (kuna `stackobjects`) The stack-object assertions the drive seeded; kept across `Funcdata::clear`.
 #[derive(Default)]
-struct AssertionsSlot(Vec<crate::kuna_stackobjectasserts::ObjectAssertion>);
+struct AssertionsSlot(Vec<crate::stackobjectasserts::ObjectAssertion>);
 crate::kuna_func_state!(AssertionsSlot, keep_across_clear: true);
 
 /// The `kuna_stackobjectasserts` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataStackobjectassertsExt {
-    fn stack_object_assertions(&self) -> &Vec<crate::kuna_stackobjectasserts::ObjectAssertion>;
+    fn stack_object_assertions(&self) -> &Vec<crate::stackobjectasserts::ObjectAssertion>;
     fn stack_object_assertions_mut(
         &mut self,
-    ) -> &mut Vec<crate::kuna_stackobjectasserts::ObjectAssertion>;
+    ) -> &mut Vec<crate::stackobjectasserts::ObjectAssertion>;
 }
 
 impl FuncdataStackobjectassertsExt for crate::funcdata::Funcdata {
-    fn stack_object_assertions(&self) -> &Vec<crate::kuna_stackobjectasserts::ObjectAssertion> {
+    fn stack_object_assertions(&self) -> &Vec<crate::stackobjectasserts::ObjectAssertion> {
         &self.kuna_state::<AssertionsSlot>().0
     }
     fn stack_object_assertions_mut(
         &mut self,
-    ) -> &mut Vec<crate::kuna_stackobjectasserts::ObjectAssertion> {
+    ) -> &mut Vec<crate::stackobjectasserts::ObjectAssertion> {
         &mut self.kuna_state_mut::<AssertionsSlot>().0
     }
 }

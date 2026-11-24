@@ -22,8 +22,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use object::{Object, ObjectSymbol};
-use unlace_analysis::listing::kuna_pdecode::Refusal;
 use unlace_analysis::listing::model::{DiscoveredFunction, FlowType, RefKind};
+use unlace_analysis::listing::pdecode::Refusal;
 use unlace_analysis::listing::{Listing, ListingDetail, WalkPlan};
 use unlace_console::engine::bootstrap_from_object;
 

@@ -672,7 +672,7 @@ fn slot_storage(e: &Entry, arch: &Architecture) -> Option<Vec<(Address, int4)>> 
         params: e.params,
     };
     let pieces = pieces_of(&sig, e.name, arch)?;
-    crate::kuna_protoorder::model_storage(&pieces, arch)
+    crate::protoorder::model_storage(&pieces, arch)
 }
 
 fn key_of(a: &Address) -> Option<(int4, uintb)> {
@@ -746,7 +746,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
     let calls = direct_calls(fd);
     let own = if arch
         .kuna_tables
-        .get::<crate::kuna_callbacktype::Ledger>()
+        .get::<crate::callbacktype::Ledger>()
         .own
         .contains_key(&me)
     {
@@ -788,9 +788,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
             printed: printed_sig(proto),
         })
     };
-    let ledger = arch
-        .kuna_tables
-        .get_mut::<crate::kuna_callbacktype::Ledger>();
+    let ledger = arch.kuna_tables.get_mut::<crate::callbacktype::Ledger>();
     let mut row = CallerFacts {
         facts: found,
         other_use,
@@ -849,7 +847,7 @@ fn return_reads(fd: &Funcdata) -> Vec<(uintb, Range)> {
         }
         let Some(v) = o
             .get_out()
-            .map(|vn| crate::kuna_narrowret::widened_read(fd, vn))
+            .map(|vn| crate::narrowret::widened_read(fd, vn))
             .and_then(|vn| fd.vbank().get(vn))
         else {
             continue;
@@ -1153,7 +1151,7 @@ fn returns_a_value(fd: &Funcdata) -> bool {
     let non_void = proto
         .get_output_type()
         .is_some_and(|t| t.get_metatype() != type_metatype::TYPE_VOID);
-    non_void && crate::kuna_returnuncomputed::every_return_computes(fd)
+    non_void && crate::returnuncomputed::every_return_computes(fd)
 }
 
 /// Every bit a live RETURN's value may have set: the union of the non-zero
@@ -1213,7 +1211,7 @@ fn call_return(fd: &Funcdata, arch: &Architecture) -> Option<Range> {
         if r.is_dead() || r.get_halt_type() != 0 {
             continue;
         }
-        let call = crate::kuna_passthrough::producing_call(fd, ret)?;
+        let call = crate::passthrough::producing_call(fd, ret)?;
         let c = fd.obank().get(call)?;
         let i = (0..fd.num_calls()).find(|&i| fd.get_call_specs(i).get_op() == call)?;
         let proto = fd.get_call_specs(i).proto();
@@ -1625,7 +1623,7 @@ fn rest_is_zero(declared: Range, value: Range, zero: Option<u32>) -> bool {
 
 /// The storage the prototype model gives a declared return value.
 fn output_storage(pieces: &PrototypePieces, arch: &Architecture) -> Option<Range> {
-    let dfp = crate::kuna_typedcallabi::undeclared_model_for(arch, pieces)
+    let dfp = crate::typedcallabi::undeclared_model_for(arch, pieces)
         .or_else(|| arch.default_fp().cloned())?;
     let void_ty = arch.types().get_type_void().ok()?;
     let types_only = PrototypePieces {
@@ -1655,7 +1653,7 @@ fn output_storage(pieces: &PrototypePieces, arch: &Architecture) -> Option<Range
 /// * More recovered inputs than the declaration passes. The list is closed, so
 ///   the extra one is dropped at every direct call site and read uninitialized
 ///   in the body; a forwarder that passes the register on without reading it
-///   trips only this, not [`crate::kuna_protoorder::reads_past_the_list`].
+///   trips only this, not [`crate::protoorder::reads_past_the_list`].
 /// * Fewer, when something calls the function directly: the closed list
 ///   materializes an argument at each such site out of whatever the register
 ///   last held, so `signal(SIGALRM, cleanup); ... cleanup();` on a
@@ -1761,7 +1759,7 @@ pub fn park(
 ) -> Result<PrototypePieces, Decline> {
     let Some(row) = arch
         .kuna_tables
-        .get::<crate::kuna_callbacktype::Ledger>()
+        .get::<crate::callbacktype::Ledger>()
         .decided()
         .remove(&entry.get_offset())
     else {
@@ -1786,14 +1784,14 @@ pub fn park(
     let key = key_of(entry).ok_or(Decline::StorageUnderivable)?;
     let own = arch
         .kuna_tables
-        .get::<crate::kuna_callbacktype::Ledger>()
+        .get::<crate::callbacktype::Ledger>()
         .own
         .get(&key)
         .cloned()
         .ok_or(Decline::BodyNotSeen)?;
     let pieces = pieces_of(&row.sig, name, arch).ok_or(Decline::StorageUnderivable)?;
     let storage =
-        crate::kuna_protoorder::model_storage(&pieces, arch).ok_or(Decline::StorageUnderivable)?;
+        crate::protoorder::model_storage(&pieces, arch).ok_or(Decline::StorageUnderivable)?;
     if storage.len() != pieces.intypes.len() {
         return Err(Decline::StorageUnderivable);
     }
@@ -1810,7 +1808,7 @@ pub fn park(
     }
     if arch
         .kuna_tables
-        .get::<crate::kuna_callbacktype::Ledger>()
+        .get::<crate::callbacktype::Ledger>()
         .reads_of(entry.get_offset())
         .any(|read| declared_out.is_none_or(|declared| !contains(declared, read)))
     {
@@ -1819,7 +1817,7 @@ pub fn park(
     if image.called_directly {
         let returns = row.sig.ret != Ty::Void;
         let callers = image.callers.as_deref();
-        let ledger = arch.kuna_tables.get::<crate::kuna_callbacktype::Ledger>();
+        let ledger = arch.kuna_tables.get::<crate::callbacktype::Ledger>();
         if let Some(why) =
             ledger.direct_calls_disagree(entry.get_offset(), callers, pieces.intypes.len(), returns)
         {
@@ -1835,7 +1833,7 @@ pub fn park(
     if trace() && row.sig.ret != Ty::Void && !own.returns_a_value {
         eprintln!("[callbacktype] {name}: the return is a call's declared value");
     }
-    if crate::kuna_protoorder::reads_past_the_list(arch, entry, &pieces, &storage) {
+    if crate::protoorder::reads_past_the_list(arch, entry, &pieces, &storage) {
         return Err(Decline::ReadsPastTheList);
     }
     if agrees(own.printed.as_ref(), &pieces) {
@@ -1845,35 +1843,35 @@ pub fn park(
     // The declaration replaces what the run recovered: `protoorder`'s
     // statement and `calleevote`'s decision would otherwise still type the
     // parameters, and a parked callback that calls another reads both.
-    if let Some(key) = crate::kuna_protoorder::stated_key(entry) {
+    if let Some(key) = crate::protoorder::stated_key(entry) {
         arch.kuna_tables
-            .get_mut::<crate::kuna_protoorder::CalleeTypes>()
+            .get_mut::<crate::protoorder::CalleeTypes>()
             .remove(&key);
         arch.kuna_tables
-            .get_mut::<crate::kuna_calleevote::Ledger>()
+            .get_mut::<crate::calleevote::Ledger>()
             .forget(key);
         arch.kuna_tables
-            .get_mut::<crate::kuna_calleevote::Ledger>()
+            .get_mut::<crate::calleevote::Ledger>()
             .own
             .remove(&key);
     }
     Ok(pieces)
 }
 
-impl crate::kuna_optionset::KunaOption for CallbackTypeMode {
+impl crate::optionset::KunaOption for CallbackTypeMode {
     const NAME: &'static str = "callbacktype";
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::kuna_callbacktype::CallbackTypeMode::Off
+        crate::callbacktype::CallbackTypeMode::Off
     }
 
     fn shipped() -> Self {
-        crate::kuna_callbacktype::CallbackTypeMode::On
+        crate::callbacktype::CallbackTypeMode::On
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        Ok(crate::kuna_callbacktype::OptionCallbackType.apply(value)?)
+        Ok(crate::callbacktype::OptionCallbackType.apply(value)?)
     }
 }
 

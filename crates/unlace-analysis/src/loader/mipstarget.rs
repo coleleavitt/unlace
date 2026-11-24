@@ -23,7 +23,7 @@ fn agree(a: Option<u32>, b: Option<u32>) -> KunaResult<Option<u32>> {
 
 fn mips_float(
     file: &object::File<'_>,
-    record: Option<super::kuna_mipsabi::AbiFlags>,
+    record: Option<super::mipsabi::AbiFlags>,
 ) -> KunaResult<MipsFloat> {
     let registers = match record.map(|r| r.0[5]).unwrap_or(0) {
         0 => None,
@@ -31,7 +31,7 @@ fn mips_float(
         2 => Some(8),
         _ => return Err(unsupported("unsupported MIPS floating-point register size")),
     };
-    let abi = super::kuna_mipsabi::fp_abi(file, record).map_err(unsupported)?;
+    let abi = super::mipsabi::fp_abi(file, record).map_err(unsupported)?;
     Ok(MipsFloat { registers, abi })
 }
 
@@ -148,7 +148,7 @@ fn mips_selection(file: &object::File<'_>, flags: u32) -> KunaResult<Option<Sele
     if flags & 0x00ff_0000 != 0 {
         return Ok(None);
     }
-    let record = super::kuna_mipsabi::abi_flags(file).map_err(unsupported)?;
+    let record = super::mipsabi::abi_flags(file).map_err(unsupported)?;
     if record.is_some_and(|r| r.extension(file.is_little_endian()) != 0) {
         return Ok(None);
     }

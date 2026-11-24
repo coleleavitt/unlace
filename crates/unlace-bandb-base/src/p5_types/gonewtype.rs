@@ -20,7 +20,7 @@
 //! any allocator site whose descriptor argument resolves to such a symbol the
 //! result's type is a fact stated by the binary's own metadata, not an
 //! inference.  This module reads that fact and asserts it through the
-//! per-call-site output type lock ([`crate::kuna_sitetypelock`]), which is
+//! per-call-site output type lock ([`crate::sitetypelock`]), which is
 //! what makes it stick: an unlocked vote at the same seam is overridden by
 //! `typeOrder` folding and `ActionStructSynth` before the declaration prints.
 //!
@@ -86,7 +86,7 @@ pub fn contribute(data: &mut Funcdata) {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_gonewtype::GoNewType>()
+        .get::<crate::gonewtype::GoNewType>()
         .0
     {
         return;
@@ -209,5 +209,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_gonewtype/tests.rs"]
+#[path = "gonewtype/tests.rs"]
 mod tests;

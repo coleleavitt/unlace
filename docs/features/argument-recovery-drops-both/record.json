@@ -7,7 +7,7 @@
   "default": "on",
   "div": "DIV-148",
   "phase": "P4",
-  "module": "decompiler/crates/kuna-decomp/src/p4_calls/kuna_zeroidiomuse.rs",
+  "module": "decompiler/crates/kuna-decomp/src/p4_calls/zeroidiomuse.rs",
   "witness": {
     "challenge": "67f9bdc38f555589f3530a85",
     "binary": "WeeperVM--Level_1",
@@ -52,7 +52,7 @@
     "kuna catalog --check": "catalog OK"
   },
   "tests": {
-    "unit": "decompiler/crates/kuna-decomp/src/p4_calls/kuna_zeroidiomuse/tests.rs (11 cases)",
+    "unit": "decompiler/crates/kuna-decomp/src/p4_calls/zeroidiomuse/tests.rs (11 cases)",
     "stage": "tests/stages/ghdec-zeroidiomuse.xml (two-pass: off = watchdog(), default = watchdog(timers,2))",
     "cli": "tests/cli/argument-recovery-drops-both.json (promoted acceptance, retargeted onto the vendored fixture)"
   },

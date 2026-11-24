@@ -197,7 +197,7 @@ On the fresh set the rule is 0.0003 behind main (81 more true fields, 93 more
 claimed); `e2fsck` O2-noinline alone adds 50 true fields of 58.
 
 `bash` O2-noinline scores nothing on either build: its `decompile-project`
-export panics in `kuna-sleigh` (`kuna_sharedbytes.rs`) on main as well, so
+export panics in `kuna-sleigh` (`sharedbytes.rs`) on main as well, so
 there is no header to read.
 
 ## Address arithmetic past a reader's end

@@ -1,5 +1,5 @@
 //! (kuna `vtabletypes`) Commit what the typed MSVC vftables say about
-//! functions and data, once [`unlace_decomp::kuna_vtabletypes::install`] has
+//! functions and data, once [`unlace_decomp::vtabletypes::install`] has
 //! built the class structures.
 //!
 //! Each virtual member gets an unlocked input hint `this` of its class's
@@ -13,12 +13,12 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use unlace_analysis::rtti::kuna_vtabletypes::{VtableFacts, VtableObject};
+use unlace_analysis::rtti::vtabletypes::{VtableFacts, VtableObject};
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::AddrSpace;
 use unlace_decomp::dtype::Datatype;
-use unlace_decomp::kuna_inputhints::InputHint;
+use unlace_decomp::inputhints::InputHint;
 use unlace_decomp::varnode::varnode_flags;
 
 use crate::engine::ConsoleProgram;
@@ -92,7 +92,7 @@ fn commit_this(
     let table = &mut prog
         .arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_inputhints::ThisHints>()
+        .get_mut::<unlace_decomp::inputhints::ThisHints>()
         .0;
     for (entry, hint) in hints {
         table.entry(entry).or_insert_with(|| Rc::new(vec![hint]));

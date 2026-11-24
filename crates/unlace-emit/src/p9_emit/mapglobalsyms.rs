@@ -25,7 +25,7 @@ use crate::funcdata::Funcdata;
 pub fn persist(arch: &mut Architecture, fd: &Funcdata) -> usize {
     if !arch
         .kuna_options
-        .get::<crate::kuna_mapglobalsyms::Mapglobalsyms>()
+        .get::<crate::mapglobalsyms::Mapglobalsyms>()
         .0
         || (fd.new_globals().is_empty() && fd.global_covers().is_empty())
     {

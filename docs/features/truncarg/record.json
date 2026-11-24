@@ -14,7 +14,7 @@
  "ablation_changed": 0,
  "parity": "OK",
  "root_cause": "ActionDeadCode counts only minimalmask(nzmask) of an unlocked call input as consumed, so RDI = ZEXT(x & 0xffff) consumes 0xffff; RuleSubvarAnd's SubvariableFlow then trims the call input to the 2-byte value through tryCallPull (nothing outside the mask is consumed). ActionSetCasts' default getInputCast compares the unlocked parameter's local type (undefined2) with the argument and asks for no cast, so a sub-int arithmetic argument prints bare and C promotes it. Found with an instrumented throwaway build printing the p-code after every changing rule/action (subvar_and is the step that replaces CALL sink,RDI:8 with CALL sink,DI:2). For a byte the trim leaves TYPE_UNKNOWN, a second cause: upstream's localExtensionType treats TYPE_UNKNOWN as zero-extending, but realtypes prints a one-byte unknown as `char`, which C sign-extends, so the promotion check and the printed C disagreed. A narrow call input is not always such a trim: clang forwards a narrow parameter as the register it received (`mov %dil,acc8; jmp sinki`), where heritage gives the call a DIL:1 input from the start and no trim runs; nothing there says which extension the binary used.",
- "fix": "Evidence (P3): SubvariableFlow::try_call_pull notes a call slot whose trim drops only known-zero bits (kuna_truncarg::drops_only_zero_bits: the wide input's nzmask lies inside the logical mask anchored at bit 0); when the rewrite commits, do_replacement records (slot, new size, input count) on the call's FuncCallSpecs (note_trimmed_arg), and a trim without that proof clears the slot. Cast (P9): p9_emit/kuna_truncarg.rs (narrowed_arg_cast), consulted by the default getInputCast arm when cast_standard asks for nothing and only when the output language promotes (LangCaps::integer_promotion: C yes, Rust no): a recorded CALL/CALLIND input still at the recorded size and input count, narrower than sizeof(int), integer/unknown-typed and not an enum, whose slot no declared prototype type-locks, gets a cast to the unsigned integer of its width unless its promoted C value is already the zero-extension (int_promotion_type for an expression; the natural extension of the printed type for a variable, load or cast; a ZEXT always) or its C value provably lies in [0, 2^(8*size)) (c_range over sign-clear constants, truth values, + * & | ^, and variables whose def keeps the sign bit clear). The promotion check runs through FuncdataCastContext::with_unknown_byte_as, which reports a non-constant one-byte TYPE_UNKNOWN as int1 when ArchContext::unknown_byte_is_char (realtypes on, C output). An argument already printed as a truncating SUBPIECE cast, every read of which is a call argument, is retyped instead of double-cast (retype_truncation).",
+ "fix": "Evidence (P3): SubvariableFlow::try_call_pull notes a call slot whose trim drops only known-zero bits (kuna_truncarg::drops_only_zero_bits: the wide input's nzmask lies inside the logical mask anchored at bit 0); when the rewrite commits, do_replacement records (slot, new size, input count) on the call's FuncCallSpecs (note_trimmed_arg), and a trim without that proof clears the slot. Cast (P9): p9_emit/truncarg.rs (narrowed_arg_cast), consulted by the default getInputCast arm when cast_standard asks for nothing and only when the output language promotes (LangCaps::integer_promotion: C yes, Rust no): a recorded CALL/CALLIND input still at the recorded size and input count, narrower than sizeof(int), integer/unknown-typed and not an enum, whose slot no declared prototype type-locks, gets a cast to the unsigned integer of its width unless its promoted C value is already the zero-extension (int_promotion_type for an expression; the natural extension of the printed type for a variable, load or cast; a ZEXT always) or its C value provably lies in [0, 2^(8*size)) (c_range over sign-clear constants, truth values, + * & | ^, and variables whose def keeps the sign bit clear). The promotion check runs through FuncdataCastContext::with_unknown_byte_as, which reports a non-constant one-byte TYPE_UNKNOWN as int1 when ArchContext::unknown_byte_is_char (realtypes on, C output). An argument already printed as a truncating SUBPIECE cast, every read of which is a call argument, is retyped instead of double-cast (retype_truncation).",
  "roundtrip": {
   "method": "docs/features/truncarg/roundtrip/roundtrip.sh <kuna> <base-kuna> with CC=gcc and CC=clang: $CC -O2 rt.c (eleven callers: eight narrowed-argument callers, two of them byte loads, and the clang forwarders r1/r6/r7), kuna decompile each, compile the C against a driver defining the callees as rt.c does, compare what the callees receive with the binary value by value (719 values), and against the base kuna (NEW_WRONG = fix wrong where base right)",
   "gcc": {
@@ -163,7 +163,7 @@
   "docs/options.md": "byte-fresh (no option added)"
  },
  "files": [
-  "decompiler/crates/kuna-decomp/src/p9_emit/kuna_truncarg.rs",
+  "decompiler/crates/kuna-decomp/src/p9_emit/truncarg.rs",
   "decompiler/crates/kuna-decomp/src/p9_emit/coreaction_casts.rs",
   "decompiler/crates/kuna-decomp/src/p9_emit/mod.rs",
   "decompiler/crates/kuna-base/src/xml.rs",
@@ -177,10 +177,10 @@
   "docs/features/truncarg/plan.md",
   "decompiler/crates/kuna-decomp/src/p3_dataflow/subflow.rs",
   "decompiler/crates/kuna-decomp/src/p4_calls/fspec.rs",
-  "decompiler/crates/kuna-decomp/src/p9_emit/kuna_lang.rs",
-  "decompiler/crates/kuna-decomp/src/p9_emit/kuna_langrust.rs",
-  "decompiler/crates/kuna-decomp/src/p9_emit/kuna_lang/tests.rs",
-  "decompiler/crates/kuna-decomp/src/p9_emit/kuna_langrust/tests.rs",
+  "decompiler/crates/kuna-decomp/src/p9_emit/lang.rs",
+  "decompiler/crates/kuna-decomp/src/p9_emit/langrust.rs",
+  "decompiler/crates/kuna-decomp/src/p9_emit/lang/tests.rs",
+  "decompiler/crates/kuna-decomp/src/p9_emit/langrust/tests.rs",
   "docs/spec/03-ssa-and-simplification.md",
   "docs/features/truncarg/roundtrip/roundtrip.sh",
   "docs/features/truncarg/roundtrip/rt.c"

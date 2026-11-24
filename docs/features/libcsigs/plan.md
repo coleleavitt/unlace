@@ -26,7 +26,7 @@ safe where 27 were safe by luck.
 
 ## Shape
 
-- New module `analyzers/protos/kuna_libcsigs.rs`: the 206-entry `LIBC_EXT` table,
+- New module `analyzers/protos/libcsigs.rs`: the 206-entry `LIBC_EXT` table,
   `imported_function_names`, and `LibcSigsPass` (`AnalysisPass`, P1, id `libcsigs`).
   Registered in `passes.rs` immediately after `LibProtoPass` and before the DWARF
   pass, so real debug info still wins.

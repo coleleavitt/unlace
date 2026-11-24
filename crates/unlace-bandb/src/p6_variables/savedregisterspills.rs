@@ -60,7 +60,7 @@ fn overlaps_saves(space: &AddrSpace, range: FrameRange, saves: &[Save]) -> bool 
 }
 
 fn frame_range(fd: &Funcdata, pointer: VarnodeId, width: i32) -> Option<FrameRange> {
-    let address = crate::kuna_stackranges::frame_address(fd, pointer)?;
+    let address = crate::stackranges::frame_address(fd, pointer)?;
     let (start, size) = address.extent(width)?;
     Some(FrameRange {
         start,
@@ -100,7 +100,7 @@ fn pointer_propagation(fd: &Funcdata, id: OpId) -> bool {
             | OpCode::CPUI_PTRADD
             | OpCode::CPUI_PTRSUB
     ) && op.get_out().is_some_and(|out| {
-        pointer_temporary(fd, out) && crate::kuna_stackranges::frame_address(fd, out).is_some()
+        pointer_temporary(fd, out) && crate::stackranges::frame_address(fd, out).is_some()
     })
 }
 
@@ -271,8 +271,8 @@ fn call_unobserved(
         return false;
     };
     let call = fd.get_call_specs(index);
-    crate::kuna_calleememory::unobserved(fd, id, range.start, range.size, mask) == Some(mask)
-        && crate::kuna_calleememory::preserves(fd, call, &address, range.size)
+    crate::calleememory::unobserved(fd, id, range.start, range.size, mask) == Some(mask)
+        && crate::calleememory::preserves(fd, call, &address, range.size)
 }
 
 fn proven_unobserved(fd: &Funcdata, saves: &[Save], stack_space: &Rc<AddrSpace>) -> bool {
@@ -440,7 +440,7 @@ pub fn restrict_local_saved_lanes(fd: &mut Funcdata) -> i32 {
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
         && !fd
             .get_arch()

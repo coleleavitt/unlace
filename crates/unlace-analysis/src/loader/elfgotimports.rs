@@ -18,9 +18,7 @@
 
 use object::read::{Object, ObjectSymbol};
 use object::{RelocationFlags, RelocationTarget};
-use unlace_decomp::kuna_symbolnamechars::{
-    NameChars, sanitize_symbol_name_bytes, symbolnamechars_mode,
-};
+use unlace_decomp::symbolnamechars::{NameChars, sanitize_symbol_name_bytes, symbolnamechars_mode};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
@@ -33,7 +31,7 @@ pub(crate) fn resolve(file: &object::File) -> Vec<(u64, Vec<u8>)> {
     {
         return out;
     }
-    let Some((_, r_glob_dat, _)) = crate::loader::kuna_dynrelocs::reloc_triple(file.architecture())
+    let Some((_, r_glob_dat, _)) = crate::loader::dynrelocs::reloc_triple(file.architecture())
     else {
         return out;
     };

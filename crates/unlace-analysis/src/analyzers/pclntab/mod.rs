@@ -498,7 +498,7 @@ fn pcvalue_span(img: &ImageBytes, vma: u64, quantum: u8) -> Option<u64> {
 ///    image's own `moduledata` points at ([`moduledata_anchored`]) over an
 ///    earlier one it only carries as data;
 /// 4. the header the `moduledata` record names when no magic matched an own
-///    table ([`kuna_gomoduledata::locate`]): the magic was overwritten, and the
+///    table ([`gomoduledata::locate`]): the magic was overwritten, and the
 ///    record alone describes the table.
 pub(crate) fn locate_header(file: &object::File, img: &ImageBytes) -> Option<u64> {
     // (1) The named section. Go's ELF uses `.gopclntab` (`.data.rel.ro.gopclntab`
@@ -568,7 +568,7 @@ pub(crate) fn locate_header(file: &object::File, img: &ImageBytes) -> Option<u64
             }
         }
     }
-    kuna_gomoduledata::locate(file, img)
+    gomoduledata::locate(file, img)
         .map(|(vma, _)| vma)
         .or(first)
 }
@@ -607,7 +607,7 @@ pub(crate) fn readonly_table_present(file: &object::File) -> bool {
             .filter(|s| s.kind() == object::SectionKind::ReadOnlyData)
     };
     readonly().any(|s| scan_section(&img, &s, |vma| moduledata_anchored(file, &img, vma)).is_some())
-        || kuna_gomoduledata::locate(file, &img).is_some_and(|(_, h)| {
+        || gomoduledata::locate(file, &img).is_some_and(|(_, h)| {
             readonly().any(|s| h.functab_vma.wrapping_sub(s.address()) < s.size())
         })
 }
@@ -716,7 +716,7 @@ fn recover_go_table(file: &object::File) -> (Vec<GoFunc>, Option<u64>) {
 fn recover_go_header(file: &object::File, img: &ImageBytes) -> Option<(PcHeader, u64)> {
     let header_vma = locate_header(file, img)?;
     let mut h = parse_header(img, header_vma)
-        .or_else(|| kuna_gomoduledata::locate(file, img).map(|(_, h)| h))?;
+        .or_else(|| gomoduledata::locate(file, img).map(|(_, h)| h))?;
     // Go 1.26 stopped storing the text base here (the runtime uses `moduledata.text`
     // instead), so `entryoff` is resolved against the module's `moduledata.text`,
     // falling back to the lowest code section when no moduledata is found.
@@ -873,8 +873,8 @@ fn module_record(
     img: &ImageBytes,
     h: &PcHeader,
     header_vma: u64,
-) -> Option<kuna_gomodlayout::Moduledata> {
-    kuna_gomodlayout::locate(
+) -> Option<gomodlayout::Moduledata> {
+    gomodlayout::locate(
         file,
         img,
         header_vma,
@@ -955,7 +955,7 @@ impl AnalysisPass for GoPclntabPass {
             .filter(|f| exec_end(&exec, f.addr).is_some())
             .collect();
         funcs.sort_unstable_by_key(|f| f.addr);
-        out.models = kuna_goabi0::model_facts(ctx, &funcs, &h, header_vma);
+        out.models = goabi0::model_facts(ctx, &funcs, &h, header_vma);
         if ctx.arch.archid == "x86:LE:64:default:golang"
             && ctx.file.format() == object::BinaryFormat::Elf
         {
@@ -996,13 +996,13 @@ impl AnalysisPass for GoPclntabPass {
     }
 }
 
-mod kuna_goabi0;
-pub(crate) mod kuna_goabi0_leaf;
-pub(crate) mod kuna_gomcall;
-pub mod kuna_gomodlayout;
-mod kuna_gomoduledata;
-pub mod kuna_gonoreturn;
-pub mod kuna_gopcln;
+mod goabi0;
+pub(crate) mod goabi0_leaf;
+pub(crate) mod gomcall;
+pub mod gomodlayout;
+mod gomoduledata;
+pub mod gonoreturn;
+pub mod gopcln;
 
 #[cfg(test)]
 mod tests;

@@ -560,29 +560,23 @@ fn forward_struct_pointers_observe_only_valid_completed_layouts() {
 
 #[test]
 fn global_name_vocabulary_demands_printable_spaceless() {
-    assert!(kuna_typeglobals::global_name_ok("main.Point"));
+    assert!(typeglobals::global_name_ok("main.Point"));
     assert!(
-        kuna_typeglobals::global_name_ok("*main.Point"),
+        typeglobals::global_name_ok("*main.Point"),
         "pointer spelling kept"
     );
     assert!(
-        kuna_typeglobals::global_name_ok("[]uint8"),
+        typeglobals::global_name_ok("[]uint8"),
         "unnamed composite kept"
     );
-    assert!(kuna_typeglobals::global_name_ok("map[string]int"));
+    assert!(typeglobals::global_name_ok("map[string]int"));
     assert!(
-        !kuna_typeglobals::global_name_ok("struct { x int }"),
+        !typeglobals::global_name_ok("struct { x int }"),
         "interior space"
     );
-    assert!(
-        !kuna_typeglobals::global_name_ok("chan int"),
-        "interior space"
-    );
-    assert!(!kuna_typeglobals::global_name_ok(""), "empty");
-    assert!(
-        !kuna_typeglobals::global_name_ok("a\u{00e9}b"),
-        "non-ASCII byte"
-    );
+    assert!(!typeglobals::global_name_ok("chan int"), "interior space");
+    assert!(!typeglobals::global_name_ok(""), "empty");
+    assert!(!typeglobals::global_name_ok("a\u{00e9}b"), "non-ASCII byte");
 }
 
 #[test]
@@ -622,7 +616,7 @@ fn descriptor_globals_name_and_type_every_printable_record() {
     tf.set_max_basetype_size(8);
     tf.setup_sizes(Some(8), 8, 8);
     tf.cache_core_types().unwrap();
-    let facts = kuna_typeglobals::collect(&tf, &img, &meta);
+    let facts = typeglobals::collect(&tf, &img, &meta);
     let named: Vec<(u64, &str)> = facts.iter().map(|f| (f.addr, f.name.as_str())).collect();
     // Address order, deduplicated, the pointer POINTEE present exactly once
     // (its own typelink and the pointer walk both reach it), the spacey
@@ -704,7 +698,7 @@ fn descriptor_globals_follow_type_edges_and_spell_import_paths() {
     tf.set_max_basetype_size(8);
     tf.setup_sizes(Some(8), 8, 8);
     tf.cache_core_types().unwrap();
-    let facts = kuna_typeglobals::collect(&tf, &img, &meta);
+    let facts = typeglobals::collect(&tf, &img, &meta);
     let named: Vec<(u64, &str)> = facts.iter().map(|f| (f.addr, f.name.as_str())).collect();
     assert_eq!(
         named,
@@ -766,7 +760,7 @@ fn synth_itab_blob() -> (Vec<(u64, Vec<u8>)>, u64, u64, u64, u64, u64) {
 fn itab_record_decodes_to_its_two_type_names() {
     let (spans, types, etypes, itab, _inter, _concrete) = synth_itab_blob();
     let img = img_of(&spans);
-    let (c, i) = super::kuna_itabs::read_itab(&img, types, etypes, itab).expect("itab decodes");
+    let (c, i) = super::itabs::read_itab(&img, types, etypes, itab).expect("itab decodes");
     assert_eq!(
         (c.name.as_str(), i.name.as_str()),
         ("main.Point", "fmt.Stringer")
@@ -775,11 +769,11 @@ fn itab_record_decodes_to_its_two_type_names() {
     // Inter not an interface descriptor -> refuse (swap the two pointers).
     let mut bad = spans.clone();
     bad[1].1[0..8].copy_from_slice(&(types + 0x60).to_le_bytes()); // Inter = struct
-    assert!(super::kuna_itabs::read_itab(&img_of(&bad), types, etypes, itab).is_none());
+    assert!(super::itabs::read_itab(&img_of(&bad), types, etypes, itab).is_none());
     // A pointer outside the blob -> refuse.
     let mut oob = spans.clone();
     oob[1].1[0..8].copy_from_slice(&0xffff_0000u64.to_le_bytes());
-    assert!(super::kuna_itabs::read_itab(&img_of(&oob), types, etypes, itab).is_none());
+    assert!(super::itabs::read_itab(&img_of(&oob), types, etypes, itab).is_none());
 }
 
 #[test]
@@ -787,18 +781,12 @@ fn itab_size_covers_method_tail_and_placeholder() {
     let (spans, _t, _e, itab, inter, _c) = synth_itab_blob();
     let img = img_of(&spans);
     // 2-method interface, Fun[0]!=0: header(32) + (2-1)*8 = 40.
-    assert_eq!(super::kuna_itabs::itab_size(&img, itab, inter), Some(40));
+    assert_eq!(super::itabs::itab_size(&img, itab, inter), Some(40));
     // Fun[0]==0 placeholder: header only (32).
     let mut ph = spans.clone();
     ph[1].1[24..32].copy_from_slice(&0u64.to_le_bytes());
-    assert_eq!(
-        super::kuna_itabs::itab_size(&img_of(&ph), itab, inter),
-        Some(32)
-    );
-    assert_eq!(
-        super::kuna_itabs::interface_method_count(&img, inter),
-        Some(2)
-    );
+    assert_eq!(super::itabs::itab_size(&img_of(&ph), itab, inter), Some(32));
+    assert_eq!(super::itabs::interface_method_count(&img, inter), Some(2));
 }
 
 #[test]
@@ -815,7 +803,7 @@ fn locate_itablinks_slice_follows_pointers() {
     md.extend_from_slice(&1u64.to_le_bytes()); // cap
     spans.push((M, md));
     let img = img_of(&spans);
-    let found = super::kuna_itabs::locate_itablinks_slice(&img, M, types, etypes).expect("slice");
+    let found = super::itabs::locate_itablinks_slice(&img, M, types, etypes).expect("slice");
     assert_eq!(found, vec![itab]);
 }
 
@@ -843,13 +831,13 @@ fn locate_itab_region_walks_the_go127_contiguous_region() {
     md.extend_from_slice(&72u64.to_le_bytes()); // itabsize
     spans.push((M, md));
     let img = img_of(&spans);
-    let found = super::kuna_itabs::locate_itab_region(&img, M, types, etypes).expect("region");
+    let found = super::itabs::locate_itab_region(&img, M, types, etypes).expect("region");
     assert_eq!(found, vec![R, R + 40]);
     // A wrong itabsize that does not land on a record boundary is refused.
     let mut bad = spans.clone();
     let mi = bad.iter().position(|(a, _)| *a == M).unwrap();
     bad[mi].1[8..16].copy_from_slice(&71u64.to_le_bytes());
-    assert!(super::kuna_itabs::locate_itab_region(&img_of(&bad), M, types, etypes).is_none());
+    assert!(super::itabs::locate_itab_region(&img_of(&bad), M, types, etypes).is_none());
 }
 
 #[test]
@@ -869,7 +857,7 @@ fn collect_emits_the_linker_itab_symbol() {
         etypes,
         offsets: vec![],
     };
-    let facts = super::kuna_itabs::collect(&img, &meta, M, &std::collections::HashSet::new());
+    let facts = super::itabs::collect(&img, &meta, M, &std::collections::HashSet::new());
     assert_eq!(facts.len(), 1);
     assert_eq!(facts[0].addr, itab);
     assert_eq!(facts[0].name, "go:itab.main.Point,fmt.Stringer");
@@ -915,10 +903,10 @@ fn interface_methods_follow_the_descriptor_order() {
     let meta = interface_meta(types, etypes);
     let inter = read_type(&img, types, etypes, 0x100).expect("interface record");
     assert_eq!(
-        super::kuna_itabtypes::interface_methods(&img, &meta, &inter),
+        super::itabtypes::interface_methods(&img, &meta, &inter),
         Some(vec!["Area".to_string(), "Name".to_string()])
     );
-    let sets = super::kuna_itabtypes::interface_method_sets(&img, &meta, &[]);
+    let sets = super::itabtypes::interface_method_sets(&img, &meta, &[]);
     assert_eq!(
         sets.get("main.Shape")
             .map(|(methods, _)| methods.as_slice()),
@@ -935,17 +923,17 @@ fn interface_methods_refuse_unusable_names() {
         let meta = interface_meta(types, etypes);
         let inter = read_type(&img, types, etypes, 0x100).unwrap();
         assert_eq!(
-            super::kuna_itabtypes::interface_methods(&img, &meta, &inter),
+            super::itabtypes::interface_methods(&img, &meta, &inter),
             None,
             "{methods:?}"
         );
-        assert!(super::kuna_itabtypes::interface_method_sets(&img, &meta, &[]).is_empty());
+        assert!(super::itabtypes::interface_method_sets(&img, &meta, &[]).is_empty());
     }
     let (spans, types, etypes) = synth_interface(&[]);
     let img = img_of(&spans);
     let meta = interface_meta(types, etypes);
     assert!(
-        super::kuna_itabtypes::interface_method_sets(&img, &meta, &[]).is_empty(),
+        super::itabtypes::interface_method_sets(&img, &meta, &[]).is_empty(),
         "an empty interface has no itab"
     );
 }
@@ -958,11 +946,7 @@ fn itab_record_names_each_method_slot() {
     tf.setup_sizes(Some(8), 8, 8);
     tf.cache_core_types().unwrap();
     let methods = ["Area".to_string(), "Name".to_string()];
-    assert!(super::kuna_itabtypes::intern_record(
-        &tf,
-        "main.Shape",
-        &methods
-    ));
+    assert!(super::itabtypes::intern_record(&tf, "main.Shape", &methods));
     let record = tf
         .find_by_name("go.itab.main.Shape")
         .unwrap()
@@ -994,7 +978,7 @@ fn itab_record_names_each_method_slot() {
         })
     );
     assert!(
-        super::kuna_itabtypes::intern_record(&tf, "main.Shape", &methods),
+        super::itabtypes::intern_record(&tf, "main.Shape", &methods),
         "re-interning keeps the completed record"
     );
 }
@@ -1038,7 +1022,7 @@ fn interface_fields_name_their_interface() {
     };
     let holder = read_type(&img, types, etypes, 0).expect("struct record");
     assert_eq!(
-        super::kuna_ifacefields::interface_fields(&img, &meta, &holder, false),
+        super::ifacefields::interface_fields(&img, &meta, &holder, false),
         Some(vec![(0, "main.Shape".to_string())])
     );
     let tf = unlace_decomp::dtype::TypeFactoryImpl::new();
@@ -1047,7 +1031,7 @@ fn interface_fields_name_their_interface() {
     tf.setup_sizes(Some(8), 8, 8);
     tf.cache_core_types().unwrap();
     assert_eq!(
-        super::kuna_ifacefields::register(&tf, &img, &meta, Some((1, 22))),
+        super::ifacefields::register(&tf, &img, &meta, Some((1, 22))),
         1
     );
     assert_eq!(
@@ -1062,7 +1046,7 @@ fn interface_fields_name_their_interface() {
     let img = img_of(&bad);
     let holder = read_type(&img, types, etypes, 0).unwrap();
     assert_eq!(
-        super::kuna_ifacefields::interface_fields(&img, &meta, &holder, false),
+        super::ifacefields::interface_fields(&img, &meta, &holder, false),
         None
     );
 }
@@ -1092,7 +1076,7 @@ fn method_pieces_read_one_register_scalars() {
     tf.set_max_basetype_size(8);
     tf.setup_sizes(Some(8), 8, 8);
     tf.cache_core_types().unwrap();
-    let pieces = super::kuna_itabtypes::method_pieces(&tf, &img, &meta, &inter, 0)
+    let pieces = super::itabtypes::method_pieces(&tf, &img, &meta, &inter, 0)
         .expect("a one-register signature");
     assert_eq!(pieces.intypes.len(), 2, "receiver then the int");
     assert_eq!(pieces.intypes[0].get_metatype(), type_metatype::TYPE_PTR);
@@ -1103,10 +1087,10 @@ fn method_pieces_read_one_register_scalars() {
         (out.get_metatype(), out.get_size()),
         (type_metatype::TYPE_INT, 8)
     );
-    assert!(super::kuna_itabtypes::method_pieces(&tf, &img, &meta, &inter, 1).is_none());
+    assert!(super::itabtypes::method_pieces(&tf, &img, &meta, &inter, 1).is_none());
 
     let mut variadic = spans.clone();
     variadic[0].1[f + 50..f + 52].copy_from_slice(&0x8001u16.to_le_bytes());
     let img = img_of(&variadic);
-    assert!(super::kuna_itabtypes::method_pieces(&tf, &img, &meta, &inter, 0).is_none());
+    assert!(super::itabtypes::method_pieces(&tf, &img, &meta, &inter, 0).is_none());
 }

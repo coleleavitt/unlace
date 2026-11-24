@@ -105,7 +105,7 @@ fn instruction_bytes(
         res |= i64::from(tmp); // uintm -> intb: zero-extending u32 -> i64
     }
     if !bigendian {
-        res = crate::kuna_instructionbytes::little_endian(res, size);
+        res = crate::instructionbytes::little_endian(res, size);
     }
     Ok(res)
 }
@@ -804,7 +804,7 @@ impl PatternValue {
 pub struct BinaryExpression {
     left: Box<PatternExpression>,
     right: Box<PatternExpression>,
-    prepared: OnceLock<Option<Box<crate::kuna_expressionplan::ExpressionPlan>>>,
+    prepared: OnceLock<Option<Box<crate::expressionplan::ExpressionPlan>>>,
 }
 
 impl BinaryExpression {
@@ -867,7 +867,7 @@ impl BinaryExpression {
 #[derive(Debug, Clone)]
 pub struct UnaryExpression {
     unary: Box<PatternExpression>,
-    prepared: OnceLock<Option<Box<crate::kuna_expressionplan::ExpressionPlan>>>,
+    prepared: OnceLock<Option<Box<crate::expressionplan::ExpressionPlan>>>,
 }
 
 impl UnaryExpression {
@@ -959,8 +959,8 @@ impl PatternExpression {
             Self::Minus(u) | Self::Not(u) => &u.prepared,
             Self::Value(_) => unreachable!(),
         };
-        let prepared = prepared
-            .get_or_init(|| crate::kuna_expressionplan::ExpressionPlan::new(self).map(Box::new));
+        let prepared =
+            prepared.get_or_init(|| crate::expressionplan::ExpressionPlan::new(self).map(Box::new));
         if let Some(plan) = prepared {
             if plan.applies_to(self) {
                 return plan.get_value(walker);

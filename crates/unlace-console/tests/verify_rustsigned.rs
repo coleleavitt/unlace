@@ -39,7 +39,7 @@ fn body(binary: &Path, name: &str) -> String {
         "print C".into(),
     ]);
     register_decomp_commands(&mut status);
-    unlace_console::kuna_console::register_kuna_commands(&mut status);
+    unlace_console::console::register_kuna_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
         .unwrap()
@@ -165,7 +165,7 @@ fn signed_machine_operations_override_unsigned_primitive_types() {
             "print C".into(),
         ]);
         register_decomp_commands(&mut status);
-        unlace_console::kuna_console::register_kuna_commands(&mut status);
+        unlace_console::console::register_kuna_commands(&mut status);
         status
             .get_data_mut(DECOMPILE_MODULE)
             .unwrap()

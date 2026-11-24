@@ -11,10 +11,10 @@ mod module_scope {
     pub(super) use std::collections::HashSet;
     pub(super) use unlace_num::opcodes::OpCode;
 }
+use crate::condexeretuse::*;
 use crate::context::{ArchContext, TypeOp};
 use crate::dtype::{Datatype, type_metatype};
 use crate::fspec::ParamTrial;
-use crate::kuna_condexeretuse::*;
 use module_scope::*;
 use unlace_base::address::Address;
 use unlace_base::space::{

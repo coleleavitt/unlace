@@ -75,7 +75,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
    Always record the number even when within budget.
 7. **Large/multi-part features go through a draft `[PROPOSAL]` PR first — do NOT implement.**
    If closing this gap needs more than one option-gated pass — a new pass *type* or infrastructure
-   (not modelable as one Action/Rule like `kuna_loweredswitch.rs`), touching S7 structuring/region
+   (not modelable as one Action/Rule like `loweredswitch.rs`), touching S7 structuring/region
    code beyond a single gated early-return, or >3 ported-core anchor files / >1 new module — STOP at
    design and follow the Phase-2 proposal fork. A human approves it before any implementation worker
    is spent. (In IMPLEMENTATION MODE, this gap is already approved — implement it.)
@@ -86,7 +86,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
 - Read `AGENTS.md`, `docs/phases.md`, `docs/history.md`, `docs/options.md`,
   `tests/stages/README.md`, and the **loweredswitch** feature as the canonical template:
   `git log --oneline | grep loweredswitch`, then read
-  `crates/unlace-lift/src/p2_lift/kuna_loweredswitch.rs`, its anchors in `coreaction*.rs` /
+  `crates/unlace-lift/src/p2_lift/loweredswitch.rs`, its anchors in `coreaction*.rs` /
   `universalaction.rs` / `options.rs` / `architecture.rs` / `phases.toml`, and
   `tests/stages/ghangr-loweredswitch.toml`.
 - Reproduce the gap: `{{KUNA_PY}} -m scripts.pipeline.compare --entry {{TEST_NAME}}` (read both
@@ -102,7 +102,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
   developing).
 {{WORKER_DECIDER_INSTRUCTIONS}}
   Treat as **large** if: the scope decision says `large`; OR it needs a new pass *type*/infrastructure (not one
-  Action/Rule like `kuna_loweredswitch.rs`); OR it must touch S7 structuring/region code beyond a single
+  Action/Rule like `loweredswitch.rs`); OR it must touch S7 structuring/region code beyond a single
   gated early-return; OR it needs >3 ported-core anchor files / >1 new module.
   - **If large — STOP. Do NOT implement.** Write `docs/features/{{SLUG}}/proposal.md` (the problem; the angr
     reference pass/class; the multi-step implementation plan; a speed/risk assessment; the proposed option
@@ -118,14 +118,14 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
   - **If small (the default) — continue to Phase 3** exactly as below.
 
 ### 3. code — implement + register
-- Create `kuna_{{SLUG}}.rs` (an Action/Rule modeled on `kuna_loweredswitch.rs`), add a `bool`
+- Create `kuna_{{SLUG}}.rs` (an Action/Rule modeled on `loweredswitch.rs`), add a `bool`
   option flag on the architecture struct (defaulted off in its reset path), register the action in
   the `universalAction` registration (`coreaction*.rs` / `universalaction.rs`) and the option in
   `options.rs`, and add the `settableTable` row (rule 4). Gate the action to early-return when the
   flag is off so default output is byte-identical.
 - **Bump the hard-coded catalog counts** (adding an option changes them in TWO places; missing one
   fails `cargo nextest run --workspace --exclude unlace-wasm --profile ci`/`cargo test --release -p unlace-harness --test parity stage_tests` opaquely): the count asserts in
-  `src/p0_knowledge/kuna_phases/tests.rs`; the count asserts AND the `tests/fixtures/phase_catalog.json`
+  `src/p0_knowledge/phases/tests.rs`; the count asserts AND the `tests/fixtures/phase_catalog.json`
   fixture in `crates/unlace-decomp/tests/catalog_bytecompat.rs` (regenerate the fixture with the
   console recapture documented in that file's header). `tests/stages/kuna-catalog.toml` computes its
   bucket counts from the compiled catalog: leave it alone.

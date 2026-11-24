@@ -185,8 +185,7 @@ impl PrintC {
             }
         }
         let context = if node.is_implied() {
-            let Some(context) = crate::kuna_rustintegers::needs_integer_context(fd, value, op, 8)
-            else {
+            let Some(context) = crate::rustintegers::needs_integer_context(fd, value, op, 8) else {
                 return false;
             };
             context

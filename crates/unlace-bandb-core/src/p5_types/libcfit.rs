@@ -14,7 +14,7 @@
 //! What the caller does through the pointer says which one it is. [`overruns`]
 //! walks the Varnode the call reads, through its descendants, with the walker
 //! `protoorder` holds its own recovered votes to
-//! (`kuna_protoorder::accesses_through`), and looks for a
+//! (`protoorder::accesses_through`), and looks for a
 //! load, a store or a derived address outside the aggregate: at a constant
 //! offset at or past its end or before its start, or stepped by a constant at
 //! least as large as the aggregate but not equal to it (coreutils `wc` walks
@@ -36,7 +36,7 @@
 //! what keeps the answer per Varnode: at `-O0` a macro local holding a copy of
 //! the pointer and the pointer itself are different Varnodes.
 //! The rule applies to the names `libctypes` owns
-//! ([`crate::kuna_libctypes::AGGREGATE_NAMES`]) and only while that option is
+//! ([`crate::libctypes::AGGREGATE_NAMES`]) and only while that option is
 //! on, so `libctypes off` is untouched.
 
 use std::rc::Rc;
@@ -90,7 +90,7 @@ fn libc_pointee_size(ct: &Datatype) -> Option<i64> {
     }
     let pointee = ct.get_ptr_to()?;
     if pointee.get_metatype() != type_metatype::TYPE_STRUCT
-        || !crate::kuna_libctypes::AGGREGATE_NAMES.contains(&pointee.get_name())
+        || !crate::libctypes::AGGREGATE_NAMES.contains(&pointee.get_name())
     {
         return None;
     }
@@ -98,7 +98,7 @@ fn libc_pointee_size(ct: &Datatype) -> Option<i64> {
 }
 
 fn reached_outside(data: &Funcdata, vn: VarnodeId, size: i64) -> bool {
-    let Some((accesses, places, _)) = crate::kuna_protoorder::accesses_through(data, &[vn]) else {
+    let Some((accesses, places, _)) = crate::protoorder::accesses_through(data, &[vn]) else {
         return false;
     };
     places

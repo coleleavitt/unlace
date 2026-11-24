@@ -73,7 +73,7 @@
 //!
 //! ## MSVC names
 //!
-//! An MSVC name is left to [`super::kuna_msvcsig`], which reads the defined
+//! An MSVC name is left to [`super::msvcsig`], which reads the defined
 //! names and the PE imports with their calling convention, return type and
 //! hidden return pointer.
 //!
@@ -154,7 +154,7 @@ impl AnalysisPass for CppSigPass {
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = AnalysisOutput::default();
         let mangled = mangled_function_symbols(ctx.file);
-        let imports = super::kuna_msvcsig::msvc_imports(ctx);
+        let imports = super::msvcsig::msvc_imports(ctx);
         if mangled.is_empty() && imports.is_empty() {
             return out;
         }
@@ -207,7 +207,7 @@ impl AnalysisPass for CppSigPass {
                 out.cpp_sig.inferred.push((*addr, pieces));
             }
         }
-        super::kuna_msvcsig::collect(ctx, &mangled, &imports, &mut out.cpp_sig);
+        super::msvcsig::collect(ctx, &mangled, &imports, &mut out.cpp_sig);
         out
     }
 }

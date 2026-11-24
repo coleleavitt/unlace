@@ -22,7 +22,7 @@ use object::read::Object;
 
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 
-use super::kuna_strrecords::{RoRegion, is_text, read_word, ro_regions};
+use super::strrecords::{RoRegion, is_text, read_word, ro_regions};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, StringFact, TypedDataFact};
 
 /// One recognized `Location`.
@@ -94,7 +94,7 @@ fn record_at(
 
 /// `slot -> addend` for every `R_*_RELATIVE` dynamic relocation.
 fn relative_addends(file: &object::File) -> HashMap<u64, u64> {
-    let Some((r_relative, _, _)) = crate::loader::kuna_dynrelocs::reloc_triple(file.architecture())
+    let Some((r_relative, _, _)) = crate::loader::dynrelocs::reloc_triple(file.architecture())
     else {
         return HashMap::new();
     };

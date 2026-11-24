@@ -24,7 +24,7 @@
 //! a check clang copies into both arms above the dispatch's block, and a
 //! selector compared in memory and loaded again for the dispatch. The
 //! reference walk reads them over the function's predecessor edges
-//! (`listing/kuna_switchflow.rs`).
+//! (`listing/switchflow.rs`).
 //!
 //! Each fixture is one `dispatch` whose four cases push a distinct literal and
 //! whose default arm pushes a fifth. The default arm is the control: it is

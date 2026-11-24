@@ -1,5 +1,5 @@
 //! Opt-in stack-address evidence for an existing register input trial.
-use super::kuna_spillargtrial::{frame_slot, stack_pointer_storage};
+use super::spillargtrial::{frame_slot, stack_pointer_storage};
 use crate::{context::VarnodeId, funcdata::Funcdata};
 
 /// A same-width copy/displacement chain must reach a particular stack pointer.
@@ -9,7 +9,7 @@ pub fn carries_stack_address(data: &Funcdata, vn: VarnodeId) -> bool {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_stackaddrargtrial::StackAddrArgTrial>()
+        .get::<crate::stackaddrargtrial::StackAddrArgTrial>()
         .0
     {
         return false;
@@ -49,8 +49,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.stackaddrargtrial_trial_is_protected = Some(trial_is_protected);
 }
 

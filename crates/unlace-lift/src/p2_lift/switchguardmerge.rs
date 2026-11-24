@@ -33,7 +33,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::context::{BlockId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::jumptable::NO_LABEL;
-use crate::kuna_regioneval::{eval, taken};
+use crate::regioneval::{eval, taken};
 
 /// Ops that only compute: a block made of them can run on more paths.
 fn pure_block(data: &Funcdata, b: BlockId) -> bool {
@@ -334,7 +334,7 @@ impl Action for ActionSwitchGuardMerge {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_switchguardmerge::SwitchGuardMerge>()
+            .get::<crate::switchguardmerge::SwitchGuardMerge>()
             .0
         {
             return 0;

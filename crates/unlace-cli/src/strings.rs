@@ -9,7 +9,7 @@
 //! ```
 //!
 //! This is the CLI face of the analyzer tier's **existing** string detection: the
-//! rows come from [`unlace_analysis::strings::kuna_stringinv`], whose ASCII half is
+//! rows come from [`unlace_analysis::strings::stringinv`], whose ASCII half is
 //! the very `StringLiteralPass` scan the engine already runs at load to plant the
 //! `char[N]` literals `unlace decompile` prints. Nothing is re-detected here and
 //! nothing is committed, so no emitted C changes.
@@ -54,7 +54,7 @@ use filter::Regex;
 
 use std::collections::BTreeMap;
 
-use unlace_analysis::strings::kuna_stringinv::{self, FoundString, Termination};
+use unlace_analysis::strings::stringinv::{self, FoundString, Termination};
 
 use crate::args::take_value as take;
 use crate::decompile_all::{Args, DriverDefaults, load_program, mode_options_for_binary};
@@ -127,10 +127,10 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
         crate::loadtime::apply_to_process(&options, args.slice.as_deref(), 1, false);
     let raw = unlace_analysis::loadimage_object::parse_object(&bytes)
         .map_err(|e| format!("could not parse {}: {e}", args.binary))?;
-    let view = unlace_analysis::loader::kuna_relocrebase::rebased_view(&raw, &bytes);
-    let (file, scanned) = unlace_analysis::loader::kuna_relocrebase::select(raw, &bytes, &view);
+    let view = unlace_analysis::loader::relocrebase::rebased_view(&raw, &bytes);
+    let (file, scanned) = unlace_analysis::loader::relocrebase::select(raw, &bytes, &view);
 
-    let query = kuna_stringinv::Query {
+    let query = stringinv::Query {
         min_len: args.min_length,
         ascii: args.ascii,
         utf8: args.utf8,
@@ -142,8 +142,8 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
         .as_ref()
         .filter(|v| v.bytes.as_ptr() == scanned.as_ptr())
     {
-        Some(view) => kuna_stringinv::inventory_in_image(&file, &query, &view.ranges),
-        None => kuna_stringinv::inventory(&file, &query),
+        Some(view) => stringinv::inventory_in_image(&file, &query, &view.ranges),
+        None => stringinv::inventory(&file, &query),
     };
     if let Some(want) = &args.section
         && !inv

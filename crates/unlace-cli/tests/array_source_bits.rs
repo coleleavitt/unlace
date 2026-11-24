@@ -173,12 +173,12 @@ int main(void) {{
 // Coalescing can make the memory read itself define the mapped frame word.
 // Preserve the fresh fixture's storage and pointer, then render that state.
 fn direct_load_body(binary: &std::path::Path, read: u64, mix: u64) -> String {
+    use unlace_console::console::register_kuna_commands;
     use unlace_console::ifacedecomp::{
         DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
         register_decomp_commands,
     };
     use unlace_console::ifaceterm::IfaceTerm;
-    use unlace_console::kuna_console::register_kuna_commands;
     use unlace_num::opcodes::OpCode;
     let script = format!(
         "load file {}\noption stackviews on\nparse line typedef struct Packet {{unsigned int tag;unsigned char payload[4];void *context;}} Packet;\nmap function 0x{read:x} read_word\nmap function 0x{mix:x} mix_words\nmap prototype 0x{read:x} unsigned int __cdecl read_word(Packet *packet)\nmap prototype 0x{mix:x} unsigned int __cdecl mix_words(float *values)\nload function 0x{mix:x}\ndecompile\nretype v2 Packet\ndecompile\n",
@@ -259,7 +259,7 @@ fn direct_load_body(binary: &std::path::Path, read: u64, mix: u64) -> String {
     arch.kuna_options
         .set(unlace_decomp::printc::Realtypes(true));
     arch.kuna_options
-        .set(unlace_decomp::kuna_coreoptions::CTypes(true));
+        .set(unlace_decomp::coreoptions::CTypes(true));
     arch.with_print(|printer, arch| {
         printer.options.partial_access = true;
         printer.doc_function_full(fd, arch)

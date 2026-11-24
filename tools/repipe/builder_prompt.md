@@ -48,7 +48,7 @@ not emitted, an error that is silently swallowed, a flag that is missing. It liv
 `CLAUDE.md` is "a judgement call ships behind a named option; a fix does not" — a new
 subcommand is neither. Do not add an option. Do not touch `phases.toml`, `options.rs`,
 `docs/options.md`, `docs/history.md`, or any catalog counter. If you find yourself editing
-`kuna_phases/tests.rs`, stop: you are on the wrong track or doing something the need did not
+`phases/tests.rs`, stop: you are on the wrong track or doing something the need did not
 ask for.
 
 Likewise **do not add a `tests/stages/` testcase.** `tests/stages/README.md` scopes that
@@ -71,7 +71,7 @@ value would only reproduce C that is false about the program, ships always-on wi
 and a one-pass `tests/stages/ghdec-<slug>.xml`; a refinement of an existing option extends
 that option. Only a judgement call gets the full option ritual: one `kuna_<slug>.rs` in the
 owning phase folder, a fully-populated `[[settable]]` row, registration in
-`kuna_option_dispatch.rs`, an Architecture flag, **all four hard-coded catalog counters**
+`option_dispatch.rs`, an Architecture flag, **all four hard-coded catalog counters**
 (`python -m scripts.repipe.counters --fix`), a two-pass `tests/stages/ghdec-<slug>.xml`, the
 stages baseline re-record, `docs/options.md` regeneration, the owning `docs/spec/` chapter,
 the ablation, and `scripts.pipeline.timeit`.

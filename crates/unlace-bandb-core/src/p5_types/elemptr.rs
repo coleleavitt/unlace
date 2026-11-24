@@ -19,7 +19,7 @@
 //! (what `malloc` returns), or nothing at all (a constant address).
 //!
 //! [`element_pointer`] supplies that candidate as one more vote in the
-//! `getLocalType` fold, the way [`crate::kuna_ptrfromuse`] supplies "this is a
+//! `getLocalType` fold, the way [`crate::ptrfromuse`] supplies "this is a
 //! pointer at all".  A bounded breadth-first walk follows the candidate through
 //! copy-like identity and literal offsets and asks of every use whether it is an
 //! ELEMENT ACCESS: a load or store of width `W` through the base plus an index
@@ -69,8 +69,8 @@
 //! Gated by [the registered option `ElemPtr`](crate::context::ArchContext) (option
 //! `elemptr on|off`); with the option off nothing here is reachable.
 
+use crate::fasthash::{FxHashMap, FxHashSet};
 use crate::funcdata_facing::FuncdataFacingExt;
-use crate::kuna_fasthash::{FxHashMap, FxHashSet};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::Rc;
 
@@ -308,7 +308,7 @@ pub fn element_pointer(
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_elemptr::ElemPtr>()
+        .get::<crate::elemptr::ElemPtr>()
         .0
     {
         return None;
@@ -483,7 +483,7 @@ pub fn keeps_stored_sign(
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_elemptr::ElemPtr>()
+        .get::<crate::elemptr::ElemPtr>()
         .0
         || inslot != 1
         || outslot != 2
@@ -915,10 +915,10 @@ fn candidate_kind(data: &Funcdata, vn: VarnodeId) -> Option<(Kind, Vec<VarnodeId
     {
         return Some((Kind::Param, Vec::new()));
     }
-    if crate::kuna_structsynth::is_call_return(data, vn) {
+    if crate::structsynth::is_call_return(data, vn) {
         let copies = copies_alone(data, vn)?;
-        let rets = crate::kuna_structsynth::returned_values(data);
-        if crate::kuna_structsynth::returned_beside_others(data, &copies, &rets)
+        let rets = crate::structsynth::returned_values(data);
+        if crate::structsynth::returned_beside_others(data, &copies, &rets)
             || returns_another_value_in_place(data, vn, &copies, &rets)
         {
             return None;
@@ -981,7 +981,7 @@ fn returns_another_value_in_place(
 /// starts, and the pointer type would reach the function's return (`libbsd`'s
 /// `user_from_uid` reads its table into the `rax` it returns a record in).
 fn shares_a_returned_register(data: &Funcdata, held: &[VarnodeId]) -> bool {
-    let rets = crate::kuna_structsynth::returned_values(data);
+    let rets = crate::structsynth::returned_values(data);
     if rets.is_empty() {
         return false;
     }
@@ -1011,7 +1011,7 @@ fn shares_a_returned_register(data: &Funcdata, held: &[VarnodeId]) -> bool {
             seen.push(out);
         }
     }
-    crate::kuna_structsynth::returned_beside_others(data, &seen, &rets)
+    crate::structsynth::returned_beside_others(data, &seen, &rets)
         || seen[held.len()..]
             .iter()
             .any(|&c| returns_another_value_in_place(data, c, &seen, &rets))
@@ -1476,7 +1476,7 @@ fn base_use(
             None
         }
         code => {
-            if crate::kuna_ptrfromuse::is_float_op(code) {
+            if crate::ptrfromuse::is_float_op(code) {
                 ev.refuse("float");
             }
             None
@@ -1750,7 +1750,7 @@ fn element_access(
                     _ => {}
                 }
             }
-            code if crate::kuna_ptrfromuse::is_float_op(code) => ev.refuse("float-elem"),
+            code if crate::ptrfromuse::is_float_op(code) => ev.refuse("float-elem"),
             _ => {}
         }
     }
@@ -1887,7 +1887,7 @@ fn stored_value(data: &Funcdata, val: VarnodeId, ev: &mut Evidence) {
         | OpCode::CPUI_INT_LESS
         | OpCode::CPUI_INT_SLESS => ev.number += 1,
         OpCode::CPUI_PTRADD | OpCode::CPUI_PTRSUB => ev.address += 1,
-        code if crate::kuna_ptrfromuse::is_float_op(code) => ev.refuse("float-elem"),
+        code if crate::ptrfromuse::is_float_op(code) => ev.refuse("float-elem"),
         _ => {}
     }
 }
@@ -2478,7 +2478,7 @@ const FAMILY_CAP: usize = 64;
 /// State for the callers decompiled after it what `data`, entered at `entry`,
 /// gave element pointers ([`Stated`]).
 pub fn state(arch: &mut crate::architecture::Architecture, entry: &Address, data: &Funcdata) {
-    if !arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0 {
+    if !arch.kuna_options.get::<crate::elemptr::ElemPtr>().0 {
         return;
     }
     let Some(key) = entry
@@ -2504,17 +2504,17 @@ pub fn state(arch: &mut crate::architecture::Architecture, entry: &Address, data
             st.params.push((addr, size));
         }
     }
-    st.ret = crate::kuna_structsynth::returned_values(data)
+    st.ret = crate::structsynth::returned_values(data)
         .into_iter()
         .any(|vn| element_derived(data, vn));
     if st == Stated::default() {
         arch.kuna_tables
-            .get_mut::<crate::kuna_elemptr::Ledger>()
+            .get_mut::<crate::elemptr::Ledger>()
             .stated
             .remove(&key);
     } else {
         arch.kuna_tables
-            .get_mut::<crate::kuna_elemptr::Ledger>()
+            .get_mut::<crate::elemptr::Ledger>()
             .stated
             .insert(key, Rc::new(st));
     }
@@ -2527,7 +2527,7 @@ pub fn reaches_element_pointer(data: &Funcdata, vn: VarnodeId) -> bool {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_elemptr::ElemPtr>()
+        .get::<crate::elemptr::ElemPtr>()
         .0
     {
         return false;
@@ -3049,8 +3049,8 @@ pub struct Ledger {
 /// that decides them together (the callee-first driver, or a single
 /// function), not one whose functions are decompiled as if alone.
 pub fn start(arch: &mut crate::architecture::Architecture, objects: bool) {
-    *arch.kuna_tables.get_mut::<crate::kuna_elemptr::Ledger>() = Ledger {
-        recording: arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0,
+    *arch.kuna_tables.get_mut::<crate::elemptr::Ledger>() = Ledger {
+        recording: arch.kuna_options.get::<crate::elemptr::ElemPtr>().0,
         no_objects: !objects,
         ..Ledger::default()
     };
@@ -3061,7 +3061,7 @@ pub fn start(arch: &mut crate::architecture::Architecture, objects: bool) {
 /// a share of the functions, and a streamed export, which writes each one as
 /// it lands.
 pub fn without_objects(arch: &mut crate::architecture::Architecture) {
-    *arch.kuna_tables.get_mut::<crate::kuna_elemptr::Ledger>() = Ledger {
+    *arch.kuna_tables.get_mut::<crate::elemptr::Ledger>() = Ledger {
         no_objects: true,
         ..Ledger::default()
     };
@@ -3070,16 +3070,16 @@ pub fn without_objects(arch: &mut crate::architecture::Architecture) {
 /// End a batch's recording; the blocked sets stay for any later redo.
 pub fn stop(arch: &mut crate::architecture::Architecture) {
     arch.kuna_tables
-        .get_mut::<crate::kuna_elemptr::Ledger>()
+        .get_mut::<crate::elemptr::Ledger>()
         .recording = false;
 }
 
 /// Hand a function the objects it must not type.
 pub fn seed(arch: &crate::architecture::Architecture, data: &mut Funcdata) {
-    if !arch.kuna_options.get::<crate::kuna_elemptr::ElemPtr>().0 {
+    if !arch.kuna_options.get::<crate::elemptr::ElemPtr>().0 {
         return;
     }
-    let ledger = arch.kuna_tables.get::<crate::kuna_elemptr::Ledger>();
+    let ledger = arch.kuna_tables.get::<crate::elemptr::Ledger>();
     data.kuna_set_elemptr_objects(!ledger.no_objects);
     if !ledger.stated.is_empty() {
         let own = data.get_address().get_offset();
@@ -3116,19 +3116,13 @@ pub fn seed(arch: &crate::architecture::Architecture, data: &mut Funcdata) {
 /// File what a decompiled function said about each object, replacing what an
 /// earlier decompile of the same function said.
 pub fn record(arch: &mut crate::architecture::Architecture, data: &Funcdata) {
-    if !arch
-        .kuna_tables
-        .get::<crate::kuna_elemptr::Ledger>()
-        .recording
-    {
+    if !arch.kuna_tables.get::<crate::elemptr::Ledger>().recording {
         return;
     }
-    arch.kuna_tables
-        .get_mut::<crate::kuna_elemptr::Ledger>()
-        .file(
-            data.get_address().get_offset(),
-            data.kuna_elemptr_verdicts(),
-        );
+    arch.kuna_tables.get_mut::<crate::elemptr::Ledger>().file(
+        data.get_address().get_offset(),
+        data.kuna_elemptr_verdicts(),
+    );
 }
 
 /// The functions to decompile again: every one that typed an object some other
@@ -3136,7 +3130,7 @@ pub fn record(arch: &mut crate::architecture::Architecture, data: &Funcdata) {
 pub fn disagreements(arch: &mut crate::architecture::Architecture) -> BTreeSet<u64> {
     let redo = arch
         .kuna_tables
-        .get_mut::<crate::kuna_elemptr::Ledger>()
+        .get_mut::<crate::elemptr::Ledger>()
         .disagreements();
     if trace_on() {
         eprintln!(
@@ -3349,11 +3343,11 @@ fn sign_extend(v: uintb, size: int4) -> intb {
 
 /// (kuna `elemptr`) Declare a pointer-width value used only as an array of
 /// one element type as a pointer to that element; option `elemptr on|off`.
-/// The rule lives in [`kuna_elemptr`](crate::kuna_elemptr).
+/// The rule lives in [`kuna_elemptr`](crate::elemptr).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ElemPtr(pub bool);
 
-impl crate::kuna_optionset::KunaOption for ElemPtr {
+impl crate::optionset::KunaOption for ElemPtr {
     const NAME: &'static str = "elemptr";
     crate::kuna_option_id!();
 
@@ -3366,7 +3360,7 @@ impl crate::kuna_optionset::KunaOption for ElemPtr {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_elemptr::OptionElemPtr.apply(value)?;
+        let (v, msg) = crate::elemptr::OptionElemPtr.apply(value)?;
         Ok((ElemPtr(v), msg))
     }
 }
@@ -3386,20 +3380,20 @@ impl crate::kuna_optionset::KunaOption for ElemPtr {
 /// - `stated`: what each callee decompiled earlier stated about its parameters and return.
 #[derive(Default)]
 struct ElemptrSlot {
-    blocked: Option<std::rc::Rc<std::collections::BTreeSet<crate::kuna_elemptr::Obj>>>,
-    adopt: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
-    settled: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
+    blocked: Option<std::rc::Rc<std::collections::BTreeSet<crate::elemptr::Obj>>>,
+    adopt: Option<std::rc::Rc<crate::elemptr::Signs>>,
+    settled: Option<std::rc::Rc<crate::elemptr::Signs>>,
     verdicts: std::cell::RefCell<
-        std::collections::BTreeMap<crate::kuna_elemptr::Obj, crate::kuna_elemptr::GlobalVerdict>,
+        std::collections::BTreeMap<crate::elemptr::Obj, crate::elemptr::GlobalVerdict>,
     >,
     constants: std::cell::RefCell<std::collections::BTreeSet<u64>>,
-    inputs: std::cell::RefCell<std::collections::BTreeMap<crate::kuna_elemptr::InputKey, bool>>,
+    inputs: std::cell::RefCell<std::collections::BTreeMap<crate::elemptr::InputKey, bool>>,
     disputed: std::cell::Cell<bool>,
     typed: std::cell::RefCell<std::collections::HashSet<crate::context::VarnodeId>>,
     no_objects: bool,
     stated: std::collections::HashMap<
         (unlace_base::types::int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_elemptr::Stated>,
+        std::rc::Rc<crate::elemptr::Stated>,
     >,
 }
 crate::kuna_func_state!(ElemptrSlot, keep_across_clear: true);
@@ -3410,20 +3404,20 @@ pub trait FuncdataElemptrExt {
     /// (kuna `elemptr`) Set the globals and tables this function must not type.
     fn kuna_set_elemptr_blocked(
         &mut self,
-        blocked: Option<std::rc::Rc<std::collections::BTreeSet<crate::kuna_elemptr::Obj>>>,
+        blocked: Option<std::rc::Rc<std::collections::BTreeSet<crate::elemptr::Obj>>>,
     );
     /// (kuna `elemptr`) Set the element signs this function adopts: the ones
     /// the batch decided for it, and the ones evidence has settled so far.
     fn kuna_set_elemptr_adopt(
         &mut self,
-        adopt: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
-        settled: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
+        adopt: Option<std::rc::Rc<crate::elemptr::Signs>>,
+        settled: Option<std::rc::Rc<crate::elemptr::Signs>>,
     );
     /// (kuna `elemptr`) The element shape and sign (`true` signed) this
     /// function reads `obj`'s elements at, when the batch decided it.
-    fn kuna_elemptr_adopted(&self, obj: crate::kuna_elemptr::Obj) -> Option<(String, bool)>;
+    fn kuna_elemptr_adopted(&self, obj: crate::elemptr::Obj) -> Option<(String, bool)>;
     /// (kuna `elemptr`) Is `obj` one this function must not type?
-    fn kuna_elemptr_blocked(&self, obj: crate::kuna_elemptr::Obj) -> bool;
+    fn kuna_elemptr_blocked(&self, obj: crate::elemptr::Obj) -> bool;
     /// (kuna `elemptr`) Set whether this function may type globals and tables.
     fn kuna_set_elemptr_objects(&mut self, on: bool);
     /// (kuna `elemptr`) May this function type globals and tables?
@@ -3432,18 +3426,18 @@ pub trait FuncdataElemptrExt {
     fn kuna_set_elemptr_stated(
         &mut self,
         entry: &unlace_base::address::Address,
-        stated: std::rc::Rc<crate::kuna_elemptr::Stated>,
+        stated: std::rc::Rc<crate::elemptr::Stated>,
     );
     /// (kuna `elemptr`) What the callee entered at `entry` stated, if anything.
     fn kuna_elemptr_stated(
         &self,
         entry: &unlace_base::address::Address,
-    ) -> Option<&crate::kuna_elemptr::Stated>;
+    ) -> Option<&crate::elemptr::Stated>;
     /// (kuna `elemptr`) What this function's last type pass said about `obj`.
     fn kuna_elemptr_verdict(
         &self,
-        obj: crate::kuna_elemptr::Obj,
-    ) -> Option<crate::kuna_elemptr::GlobalVerdict>;
+        obj: crate::elemptr::Obj,
+    ) -> Option<crate::elemptr::GlobalVerdict>;
     /// (kuna `elemptr`) Forget what the previous type pass said: the verdicts
     /// and typed tables describe the pass whose types the function keeps.
     fn kuna_elemptr_begin_pass(&self);
@@ -3452,11 +3446,7 @@ pub trait FuncdataElemptrExt {
     /// (kuna `elemptr`) Did this pass give `vn` an element pointer?
     fn kuna_elemptr_typed(&self, vn: crate::context::VarnodeId) -> bool;
     /// (kuna `elemptr`) Fold one walk's verdict about `obj` in.
-    fn kuna_elemptr_note(
-        &self,
-        obj: crate::kuna_elemptr::Obj,
-        verdict: crate::kuna_elemptr::GlobalVerdict,
-    );
+    fn kuna_elemptr_note(&self, obj: crate::elemptr::Obj, verdict: crate::elemptr::GlobalVerdict);
     /// (kuna `elemptr`) Note a constant address a walk typed as an element pointer.
     fn kuna_elemptr_note_constant(&self, addr: u64);
     /// (kuna `elemptr`) Did a walk type the constant address `addr`?
@@ -3464,25 +3454,25 @@ pub trait FuncdataElemptrExt {
     /// (kuna `elemptr`) What an earlier pass of this decompile did with the
     /// parameter or call return `key`: `Some(false)` typed it, `Some(true)` it
     /// is blocked.
-    fn kuna_elemptr_input(&self, key: crate::kuna_elemptr::InputKey) -> Option<bool>;
+    fn kuna_elemptr_input(&self, key: crate::elemptr::InputKey) -> Option<bool>;
     /// (kuna `elemptr`) A pass typed the parameter or call return `key`.
-    fn kuna_elemptr_note_input(&self, key: crate::kuna_elemptr::InputKey);
+    fn kuna_elemptr_note_input(&self, key: crate::elemptr::InputKey);
     /// (kuna `elemptr`) A later pass found `key`, typed by an earlier one, to be
     /// the index of another base: block it and ask for a restart.
-    fn kuna_elemptr_dispute_input(&self, key: crate::kuna_elemptr::InputKey);
+    fn kuna_elemptr_dispute_input(&self, key: crate::elemptr::InputKey);
     /// (kuna `elemptr`) Was a candidate disputed since the last call?
     fn kuna_elemptr_take_disputed(&self) -> bool;
     /// (kuna `elemptr`) What this function's walks said about each global.
     fn kuna_elemptr_verdicts(
         &self,
-    ) -> std::collections::BTreeMap<crate::kuna_elemptr::Obj, crate::kuna_elemptr::GlobalVerdict>;
+    ) -> std::collections::BTreeMap<crate::elemptr::Obj, crate::elemptr::GlobalVerdict>;
 }
 
 impl FuncdataElemptrExt for crate::funcdata::Funcdata {
     /// (kuna `elemptr`) Set the globals and tables this function must not type.
     fn kuna_set_elemptr_blocked(
         &mut self,
-        blocked: Option<std::rc::Rc<std::collections::BTreeSet<crate::kuna_elemptr::Obj>>>,
+        blocked: Option<std::rc::Rc<std::collections::BTreeSet<crate::elemptr::Obj>>>,
     ) {
         self.kuna_state_mut::<ElemptrSlot>().blocked = blocked;
     }
@@ -3490,8 +3480,8 @@ impl FuncdataElemptrExt for crate::funcdata::Funcdata {
     /// the batch decided for it, and the ones evidence has settled so far.
     fn kuna_set_elemptr_adopt(
         &mut self,
-        adopt: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
-        settled: Option<std::rc::Rc<crate::kuna_elemptr::Signs>>,
+        adopt: Option<std::rc::Rc<crate::elemptr::Signs>>,
+        settled: Option<std::rc::Rc<crate::elemptr::Signs>>,
     ) {
         let slot = self.kuna_state_mut::<ElemptrSlot>();
         slot.adopt = adopt;
@@ -3499,14 +3489,14 @@ impl FuncdataElemptrExt for crate::funcdata::Funcdata {
     }
     /// (kuna `elemptr`) The element shape and sign (`true` signed) this
     /// function reads `obj`'s elements at, when the batch decided it.
-    fn kuna_elemptr_adopted(&self, obj: crate::kuna_elemptr::Obj) -> Option<(String, bool)> {
+    fn kuna_elemptr_adopted(&self, obj: crate::elemptr::Obj) -> Option<(String, bool)> {
         let slot = self.kuna_state::<ElemptrSlot>();
         [&slot.adopt, &slot.settled]
             .into_iter()
             .find_map(|m| m.as_ref().and_then(|a| a.get(&obj).cloned()))
     }
     /// (kuna `elemptr`) Is `obj` one this function must not type?
-    fn kuna_elemptr_blocked(&self, obj: crate::kuna_elemptr::Obj) -> bool {
+    fn kuna_elemptr_blocked(&self, obj: crate::elemptr::Obj) -> bool {
         self.kuna_state::<ElemptrSlot>()
             .blocked
             .as_ref()
@@ -3524,7 +3514,7 @@ impl FuncdataElemptrExt for crate::funcdata::Funcdata {
     fn kuna_set_elemptr_stated(
         &mut self,
         entry: &unlace_base::address::Address,
-        stated: std::rc::Rc<crate::kuna_elemptr::Stated>,
+        stated: std::rc::Rc<crate::elemptr::Stated>,
     ) {
         if let Some(sp) = entry.get_space() {
             self.kuna_state_mut::<ElemptrSlot>()
@@ -3536,7 +3526,7 @@ impl FuncdataElemptrExt for crate::funcdata::Funcdata {
     fn kuna_elemptr_stated(
         &self,
         entry: &unlace_base::address::Address,
-    ) -> Option<&crate::kuna_elemptr::Stated> {
+    ) -> Option<&crate::elemptr::Stated> {
         let stated = &self.kuna_state::<ElemptrSlot>().stated;
         if stated.is_empty() {
             return None;
@@ -3549,8 +3539,8 @@ impl FuncdataElemptrExt for crate::funcdata::Funcdata {
     /// (kuna `elemptr`) What this function's last type pass said about `obj`.
     fn kuna_elemptr_verdict(
         &self,
-        obj: crate::kuna_elemptr::Obj,
-    ) -> Option<crate::kuna_elemptr::GlobalVerdict> {
+        obj: crate::elemptr::Obj,
+    ) -> Option<crate::elemptr::GlobalVerdict> {
         self.kuna_state::<ElemptrSlot>()
             .verdicts
             .borrow()
@@ -3580,11 +3570,7 @@ impl FuncdataElemptrExt for crate::funcdata::Funcdata {
             .contains(&vn)
     }
     /// (kuna `elemptr`) Fold one walk's verdict about `obj` in.
-    fn kuna_elemptr_note(
-        &self,
-        obj: crate::kuna_elemptr::Obj,
-        verdict: crate::kuna_elemptr::GlobalVerdict,
-    ) {
+    fn kuna_elemptr_note(&self, obj: crate::elemptr::Obj, verdict: crate::elemptr::GlobalVerdict) {
         let mut m = self.kuna_state::<ElemptrSlot>().verdicts.borrow_mut();
         let merged = match m.remove(&obj) {
             Some(prev) => prev.merge(verdict),
@@ -3609,7 +3595,7 @@ impl FuncdataElemptrExt for crate::funcdata::Funcdata {
     /// (kuna `elemptr`) What an earlier pass of this decompile did with the
     /// parameter or call return `key`: `Some(false)` typed it, `Some(true)` it
     /// is blocked.
-    fn kuna_elemptr_input(&self, key: crate::kuna_elemptr::InputKey) -> Option<bool> {
+    fn kuna_elemptr_input(&self, key: crate::elemptr::InputKey) -> Option<bool> {
         self.kuna_state::<ElemptrSlot>()
             .inputs
             .borrow()
@@ -3617,7 +3603,7 @@ impl FuncdataElemptrExt for crate::funcdata::Funcdata {
             .copied()
     }
     /// (kuna `elemptr`) A pass typed the parameter or call return `key`.
-    fn kuna_elemptr_note_input(&self, key: crate::kuna_elemptr::InputKey) {
+    fn kuna_elemptr_note_input(&self, key: crate::elemptr::InputKey) {
         self.kuna_state::<ElemptrSlot>()
             .inputs
             .borrow_mut()
@@ -3626,7 +3612,7 @@ impl FuncdataElemptrExt for crate::funcdata::Funcdata {
     }
     /// (kuna `elemptr`) A later pass found `key`, typed by an earlier one, to be
     /// the index of another base: block it and ask for a restart.
-    fn kuna_elemptr_dispute_input(&self, key: crate::kuna_elemptr::InputKey) {
+    fn kuna_elemptr_dispute_input(&self, key: crate::elemptr::InputKey) {
         let slot = self.kuna_state::<ElemptrSlot>();
         slot.inputs.borrow_mut().insert(key, true);
         slot.disputed.set(true);
@@ -3638,8 +3624,7 @@ impl FuncdataElemptrExt for crate::funcdata::Funcdata {
     /// (kuna `elemptr`) What this function's walks said about each global.
     fn kuna_elemptr_verdicts(
         &self,
-    ) -> std::collections::BTreeMap<crate::kuna_elemptr::Obj, crate::kuna_elemptr::GlobalVerdict>
-    {
+    ) -> std::collections::BTreeMap<crate::elemptr::Obj, crate::elemptr::GlobalVerdict> {
         self.kuna_state::<ElemptrSlot>().verdicts.borrow().clone()
     }
 }
@@ -3647,5 +3632,5 @@ impl FuncdataElemptrExt for crate::funcdata::Funcdata {
 crate::kuna_arch_table!(Ledger);
 
 #[cfg(test)]
-#[path = "kuna_elemptr/tests.rs"]
+#[path = "elemptr/tests.rs"]
 mod tests;

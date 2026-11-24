@@ -68,7 +68,7 @@ fn fixture(
 
     let mut arch = ArchContext::new(spaces);
     arch.kuna_options
-        .set(unlace_decomp::kuna_coreoptions::StackViews(true));
+        .set(unlace_decomp::coreoptions::StackViews(true));
     let mut fd = Funcdata::new(
         "build",
         "build",

@@ -269,7 +269,7 @@ pub struct Architecture {
     pub archid: String,
 
     /// The registered kuna options' current values.
-    pub kuna_options: crate::kuna_optionset::OptionSet,
+    pub kuna_options: crate::optionset::OptionSet,
 
     /// File input explicitly selected ARM/Thumb state; metadata must not repaint TMode.
     pub input_arm_isa_override: bool,
@@ -324,23 +324,23 @@ pub struct Architecture {
     /// (kuna `pltlocal`) `(stub, definition)` for each PLT stub the image's own
     /// dynamic relocations bind to a function it defines, ascending by stub
     /// (`ObjectLoadImage::plt_local_targets`). Installed by the ELF bootstrap;
-    /// empty on every other path. See [`crate::p4_calls::kuna_pltlocal`].
+    /// empty on every other path. See [`crate::p4_calls::pltlocal`].
     pub plt_local: Rc<Vec<(u64, u64)>>,
     /// (kuna `litpoolconst`) `[start, stop]` (inclusive) offsets of the image's
     /// allocated, executable, non-writable, file-backed regions — the program's
     /// own instruction stream, and so the ARM/MIPS/PPC literal pools embedded in
     /// it. A read that lies entirely inside one folds with
     /// [`Self::readonlypropagate`] off; derived
-    /// by [`crate::kuna_litpoolconst::code_const_ranges`] and installed by the
+    /// by [`crate::litpoolconst::code_const_ranges`] and installed by the
     /// object bootstrap beside [`Self::dynreloc_const`]. Empty on every other
     /// path, so it is inert for the XML datatest oracle.
     pub litpool_const: Rc<Vec<(u64, u64)>>,
     /// (kuna `poolextents`) Sorted, disjoint `[lo, hi)` word runs of the ARM32
     /// literal pools the analysis tier's Listing proves from trusted
-    /// references (`unlace-analysis` `listing/kuna_poolextents.rs`), committed
+    /// references (`unlace-analysis` `listing/poolextents.rs`), committed
     /// with the Listing's facts. The `funcboundflow` bound ends an
     /// unconditional call's fall-through at one
-    /// ([`crate::kuna_funcboundflow::kuna_pool_pad`]). Empty without the
+    /// ([`crate::funcboundflow::kuna_pool_pad`]). Empty without the
     /// Listing and on every other target, so it is inert for the XML datatest
     /// oracle.
     pub arm_pool_extents: Rc<Vec<(u64, u64)>>,
@@ -414,13 +414,13 @@ pub struct Architecture {
     /// (kuna `vectorabi`) The vector user-ops and their element kinds, built once.
     pub vector_userop_kinds: std::cell::OnceCell<Rc<Vec<(unlace_base::types::uint4, u8)>>>,
 
-    /// (kuna) The kuna passes' architecture-wide tables ([`crate::kuna_archstate`]): the
+    /// (kuna) The kuna passes' architecture-wide tables ([`crate::archstate`]): the
     /// compiled `<segmentop>` definitions, call mechanisms and jump assists, built while the
     /// specs load and shared with every per-function context.
-    pub kuna_states: crate::kuna_archstate::ArchStates,
-    /// (kuna) The kuna passes' run-wide ledgers and caches ([`crate::kuna_archstate::ArchTables`]),
+    pub kuna_states: crate::archstate::ArchStates,
+    /// (kuna) The kuna passes' run-wide ledgers and caches ([`crate::archstate::ArchTables`]),
     /// one per table type, created on first use.
-    pub kuna_tables: crate::kuna_archstate::ArchTables,
+    pub kuna_tables: crate::archstate::ArchTables,
     /// (kuna `fpuemu`) The loader found 8087-emulator code in the image, which
     /// `auto` decodes by.
     pub fpu_emu_evidence: bool,
@@ -469,7 +469,7 @@ pub struct Architecture {
     /// `option octeoneffects off`.
     pub octeon_upstream_inject: Vec<int4>,
     /// (kuna) The halves of the image's MIPS unaligned load/store pairs, once
-    /// scanned ([`crate::kuna_mipsunaligned`]).
+    /// scanned ([`crate::mipsunaligned`]).
     pub kuna_mips_pairs: Option<Rc<Vec<u64>>>,
     /// (kuna) Whether those halves carry the pair flag.
     pub kuna_mips_pairs_painted: bool,
@@ -479,7 +479,7 @@ pub struct Architecture {
     /// applied), and the thing `option rustabi auto` tests and
     /// `option reloadarg` stands down on.  The XML `<binaryimage>` bootstrap
     /// never runs the analyzer tier, so it stays `Unknown` there.
-    pub source_lang_detected: crate::kuna_sourcelang::SourceLang,
+    pub source_lang_detected: crate::sourcelang::SourceLang,
     /// Executable `runtime.chanrecv2` entry confirmed by the Go function table.
     pub go_chanrecv2: Option<u64>,
     /// Function entry to its single DWARF-verified status receive call site.
@@ -506,7 +506,7 @@ pub struct Architecture {
     /// (kuna `armfloatreturn`) Library prototypes declaring a `float` or `double`
     /// that an ARM image's load held back, by name or by entry address, until a
     /// decompile shows whether the option applies. See
-    /// [`crate::p4_calls::kuna_armfloatreturn::park_float_library_prototypes`].
+    /// [`crate::p4_calls::armfloatreturn::park_float_library_prototypes`].
     pub arm_float_library_prototypes: Vec<(Option<Address>, crate::fspec::PrototypePieces)>,
 
     /// (kuna `fdeflowbound`) Every single-function unwind-table extent
@@ -550,11 +550,11 @@ pub struct Architecture {
     /// `(space index, offset)`, committed by the analysis tier.
     pub kuna_import_sites: Rc<std::collections::HashMap<(int4, u64), Vec<u64>>>,
     /// (kuna `swiftcall`) Per-image cache of whether a callee's body leaves
-    /// `swiftself` unread ([`crate::kuna_swiftcall::seed_self_readers`]).
+    /// `swiftself` unread ([`crate::swiftcall::seed_self_readers`]).
     pub kuna_swift_self_first_cache: std::collections::HashMap<(int4, uintb), bool>,
     /// (kuna `swiftcall`) Whether the body at an entry reads `swiftself`
     /// before writing it, other than to save it
-    /// ([`crate::kuna_swiftinfer::seed`]).
+    /// ([`crate::swiftinfer::seed`]).
     pub kuna_swift_self_reads: std::collections::BTreeMap<(int4, uintb), bool>,
     /// (kuna `swiftcall`) The same for `swiftasync`.
     pub kuna_swift_async_reads: std::collections::BTreeMap<(int4, uintb), bool>,
@@ -567,12 +567,12 @@ pub struct Architecture {
     /// keyed by the default model it was derived from.
     pub kuna_vfp_variadic: RefCell<Option<(Rc<ProtoModel>, Option<Rc<ProtoModel>>)>>,
     /// (kuna) Each x86-32 callee's register inputs read off its own entry, keyed
-    /// by entry offset; see [`crate::kuna_calleereginputs`].
+    /// by entry offset; see [`crate::calleereginputs`].
     pub kuna_callee_reginputs: RefCell<std::collections::HashMap<uintb, Option<u8>>>,
     /// (kuna `calleereginputs custom`) Per-callee-entry input-register key (the
     /// ECX/EDX/EBX/ESI/EDI set the whole-image two-sided rule decided): bit 0
     /// ECX, 1 EDX, 2 EBX, 3 ESI, 4 EDI. Built once over the whole image by the
-    /// callee-first driver ([`crate::p4_calls::kuna_calleereginputs`]); empty in
+    /// callee-first driver ([`crate::p4_calls::calleereginputs`]); empty in
     /// single-function mode (then no custom register is an argument, consistently
     /// on both sides) and empty with the `custom` extension off.
     pub kuna_custom_reg_callers: Rc<std::collections::HashMap<uintb, u16>>,
@@ -630,11 +630,11 @@ pub struct Architecture {
     pub kuna_vcall_targets: Rc<std::collections::BTreeMap<u64, VcallTargets>>,
 
     /// Caller-local PPC32 PIC import proof, applied during flow following.
-    pub analysis_ppc32picimports: crate::kuna_ppc32picimports::Mode,
+    pub analysis_ppc32picimports: crate::ppc32picimports::Mode,
     /// (kuna) The load-time options this program was loaded with: the ones in
     /// force when it was built, updated by a load-time `option` command.
     /// [`Self::load_scope`] puts them back in force for later analysis.
-    load_options: Rc<crate::kuna_loadoptions::LoadOptions>,
+    load_options: Rc<crate::loadoptions::LoadOptions>,
     /// (kuna) Built with no options in force: an entry point that takes none
     /// loaded this program, so its gates keep reading the environment live.
     load_options_from_env: bool,
@@ -642,7 +642,7 @@ pub struct Architecture {
     /// (kuna `msvcsig`) The entries, as `(space index, offset)`, whose MSVC
     /// prototype the analysis commit locked onto the FunctionSymbol. A call
     /// through one of these import slots is made direct while the flow is
-    /// followed ([`crate::kuna_msvcimportcall`]). Empty unless `msvcsig` applied.
+    /// followed ([`crate::msvcimportcall`]). Empty unless `msvcsig` applied.
     pub msvcsig_import_slots: std::collections::BTreeSet<(int4, uintb)>,
     /// (kuna `guarddispatch`) The Control Flow Guard dispatch pointer slots a PE
     /// load configuration names, as `(space index, offset)`.
@@ -660,28 +660,28 @@ pub struct Architecture {
     /// **envp)` for an executable's own symbol-named `main`, with its entry.
     /// Not parked on the symbol: the drive locks only its `int` return and names
     /// and types the parameters `main`'s own analysis recovers
-    /// ([`crate::kuna_elfmaindecl`]).
+    /// ([`crate::elfmaindecl`]).
     pub elfmain_main_decl: Option<(Address, crate::fspec::PrototypePieces)>,
     /// (kuna `fid`) The entries whose parked prototype came from a `.fid`
-    /// record ([`crate::kuna_fidproto`]).
+    /// record ([`crate::fidproto`]).
     pub fid_prototypes: std::collections::BTreeSet<u64>,
     /// (kuna `formatstring`) The call points, among the prototype overrides of
     /// the drive in progress, whose override a resolved format string produced.
     /// Set by the console's decompile step around each drive; the flow build
     /// installs those overrides with an open tail
-    /// ([`crate::p4_calls::kuna_formattail`]).
+    /// ([`crate::p4_calls::formattail`]).
     pub format_override_callpoints: std::collections::BTreeSet<u64>,
     /// (kuna `--assert callee`) Caller-stated destinations of indirect calls:
     /// function entry -> call site -> callee entry
-    /// ([`crate::kuna_calleeoverride`]).
+    /// ([`crate::calleeoverride`]).
     pub kuna_callee_overrides:
         std::collections::BTreeMap<Address, std::collections::BTreeMap<Address, Address>>,
     /// (kuna) Loader-stated prototypes of single call instructions, by the
-    /// instruction's address ([`crate::kuna_callsiteproto`]).
+    /// instruction's address ([`crate::callsiteproto`]).
     pub kuna_callsite_protos: std::collections::BTreeMap<u64, crate::fspec::PrototypePieces>,
     /// (kuna `uefi`) The interface instances the EFI module installs
-    /// ([`crate::kuna_uefiprotocols`]).
-    pub kuna_uefi_installs: Vec<crate::kuna_uefiprotocols::InstalledInterface>,
+    /// ([`crate::uefiprotocols`]).
+    pub kuna_uefi_installs: Vec<crate::uefiprotocols::InstalledInterface>,
     /// (kuna `varargstackargs`) Per-run cache of the callee `va_start` probe,
     /// keyed by the callee's `(space index, entry offset)`.
     pub kuna_darwin_variadic_cache: std::collections::HashMap<(int4, uintb), bool>,
@@ -698,7 +698,7 @@ pub struct Architecture {
     pub error_noreturn_callsites: Vec<u64>,
     /// (kuna #1288) The MS-DOS exit interrupts (`INT 20h`, `INT 27h`, `INT 21h`
     /// with AH 00h/31h/4Ch) of a real-mode raw or MZ load, sorted. The raw
-    /// discovery finds them (`unlace_analysis::listing::kuna_dosexit`); flow ends
+    /// discovery finds them (`unlace_analysis::listing::dosexit`); flow ends
     /// at each ([`FlowEnvironment::is_dos_exit_callind`](crate::flow::FlowEnvironment::is_dos_exit_callind)).
     pub dos_exit_sites: Vec<u64>,
 
@@ -727,7 +727,7 @@ pub struct Architecture {
     /// are recovered under it ([`crate::context::ArchContext::bound_proto_models`]).
     pub loader_proto_models: Rc<std::collections::BTreeMap<(int4, uintb), Rc<ProtoModel>>>,
     /// (kuna `swiftmetadata`) Each local Swift enum's case count by its
-    /// metadata accessor's entry offset (`p2_lift/kuna_switchextent.rs`).
+    /// metadata accessor's entry offset (`p2_lift/switchextent.rs`).
     pub loader_swift_enum_cases: Rc<std::collections::BTreeMap<u64, u32>>,
 
     // --- Owned subsystems (architecture.hh:211-233) -----------------------
@@ -756,7 +756,7 @@ pub struct Architecture {
     /// `restartTable`, owned here per `docs/rust-port/README.md` — one log per loaded
     /// program; survives `Funcdata::clear()` because it lives outside the
     /// Funcdata).  The `restarts` console command renders it.
-    pub restart_log: crate::kuna_restartlog::RestartLog,
+    pub restart_log: crate::restartlog::RestartLog,
     /// Specifically registered user-defined p-code ops (C++ `userops`).
     pub userops: UserOpManage,
     /// Manager of decoded strings (C++ `stringManager`, a `StringManager*`).
@@ -775,10 +775,10 @@ pub struct Architecture {
     pub image_elfv1_toc: bool,
     /// (kuna `dexmodel`) The loaded DEX files, when the image is one (or an
     /// APK holding several).
-    pub dex: Vec<Rc<crate::kuna_dex::DexModel>>,
+    pub dex: Vec<Rc<crate::dex::DexModel>>,
     /// (kuna `jvmmodel`) The loaded class files, when the image is one (or a
     /// JAR holding several).
-    pub jvm: Vec<Rc<crate::kuna_jvm::JvmModel>>,
+    pub jvm: Vec<Rc<crate::jvm::JvmModel>>,
     /// Comments for this architecture (C++ `commentdb`).  // STUB(comment.cc)
     pub commentdb: CommentDatabase,
 
@@ -793,7 +793,7 @@ pub struct Architecture {
     /// keeps the `&self` setters (`setup_sizes`, `set_core_type`, …) working.
     types: Rc<TypeFactoryImpl>,
     /// The c-language printer (C++ `print`, the active `PrintLanguage*`).
-    print: Box<dyn crate::kuna_printhandle::PrintHandle>,
+    print: Box<dyn crate::printhandle::PrintHandle>,
     /// Registered prototype models (C++ `protoModels`, name -> `ProtoModel*`).
     /// A `BTreeMap` (ADR 0002) for deterministic iteration matching the C++
     /// `map<string,ProtoModel*>` ordered traversal in `parseCompilerConfig`.
@@ -821,7 +821,7 @@ pub struct Architecture {
     /// The model the compiler spec **nominates** for evaluating the current
     /// function's prototype (its `<eval_current_prototype>`), decoded by
     /// [`build_default_proto`]; `None` for the many languages whose spec
-    /// declares no such element.  See [`crate::kuna_evalcurrentproto`].
+    /// declares no such element.  See [`crate::evalcurrentproto`].
     evalfp_current_spec: Option<Rc<ProtoModel>>,
     /// Default storage location of a function's return address (C++
     /// `Architecture::defaultReturnAddr`), decoded from the cspec's top-level
@@ -916,7 +916,7 @@ pub struct Architecture {
 
     /// (kuna) The `.sla` bytes [`crate::sleigh_arch::SleighArchitecture::build_translator`]
     /// decoded this engine from, kept so a decode-equivalent engine can be
-    /// rebuilt elsewhere (see [`crate::kuna_decodekit::EngineRecipe`]). `None`
+    /// rebuilt elsewhere (see [`crate::decodekit::EngineRecipe`]). `None`
     /// for an `Architecture` whose engine was not built from local `.sla` bytes
     /// -- the ghidra-mode bridge, where there is nothing to rebuild from.
     decode_sla: Option<Arc<[u8]>>,
@@ -963,11 +963,11 @@ impl Architecture {
     /// `None` for an engine that is not a local `Sleigh` over decoded `.sla`
     /// bytes -- the ghidra-mode bridge decodes through an RPC, and there is no
     /// recipe that reproduces it.
-    pub fn decode_recipe(&self) -> Option<crate::kuna_decodekit::EngineRecipe> {
+    pub fn decode_recipe(&self) -> Option<crate::decodekit::EngineRecipe> {
         let sla = self.decode_sla.clone()?;
         let truncations = self.decode_truncations.clone()?;
         self.translate.as_sleigh()?;
-        Some(crate::kuna_decodekit::EngineRecipe {
+        Some(crate::decodekit::EngineRecipe {
             archid: Arc::from(self.archid.as_str()),
             sla,
             truncations,
@@ -1001,11 +1001,11 @@ pub enum HelperAbi {
     Arm { big_endian: bool },
 }
 
-pub use crate::kuna_passhooks::default_pass_hooks;
+pub use crate::passhooks::default_pass_hooks;
 
 impl Architecture {
-    /// The pass hooks this architecture's contexts start with ([`crate::kuna_passhooks`]).
-    pub fn pass_hooks(&self) -> &'static crate::kuna_passhooks::KunaHooks {
+    /// The pass hooks this architecture's contexts start with ([`crate::passhooks`]).
+    pub fn pass_hooks(&self) -> &'static crate::passhooks::KunaHooks {
         default_pass_hooks()
     }
 
@@ -1066,7 +1066,7 @@ impl Architecture {
 
         let mut arch = Architecture {
             archid: archid.to_string(),
-            kuna_options: crate::kuna_optionset::OptionSet::new(),
+            kuna_options: crate::optionset::OptionSet::new(),
             input_arm_isa_override: false,
             arm_inventory_modes: Vec::new(),
             loader_entry_tracks: std::collections::BTreeMap::new(),
@@ -1078,8 +1078,8 @@ impl Architecture {
             symbol_snapshots: RefCell::new(SymbolSnapshots::default()),
             kuna_snapshot_cache: unlace_base::env::var_os("UNLACE_NO_SYMBOL_SNAPSHOT_CACHE")
                 .is_none(),
-            load_options: crate::kuna_loadoptions::LoadOptions::in_force(),
-            load_options_from_env: !crate::kuna_loadoptions::options_in_force(),
+            load_options: crate::loadoptions::LoadOptions::in_force(),
+            load_options_from_env: !crate::loadoptions::options_in_force(),
 
             decode_sla: None,
             decode_truncations: None,
@@ -1177,7 +1177,7 @@ impl Architecture {
             // Analysis-pass gates: placeholder values -- `Architecture::new` calls
             // `reset_defaults_internal()` below, the SINGLE source of every
             // effective default (phases.toml's `default` column mirrors it;
-            // asserted equal by kuna_phases/tests.rs `live_value` parity).
+            // asserted equal by phases/tests.rs `live_value` parity).
             kuna_vcall_targets: Rc::default(),
 
             analysis_ppc32picimports: Default::default(),
@@ -1211,7 +1211,7 @@ impl Architecture {
             remote_scope: None,
             options: OptionDatabase::new(),
             allacts: ActionDatabase::new(),
-            restart_log: crate::kuna_restartlog::RestartLog::new(),
+            restart_log: crate::restartlog::RestartLog::new(),
             userops: UserOpManage::new(),
             // sleigh_arch.cc:250: stringManager = new StringManagerUnicode(this,2048)
             string_manager: Rc::new(std::cell::RefCell::new(
@@ -1263,19 +1263,17 @@ impl Architecture {
     /// (kuna) The effective source language for this image: the per-run
     /// `option sourcelang` override when one is set, else the detected fact.
     #[inline]
-    pub fn source_lang(&self) -> crate::kuna_sourcelang::SourceLang {
+    pub fn source_lang(&self) -> crate::sourcelang::SourceLang {
         self.kuna_options
-            .get::<crate::kuna_sourcelang::SourceLangForced>()
+            .get::<crate::sourcelang::SourceLangForced>()
             .0
             .unwrap_or(self.source_lang_detected)
     }
 
     pub fn reset_defaults_internal(&mut self) {
         // The load-time ppcapu and ifuncfpret requests outlive a reset, as the env vars they set do.
-        let ppcapu = self.kuna_options.get::<crate::kuna_ppcapu::PpcApu>();
-        let ifuncfpret = self
-            .kuna_options
-            .get::<crate::kuna_ifuncfpret::IfuncFpRet>();
+        let ppcapu = self.kuna_options.get::<crate::ppcapu::PpcApu>();
+        let ifuncfpret = self.kuna_options.get::<crate::ifuncfpret::IfuncFpRet>();
         self.kuna_options.reset_shipped();
         self.kuna_options.set(ppcapu);
         self.kuna_options.set(ifuncfpret);
@@ -1357,9 +1355,9 @@ impl Architecture {
         // (kuna) `.pdata` RUNTIME_FUNCTION-interior entry suppression — default-ON.
         // (kuna) PDB-procedure-interior entry suppression — default-ON.
         self.analysis_ppc32picimports = if self.load_options_from_env {
-            crate::kuna_ppc32picimports::Mode::loaded()
+            crate::ppc32picimports::Mode::loaded()
         } else {
-            crate::kuna_ppc32picimports::Mode::loaded_with(self.load_options.ppc32picimports)
+            crate::ppc32picimports::Mode::loaded_with(self.load_options.ppc32picimports)
         }; // (kuna) abi when the loader applied it, else off
 
         // (kuna) DIV: demangled C++ signatures default to the PROVEN tier — only
@@ -1459,8 +1457,8 @@ impl Architecture {
     pub fn reset_wire_defaults(&mut self) {
         // The load-time PPC32 PIC mode is program and process state, so a wire
         // reset clears both.
-        self.load_options_mut().ppc32picimports = crate::kuna_ppc32picimports::Mode::Off;
-        crate::kuna_ppc32picimports::Mode::Off.set_env();
+        self.load_options_mut().ppc32picimports = crate::ppc32picimports::Mode::Off;
+        crate::ppc32picimports::Mode::Off.set_env();
         self.reset_defaults();
         self.print.reset_wire_defaults();
     }
@@ -1616,7 +1614,7 @@ impl Architecture {
     /// sub-scopes to delete (namespaces are cached path strings inside the
     /// RemoteScope, cleared with it) and no wired constant pool yet.  The
     /// x86-32 callee walks read the host's names and no-return facts, so they
-    /// go too ([`crate::kuna_calleepurge`]).
+    /// go too ([`crate::calleepurge`]).
     pub fn flush_remote_caches(&mut self) {
         if let Some(remote) = &self.remote_scope {
             remote.clear();
@@ -1635,7 +1633,7 @@ impl Architecture {
             crate::database::KunaNameStyle::Ghidra
         } else if self
             .kuna_options
-            .get::<crate::kuna_coreoptions::NameStyleAngr>()
+            .get::<crate::coreoptions::NameStyleAngr>()
             .0
         {
             crate::database::KunaNameStyle::Angr
@@ -1661,7 +1659,7 @@ impl Architecture {
         }
         if self
             .kuna_options
-            .get::<crate::kuna_coreoptions::NameStyleAngr>()
+            .get::<crate::coreoptions::NameStyleAngr>()
             .0
         {
             // (kuna) angr-style: sub_<addr>
@@ -1696,12 +1694,8 @@ impl Architecture {
     }
 
     /// (kuna `dexmodel`) The DEX models the engine may consult.
-    pub fn dex_models(&self) -> &[Rc<crate::kuna_dex::DexModel>] {
-        if self
-            .kuna_options
-            .get::<crate::kuna_coreoptions::DexModel>()
-            .0
-        {
+    pub fn dex_models(&self) -> &[Rc<crate::dex::DexModel>] {
+        if self.kuna_options.get::<crate::coreoptions::DexModel>().0 {
             &self.dex
         } else {
             &[]
@@ -1748,7 +1742,7 @@ impl Architecture {
 
     /// (kuna `protomerge`) Park a load-time prototype like
     /// [`Self::set_function_prototype_pieces_at`], merged slot by slot with the
-    /// one already parked there (`kuna_protomerge::merge`) when the option is on.
+    /// one already parked there (`protomerge::merge`) when the option is on.
     pub fn merge_function_prototype_pieces_at(
         &mut self,
         addr: &Address,
@@ -1776,12 +1770,7 @@ impl Architecture {
         pieces: crate::fspec::PrototypePieces,
     ) {
         let merged = match self.symboltab.function_proto_pieces_of(sid) {
-            Some(old)
-                if self
-                    .kuna_options
-                    .get::<crate::kuna_coreoptions::Protomerge>()
-                    .0 =>
-            {
+            Some(old) if self.kuna_options.get::<crate::coreoptions::Protomerge>().0 => {
                 (self.pass_hooks().protomerge_merge)(old, pieces)
             }
             _ => pieces,
@@ -1794,7 +1783,7 @@ impl Architecture {
         &mut self,
         addr: &Address,
         pieces: crate::fspec::PrototypePieces,
-        string_input: Option<crate::kuna_gostringinput::GoStringInput>,
+        string_input: Option<crate::gostringinput::GoStringInput>,
     ) {
         if let Some((sid, _)) = self.symboltab.find_function_across_scopes(addr) {
             let string_input = string_input.filter(|formal| &formal.entry == addr);
@@ -1838,7 +1827,7 @@ impl Architecture {
     }
 
     /// (kuna `jvmmodel`) The class-file models the engine may consult.
-    pub fn jvm_models(&self) -> &[Rc<crate::kuna_jvm::JvmModel>] {
+    pub fn jvm_models(&self) -> &[Rc<crate::jvm::JvmModel>] {
         &self.jvm
     }
 
@@ -1865,11 +1854,8 @@ impl Architecture {
                 .find(|model| model.contains(addr.get_offset()))
                 .cloned()
         }); // jvmmodel
-        ctx.kuna_options.set(crate::kuna_coreoptions::JavaTry(
-            self.kuna_options
-                .get::<crate::kuna_coreoptions::JavaTry>()
-                .0
-                && ctx.dex.is_some(),
+        ctx.kuna_options.set(crate::coreoptions::JavaTry(
+            self.kuna_options.get::<crate::coreoptions::JavaTry>().0 && ctx.dex.is_some(),
         )); // javatry
         ctx.min_laned_register_size = self.get_minimum_laned_register_size();
         // Carry the laned-register table so the per-function Funcdata reaches
@@ -1941,7 +1927,7 @@ impl Architecture {
             }
         });
         // An explicit `option protoeval <model>` outranks the spec's own
-        // `<eval_current_prototype>` nomination (see `crate::kuna_evalcurrentproto`).
+        // `<eval_current_prototype>` nomination (see `crate::evalcurrentproto`).
         // With neither, the handle's own accessor falls back to `defaultfp`.
         ctx.evalfp_current = self
             .evalfp_current
@@ -1972,48 +1958,48 @@ impl Architecture {
         ctx.x87_empty_storage =
             (crate::architecture::default_pass_hooks().x87emptyreturn_storage)(self);
         ctx.vararg_regs = (crate::architecture::default_pass_hooks().varargsave_regs)(self);
-        ctx.kuna_options.set(crate::kuna_coreoptions::TrapAfterCall(
+        ctx.kuna_options.set(crate::coreoptions::TrapAfterCall(
             self.kuna_options
-                .get::<crate::kuna_coreoptions::TrapAfterCall>()
+                .get::<crate::coreoptions::TrapAfterCall>()
                 .0
                 && self.get_description().starts_with("x86:"),
         ));
         ctx.vcall_targets = Rc::clone(&self.kuna_vcall_targets);
-        ctx.retsysreg_userops = ids(crate::kuna_specnames::RETSYSREG_STATE_USEROPS);
-        ctx.retsysreg_cop_userops = ids(crate::kuna_specnames::RETSYSREG_COP_USEROPS);
+        ctx.retsysreg_userops = ids(crate::specnames::RETSYSREG_STATE_USEROPS);
+        ctx.retsysreg_cop_userops = ids(crate::specnames::RETSYSREG_COP_USEROPS);
         // (kuna) carry the Rust return-ABI gate and the detected source language
         // so `kuna_rustabi` reaches both via `glb`.
         ctx.source_lang = self.source_lang();
-        ctx.kuna_options.set(crate::kuna_coreoptions::ChkstkDarwin(
+        ctx.kuna_options.set(crate::coreoptions::ChkstkDarwin(
             self.kuna_options
-                .get::<crate::kuna_coreoptions::ChkstkDarwin>()
+                .get::<crate::coreoptions::ChkstkDarwin>()
                 .0
                 && self.image_apple
                 && (self.pass_hooks().chkstkdarwin_applies_to)(&self.archid),
         ));
-        ctx.kuna_options.set(crate::kuna_coreoptions::SpSolve((self
+        ctx.kuna_options.set(crate::coreoptions::SpSolve((self
             .pass_hooks()
             .spsolve_applies)(
             self
         )));
         ctx.swift_metadata_results = self
             .kuna_options
-            .get::<crate::kuna_analysisgates::Swifttypes>()
+            .get::<crate::analysisgates::Swifttypes>()
             .0;
         ctx.ptrauth_trap_userop = self
             .kuna_options
-            .get::<crate::kuna_coreoptions::PtrauthTrap>()
+            .get::<crate::coreoptions::PtrauthTrap>()
             .0
             .then(|| {
                 self.userops
-                    .get_op_by_name(crate::kuna_specnames::PTRAUTH_BREAKPOINT_USEROP)
+                    .get_op_by_name(crate::specnames::PTRAUTH_BREAKPOINT_USEROP)
             })
             .flatten()
             .map(|u| u.get_index() as unlace_base::types::uint4);
         ctx.arm64e = self.archid.starts_with("AARCH64:LE:64:AppleSilicon:");
         ctx.name_style_angr = self
             .kuna_options
-            .get::<crate::kuna_coreoptions::NameStyleAngr>()
+            .get::<crate::coreoptions::NameStyleAngr>()
             .0;
         ctx.name_style_ghidra = self.name_style_ghidra;
         // (kuna) carry the duplicate-declaration collapse gate so `emit_local_var_decls`
@@ -2026,16 +2012,14 @@ impl Architecture {
         // reads `data.get_arch().<flag>`; the rule is registered `enabled=false`
         // so the live flag drives both the DIV default and the toggle).
 
-        ctx.kuna_options.set(crate::kuna_coreoptions::GuardedLoop(
-            self.kuna_options
-                .get::<crate::kuna_coreoptions::GuardedLoop>()
-                .0
-                && self.print.out_lang() == crate::kuna_outlang::OutLang::C,
+        ctx.kuna_options.set(crate::coreoptions::GuardedLoop(
+            self.kuna_options.get::<crate::coreoptions::GuardedLoop>().0
+                && self.print.out_lang() == crate::outlang::OutLang::C,
         ));
         // (kuna) resolve the byte-shuffle user-op ids ONCE per program, so the
         // rule can name a CALLOTHER through the ArchSeam (the boundary
         // ArchContext carries no userop table).
-        ctx.simd_shuffle_userops = crate::kuna_specnames::SIMDLANE_SHUFFLE_USEROPS
+        ctx.simd_shuffle_userops = crate::specnames::SIMDLANE_SHUFFLE_USEROPS
             .iter()
             .filter_map(|nm| {
                 self.userops
@@ -2043,13 +2027,13 @@ impl Architecture {
                     .map(|u| u.get_index() as unlace_base::types::uint4)
             })
             .collect();
-        ctx.x87_float_to_int_userops = crate::kuna_specnames::X87_TRUNCATE_USEROPS
+        ctx.x87_float_to_int_userops = crate::specnames::X87_TRUNCATE_USEROPS
             .iter()
             .filter_map(|nm| self.userops.get_op_by_name(nm))
             .filter(|u| u.get_inject_id().is_none())
             .map(|u| u.get_index() as unlace_base::types::uint4)
             .collect();
-        ctx.x87_integer_userops = crate::kuna_specnames::X87_TRUNCATE_USEROPS
+        ctx.x87_integer_userops = crate::specnames::X87_TRUNCATE_USEROPS
             .iter()
             .zip([2, 4, 8])
             .filter_map(|(name, width)| {
@@ -2058,7 +2042,7 @@ impl Architecture {
                     .map(|u| (u.get_index() as unlace_base::types::uint4, width))
             })
             .collect();
-        ctx.float_rounding_userops = crate::kuna_specnames::ROUNDING_USEROPS
+        ctx.float_rounding_userops = crate::specnames::ROUNDING_USEROPS
             .iter()
             .filter_map(|nm| {
                 self.userops
@@ -2066,52 +2050,36 @@ impl Architecture {
                     .map(|u| u.get_index() as unlace_base::types::uint4)
             })
             .collect();
-        ctx.kuna_options
-            .set(crate::kuna_coreoptions::CallTargetType(
-                self.kuna_options
-                    .get::<crate::kuna_coreoptions::CallTargetType>()
-                    .0
-                    && self.kuna_options.get::<crate::kuna_coreoptions::CTypes>().0,
-            )); // (kuna) calltargettype: only C's own spelling needs it
+        ctx.kuna_options.set(crate::coreoptions::CallTargetType(
+            self.kuna_options
+                .get::<crate::coreoptions::CallTargetType>()
+                .0
+                && self.kuna_options.get::<crate::coreoptions::CTypes>().0,
+        )); // (kuna) calltargettype: only C's own spelling needs it
         ctx.call_target_c = ctx
             .kuna_options
-            .get::<crate::kuna_coreoptions::CallTargetType>()
+            .get::<crate::coreoptions::CallTargetType>()
             .0
-            && self.print.out_lang() == crate::kuna_outlang::OutLang::C; // (kuna) calltargettype
-        ctx.java_casts = self.print.out_lang() == crate::kuna_outlang::OutLang::Java;
-        ctx.unknown_byte_is_char = self
-            .kuna_options
-            .get::<crate::kuna_coreoptions::Realtypes>()
-            .0
-            && self.print.out_lang() == crate::kuna_outlang::OutLang::C;
-        ctx.unknown_is_integer = self
-            .kuna_options
-            .get::<crate::kuna_coreoptions::Realtypes>()
-            .0
-            || self.print.out_lang() != crate::kuna_outlang::OutLang::C;
+            && self.print.out_lang() == crate::outlang::OutLang::C; // (kuna) calltargettype
+        ctx.java_casts = self.print.out_lang() == crate::outlang::OutLang::Java;
+        ctx.unknown_byte_is_char = self.kuna_options.get::<crate::coreoptions::Realtypes>().0
+            && self.print.out_lang() == crate::outlang::OutLang::C;
+        ctx.unknown_is_integer = self.kuna_options.get::<crate::coreoptions::Realtypes>().0
+            || self.print.out_lang() != crate::outlang::OutLang::C;
         ctx.int_promotion = (self.pass_hooks().lang_int_promotion)(self.print.out_lang());
-        ctx.kuna_options.set(crate::kuna_coreoptions::CastArith(
-            self.kuna_options
-                .get::<crate::kuna_coreoptions::CastArith>()
-                .0
-                && self.print.out_lang() == crate::kuna_outlang::OutLang::C,
+        ctx.kuna_options.set(crate::coreoptions::CastArith(
+            self.kuna_options.get::<crate::coreoptions::CastArith>().0
+                && self.print.out_lang() == crate::outlang::OutLang::C,
         )); // (kuna) castarith
-        ctx.kuna_options.set(crate::kuna_coreoptions::CastIndex(
-            self.kuna_options
-                .get::<crate::kuna_coreoptions::CastIndex>()
-                .0
-                && self.print.out_lang() == crate::kuna_outlang::OutLang::C,
+        ctx.kuna_options.set(crate::coreoptions::CastIndex(
+            self.kuna_options.get::<crate::coreoptions::CastIndex>().0
+                && self.print.out_lang() == crate::outlang::OutLang::C,
         )); // (kuna) castindex
         ctx.elem_ptr_ranges = std::rc::Rc::clone(&self.globalref_ranges); // (kuna) elemptr
-        ctx.libctypes = self
-            .kuna_options
-            .get::<crate::kuna_libctypes::LibcTypesLayout>()
-            != crate::kuna_libctypes::LibcTypesLayout::Off; // (kuna) libctypes (kuna_libcfit)
+        ctx.libctypes = self.kuna_options.get::<crate::libctypes::LibcTypesLayout>()
+            != crate::libctypes::LibcTypesLayout::Off; // (kuna) libctypes (kuna_libcfit)
 
-        ctx.vtable_types = self
-            .kuna_options
-            .get::<crate::kuna_coreoptions::Vtabletypes>()
-            .0
+        ctx.vtable_types = self.kuna_options.get::<crate::coreoptions::Vtabletypes>().0
             || (self.pass_hooks().inputhints_has_this_hints)(&self.kuna_tables);
         // (kuna `calleereginputs custom`) a function's own evaluation sees the
         // same per-callee models its callers' flow does.
@@ -2119,25 +2087,24 @@ impl Architecture {
         ctx.kuna_custom_reg_models = Rc::clone(&self.kuna_custom_reg_models);
 
         ctx.do_while_continue = (self.pass_hooks().lang_do_while_continue)(self.print.out_lang());
-        ctx.kuna_options.set(crate::kuna_coreoptions::PostIncrement(
+        ctx.kuna_options.set(crate::coreoptions::PostIncrement(
             self.kuna_options
-                .get::<crate::kuna_coreoptions::PostIncrement>()
+                .get::<crate::coreoptions::PostIncrement>()
                 .0
-                && self.print.out_lang() == crate::kuna_outlang::OutLang::C,
+                && self.print.out_lang() == crate::outlang::OutLang::C,
         ));
         ctx.image_linux_elf = self.image_linux_elf; // (kuna) linuxsyscall
-        ctx.octeon_memory_userops = crate::kuna_octeonops::userop_ids(
+        ctx.octeon_memory_userops = crate::octeonops::userop_ids(
             &self.userops,
             self.kuna_options
-                .get::<crate::kuna_octeonops::OcteonEffectsMode>(),
+                .get::<crate::octeonops::OcteonEffectsMode>(),
             &self.octeon_upstream_inject,
         );
-        ctx.atomic_userops =
-            crate::kuna_atomicops::AtomicUserops::resolve(&self.archid, &self.userops);
+        ctx.atomic_userops = crate::atomicops::AtomicUserops::resolve(&self.archid, &self.userops);
         ctx.x64_syscall_memory_target = self.archid == "x86:LE:64:default:gcc";
         ctx.syscall_regs = self
             .kuna_options
-            .get::<crate::kuna_coreoptions::SyscallRegsMode>()
+            .get::<crate::coreoptions::SyscallRegsMode>()
             .fires(self.image_os_userland); // (kuna) syscallregs
         ctx.syscall_regs_family = crate::context::SyscallFamily::from_archid(&self.archid);
         ctx.syscall_regs_userops =
@@ -2152,7 +2119,7 @@ impl Architecture {
         // is left out, so the spec's model wins.
         ctx.x64_syscall_userops = self
             .userops
-            .get_op_by_name(crate::kuna_specnames::X64_SYSCALL_USEROP)
+            .get_op_by_name(crate::specnames::X64_SYSCALL_USEROP)
             .filter(|u| u.get_inject_id().is_none())
             .map(|u| vec![u.get_index() as unlace_base::types::uint4])
             .unwrap_or_default();
@@ -2210,29 +2177,24 @@ impl Architecture {
         // slots so `ActionVarnodeProps` folds those loads with global read-only
         // propagation still off. `Rc` clone: the list is built once at load.
         ctx.dynreloc_const = Rc::clone(&self.dynreloc_const);
-        ctx.kuna_options.set(crate::kuna_coreoptions::VexZeroUpper(
+        ctx.kuna_options.set(crate::coreoptions::VexZeroUpper(
             self.kuna_options
-                .get::<crate::kuna_coreoptions::VexZeroUpper>()
+                .get::<crate::coreoptions::VexZeroUpper>()
                 .0
                 && self.archid.starts_with("x86:LE:64"),
         ));
-        let neon = self
-            .kuna_options
-            .get::<crate::kuna_neonintrin::NeonIntrin>();
+        let neon = self.kuna_options.get::<crate::neonintrin::NeonIntrin>();
         let aarch64 = self.archid.starts_with("AARCH64:");
-        ctx.kuna_options.set(crate::kuna_neonintrin::NeonIntrin {
+        ctx.kuna_options.set(crate::neonintrin::NeonIntrin {
             on: neon.on && aarch64,
             fuse: neon.fuse && aarch64,
         });
-        let lane_fuse = self.kuna_options.get::<crate::kuna_coreoptions::LaneFuse>();
-        ctx.kuna_options.set(crate::kuna_coreoptions::LaneFuse {
+        let lane_fuse = self.kuna_options.get::<crate::coreoptions::LaneFuse>();
+        ctx.kuna_options.set(crate::coreoptions::LaneFuse {
             on: lane_fuse.on && self.archid.starts_with("x86:LE:64"),
             all: lane_fuse.all,
         });
-        ctx.vector_fp = if self
-            .kuna_options
-            .get::<crate::kuna_coreoptions::VectorAbi>()
-            .0
+        ctx.vector_fp = if self.kuna_options.get::<crate::coreoptions::VectorAbi>().0
             && self.archid == "x86:LE:64:default:gcc"
         {
             ctx.defaultfp.as_ref().map(|model| {
@@ -2247,15 +2209,9 @@ impl Architecture {
         } else {
             None
         };
-        ctx.vector_userops = if self
-            .kuna_options
-            .get::<crate::kuna_coreoptions::VectorAbi>()
-            .0
+        ctx.vector_userops = if self.kuna_options.get::<crate::coreoptions::VectorAbi>().0
             && self.archid.starts_with("x86:LE:64")
-            || self
-                .kuna_options
-                .get::<crate::kuna_neonintrin::NeonIntrin>()
-                .on
+            || self.kuna_options.get::<crate::neonintrin::NeonIntrin>().on
                 && self.archid.starts_with("AARCH64:")
         {
             Rc::clone(self.vector_userop_kinds.get_or_init(|| {
@@ -2266,14 +2222,14 @@ impl Architecture {
                         .filter_map(|(i, nm)| {
                             Some((
                                 i,
-                                crate::kuna_neonintrin::userop_kind(std::str::from_utf8(nm).ok()?)?,
+                                crate::neonintrin::userop_kind(std::str::from_utf8(nm).ok()?)?,
                             ))
                         })
                         .chain(
                             (self.pass_hooks().lanefuse_builtins)()
                                 .into_iter()
                                 .filter_map(|(i, nm)| {
-                                    Some((i, crate::kuna_neonintrin::userop_kind(&nm)?))
+                                    Some((i, crate::neonintrin::userop_kind(&nm)?))
                                 }),
                         )
                         .collect();
@@ -2303,10 +2259,7 @@ impl Architecture {
         } else {
             Rc::new(Vec::new())
         };
-        ctx.vector_fp = if self
-            .kuna_options
-            .get::<crate::kuna_coreoptions::VectorAbi>()
-            .0
+        ctx.vector_fp = if self.kuna_options.get::<crate::coreoptions::VectorAbi>().0
             && self.archid == "x86:LE:64:default:gcc"
         {
             ctx.defaultfp.as_ref().map(|model| {
@@ -2691,7 +2644,7 @@ impl Architecture {
     /// installs live in the per-function snapshot).  A segment op whose snippet
     /// has no local template (ghidra mode) is left out.
     ///
-    /// [`SegmentDef`]: crate::kuna_segmentize::SegmentDef
+    /// [`SegmentDef`]: crate::segmentize::SegmentDef
     fn initialize_segments(&mut self) -> KunaResult<()> {
         let mut states = std::mem::take(&mut self.kuna_states);
         let built = (crate::architecture::default_pass_hooks().segmentize_build)(
@@ -2851,7 +2804,7 @@ impl Architecture {
     ///
     /// Mirrors `decode_global`'s `<register>` arm — the register's storage
     /// joins the global scope — then maps a type+name-locked `g` symbol typed
-    /// `runtime.g *` over it (`crate::kuna_goreg`). Gated on the golang cspec
+    /// `runtime.g *` over it (`crate::goreg`). Gated on the golang cspec
     /// being the active compiler spec (the `archid` compiler field); a
     /// no-register golang target (x86-32 reaches `g` through TLS) and every
     /// other image are untouched.
@@ -3026,7 +2979,7 @@ impl Architecture {
     }
 
     /// (kuna) Register the models of the MSVC x87 intrinsics
-    /// (`p4_calls::kuna_x87intrinsic`). x86-32 only: the models name `ST0`/`ST1`,
+    /// (`p4_calls::x87intrinsic`). x86-32 only: the models name `ST0`/`ST1`,
     /// and the intrinsics exist nowhere else. Skipped when the registry already
     /// holds the one-operand model.
     fn register_kuna_x87_intrinsic_model(&mut self, root: &Rc<unlace_base::xml::Element>) {
@@ -3041,7 +2994,7 @@ impl Architecture {
             code_addr_size,
         ) || self
             .proto_models
-            .contains_key(crate::kuna_specnames::X87_UNARY_MODEL)
+            .contains_key(crate::specnames::X87_UNARY_MODEL)
         {
             return;
         }
@@ -3058,9 +3011,9 @@ impl Architecture {
     }
 
     /// (kuna) Register the synthesized MSVC `__ftol`-family call-fixup
-    /// (`p2_lift::kuna_msvcftol`), the arithmetic runtime-helper fixups
-    /// (`p2_lift::kuna_arithhelpers`) and the ObjC ARC fixups
-    /// (`p2_lift::kuna_objcarc`) alongside the cspec's own `<callfixup>`
+    /// (`p2_lift::msvcftol`), the arithmetic runtime-helper fixups
+    /// (`p2_lift::arithhelpers`) and the ObjC ARC fixups
+    /// (`p2_lift::objcarc`) alongside the cspec's own `<callfixup>`
     /// elements, so `parse_inject_all` compiles them with the rest.  A registered
     /// payload is inert until the analysis-tier `callfixup` pass installs it at
     /// `read symbols`.
@@ -3237,7 +3190,7 @@ impl Architecture {
         //     so step 3 compiles it with the rest. Unconditional on any language
         //     that declares the user-op (the option is not readable at bootstrap);
         //     `decompile_drive::is_injected_userop` is the gate. See
-        //     `p2_lift::kuna_cortexmpriv`.
+        //     `p2_lift::cortexmpriv`.
         self.register_cortexmpriv_fixup()?;
         self.register_octeon_upstream_fixups()?;
 
@@ -3329,7 +3282,7 @@ impl Architecture {
     /// own `<callotherfixup>` wins, exactly as it does for the vendored
     /// `setISAMode` fixups.
     fn register_cortexmpriv_fixup(&mut self) -> KunaResult<()> {
-        use crate::kuna_specnames as names;
+        use crate::specnames as names;
         if let Some(injectid) = self.register_manual_fixup(
             names::CORTEXMPRIV_USEROP,
             names::CORTEXMPRIV_OUTPUT,
@@ -3344,12 +3297,12 @@ impl Architecture {
 
     /// (kuna `octeoneffects`) Register a callother fixup holding upstream's
     /// lifting for each Octeon reservation and ordering operation the language
-    /// declares unspecialized ([`crate::kuna_octeonops::UPSTREAM`]), as
+    /// declares unspecialized ([`crate::octeonops::UPSTREAM`]), as
     /// step 2b does for `cortexmpriv`; `decompile_drive::is_injected_userop`
     /// applies them only under `option octeoneffects off`.
     fn register_octeon_upstream_fixups(&mut self) -> KunaResult<()> {
         self.octeon_upstream_inject.clear();
-        for fixup in crate::kuna_octeonops::UPSTREAM {
+        for fixup in crate::octeonops::UPSTREAM {
             let inputs: Vec<Vec<u8>> = fixup.inputs.iter().map(|input| input.to_vec()).collect();
             if let Some(injectid) =
                 self.register_manual_fixup(fixup.name, fixup.output, &inputs, fixup.body, true)?
@@ -3521,12 +3474,12 @@ impl Architecture {
     // -----------------------------------------------------------------------
 
     /// (kuna) The load-time options this program was loaded with.
-    pub fn load_options(&self) -> &crate::kuna_loadoptions::LoadOptions {
+    pub fn load_options(&self) -> &crate::loadoptions::LoadOptions {
         &self.load_options
     }
 
     /// (kuna) Change a load-time option for this program's later analysis.
-    pub fn load_options_mut(&mut self) -> &mut crate::kuna_loadoptions::LoadOptions {
+    pub fn load_options_mut(&mut self) -> &mut crate::loadoptions::LoadOptions {
         Rc::make_mut(&mut self.load_options)
     }
 
@@ -3534,18 +3487,18 @@ impl Architecture {
     /// the scope drops, so the gates that run after the load read them. A
     /// program loaded with no options defers to the environment instead, so its
     /// gates read their variables live.
-    pub fn load_scope(&self) -> crate::kuna_loadoptions::LoadScope {
+    pub fn load_scope(&self) -> crate::loadoptions::LoadScope {
         if self.load_options_from_env {
-            crate::kuna_loadoptions::enter_environment()
+            crate::loadoptions::enter_environment()
         } else {
-            crate::kuna_loadoptions::enter(Rc::clone(&self.load_options))
+            crate::loadoptions::enter(Rc::clone(&self.load_options))
         }
     }
 
     /// (kuna) The image's Go toolchain release, when the load stated one.
     fn go_version(&self) -> Option<(u16, u16)> {
         if self.load_options_from_env {
-            crate::kuna_loadoptions::env::go_version()
+            crate::loadoptions::env::go_version()
         } else {
             self.load_options.go_version
         }
@@ -3593,35 +3546,35 @@ impl Architecture {
     /// Borrow the output-language printer (C++ `glb->print`); the concrete C printer is
     /// `printc::ArchPrintExt::print`.
     #[inline]
-    pub fn printer(&self) -> &dyn crate::kuna_printhandle::PrintHandle {
+    pub fn printer(&self) -> &dyn crate::printhandle::PrintHandle {
         &*self.print
     }
 
     /// (kuna) Borrow the per-program restart-trigger log (read by the `restarts`
     /// console command).
-    pub fn restart_log(&self) -> &crate::kuna_restartlog::RestartLog {
+    pub fn restart_log(&self) -> &crate::restartlog::RestartLog {
         &self.restart_log
     }
 
     /// (kuna) Mutably borrow the restart-trigger log (the trigger sites record
     /// into it).
-    pub fn restart_log_mut(&mut self) -> &mut crate::kuna_restartlog::RestartLog {
+    pub fn restart_log_mut(&mut self) -> &mut crate::restartlog::RestartLog {
         &mut self.restart_log
     }
 
     /// Mutably borrow the output-language printer (the print option setters).
-    pub fn printer_mut(&mut self) -> &mut dyn crate::kuna_printhandle::PrintHandle {
+    pub fn printer_mut(&mut self) -> &mut dyn crate::printhandle::PrintHandle {
         &mut *self.print
     }
 
     /// Lend the printer out, leaving a default one in its place (`printc::ArchPrintExt::with_print`).
-    pub fn take_printer(&mut self) -> Box<dyn crate::kuna_printhandle::PrintHandle> {
+    pub fn take_printer(&mut self) -> Box<dyn crate::printhandle::PrintHandle> {
         let stand_in = (self.pass_hooks().printer_default)();
         std::mem::replace(&mut self.print, stand_in)
     }
 
     /// Put a lent printer back.
-    pub fn put_printer(&mut self, print: Box<dyn crate::kuna_printhandle::PrintHandle>) {
+    pub fn put_printer(&mut self, print: Box<dyn crate::printhandle::PrintHandle>) {
         self.print = print;
     }
 
@@ -3632,10 +3585,10 @@ impl Architecture {
     /// it mirrors the upstream setter; this is the surface a front-end should
     /// use, so a typo is an error rather than a silent fall back to C.
     pub fn set_print_language_checked(&mut self, name: &str) -> KunaResult<()> {
-        let lang = crate::kuna_outlang::OutLang::from_print_name(name).ok_or_else(|| {
+        let lang = crate::outlang::OutLang::from_print_name(name).ok_or_else(|| {
             KunaError::parse(format!(
                 "unknown output language {name:?} (expected one of: {})",
-                crate::kuna_outlang::OutLang::names().join(", ")
+                crate::outlang::OutLang::names().join(", ")
             ))
         })?;
         self.print.set_name(lang.print_name());
@@ -4121,7 +4074,7 @@ impl Architecture {
                     // registration pass skips rather than throws), leaving the
                     // `<default_proto>` evaluation.
                     self.evalfp_current_spec =
-                        crate::kuna_evalcurrentproto::eval_current_model_name(&root)
+                        crate::evalcurrentproto::eval_current_model_name(&root)
                             .and_then(|name| self.proto_models.get(&name).cloned());
                     return;
                 }
@@ -4993,7 +4946,7 @@ impl Architecture {
                 .map(|v| v.size as int4)
         });
         if let (Some(el), Some((self_reg, error_reg, async_reg))) = (default_el, regs) {
-            for (name, throws, is_async) in crate::kuna_specnames::SWIFT_MODELS {
+            for (name, throws, is_async) in crate::specnames::SWIFT_MODELS {
                 if byname.contains_key(name) {
                     continue;
                 }
@@ -5558,7 +5511,7 @@ impl Architecture {
 
     /// (kuna) Add `rule` to the default pipeline, behind the last rule of
     /// `after_group` in the pool that holds that group
-    /// ([`HookRegistry::add_rule`](crate::kuna_hooks::HookRegistry::add_rule)).
+    /// ([`HookRegistry::add_rule`](crate::hooks::HookRegistry::add_rule)).
     pub fn add_rule(
         &mut self,
         after_group: &str,
@@ -5570,10 +5523,10 @@ impl Architecture {
     }
 
     /// (kuna) Run `callback` on every function at the boundary of `phase`
-    /// ([`HookRegistry::on_phase`](crate::kuna_hooks::HookRegistry::on_phase)).
+    /// ([`HookRegistry::on_phase`](crate::hooks::HookRegistry::on_phase)).
     pub fn on_phase(
         &mut self,
-        phase: crate::kuna_phases::KunaPhase,
+        phase: crate::phases::KunaPhase,
         callback: impl FnMut(&mut Funcdata) + 'static,
     ) -> KunaResult<()> {
         (self.pass_hooks().hooks_on_phase)(&mut self.kuna_tables, phase, Box::new(callback))?;
@@ -5944,7 +5897,7 @@ impl ArchOptionContext for Architecture {
         self.print.get_name() == "c-language"
     }
     fn print_lang_known(&self) -> bool {
-        crate::kuna_outlang::OutLang::from_print_name(self.print.get_name()).is_some()
+        crate::outlang::OutLang::from_print_name(self.print.get_name()).is_some()
     }
     fn set_null_printing(&mut self, val: bool) {
         self.print.set_null_printing(val);

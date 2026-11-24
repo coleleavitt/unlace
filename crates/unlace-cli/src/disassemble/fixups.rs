@@ -5,7 +5,7 @@
 //! Mach-O chained-fixup rebase or an ELF `RELATIVE` slot holds the pointer the
 //! loader stores, not the chain word or zero the file holds, and a bind holds a
 //! zero where the loader writes another image's address
-//! (`unlace_analysis::loader::kuna_dynrelocs`). That is the right view of a
+//! (`unlace_analysis::loader::dynrelocs`). That is the right view of a
 //! pointer and the wrong one to take for the file's bytes, and nothing in the
 //! output said which a slot was. So every fixup slot the listed span overlaps is
 //! reported with its kind, the symbol it binds, the file's own bytes and what
@@ -13,8 +13,8 @@
 //! or kuna's zero placeholder.
 
 use object::read::{Object, ObjectSegment};
-use unlace_analysis::loader::kuna_dataptrs::Coverage;
-use unlace_analysis::loader::kuna_dynrelocs::{FixupKind, FixupSite};
+use unlace_analysis::loader::dataptrs::Coverage;
+use unlace_analysis::loader::dynrelocs::{FixupKind, FixupSite};
 use unlace_console::disasm::hex;
 use unlace_console::engine::ConsoleProgram;
 
@@ -86,7 +86,7 @@ pub(super) fn overlapping(
     let Some((bytes, file)) = view else {
         return none;
     };
-    let listed = unlace_analysis::loader::kuna_dynrelocs::fixup_sites(file, bytes);
+    let listed = unlace_analysis::loader::dynrelocs::fixup_sites(file, bytes);
     let le = file.is_little_endian();
     let mut slots = Vec::new();
     for site in listed.sites {

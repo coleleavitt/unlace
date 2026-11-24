@@ -417,5 +417,5 @@ pub fn paint(arch: &mut Architecture) {
 }
 
 #[cfg(test)]
-#[path = "kuna_mipsunaligned/tests.rs"]
+#[path = "mipsunaligned/tests.rs"]
 mod tests;

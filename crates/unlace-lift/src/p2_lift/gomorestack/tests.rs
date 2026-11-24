@@ -1,5 +1,5 @@
 // Tests for `kuna_gomorestack` (included into `mod tests` in
-// kuna_gomorestack.rs).
+// gomorestack.rs).
 //
 // Covered:
 //   - `GoMorestackMode`: parse vocabulary, u8 round-trip, default.
@@ -22,7 +22,7 @@ use unlace_base::space::{
 
 use crate::action::ActionContext;
 use crate::context::ArchContext;
-use crate::kuna_sourcelang::SourceLang;
+use crate::sourcelang::SourceLang;
 
 fn build_fd(mode: GoMorestackMode, lang: SourceLang) -> Funcdata {
     let mut m = AddrSpaceManager::new();

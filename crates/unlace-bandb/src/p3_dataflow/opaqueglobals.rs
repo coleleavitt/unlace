@@ -3,7 +3,7 @@
 //! Bogus control flow keys its predicates on globals nothing assigns:
 //! `if (y < 10 || x * (x + 1) % 2 == 0)` with `x` and `y` zero-initialized in
 //! `.bss`. One function cannot know that; the analysis tier answers it for
-//! the whole program (`unlace_analysis::listing::kuna_opaqueglobals`) with the
+//! the whole program (`unlace_analysis::listing::opaqueglobals`) with the
 //! bytes of writable data that some instruction stores to, that a pointer
 //! may reach, or that the run-time loader fills. Any other byte still holds
 //! what the image gives it when the program reads it, so
@@ -76,7 +76,7 @@ pub fn constant_read(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
     let glb = data.get_arch();
     let gate = glb
         .kuna_options
-        .get::<crate::kuna_coreoptions::OpaquePredicate>();
+        .get::<crate::coreoptions::OpaquePredicate>();
     let found = (gate.on && gate.globals)
         .then(|| glb.kuna_states.get::<UnwrittenGlobals>())
         .flatten();
@@ -85,7 +85,7 @@ pub fn constant_read(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
         && found.is_none()
         && glb
             .kuna_states
-            .get::<crate::kuna_floatglobals::FloatScan>()
+            .get::<crate::floatglobals::FloatScan>()
             .is_some();
     if found.is_none() && !pending {
         return None;

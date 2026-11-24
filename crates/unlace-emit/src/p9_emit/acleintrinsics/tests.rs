@@ -1,5 +1,5 @@
 // Tests for `kuna_acleintrinsics` (included into `mod tests` in
-// kuna_acleintrinsics.rs). The rendered calls are pinned end to end by
+// acleintrinsics.rs). The rendered calls are pinned end to end by
 // `tests/stages/kuna-acleintrinsics.toml`.
 
 use super::*;

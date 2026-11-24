@@ -7,14 +7,13 @@
 //! catalog's live `current` field. Default off: the e500 compiler model does
 //! not yet recover scalar call arguments held in its 64-bit registers.
 
-/// Environment variable read by `unlace-analysis::loader::kuna_ppcaputarget`.
+/// Environment variable read by `unlace-analysis::loader::ppcaputarget`.
 /// Absent or an off-token ⇒ disabled; any on-token ⇒ enabled.
 pub const PPCAPU_ENV: &str = "UNLACE_PPCAPU";
 
 /// Whether APU-based PowerPC language selection is enabled for this process.
 pub fn ppcapu_enabled() -> bool {
-    crate::kuna_loadoptions::scoped(|o| o.ppcapu)
-        .unwrap_or_else(crate::kuna_loadoptions::env::ppcapu)
+    crate::loadoptions::scoped(|o| o.ppcapu).unwrap_or_else(crate::loadoptions::env::ppcapu)
 }
 
 /// Bridge a `set_kuna_option("ppcapu", val)` toggle to [`PPCAPU_ENV`] so a later

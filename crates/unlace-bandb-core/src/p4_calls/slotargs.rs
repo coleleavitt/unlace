@@ -220,7 +220,7 @@ pub fn backed(data: &Funcdata, call_op: OpId, proto: &FuncProto) -> bool {
     if need.is_empty() {
         return true;
     }
-    let Some(ret) = crate::kuna_calleepop::return_address_bytes(data, &stack, &call_addr) else {
+    let Some(ret) = crate::calleepop::return_address_bytes(data, &stack, &call_addr) else {
         return true;
     };
     let need: Vec<(i64, int4)> = need

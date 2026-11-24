@@ -55,7 +55,7 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_regioneval::{eval, taken};
+use crate::regioneval::{eval, taken};
 
 /// `(base, offset)` of a pointer expression `base + offset`.
 fn field(data: &Funcdata, mut v: VarnodeId) -> Option<(VarnodeId, u64)> {
@@ -1633,7 +1633,7 @@ fn rewrite(data: &mut Funcdata, plan: &Plan) -> unlace_base::error::KunaResult<(
                 .ok_or_else(|| KunaError::lowlevel("vaarg: empty entry"))?;
             let fp = fp.unwrap_or(48);
             let gp = gp.unwrap_or_else(|| 8 * named_registers(data));
-            let last = crate::kuna_vastart::last_named(
+            let last = crate::vastart::last_named(
                 data,
                 (gp / 8 + (fp - 48) / 16) as int4,
                 (gp / 8) as int4,
@@ -1684,12 +1684,7 @@ impl Action for ActionVaArg {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data
-            .get_arch()
-            .kuna_options
-            .get::<crate::kuna_vaarg::VaArg>()
-            .0
-        {
+        if !data.get_arch().kuna_options.get::<crate::vaarg::VaArg>().0 {
             return 0;
         }
         let cls = Cls::classify(data);

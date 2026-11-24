@@ -13,10 +13,10 @@ from a live `unlace catalog --json`, and from the files on disk.
 The counters, how each is measured, and where each is hard-coded:
 
     settables (127)         `[[settable]]` blocks in unlace-decomp/phases.toml
-                            -> kuna_phases/tests.rs   2 asserts + the test fn NAME
+                            -> phases/tests.rs   2 asserts + the test fn NAME
                             -> catalog_bytecompat.rs  3 FIXTURE.matches asserts + the fn NAME
     tiers (28/52/47)        row["tier"] tally from `unlace catalog --json`
-                            -> kuna_phases/tests.rs   the tuple assert + the test fn NAME
+                            -> phases/tests.rs   the tuple assert + the test fn NAME
     catalog buckets         field/value tallies over the same catalog rows
                             -> tests/stages/kuna-catalog.xml  per-bucket stringmatch min/max
                             (kuna-catalog.toml computes its bucket counts from the compiled
@@ -65,7 +65,7 @@ ELEMENT_ID_BASE = int(os.environ.get("REPIPE_ELEMENT_ID_BASE", "4000"))
 CORPUS_DIRS = ("tests/datatests", "tests/stages")
 
 REL_PHASES_TOML = "crates/unlace-decomp/phases.toml"
-REL_TESTS_RS = "crates/unlace-middle/src/p0_knowledge/kuna_phases/tests.rs"
+REL_TESTS_RS = "crates/unlace-middle/src/p0_knowledge/phases/tests.rs"
 REL_BYTECOMPAT_RS = "crates/unlace-decomp/tests/catalog_bytecompat.rs"
 REL_CATALOG_FIXTURE = "crates/unlace-decomp/tests/fixtures/phase_catalog.json"
 REL_CATALOG_XML = "tests/stages/kuna-catalog.xml"

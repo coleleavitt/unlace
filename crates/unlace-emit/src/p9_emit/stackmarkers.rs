@@ -6,7 +6,7 @@ use unlace_num::opcodes::OpCode;
 
 #[doc(hidden)]
 pub fn nonprinting(fd: &Funcdata, id: OpId) -> bool {
-    if !crate::kuna_stackviews::enabled(fd) {
+    if !crate::stackviews::enabled(fd) {
         return false;
     }
     if physical_effect(fd, id) {

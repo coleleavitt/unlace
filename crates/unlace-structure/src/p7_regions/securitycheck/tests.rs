@@ -1,5 +1,5 @@
 // Tests for the `kuna_securitycheck` port (included into `mod tests` in
-// kuna_securitycheck.rs).
+// securitycheck.rs).
 //
 // Covered:
 //   - `callee_path`: generic-argument and legacy-`::h<hash>` trimming.

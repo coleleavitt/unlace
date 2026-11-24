@@ -179,7 +179,7 @@ impl Action for ActionTypeVote {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_typevote::TypeVote>()
+            .get::<crate::typevote::TypeVote>()
             .0
         {
             return 0;
@@ -242,7 +242,7 @@ impl Action for ActionTypeVote {
 
 crate::kuna_flag!(
     /// (kuna `typevote`) A variable left `undefinedN` takes the type the ops
-    /// on it vote for (`p5_types/kuna_typevote.rs`). Default on.
+    /// on it vote for (`p5_types/typevote.rs`). Default on.
     TypeVote,
     "typevote",
     "Type vote for leftover undefined variables",

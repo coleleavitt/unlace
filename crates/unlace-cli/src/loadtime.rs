@@ -9,10 +9,8 @@ use std::ffi::OsString;
 use std::process::Command;
 
 use unlace_decomp::{
-    kuna_calltargettype, kuna_debuglink, kuna_delphiabi, kuna_dyldcache, kuna_exporttrie,
-    kuna_goabi, kuna_ifuncfpret, kuna_kernelcache, kuna_libctypes, kuna_loadoptions,
-    kuna_macho_arm64e, kuna_objcivars, kuna_objcsdk, kuna_ppcapu, kuna_sourcelang,
-    kuna_symbolnamechars,
+    calltargettype, debuglink, delphiabi, dyldcache, exporttrie, goabi, ifuncfpret, kernelcache,
+    libctypes, loadoptions, macho_arm64e, objcivars, objcsdk, ppcapu, sourcelang, symbolnamechars,
 };
 
 #[derive(Clone, Copy)]
@@ -30,40 +28,40 @@ enum Encoding {
 fn binding(name: &str) -> Option<(&'static str, Encoding)> {
     use Encoding::*;
     Some(match name {
-        "ppc32picimports" => (unlace_decomp::kuna_ppc32picimports::ENV, Ppc32Pic),
-        "ifuncfpret" => (kuna_ifuncfpret::IFUNCFPRET_ENV, DefaultOn),
-        "ppcapu" => (kuna_ppcapu::PPCAPU_ENV, DefaultOff),
-        "delphiabi" => (kuna_delphiabi::DELPHIABI_ENV, DefaultOn),
-        "ruststdsigs" => (unlace_decomp::kuna_ruststdsigs::RUSTSTDSIGS_ENV, Trimmed),
-        "debuglink" => (kuna_debuglink::DEBUGLINK_ENV, DefaultOn),
-        "kernelcache" => (kuna_kernelcache::KERNELCACHE_ENV, Kernelcache),
+        "ppc32picimports" => (unlace_decomp::ppc32picimports::ENV, Ppc32Pic),
+        "ifuncfpret" => (ifuncfpret::IFUNCFPRET_ENV, DefaultOn),
+        "ppcapu" => (ppcapu::PPCAPU_ENV, DefaultOff),
+        "delphiabi" => (delphiabi::DELPHIABI_ENV, DefaultOn),
+        "ruststdsigs" => (unlace_decomp::ruststdsigs::RUSTSTDSIGS_ENV, Trimmed),
+        "debuglink" => (debuglink::DEBUGLINK_ENV, DefaultOn),
+        "kernelcache" => (kernelcache::KERNELCACHE_ENV, Kernelcache),
         "kernelcache-boot" => (
-            unlace_decomp::kuna_kernelcacheboot::KERNELCACHE_BOOT_ENV,
+            unlace_decomp::kernelcacheboot::KERNELCACHE_BOOT_ENV,
             Trimmed,
         ),
-        "goabi" => (kuna_goabi::GOABI_ENV, DefaultOn),
-        "cil" => (unlace_decomp::kuna_cil::CIL_ENV, DefaultOn),
-        "symbolnamechars" => (kuna_symbolnamechars::SYMBOLNAMECHARS_ENV, SymbolNameChars),
-        "libctypes" => (kuna_libctypes::LIBCTYPES_ENV, LibcTypes),
+        "goabi" => (goabi::GOABI_ENV, DefaultOn),
+        "cil" => (unlace_decomp::cil::CIL_ENV, DefaultOn),
+        "symbolnamechars" => (symbolnamechars::SYMBOLNAMECHARS_ENV, SymbolNameChars),
+        "libctypes" => (libctypes::LIBCTYPES_ENV, LibcTypes),
         "dwarfscopes" => (
-            unlace_analysis::dwarf::kuna_dwarfscopes::DWARFSCOPES_ENV,
+            unlace_analysis::dwarf::dwarfscopes::DWARFSCOPES_ENV,
             DefaultOn,
         ),
         "dwarfenumtypedef" => (
-            unlace_analysis::dwarf::kuna_dwarfenumtypedef::DWARFENUMTYPEDEF_ENV,
+            unlace_analysis::dwarf::dwarfenumtypedef::DWARFENUMTYPEDEF_ENV,
             DefaultOn,
         ),
-        "calltargettype" => (kuna_calltargettype::CALLTARGETTYPE_ENV, DefaultOn),
-        "macho-arm64e" => (kuna_macho_arm64e::MACHO_ARM64E_ENV, DefaultOn),
-        "sourcelang" => (kuna_sourcelang::SOURCELANG_ENV, SourceLang),
-        "objcivars" => (kuna_objcivars::OBJCIVARS_ENV, DefaultOn),
-        "objcsdk" => (kuna_objcsdk::OBJCSDK_ENV, Trimmed),
-        "dyldimage" => (kuna_dyldcache::DYLDIMAGE_ENV, Trimmed),
-        "dyldcrossrefs" => (kuna_dyldcache::DYLDCROSSREFS_ENV, DefaultOn),
-        "exporttrie" => (kuna_exporttrie::EXPORTTRIE_ENV, DefaultOn),
-        "codestrings" => (kuna_loadoptions::CODESTRINGS_ENV, DefaultOn),
-        "nameladder" => (kuna_loadoptions::NAMELADDER_ENV, DefaultOn),
-        "swifttypes" => (kuna_loadoptions::SWIFTTYPES_ENV, DefaultOn),
+        "calltargettype" => (calltargettype::CALLTARGETTYPE_ENV, DefaultOn),
+        "macho-arm64e" => (macho_arm64e::MACHO_ARM64E_ENV, DefaultOn),
+        "sourcelang" => (sourcelang::SOURCELANG_ENV, SourceLang),
+        "objcivars" => (objcivars::OBJCIVARS_ENV, DefaultOn),
+        "objcsdk" => (objcsdk::OBJCSDK_ENV, Trimmed),
+        "dyldimage" => (dyldcache::DYLDIMAGE_ENV, Trimmed),
+        "dyldcrossrefs" => (dyldcache::DYLDCROSSREFS_ENV, DefaultOn),
+        "exporttrie" => (exporttrie::EXPORTTRIE_ENV, DefaultOn),
+        "codestrings" => (loadoptions::CODESTRINGS_ENV, DefaultOn),
+        "nameladder" => (loadoptions::NAMELADDER_ENV, DefaultOn),
+        "swifttypes" => (loadoptions::SWIFTTYPES_ENV, DefaultOn),
         _ => return None,
     })
 }
@@ -80,15 +78,15 @@ impl Encoding {
                 "off"
             }
             .into(),
-            Self::SymbolNameChars => kuna_symbolnamechars::NameChars::parse(value)
+            Self::SymbolNameChars => symbolnamechars::NameChars::parse(value)
                 .unwrap_or_default()
                 .as_str()
                 .into(),
-            Self::Ppc32Pic => unlace_decomp::kuna_ppc32picimports::Mode::from_env_value(value)
+            Self::Ppc32Pic => unlace_decomp::ppc32picimports::Mode::from_env_value(value)
                 .as_str()
                 .into(),
             Self::Trimmed => value.trim().into(),
-            Self::Kernelcache => kuna_kernelcache::KernelcacheChoice::parse(value)
+            Self::Kernelcache => kernelcache::KernelcacheChoice::parse(value)
                 .unwrap_or_default()
                 .as_str()
                 .into(),
@@ -103,7 +101,7 @@ impl Encoding {
             // console `option` arm will refuse anyway) clears the variable so
             // detection decides.
             Self::SourceLang => {
-                return kuna_sourcelang::SourceLang::parse_forced(value)
+                return sourcelang::SourceLang::parse_forced(value)
                     .map(|lang| lang.as_str().into());
             }
         })
@@ -179,14 +177,14 @@ fn settings(
         }
     }
     if explicit_output_language(options).is_some_and(|l| l.starts_with("rust")) {
-        values.insert(kuna_calltargettype::CALLTARGETTYPE_ENV, Some("off".into()));
+        values.insert(calltargettype::CALLTARGETTYPE_ENV, Some("off".into()));
     }
     if let Some(slice) = slice.filter(|s| !s.trim().is_empty()) {
         values.insert("UNLACE_MACHO_SLICE", Some(slice.into()));
     }
     if decode_lanes > 1 {
         values.insert(
-            unlace_analysis::listing::kuna_pdecode::DECODE_JOBS_ENV,
+            unlace_analysis::listing::pdecode::DECODE_JOBS_ENV,
             Some(decode_lanes.to_string()),
         );
     }
@@ -404,8 +402,8 @@ mod tests {
         assert_eq!(
             image_selection(&argv),
             BTreeMap::from([
-                (kuna_kernelcache::KERNELCACHE_ENV, "PMGR".to_string()),
-                (kuna_dyldcache::DYLDIMAGE_ENV, "libfoo.dylib".to_string()),
+                (kernelcache::KERNELCACHE_ENV, "PMGR".to_string()),
+                (dyldcache::DYLDIMAGE_ENV, "libfoo.dylib".to_string()),
             ])
         );
         assert!(image_selection(&["--option".into(), "kernelcache".into()]).is_empty());
@@ -436,14 +434,14 @@ mod tests {
                 ("UNLACE_MACHO_SLICE", Some("arm64")),
                 ("UNLACE_DYLDCROSSREFS", Some("off")),
                 ("UNLACE_CIL", Some("off")),
-                (kuna_sourcelang::SOURCELANG_ENV, None),
+                (sourcelang::SOURCELANG_ENV, None),
                 (unlace_analysis::passes::LOAD_OBJC_ENV, Some("on")),
                 (unlace_analysis::passes::LOAD_STRINGS_ENV, Some("on")),
             ])
         );
         assert_eq!(settings(&[], Some("  "), 1, false).len(), 2);
         assert_eq!(
-            settings(&[], None, 4, false)[unlace_analysis::listing::kuna_pdecode::DECODE_JOBS_ENV],
+            settings(&[], None, 4, false)[unlace_analysis::listing::pdecode::DECODE_JOBS_ENV],
             Some("4".into())
         );
     }

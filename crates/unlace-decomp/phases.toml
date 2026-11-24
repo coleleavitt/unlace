@@ -1770,6 +1770,25 @@ tier = "transform"
 symptoms = "v = NAN; if ((int)(x >> 0x20) == -1) v = x; around a float parameter on RISC-V|a RISC-V float function starts with one NAN test per float argument|an unused int variable named after fa0 or fa1 beside a float parameter"
 
 [[settable]]
+option = "satconvert"
+values = "on|off"
+default = "on"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace-satconvert"
+summary = "Print a float-to-integer conversion that saturates exactly as RISC-V `fcvt.w*`/`fcvt.l*` with `rtz` does as the C cast. `riscv.fd.sinc` lifts the instruction as the ISA defines it: truncation, then three clamps (NaN and values at or above the range give the maximum, values below it the minimum, 0 for the unsigned forms), printed `v = (int)x; if (x < -2147483648.0) v = -0x80000000; if (2147483648.0 <= x) v = 0x7fffffff; if (NAN(x)) v = 0x7fffffff;`. `RuleSatConvert` (oppool1, `kuna_satconvert.rs`) takes the outermost of three two-input MULTIEQUALs, each choosing a constant on one out-edge of its immediate dominator's branch (the `pow2select` select test), whose innermost input is a `FLOAT_TRUNC` of `x` (or the low part of a 64-bit one) and whose branches test `x` against float constants or `NAN(x)`. It evaluates the ladder at NaN, the infinities, zero, -0.5, -1 and every threshold and its neighbours, and requires the result to equal C's saturating conversion at the join's width, signed or unsigned. Only then does it replace the join by the truncation, so the clamps die and the function prints `(int)x`. The 64-bit unsigned form, whose truncation is itself split at 2^63, keeps its ladder."
+use_when = "On by default: C leaves an out-of-range float-to-integer conversion undefined, so `(int)x` is what the source said, and the ladder appears only where the ISA defines the saturation. Flip off to see the ISA's exact result for NaN and out-of-range values."
+example = "option satconvert off"
+source_decompiler = "kuna"
+inspiration = "RISC-V int cvtw(double d) { return (int)d; } printed a truncation and three clamps after the F/D spec was generated from the Sail model"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "if (NAN(x)) v = 0x7fffffff; after v = (int)x;|a float-to-int conversion followed by clamps to -0x80000000 and 0x7fffffff|v = 0; if (x <= -1.0) after an unsigned conversion|(int)x where the clamps for NaN and overflow should not print"
+
+[[settable]]
 option = "cmpmerge"
 values = "on|off"
 default = "off"

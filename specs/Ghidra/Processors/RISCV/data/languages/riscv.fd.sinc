@@ -571,22 +571,21 @@ define pcodeop fsub_s;
 		local sg5:4 = frs1:4;
 		sv4 = sg5;
 	<sgbox1>
-	local sg6:8 = trunc(sv4);
-	local sg7:4 = sg6:4;
-	local sv8:4 = sg7;
-	local sg9:1 = sv4 f< 0xcf000000:4;
-	if (!sg9) goto <sgsat2>;
-		sv8 = 0x80000000:4;
+	local sg6:4 = trunc(sv4);
+	local sv7:4 = sg6;
+	local sg8:1 = sv4 f< 0xcf000000:4;
+	if (!sg8) goto <sgsat2>;
+		sv7 = 0x80000000:4;
 	<sgsat2>
-	local sg10:1 = sv4 f>= 0x4f000000:4;
-	if (!sg10) goto <sgsat3>;
-		sv8 = 0x7fffffff:4;
+	local sg9:1 = sv4 f>= 0x4f000000:4;
+	if (!sg9) goto <sgsat3>;
+		sv7 = 0x7fffffff:4;
 	<sgsat3>
-	local sg11:1 = nan(sv4);
-	if (!sg11) goto <sgsat4>;
-		sv8 = 0x7fffffff:4;
+	local sg10:1 = nan(sv4);
+	if (!sg10) goto <sgsat4>;
+		sv7 = 0x7fffffff:4;
 	<sgsat4>
-	rd = sv8;
+	rd = sv7;
 }
 
 :fcvt.w.s rd,frs1,"rdn" is rd & frs1 & op0006=0x53 & funct3=0x2 & op2031=0xc00
@@ -1412,22 +1411,21 @@ define pcodeop fsub_s;
 
 :fcvt.w.d rd,frs1,"rtz" is rd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0xc20
 {
-	local sg1:8 = trunc(frs1);
-	local sg2:4 = sg1:4;
-	local sv3:4 = sg2;
-	local sg4:1 = frs1 f< 0xc1e0000000000000:8;
-	if (!sg4) goto <sgsat1>;
-		sv3 = 0x80000000:4;
+	local sg1:4 = trunc(frs1);
+	local sv2:4 = sg1;
+	local sg3:1 = frs1 f< 0xc1e0000000000000:8;
+	if (!sg3) goto <sgsat1>;
+		sv2 = 0x80000000:4;
 	<sgsat1>
-	local sg5:1 = frs1 f>= 0x41e0000000000000:8;
-	if (!sg5) goto <sgsat2>;
-		sv3 = 0x7fffffff:4;
+	local sg4:1 = frs1 f>= 0x41e0000000000000:8;
+	if (!sg4) goto <sgsat2>;
+		sv2 = 0x7fffffff:4;
 	<sgsat2>
-	local sg6:1 = nan(frs1);
-	if (!sg6) goto <sgsat3>;
-		sv3 = 0x7fffffff:4;
+	local sg5:1 = nan(frs1);
+	if (!sg5) goto <sgsat3>;
+		sv2 = 0x7fffffff:4;
 	<sgsat3>
-	rd = sv3;
+	rd = sv2;
 }
 
 :fcvt.w.d rd,frs1,"rdn" is rd & frs1 & op0006=0x53 & funct3=0x2 & op2031=0xc20
@@ -2527,23 +2525,22 @@ define pcodeop fsub_s;
 		local sg5:4 = frs1:4;
 		sv4 = sg5;
 	<sgbox1>
-	local sg6:8 = trunc(sv4);
-	local sg7:4 = sg6:4;
-	local sv8:4 = sg7;
-	local sg9:1 = sv4 f< 0xcf000000:4;
-	if (!sg9) goto <sgsat2>;
-		sv8 = 0x80000000:4;
+	local sg6:4 = trunc(sv4);
+	local sv7:4 = sg6;
+	local sg8:1 = sv4 f< 0xcf000000:4;
+	if (!sg8) goto <sgsat2>;
+		sv7 = 0x80000000:4;
 	<sgsat2>
-	local sg10:1 = sv4 f>= 0x4f000000:4;
-	if (!sg10) goto <sgsat3>;
-		sv8 = 0x7fffffff:4;
+	local sg9:1 = sv4 f>= 0x4f000000:4;
+	if (!sg9) goto <sgsat3>;
+		sv7 = 0x7fffffff:4;
 	<sgsat3>
-	local sg11:1 = nan(sv4);
-	if (!sg11) goto <sgsat4>;
-		sv8 = 0x7fffffff:4;
+	local sg10:1 = nan(sv4);
+	if (!sg10) goto <sgsat4>;
+		sv7 = 0x7fffffff:4;
 	<sgsat4>
-	local sg12:8 = sext(sv8);
-	rd = sg12;
+	local sg11:8 = sext(sv7);
+	rd = sg11;
 }
 
 :fcvt.w.s rd,frs1,"rdn" is rd & frs1 & op0006=0x53 & funct3=0x2 & op2031=0xc00
@@ -3572,23 +3569,22 @@ define pcodeop fsub_s;
 
 :fcvt.w.d rd,frs1,"rtz" is rd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0xc20
 {
-	local sg1:8 = trunc(frs1);
-	local sg2:4 = sg1:4;
-	local sv3:4 = sg2;
-	local sg4:1 = frs1 f< 0xc1e0000000000000:8;
-	if (!sg4) goto <sgsat1>;
-		sv3 = 0x80000000:4;
+	local sg1:4 = trunc(frs1);
+	local sv2:4 = sg1;
+	local sg3:1 = frs1 f< 0xc1e0000000000000:8;
+	if (!sg3) goto <sgsat1>;
+		sv2 = 0x80000000:4;
 	<sgsat1>
-	local sg5:1 = frs1 f>= 0x41e0000000000000:8;
-	if (!sg5) goto <sgsat2>;
-		sv3 = 0x7fffffff:4;
+	local sg4:1 = frs1 f>= 0x41e0000000000000:8;
+	if (!sg4) goto <sgsat2>;
+		sv2 = 0x7fffffff:4;
 	<sgsat2>
-	local sg6:1 = nan(frs1);
-	if (!sg6) goto <sgsat3>;
-		sv3 = 0x7fffffff:4;
+	local sg5:1 = nan(frs1);
+	if (!sg5) goto <sgsat3>;
+		sv2 = 0x7fffffff:4;
 	<sgsat3>
-	local sg7:8 = sext(sv3);
-	rd = sg7;
+	local sg6:8 = sext(sv2);
+	rd = sg6;
 }
 
 :fcvt.w.d rd,frs1,"rdn" is rd & frs1 & op0006=0x53 & funct3=0x2 & op2031=0xc20

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="ROMP"
+            endian="big"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="romp.sla"
+            processorspec="romp.pspec"
+            id="ROMP:BE:32:default">
+    <description>IBM ROMP (RT PC)</description>
+    <compiler name="default" spec="romp.cspec" id="default"/>
+  </language>
+</language_definitions>

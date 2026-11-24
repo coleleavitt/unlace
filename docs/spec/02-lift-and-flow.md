@@ -4357,7 +4357,21 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `M88000` | Motorola 88000 (MC88100) | `88000:BE:32:default` | written for unlace from the MC88100 User's Manual, Apache-2.0 |
 | `RISCV` (T-Head) | RISC-V with the T-Head vendor extensions (XThead*) | `RISCV:LE:64:XThead`, `RISCV:LE:32:XThead` | written for #98 from T-Head's thead-extension-spec and LLVM's XTHead encodings |
 | `Clipper` | Fairchild/Intergraph CLIPPER C100/C300 | `clipper:LE:32:default` | written for unlace from the CLIPPER C300 data book, Apache-2.0 |
+| `ROMP` | IBM ROMP (RT PC) | `ROMP:BE:32:default` | written for unlace from the RT PC Hardware Technical Reference, Apache-2.0 |
 <!-- vendor-rows -->
+
+### IBM ROMP (#98)
+
+`specs/Ghidra/Processors/ROMP` is a SLEIGH module written for unlace from the IBM
+RT PC Hardware Technical Reference (no prior SLEIGH existed):
+`ROMP:BE:32:default`. Branches test one bit of the condition status (LT, EQ,
+GT, C, OV, TB, and bit 8, the permanent zero that makes `bnb` unconditional);
+the "with execute" forms run the next instruction as a delay slot. The cspec
+follows the RT linkage (arguments r2-r5, result r2, link r15, stack r1).
+Exercised by `unlace-cli/tests/romp_raw.rs` (hand-assembled add, signed max,
+absolute load and branch-with-execute call routines decompile to the expected
+C).
+
 
 ### CLIPPER (#98)
 

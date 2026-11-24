@@ -4176,6 +4176,9 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `C6000` | TI TMS320C6000 (C6x, C64x, C674x) | `C6000:LE:32:default`, `C6000:LE:32:analysis`, `C6000:BE:32:default`, `C6000:BE:32:analysis` | aleph-void/ghidra-c6000 (fork of geepot/ghidra-c6000) @ `854fa26859`, Apache-2.0 |
 | `TLCS900H` | Toshiba TLCS-900/H | `TLCS900H:LE:32:default` | aleph-void/ghidra-tlcs900h (fork of nevesnunes/ghidra-tlcs900h) @ `585eb6070f`, MIT |
 | `LM32` | Lattice LatticeMico32 | `lm32:BE:32:default`, `lm32:LE:32:default` | aleph-void/ghidra-lm32 (fork of jevinskie/ghidra-lm32) @ `5be258ec6d`, MIT |
+| `MCORE` | Motorola M-CORE | `MCORE:BE:32:default`, `MCORE:LE:32:default` | aleph-void/ghidra-mcore (fork of CUB3D/ghidra-mcore) @ `0c10e14854`, Apache-2.0 |
+| `EBC` | EFI Byte Code | `EBC:LE:64:default`, `EBC:LE:32:default` | aleph-void/Ghidra-EFI-Byte-Code-Processor (fork of meromwolff/Ghidra-EFI-Byte-Code-Processor) @ `f27afea157`, MIT |
+| `SPC700` | Sony SPC700 (SNES audio) | `spc700:LE:16:default`, `spc700:LE:16:65816` | aleph-void/SPCdra (fork of qwertymodo/SPCdra) @ `e4f0b34412`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)
@@ -5148,8 +5151,18 @@ filter funclet by its `<parent>$filt$<n>` name). The first call in the range
 gets the edge, the pad defines RAX (the exception code the handler block
 reads) and RDX as at any pad, and the printer's catch header prints a lone
 `__except` clause as given: `try { ... } __except (EXCEPTION_EXECUTE_HANDLER)
-{ ... }`. A `__try` with no call in it gets no edge; `__finally` funclets and
-x86 scope tables are not spliced.
+{ ... }`. A `__try` with no call in it gets no edge; x64 `__finally` funclets
+are cleanup pads (above).
+
+On x86 (`kuna_msvcseh.rs (x86_seh_splice)`) the SEH3/SEH4 frame keeps the try
+level in `[ebp-4]`, so the regions come from the same state stores as x86 C++
+(the function starts outside every level; SEH4's -2 and SEH3's -1 mean none),
+between the function start and its first filter or handler block, at most
+16 KiB. A region at level `n` gets one record into scope record `n`'s `__except`
+block, which lies in the function and restores the stack pointer itself, so it
+is an ordinary pad, printed `__except (filter 0x401050)` or by its constant
+filter's name. An enclosing level's handler is not chained, and x86
+`__finally` routines (called by the runtime) are not spliced.
 
 ## 2.13 VEX zero-upper writes and per-lane vector p-code
 

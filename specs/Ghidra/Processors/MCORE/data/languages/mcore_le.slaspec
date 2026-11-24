@@ -1,0 +1,3 @@
+# M-CORE, little-endian (gcc -mlittle-endian)
+@define MCORE_LE ""
+@include "mcore.slaspec"

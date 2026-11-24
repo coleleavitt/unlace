@@ -5805,6 +5805,26 @@ change_kind = "analysis-enablement"
 tier = "analysis"
 symptoms = "many sub_<addr> functions that end in _Unwind_Resume()|a stripped c++ binary's function list is full of cleanup fragments from .text.unlikely|a function that starts by reading an undefined rbx and frees buffers before _Unwind_Resume"
 
+
+[[settable]]
+option = "mfcmsgmap"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P1"
+subphase = "code-data-partition"
+strength = "HARD"
+rewind = "P1"
+issue = "holley-i386-ptrdisc"
+summary = "On a 32-bit PE, list the handlers of every MFC message map as functions. An MFC window class routes messages through a static AFX_MSGMAP in .rdata (pfnGetBaseMap, lpEntries) whose AFX_MSGMAP_ENTRY array (nMessage, nCode, nID, nLastID, nSig, pfn; 24 bytes each, ending in an all-zero entry) names each handler. The handlers are reached only through that table, so no entry oracle or direct-call walk finds them and each was folded into the function before it. A table is read only where the base relocations vouch for it: lpEntries and the pfnGetBaseMap word before it are relocated, pfnGetBaseMap points into code, the entries lie in a non-executable section, and every entry's pfn is a relocated pointer into code with nMessage below 0x10000 and nSig below 0x100. The handlers are walked as roots, so their callees are found too."
+use_when = "Off by default. Turn it on for MFC applications and DLLs built with MSVC for i386, where window-message handlers (OnPaint, OnCommand handlers) are missing from the function list and their code is folded into the function before them. Measured on PEGRP32F.dll: 29 maps, 198 handlers, every one an IDA 9.5 function start, 194 of them missing before."
+example = "--option mfcmsgmap on"
+source_decompiler = "kuna"
+inspiration = "IDA 9.5 on PEGRP32F.dll (MFC, MSVC i386): 2,455 function starts unlace missed, the MFC message-map handlers among them"
+change_kind = "analysis-enablement"
+tier = "analysis"
+symptoms = "an mfc window class's message handlers are missing from the function list|a function in an mfc image spans several handlers that a message map names|IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour"
+
 [[settable]]
 option = "importvote"
 values = "on|off"

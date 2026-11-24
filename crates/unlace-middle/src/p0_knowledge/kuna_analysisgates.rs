@@ -210,6 +210,16 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna) List the handlers of a 32-bit PE's MFC message maps as functions
+    /// (option `mfcmsgmap`).  See `unlace_analysis::entry::kuna_mfcmsgmap`.
+    Mfcmsgmap,
+    "mfcmsgmap",
+    "MFC message-map handler discovery",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna) Withhold an exception-cleanup `.cold` fragment from the function
     /// list (option `ehcold`).  See `unlace_analysis::entry::kuna_ehcold`.
     Ehcold,

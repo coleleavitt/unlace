@@ -360,7 +360,9 @@ exit status is sweep.py's. LoongArch without an objdump is `unavailable`.
 Full sweep (unlace-5dac424f4f, 37 configurations, all oracles installed): exit 0, every
 configuration `ok`, no mismatches beyond riscv64v's 15 known ones. The `decode` findings (s390x
 97, ppc 25, tricore 12, x86-64-native 7, a few elsewhere) are spec gaps or encodings Capstone
-accepts that the ISA leaves invalid. They are listed in #862.
+accepts that the ISA leaves invalid. They are listed in #862. After the `isel` decode and the
+invalid-encoding filters (unlace-478ab58a5e), the only `decode` findings left are AMD FMA4 on
+`x86-64-native` (2), a spec gap routed to the x86 team.
 
 ## How a case runs
 
@@ -396,7 +398,16 @@ accepts that the ISA leaves invalid. They are listed in #862.
   Capstone's text back to the same bytes (`pip install keystone-engine`; without it every
   encoding is kept). Also dropped as UNPREDICTABLE: an `LDRD`/`STRD` whose first register is
   odd or `lr`; T32 shifted-register data-processing ops with bit 15 of the second halfword set
-  and saturate/bit-field ops with bit 10 of the first; `SVC` (a system call on QEMU).
+  and saturate/bit-field ops with bit 10 of the first or bit 5 of the second; `SVC` (a system call
+  on QEMU).
+- Encodings Capstone decodes but the ISA leaves invalid are dropped before lifting (each
+  architecture's `canonical`), so a `decode` finding is a SLEIGH gap: on x86, an F2/F3 prefix on
+  a 0F-map opcode that has no such form (Capstone decodes the same instruction without it); on
+  32-bit PowerPC, 64-bit-only instructions, VSX and `isel`, which the 32-bit language and the
+  7457 lack; on MIPS R6, the REGIMM trap-immediates R6 removed and the Cavium Octeon
+  instructions; on TriCore, an encoding with a reserved bit set that Capstone ignores, and the
+  TC1.6.2 additions the TC1.6.1 language lacks; on m68k, a full extension word for the opword's
+  own effective address with bit 3 set, a zero base-displacement size or a reserved I/IS value.
 - ARM and Thumb on QEMU (`qemu-arm -cpu max`, QEMU 10; build it with
   `--target-list=arm-linux-user`): the A32 prologue sets NZCVQ and GE with `MSR APSR_nzcvqg`,
   loads r0..lr, and enters the instruction with `LDR pc` from a literal (bit 0 set for Thumb);
@@ -471,7 +482,7 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
   register stored the whole word. With `ppc64-p10`/`ppc64le-p10`: `sradi.` did not set CR0;
   `divwe[u]`/`divde[u]` divided 0 by 0 or `RA` by `RB` instead of `RA || 0`; `bpermd`, `xxsel`,
   the VSX compares, `xststdcdp`, `xscmpexpdp` and the other VSX user ops never wrote their target;
-  `stxsd`/`stxssp` were user ops (no store).
+  `stxsd`/`stxssp` were user ops (no store). The generic 64-bit languages did not decode `isel`.
 - **LoongArch.** `bstrins.w`/`.d` had `bstrpick`'s semantics; `slli.d`/`srli.d`/`srai.d` masked the
   shift with `0x1f`; the rotates shifted arithmetically; `bytepick.w`/`.d` picked the wrong bytes;
   `ftintrm`/`ftintrp`/`ftint` truncated and the `.l.s` forms wrote only the low word.

@@ -709,6 +709,7 @@ fn deferred_entry_passes() -> Vec<Box<dyn AnalysisPass>> {
         Box::new(crate::entry::FuncStartPatternPass),
         Box::new(crate::entry::kuna_coldentry::ColdEntryPass),
         Box::new(crate::entry::kuna_ehcold::EhColdPass),
+        Box::new(crate::entry::kuna_mfcmsgmap::MfcMsgMapPass),
         Box::new(crate::protos::kuna_importvote::ImportVotePass),
         // (kuna `pdbtypes`/`pdblines`) A full read of the `.pdb`'s type,
         // module and line streams: paid only when its gate (and `pdb`) is on.
@@ -2532,6 +2533,8 @@ mod tests {
             .set(unlace_decomp::kuna_analysisgates::Itaniumrtti(true));
         arch.kuna_options
             .set(unlace_decomp::kuna_formatstring::FormatStringMode::Off);
+        arch.kuna_options
+            .set(unlace_decomp::kuna_goitabcalls::GoItabCalls(false));
 
         let schedule: Vec<(&str, bool)> = listing_consumer_passes(&arch)
             .into_iter()

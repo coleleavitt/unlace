@@ -166,11 +166,10 @@ regex = 'func stringNameCollision\(a0 [^,]+, a1 [^,]+, a2 [^\)]+\)'
 name = 'bounds audit keeps the panic path before and after header import'
 count = 2
 regex = [
-    '',
-    'if (a2 < a1|uint64\(index\) < uint64\(s_len\)) \{',
-    'return \*\(\*byte\)\(unsafe\.(Pointer|Add)\(',
-    '\}',
+    'if (a1 <= a2|uint64\(s_len\) <= uint64\(index\)) \{',
     'runtime.panicIndex\(.*\) // no-return',
+    '\}',
+    'return \*\(\*byte\)\(unsafe\.(Pointer|Add)\(',
 ]
 
 [[match]]

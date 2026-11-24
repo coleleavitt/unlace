@@ -49,6 +49,8 @@ hex = '85ff74054885f67505e812000000893e89f883c001c390909090909090909090c3'
 
 [script]
 commands = [
+    # noretfirst orders the same tie by the no-return call, before guardarm sees it
+    'option noretfirst off',
     'lo fu victim',
     'decompile',
     'print C',

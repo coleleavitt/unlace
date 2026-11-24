@@ -62,6 +62,8 @@ hex = '200020d4200020d4200020d4200020d4'
 commands = [
     # rangefold would invert the guard's comparison and the raw branch it pins
     'option rangefold off',
+    # noretfirst would swap the guard's arms and flip the raw branch it pins the same way
+    'option noretfirst off',
     'option sourcelang go',
     'option outlang go',
     'option noreturn runtime.panicdivide',

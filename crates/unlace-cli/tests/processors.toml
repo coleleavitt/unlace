@@ -115,6 +115,13 @@ x86_64_avx512_round = """
 62f17c7858c1c3
 """
 
+meta_fpu = """
+c4070009c4070808010210f1008110f144050008a00820a3c4072009012129f2004101f3064129f0440b0008a00820a321d60005a00820a3
+"""
+meta_dsp = """
+00c5000083000062a00820a3
+"""
+
 [[family]]
 name = "blackfin"
 language = "Blackfin:LE:32:default"
@@ -2169,4 +2176,45 @@ expect = [
     "v1 = *(unsigned short *)(v2 + 3);",
     "*(short *)(v2 + 3) = *(short *)(v2 + 3) + 1;",
     "*(unsigned short *)(v2 + 5) = v1;",
+]
+
+# The META FPU instructions decode and lift: F MOVD between data and FX registers, F ADD and
+# F MUL, F ITOF, F CMP with #0 and a conditional F NEG (NEGFLO) after it. Built with
+# metag-linux-gnu-as 2.45 -mcpu=metac21 -mfpu=metac21.
+[[family]]
+name = "meta_fpu"
+language = "META:LE:32:default"
+base = "0x0"
+image = "meta_fpu"
+
+[[family.function]]
+test = "meta_fpu_arithmetic_decompiles"
+address = "0x0"
+expect = [
+    "float sub_0(float a0,float a1)",
+    "return (a0 + a1) * a0;",
+]
+
+[[family.function]]
+test = "meta_fpu_conversion_compare_decompiles"
+address = "0x18"
+expect = [
+    "v1 = (float)a0;",
+    "if (v1 < 0.0f)",
+    "v1 = -v1;",
+]
+
+# The META DSP instructions decode to their binutils mnemonics (D ADD, D MUL #imm) and lift
+# as named operations over the data registers they name.
+[[family]]
+name = "meta_dsp"
+language = "META:LE:32:default"
+base = "0x0"
+image = "meta_dsp"
+
+[[family.function]]
+test = "meta_dsp_operations_decompile"
+address = "0x0"
+expect = [
+    "return dsp_mul(dsp_add(a1,a3),0x10);",
 ]

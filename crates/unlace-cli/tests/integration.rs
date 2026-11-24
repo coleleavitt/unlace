@@ -1113,5 +1113,7 @@ mod types_header;
 #[path = "typelib.rs"]
 mod typelib;
 
+#[path = "msvcexport_cli.rs"]
+mod msvcexport_cli;
 #[path = "vexzeroupper_cli.rs"]
 mod vexzeroupper_cli;

@@ -16,7 +16,7 @@ and effects refuse. Flow overrides do not acquire a record. The record is
 cleared on restart and cannot authorize a later rendering without the final
 whole-function SSA proof described in chapter 09.
 
-**(kuna) Atomic instructions — `option atomics auto|msvc|gcc|off`, default off,
+**(kuna) Atomic instructions — `option atomics auto|msvc|gcc|off`, default `auto` (measured in unlace#581),
 `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rewrite)`.**
 SLEIGH lifts an x86 `lock`-prefixed read-modify-write as `LOCK()`, a load, an
 update, a store and `UNLOCK()`; an AArch64 LSE atomic (`ldadd`, `ldclr`,
@@ -126,7 +126,7 @@ spells no 16-byte intrinsic with these operands (`_InterlockedCompareExchange128
 returns a flag and writes the old value through a pointer), so the 16-byte forms
 keep the GCC name under every spelling.
 
-**(kuna) Load/store-exclusive loops — `option llscfold`, default off,
+**(kuna) Load/store-exclusive loops — `option llscfold`, default on (unlace#581; it acts only with `atomics`),
 `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (ActionLlscLoop)`.**
 Without LSE, AArch64 code (and all ARMv6+/Thumb-2 code) updates memory with a retry loop: `ldaxr w8, [x0];
 add w9, w8, w1; stlxr w10, w9, [x0]; cbnz w10, loop`. The store-exclusive
@@ -157,6 +157,20 @@ anything but `clrex`. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
 monitor's pass and status become the constants 1 and 0, and the STORE a dead
 copy; dead-branch removal then deletes the back edge. A compare-exchange that
 fails stores nothing, as the loop did, and keeps its exit (with its `clrex`).
+
+clang rotates an ARM and Thumb compare-exchange: `ldrex r0, [r0]; cmp r0, r1;
+bne fail; dmb ish; L: strex r3, r2, [r12]; cbz r3, done; ldrex r0, [r12]; cmp
+r0, r1; beq L; fail: clrex`. The store-exclusive block then has two
+predecessors: the head (directly or through one block, here the `dmb`) and a
+reload block that the status test falls into and that branches back to it or
+to the head's failure exit
+(`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rotated_blocks)`). The head,
+the block between and the store-exclusive's blocks fold as above, and the
+reload block must repeat the head: evaluated from the state the loop body
+leaves, its one load-exclusive reads the head's address, it reads neither
+monitor output, and it branches back exactly when the reloaded value equals
+the head's expected value (`reload_matches`). The status test then always
+leaves the loop and the reload block is dead.
 
 On ARM and Thumb, `strex rd, rt, [rn]` lifts to `access = hasExclusiveAccess(rn);
 rd = 1; if (!access) goto next; rd = 0; *rn = rt`, with no status user
@@ -4273,6 +4287,16 @@ bits before the shift. `sha` sets C to the OR of the bits shifted out (the top
 `count` bits left, the low `-count` bits right); `shas` leaves C alone. The 64-bit
 (E register) multiply-accumulate forms set V from the add's signed overflow (unsigned
 carry for `madds.u`). Checked with `tools/difffuzz` against Unicorn.
+
+The q-format 16x16 multiplies (`mul.q`/`mulr.q`/`madd(r)(s).q`/`msub(r)(s).q` on the U/L
+halves) multiply in 32 bits; they truncated the product to 16 bits, and the rounding forms
+cleared the result (`zext(res[16,16] << 16)`). The 64-bit (E register) `madd`, `msub`, `mul`
+families, plain, `.u`, saturating and `.q`, extend the operands before multiplying (they
+truncated the 32x32 product), take V from the 64-bit add's signed overflow (unsigned carry or
+borrow for `.u`) instead of bit 63, and saturate on it; `msubs.u` multiplies (it subtracted).
+The 32-bit `msub.q`/`msubs.q` (32x32 and 32x16) subtract at full precision and then drop the
+low bits, as `madd.q` does, so the result is `D[d] - ceil(product)` rather than
+`D[d] - floor(product)`, matching Unicorn's TriCore core.
 ### AArch64 SVE2 and SVE2.1 (#98)
 
 `specs/Ghidra/Processors/AARCH64/data/languages/AARCH64_sve2.sinc` decodes
@@ -4319,6 +4343,11 @@ crossbuild instruction"), an existing engine gap that is not HMX-specific.
 Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
 encodings against LLVM's syntax and a raw image with one instruction per
 packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
+
+### AArch64 SMSTART/SMSTOP text
+
+`smstart`/`smstop` (`AARCH64base.sinc`) print as LLVM does: `smstart`, `smstart sm`, `smstart za`
+(they printed `smstart {}`, `smstart {SM}`). Their p-code is unchanged.
 
 ### AArch64 RMIF
 
@@ -4748,12 +4777,12 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `EVM` | Ethereum Virtual Machine bytecode, Cancun opcode set | `EVM:BE:32:Cancun` | Ethereum Yellow Paper appendix H, evm.codes opcode reference, EIPs 145/1153/3855/4844/5656/7516 | `unlace-cli/tests/evm.rs` |
 | `Rabbit` | Rabbit Semiconductor Rabbit 2000 / 3000A / 4000 / 5000 / 6000 | `Rabbit2000:LE:16:default`, `Rabbit3000:LE:16:default`, `Rabbit4000:LE:16:default`, `Rabbit6000:LE:16:default` | Rabbit 2000/3000 Instruction Reference Manual and Rabbit Family Instruction Reference (019-0098), Rabbit 6000 instruction spreadsheet, Rabbit User's Manuals, Dynamic C docs; 4000/6000 checked against z88dk's r4k/r6k tables | `unlace-cli/tests/processors.toml` (`rabbit`, `rabbit4000`) |
 | `Lanai` | Lanai v11 (Myricom, Google) | `lanai:BE:32:default` | LLVM Lanai backend (`LanaiInstrFormats.td` format descriptions, `LanaiInstrInfo.td`, `LanaiCallingConv.td`) | `unlace-cli/tests/processors.toml` (`lanai`) |
-| `META` | Imagination Technologies META (Meta 1.1, 1.2, 2.1), GP instructions | `META:LE:32:default` | binutils `include/opcode/metag.h` and `opcodes/metag-dis.c` field layouts, Linux `arch/metag` ABI; checked against `metag-linux-gnu-objdump` | `unlace-cli/tests/meta_raw.rs` |
+| `META` | Imagination Technologies META (Meta 1.1, 1.2, 2.1): GP, FPU and DSP instructions | `META:LE:32:default` | binutils `include/opcode/metag.h` and `opcodes/metag-dis.c` field layouts, Linux `arch/metag` ABI; checked against `metag-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`meta`, `meta_fpu`, `meta_dsp`) |
 | `S1C` | Epson S1C17 and S1C33000 cores | `S1C17:LE:24:default`, `S1C33:LE:32:default` | Epson S1C17 Core Manual Rev. 1.2, S1C33000 Core CPU Manual, S1C17 Startup Manual, S1C33 Application Note | `unlace-cli/tests/s1c_raw.rs` |
 | `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/processors.toml` (`st20`) |
 | `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilegx`) |
 | `TILEPRO` | Tilera TILEPro (TILEPro32/TILEPro64, TILE64), parallel X/Y-mode bundles | `TILEPRO:LE:32:default` | TILEPro ISA reference (UG120); encodings generated from the binutils `tilepro` opcode table by `tools/gen_tilepro_sleigh.py`; checked against `tilepro-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilepro`) |
-| `CSKY` | C-SKY ABIv2 (CK801-CK860), integer ISA, both byte orders | `CSKY:LE:32:v2`, `CSKY:BE:32:v2` | C-SKY V2 instruction set manual; encodings from the binutils `csky-opc.h` table; checked against `csky-elf-objdump` | `unlace-cli/tests/processors.toml` (`csky`) |
+| `CSKY` | C-SKY ABIv2 (CK801-CK860): integer ISA, FPUv2, FPUv3, VDSP; ABIv1 (CK510, CK610) | `CSKY:LE:32:v2`, `CSKY:BE:32:v2`, `CSKY:LE:32:ck810v`, `CSKY:LE:32:ck860`, `CSKY:LE:32:v1`, `CSKY:BE:32:v1` | C-SKY V2 instruction set manual; encodings from the binutils `csky-opc.h` table (FPU and VDSP generated by `tools/gen_csky_ext_sleigh.py`); checked against `csky-elf-objdump` | `unlace-cli/tests/processors.toml` (`csky`, `csky_fpuv2`, `csky_fpuv3`, `csky_vdsp`, `csky_abiv1`) |
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/processors.toml` (`v60*`) |
 | `PowerPC` (Gekko) | IBM Gekko / Broadway (PowerPC 750CL) paired singles | `PowerPC:BE:32:Gekko` | IBM PowerPC 750CL User's Manual (paired-single chapter); checked against `powerpc-elf-objdump -M gekko` 2.43.1 | `unlace-cli/tests/ppc_gekko.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
@@ -4784,6 +4813,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `S1C88` | Seiko Epson S1C88 8-bit core (Pokemon mini CPU) | `S1C88:LE:16:default` | Epson S1C88 Core CPU Manual (MF658-05); checked against MAME `minx` on all 768 opcode slots | `unlace-cli/tests/processors.toml` (`s1c88`) |
 | `M7700` | Mitsubishi/Renesas 7700 Family (M37700/M37702/M37710, 7750/7751 additions) | `M7700:LE:24:default` | Renesas 7700 Family Software Manual (chapter 4 instruction pages, Appendix 2 code tables) | `unlace-cli/tests/processors.toml` (`m7700`) |
 | `MULTOS` | MULTOS Executable Language (MEL) smart-card bytecode | `MULTOS:BE:16:MEL` | MULTOS Developer's Reference Manual v1.58 (instruction descriptions, Instruction Map) | `unlace-cli/tests/processors.toml` (`multos_mel`) |
+| `M7900` | Mitsubishi/Renesas 7900 Series (DPR0 only, and DPR0-DPR3) | `M7900:LE:24:default`, `M7900:LE:24:DPR4` | Renesas 7900 Series Software Manual (chapter 4 machine-code rows) | `unlace-cli/tests/processors.toml` (`m7900`) |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -5541,6 +5571,23 @@ pairs of Rm in the low half of the result (the other arrangements already put Rn
 scalar `SQSHL`/`SQSHLU`/`UQSHL` (immediate) decoded their left shift with the right-shift
 formula (`sqshl d13, d6, #10` printed `#0x36`), and scalar `SLI d` read only 5 bits of its
 6-bit shift; they now take `Imm_uimm3`/`Imm_uimm4`/`Imm_uimm5`/`Imm_imm0_63` by element size.
+
+### AArch64 FP16 fixed-point conversions, FMLAL/FMLSL, FP16 FMOV immediate, SABD
+
+Found by `tools/difffuzz --oracle qemu`.
+
+- `FBits16`/`FBits32`/`FBits64` (`AARCH64instructions.sinc`) build 2^fbits from two powers of two,
+  so fbits = 64 no longer shifts out to 0. The half-precision fixed-point conversions
+  (`FCVTZS`/`FCVTZU` from H to a general register, `SCVTF`/`UCVTF` to H) scale in double
+  precision with `FBits64` (2^fbits overflows a half for fbits > 15, and two of them multiplied by
+  the fbits count itself), and `FCVTZU h/s/d, #fbits` scales by a double built the same way.
+- `FMLAL`/`FMLSL`(2), vector and by element, widen each half to single and accumulate with
+  `f+`/`f-` (they multiplied in half precision and added the single-precision bit patterns as
+  integers); the product of two halves is exact in single precision, so this is the fused result.
+  The by-element forms index V0-V15 by H:L:M (`Re_VPR128Lo.H.vIndexHLM3`).
+- `FMOV v.4H/v.8H, #imm` converts the single-precision expansion of the immediate to half
+  (`float2float`); it converted the bit pattern as an integer.
+- `SABD v.4S` read lane 2 of its doubled difference from bit 94.
 
 ## 2.9 Go stack-growth prologue folding
 

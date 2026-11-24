@@ -96,3 +96,10 @@ differences are the MUBUF scratch and `s_waitcnt_depctr` operand spellings), and
 decompiles with no bad instruction. Decoded as wave32 instead, a ballot's high half reads as an
 uninitialized `vcc_hi`.
 
+## Aperture sources and v_swap_b32
+
+Source operand codes 235-239 (`src_shared_base`, `src_shared_limit`, `src_private_base`,
+`src_private_limit`, `src_pops_exiting_wave_id`) decode on GFX9, GFX10 and GFX11 as the
+`aperture_register` user op (their values are set by the hardware), and GFX9 decodes
+`v_swap_b32` (VOP1 opcode 81). Found by the real-code sweep (`notes/real-code-sweep.md`):
+clang's gfx900 output reads `src_private_base` in every function that takes a stack address.

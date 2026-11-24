@@ -130,7 +130,7 @@ impl crate::kuna_optionset::KunaOption for Atomics {
     }
 
     fn shipped() -> Self {
-        Atomics::Off
+        Atomics::Auto
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
@@ -157,7 +157,7 @@ crate::kuna_flag!(
     "llscfold",
     "load/store-exclusive retry loops as atomic builtins",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 #[cfg(test)]
@@ -166,9 +166,10 @@ mod tests {
     use crate::kuna_optionset::KunaOption;
 
     #[test]
-    fn options_parse_and_ship_off() {
-        assert_eq!(Atomics::shipped(), Atomics::Off);
-        assert!(!LlscFold::shipped().0);
+    fn options_parse_and_ship_on() {
+        assert_eq!(Atomics::unset(), Atomics::Off);
+        assert_eq!(Atomics::shipped(), Atomics::Auto);
+        assert!(LlscFold::shipped().0);
         for mode in [Atomics::Off, Atomics::Auto, Atomics::Msvc, Atomics::Gcc] {
             assert_eq!(Atomics::parse(mode.as_str()).unwrap().0, mode);
         }

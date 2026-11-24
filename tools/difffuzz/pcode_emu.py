@@ -225,7 +225,7 @@ def _eval(opc, ins, rd, osz):
         return bin(a).count("1")
     if opc == "LZCOUNT":
         return 8 * asz - a.bit_length()
-    if opc.startswith("FLOAT_") or opc in ("INT2FLOAT", "TRUNC", "CEIL", "FLOOR", "ROUND"):
+    if opc.startswith("FLOAT_") or opc in ("INT2FLOAT", "FLOAT2FLOAT", "TRUNC", "CEIL", "FLOOR", "ROUND"):
         return _float(opc, ins, a, asz, b, osz)
     raise Unmodeled(opc)
 

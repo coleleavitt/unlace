@@ -114,7 +114,7 @@ bytes are the reader's own. Members elsewhere, and the structure's size, still
 follow the rules above. A reader turned away mints its own shape even though a
 live structure contains it, so that entry is superseded from the start and the
 convergence sweep decides the reader again, to the same answer.
-`tests/stages/structsynth-unclaimed-bytes.xml` pins the three readers (0 of 3
+`tests/stages/structsynth-unclaimed-bytes.toml` pins the three readers (0 of 3
 on the previous revision, 3 of 3 here and on main) and two ledger unit tests pin
 the rule.
 
@@ -161,7 +161,7 @@ typed pointer may not be given anything past its last field. A hole wider than
 its padding is still room for a member the reader skipped (`{0: uint, 0x10: ptr}`
 may still take a word at 8), and a typed reader may still be given members in its
 tail padding: `fmt`'s `put_word` measures `{0: char *, 8: int}` of a `WORD` whose
-`int space` sits at 0xc. `tests/stages/structsynth-shared-layout.xml` asserts
+`int space` sits at 0xc. `tests/stages/structsynth-shared-layout.toml` asserts
 10 to 12 pin the three shapes (all three fail on the previous revision).
 
 On the reviewer's builds and on 34 more chosen before any result under this rule

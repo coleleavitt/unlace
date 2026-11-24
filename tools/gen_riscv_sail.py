@@ -1241,7 +1241,11 @@ class Compiler:
         imax = mask(iw - 1) if signed else mask(iw)
         imin = (1 << (iw - 1)) if signed else 0
         size = iw // 8
-        if signed or iw == 32:
+        if signed:
+            # in range the signed result is the truncation at its own width
+            r = self.mutable(self.tmp(iw, 'trunc(%s)' % xs), 'cvt')
+        elif iw == 32:
+            # [2^31, 2^32) needs the 64-bit truncation's low word
             wide = self.tmp(64, 'trunc(%s)' % xs)
             r = self.mutable(self.coerce_zext(wide, iw), 'cvt')
         else:

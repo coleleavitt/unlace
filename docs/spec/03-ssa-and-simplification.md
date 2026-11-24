@@ -3897,6 +3897,21 @@ parameter's 48-bit test stays. *Rewrite:* the
 compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
 unboxing dies. Exact, so always on.
 
+**satconvert** —
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_satconvert.rs (RuleSatConvert)`, oppool1, fires
+on `MULTIEQUAL`, option `satconvert` (default on). *Pattern:* the outermost of three two-input
+joins, each taking a constant on one out-edge of its immediate dominator's branch (the select
+test `pow2select` uses), whose innermost input is `FLOAT_TRUNC(x)` at the join's width or the
+low word of a 64-bit one. The branches test `x` against float constants or `NAN(x)`. This is how
+`riscv.fd.sinc` lifts an `rtz` `fcvt.w*`/`fcvt.l*`. *Proof:* the ladder is evaluated at NaN,
+both infinities, 0, -0.5, -1 and every threshold with its two neighbours. It must equal C's
+saturating conversion at the join's width, signed or unsigned: NaN and values at or above the
+range give the maximum, values below it the minimum. Between thresholds no test changes, so those
+points cover every input. *Rewrite:* the join's readers read the truncation, the clamps die, and
+the conversion prints as `(int)x`. C leaves out-of-range conversions undefined, which is why the
+cast is the source's meaning and the rewrite sits behind an option. The 64-bit unsigned form,
+whose truncation is split at 2^63, keeps its ladder.
+
 **x87truncate** —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_x87truncate.rs
 (RuleX87Truncate)`, oppool1, fires on CALLOTHER. *Pattern:* one of the x87

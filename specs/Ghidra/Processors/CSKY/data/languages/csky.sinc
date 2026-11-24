@@ -24,6 +24,9 @@ define register offset=0x00 size=4 [
 define register offset=0x100 size=4 [ pc hi lo epc fpc ];
 define register offset=0x200 size=1 [ C ];
 define register offset=0x300 size=4 [ contextreg ];
+define register offset=0x400 size=16 [ vr0 vr1 vr2 vr3 vr4 vr5 vr6 vr7 vr8 vr9 vr10 vr11 vr12 vr13 vr14 vr15 ];
+define register offset=0x400 size=8 [ fr0 _ fr1 _ fr2 _ fr3 _ fr4 _ fr5 _ fr6 _ fr7 _ fr8 _ fr9 _ fr10 _ fr11 _ fr12 _ fr13 _ fr14 _ fr15 _ fr16 fr17 fr18 fr19 fr20 fr21 fr22 fr23 fr24 fr25 fr26 fr27 fr28 fr29 fr30 fr31 ];
+define register offset=0x600 size=4 [ fcr fesr fid ];
 
 # 16-bit instruction
 define token hw(16)
@@ -1729,3 +1732,13 @@ cpv20: v is a20_16; b15_0 [ v = (a20_16 << 15) | (b15_0 & 0x7fff); ] { export *[
 :cpwcr rx, "<"^a25_21^", "^b11_0^">" is a31_26=0x3f & rx & a25_21; b15_12=3 & b11_0 { local c:1 = a25_21; local n:2 = b11_0; coprocessor(3:1, c, n, rx); }
 :cprc "<"^a25_21^", "^b11_0^">" is a31_26=0x3f & a25_21 & a20_16=0; b15_12=4 & b11_0 { local c:1 = a25_21; local n:2 = b11_0; C = coprocessor(4:1, c, n); }
 :cpop "<"^a25_21^", "^cpv20^">" is (a31_26=0x3f & a25_21; b15=1) & cpv20 { local c:1 = a25_21; coprocessor(5:1, c, cpv20); }
+
+@ifdef CSKY_FPUV2
+@include "csky_fpuv2.sinc"
+@endif
+@ifdef CSKY_FPUV3
+@include "csky_fpuv3.sinc"
+@endif
+@ifdef CSKY_VDSP
+@include "csky_vdsp.sinc"
+@endif

@@ -24,6 +24,7 @@ use crate::kernelcacheboot::KernelcacheBoot;
 use crate::libctypes::LibcTypesLayout;
 use crate::options::env_toggle;
 use crate::ppc32picimports::Mode as Ppc32PicMode;
+use crate::ruststdsigs::RustStdSigs;
 use crate::sourcelang::SourceLang;
 use crate::symbolnamechars::NameChars;
 
@@ -37,6 +38,10 @@ pub const NAMELADDER_ENV: &str = "UNLACE_NAMELADDER";
 /// Carries `swifttypes` to the Objective-C pass, which leaves a Swift class's
 /// layout to the Swift pass when it is on.
 pub const SWIFTTYPES_ENV: &str = "UNLACE_SWIFTTYPES";
+/// Carries `dwarfscopes` to the DWARF pass, which runs at `load file`.
+pub const DWARFSCOPES_ENV: &str = "UNLACE_DWARFSCOPES";
+/// Carries `dwarfenumtypedef` to the DWARF type mapper, which runs at `load file`.
+pub const DWARFENUMTYPEDEF_ENV: &str = "UNLACE_DWARFENUMTYPEDEF";
 /// The `--slice` fat Mach-O slice override.
 pub const MACHO_SLICE_ENV: &str = "UNLACE_MACHO_SLICE";
 /// The external `.pdb` file to apply.
@@ -116,6 +121,18 @@ pub struct LoadOptions {
     pub nameladder: bool,
     /// `swifttypes`: a Swift image's class layouts come from its field descriptors.
     pub swifttypes: bool,
+    /// `delphiabi`: read a 32-bit Delphi PE under the Delphi compiler spec.
+    pub delphiabi: bool,
+    /// `debuglink`: name a stripped ELF's functions from its separate debug file.
+    pub debuglink: bool,
+    /// `exporttrie`: read Mach-O export tries for names.
+    pub exporttrie: bool,
+    /// `ruststdsigs`: the toolchain Rust standard-library signatures come from.
+    pub ruststdsigs: RustStdSigs,
+    /// `dwarfscopes`: collect locals nested in DWARF lexical blocks.
+    pub dwarfscopes: bool,
+    /// `dwarfenumtypedef`: name an anonymous DWARF enumeration after its typedef.
+    pub dwarfenumtypedef: bool,
 }
 
 impl Default for LoadOptions {
@@ -149,6 +166,12 @@ impl Default for LoadOptions {
             codestrings: true,
             nameladder: true,
             swifttypes: true,
+            delphiabi: true,
+            debuglink: true,
+            exporttrie: true,
+            ruststdsigs: RustStdSigs::Off,
+            dwarfscopes: true,
+            dwarfenumtypedef: true,
         }
     }
 }
@@ -186,6 +209,12 @@ impl LoadOptions {
             codestrings: env::codestrings(),
             nameladder: env::nameladder(),
             swifttypes: env::swifttypes(),
+            delphiabi: env::delphiabi(),
+            debuglink: env::debuglink(),
+            exporttrie: env::exporttrie(),
+            ruststdsigs: env::ruststdsigs(),
+            dwarfscopes: env::dwarfscopes(),
+            dwarfenumtypedef: env::dwarfenumtypedef(),
         }
     }
 
@@ -444,6 +473,48 @@ pub mod env {
         env_toggle(super::SWIFTTYPES_ENV, true)
     }
 
+    pub fn delphiabi() -> bool {
+        match unlace_base::env::var(crate::delphiabi::DELPHIABI_ENV) {
+            Ok(v) => !matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "off" | "0" | "false"
+            ),
+            Err(_) => true,
+        }
+    }
+
+    pub fn debuglink() -> bool {
+        env_toggle(crate::debuglink::DEBUGLINK_ENV, true)
+    }
+
+    pub fn exporttrie() -> bool {
+        env_toggle(crate::exporttrie::EXPORTTRIE_ENV, true)
+    }
+
+    pub fn ruststdsigs() -> RustStdSigs {
+        unlace_base::env::var(crate::ruststdsigs::RUSTSTDSIGS_ENV)
+            .ok()
+            .and_then(|v| RustStdSigs::parse(&v))
+            .unwrap_or_default()
+    }
+
+    fn dwarf_toggle(name: &str) -> bool {
+        unlace_base::env::var(name).map_or(true, |v| {
+            !matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "off" | "0" | "false"
+            )
+        })
+    }
+
+    pub fn dwarfscopes() -> bool {
+        dwarf_toggle(super::DWARFSCOPES_ENV)
+    }
+
+    pub fn dwarfenumtypedef() -> bool {
+        dwarf_toggle(super::DWARFENUMTYPEDEF_ENV)
+    }
+
     pub fn objcivars() -> bool {
         match unlace_base::env::var(crate::objcivars::OBJCIVARS_ENV) {
             Ok(v) => !matches!(
@@ -618,9 +689,17 @@ mod tests {
             codestrings: false,
             nameladder: false,
             swifttypes: false,
+            delphiabi: false,
+            debuglink: false,
+            exporttrie: false,
+            ruststdsigs: RustStdSigs::Nearest,
             ..LoadOptions::default()
         };
         let _scope = options.enter();
+        assert!(!crate::delphiabi::delphiabi_enabled());
+        assert!(!crate::debuglink::debuglink_enabled());
+        assert!(!crate::exporttrie::exporttrie_enabled());
+        assert_eq!(crate::ruststdsigs::ruststdsigs(), RustStdSigs::Nearest);
         assert!(!crate::loadoptions::codestrings_enabled());
         assert!(!crate::loadoptions::nameladder_enabled());
         assert!(!crate::loadoptions::swifttypes_enabled());

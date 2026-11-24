@@ -12,16 +12,13 @@
 use super::DieSnap;
 
 /// The load-time environment variable the CLI and the console set from the option.
-pub const DWARFENUMTYPEDEF_ENV: &str = "UNLACE_DWARFENUMTYPEDEF";
+pub const DWARFENUMTYPEDEF_ENV: &str = unlace_decomp::loadoptions::DWARFENUMTYPEDEF_ENV;
 
-/// Is the option on? On unless the bridge says `off`.
+/// Is the option on? `LoadOptions::dwarfenumtypedef` for the load in progress,
+/// else on unless the bridge says `off`.
 pub fn enabled() -> bool {
-    unlace_base::env::var(DWARFENUMTYPEDEF_ENV).map_or(true, |v| {
-        !matches!(
-            v.trim().to_ascii_lowercase().as_str(),
-            "off" | "0" | "false"
-        )
-    })
+    use unlace_decomp::loadoptions::{env, scoped};
+    scoped(|o| o.dwarfenumtypedef).unwrap_or_else(env::dwarfenumtypedef)
 }
 
 /// The name an enumeration DIE is interned under: its own, or with the option on

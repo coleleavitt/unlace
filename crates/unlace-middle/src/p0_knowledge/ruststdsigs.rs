@@ -42,13 +42,11 @@ impl RustStdSigs {
     }
 }
 
-/// The choice in force for this process: [`RUSTSTDSIGS_ENV`], off when unset
-/// or unreadable.
+/// The choice for the load in progress: `LoadOptions::ruststdsigs`, else
+/// [`RUSTSTDSIGS_ENV`], off when unset or unreadable.
 pub fn ruststdsigs() -> RustStdSigs {
-    unlace_base::env::var(RUSTSTDSIGS_ENV)
-        .ok()
-        .and_then(|v| RustStdSigs::parse(&v))
-        .unwrap_or_default()
+    crate::loadoptions::scoped(|o| o.ruststdsigs)
+        .unwrap_or_else(crate::loadoptions::env::ruststdsigs)
 }
 
 /// Bridge a `set_unlace_option("ruststdsigs", val)` choice to [`RUSTSTDSIGS_ENV`].

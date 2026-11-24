@@ -15,13 +15,7 @@ pub const DELPHIABI_ENV: &str = "UNLACE_DELPHIABI";
 
 /// Whether Delphi compiler-spec selection is enabled for this process.
 pub fn delphiabi_enabled() -> bool {
-    match unlace_base::env::var(DELPHIABI_ENV) {
-        Ok(v) => !matches!(
-            v.trim().to_ascii_lowercase().as_str(),
-            "off" | "0" | "false"
-        ),
-        Err(_) => true,
-    }
+    crate::loadoptions::scoped(|o| o.delphiabi).unwrap_or_else(crate::loadoptions::env::delphiabi)
 }
 
 /// Bridge a `set_unlace_option("delphiabi", val)` toggle to [`DELPHIABI_ENV`]

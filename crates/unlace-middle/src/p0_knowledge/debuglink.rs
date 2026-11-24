@@ -9,7 +9,7 @@ pub const DEBUGLINK_ENV: &str = "UNLACE_DEBUGLINK";
 
 /// Whether the companion lookup is enabled for this process.
 pub fn debuglink_enabled() -> bool {
-    crate::options::env_toggle(DEBUGLINK_ENV, true)
+    crate::loadoptions::scoped(|o| o.debuglink).unwrap_or_else(crate::loadoptions::env::debuglink)
 }
 
 /// Bridge `option debuglink on|off` to [`DEBUGLINK_ENV`] for a later `load file`.

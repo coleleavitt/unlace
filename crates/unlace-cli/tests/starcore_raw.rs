@@ -41,14 +41,20 @@ fn starcore_add_returns_the_sum() {
 #[test]
 fn starcore_compare_and_branch_select_the_maximum() {
     let out = decompile("max.bin", "0x0");
-    assert!(out.contains("a0 = a1;"), "BT skips the TFR when D0 > D1: {out}");
+    assert!(
+        out.contains("a0 = a1;"),
+        "BT skips the TFR when D0 > D1: {out}"
+    );
     assert!(out.contains("return a0;"), "{out}");
 }
 
 #[test]
 fn starcore_prefixed_set_loads_through_r0() {
     let out = decompile("sets.bin", "0xc");
-    assert!(out.contains("*a2"), "MOVE.W (R0)+ reads the third argument: {out}");
+    assert!(
+        out.contains("*a2"),
+        "MOVE.W (R0)+ reads the third argument: {out}"
+    );
 }
 
 #[test]

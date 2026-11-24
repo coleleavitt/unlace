@@ -2133,6 +2133,7 @@ pub fn run_uefi(
     bytes: &[u8],
     arch: &Architecture,
     image_path: Option<&std::path::Path>,
+    entry_names: bool,
 ) -> AnalysisOutput {
     if !crate::uefi::is_efi_image(bytes) {
         return AnalysisOutput::default();
@@ -2148,7 +2149,7 @@ pub fn run_uefi(
         listing: None,
         image_path,
     };
-    let mut out = crate::uefi::UefiPass.run(&ctx);
+    let mut out = crate::uefi::UefiPass { entry_names }.run(&ctx);
     out.sanitize_names(symbolnamechars_mode());
     out
 }

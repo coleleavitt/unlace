@@ -3625,6 +3625,10 @@ impl ConsoleProgram {
                         &bytes,
                         self.arch(),
                         image_path,
+                        self.arch()
+                            .unlace_options
+                            .get::<unlace_decomp::analysisgates::Uefientry>()
+                            .0,
                     ));
                 }
                 // (unlace `vtabletypes`) MSVC constructors and destructors are

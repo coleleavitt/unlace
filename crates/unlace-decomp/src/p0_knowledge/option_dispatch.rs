@@ -442,6 +442,7 @@ unlace_options! { self, p1;
     "tlsnames" => registered!(crate::tlsnames::Tlsnames),
     "uefi" => registered!(crate::analysisgates::Uefi),
     "cortexmscs" => registered!(crate::analysisgates::Cortexmscs),
+    "uefientry" => registered!(crate::analysisgates::Uefientry),
     "com" => registered!(crate::analysisgates::Com),
     "comcfg" => registered!(crate::comcfg::ComCfg),
     "strings" => registered!(crate::analysisgates::Strings),

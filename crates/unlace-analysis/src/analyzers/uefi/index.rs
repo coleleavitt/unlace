@@ -175,10 +175,15 @@ impl Index {
         Some(index)
     }
 
+    /// The FFS file type of the module `image`, from the index.
+    pub(super) fn file_type_of(&self, image: &Path) -> Option<u8> {
+        let file = image.file_name()?.to_str()?;
+        self.modules.get(file).copied()
+    }
+
     /// How the module `image` is entered, from its FFS file type.
     pub(super) fn kind_of(&self, image: &Path) -> Option<Kind> {
-        let file = image.file_name()?.to_str()?;
-        Some(match self.modules.get(file)? {
+        Some(match self.file_type_of(image)? {
             0x04 | 0x06 | 0x08 => Kind::Pei,
             0x0e | 0x0f => Kind::Mm,
             _ => Kind::Dxe,

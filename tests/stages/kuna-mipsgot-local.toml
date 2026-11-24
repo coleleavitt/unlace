@@ -1,0 +1,78 @@
+# kuna loader (dynrelocs, always on), GH-904: same-image calls and
+# data accesses through a MIPS PIC GOT.
+#
+# A MIPS dynamic image relocates its primary GOT with no relocation
+# records: the dynamic linker adds the load bias to the local entries and
+# stores each defined dynamic symbol's address in its global entry.  The
+# loader marked only the import stubs' slots constant, so a call to a
+# function the image defines and every global or static variable read
+# through the GOT stayed a load of a variable slot:
+#     v2 = (*dat_1043c)();                               (bug, c_add)
+#     *(int4 *)(dat_10428 + 0x458) = *(int4 *)(dat_10428 + 0x458) + 1;
+#     v2 = (*v1)();                                      (bug, c_calls)
+# Those slots already hold their run-time values at the link-time
+# addresses kuna maps the image at, so they are now constant too and the
+# call names add64, the weak wfn, and the reads name counter and gdata.
+#
+# Stage: P1 program prep (loader constant ranges).  Single pass; the loader
+# facts are checked by
+# crates/unlace-analysis/tests/verify_dynrelocs_gate.rs.
+#
+# Image: crates/unlace-analysis/tests/fixtures/mipsgot_gcc_be.so
+# (mipsgot.c); see mipsgot.provenance.
+#
+# Assert #1: c_add calls add64 and stores to sink64.
+# Assert #2: c_calls bumps counter, calls wfn and reads gdata.
+# Assert #3: no call goes through a GOT slot any more.
+
+[image]
+arch = 'MIPS:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '03e0000800000000'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/mipsgot_gcc_be.so',
+    'read symbols',
+    'lo fu c_add',
+    'decompile',
+    'print C',
+    'lo fu c_calls',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'mipsgot-local #1: c_add calls add64'
+count = 1
+literal = '= add64('
+
+[[match]]
+name = 'mipsgot-local #1b: c_add stores to sink64'
+min = 1
+max = 2
+literal = 'sink64'
+
+[[match]]
+name = 'mipsgot-local #2: c_calls bumps counter'
+count = 1
+literal = 'counter += 1;'
+
+[[match]]
+name = 'mipsgot-local #2b: c_calls calls wfn and reads gdata'
+count = 1
+regex = 'wfn\(.*gdata|gdata.*wfn\('
+
+[[match]]
+name = 'mipsgot-local #3: no call through a GOT slot'
+count = 0
+regex = '\(\*[^)]*dat_'

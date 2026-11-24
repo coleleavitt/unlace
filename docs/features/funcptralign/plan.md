@@ -12,7 +12,7 @@ line-for-line transcription of upstream `ruleaction.cc:9928`, it is already
 registered in the pool (`infra/universalaction.rs:515`), and the architecture
 plumbing that populates `funcptr_align` from the cspec's `<funcptr align="N"/>`
 already exists and is already proven live at runtime by
-`tests/stages/gh8471-thumbfuncptr.xml`.
+`tests/stages/gh8471-thumbfuncptr.toml`.
 
 Scope: **small**. One function body, no new module, no new option, no new
 registration point, no phase-order change.
@@ -35,7 +35,7 @@ because the registry records no-flag bug fixes (DIV-43...DIV-53).
    masked indirect call). Whole-binary x86-64 controls are byte-identical.
 2. **`RulePtrsubUndo::preserve_thumb_funcptr` (GH-8471 / DIV-2) interaction.**
    The two features touch the same low bit from opposite ends. Closed by the
-   existing `tests/stages/gh8471-thumbfuncptr.xml` (still 2/2) and by pass 2 of
+   existing `tests/stages/gh8471-thumbfuncptr.toml` (still 2/2) and by pass 2 of
    the new stage test, which re-runs the same function with
    `option thumbfuncptr off` and asserts the mask stays stripped either way.
    They cannot collide by construction: this rule only removes an `INT_AND` that

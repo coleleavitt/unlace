@@ -54,7 +54,7 @@ fn discovered_main_decompiles_without_supplied_address() {
     // zeros) that discovery gives an entry with no symbol, so `elfmain` — which
     // replaces exactly that name at exactly this address with `main` — is turned
     // off here. The default path on this same fixture is gated by
-    // `tests/stages/kuna-elfmain.xml` and `verify_crossarch_entry_main`.
+    // `tests/stages/kuna-elfmain.toml` and `verify_crossarch_entry_main`.
     prog.arch_mut()
         .set_kuna_option("elfmain", "off")
         .expect("elfmain flips");

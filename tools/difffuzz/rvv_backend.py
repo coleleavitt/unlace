@@ -20,6 +20,7 @@ all back with the CSRs and write(2)s the table and the data pages. QEMU runs wit
 rvv_ta_all_1s/rvv_ma_all_1s, so an agnostic tail or masked-off element is all ones and only an
 undisturbed policy (vta=0/vma=0, chosen at random) can read the old destination.
 """
+import json
 import os
 import random
 import re
@@ -204,12 +205,66 @@ def reg_bytes(ops, space):
     return rd, wr
 
 
+def variant_vtypes(cand, seed):
+    """The vtypes a candidate is lifted and run at: a random legal one, then LMUL 1 at each SEW,
+    as QEMU raises SIGILL for a register group, SEW or EEW the instruction does not allow."""
+    rng = random.Random("%s:vtype:%s" % (seed, cand["bytes"].hex()))
+    return [random_vtype(rng)] + [(s << 3) | (rng.getrandbits(2) << 6) for s in range(4)]
+
+
+def vsetvli_x0(vtype):
+    return ((vtype & 0x7FF) << 20) | (7 << 12) | 0x57
+
+
+def lift_variants(unlace, arch, cands, tmp, seed, sleighpath=None):
+    """Each candidate after a vsetvli x0, x0 of each of its vtypes, so the decoder sees the vtype
+    as context: cand["variants"] = [(vtype, address, row or None)]."""
+    from difffuzz import make_elf
+    code, plan = b"", []
+    a = arch.base
+    for c in cands:
+        c["variants"] = []
+        for vt in variant_vtypes(c, seed):
+            code += struct.pack("<I", vsetvli_x0(vt)) + c["bytes"]
+            plan.append((c, vt, a + 4))
+            a += 4 + len(c["bytes"])
+    elf = os.path.join(tmp, "rvv-batch.elf")
+    Path(elf).write_bytes(make_elf(code, arch))
+    cmd = [unlace, "raw-pcode", elf, "%#x-%#x" % (arch.base, a), "--json", "--target", arch.lang]
+    if sleighpath:
+        cmd += ["--sleighpath", sleighpath]
+    rows = {}
+    start = arch.base
+    while start < a:
+        cmd[3] = "%#x-%#x" % (start, a)
+        p = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            doc = json.loads(p.stdout)
+        except json.JSONDecodeError:
+            break
+        for r in doc.get("instructions", []):
+            rows[r["address"]] = r
+        err = doc.get("error")
+        if not err:
+            break
+        # resume at the next pair after a decode failure
+        nxt = [x - 4 for _, _, x in plan if x - 4 > err["address"]]
+        if not nxt:
+            break
+        start = nxt[0]
+    for c, vt, at in plan:
+        r = rows.get(at)
+        c["variants"].append((vt, at, r if r and r["size"] == len(c["bytes"]) else None))
+
+
 def run_case_rvv(arch, regs, row, cand, rng, seed, tmp, vlen):
-    """Up to four vtypes: a random one, then LMUL 1 at each SEW, as QEMU raises SIGILL for a
-    register group, SEW or EEW the instruction does not allow at the random vtype."""
-    res = None
-    for attempt in range(5):
-        res = run_case_vtype(arch, regs, row, cand, rng, seed, tmp, vlen, None if attempt == 0 else (attempt - 1) << 3 | rng.getrandbits(2) << 6)
+    """The first variant QEMU does not reject with SIGILL."""
+    res = {"status": "not-lifted"}
+    for vt, at, r in cand["variants"]:
+        if r is None:
+            continue
+        c = dict(cand, addr=at)
+        res = run_case_vtype(arch, regs, r, c, rng, seed, tmp, vlen, vt)
         if res["status"] != "ref-exception" or "-4" not in res["why"]:
             return res
     return res
@@ -249,8 +304,9 @@ def run_case_vtype(arch, regs, row, cand, rng, seed, tmp, vlen, vtype):
             s.write("csreg", 8 * csr, 8, v)
         s.write("csreg", 8 * 0x002, 8, st["fcsr"] >> 5)
         s.write("csreg", 8 * 0xC22, 8, vlenb)
-        crng = random.Random(f"{seed}:{salt}")
-        s.callother = lambda op: crng.getrandbits(8 * op["output"]["size"])
+        crng = random.Random(seed)
+        flip = (lambda n: (1 << n) - 1) if salt == 2 else (lambda n: 0)
+        s.callother = lambda op: crng.getrandbits(8 * op["output"]["size"]) ^ flip(8 * op["output"]["size"])
         if arch.pc in regs:
             s.set(arch.pc, addr)
         nxt = step(s, ops, addr, size)
@@ -267,7 +323,7 @@ def run_case_vtype(arch, regs, row, cand, rng, seed, tmp, vlen, vtype):
     code_pages = sorted({p for p in range(addr & ~(PAGE - 1), (epi_at + 0x800 + PAGE - 1) & ~(PAGE - 1), PAGE)})
     data_pages = [DATA + PAGE * i for i in range(DATA_PAGES)]
     if not all(DATA <= x and x + n <= DATA + PAGE * DATA_PAGES or addr <= x < epi_at for x, n in a.accesses):
-        return {"status": "bad-address"}
+        return {"status": "bad-address", "why": "p-code access outside the data region"}
     mem = {}
     for p in code_pages:
         for i in range(PAGE):

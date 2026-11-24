@@ -4000,24 +4000,24 @@ XmmReg1 & XmmReg2
 	xsha256(ECX,ESI,EDI); 
 	EAX = ECX; 
 }
-# ia.sinc:10591
+# ia.sinc:10595
 :POPCNT Reg16, rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & $(PRE_F3) &            byte=0xB8; Reg16 ... & rm16 { popcountflags(rm16); Reg16 = popcount(rm16); }
-# ia.sinc:10592
+# ia.sinc:10596
 :POPCNT Reg32, rm32 is vexMode=3 & vexMMMMM=1 & opsize=1 & $(PRE_F3) &            byte=0xB8; Reg32 ... & check_Reg32_dest ... & rm32 { popcountflags(rm32); Reg32 = popcount(rm32); build check_Reg32_dest; }
-# ia.sinc:10594
+# ia.sinc:10598
 :POPCNT Reg64, rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & $(REX_W) & byte=0xB8; Reg64 ... & rm64 { popcountflags(rm64); Reg64 = popcount(rm64); }
-# ia.sinc:10738
+# ia.sinc:10742
 :FEMMS is vexMode=3 & vexMMMMM=1 & byte=0x0E    { FastExitMediaState(); }
-# ia.sinc:10769
+# ia.sinc:10773
 :MASKMOVQ            mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF7 & maskMovDI; mmxmod = 3 & mmxreg1 & mmxreg2		{ MaskedMoveQWord(mmxreg1, mmxreg2, maskMovDI); }
-# ia.sinc:10778
+# ia.sinc:10782
 :EXTRQ XmmReg2, bitLen, lsbOffset is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x78; reg_opcode=0 & XmmReg2; bitLen; lsbOffset {
 	local len:8 = zext(bitLen);
 	local mask:8 = 0xffffffffffffffff >> ((64 - len) & 63);
 	local val:8 = (XmmReg2[0,64] >> lsbOffset) & mask;
 	XmmReg2 = zext(val);
 }
-# ia.sinc:10785
+# ia.sinc:10789
 :EXTRQ XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x79; XmmReg1 & XmmReg2 {
 	local len:8 = zext(XmmReg2[0,6]);
 	local offs:8 = zext(XmmReg2[8,6]);
@@ -4025,7 +4025,7 @@ XmmReg1 & XmmReg2
 	local val:8 = (XmmReg1[0,64] >> offs) & mask;
 	XmmReg1 = zext(val);
 }
-# ia.sinc:10793
+# ia.sinc:10797
 :INSERTQ XmmReg1, XmmReg2, bitLen, lsbOffset is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x78; XmmReg1 & XmmReg2; bitLen; lsbOffset {
 	local len:8 = zext(bitLen);
 	local field:8 = 0xffffffffffffffff >> ((64 - len) & 63);
@@ -4034,7 +4034,7 @@ XmmReg1 & XmmReg2
 	local hi:8 = XmmReg1[64,64];
 	XmmReg1 = (zext(hi) << 64) | zext(lo);
 }
-# ia.sinc:10802
+# ia.sinc:10806
 :INSERTQ XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x79; XmmReg1 & XmmReg2 {
 	local len:8 = zext(XmmReg2[64,6]);
 	local offs:8 = zext(XmmReg2[72,6]);
@@ -4044,11 +4044,11 @@ XmmReg1 & XmmReg2
 	local hi:8 = XmmReg1[64,64];
 	XmmReg1 = (zext(hi) << 64) | zext(lo);
 }
-# ia.sinc:10812
+# ia.sinc:10816
 :MOVNTSD m64, XmmReg1 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x2B; XmmReg1 ... & m64 {
 	m64 = XmmReg1[0,64];
 }
-# ia.sinc:10816
+# ia.sinc:10820
 :MOVNTSS m32, XmmReg1 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x2B; XmmReg1 ... & m32 {
 	m32 = XmmReg1[0,32];
 }
@@ -4512,21 +4512,24 @@ with : lockprefx=0 {
 # lzcnt.sinc:12
 :LZCNT Reg16, rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & $(PRE_66) & $(PRE_F3) & byte=0xBD; Reg16 ... & rm16 {
 
-  Reg16 = lzcount(rm16);
-  lzcntflags(rm16, Reg16);
+  local src = rm16;
+  Reg16 = lzcount(src);
+  lzcntflags(src, Reg16);
 }
-# lzcnt.sinc:18
+# lzcnt.sinc:19
 :LZCNT Reg32, rm32 is vexMode=3 & vexMMMMM=1 & opsize=1 & $(PRE_F3) & byte=0xBD; Reg32 ... & check_Reg32_dest ... & rm32 {
 
-  Reg32 = lzcount(rm32);
-  lzcntflags(rm32, Reg32);
+  local src = rm32;
+  Reg32 = lzcount(src);
+  lzcntflags(src, Reg32);
   build check_Reg32_dest;
 }
-# lzcnt.sinc:26
+# lzcnt.sinc:28
 :LZCNT Reg64, rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & $(REX_W) & byte=0xBD; Reg64 ... & rm64 {
 
-  Reg64 = lzcount(rm64);
-  lzcntflags(rm64, Reg64);
+  local src = rm64;
+  Reg64 = lzcount(src);
+  lzcntflags(src, Reg64);
 }
 }
 

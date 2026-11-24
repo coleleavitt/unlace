@@ -15,7 +15,7 @@
 # declared and the two fabrications lose their source: the forwarded `r8`
 # argument is dropped from the call, and the stored `r9` becomes a local that
 # nothing assigns.  Both shapes are pinned (tests/cli/elf-main-extra-args.json,
-# tests/stages/kuna-elfmain.xml) so the cost stays visible.
+# tests/stages/kuna-elfmain.toml) so the cost stays visible.
 #
 # Built with:
 #     gcc -nostartfiles -o elfmainextra_x86_64 elfmainextra_x86_64.s

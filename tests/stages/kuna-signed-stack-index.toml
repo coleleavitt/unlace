@@ -1,0 +1,61 @@
+# Independent signed-index stack regression. For seed=1, returns 1.
+# .text
+# .global signed_stack_index
+# .type signed_stack_index,@function
+# signed_stack_index:
+#  save %sp,-112,%sp
+#  st %g0,[%fp-16]
+#  add %fp,-16,%l2
+#  mov 0,%l3
+# .loop:
+#  sll %l3,16,%l4
+#  sra %l4,16,%l4
+#  sll %l4,2,%l4
+#  st %i0,[%l2+%l4]
+#  add %l3,1,%l3
+#  sll %l3,16,%g1
+#  sra %g1,16,%g1
+#  cmp %g1,3
+#  bl .loop
+#  nop
+#  ld [%fp-16],%i0
+#  and %i0,2047,%i0
+#  ret
+#  restore
+# .size signed_stack_index,.-signed_stack_index
+
+[image]
+arch = 'sparc:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'signed_stack_index' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '9de3bf90c027bff0a407bff0a6102000a92ce010a93d2010a92d2002f0248014a604e001832ce0108338601080a0600306bffff801000000f007bff0b00e27ff81c7e00881e80000'
+
+[script]
+commands = [
+    'parse line extern uint4 signed_stack_index(uint4 seed);',
+    'load function signed_stack_index',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'SIGNED-STACK-INDEX #1: the word written by the loop is read'
+count = 1
+regex = 'return .*\[0\] & 0x7ff;'
+
+[[match]]
+name = 'SIGNED-STACK-INDEX #2: no stale initializer is forwarded'
+count = 0
+literal = 'return 0;'
+
+[[match]]
+name = 'SIGNED-STACK-INDEX #3: the indexed writes are retained'
+count = 1
+regex = '\[[^]]+\] = seed;'

@@ -1397,6 +1397,7 @@ dependencies = [
  "unlace-project",
  "unlace-slacomp",
  "unlace-sleigh",
+ "unlace-stagefile",
 ]
 
 [[package]]
@@ -1414,6 +1415,7 @@ dependencies = [
  "unlace-num",
  "unlace-slacomp",
  "unlace-sleigh",
+ "unlace-stagefile",
 ]
 
 [[package]]
@@ -1444,6 +1446,7 @@ dependencies = [
  "unlace-num",
  "unlace-slacomp",
  "unlace-sleigh",
+ "unlace-stagefile",
  "unlace-structure",
 ]
 
@@ -1493,7 +1496,6 @@ version = "0.1.0"
 dependencies = [
  "regex",
  "serde_json",
- "toml",
  "unlace-base",
  "unlace-console",
  "unlace-decomp",
@@ -1501,6 +1503,7 @@ dependencies = [
  "unlace-num",
  "unlace-slacomp",
  "unlace-sleigh",
+ "unlace-stagefile",
 ]
 
 [[package]]
@@ -1596,6 +1599,14 @@ dependencies = [
  "unlace-base",
  "unlace-num",
  "unlace-slacomp",
+ "unlace-stagefile",
+]
+
+[[package]]
+name = "unlace-stagefile"
+version = "0.1.0"
+dependencies = [
+ "toml",
 ]
 
 [[package]]

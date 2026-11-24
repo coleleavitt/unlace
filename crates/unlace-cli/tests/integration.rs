@@ -32,6 +32,8 @@ mod ft32_raw;
 mod huc6280;
 #[path = "kr1878_raw.rs"]
 mod kr1878_raw;
+#[path = "lanai_raw.rs"]
+mod lanai_raw;
 #[path = "lua54.rs"]
 mod lua54;
 #[path = "m6800_family.rs"]

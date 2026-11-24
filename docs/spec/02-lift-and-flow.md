@@ -4344,6 +4344,21 @@ Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
 encodings against LLVM's syntax and a raw image with one instruction per
 packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
 
+### AArch64 FEAT_PAuth_LR and the BTI hint space
+
+The Armv9.5 PAC-with-PC instructions decode (`AARCH64base.sinc`, with `__PACpart` tables in
+`AARCH64_base_PACoptions.sinc` so they follow the same `ShowPAC`/`PAC_clobber` options):
+`paciasppc`, `pacibsppc`, `pacnbiasppc`, `pacnbibsppc`, `pacia171615`, `pacib171615`,
+`autia171615`, `autib171615`, `autiasppc`/`autibsppc` (label `#-imm*4` and register forms) and
+`retaasppc`/`retabsppc` (label and register), plus `pacm` (`hint #39`). The PC (the
+instruction address, the label address, or the register holding it) is the third operand
+of the `pacia`/`pacib`/`AuthIA`/`AuthIB` user operations; the `171615` forms pass `x15`.
+`bti` now requires bit 5 clear, so the odd hints `#33`, `#35`, `#37` print as `hint` and
+`#39` as `pacm` instead of `bti`. Every PAuth/PAuth_LR record of LLVM 22's TableGen
+(two words each, `unlace-cli/tests/aarch64_pauth.rs`) prints as `llvm-mc` does, and the
+PAC instructions of the arm64e iOS 16.4.1 `backboardd`, `trustd` and `debugserver`
+`__text` sections decode with the same counts as `llvm-objdump`.
+
 ### AArch64 SMSTART/SMSTOP text
 
 `smstart`/`smstop` (`AARCH64base.sinc`) print as LLVM does: `smstart`, `smstart sm`, `smstart za`

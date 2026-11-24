@@ -2509,6 +2509,34 @@ expect = [
 ]
 
 [[family]]
+name = "evm_erc20_calls"
+language = "EVM:BE:32:Cancun"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/evm/erc20_runtime_opt.bin"
+args = ["--option", "evmcalls", "on"]
+forbid = ["indirect jump", "switch("]
+
+# The same runtime with option evmcalls: the dispatcher calls the ABI decoder and
+# transfer() as functions, and the checked subtraction at 0x61c decompiles on its own
+# with its two stack arguments and its result.
+[[family.function]]
+test = "evm_erc20_calls_dispatch"
+address = "0x0"
+expect = [
+    "if (v1._0_32_ == 0xa9059cbb) {",
+    "sub_3e7(",
+    "= sub_51e(4,calldatasize());",
+]
+
+[[family.function]]
+test = "evm_erc20_calls_checked_sub"
+address = "0x61c"
+expect = [
+    "sub_61c(char a0[32],char a1[32])",
+    "return a0._0_32_ - a1._0_32_;",
+]
+
+[[family]]
 name = "cpython_tailcallframe"
 language = "CPython:LE:32:3.12"
 base = "0"

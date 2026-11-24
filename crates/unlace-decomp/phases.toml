@@ -2377,6 +2377,25 @@ tier = "transform"
 symptoms = "a syscall renders as (*(void *)swi(0x80))() - a call through a pointer nothing assigns|the mov $N,%eax before an int 0x80 has vanished from the output|an int 0x80 site shows no arguments even though the disassembly loads ebx/ecx/edx|32-bit linux _start or shellcode where every system call is an unnamed indirect call|esp-relative locals shift by four bytes after an int 0x80"
 
 [[settable]]
+option = "evmcalls"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P2"
+subphase = "flow-classification"
+strength = "HARD"
+rewind = "P2"
+issue = "unlace-evm-internal-calls"
+summary = "Recover Solidity internal-function calls and returns in EVM bytecode. The EVM has no call instruction for code inside a contract: solc lowers an internal call to `PUSH ret; <arguments>; PUSH fn; JUMP` and the callee returns with a `JUMP` to the label its caller left on the stack, so every return is an indirect jump, jump-table recovery chases each one (`Re-entered indirect jump`), every callee is inlined into every caller and the dispatcher's JUMPI conditions print as bare expression statements. `kuna_evmcalls.rs` reads the whole code image once with a constant-tracking stack interpreter: a `JUMP` to a pushed constant while another pushed `JUMPDEST` constant is still on the stack is a call (the nearest such label to the top is its return address, the items above it its arguments); a `JUMP` to a value that is not a constant is a return; a `JUMP` or `JUMPI` whose target is the same constant on every path is a direct branch. Slots below a call's return label survive it, so the interpreter carries them to the label, and each callee's net stack effect (the words the call removes, return label included) is the one depth its return jumps leave relative to its entry, iterated to a fixed point over nested calls; a callee none of whose fully-explored paths returns is noreturn. The flow walk rewrites the BRANCHINDs: a call becomes a CALL to the callee (plus a BRANCH to the return label when it is not the next instruction), a return becomes RETURN, a constant jump a direct BRANCH. ActionEvmCalls (protorecovery) locks each call spec, and the decompiled function itself when it is a callee, to its arguments as stack words from the top, its stack effect as extrapop and its results as the stack words the call leaves. Inert on every language without an `evmstack` space."
+use_when = "Off by default (a new readability transform). Turn it on for EVM runtime bytecode compiled by solc: the dispatcher prints as an if-chain on the selector calling `sub_<addr>(...)` for each internal function (ABI decoding, checked arithmetic, the function bodies), and each internal function decompiles on its own with its stack arguments and result (`undefined32 sub_61c(a0,a1) { if (a0 < a0 - a1) sub_608(0x260); return a0 - a1; }`). Measured on 10 solc 0.8.24 runtimes (ERC-20, vault, registry, staking, math; optimizer off and on): the dispatcher's bare-condition statements go from 209 to 0, if statements from 1 to 109, indirect-jump warnings from 42 to 0, lines from 2,423 to 844, the ten dispatchers decompile in 1.6 s instead of 20.8 s, and all 260 internal functions decompile. Against solc's own jump annotations (srcmap jump types) the classification finds 421 of 425 calls and 216 of 220 returns, and reads 5 of 57 plain jumps as calls. Leave it off for hand-written EVM that does not follow solc's return-label convention."
+example = "option evmcalls on"
+source_decompiler = "kuna"
+inspiration = "real-code sweep of EVM:BE:32:Cancun (notes/real-code-sweep.md): solc 0.8.24 ERC-20 and vault runtimes decompiled to indirect-jump dispatchers with bare JUMPI conditions; solc's srcmap jump types (i/o/-) as the ground truth"
+change_kind = "transform"
+tier = "transform"
+symptoms = "an evm dispatcher prints its jumpi conditions as bare expression statements|re-entered indirect jump warnings throughout an evm contract|solidity internal functions are inlined into every caller|evm return labels such as 0x91 are assigned to stack slots instead of calls|every evm internal function return is a switch on a stack value"
+
+[[settable]]
 option = "msvcstrappend"
 values = "on|off"
 default = "off"

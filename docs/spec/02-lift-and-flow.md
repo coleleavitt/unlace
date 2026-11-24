@@ -1649,6 +1649,39 @@ and none of them fire). Deferring the decision until the flow work-stack drains,
 and then asking whether the function decoded `dest` by another path, is the sound
 fix; it is a change to the walk's ordering rather than to this predicate.
 
+**(kuna) EVM internal calls — `option evmcalls`, default off,
+`crates/unlace-lift/src/p2_lift/kuna_evmcalls.rs (classify, ActionEvmCalls)`.** The
+EVM has no call instruction for code inside a contract: solc lowers an internal call
+to `PUSH ret; <arguments>; PUSH fn; JUMP` and the callee returns with a `JUMP` to
+the label its caller left on the stack, so every return is an indirect jump. With
+the option on and a language that has an `evmstack` space, the flow environment
+classifies the whole code image once (read from offset 0 of the default code
+space): a stack interpreter tracks which stack slots hold pushed constants per
+block, merging slot by slot at joins. A `JUMP` to a constant while another
+constant `JUMPDEST` is on the stack is a call; the label nearest the top is its
+return address and the items above it are its arguments. A `JUMP` to a
+non-constant is a return. A `JUMP` or `JUMPI` whose target is the same constant
+on every path that reaches it is a direct branch. The slots below a call's return
+label survive the call, so the interpreter carries them to the label, with the
+callee's results as unknown slots on top once the callee's stack effect is known.
+A callee's stack effect (words the call removes, return label included) is
+`1 - d` for the one depth `d` its return jumps reach relative to its entry; it is
+iterated to a fixed point with the classification (4 rounds) and within one pass
+(32 rounds), and a callee with return jumps at two depths has none. A callee whose
+walk finds no return and was never cut short (an unknown callee, an unresolved
+jump, the visit budget) is noreturn. The BRANCHIND arm of
+`flow.rs (FlowInfo::xref_control_flow)` rewrites the jump in place: a return
+becomes RETURN; a direct branch becomes BRANCH to the label; a call becomes a CALL
+to the callee, followed by an artificial halt when the callee is noreturn, or by a
+BRANCH to the return label when that label is not the next instruction.
+`ActionEvmCalls` (protorecovery, before ActionFuncLink and ActionExtraPopSetup)
+then locks each such call spec: its arguments are the stack words from the top,
+its extrapop is the stack effect times 32, and its `args + 1 - pop` results are
+one stack-relative output at offset `32 * pop`. When the function being
+decompiled is itself a callee whose call sites agree on its argument count, its
+own prototype is locked the same way, so it reads its arguments as parameters and
+returns its result.
+
 **(kuna) A teardown has to give back what the entry block saved — part of
 `tailcallframe` (DIV-157),
 `crates/unlace-lift/src/p2_lift/kuna_tailcallsaved.rs

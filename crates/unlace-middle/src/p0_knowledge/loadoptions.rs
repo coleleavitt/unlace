@@ -15,6 +15,9 @@
 //! gate read outside any scope falls back to its environment variable.
 
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
+use std::env::VarError;
+use std::ffi::OsString;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -22,7 +25,7 @@ use std::rc::Rc;
 use crate::kernelcache::KernelcacheChoice;
 use crate::kernelcacheboot::KernelcacheBoot;
 use crate::libctypes::LibcTypesLayout;
-use crate::options::env_toggle;
+use crate::options::parse_env_toggle;
 use crate::ppc32picimports::Mode as Ppc32PicMode;
 use crate::ruststdsigs::RustStdSigs;
 use crate::sourcelang::SourceLang;
@@ -180,41 +183,52 @@ impl LoadOptions {
     /// The options the environment states, in the vocabulary the CLI exports.
     /// An unset or unrecognized variable leaves that option at its default.
     pub fn from_env() -> Self {
+        Self::from_vars(&Vars::process())
+    }
+
+    /// The options the environment would state with each variable `overrides`
+    /// names set (`Some`) or removed (`None`); the environment is not changed.
+    pub fn from_env_with(overrides: &BTreeMap<&'static str, Option<String>>) -> Self {
+        Self::from_vars(&Vars::with(overrides))
+    }
+
+    /// The options `vars` states, in the vocabulary the CLI exports.
+    pub fn from_vars(vars: &Vars<'_>) -> Self {
         LoadOptions {
-            ppc32picimports: env::ppc32picimports(),
-            ifuncfpret: env::ifuncfpret(),
-            ppcapu: env::ppcapu(),
-            kernelcache: env::kernelcache(),
-            kernelcache_boot: env::kernelcache_boot(),
-            goabi: env::goabi(),
-            cil: env::cil(),
-            symbolnamechars: env::symbolnamechars(),
-            libctypes: env::libctypes(),
-            calltargettype: env::calltargettype(),
-            macho_arm64e: env::macho_arm64e(),
-            sourcelang: env::sourcelang(),
-            objcivars: env::objcivars(),
-            objcsdk: env::objcsdk(),
-            dyldimage: env::dyldimage(),
-            dyldcrossrefs: env::dyldcrossrefs(),
-            macho_slice: env::macho_slice(),
-            pdb_path: env::pdb_path(),
-            pdb_symsrv: env::pdb_symsrv(),
-            fid_db: env::fid_db(),
-            flirt_sigs: env::flirt_sigs(),
-            go_version: env::go_version(),
-            load_objc: env::load_objc(),
-            load_strings: env::load_strings(),
-            load_mmap: env::load_mmap(),
-            codestrings: env::codestrings(),
-            nameladder: env::nameladder(),
-            swifttypes: env::swifttypes(),
-            delphiabi: env::delphiabi(),
-            debuglink: env::debuglink(),
-            exporttrie: env::exporttrie(),
-            ruststdsigs: env::ruststdsigs(),
-            dwarfscopes: env::dwarfscopes(),
-            dwarfenumtypedef: env::dwarfenumtypedef(),
+            ppc32picimports: read::ppc32picimports(vars),
+            ifuncfpret: read::ifuncfpret(vars),
+            ppcapu: read::ppcapu(vars),
+            kernelcache: read::kernelcache(vars),
+            kernelcache_boot: read::kernelcache_boot(vars),
+            goabi: read::goabi(vars),
+            cil: read::cil(vars),
+            symbolnamechars: read::symbolnamechars(vars),
+            libctypes: read::libctypes(vars),
+            calltargettype: read::calltargettype(vars),
+            macho_arm64e: read::macho_arm64e(vars),
+            sourcelang: read::sourcelang(vars),
+            objcivars: read::objcivars(vars),
+            objcsdk: read::objcsdk(vars),
+            dyldimage: read::dyldimage(vars),
+            dyldcrossrefs: read::dyldcrossrefs(vars),
+            macho_slice: read::macho_slice(vars),
+            pdb_path: read::pdb_path(vars),
+            pdb_symsrv: read::pdb_symsrv(vars),
+            fid_db: read::fid_db(vars),
+            flirt_sigs: read::flirt_sigs(vars),
+            go_version: read::go_version(vars),
+            load_objc: read::load_objc(vars),
+            load_strings: read::load_strings(vars),
+            load_mmap: read::load_mmap(vars),
+            codestrings: read::codestrings(vars),
+            nameladder: read::nameladder(vars),
+            swifttypes: read::swifttypes(vars),
+            delphiabi: read::delphiabi(vars),
+            debuglink: read::debuglink(vars),
+            exporttrie: read::exporttrie(vars),
+            ruststdsigs: read::ruststdsigs(vars),
+            dwarfscopes: read::dwarfscopes(vars),
+            dwarfenumtypedef: read::dwarfenumtypedef(vars),
         }
     }
 
@@ -400,57 +414,102 @@ impl Drop for LoadScope {
     }
 }
 
-/// Each option read from its environment variable, in the vocabulary the CLI
-/// exports: the fallback a gate takes outside every scope.
-pub mod env {
+/// Where a set of load options reads its variables: the process environment,
+/// optionally with some variables set or removed on top of it.
+pub struct Vars<'a> {
+    overrides: Option<&'a BTreeMap<&'static str, Option<String>>>,
+}
+
+impl<'a> Vars<'a> {
+    /// The process environment as it stands.
+    pub fn process() -> Vars<'static> {
+        Vars { overrides: None }
+    }
+
+    /// The process environment with each variable `overrides` names set to its
+    /// value (`Some`) or removed (`None`).
+    pub fn with(overrides: &'a BTreeMap<&'static str, Option<String>>) -> Vars<'a> {
+        Vars {
+            overrides: Some(overrides),
+        }
+    }
+
+    fn var_os(&self, name: &str) -> Option<OsString> {
+        if let Some(overrides) = self.overrides
+            && let Some(value) = overrides.get(name)
+        {
+            return value.clone().map(OsString::from);
+        }
+        unlace_base::env::var_os(name)
+    }
+
+    fn var(&self, name: &str) -> Result<String, VarError> {
+        match self.var_os(name) {
+            Some(value) => value.into_string().map_err(VarError::NotUnicode),
+            None => Err(VarError::NotPresent),
+        }
+    }
+
+    fn toggle(&self, name: &str, default: bool) -> bool {
+        self.var(name)
+            .map_or(default, |value| parse_env_toggle(&value, default))
+    }
+}
+
+/// Each option read from a [`Vars`] source, in the vocabulary the CLI exports.
+pub mod read {
     use super::*;
 
-    fn path(name: &str) -> Option<PathBuf> {
-        unlace_base::env::var_os(name)
-            .filter(|p| !p.is_empty())
-            .map(PathBuf::from)
+    fn path(v: &Vars<'_>, name: &str) -> Option<PathBuf> {
+        v.var_os(name).filter(|p| !p.is_empty()).map(PathBuf::from)
     }
 
-    pub fn ppc32picimports() -> Ppc32PicMode {
-        unlace_base::env::var(crate::ppc32picimports::ENV).map_or(Ppc32PicMode::Off, |value| {
-            Ppc32PicMode::from_env_value(&value)
-        })
+    pub fn ppc32picimports(v: &Vars<'_>) -> Ppc32PicMode {
+        v.var(crate::ppc32picimports::ENV)
+            .map_or(Ppc32PicMode::Off, |value| {
+                Ppc32PicMode::from_env_value(&value)
+            })
     }
 
-    pub fn ifuncfpret() -> bool {
-        env_toggle(crate::ifuncfpret::IFUNCFPRET_ENV, true)
+    pub fn ifuncfpret(v: &Vars<'_>) -> bool {
+        v.toggle(crate::ifuncfpret::IFUNCFPRET_ENV, true)
     }
 
-    pub fn ppcapu() -> bool {
-        env_toggle(crate::ppcapu::PPCAPU_ENV, false)
+    pub fn ppcapu(v: &Vars<'_>) -> bool {
+        v.toggle(crate::ppcapu::PPCAPU_ENV, false)
     }
 
-    pub fn kernelcache() -> KernelcacheChoice {
-        KernelcacheChoice::from_env()
+    pub fn kernelcache(v: &Vars<'_>) -> KernelcacheChoice {
+        v.var(crate::kernelcache::KERNELCACHE_ENV)
+            .ok()
+            .and_then(|value| KernelcacheChoice::parse(&value))
+            .unwrap_or_default()
     }
 
-    pub fn kernelcache_boot() -> KernelcacheBoot {
-        KernelcacheBoot::from_env()
+    pub fn kernelcache_boot(v: &Vars<'_>) -> KernelcacheBoot {
+        v.var(crate::kernelcacheboot::KERNELCACHE_BOOT_ENV)
+            .map(|value| KernelcacheBoot::parse(&value))
+            .unwrap_or_default()
     }
 
-    pub fn goabi() -> bool {
-        env_toggle(crate::goabi::GOABI_ENV, true)
+    pub fn goabi(v: &Vars<'_>) -> bool {
+        v.toggle(crate::goabi::GOABI_ENV, true)
     }
 
-    pub fn cil() -> bool {
-        env_toggle(crate::cil::CIL_ENV, true)
+    pub fn cil(v: &Vars<'_>) -> bool {
+        v.toggle(crate::cil::CIL_ENV, true)
     }
 
-    pub fn symbolnamechars() -> NameChars {
-        match unlace_base::env::var(crate::symbolnamechars::SYMBOLNAMECHARS_ENV) {
-            Ok(v) => NameChars::parse(&v).unwrap_or_default(),
+    pub fn symbolnamechars(v: &Vars<'_>) -> NameChars {
+        match v.var(crate::symbolnamechars::SYMBOLNAMECHARS_ENV) {
+            Ok(value) => NameChars::parse(&value).unwrap_or_default(),
             Err(_) => NameChars::default(),
         }
     }
 
-    pub fn libctypes() -> LibcTypesLayout {
-        match unlace_base::env::var(crate::libctypes::LIBCTYPES_ENV) {
-            Ok(v) => match v.trim().to_ascii_lowercase().as_str() {
+    pub fn libctypes(v: &Vars<'_>) -> LibcTypesLayout {
+        match v.var(crate::libctypes::LIBCTYPES_ENV) {
+            Ok(value) => match value.trim().to_ascii_lowercase().as_str() {
                 "off" | "0" | "false" => LibcTypesLayout::Off,
                 "glibc" => LibcTypesLayout::Glibc,
                 _ => LibcTypesLayout::Opaque,
@@ -459,124 +518,116 @@ pub mod env {
         }
     }
 
-    pub fn calltargettype() -> bool {
-        env_toggle(super::CALLTARGETTYPE_ENV, true)
+    pub fn calltargettype(v: &Vars<'_>) -> bool {
+        v.toggle(super::CALLTARGETTYPE_ENV, true)
     }
 
-    pub fn macho_arm64e() -> bool {
-        env_toggle(crate::macho_arm64e::MACHO_ARM64E_ENV, true)
+    pub fn macho_arm64e(v: &Vars<'_>) -> bool {
+        v.toggle(crate::macho_arm64e::MACHO_ARM64E_ENV, true)
     }
 
-    pub fn sourcelang() -> Option<SourceLang> {
-        SourceLang::parse_forced(&unlace_base::env::var(crate::sourcelang::SOURCELANG_ENV).ok()?)
+    pub fn sourcelang(v: &Vars<'_>) -> Option<SourceLang> {
+        SourceLang::parse_forced(&v.var(crate::sourcelang::SOURCELANG_ENV).ok()?)
     }
 
-    pub fn codestrings() -> bool {
-        env_toggle(super::CODESTRINGS_ENV, true)
+    pub fn codestrings(v: &Vars<'_>) -> bool {
+        v.toggle(super::CODESTRINGS_ENV, true)
     }
 
-    pub fn nameladder() -> bool {
-        env_toggle(super::NAMELADDER_ENV, true)
+    pub fn nameladder(v: &Vars<'_>) -> bool {
+        v.toggle(super::NAMELADDER_ENV, true)
     }
 
-    pub fn swifttypes() -> bool {
-        env_toggle(super::SWIFTTYPES_ENV, true)
+    pub fn swifttypes(v: &Vars<'_>) -> bool {
+        v.toggle(super::SWIFTTYPES_ENV, true)
     }
 
-    pub fn delphiabi() -> bool {
-        match unlace_base::env::var(crate::delphiabi::DELPHIABI_ENV) {
-            Ok(v) => !matches!(
-                v.trim().to_ascii_lowercase().as_str(),
-                "off" | "0" | "false"
-            ),
-            Err(_) => true,
-        }
-    }
-
-    pub fn debuglink() -> bool {
-        env_toggle(crate::debuglink::DEBUGLINK_ENV, true)
-    }
-
-    pub fn exporttrie() -> bool {
-        env_toggle(crate::exporttrie::EXPORTTRIE_ENV, true)
-    }
-
-    pub fn ruststdsigs() -> RustStdSigs {
-        unlace_base::env::var(crate::ruststdsigs::RUSTSTDSIGS_ENV)
-            .ok()
-            .and_then(|v| RustStdSigs::parse(&v))
-            .unwrap_or_default()
-    }
-
-    fn dwarf_toggle(name: &str) -> bool {
-        unlace_base::env::var(name).map_or(true, |v| {
+    fn on_unless_off(v: &Vars<'_>, name: &str) -> bool {
+        v.var(name).map_or(true, |value| {
             !matches!(
-                v.trim().to_ascii_lowercase().as_str(),
+                value.trim().to_ascii_lowercase().as_str(),
                 "off" | "0" | "false"
             )
         })
     }
 
-    pub fn dwarfscopes() -> bool {
-        dwarf_toggle(super::DWARFSCOPES_ENV)
+    pub fn delphiabi(v: &Vars<'_>) -> bool {
+        on_unless_off(v, crate::delphiabi::DELPHIABI_ENV)
     }
 
-    pub fn dwarfenumtypedef() -> bool {
-        dwarf_toggle(super::DWARFENUMTYPEDEF_ENV)
+    pub fn debuglink(v: &Vars<'_>) -> bool {
+        v.toggle(crate::debuglink::DEBUGLINK_ENV, true)
     }
 
-    pub fn objcivars() -> bool {
-        match unlace_base::env::var(crate::objcivars::OBJCIVARS_ENV) {
-            Ok(v) => !matches!(
-                v.trim().to_ascii_lowercase().as_str(),
+    pub fn exporttrie(v: &Vars<'_>) -> bool {
+        v.toggle(crate::exporttrie::EXPORTTRIE_ENV, true)
+    }
+
+    pub fn ruststdsigs(v: &Vars<'_>) -> RustStdSigs {
+        v.var(crate::ruststdsigs::RUSTSTDSIGS_ENV)
+            .ok()
+            .and_then(|value| RustStdSigs::parse(&value))
+            .unwrap_or_default()
+    }
+
+    pub fn dwarfscopes(v: &Vars<'_>) -> bool {
+        on_unless_off(v, super::DWARFSCOPES_ENV)
+    }
+
+    pub fn dwarfenumtypedef(v: &Vars<'_>) -> bool {
+        on_unless_off(v, super::DWARFENUMTYPEDEF_ENV)
+    }
+
+    pub fn objcivars(v: &Vars<'_>) -> bool {
+        match v.var(crate::objcivars::OBJCIVARS_ENV) {
+            Ok(value) => !matches!(
+                value.trim().to_ascii_lowercase().as_str(),
                 "off" | "0" | "false" | "no"
             ),
             Err(_) => true,
         }
     }
 
-    pub fn objcsdk() -> Option<PathBuf> {
-        crate::objcsdk::sdk_path_from_env()
+    pub fn objcsdk(v: &Vars<'_>) -> Option<PathBuf> {
+        crate::objcsdk::sdk_path_from_value(&v.var(crate::objcsdk::OBJCSDK_ENV).ok()?)
     }
 
-    pub fn dyldimage() -> Option<String> {
-        unlace_base::env::var(crate::dyldcache::DYLDIMAGE_ENV)
+    pub fn dyldimage(v: &Vars<'_>) -> Option<String> {
+        v.var(crate::dyldcache::DYLDIMAGE_ENV)
             .ok()
-            .and_then(|v| crate::dyldcache::image_name(&v).map(str::to_string))
+            .and_then(|value| crate::dyldcache::image_name(&value).map(str::to_string))
     }
 
-    pub fn dyldcrossrefs() -> bool {
-        env_toggle(crate::dyldcache::DYLDCROSSREFS_ENV, true)
+    pub fn dyldcrossrefs(v: &Vars<'_>) -> bool {
+        v.toggle(crate::dyldcache::DYLDCROSSREFS_ENV, true)
     }
 
-    pub fn macho_slice() -> Option<String> {
-        unlace_base::env::var(MACHO_SLICE_ENV)
+    pub fn macho_slice(v: &Vars<'_>) -> Option<String> {
+        v.var(MACHO_SLICE_ENV).ok().filter(|t| !t.trim().is_empty())
+    }
+
+    pub fn pdb_path(v: &Vars<'_>) -> Option<PathBuf> {
+        path(v, PDB_PATH_ENV)
+    }
+
+    pub fn pdb_symsrv(v: &Vars<'_>) -> Option<String> {
+        v.var(PDB_SYMSRV_ENV)
             .ok()
-            .filter(|t| !t.trim().is_empty())
+            .filter(|value| !value.trim().is_empty())
     }
 
-    pub fn pdb_path() -> Option<PathBuf> {
-        path(PDB_PATH_ENV)
+    pub fn fid_db(v: &Vars<'_>) -> Option<PathBuf> {
+        path(v, FID_DB_ENV)
     }
 
-    pub fn pdb_symsrv() -> Option<String> {
-        std::env::var(PDB_SYMSRV_ENV)
-            .ok()
-            .filter(|v| !v.trim().is_empty())
-    }
-
-    pub fn fid_db() -> Option<PathBuf> {
-        path(FID_DB_ENV)
-    }
-
-    pub fn flirt_sigs() -> Vec<PathBuf> {
-        unlace_base::env::var_os(FLIRT_SIGS_ENV)
+    pub fn flirt_sigs(v: &Vars<'_>) -> Vec<PathBuf> {
+        v.var_os(FLIRT_SIGS_ENV)
             .map(|list| std::env::split_paths(&list).collect())
             .unwrap_or_default()
     }
 
-    fn load_pass(name: &str) -> bool {
-        !unlace_base::env::var(name).is_ok_and(|value| {
+    fn load_pass(v: &Vars<'_>, name: &str) -> bool {
+        !v.var(name).is_ok_and(|value| {
             matches!(
                 value.trim().to_ascii_lowercase().as_str(),
                 "off" | "0" | "false"
@@ -584,31 +635,187 @@ pub mod env {
         })
     }
 
-    pub fn load_objc() -> bool {
-        load_pass(LOAD_OBJC_ENV)
+    pub fn load_objc(v: &Vars<'_>) -> bool {
+        load_pass(v, LOAD_OBJC_ENV)
     }
 
-    pub fn load_strings() -> bool {
-        load_pass(LOAD_STRINGS_ENV)
+    pub fn load_strings(v: &Vars<'_>) -> bool {
+        load_pass(v, LOAD_STRINGS_ENV)
     }
 
-    pub fn load_mmap() -> bool {
-        !unlace_base::env::var(LOAD_MMAP_ENV)
+    pub fn load_mmap(v: &Vars<'_>) -> bool {
+        !v.var(LOAD_MMAP_ENV)
             .is_ok_and(|value| matches!(value.as_str(), "off" | "0" | "false"))
     }
 
     /// The `"<maj>.<min>"` release in `UNLACE_GOVERSION`; `None` when it is
     /// unset or unparsable.
-    pub fn go_version() -> Option<(u16, u16)> {
-        let value = unlace_base::env::var(crate::architecture::GOVERSION_ENV).ok()?;
+    pub fn go_version(v: &Vars<'_>) -> Option<(u16, u16)> {
+        let value = v.var(crate::architecture::GOVERSION_ENV).ok()?;
         let mut parts = value.trim().split('.');
         Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
+    }
+}
+
+/// Each option read from its environment variable, in the vocabulary the CLI
+/// exports: the fallback a gate takes outside every scope.
+pub mod env {
+    use super::*;
+
+    pub fn ppc32picimports() -> Ppc32PicMode {
+        read::ppc32picimports(&Vars::process())
+    }
+
+    pub fn ifuncfpret() -> bool {
+        read::ifuncfpret(&Vars::process())
+    }
+
+    pub fn ppcapu() -> bool {
+        read::ppcapu(&Vars::process())
+    }
+
+    pub fn kernelcache() -> KernelcacheChoice {
+        read::kernelcache(&Vars::process())
+    }
+
+    pub fn kernelcache_boot() -> KernelcacheBoot {
+        read::kernelcache_boot(&Vars::process())
+    }
+
+    pub fn goabi() -> bool {
+        read::goabi(&Vars::process())
+    }
+
+    pub fn cil() -> bool {
+        read::cil(&Vars::process())
+    }
+
+    pub fn symbolnamechars() -> NameChars {
+        read::symbolnamechars(&Vars::process())
+    }
+
+    pub fn libctypes() -> LibcTypesLayout {
+        read::libctypes(&Vars::process())
+    }
+
+    pub fn calltargettype() -> bool {
+        read::calltargettype(&Vars::process())
+    }
+
+    pub fn macho_arm64e() -> bool {
+        read::macho_arm64e(&Vars::process())
+    }
+
+    pub fn sourcelang() -> Option<SourceLang> {
+        read::sourcelang(&Vars::process())
+    }
+
+    pub fn codestrings() -> bool {
+        read::codestrings(&Vars::process())
+    }
+
+    pub fn nameladder() -> bool {
+        read::nameladder(&Vars::process())
+    }
+
+    pub fn swifttypes() -> bool {
+        read::swifttypes(&Vars::process())
+    }
+
+    pub fn delphiabi() -> bool {
+        read::delphiabi(&Vars::process())
+    }
+
+    pub fn debuglink() -> bool {
+        read::debuglink(&Vars::process())
+    }
+
+    pub fn exporttrie() -> bool {
+        read::exporttrie(&Vars::process())
+    }
+
+    pub fn ruststdsigs() -> RustStdSigs {
+        read::ruststdsigs(&Vars::process())
+    }
+
+    pub fn dwarfscopes() -> bool {
+        read::dwarfscopes(&Vars::process())
+    }
+
+    pub fn dwarfenumtypedef() -> bool {
+        read::dwarfenumtypedef(&Vars::process())
+    }
+
+    pub fn objcivars() -> bool {
+        read::objcivars(&Vars::process())
+    }
+
+    pub fn objcsdk() -> Option<PathBuf> {
+        read::objcsdk(&Vars::process())
+    }
+
+    pub fn dyldimage() -> Option<String> {
+        read::dyldimage(&Vars::process())
+    }
+
+    pub fn dyldcrossrefs() -> bool {
+        read::dyldcrossrefs(&Vars::process())
+    }
+
+    pub fn macho_slice() -> Option<String> {
+        read::macho_slice(&Vars::process())
+    }
+
+    pub fn pdb_path() -> Option<PathBuf> {
+        read::pdb_path(&Vars::process())
+    }
+
+    pub fn pdb_symsrv() -> Option<String> {
+        read::pdb_symsrv(&Vars::process())
+    }
+
+    pub fn fid_db() -> Option<PathBuf> {
+        read::fid_db(&Vars::process())
+    }
+
+    pub fn flirt_sigs() -> Vec<PathBuf> {
+        read::flirt_sigs(&Vars::process())
+    }
+
+    pub fn load_objc() -> bool {
+        read::load_objc(&Vars::process())
+    }
+
+    pub fn load_strings() -> bool {
+        read::load_strings(&Vars::process())
+    }
+
+    pub fn load_mmap() -> bool {
+        read::load_mmap(&Vars::process())
+    }
+
+    pub fn go_version() -> Option<(u16, u16)> {
+        read::go_version(&Vars::process())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overrides_set_and_remove_variables_for_one_read() {
+        let mut overrides = BTreeMap::new();
+        overrides.insert(crate::goabi::GOABI_ENV, Some("off".to_string()));
+        overrides.insert(crate::ppcapu::PPCAPU_ENV, Some("on".to_string()));
+        overrides.insert(MACHO_SLICE_ENV, None);
+        overrides.insert(FLIRT_SIGS_ENV, Some("/a".to_string()));
+        let options = LoadOptions::from_env_with(&overrides);
+        assert!(!options.goabi);
+        assert!(options.ppcapu);
+        assert_eq!(options.macho_slice, None);
+        assert_eq!(options.flirt_sigs, vec![PathBuf::from("/a")]);
+    }
 
     #[test]
     fn scopes_nest_and_restore_per_thread() {

@@ -3457,3 +3457,126 @@ forbid = ["halt_baddata"]
 test = "arcv2_conditional_delayed_return_runs_its_slot"
 address = "0x0"
 expect = ["v2 = 0;", "return v2 + *v1;"]
+
+# C-SKY ET_REL (EM_CSKY, ABIv2) routes to CSKY:LE:32:v2 (#776). chain and pick need the bsr relocations, which are not applied yet.
+[[family]]
+name = "elfroute_csky_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/csky.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_csky_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+# C-SKY executable (csky-elf-gcc 15.3) routes to CSKY:LE:32:v2 (#776).
+[[family]]
+name = "elfroute_csky_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/csky.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_csky_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_csky_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+xfail = "g_tab at 0x20000000 prints as the constant base, not g_tab["
+
+[[family.function]]
+test = "elfroute_csky_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# m68k ET_REL (EM_68K, no e_flags = gcc -m68020) routes to 68000:BE:32:MC68020 (#776).
+[[family]]
+name = "elfroute_m68k_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/m68k.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_m68k_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_m68k_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_m68k_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# m68k executable routes to 68000:BE:32:MC68020 (#776).
+[[family]]
+name = "elfroute_m68k_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/m68k.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_m68k_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_m68k_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_m68k_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# OpenRISC executable (EM_OPENRISC, big-endian) routes to OpenRISC:BE:32:default (#776).
+[[family]]
+name = "elfroute_or1k_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/or1k.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_or1k_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_or1k_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_or1k_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# Xtensa executable (EM_XTENSA, little-endian, gcc 15.3 windowed ABI) routes to Xtensa:LE:32:default (#776).
+[[family]]
+name = "elfroute_xtensa_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/xtensa.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_xtensa_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_xtensa_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_xtensa_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]

@@ -652,6 +652,8 @@ mod tests {
         /// `gopairreturns` remains explicit while aggregate ABI interactions across
         /// Go corpus sizes are evaluated for automatic selection.
         const UNEVALUATED: &[&str] = &[
+            // `ptrfromlocal` (Hex-Rays printer survey row 1) is measured in its own sweep.
+            "ptrfromlocal",
             // `charnum`, `constright` and `signeddec` (the Hex-Rays printer survey,
             // notes/ida-gap/hexrays-ctree-printer.md) print only; each is measured in its
             // own sweep before a preset or default decision.
@@ -664,6 +666,8 @@ mod tests {
             "orchainlive",
             // `phithread` (issue #20) landed without a corpus sweep.
             "phithread",
+            // `structassign` (IDA types survey item #4) landed without a corpus sweep.
+            "structassign",
             // `dextrpc` landed measured on 17 macOS dexts only; preset membership
             // would make it the default under 500 KiB, which is the lead's call.
             "dextrpc",

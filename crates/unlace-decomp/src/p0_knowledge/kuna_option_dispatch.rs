@@ -375,6 +375,7 @@ kuna_options! { self, p1;
     "castternary" => registered!(crate::kuna_castternary::CastTernary),
     "callrettype" => registered!(crate::kuna_callrettype::CallRetType),
     "castnarrow" => registered!(crate::kuna_castnarrow::CastNarrow),
+    "structassign" => registered!(crate::kuna_structassign::StructAssign),
     "libcnames" => registered!(crate::kuna_libcnames::LibcNames),
     "contextnames" => registered!(crate::kuna_contextnames::ContextNames),
     "flownames" => registered!(crate::kuna_flownames::FlowNames),
@@ -403,6 +404,7 @@ kuna_options! { self, p1;
     "castarith" => registered!(crate::kuna_coreoptions::CastArith),
     "castindex" => registered!(crate::kuna_coreoptions::CastIndex),
     "ptrfromuse" => registered!(crate::kuna_ptrfromuse::PtrFromUseMode),
+    "ptrfromlocal" => registered!(crate::kuna_ptrfromuse::PtrFromLocal),
     "charptr" => registered!(crate::kuna_charptr::CharPtr),
     "cstringconst" => registered!(crate::kuna_cstringconst::CstringConst),
     "charnum" => registered!(crate::kuna_charnum::CharNum),
@@ -423,6 +425,7 @@ kuna_options! { self, p1;
     "dedupvardecls" => registered!(crate::kuna_dedupvardecls::DedupVarDecls),
     "noreturn_known" => registered!(crate::kuna_analysisgates::NoreturnKnown),
     "libgccsigs" => registered!(crate::kuna_analysisgates::Libgccsigs),
+    "movwpairs" => registered!(crate::kuna_analysisgates::MovwPairs),
     "gotypeglobals" => registered!(crate::kuna_analysisgates::GoTypeGlobals),
 
     "arm64evcall" => registered!(crate::kuna_analysisgates::Arm64evcall),

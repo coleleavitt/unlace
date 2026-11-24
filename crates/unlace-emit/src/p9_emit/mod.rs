@@ -109,6 +109,7 @@ pub mod kuna_stackassign;
 pub mod kuna_stackbytes;
 pub mod kuna_stacklayout;
 pub mod kuna_stackmem;
+pub mod kuna_structassign; // (kuna) a memcpy of exactly one struct between pointers to that struct prints as *d = *s
 pub mod kuna_structdefs;
 pub mod kuna_swiftstrobj; // (kuna) a Swift string object is not a pointer to the bytes it lands on
 pub mod kuna_truncarg;

@@ -5,8 +5,13 @@
 //! clusters flatten into `<cluster>_<register>` members; `dim` arrays expand
 //! `%s` (from `dimIndex` or the index). Registers that overlap an earlier one
 //! (SVD alternates) are dropped from the structure; gaps become reserved bytes.
+//!
+//! [`bundled`] reads a device from the descriptions unlace carries
+//! (`svd_devices.br`, written by `tools/gen_svd_bundle.py` from the vendors'
+//! Apache-2.0 and BSD-3-Clause device packs), so `--svd STM32F405` needs no file.
 
 use std::collections::BTreeMap;
+use std::io::Read;
 use std::rc::Rc;
 use unlace_base::xml::{Element, xml_tree};
 
@@ -129,7 +134,7 @@ fn registers(parent: &Element, prefix: &str, base: u64, size_bits: u32, out: &mu
 
 /// Parse an SVD file.
 pub fn parse(bytes: &[u8]) -> Result<Device, String> {
-    let doc = xml_tree(bytes).map_err(|e| format!("SVD: {}", e.explain()))?;
+    let doc = xml_tree(without_declaration(bytes)).map_err(|e| format!("SVD: {}", e.explain()))?;
     let root = doc.get_root();
     if root.get_name() != "device" {
         return Err(format!(
@@ -197,6 +202,84 @@ pub fn parse(bytes: &[u8]) -> Result<Device, String> {
         });
     }
     Ok(dev)
+}
+
+/// `bytes` past a leading `<?xml ...?>` declaration (and byte-order mark). The
+/// kuna XML reader takes `version` and `encoding` only, and the vendors' SVD
+/// files declare `standalone="no"` as well.
+fn without_declaration(bytes: &[u8]) -> &[u8] {
+    let b = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
+    if !b.starts_with(b"<?xml") {
+        return b;
+    }
+    match b.windows(2).position(|w| w == b"?>") {
+        Some(end) => &b[end + 2..],
+        None => b,
+    }
+}
+
+/// The bundled device descriptions, compressed.
+const BUNDLE: &[u8] = include_bytes!("svd_devices.br");
+/// The most the bundle may decompress to.
+const MAX_BUNDLE: u64 = 64 << 20;
+
+/// The bundle's devices, in order, with each document's bytes.
+fn bundle() -> Result<Vec<(String, Vec<u8>)>, String> {
+    let mut data = Vec::new();
+    brotli_decompressor::Decompressor::new(BUNDLE, 4096)
+        .take(MAX_BUNDLE)
+        .read_to_end(&mut data)
+        .map_err(|e| format!("SVD bundle: {e}"))?;
+    let header = data
+        .windows(2)
+        .position(|w| w == b"\n\n")
+        .ok_or("SVD bundle: no index")?;
+    let index = std::str::from_utf8(&data[..header]).map_err(|_| "SVD bundle: index not UTF-8")?;
+    let mut at = header + 2;
+    let mut out = Vec::new();
+    for line in index.lines().skip(1) {
+        let (name, len) = line.split_once('\t').ok_or("SVD bundle: bad index line")?;
+        let len: usize = len.parse().map_err(|_| "SVD bundle: bad length")?;
+        let doc = data.get(at..at + len).ok_or("SVD bundle: truncated")?;
+        out.push((name.to_string(), doc.to_vec()));
+        at += len;
+    }
+    Ok(out)
+}
+
+/// The names of the bundled devices.
+pub fn bundled_names() -> Vec<String> {
+    bundle()
+        .map(|b| b.into_iter().map(|(n, _)| n).collect())
+        .unwrap_or_default()
+}
+
+/// Whether the bundled name `stem` covers the part `query`: case-insensitive, an
+/// `X` in the name standing for any one character (`STM32F0X0`), and the part
+/// number may go on (a package or flash code: `STM32F405RG`).
+fn covers(stem: &str, query: &str) -> bool {
+    let (s, q) = (stem.as_bytes(), query.as_bytes());
+    s.len() <= q.len()
+        && s.iter()
+            .zip(q)
+            .all(|(&a, &b)| a.eq_ignore_ascii_case(&b) || (a == b'X' && b.is_ascii_alphanumeric()))
+}
+
+/// The bundled description of the device `query` names: the bundled name equal to
+/// it, or else the longest one that covers it, the most specific of those (fewest
+/// `X`). `(name, document)`.
+pub fn bundled(query: &str) -> Option<(String, Vec<u8>)> {
+    let devices = bundle().ok()?;
+    if let Some(i) = devices
+        .iter()
+        .position(|(n, _)| n.eq_ignore_ascii_case(query))
+    {
+        return devices.into_iter().nth(i);
+    }
+    devices
+        .into_iter()
+        .filter(|(n, _)| covers(n, query))
+        .max_by_key(|(n, _)| (n.len(), n.bytes().filter(|&c| c != b'X').count()))
 }
 
 impl Device {
@@ -272,5 +355,31 @@ mod tests {
         assert_eq!(u1.extent(), 0x14);
         assert_eq!(d.peripherals[1].type_name, "USART1_Type");
         assert_eq!(d.interrupts.get(&37).map(String::as_str), Some("USART1"));
+    }
+
+    #[test]
+    fn a_standalone_declaration_parses() {
+        let doc = format!(
+            "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"no\"?>\n<!-- licence -->\n{}",
+            SVD.split_once("?>").unwrap().1
+        );
+        assert_eq!(parse(doc.as_bytes()).unwrap().peripherals.len(), 2);
+    }
+
+    #[test]
+    fn bundled_devices_resolve_by_part_number() {
+        let (name, doc) = bundled("stm32f405rg").unwrap();
+        assert_eq!(name, "STM32F405");
+        let d = parse(&doc).unwrap();
+        assert!(
+            d.peripherals
+                .iter()
+                .any(|p| p.name == "GPIOA" && p.base == 0x4002_0000)
+        );
+        assert_eq!(bundled("STM32F030F4").unwrap().0, "STM32F030");
+        assert_eq!(bundled("STM32F051K8").unwrap().0, "STM32F0X1");
+        assert_eq!(bundled("rp2040").unwrap().0, "RP2040");
+        assert!(bundled("STM32F103C8").is_none());
+        assert!(bundled_names().len() > 100);
     }
 }

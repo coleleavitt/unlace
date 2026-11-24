@@ -938,7 +938,9 @@ fn scrambles(regs: &Regs, ins: &[VarnodeData], vals: &[Option<Val>]) -> bool {
 /// stack pointer that calls the walk cannot read left only bounded is placed
 /// there again, and the pops after it (the cookie slot, the callee-saved
 /// registers) read the slots the prologue wrote. A later store to the saved
-/// slot forgets it.
+/// slot forgets it. A call the walk cannot read that is made with the stack
+/// pointer at the saved value (only its return address pushed) takes no stack
+/// argument, so it pops none and the stack pointer stays there (`walk`).
 fn msvc_saved_sp(
     state: &mut State,
     regs: &Regs,
@@ -1480,7 +1482,16 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
             match effect.effect {
                 Effect::Balanced(ep) => s.state.0[SP] = Some(sp.shift(ep as i64)),
                 Effect::NoReturn => s.falls_through = false,
-                Effect::Unknown => s.state.0[SP] = Some(after_unread_call(sp)),
+                Effect::Unknown => {
+                    s.state.0[SP] = Some(match s.state.3 {
+                        Some((_, saved))
+                            if regs.fs.is_some() && sp.as_exact() == Some(saved - 4) =>
+                        {
+                            Val::exact(saved)
+                        }
+                        _ => after_unread_call(sp),
+                    })
+                }
                 Effect::Unbalanced => {
                     s.state.0[SP] = Some(Val::Opaque { own: false });
                     writes |= effect.writes;

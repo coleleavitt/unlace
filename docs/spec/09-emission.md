@@ -5743,6 +5743,17 @@ over the two arms' ops). `emit_block_if` asks the tree for that form
 (`ite_form`): a rewritten `if` prints as its assignment, any other as an `if`;
 without a tree it runs the two tests itself.
 
+With `option boolreturn on` (C output; default off), the same pass turns an
+`if`/`else` without a goto whose body and else are each a `BlockCopy` leaf with
+no label line and no comment printing exactly one statement, a `RETURN` of the
+constant `1` in one arm and `0` in the other, into a return statement whose value
+is the condition, negated when the body returns `0`. `emit_block_if` prints it
+(`return_form`, `emit_block_if_return`) after the assignment forms: the
+condition block's statements above it as for an `if`, then `return ( cond );` or
+`return !( cond );` through the `ONLY_BRANCH` render of the header, with the
+body's `RETURN` as the statement's markup. The option builds the tree even when
+`ctree` is off.
+
 The walk is `printc/kuna_ctreeprint.rs`. The body prints from the root's
 statements; `emit_block` first asks the tree for the statement built from its
 block, and the walk prints a `BlockGraph` sequence (each statement in its own

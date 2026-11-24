@@ -25,7 +25,16 @@ fn tms9900_sum_store_decompiles() {
     assert!(!lower.contains("unimplemented"), "{stdout}");
     assert!(!lower.contains("bad instruction"), "{stdout}");
     assert!(!lower.contains("halt_baddata"), "{stdout}");
-    assert!(stdout.contains("do {"), "the JNE loop is recovered: {stdout}");
-    assert!(stdout.contains("dat_1000 = "), "MOV R3,*R2 stores to 0x1000: {stdout}");
-    assert!(stdout.contains("dat_3000 = dat_2000;"), "both extension words decode: {stdout}");
+    assert!(
+        stdout.contains("do {"),
+        "the JNE loop is recovered: {stdout}"
+    );
+    assert!(
+        stdout.contains("dat_1000 = "),
+        "MOV R3,*R2 stores to 0x1000: {stdout}"
+    );
+    assert!(
+        stdout.contains("dat_3000 = dat_2000;"),
+        "both extension words decode: {stdout}"
+    );
 }

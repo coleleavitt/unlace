@@ -437,6 +437,9 @@ binds every resolved import, at its IAT slot and its jump thunk, to the
 `__stdcall` model (a model-only fact; a parked Win32 signature keeps its
 pieces and takes the model). A Borland-mangled `@` name is a Delphi package
 export and keeps the register default; a C runtime import keeps `__cdecl`.
+A delay-load thunk (`__imp_load_<name>`, which saves ECX and EDX and jumps to
+`__tailMerge`) is image code, not an import, and is left out; the delay IAT
+slot it fills is bound like any other import.
 Without this a call such as `SetFilePointer(h, lo, &hi, 0)` read its first
 three arguments from EAX, EDX and ECX and its fourth from the first pushed
 word (`SetFilePointer(hFile,a1,a2,(unsigned int)hFile)`). The image's own

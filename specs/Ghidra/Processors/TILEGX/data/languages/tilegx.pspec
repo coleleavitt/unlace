@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="pc"/>
+  <register_data>
+    <register name="T0" hidden="true"/>
+    <register name="T1" hidden="true"/>
+    <register name="T2" hidden="true"/>
+    <register name="U0" hidden="true"/>
+    <register name="U1" hidden="true"/>
+    <register name="U2" hidden="true"/>
+    <register name="BC" hidden="true"/>
+  </register_data>
+</processor_spec>

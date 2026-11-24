@@ -34,6 +34,8 @@ mod kr1878_raw;
 mod lanai_raw;
 #[path = "lua54.rs"]
 mod lua54;
+#[path = "m32c_raw.rs"]
+mod m32c_raw;
 #[path = "m32r_raw.rs"]
 mod m32r_raw;
 #[path = "m6800_family.rs"]
@@ -54,6 +56,8 @@ mod nios2_raw;
 mod pdp11_raw;
 #[path = "rabbit_raw.rs"]
 mod rabbit_raw;
+#[path = "v60.rs"]
+mod v60;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
@@ -65,6 +69,8 @@ mod aarch64_sve2;
 mod cdp1802_raw;
 #[path = "i4004_raw.rs"]
 mod i4004_raw;
+#[path = "ppc_spe2.rs"]
+mod ppc_spe2;
 #[path = "return_branch_cli.rs"]
 mod return_branch_cli;
 #[path = "riscv_bitmanip.rs"]
@@ -104,8 +110,13 @@ mod sbpf;
 mod scmp_raw;
 #[path = "sparc_prologue_start.rs"]
 mod sparc_prologue_start;
+#[path = "st20_raw.rs"]
+mod st20_raw;
+
 #[path = "stm8_raw.rs"]
 mod stm8_raw;
+#[path = "tilegx_raw.rs"]
+mod tilegx_raw;
 #[path = "tlcs90_raw.rs"]
 mod tlcs90_raw;
 #[path = "tms320c3x_raw.rs"]

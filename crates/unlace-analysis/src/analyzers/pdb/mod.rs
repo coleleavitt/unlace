@@ -217,6 +217,12 @@ pub(crate) fn open_fingerprint_matched(
 }
 
 /// Open `path` as a `.pdb` and return it when its `{guid, age}` matches `cv`.
+///
+/// The age compared is the DBI stream's, the one the linker wrote alongside the
+/// image's own. The PDB info stream's age is bumped by every later writer
+/// (`symstore`, `pdbcopy`, a symbol server's processing), so a published `.pdb`
+/// reads age 2 or 3 there against the image's 1; only a PDB whose DBI stream
+/// states no age falls back to it.
 fn open_if_matching(
     path: &std::path::Path,
     cv: &codeview::CodeViewInfo,
@@ -225,7 +231,12 @@ fn open_if_matching(
     let mut pdb = pdb::PDB::open(file).ok()?;
     let info = pdb.pdb_information().ok()?;
     let guid = info.guid.to_string();
-    if locate::fingerprint_ok(cv, &guid, info.age) {
+    let age = pdb
+        .debug_information()
+        .ok()
+        .and_then(|dbi| dbi.age())
+        .unwrap_or(info.age);
+    if locate::fingerprint_ok(cv, &guid, age) {
         return Some(pdb);
     }
     unlace_base::notes::say_once(
@@ -234,7 +245,7 @@ fn open_if_matching(
             "[kuna pdb] {}: age {} guid {} does not match the image's CodeView record \
              (age {} guid {}); not applied",
             path.display(),
-            info.age,
+            age,
             guid.to_uppercase(),
             cv.age(),
             cv.guid_string()

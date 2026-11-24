@@ -8800,8 +8800,11 @@ both
   cannot escape that directory.
 
   The gate is what makes the search safe to run by default, and it runs per
-  candidate: a `.pdb` is applied only when its own `pdb_information().guid/age`
-  equals the PE's record, so a stale sidecar left beside a rebuilt binary, or an
+  candidate: a `.pdb` is applied only when its GUID and age equal the PE's
+  record. The age is the DBI stream's, which the linker writes with the image's;
+  the PDB info stream's age is bumped by every later writer (`symstore`,
+  `pdbcopy`, Mozilla's and Microsoft's symbol servers publish age 2 or 3 against
+  the image's 1), so it is used only when the DBI stream states none. So a stale sidecar left beside a rebuilt binary, or an
   unrelated `.pdb` that happens to share the name, is skipped rather than applied —
   wrong names are worse than no names. A skipped-because-mismatched candidate gets
   one `[kuna pdb]` line on stderr naming it: once the search is automatic, silence
@@ -8830,8 +8833,9 @@ both
   modifiers transparent, arrays flattened to their element, enumerations with
   their constants, and structures, classes and unions at the compiler's member
   offsets. A forward reference resolves to the definition with the same unique
-  name; an aggregate is interned before its members are walked, so a pointer to
-  itself names the shell. A class carries each base class as a `super_<Base>`
+  name; an aggregate is declared (`kuna_declare_record`) before its members are
+  walked, so a pointer built to it meanwhile (a self-reference, or the structure
+  reached first through a global that points at it) reads the completed layout. A class carries each base class as a `super_<Base>`
   member and its table pointer as a `__vftable` member at offset 0. A structure's
   bitfield (an `LF_MEMBER` of an `LF_BITFIELD` type) keeps its bit position, placed
   in the smallest byte span that covers it as `dwarfstructs` does (PE images are

@@ -488,6 +488,8 @@ Three tiers:
 | every use of an argument is *(T *)(a0 + k) but the argument is not a pointer | [`ptrfromuse`](#ptrfromuse----off--byte--void-default-void) |
 | one function takes T *a0 and its sibling takes long a0 for the same kind of argument | [`ptrfromuse`](#ptrfromuse----off--byte--void-default-void) |
 | an argument dereferenced at offset 0 gets a pointer type but one dereferenced at +8 does not | [`ptrfromuse`](#ptrfromuse----off--byte--void-default-void) |
+| a call result declared long and dereferenced as *(T *)(v1 + k) | [`ptrfromlocal`](#ptrfromlocal----on--off-default-off) |
+| a pointer loaded from a structure is declared long and cast at every use | [`ptrfromlocal`](#ptrfromlocal----on--off-default-off) |
 | a string parameter is declared unsigned long and every call site passes it to strlen or printf | [`charptr`](#charptr----on--off-default-off) |
 | a buffer indexed one byte at a time is declared void * | [`charptr`](#charptr----on--off-default-off) |
 | two functions take the same string and one says char * and the other unsigned long | [`charptr`](#charptr----on--off-default-off) |
@@ -538,6 +540,9 @@ Three tiers:
 | obfuscated arithmetic that option mba leaves unsimplified | [`egraph`](#egraph----on--off-default-off) |
 | one mba identity applied to the result of another | [`egraph`](#egraph----on--off-default-off) |
 | ollvm substitution chains such as (a ^ ~b) & a instead of a & b | [`egraph`](#egraph----on--off-default-off) |
+| a long long local on a 32-bit target prints as CONCAT44 of two variables | [`pairlocal`](#pairlocal----on--off-default-off) |
+| CONCAT44(v13, v12) after an if where each half is set on every path | [`pairlocal`](#pairlocal----on--off-default-off) |
+| a 64-bit sum or compare reads CONCAT44 of a sign-extended pair | [`pairlocal`](#pairlocal----on--off-default-off) |
 | heavily-called custom die()/fatal() wrapper still treated as returning | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
 | dead code after a stripped sub_ wrapper that never falls through at 3+ call sites | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
 | caller swallows the next function after a wrapper call | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
@@ -679,6 +684,9 @@ Three tiers:
 | guard clauses returning the same constant print as one && chain | [`orchainlive`](#orchainlive----on--off-default-off) |
 | guard clauses returning the same error constant print as one && or or chain | [`orchainbool`](#orchainbool----on--off-default-off) |
 | a null check and an unrelated field test are folded into one condition before a shared return -1 | [`orchainbool`](#orchainbool----on--off-default-off) |
+| a struct copy prints as memcpy(d,s,0x18) where both sides have the same struct type | [`structassign`](#structassign----on--off-default-off) |
+| a by-value struct assignment or return reads as a memcpy call | [`structassign`](#structassign----on--off-default-off) |
+| memcpy(&v1,a0,sizeof) copies one whole record into a local of that record type | [`structassign`](#structassign----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -2507,6 +2515,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P5/type-propagation · angr · opt-in-tool · kuna-ptrfromuse
 - **Example:** `option ptrfromuse off`
 
+### `ptrfromlocal` -- on | off, default `off`
+
+- **Symptoms:** a call result declared long and dereferenced as *(T *)(v1 + k); a pointer loaded from a structure is declared long and cast at every use.
+- **What it does:** Extend the `ptrfromuse` walk from function inputs to a pointer-width value a CALL, CALLIND or LOAD writes: when its vote is still unknown (`undefined8`, printed `long`) and every use the walk reaches makes it a memory base (the address of a LOAD or STORE, through copies, phis, PTRADD/PTRSUB and constant-offset additions, with no use that refuses a pointer), it gets a `void *` vote folded by `type_order`. A declared callee return or a loaded value with any typed vote keeps its type. With the value a pointer, `structsynth` can then lay out the record a call returned, so `*(unsigned long *)(v1 + 0x10)` can print as a field.
+- **When to flip:** Turn on for stripped code where a pointer a callee returns or a structure member holds prints as `long v1` with every access cast (`*(unsigned long *)(v1 + 0x10)`): on twelve DecBench O2-noinline binaries 53% of these expression casts are on such call results and loaded words. Leave off to keep upstream's integer declaration of those values.
+- **Where / provenance:** P5/type-propagation · kuna · type-inference · unlace-ptrfromlocal
+- **Example:** `option ptrfromlocal on`
+
 ### `charptr` -- on | off, default `off`
 
 - **Symptoms:** a string parameter is declared unsigned long and every call site passes it to strlen or printf; a buffer indexed one byte at a time is declared void *; two functions take the same string and one says char * and the other unsigned long; a -O0 parameter is an integer although the callee's prototype declares char *; void * sub_e680(uint1 *a0) for a function that passes its argument to strlen.
@@ -2594,6 +2610,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default and stays opt-in. Turn it on together with mba for obfuscated code where mba alone leaves xor/and/or soup: substitutions stacked on each other, or linear and nonlinear MBA mixed in one tree (synthetic OLLVM-style corpus: mba+egraph solves 101-145 functions per build where mba alone solves 93-143). On ordinary compiler output it costs +2.3% instructions over DecBench O2-noinline (+64% on the libopencm3 examples, +71% on coreutils shuf) and its 247 changed functions of 91,216 are not improvements on the whole (a named local or a |= idiom folded away, a bit-field store respelled as a shift and multiply), so it is not a default candidate; see notes/egraph.md.
 - **Where / provenance:** P3/simplification-quiescence · kuna · new-analysis · kuna-egraph
 - **Example:** `--option egraph on`
+
+### `pairlocal` -- on | off, default `off`
+
+- **Symptoms:** a long long local on a 32-bit target prints as CONCAT44 of two variables; CONCAT44(v13, v12) after an if where each half is set on every path; a 64-bit sum or compare reads CONCAT44 of a sign-extended pair.
+- **What it does:** Join a 64-bit local that a 32-bit target holds in two registers (edx:eax) where control flow merges. Heritage gives each half its own MULTIEQUAL, so the 64-bit use after the join reads PIECE(hi, lo) of two 32-bit variables and prints as CONCAT44(v13, v12), each half assigned on every path (v13 = v12 >> 0x1f; or v13 = 0; v12 = 0;). RulePairPhi matches PIECE(hi, lo) of two MULTIEQUAL outputs of one block and builds the 64-bit value each incoming edge carries: two constants are the 64-bit constant, hi = lo s>> 31 is SEXT(lo), hi = 0 is ZEXT(lo), SUBPIECE(w, 4) and SUBPIECE(w, 0) of one 8-byte w are w, and the two phis' own outputs (a loop carrying the pair) are the new phi. When every edge has one, a 64-bit MULTIEQUAL of them goes at the head of the block (an extension is computed at the end of its predecessor) and the PIECE becomes a COPY of it, so the local is one long long. The rewrite is exact; the half phis stay for other readers and go dead otherwise.
+- **When to flip:** Off by default. Turn it on for 32-bit x86, ARM or MIPS code whose long long locals print as CONCAT44 of two variables after an if or a loop.
+- **Where / provenance:** P3/simplification-quiescence · kuna · new-analysis · kuna-pairlocal
+- **Example:** `--option pairlocal on`
 
 ### `noreturn_disc` -- on | off, default `on`
 
@@ -2939,6 +2963,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
 - **Example:** `option orchainbool on`
 
+### `structassign` -- on | off, default `off`
+
+- **Symptoms:** a struct copy prints as memcpy(d,s,0x18) where both sides have the same struct type; a by-value struct assignment or return reads as a memcpy call; memcpy(&v1,a0,sizeof) copies one whole record into a local of that record type.
+- **What it does:** Print a memcpy that copies exactly one struct as a struct assignment. A compiler copies a struct with memcpy, or inlines the copy and kuna's copy folds turn it back into memcpy, so a by-value assignment `*d = *s;` or `v = *p;` prints as `memcpy(d,s,0x18);`. Hex-Rays turns such a copy back into a struct move when the size is the size of the struct the pointers point to (hexx64 sub_4C8BB0). When on, kuna_structassign decides at print time, with the IR unchanged: a direct call of memcpy (with or without leading underscores) with three arguments, whose result is unused, whose size is a constant, and whose destination and source are both typed as pointers to one and the same struct or union type of exactly that size, prints as `*d = *s`, and an argument that is the address of a variable prints as the variable (`v1 = *a0;`). Any other memcpy (a length that is not the struct size, two different types, a char or void pointer, a used result, __memcpy_chk) prints as before. C output only.
+- **When to flip:** Off by default (not yet measured on a corpus). Turn it on to read struct copies as the assignments the source wrote, `*a0 = v1;` instead of `memcpy(a0,&v1,0x18);`, wherever type recovery gave both sides the same struct type. Leave it off when the call itself matters (a script matching memcpy calls, or code that copies between two objects that only happen to share a type).
+- **Where / provenance:** P9/readability-rewrites · ida · presentation-default · unlace-ida-gap-types-4
+- **Example:** `option structassign on`
+
 ## Analysis & loader passes
 
 Program-prep enablement: what is discovered, decoded, and named before any function is decompiled.
@@ -3210,7 +3242,7 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 ### `debuglink` -- on | off, default `on`
 
 - **Symptoms:** a stripped distribution binary prints sub_<addr> for every function although its debug package is installed; a Fedora/RHEL binary keeps function names in .gnu_debugdata but kuna shows none.
-- **What it does:** Name a stripped ELF's functions from its separate debug file: the companion its GNU build-id note names (<dir>/.build-id/xx/rest.debug, build-id checked) or its .gnu_debuglink names (next to the image, its .debug/ directory, or <dir>/<image directory>/, CRC32 checked), with <dir> each entry of KUNA_DEBUG_DIRS then /usr/lib/debug; failing that, the XZ-compressed function symbol table a Fedora/RHEL image keeps in .gnu_debugdata (MiniDebugInfo). Only an image without its own .symtab is affected, and an address that already has a name keeps it. Loader-tier: read via the KUNA_DEBUGLINK env var (symbols are read at load file).
+- **What it does:** Name a stripped ELF's functions from its separate debug file: the companion its GNU build-id note names (<dir>/.build-id/xx/rest.debug, build-id checked) or its .gnu_debuglink names (next to the image, its .debug/ directory, or <dir>/<image directory>/, CRC32 checked), with <dir> each entry of KUNA_DEBUG_DIRS then /usr/lib/debug; failing that, the XZ-compressed function symbol table a Fedora/RHEL image keeps in .gnu_debugdata (MiniDebugInfo). A DWZ-compressed debug file's supplementary file (named by .gnu_debugaltlink, found at that path, beside the debug file or by build-id, build-id checked) is read too, so its shared strings name the DWARF entries that refer to them. Only an image without its own .symtab is affected, and an address that already has a name keeps it. Loader-tier: read via the KUNA_DEBUGLINK env var (symbols are read at load file).
 - **When to flip:** On by default: a stripped system binary whose debug package or debuginfod cache is installed decompiles with its real function names instead of sub_<addr>. Turn OFF to see only what the image itself carries, or when a mismatched debug directory is in KUNA_DEBUG_DIRS.
 - **Where / provenance:** P1/environment-binding · kuna · analysis-enablement · kuna-elf-debuglink
 - **Example:** `option debuglink off`

@@ -7195,8 +7195,13 @@ every other binary's pass list is byte-identical to before the pass existed):
   chain (x86 raw-VA vs x64 image-base-relative refs behind a refkind dispatch), and
   label `<Class>::vftable` / `RTTI_*` with the class names demangled by the
   existing MSVC arm. From each recovered `<Class>::vftable` base the pass then walks
-  the slot array (`vftable.rs`), bounded at the first NULL or non-`.text` slot, and
-  emits one **function** symbol per surviving slot at the address it points at. That
+  the slot array (`vftable.rs`), bounded at the first NULL or non-`.text` slot, and,
+  in a relocatable PE whose base-relocation table reads whole, at the first word that
+  table does not list (`TextRanges::with_relocations`): the loader fixes up every
+  slot, so an unlisted word is data however it reads, such as the UTF-16 text after
+  the last vftable of a large `.text` (Holley EFI's MFC `Holley.exe` read
+  `0x0065006e` as `CGDIPCrank::vfunc_97` and split real functions at five such
+  words). It then emits one **function** symbol per surviving slot at the address it points at. That
   symbol is named `<Class>::vfunc_<i>` — the class name comes from the RTTI0
   `TypeDescriptor` and the slot index is the only disambiguator MSVC metadata offers,
   since it records no per-method names. The stem is `vfunc_`, not `vftable_`, because

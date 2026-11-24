@@ -12,6 +12,8 @@ mod hexagon_hmx;
 mod huc6280;
 #[path = "konami.rs"]
 mod konami;
+#[path = "v8ignition_raw.rs"]
+mod v8ignition_raw;
 #[path = "lua54.rs"]
 mod lua54;
 #[path = "m6800_family.rs"]
@@ -1069,3 +1071,5 @@ mod processors;
 mod vexzeroupper_cli;
 #[path = "initterm_cli.rs"]
 mod initterm_cli;
+#[path = "vftablerelocs_cli.rs"]
+mod vftablerelocs_cli;

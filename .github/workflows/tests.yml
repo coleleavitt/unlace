@@ -1,8 +1,7 @@
 name: Tests
 
 # Parity and integration gates run on every event. The workspace suite runs
-# for forks, main, manual dispatch, the nightly (which calls this workflow
-# whole), or an internal PR carrying full-ci.
+# for forks, main, manual dispatch, or an internal PR carrying full-ci.
 
 on:
   pull_request:

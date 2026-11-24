@@ -3,7 +3,8 @@
 # `ci` is what every push to main and every full-ci PR runs (.github/workflows/tests.yml),
 # split three ways. It leaves out the tests below, each 40-80 s on a fast machine and
 # several times that on a CI runner: they would set the length of whichever partition
-# drew them. `full` runs everything (the scheduled Coverage workflow runs the same
+# drew them. The `nightly` profile runs exactly those tests (the nightly workflow's slow-tests job);
+# scripts/check_test_tiers.py fails when the two lists differ. `full` runs everything (the scheduled Coverage workflow runs the same
 # set under cargo's own harness, which keeps it to one coverage profile per binary).
 
 [profile.default]
@@ -42,6 +43,28 @@ not (
 '''
 
 [profile.ci.junit]
+path = "junit.xml"
+
+# The seven slow tests the `ci` profile leaves out, and nothing else: the nightly workflow's
+# slow-tests job runs this profile (.github/workflows/nightly.yml). The list repeats the `ci`
+# exclusion above because nextest has no named filterset to share; scripts/check_test_tiers.py
+# (run by the tidy job through scripts/tests) fails when the two differ.
+[profile.nightly]
+fail-fast = false
+failure-output = "immediate-final"
+status-level = "fail"
+final-status-level = "slow"
+default-filter = '''
+    (binary_id(unlace-cli::integration) & test(=stack_struct::every_build_declares_the_record_and_prints_c))
+  | (binary_id(unlace-cli::integration) & test(=stack_parameter_lifetimes::wider_stores_keep_their_width_in_narrow_parameter_slots))
+  | (binary_id(unlace-console::integration) & test(=verify_arm_context::generated_graphs_preserve_calls_modes_and_c_across_layouts_and_reuse))
+  | (binary_id(unlace-cli::decompile_all_cli) & test(=the_memory_limit_defaults_to_the_cgroup_cap))
+  | (binary_id(unlace-cli::decompile_all_cli) & test(=jobs_names_synthesized_structs_as_the_serial_run_does))
+  | (binary_id(unlace-console::integration) & test(=verify_pdecode::decode_lanes_produce_the_serial_listing))
+  | (binary_id(unlace-cli::integration) & test(=indirect_dispatch::reentered_dispatches_preserve_each_effect_and_the_callers_return))
+'''
+
+[profile.nightly.junit]
 path = "junit.xml"
 
 [profile.full]

@@ -2355,6 +2355,38 @@ expect = [
     "return ~(",
 ]
 
+[[family]]
+name = "evm_erc20_runtime"
+language = "EVM:BE:32:Cancun"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/evm/erc20_runtime_opt.bin"
+
+# Runtime code of `fixtures/evm/erc20.sol`'s Token (solc 0.8.24 --optimize). Jump-table recovery
+# ran pow2select on 32-byte words, whose `1 << (size * 8 - 1)` overflowed (#687, fixed by #709).
+[[family.function]]
+test = "evm_erc20_runtime_dispatch"
+address = "0x0"
+expect = [
+    "0x70a08231",
+    "0xa9059cbb",
+]
+
+[[family]]
+name = "lua54_allones_and"
+language = "Lua:LE:32:5.4"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/lua5x/lua54_allones_and.bin"
+
+# `fixtures/lua5x/lua54_allones_and.lua` (luac 5.4.8): `a & -1` on a 64-bit integer, an AND
+# with the all-ones mask, which made pow2select's remainder test overflow on `m + 1` (#688).
+[[family.function]]
+test = "lua54_allones_and_decompile"
+address = "0x0"
+expect = [
+    "luaGetTable(U0,K0)",
+    "luaEq(K2,0x23)",
+]
+
 # The 7700 Family language decompiles routines hand-assembled from the software manual's
 # instruction pages: a 16-bit compare and BCC clamp, a JSR caller, and an 8-bit store
 # after SEM and LDT (data bank 0).

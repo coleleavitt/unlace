@@ -6976,7 +6976,12 @@ every other binary's pass list is byte-identical to before the pass existed):
   a constant offset from it reads `pkg.T`'s field there, and `pkg.T`'s
   facet names the interface
   (`crates/unlace-emit/src/p9_emit/kuna_goitabcall.rs (receiver_field_interface)`;
-  top-level fields only, a generic receiver is refused).
+  top-level fields only, a generic receiver is refused). The receiver counts
+  as the input when every definition back to it is a copy, cast, call guard
+  or join (a loop's join included) and `RAX`'s input is the only root. A
+  value method `pkg.T.M` receives its struct field by field in registers, so
+  when `pkg.T`'s facet lists an interface at offset 0 its first input is
+  that field's table (`io.nopCloser.Read`).
   A type assertion's result is the third source
   (`crates/unlace-emit/src/p9_emit/kuna_goitabcall.rs (asserted_interface)`):
   the output of a call to `runtime.typeAssert` whose first argument is a

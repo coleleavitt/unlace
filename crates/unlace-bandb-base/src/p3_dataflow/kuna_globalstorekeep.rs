@@ -32,6 +32,8 @@
 
 use std::collections::BTreeSet;
 
+use slotmap::SecondaryMap;
+
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -172,11 +174,9 @@ pub fn old_value_read_after(data: &Funcdata, vn: VarnodeId) -> bool {
         budget = budget.saturating_sub(1);
         budget == 0
     };
-    let succ = |b| {
+    let push_succ = |work: &mut Vec<BlockId>, b: BlockId| {
         let blk = data.bblocks_ref().block(b);
-        (0..blk.size_out())
-            .map(|i| blk.get_out(i))
-            .collect::<Vec<_>>()
+        work.extend((0..blk.size_out()).map(|i| blk.get_out(i)));
     };
     let mut later = Vec::new();
     let mut cur = data.obank().get(store).and_then(|s| s.basic_neighbours().1);
@@ -187,14 +187,15 @@ pub fn old_value_read_after(data: &Funcdata, vn: VarnodeId) -> bool {
         later.push(o);
         cur = data.obank().get(o).and_then(|x| x.basic_neighbours().1);
     }
-    let mut reach = BTreeSet::new();
-    let mut work = succ(sb);
+    let mut reach: SecondaryMap<BlockId, ()> = SecondaryMap::new();
+    let mut work = Vec::new();
+    push_succ(&mut work, sb);
     while let Some(b) = work.pop() {
-        if reach.insert(b) {
+        if reach.insert(b, ()).is_none() {
             if tick() {
                 return true;
             }
-            work.extend(succ(b));
+            push_succ(&mut work, b);
         }
     }
     for w in data.vbank().iter_loc_size_addr(v.get_size(), v.get_addr()) {
@@ -219,7 +220,7 @@ pub fn old_value_read_after(data: &Funcdata, vn: VarnodeId) -> bool {
             .filter_map(|&o| data.obank().get(o).and_then(|x| x.get_parent()))
             .chain(ends.iter().copied())
             .collect();
-        if !blocks.iter().any(|b| reach.contains(b))
+        if !blocks.iter().any(|&b| reach.contains_key(b))
             && !ends.contains(&sb)
             && !later.iter().any(|o| ops.contains(o))
         {
@@ -237,10 +238,11 @@ pub fn old_value_read_after(data: &Funcdata, vn: VarnodeId) -> bool {
         if ends.contains(&sb) {
             return true;
         }
-        let mut work = succ(sb);
-        let mut seen = BTreeSet::new();
+        work.clear();
+        push_succ(&mut work, sb);
+        let mut seen: SecondaryMap<BlockId, ()> = SecondaryMap::new();
         while let Some(b) = work.pop() {
-            if !seen.insert(b) || Some(b) == def_block {
+            if seen.insert(b, ()).is_some() || Some(b) == def_block {
                 continue;
             }
             if tick() {
@@ -249,7 +251,7 @@ pub fn old_value_read_after(data: &Funcdata, vn: VarnodeId) -> bool {
             if blocks.contains(&b) {
                 return true;
             }
-            work.extend(succ(b));
+            push_succ(&mut work, b);
         }
     }
     false

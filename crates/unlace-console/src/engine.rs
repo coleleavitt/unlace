@@ -9052,6 +9052,9 @@ fn commit_analysis_output(
     // 7c. An Objective-C direct method's `self`, the same unlocked hint; a
     //     function Swift already hinted keeps that one.
     commit_input_hints(prog, code_space, &out.objc_self_hints);
+    // 7c''. (kuna `dextrpc`) A DriverKit instance method's `this`, the same
+    //       unlocked hint.
+    commit_input_hints(prog, code_space, &out.dext_this_hints);
     // 7c'. (kuna `goitabcalls`) A stripped Go function's interface table word,
     //      typed from the static itabs its callers pass; a function another
     //      source already hinted keeps that hint.

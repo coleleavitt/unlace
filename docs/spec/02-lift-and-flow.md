@@ -4355,6 +4355,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | written for unlace from the Moxie architecture page and the binutils opcode table |
 | `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | written for unlace from the FT32 documentation and the binutils opcode table |
 | `M88000` | Motorola 88000 (MC88100) | `88000:BE:32:default` | written for unlace from the MC88100 User's Manual, Apache-2.0 |
+| `RISCV` (T-Head) | RISC-V with the T-Head vendor extensions (XThead*) | `RISCV:LE:64:XThead`, `RISCV:LE:32:XThead` | written for #98 from T-Head's thead-extension-spec and LLVM's XTHead encodings |
 | `Clipper` | Fairchild/Intergraph CLIPPER C100/C300 | `clipper:LE:32:default` | written for unlace from the CLIPPER C300 data book, Apache-2.0 |
 | `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
 <!-- vendor-rows -->
@@ -4425,6 +4426,8 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `KonamiCPU` | KONAMI CPU (052001/052526/053248, Konami-2) | `KONAMI:BE:16:default` | MC6809 programming manual, MAME `konami` (opcode map and postbyte) | `unlace-cli/tests/konami.rs` |
 | `Uxn` | Uxn virtual machine (Varvara ROMs) | `Uxn:BE:16:default` | Uxntal reference (opcode table and modes) | `unlace-cli/tests/uxn.rs` |
 | `Visium` | Visium (CDS GR5/GR6) | `visium:BE:32:default` | binutils `visium` opcode table and disassembler, GCC `config/visium` | `unlace-cli/tests/visium_raw.rs` |
+| `TMS9900` | TI TMS9900 | `TMS9900:BE:16:default` | TI TMS9900 Microprocessor Data Manual, TMS9900 Family System Development Manual | `unlace-cli/tests/tms9900_raw.rs` |
+| `Blackfin` | Analog Devices Blackfin (ADSP-BF5xx, BF6xx) | `Blackfin:LE:32:default` | Blackfin Processor Programming Reference rev 2.2, binutils `bfin.h` layouts; checked against `bfin-elf-objdump` | `unlace-cli/tests/blackfin_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -4578,6 +4581,28 @@ LLVM-selected `c.lbu`, `c.lh`, `c.sb`, `c.mul`/`c.not` and
 `cmpxchg`-lowered `amocas` functions that decompile with no bad or
 unimplemented instruction.
 
+
+### RISC-V T-Head vendor extensions (#98)
+
+`riscv.xthead.sinc` decodes the T-Head (XuanTie) vendor extensions in two new
+languages, `RISCV:LE:64:XThead` and `RISCV:LE:32:XThead`: the default RISC-V
+languages plus XTheadBa, Bb, Bs, CondMov, Mac, MemPair, MemIdx, FMemIdx, Cmo
+and Sync, all in the custom-0 opcode space. Those encodings collide with the
+generic `custom0` placeholders of `riscv.custom.sinc`, so the placeholders
+for custom-0 are compiled out of these two languages (`@define
+CUSTOM0_VENDOR`) and the default languages are unchanged. The arithmetic,
+bit-field, conditional-move, multiply-accumulate and memory forms lift
+exactly (`th.extu a0,a0,19,8` is `(a0 & 0xfffff) >> 8`, `th.lrd` is a
+load from `rs1 + (rs2 << n)`, the `ia`/`ib` forms write the base back
+after or before the access, the pair forms move two consecutive words or
+doublewords); the cache and sync operations are named pcodeops. A binary is
+not routed to these languages by its ELF header; `--target` selects them.
+Before, every T-Head instruction was an opaque `custom0` call. Exercised
+by `unlace-cli/tests/riscv_xthead.rs`: a probe of every encoding (agreeing
+with LLVM 23's disassembler, 102 rows RV64 and 80 RV32), LLVM-selected
+`th.lrd`/`th.lrw`, `th.extu`, `th.mvnez` and `th.mula` functions, and a
+raw RV64 image. Gaps (XTheadVector, Vdot, Fmv, Int) are listed in
+`specs/Ghidra/Processors/RISCV/README.md`.
 
 ### RISC-V Zacas register pairs (#98)
 

@@ -653,6 +653,9 @@ mod tests {
             "orchainlive",
             // `phithread` (issue #20) landed without a corpus sweep.
             "phithread",
+            // `dextrpc` landed measured on 17 macOS dexts only; preset membership
+            // would make it the default under 500 KiB, which is the lead's call.
+            "dextrpc",
             // `phiarm` (issue #20) landed without a corpus sweep.
             "phiarm",
             // `calleesaved` (issue #20) landed without a corpus sweep.
@@ -666,6 +669,8 @@ mod tests {
             "dwarfglobaltypes",
             // `dwarfdecls` lands as an opt-in with its decbench sweep in its catalog row.
             "dwarfdecls",
+            // `dwarfenumtypedef` lands as an opt-in beside it.
+            "dwarfenumtypedef",
             // Stack-address liveness can be incidental; synthetic regressions and
             // a local speed measurement do not justify a broad preset flip.
             "stackaddrargtrial",

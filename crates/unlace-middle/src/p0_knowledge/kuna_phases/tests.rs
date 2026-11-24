@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_358() {
-    assert_eq!(kuna_num_settables(), 358);
-    assert_eq!(SETTABLE_TABLE.len(), 358);
+fn settable_count_is_359() {
+    assert_eq!(kuna_num_settables(), 359);
+    assert_eq!(SETTABLE_TABLE.len(), 359);
 }
 
 #[test]
-fn tier_counts_are_70_core_180_transform_108_analysis() {
+fn tier_counts_are_70_core_180_transform_109_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_180_transform_108_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 180, 108));
+    assert_eq!((core, transform, analysis), (70, 180, 109));
 }
 
 #[test]
@@ -316,6 +316,8 @@ fn option_values_live_value_present_for_129() {
         "dwarfglobaltypes",
         // (kuna) DWARF declarations of imports -- a commit-time gate read console-side.
         "dwarfdecls",
+        // (kuna) Anonymous DWARF enums named by their typedef -- a load-time env bridge.
+        "dwarfenumtypedef",
         // (kuna) Global typing from stored values -- a batch ledger read in project.rs.
         "storetype",
         // (kuna) The UEFI module pass -- an analysis-pass gate read console-side. Default-ON.
@@ -496,6 +498,9 @@ fn option_values_live_value_present_for_129() {
         "xnutables",
         // (kuna) DriverKit __osclassinfo records -- the same kind of gate. Default-on.
         "osclassinfo",
+        // (kuna) DriverKit IORPC dispatch types -- read inside the osclassinfo
+        // pass. Default-off.
+        "dextrpc",
         // (kuna) The Swift calling-convention arm's gate, read inside that pass.
         "swiftcall",
         // (kuna) The Swift runtime prototype pass gate.
@@ -1281,6 +1286,7 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `truncptrflow`; its P3 row sits after `haltloopguard`.
     // +1 for `clonephiorder`; its P8 row sits after `rettriangle`.
     // +1 for `dwarfdecls`; its P1 row sits after `dwarfglobaltypes`.
+    // +1 for `dwarfenumtypedef`; its P1 row sits after `dwarfdecls`.
     // +1 for `switchrunon`; its P2 row sits after `switchsharedcase`.
     // +1 for `bejoinpass`; its P4 row sits after `bejoin`.
     // +1 for `persistcalls`; its P3 row sits after `readonlycalls`.
@@ -1329,7 +1335,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `orchainlive`: 355 rows, 354 commas.
     // +1 for `orchainbool`: 356 rows, 355 commas.
     // Recounted from phases.toml with `delphi` (its P1 row follows `msvceh`): 358 rows, 357 commas.
-    assert_eq!(json.matches("},\n").count(), 357);
+    // +1 for `dextrpc`; its P1 row sits after `osclassinfo`: 359 rows, 358 commas.
+    assert_eq!(json.matches("},\n").count(), 358);
 }
 
 #[test]

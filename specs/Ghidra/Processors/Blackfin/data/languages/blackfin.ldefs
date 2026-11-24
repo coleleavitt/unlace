@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="Blackfin"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="blackfin.sla"
+            processorspec="blackfin.pspec"
+            id="Blackfin:LE:32:default">
+    <description>Analog Devices Blackfin (ADSP-BF5xx, ADSP-BF6xx)</description>
+    <compiler name="default" spec="blackfin.cspec" id="default"/>
+    <external_name tool="gnu" name="bfin"/>
+    <external_name tool="IDA-PRO" name="blackfin"/>
+  </language>
+</language_definitions>

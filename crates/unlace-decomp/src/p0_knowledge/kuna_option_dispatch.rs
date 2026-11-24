@@ -547,6 +547,13 @@ kuna_options! { self, p1;
     "cppsig" => registered!(crate::kuna_cppsig::CppSigMode),
     "dwarfglobaltypes" => registered!(crate::kuna_analysisgates::Dwarfglobaltypes),
     "dwarfdecls" => registered!(crate::kuna_analysisgates::Dwarfdecls),
+    "dwarfenumtypedef" => {
+        let (val, msg) = <crate::kuna_analysisgates::DwarfEnumTypedef as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        // FIXME: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("KUNA_DWARFENUMTYPEDEF", if val.0 { "on" } else { "off" }) };
+        self.kuna_options.set(val);
+        Ok(msg)
+    },
     "dwarfscopes" => {
         let (val, msg) = <crate::kuna_analysisgates::DwarfScopes as crate::kuna_optionset::KunaOption>::parse(p1)?;
         // FIXME: Audit that the environment access only happens in single-threaded code.
@@ -657,6 +664,7 @@ kuna_options! { self, p1;
     "iokitclasses" => registered!(crate::kuna_analysisgates::IokitClasses),
     "xnutables" => registered!(crate::kuna_analysisgates::Xnutables),
     "osclassinfo" => registered!(crate::kuna_analysisgates::Osclassinfo),
+    "dextrpc" => registered!(crate::kuna_analysisgates::Dextrpc),
     "swiftcall" => registered!(crate::kuna_swiftcall::Swiftcall),
     "swiftruntime" => registered!(crate::kuna_analysisgates::Swiftruntime),
     "typelib" => registered!(crate::kuna_typelib::TypeLib),

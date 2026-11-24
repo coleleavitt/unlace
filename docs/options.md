@@ -977,6 +977,10 @@ Three tiers:
 | a DriverKit dext's metaclass globals render as dat_<addr> | [`osclassinfo`](#osclassinfo----on--off-default-on) |
 | a dext's class New functions are sub_<addr> | [`osclassinfo`](#osclassinfo----on--off-default-on) |
 | __osclassinfo records are unnamed data | [`osclassinfo`](#osclassinfo----on--off-default-on) |
+| a DriverKit _Dispatch prints as void C::_Dispatch(unsigned long a0,unsigned long *a1) | [`dextrpc`](#dextrpc----on--off-default-off) |
+| a dext's _Dispatch compares *(long *)IORPCMessageFromMach(...) against bare 64-bit hashes | [`dextrpc`](#dextrpc----on--off-default-off) |
+| a dext's M_Invoke results are dropped and _Dispatch returns nothing | [`dextrpc`](#dextrpc----on--off-default-off) |
+| a DriverKit init or M_Impl reads its ivars as ((long *)a0)[N] | [`dextrpc`](#dextrpc----on--off-default-off) |
 | a swift class method in a stripped app is named vtable#N.method | [`swiftobjcthunk`](#swiftobjcthunk----on--off-default-on) |
 | a swift property accessor prints as vtable#N.getter or vtable#N.setter | [`swiftobjcthunk`](#swiftobjcthunk----on--off-default-on) |
 | a call on a swift class instance prints the slot number instead of the method | [`swiftobjcthunk`](#swiftobjcthunk----on--off-default-on) |
@@ -1025,6 +1029,10 @@ Three tiers:
 | a COM method call renders as (**(code **)(*plVar1 + 0x58))(plVar1, ...) | [`com`](#com----on--off-default-off) |
 | CoCreateInstance(&dat_140003010, 0, 1, &dat_140003020, &local_18) with the ids unnamed | [`com`](#com----on--off-default-off) |
 | the object a QueryInterface or CoCreateInstance call returns is an untyped void * or long * | [`com`](#com----on--off-default-off) |
+| the MULTI_QI array of CoCreateInstanceEx is untyped and each pItf a void * | [`com`](#com----on--off-default-off) |
+| with com on, a GUID in .rdata is still an unnamed 16-byte blob | [`comcfg`](#comcfg----off---default-off) |
+| a vendor CLSID or IID the built-in COM table does not know | [`comcfg`](#comcfg----off---default-off) |
+| a media or device GUID (MFMediaType_*, WPD_*, SENSOR_*) prints as an unnamed blob | [`comcfg`](#comcfg----off---default-off) |
 | a global holding a service table is an untyped dat_ word in every function but the one that stores it | [`storetype`](#storetype----off--uefi--all-default-uefi) |
 | a UEFI helper calls (**(code **)(dat_1a70 + 0x40))(...) instead of gBS->AllocatePool | [`storetype`](#storetype----off--uefi--all-default-uefi) |
 | the same global prints typed in one function and untyped in the next | [`storetype`](#storetype----off--uefi--all-default-uefi) |
@@ -1041,6 +1049,9 @@ Three tiers:
 | an import declared in the binary's DWARF still has an inferred prototype | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
 | a call to an import drops an argument or passes CONCAT44 garbage in a -g binary | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
 | enum constants print as numbers in calls to a shared library | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
+| a parameter typed by a typedef enum prints numbers instead of members in a -g binary | [`dwarfenumtypedef`](#dwarfenumtypedef----on--off-default-off) |
+| an anonymous enum behind a typedef is an int | [`dwarfenumtypedef`](#dwarfenumtypedef----on--off-default-off) |
+| constants passed to a typedef'd enum parameter are not named | [`dwarfenumtypedef`](#dwarfenumtypedef----on--off-default-off) |
 | a __thread variable reads as *(int *)(v1 + -0x10) with v1 an fs_offset | [`tlsnames`](#tlsnames----on--off-default-on) |
 | thread-local variables of an executable have no names although .symtab has STT_TLS symbols | [`tlsnames`](#tlsnames----on--off-default-on) |
 | the TLS block is not modelled | [`tlsnames`](#tlsnames----on--off-default-on) |
@@ -3468,6 +3479,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · ida · new-analysis · kuna-osclassinfo
 - **Example:** `option osclassinfo off`
 
+### `dextrpc` -- on | off, default `off`
+
+- **Symptoms:** a DriverKit _Dispatch prints as void C::_Dispatch(unsigned long a0,unsigned long *a1); a dext's _Dispatch compares *(long *)IORPCMessageFromMach(...) against bare 64-bit hashes; a dext's M_Invoke results are dropped and _Dispatch returns nothing; a DriverKit init or M_Impl reads its ivars as ((long *)a0)[N].
+- **What it does:** DriverKit IORPC dispatch types for a dext (an arm64 Mach-O whose __osclassinfo the osclassinfo pass reads; inert unless osclassinfo is on). Every symbol the dext defines or imports named C::_Dispatch(C *, IORPC) (_ZN<n>C9_DispatchEPS_5IORPC), C::Dispatch(IORPC) (_ZN<n>C8DispatchE5IORPC) or X::M_Invoke(IORPC, OSMetaClassBase *, handler[, const OSMetaClass *]) gets its prototype by address: int return (kern_return_t), the IORPC as IORPC * (AAPCS64 passes the 24-byte struct by reference), self or this as C * for a class of the dext and void * otherwise. IORPCMessageFromMach gets IORPCMessage *(IORPCMessageMach *msg, bool reply). The types follow IORPC.h: IORPC {message, reply, sendSize, replySize} and IORPCMessage {msgid, flags, objectRefs}, msgid typed by an 8-byte enum IORPCMessageID whose values C_M_ID come from the class descriptions (the method-options table holds the n message ids of the methods the class implements, then n option words; the method-names table the n length-prefixed names in the same order; meta methods likewise; an id two classes list keeps the first name), so _Dispatch compares the message id against named constants. Each class becomes a struct C of its instanceSize: iig gives every class one C_IVars *ivars after its superclass, so ivars sits at instanceSize - 8, behind the superclass's struct as field super when the superclass is a class of the same dext whose size leaves room (else those bytes stay untyped). init, free and every M_Impl of a class get an unlocked C *this hint on x0, so this->ivars replaces ((long *)a0)[10]. A table that does not parse adds no ids, a class whose instanceSize is not a multiple of 8 gets no struct, and a type name the program already holds with another shape is left alone.
+- **When to flip:** Off by default. Turn on when reading a DriverKit extension: _Dispatch prints int C::_Dispatch(C *self, IORPC *rpc) with IORPCMessageFromMach(rpc->message,0)->msgid compared against C_M_ID names and return M_Invoke(...) instead of void with *a1 and bare 64-bit hashes, and init, free and the M_Impl methods read their instance variables through this->ivars. Symbol-driven like IDA's dku: a dext stripped of its C++ symbols gets only the enum and the class structs.
+- **Where / provenance:** P1/external-refinement · ida · new-analysis · ida-driverkit
+- **Example:** `option dextrpc on`
+
 ### `swiftobjcthunk` -- on | off, default `on`
 
 - **Symptoms:** a swift class method in a stripped app is named vtable#N.method; a swift property accessor prints as vtable#N.getter or vtable#N.setter; a call on a swift class instance prints the slot number instead of the method.
@@ -3550,11 +3569,19 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 
 ### `com` -- on | off, default `off`
 
-- **Symptoms:** a CLSID or IID in .rdata is an unnamed 16-byte blob; a COM method call renders as (**(code **)(*plVar1 + 0x58))(plVar1, ...); CoCreateInstance(&dat_140003010, 0, 1, &dat_140003020, &local_18) with the ids unnamed; the object a QueryInterface or CoCreateInstance call returns is an untyped void * or long *.
-- **What it does:** COM markup for a PE image. Every 16-byte value in a data section equal to a known interface or class id (5239 ids: IID_IShellLinkW, CLSID_ShellLink, CLSID_WbemLocator and the rest) is named and typed GUID. For each interface id found, the interface struct is built the way COM lays it out: IShellLinkW holds IShellLinkWVtbl *lpVtbl, and the table holds a typed function pointer per method, the base interfaces' methods first and This the first parameter, from the method tables of 4401 interfaces generated from the Win32 metadata. The out-parameter of CoCreateInstance, CoGetClassObject, CoGetObject, CoGetInterfaceAndReleaseStream, CoGetObjectContext, CoGetCallContext, DllGetClassObject and OleCreate, and of a call through slot 0 (QueryInterface) or, with four arguments, slot 3 (IClassFactory::CreateInstance) of the table of the object the call passes as This, is typed a pointer to the interface its interface-id argument names when that argument is the address of a known id, so the object it fills is typed and each call through it prints as `p->lpVtbl->SetPath(p, ...)`. The imported ole32 requests get their prototypes, so the out-parameter is an argument at each call. A method with a by-value aggregate parameter keeps an untyped code pointer.
+- **Symptoms:** a CLSID or IID in .rdata is an unnamed 16-byte blob; a COM method call renders as (**(code **)(*plVar1 + 0x58))(plVar1, ...); CoCreateInstance(&dat_140003010, 0, 1, &dat_140003020, &local_18) with the ids unnamed; the object a QueryInterface or CoCreateInstance call returns is an untyped void * or long *; the MULTI_QI array of CoCreateInstanceEx is untyped and each pItf a void *.
+- **What it does:** COM markup for a PE image. Every 16-byte value in a data section equal to a known interface or class id (5239 ids: IID_IShellLinkW, CLSID_ShellLink, CLSID_WbemLocator and the rest) is named and typed GUID. For each interface id found, the interface struct is built the way COM lays it out: IShellLinkW holds IShellLinkWVtbl *lpVtbl, and the table holds a typed function pointer per method, the base interfaces' methods first and This the first parameter, from the method tables of 4401 interfaces generated from the Win32 metadata. The out-parameter of CoCreateInstance, CoGetClassObject, CoGetObject, CoGetInterfaceAndReleaseStream, CoGetObjectContext, CoGetCallContext, DllGetClassObject and OleCreate, and of a call through slot 0 (QueryInterface) or, with four arguments, slot 3 (IClassFactory::CreateInstance) of the table of the object the call passes as This, is typed a pointer to the interface its interface-id argument names when that argument is the address of a known id, so the object it fills is typed and each call through it prints as `p->lpVtbl->SetPath(p, ...)`. CoCreateInstanceEx, CoCreateInstanceFromApp, CoGetInstanceFromIStorage and CoGetInstanceFromFile fill an array of MULTI_QI elements, one interface id each: when the count is a literal of 1 to 8 and the array is on the stack, the array is typed MULTI_QI_IShellLinkW (one element) or a record of one MULTI_QI_<Interface> per element (MULTI_QI_IShellLinkW_IPersistFile), each pItf a pointer to the interface whose id the code stores into that element's pIID before the call. The imported ole32 requests get their prototypes, so the out-parameter is an argument at each call. Option comcfg adds the ids of a clsid.cfg file to the built-in table. A method with a by-value aggregate parameter keeps an untyped code pointer.
 - **When to flip:** Off by default. Turn on for Windows code that uses COM (shell links, WMI, the task scheduler, BITS, the firewall, scripting hosts, Office automation): the ids in .rdata are named and the objects the requests return are typed, so their method calls read as names instead of offsets off a table. It acts on PE images only and builds its types only when on. A call whose interface id is computed, or read from memory the decompiler cannot fold, stays untyped.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida95-gap9
 - **Example:** `option com on`
+
+### `comcfg` -- off | <path>, default `off`
+
+- **Symptoms:** with com on, a GUID in .rdata is still an unnamed 16-byte blob; a vendor CLSID or IID the built-in COM table does not know; a media or device GUID (MFMediaType_*, WPD_*, SENSOR_*) prints as an unnamed blob.
+- **What it does:** A file of extra COM ids for the com pass, in the format of IDA's cfg/clsid.cfg: one `guid {00000000-0000-0000-C000-000000000046} IUnknown` line per id, `;` starting a comment. Each id the built-in table (5239 ids) lacks is named after its line, the name's spaces and other characters made `_`; a bare name the interface table holds (IUnknown, IShellLinkW) is read as that interface's id, IID_IUnknown, so its interface struct is built and the requests passing it are typed. An id the built-in table holds keeps its built-in name, and a malformed line is skipped. Inert unless com is on.
+- **When to flip:** Off by default. With com on, point it at IDA's cfg/clsid.cfg (16,117 ids, 13,674 of them not in the built-in table: the media, device, sensor and portable-device ids the table leaves out, and older interface ids) or a file of your own when a PE uses class or interface ids the built-in table does not know (a vendor's or an in-house component's).
+- **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida95-gap9
+- **Example:** `option comcfg /path/to/clsid.cfg`
 
 ### `storetype` -- off | uefi | all, default `uefi`
 
@@ -3587,6 +3614,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** Off by default while it is measured: it changes the output of every -g ELF that calls a library no signature pass knows. Turn on to read such a binary with its library calls typed as the headers declared them. Leave off to see what the binary alone gives, or when a header the program was built against does not match the library it loads.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida-hexrays-rules-6
 - **Example:** `option dwarfdecls on`
+
+### `dwarfenumtypedef` -- on | off, default `off`
+
+- **Symptoms:** a parameter typed by a typedef enum prints numbers instead of members in a -g binary; an anonymous enum behind a typedef is an int; constants passed to a typedef'd enum parameter are not named.
+- **What it does:** Name an anonymous DWARF enumeration after the typedef it is reached through. C headers usually write `typedef enum { A, B } name_t;`, so the DW_TAG_enumeration_type has no DW_AT_name and only the typedef names it; the enum arm of the DWARF type mapper built a real enum only for a named DIE and flattened an anonymous one to its underlying integer, so a parameter of type gnutls_close_request_t took `1` where the header has GNUTLS_SHUT_WR, in a DWARF definition's prototype and in a dwarfdecls declaration alike. On, an anonymous enumeration reached through a typedef (the innermost typedef of the qualifier chain, the same alias an anonymous struct or union already takes) is interned as an enum of that name with its members; a name another type already holds keeps the plain integer, as for a named enum. A load-time env bridge (KUNA_DWARFENUMTYPEDEF): set it before the image is loaded.
+- **When to flip:** Off by default while it is measured: it changes how constants print wherever a -g binary uses a typedef'd anonymous enum (parameters, locals, globals, struct fields). Turn on, with dwarfdecls for library calls, to read those constants as the header's members. Leave off to see the plain integers.
+- **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida-hexrays-rules-6
+- **Example:** `option dwarfenumtypedef on`
 
 ### `tlsnames` -- on | off, default `on`
 

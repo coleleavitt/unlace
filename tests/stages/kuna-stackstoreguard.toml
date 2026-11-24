@@ -1,0 +1,41 @@
+# Authored indexed-stack-store regression, P3 heritage-guard.
+# Zero a stack word; copy three input bytes through a walking pointer;
+# read the first stack byte directly and call helper when it is nonzero.
+# The stack store guard preserves the dependent call.
+# Assembly source: docs/features/stackstoreguard/scan.s.
+
+[image]
+arch = 'ARM:LE:32:v4t'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'inspect_bytes' },
+    { space = 'ram', offset = '0x1044', name = 'helper' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '10402de908d04de20d10a0e10020a0e300208de50330a0e30120d0e40120c1e4013053e2fbffff1a0000dde5000050e30000000a020000eb08d08de21040bde81eff2fe10512a0e3000081e51eff2fe1'
+
+[script]
+commands = [
+    'parse line extern void inspect_bytes(unsigned char *bytes);',
+    'parse line extern void helper(void);',
+    'load function inspect_bytes',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'STACK STORE #1: the byte-copy loop is retained'
+count = 1
+regex = '\*v[0-9]+ = \*bytes;'
+
+[[match]]
+name = 'STACK STORE #2: the guarded read retains the dependent call'
+count = 1
+literal = 'helper();'
+
+[[match]]
+name = 'STACK STORE #3: the guarded read retains its nonzero test'
+count = 1
+literal = 'if ('

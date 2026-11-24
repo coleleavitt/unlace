@@ -1945,7 +1945,7 @@ int3pad off` restores the unannotated rendering. Exercised by
 
 **(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/kuna-trapaftercall.xml`.
 
-**(kuna) A retpoline thunk is an indirect call — `option retpolinethunk`, default on, `crates/unlace-lift/src/p2_lift/kuna_retpolinethunk.rs (thunk_register)`.** `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) compile each indirect call into a direct call to a per-register thunk, `call 1f; 2: pause; lfence; jmp 2b; 1: mov %reg,(%rsp); ret`, which returns into the target the register holds. The cspecs model it as the `x86_indirect_thunk_<reg>` call-fixups, which the call-fixup installer tags onto functions by gcc's thunk name only; clang names its thunks `__llvm_retpoline_<reg>`, and a stripped image names neither. When the flow builder asks for a direct callee's inject id and the callee has none, the decompile driver (`decompile_drive.rs (query_call_inject_id)`) reads the callee's first bytes: an `E8` call over the `F3 90 0F AE E8 EB F9` spin to a `[REX] 89 /r 24` store of a register over the return address followed by `C3`. The register picks the `x86_indirect_thunk_<reg>` fixup, which is then injected like any other call-fixup. x86 language ids only; a register the cspec has no fixup for keeps the plain call. Exercised by `tests/stages/kuna-retpolinethunk.xml`.
+**(kuna) A retpoline thunk is an indirect call — `option retpolinethunk`, default on, `crates/unlace-lift/src/p2_lift/kuna_retpolinethunk.rs (thunk_register)`.** `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) compile each indirect call into a direct call to a per-register thunk, `call 1f; 2: pause; lfence; jmp 2b; 1: mov %reg,(%rsp); ret`, which returns into the target the register holds. The cspecs model it as the `x86_indirect_thunk_<reg>` call-fixups, which the call-fixup installer tags onto functions by gcc's thunk name only; clang names its thunks `__llvm_retpoline_<reg>`, and a stripped image names neither. When the flow builder asks for a direct callee's inject id and the callee has none, the decompile driver (`decompile_drive.rs (query_call_inject_id)`) reads the callee's first bytes: an `E8` call over the `F3 90 0F AE E8 EB F9` spin to a `[REX] 89 /r 24` store of a register over the return address followed by `C3`. The register picks the `x86_indirect_thunk_<reg>` fixup, which is then injected like any other call-fixup. x86 language ids only; a register the cspec has no fixup for keeps the plain call. Exercised by `tests/stages/kuna-retpolinethunk.toml`.
 
 **(kuna) A compiler's AArch64 `brk` trap ends the flow — always on,
 `crates/unlace-lift/src/p2_lift/kuna_brktrap.rs
@@ -3661,7 +3661,7 @@ unbounded `MULTIEQUAL` first would read past the table into the code after
 it, fail its sanity check, and leave the switch a
 `(*(code *)(*(int *)&table[i * 4] + base))()` computed call; model 2 recovers
 it as `switch(a0 >> 0x3e)` with every case
-(`tests/stages/kuna-relswitch-a64.xml`).
+(`tests/stages/kuna-relswitch-a64.toml`).
 
 **`fdeflowbound`, default on** (`flow.rs (leaves_own_fde)`). An unwind-table
 extent (an `.eh_frame` FDE or a Go `functab` entry: the extents the analysis tier
@@ -4320,6 +4320,21 @@ Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
 encodings against LLVM's syntax and a raw image with one instruction per
 packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
 
+### AArch64 SVE matrix multiply and BFloat16 (#98)
+
+`AARCH64_svemm.sinc` decodes the SVE forms of FEAT_F64MM (`ld1ro*`, `fmmla .d`, the
+128-bit-element `zip`/`uzp`/`trn`), FEAT_F32MM (`fmmla .s`), FEAT_I8MM (`smmla`,
+`ummla`, `usmmla`, `usdot`, `sudot`), SVE BF16 (`bfdot`, `bfmlalb`/`bfmlalt`,
+`bfmmla`, `bfcvt`, `bfcvtnt`) and FEAT_SVE_F16F32MM. Before, all 32 forms were bad
+instructions: 85 of 6000 random SVE-space words that Capstone decodes, the decode
+failures difffuzz reported. The file is generated by `tools/gen_aarch64_ext.py`, which
+now takes an optional list of required predicates, so that it selects only the SVE
+records among those that carry HasBF16, and a file of record names to skip. Each
+instruction lifts to a user operation (`SVEMM_smmla`) in the SVE2 file's style.
+Exercised by `unlace-cli/tests/aarch64_svemm.rs`: every record's word against LLVM's text,
+and clang-compiled ACLE functions (`svmmla_f64`, `svmmla_s32`, `svbfdot_f32`,
+`svbfmlalb`/`svbfmlalt`, `svld1ro_s32`).
+
 ### AArch64 SME, SME2, SME2.1 and SME2.2 (#98)
 
 `specs/Ghidra/Processors/AARCH64/data/languages/AARCH64_sme.sinc` decodes the
@@ -4610,6 +4625,17 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 AVX-512 {sae} and embedded rounding (#98)
+
+An EVEX register form with EVEX.b=1 is 512 bits wide (or scalar), and its L'L field is the
+rounding mode. A pre-parse in `ia.sinc` records L'L in `evexRcMode`, sets `evexRcOn` and decodes
+the instruction again with L'L=10; `avx512_round.sinc` (generated by
+`tools/gen_x86_avx512_round.py` from LLVM's 301 EVEX.b register records) adds the `{sae}`/
+`{rn-sae}`..`{rz-sae}` constructors keyed on `evexRcOn`. Before, the rounding mode was read as a
+vector length, so `vaddps zmm0, zmm0, zmm1, {rz-sae}` lifted as a 256-bit add. The 16-bit
+language has no pre-parse (its high context bits hold the real-mode CS). Exercised by the
+`x86_64_avx512_round` row of `unlace-cli/tests/processors.toml`.
+
 ### x86 AVX-512 Disp8*N from LLVM (#98)
 
 The compressed displacement of 134 AVX-512 constructors (sub-vector broadcasts, inserts and
@@ -4813,7 +4839,7 @@ copies `a0`, `a1` into two `s0..s7` registers, `cm.mva01s` copies them back.
 `cm.push {ra,s0-s1},-0x10`. Before this the issue's `-Os` prologue decoded as
 `c.fsdsp fs8,0x30(sp)` and its epilogue as a float store followed by a jump
 through whatever `ra` held, so the saves, the stack adjustment and the return
-were lost. Exercised by `tests/stages/kuna-riscv-zcmp.xml` (the issue's
+were lost. Exercised by `tests/stages/kuna-riscv-zcmp.toml` (the issue's
 `keep`, hand-written `swapcall`/`zret`/`popsep`, the raw push/popret p-code)
 and `unlace-cli/tests/riscv_zcmp.rs` (one decode per encoding shape against
 LLVM's names, RV32 and RV64). Zcb and the T-Head vendor extensions the
@@ -5487,6 +5513,16 @@ Found by `tools/difffuzz` against Unicorn.
 - The FEAT_MOPS `cpyType` table had the four write-unprivileged options (`wt`, `wtn`, `wtrn`,
   `wtwn`) at the wrong encodings, so e.g. `cpyfewtrn` did not decode, and `SETP/SETM/SETE`
   printed as `setpp`/`setpm`/`setpe`.
+
+### AArch64 SHA3, pairwise half-precision add and scalar shift-left immediates
+
+Found by `tools/difffuzz --oracle qemu`. `EOR3` computed `Rn ^ (Rm | Ra)`, `BCAX` did not
+complement Ra into an AND-NOT of Rm, and `XAR` shifted the XOR right instead of rotating it;
+they now lift as `Rn ^ Rm ^ Ra`, `Rn ^ (Rm & ~Ra)` and a 64-bit rotate. `FADDP` `.4H` put the
+pairs of Rm in the low half of the result (the other arrangements already put Rn there). The
+scalar `SQSHL`/`SQSHLU`/`UQSHL` (immediate) decoded their left shift with the right-shift
+formula (`sqshl d13, d6, #10` printed `#0x36`), and scalar `SLI d` read only 5 bits of its
+6-bit shift; they now take `Imm_uimm3`/`Imm_uimm4`/`Imm_uimm5`/`Imm_imm0_63` by element size.
 
 ## 2.9 Go stack-growth prologue folding
 

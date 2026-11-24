@@ -111,6 +111,9 @@ ppc_xenon_vmx128 = """
 x86_64_avx512_disp8 = """
 62f27d4878470162f17e487f06c5f877c3
 """
+x86_64_avx512_round = """
+62f17c7858c1c3
+"""
 
 [[family]]
 name = "blackfin"
@@ -2004,6 +2007,19 @@ expect = [
     "if (a0 < a1)",
     "a0 = a1;",
 ]
+
+# AVX-512 embedded rounding: vaddps zmm0, zmm0, zmm1, {rz-sae} is a 512-bit add (EVEX.b=1 makes L'L the
+# rounding mode); before, L'L=11 decoded it as a 256-bit vaddps.
+[[family]]
+name = "x86_64_avx512_round"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_avx512_round"
+
+[[family.function]]
+test = "x86_rounding_form_keeps_512_bits"
+address = "0x0"
+expect = ["_mm512_add_ps(a0,a1)"]
 
 [[family]]
 name = "lua51_loop"

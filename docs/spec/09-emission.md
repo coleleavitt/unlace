@@ -2701,8 +2701,8 @@ the guard off it would let a 2-byte local be re-signed on those targets and turn
 an emitted `if (v1 != -1)` into a constant-true test. The floor is therefore
 `max(4, TypeFactory::get_size_of_int())`
 (`crates/unlace-emit/src/p9_emit/kuna_typeround.rs
-(MIN_PROMOTION_SIZE)`), pinned on x86-64 by `tests/stages/kuna-signedness.xml`
-and on a 2-byte-`int` target by `tests/stages/kuna-signedness-int16.xml`. A width change
+(MIN_PROMOTION_SIZE)`), pinned on x86-64 by `tests/stages/kuna-signedness.toml`
+and on a 2-byte-`int` target by `tests/stages/kuna-signedness-int16.toml`. A width change
 *between* two integers is an explicit `INT_SEXT`/`INT_ZEXT` in p-code, so a
 mixed-width expression is constrained by the extension op rather than slipping
 through as neutral.

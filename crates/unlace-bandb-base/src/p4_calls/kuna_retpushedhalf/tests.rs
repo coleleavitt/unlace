@@ -4,7 +4,7 @@
 //! of one machine instruction, in emission order. An x86-64 `push %r8` is
 //! `RSP = RSP - 8` followed by `STORE(ram, RSP, R8)`; a `pop %rdx` is
 //! `RDX = LOAD(ram, RSP)` followed by `RSP = RSP + 8`. The end-to-end witness is
-//! `tests/stages/kuna-retpushedhalf.xml`.
+//! `tests/stages/kuna-retpushedhalf.toml`.
 
 use super::*;
 use crate::kuna_retpushedhalf::FuncdataRetpushedhalfExt;

@@ -1,0 +1,39 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '90'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/rust-option-returned/option-amd64',
+    'read symbols',
+    'option setlanguage rust-language',
+    'load function inspect_returned',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust returned Option uses the full typed call as the pattern scrutinee'
+count = 1
+literal = 'if let ::core::option::Option::Some(_) = provide_tagged(value)'
+
+[[match]]
+name = 'Rust returned Option calls its producer once'
+count = 1
+literal = 'provide_tagged(value)'
+
+[[match]]
+name = 'Rust returned Option does not access a tag field'
+count = 0
+literal = 'provide_tagged(value).tag'
+
+[[match]]
+name = 'Rust returned Option retains both branch callback values'
+count = 2
+regex = '^ +option_(?:present\(0x3d\)|absent\(0x49\));$'

@@ -1,0 +1,63 @@
+# kuna structdefs: print the definitions of the composite types a function's
+# C names above the function.
+#
+# `readfields` takes a pointer to a three-field struct and adds two of the
+# fields.  The signature names `mystruct` and the body names two of its
+# members, and with the option off nothing in the output says what a
+# `mystruct` is: the layout the decompiler is printing field accesses
+# against exists only in the type factory (and, for a whole-binary run, in
+# `unlace decompile-project`'s header).
+#
+# Two passes over the SAME decompiled function: the default (off) prints the
+# bare function document, then `option structdefs on` prints the struct
+# definition above it.  The body assertions are min=2 max=2, so the flip is
+# proven to add the preamble and change nothing else.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'readfields' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '8b47080307c3'
+
+[script]
+commands = [
+    'parse line struct mystruct { int4 a; int4 b; int4 c; };',
+    'parse line extern int4 readfields(mystruct *p);',
+    'lo fu readfields',
+    'decompile',
+    'print C',
+    'option structdefs on',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'KUNA-STRUCTDEFS #1: the struct definition is printed exactly once, by the ON pass'
+count = 1
+literal = 'struct mystruct {'
+
+[[match]]
+name = 'KUNA-STRUCTDEFS #2: every member of the referenced struct is spelled'
+count = 1
+literal = 'int4 b;'
+
+[[match]]
+name = 'KUNA-STRUCTDEFS #3: the tag gets the forward declaration the project header gives it'
+count = 1
+literal = 'typedef struct mystruct mystruct;'
+
+[[match]]
+name = 'KUNA-STRUCTDEFS #4: the signature is unchanged by the flip'
+count = 2
+literal = 'int4 readfields(mystruct *p)'
+
+[[match]]
+name = 'KUNA-STRUCTDEFS #5: the body is unchanged by the flip'
+count = 2
+literal = 'return p->c + p->a;'

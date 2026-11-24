@@ -68,7 +68,7 @@ nothing.
 - 7 unit tests in `kuna_structdefs/tests.rs` over hand-built `Datatype`s: the
   pointee pull-in, nested ordering, cycle termination, the core/unnamed
   refusals, the opaque forward declaration, a complete body, and the dedup rule.
-- `tests/stages/kuna-structdefs.xml` — two `print C` passes over one decompiled
+- `tests/stages/kuna-structdefs.toml` — two `print C` passes over one decompiled
   function (`parse line struct mystruct { … };`), default then
   `option structdefs on`: the definition appears exactly once, and the signature
   and body lines appear exactly twice (so the flip is proven to add the preamble

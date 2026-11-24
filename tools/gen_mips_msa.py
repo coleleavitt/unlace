@@ -330,6 +330,76 @@ def semantics2(mn, suf, imm):
     L.append(_pack(res, s))
     return L
 
+def semantics3(mn, suf, imm):
+    """The last integer groups: absolute adds, bit-move immediates, multiply-accumulate, element
+    inserts and the dot products."""
+    base = mn.split(".")[0]
+    if suf not in SIZE:
+        return None
+    s = SIZE[suf]; n = 16 // s; B = 8 * s
+    L = []
+    if base in ("insert", "insve"):
+        src = "msa_rs:%d" % s if base == "insert" else "msa_ws:%d" % s
+        L.append("local me:%d = %s;" % (s, src))
+        L.append("local msh:4 = %s * %d;" % (imm, B))
+        L.append("local mmask:16 = ~(zext(0x%x:%d) << msh);" % ((1 << B) - 1, s))
+        L.append("msa_wd = (msa_wd & mmask) | (zext(me) << msh);")
+        return L
+    if base in ("dotp_s", "dotp_u", "dpadd_s", "dpadd_u", "dpsub_s", "dpsub_u"):
+        hs = s // 2
+        ext = "sext" if base.endswith("_s") else "zext"
+        res = []
+        if base.startswith("dp"):
+            L += _elems("msa_wd", s, n, "mc")
+        for i in range(n):
+            for k in (0, 1):
+                L.append("local mx%d_%d:%d = msa_ws(%d);" % (i, k, hs, (2 * i + k) * hs))
+                L.append("local my%d_%d:%d = msa_wt(%d);" % (i, k, hs, (2 * i + k) * hs))
+            dot = "(%s(mx%d_0) * %s(my%d_0)) + (%s(mx%d_1) * %s(my%d_1))" % (ext, i, ext, i, ext, i, ext, i)
+            if base.startswith("dotp"):
+                L.append("local mr%d:%d = %s;" % (i, s, dot))
+            else:
+                L.append("local mr%d:%d = mc%d %s (%s);" % (i, s, i, "+" if base.startswith("dpadd") else "-", dot))
+            res.append("mr%d" % i)
+        L.append(_pack(res, s))
+        return L
+    known = ("add_a", "adds_a", "bmnzi", "bmzi", "bseli", "maddv", "msubv")
+    if base not in known:
+        return None
+    L += _elems("msa_ws", s, n, "ma")
+    if base in ("bmnzi", "bmzi", "bseli", "maddv", "msubv"):
+        L += _elems("msa_wd", s, n, "mc")
+    if base in ("add_a", "adds_a", "maddv", "msubv"):
+        L += _elems("msa_wt", s, n, "mb")
+    if base in ("bmnzi", "bmzi", "bseli"):
+        L.append("local mk:1 = %s;" % imm)
+    res = []
+    for i in range(n):
+        x, r = "ma%d" % i, "mr%d" % i
+        if base in ("add_a", "adds_a"):
+            y = "mb%d" % i
+            L.append("local mxa%d:%d = (%s * zext(%s s>= 0)) | ((0 - %s) * zext(%s s< 0));" % (i, s, x, x, x, x))
+            L.append("local mya%d:%d = (%s * zext(%s s>= 0)) | ((0 - %s) * zext(%s s< 0));" % (i, s, y, y, y, y))
+            if base == "add_a":
+                L.append("local %s:%d = mxa%d + mya%d;" % (r, s, i, i))
+            else:
+                mx = _smax(s)
+                L.append("local msum%d:%d = zext(mxa%d) + zext(mya%d);" % (i, 2 * s, i, i))
+                L.append("local %s:%d = (msum%d:%d * zext(msum%d <= %s)) | (%s * zext(msum%d > %s));" % (r, s, i, s, i, mx, mx, i, mx))
+        elif base == "bmnzi":
+            L.append("local %s:1 = (%s & mk) | (mc%d & ~mk);" % (r, x, i))
+        elif base == "bmzi":
+            L.append("local %s:1 = (%s & ~mk) | (mc%d & mk);" % (r, x, i))
+        elif base == "bseli":
+            L.append("local %s:1 = (%s & ~mc%d) | (mk & mc%d);" % (r, x, i, i))
+        elif base == "maddv":
+            L.append("local %s:%d = mc%d + (%s * mb%d);" % (r, s, i, x, i))
+        elif base == "msubv":
+            L.append("local %s:%d = mc%d - (%s * mb%d);" % (r, s, i, x, i))
+        res.append(r)
+    L.append(_pack(res, s))
+    return L
+
 out = []
 skipped = []
 for name, fmt, args in encs:
@@ -452,7 +522,7 @@ for name, mn, suf, cons, ops, asm, wd_in, signed_imm, fmt in out:
                 ins.append("msa_" + op)
         if imm:
             ins.append(imm + ":4")
-        sem = semantics(mn, suf, imm) or semantics2(mn, suf, imm)
+        sem = semantics(mn, suf, imm) or semantics2(mn, suf, imm) or semantics3(mn, suf, imm)
         if sem:
             body = sem
         else:

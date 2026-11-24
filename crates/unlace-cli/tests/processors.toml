@@ -132,6 +132,9 @@ b8ffffffff0fbdc7c3cccccccccccccc486601f8c3cccccccccccccccccc
 cccc406663c7c3
 """
 
+s390x_hfp_decimal = """
+930020002002fa333000400007fe
+"""
 ppc_xenon_vmx128 = """
 100018cb102020cb14400c1a1462049a106029cb4e800020
 """
@@ -4150,3 +4153,17 @@ forbid = ["halt_baddata"]
 test = "xtensa_esp32s3_rom_divsf3_decodes_the_divide_steps"
 address = "0x40056124"
 expect = ["div0_s(a1)", "return divn_s("]
+
+# s390x TEST AND SET, LOAD POSITIVE (long HFP) and ADD DECIMAL (#862): ts 0(%r2); lpdr %f0,%f2;
+# ap 0(4,%r3),0(4,%r4); br %r14.
+[[family]]
+name = "s390x_hfp_decimal"
+language = "s390x:BE:64:default"
+base = "0x1000"
+image = "s390x_hfp_decimal"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s390x_ts_lpdr_ap_decompile"
+address = "0x1000"
+expect = ["*a2 = 0xff;", "hd_ap(a3,4,a4,4);", "ABS(a1)"]

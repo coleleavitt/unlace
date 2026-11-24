@@ -502,17 +502,24 @@ impl PrintC {
         }) else {
             return;
         };
+        boolreturn_trace(fd, || {
+            format!("run {id:?}: {} statements, graph {graph}", list.len())
+        });
         let tail = list[list.len() - 1];
         let Some(tail_blk) = self.ctree.as_ref().and_then(|tree| {
             let blk = tree.stmt(tail).origin?;
             (tree.node_for(blk) == Some(tail)).then_some(blk)
         }) else {
+            boolreturn_trace(fd, || {
+                format!("run {id:?}: tail {tail:?} has no block of its own")
+            });
             return;
         };
         let Some((tail_op, mut value)) = self
             .return_term(fd, tail_blk)
             .or_else(|| self.folded_return(fd, tail))
         else {
+            boolreturn_trace(fd, || format!("run {id:?}: tail {tail:?} is no run value"));
             return;
         };
         let mut first = None;
@@ -608,19 +615,23 @@ impl PrintC {
             return;
         }
         let (body, other) = (block.get_block(1), block.get_block(2));
+        boolreturn_trace(fd, || format!("if/else {id:?}"));
         let Some((ret_op, yes)) = self
             .return_term(fd, body)
             .or_else(|| self.folded_return(fd, then))
         else {
+            boolreturn_trace(fd, || format!("if/else {id:?}: body is no run value"));
             return;
         };
         let Some((_, no)) = self
             .return_term(fd, other)
             .or_else(|| self.folded_return(fd, els))
         else {
+            boolreturn_trace(fd, || format!("if/else {id:?}: else is no run value"));
             return;
         };
         let Some(value) = combine_return(cond, &yes, &no) else {
+            boolreturn_trace(fd, || format!("if/else {id:?}: arms do not combine"));
             return;
         };
         if let RunTerm::Cond(c, false) = value
@@ -671,8 +682,12 @@ impl PrintC {
                     .iter()
                     .copied()
                     .filter(|s| !matches!(&tree.stmt(*s).kind, StmtKind::Seq(l) if l.is_empty()));
-                let one = live.next()?;
+                let Some(one) = live.next() else {
+                    boolreturn_trace(fd, || format!("folded {id:?}: empty sequence"));
+                    return None;
+                };
                 if live.next().is_some() {
+                    boolreturn_trace(fd, || format!("folded {id:?}: more than one statement"));
                     return None;
                 }
                 cur = one;
@@ -682,12 +697,14 @@ impl PrintC {
                 op: Some(op),
             } = tree.stmt(cur).kind
             else {
+                boolreturn_trace(fd, || format!("folded {id:?}: {cur:?} is no folded return"));
                 return None;
             };
             if !matches!(
                 tree.expr(value).kind,
                 ExprKind::Branch(_) | ExprKind::Not(_) | ExprKind::And(..) | ExprKind::Or(..)
             ) {
+                boolreturn_trace(fd, || format!("folded {id:?}: value is not 0 or 1"));
                 return None;
             }
             (op, value, first_branch(tree, value)?)

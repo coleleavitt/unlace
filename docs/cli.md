@@ -5682,6 +5682,12 @@ an empty metadata blob, under the chosen `--mode` (the server's override rule; d
 `override-if-better`). It sends the input's MD5, its file name (never the path), `<name>.unlace` as
 the database name and `--hostname` (default `unlace`). Exit 1 when the server refused any function.
 
+`--share-policy FILE` (opt-in; without it nothing changes) applies a sharing policy before anything is sent.
+The file has one directive per line: `sharing on|off` (default off), `anonymize on|off` (default on) and
+`allow <SHA-256 of the input, 64 hex digits>`. The push is refused, with no network use, unless `sharing on`
+and the input's SHA-256 is listed. With `anonymize on` the hostname is sent as `anonymous` instead of
+`--hostname`. The login name is still sent, since the server authorises by it; the file name is unchanged.
+
 **`serve`** runs a server over a sqlite database (created if missing), bound to `--bind` (default
 `127.0.0.1:65432`), with TLS when given `--tls-cert`/`--tls-key` (PEM). It answers `HELO`,
 `PULL_MD`, `PUSH_MD`, `GET_LUMINA_INFO` and, for administrators, `GET_LUMINA_STATS`; every other

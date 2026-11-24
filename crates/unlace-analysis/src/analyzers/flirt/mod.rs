@@ -15,6 +15,10 @@
 //! 3. a module that names a referenced function is accepted only when the
 //!    instruction at the reference offset points to a function of that name
 //!    (a branch or call target, or on x86 the address in its 32-bit field).
+//!    A target no listing function names still resolves when its own bytes
+//!    match a reference-free signature of that name (`callee_named`), so a
+//!    callee discovery never created (reached only by a tail `jmp`) can
+//!    satisfy the reference.
 //!    Names found in one round can satisfy references in the next, so
 //!    matching runs up to [`MAX_ROUNDS`] rounds (IDA's three `AU_LIBF`
 //!    queues).
@@ -41,6 +45,7 @@ use crate::listing::Listing;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, Phase};
 use flirt_sig::{Endian, FLAG_STARTUP, Matcher, Module, Signature};
 
+pub mod cruntime;
 pub mod elf_data_names;
 pub mod rustprofiles;
 pub mod ruststdsigs;
@@ -69,7 +74,7 @@ impl AnalysisPass for FlirtPass {
         let Some(listing) = ctx.listing else {
             return out;
         };
-        let mut sigs = load_sigs(ctx.file.format());
+        let mut sigs = load_sigs_for(ctx.file);
         if let Some(sig) =
             ruststdsigs::signature_bytes(ctx.file).and_then(|bytes| Signature::parse(&bytes).ok())
         {
@@ -99,6 +104,35 @@ impl AnalysisPass for FlirtPass {
         }
         out
     }
+}
+
+/// The applicable signatures of `file`, with those of the C runtime its compiler
+/// ships (see [`cruntime`]) first, so they answer collisions first. Reports on
+/// stderr when signature files were given but none of them is that runtime.
+pub fn load_sigs_for(file: &object::File) -> Vec<Signature> {
+    let runtime = cruntime::comment_c_compiler(file);
+    let mut loaded: Vec<(bool, Signature)> = applicable_sig_paths(file.format())
+        .into_iter()
+        .filter_map(|p| {
+            let sig = Signature::parse(&std::fs::read(&p).ok()?).ok()?;
+            let family = runtime
+                .as_ref()
+                .is_some_and(|r| cruntime::is_runtime_of(&p, &sig, r.compiler));
+            Some((family, sig))
+        })
+        .collect();
+    if let Some(r) = &runtime {
+        if !loaded.is_empty() && !loaded.iter().any(|(family, _)| *family) {
+            eprintln!(
+                "flirt: the image was built by {} {}; no signature file named by {} is its C runtime",
+                r.compiler.name(),
+                r.version,
+                FLIRT_SIGS_ENV
+            );
+        }
+    }
+    loaded.sort_by_key(|(family, _)| !*family);
+    loaded.into_iter().map(|(_, sig)| sig).collect()
 }
 
 /// Parse the signature files the load names (`LoadOptions::flirt_sigs`, else
@@ -331,14 +365,14 @@ fn match_all_inner(
                 let pattern_len = usize::from(s.signature().header.pattern_len);
                 for m in modules_at(s, code, pattern_len) {
                     let unnamed_ok = sites && last && m.length as usize > pattern_len;
-                    if !reference_ok(m, ea, image, listing, &known, unnamed_ok) {
+                    if !reference_ok(sigs, m, ea, image, listing, &known, unnamed_ok) {
                         continue;
                     }
                     let Some(name) = function_name(m, pattern_len, sites) else {
                         continue;
                     };
                     let tally = if sites {
-                        site_tally(m, ea, image, listing, &known)
+                        site_tally(sigs, m, ea, image, listing, &known)
                     } else {
                         Tally::default()
                     };
@@ -465,6 +499,25 @@ fn function_name(m: &Module, pattern_len: usize, sites: bool) -> Option<String> 
     Some(String::from_utf8_lossy(&p.name).into_owned())
 }
 
+/// Whether the code at `target` matches a reference-free module that names
+/// `want`: the callee's own signature. A reference resolves through a callee
+/// that no listing function names when a signature of that name matches the
+/// callee's bytes (origin/master's `reference_resolves`).
+fn callee_named(sigs: &[Matcher<'_>], image: &Image<'_>, target: u64, want: &str) -> bool {
+    let code = image.from(target);
+    if code.is_empty() {
+        return false;
+    }
+    sigs.iter().any(|s| {
+        let pattern_len = usize::from(s.signature().header.pattern_len);
+        modules_at(s, code, pattern_len).into_iter().any(|m| {
+            m.reference.is_none()
+                && m.sites.iter().all(|x| x.name.len() < 2)
+                && function_name(m, pattern_len, true).is_some_and(|n| same_name(&n, want))
+        })
+    })
+}
+
 /// How the instruction covering a module offset relates to the name the module
 /// expects there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -479,6 +532,7 @@ enum SiteMatch {
 /// offset encodes (a `lea` or `mov` of a function's address, which the Listing
 /// does not record as a flow).
 fn site_match(
+    sigs: &[Matcher<'_>],
     ea: u64,
     off: i64,
     want: &[u8],
@@ -500,6 +554,8 @@ fn site_match(
         SiteMatch::Agrees
     } else if !names.is_empty() {
         SiteMatch::Differs
+    } else if targets.iter().any(|&t| callee_named(sigs, image, t, &want)) {
+        SiteMatch::Agrees
     } else {
         SiteMatch::Unnamed
     })
@@ -515,6 +571,7 @@ struct Tally {
 }
 
 fn site_tally(
+    sigs: &[Matcher<'_>],
     m: &Module,
     ea: u64,
     image: &Image<'_>,
@@ -539,7 +596,7 @@ fn site_tally(
         .filter(|&(o, _)| seen.insert(o))
     {
         t.named += 1;
-        match site_match(ea, off, name, image, listing, known) {
+        match site_match(sigs, ea, off, name, image, listing, known) {
             Some(SiteMatch::Agrees) => t.agree += 1,
             Some(SiteMatch::Differs) => t.differ += 1,
             _ => {}
@@ -554,6 +611,7 @@ fn site_tally(
 /// `unnamed_ok` (the last round, for a module whose CRC covers bytes past the
 /// trie prefix) the classic reference may stay unnamed.
 fn reference_ok(
+    sigs: &[Matcher<'_>],
     m: &Module,
     ea: u64,
     image: &Image<'_>,
@@ -566,7 +624,7 @@ fn reference_ok(
         .as_ref()
         .filter(|r| r.name != b".")
         .is_none_or(
-            |r| match site_match(ea, r.offset, &r.name, image, listing, known) {
+            |r| match site_match(sigs, ea, r.offset, &r.name, image, listing, known) {
                 Some(SiteMatch::Agrees) => true,
                 Some(SiteMatch::Unnamed) => unnamed_ok,
                 _ => false,
@@ -577,8 +635,15 @@ fn reference_ok(
             .iter()
             .filter(|s| m.length <= 0x10 && s.name.len() >= 2 && s.flags & 0x08 == 0)
             .all(|s| {
-                site_match(ea, i64::from(s.offset), &s.name, image, listing, known)
-                    == Some(SiteMatch::Agrees)
+                site_match(
+                    sigs,
+                    ea,
+                    i64::from(s.offset),
+                    &s.name,
+                    image,
+                    listing,
+                    known,
+                ) == Some(SiteMatch::Agrees)
             })
 }
 

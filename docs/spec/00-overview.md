@@ -3675,6 +3675,13 @@ lock — is the same object every later function resolves. Chapter 05 owns the
 lattice; here it only matters that `Datatype` handles cross function boundaries
 and IR arenas do not.
 
+The structural tier of the IR verifier is `crates/unlace-middle/src/substrate/irverify.rs
+(verify_funcdata)`. It checks that the op, varnode and basic-block links agree: each output's
+definition is its op, each input is among its varnode's descendants, each descendant reads the
+varnode, and each basic block's op list is a chain whose length and tail match the block record.
+It makes no dominance or definedness claim. The scheduler does not call it yet; it is a tool for
+locating the pass that broke a link.
+
 ## 0.4 The knowledge plane (P0)
 
 P0 is everything that outlives a function's IR — the plane a restart re-reads

@@ -36,6 +36,7 @@ pub mod funcslots;
 pub mod funcstate;
 pub mod hostmem;
 pub mod idiom;
+pub mod irverify; // (unlace) whole-function IR consistency check (structural tier)
 pub mod maturity; // (unlace) how far the scheduler has got through a pass (spec §0.10)
 pub mod namespaces; // (unlace) which namespaces print in front of a name
 pub mod neonintrin; // (unlace `neonintrin`) ACLE NEON intrinsic names and vector types

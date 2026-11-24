@@ -86,7 +86,7 @@ opcode maps and checked with `decomp_dbg` (`load raw eZ80:LE:24:ADL 0 0 FILE`,
 | `ED 82` | `INIM` |
 | `10 FE` | `DJNZ $` |
 
-The CLI test `crates/unlace-cli/tests/ez80_raw.rs` decompiles
+The `crates/unlace-cli/tests/processors.toml` row `ez80` decompiles
 `crates/unlace-cli/tests/fixtures/ez80/add_store.bin` (listing in `add_store.s`, ADL
 mode, base 0) to
 

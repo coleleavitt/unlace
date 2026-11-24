@@ -64,7 +64,7 @@ reference manual and checked with `decomp_dbg` (`load raw ST20:LE:32:default ...
 | `22 F0` | `ret` | opr 0x20 |
 | `25 FA` | `dup` | opr 0x5a |
 
-The CLI test `crates/unlace-cli/tests/st20_raw.rs` decompiles
+The `crates/unlace-cli/tests/processors.toml` row `st20` decompiles
 `crates/unlace-cli/tests/fixtures/st20/add_store.bin` (listing in `add_store.s`) to
 
 ```c

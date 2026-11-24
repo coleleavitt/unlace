@@ -112,12 +112,27 @@ pub fn callee_arg_bytes(
         return None;
     }
     let s = summary(arch, entry, DEPTH);
-    let read = s.arg_bytes?;
+    let Some(read) = s.arg_bytes else {
+        trace(|| {
+            format!(
+                "call 0x{:x} -> 0x{:x}: no extent (effect {:?})",
+                call_at.get_offset(),
+                entry.get_offset(),
+                s.effect
+            )
+        });
+        return None;
+    };
     let popped = s.ret_pops.map_or(0, |ep| (ep - 4).max(0) as u32);
-    Some(StackArgs {
-        read,
-        bound: read.max(popped).max(caller_cleanup(arch, call_at)),
-    })
+    let bound = read.max(popped).max(caller_cleanup(arch, call_at));
+    trace(|| {
+        format!(
+            "call 0x{:x} -> 0x{:x}: extent read {read} bound {bound}",
+            call_at.get_offset(),
+            entry.get_offset()
+        )
+    });
+    Some(StackArgs { read, bound })
 }
 
 /// (`calleeargs`) For a direct callee whose extent is not stated, the stack
@@ -363,6 +378,21 @@ impl Cache {
 /// A depth no walk reaches: the walk was cut short.
 #[doc(hidden)]
 pub const CUT: u8 = u8::MAX;
+
+/// (kuna) Is `KUNA_CALLEEPURGE_DEBUG` set? Then every callee walk says on
+/// stderr where it first gives up on each property (the pop, the stack-argument
+/// extent) and why, and each call site what extent it was given.
+fn debug_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KUNA_CALLEEPURGE_DEBUG").is_some())
+}
+
+/// Print one `KUNA_CALLEEPURGE_DEBUG` line, built only when the trace is on.
+fn trace(line: impl FnOnce() -> String) {
+    if debug_on() {
+        eprintln!("calleepurge: {}", line());
+    }
+}
 
 /// The summary of the function at `entry`, reading nested direct calls
 /// `depth` levels down.
@@ -1257,13 +1287,16 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
         seen.insert(at, state);
         steps += 1;
         if seen.len() > BUDGET || steps > STEPS {
+            trace(|| format!("walk 0x{:x}: budget spent at 0x{at:x}", entry.get_offset()));
             incomplete = true;
             break;
         }
         let Some(insn) = decode(arch, &space, at) else {
+            trace(|| format!("walk 0x{:x}: no decode at 0x{at:x}", entry.get_offset()));
             incomplete = true;
             continue;
         };
+        let before = (incomplete, unplaced, unbalanced, unknown, mixed, strayed);
         let (ops, len) = (&insn.0, &insn.1);
         let mut s = step_with(ops, &regs, state, track);
         writes |= s.writes;
@@ -1273,7 +1306,17 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
         if s.ret.is_some() || s.call.is_some() {
             for (r, v) in s.state.0.iter().enumerate() {
                 if r != SP {
+                    let was = unplaced;
                     escape(*v, &mut unplaced);
+                    if unplaced && !was {
+                        trace(|| {
+                            format!(
+                                "walk 0x{:x}: 0x{at:x} {} holds an unplaced or argument address at a call or return",
+                                entry.get_offset(),
+                                GPRS[r]
+                            )
+                        });
+                    }
                 }
             }
         }
@@ -1337,6 +1380,20 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
                 Call::Indirect(Some(slot)) => slot_effect(arch, &Address::new(space.clone(), slot)),
                 Call::Indirect(None) => UNKNOWN,
             };
+            if debug_on()
+                && (effect.arg_bytes.is_none() || !matches!(effect.effect, Effect::Balanced(_)))
+            {
+                trace(|| {
+                    format!(
+                        "walk 0x{:x}: 0x{at:x} {:?} effect {:?} extent {:?}{}",
+                        entry.get_offset(),
+                        call,
+                        effect.effect,
+                        effect.arg_bytes,
+                        if depth == 0 { " (depth cut)" } else { "" }
+                    )
+                });
+            }
             let sp = s.state.0[SP].unwrap_or(Val::Opaque { own: true });
             match effect.arg_bytes {
                 Some(0) => {}
@@ -1362,10 +1419,42 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
                 }
             }
         }
+        if debug_on() {
+            let after = (incomplete, unplaced, unbalanced, unknown, mixed, strayed);
+            let names = [
+                "incomplete",
+                "unplaced",
+                "unbalanced",
+                "unknown",
+                "mixed",
+                "strayed",
+            ];
+            let flags = [
+                (before.0, after.0),
+                (before.1, after.1),
+                (before.2, after.2),
+                (before.3, after.3),
+                (before.4, after.4),
+                (before.5, after.5),
+            ];
+            for (name, (was, now)) in names.iter().zip(flags) {
+                if now && !was {
+                    trace(|| format!("walk 0x{:x}: {name} at 0x{at:x}", entry.get_offset()));
+                }
+            }
+        }
         if s.falls_through {
             let next = at.wrapping_add(*len);
             if track && !strayed && !seen.contains_key(&next) {
                 strayed = next != entry.get_offset() && is_entry(arch, &space, next);
+                if strayed {
+                    trace(|| {
+                        format!(
+                            "walk 0x{:x}: falls from 0x{at:x} into the entry 0x{next:x}",
+                            entry.get_offset()
+                        )
+                    });
+                }
             }
             work.push((next, s.state));
         }
@@ -1373,6 +1462,12 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
     }
     let arg_bytes = (!incomplete && !unplaced).then(|| (((arg_end + 3) & !3) - 4) as u32);
     let own_pop = ret_pops.filter(|_| !incomplete && !mixed && !strayed);
+    trace(|| {
+        format!(
+            "walk 0x{:x} depth {depth}: extent {arg_bytes:?} own pop {own_pop:?} incomplete {incomplete} unplaced {unplaced} unbalanced {unbalanced} unknown {unknown} mixed {mixed} strayed {strayed}",
+            entry.get_offset()
+        )
+    });
     unknown |= incomplete;
     let effect = if unbalanced {
         Effect::Unbalanced

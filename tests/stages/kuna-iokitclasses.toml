@@ -1,0 +1,87 @@
+# Kuna `iokitclasses` option (P1 external refinement): IOKit class and vtable
+# recovery on an XNU kext.
+#
+# The fixture (gen_iokit.py) is a stripped arm64 MH_KEXT_BUNDLE whose one
+# initializer registers Base and Derived through an unnamed constructor
+# called with (&X::gMetaClass, "X", &Super::gMetaClass, size), then stores
+# each X::MetaClass vtable. Each class has a vtable holding its
+# getMetaClass(); Derived overrides Base::m2 (named by a symbol) and adds a
+# method of its own. Only meta_of_derived, Base::m1 and Base::m2 have symbols.
+#
+# Pass 1 (`option iokitclasses off`) is the bug: the constructor and the
+# metaclass objects are bare addresses and the override is sub_<addr>.
+# Pass 2 (`on`) names the constructor by vote, the metaclass objects, and
+# the override after the slot it overrides.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/kernelcache/iokit_kext.macho',
+    'option iokitclasses off',
+    'read symbols',
+    'load function meta_of_derived',
+    'decompile',
+    'print C',
+    'load addr 0xfffffff007a04010',
+    'decompile',
+    'print C',
+    'load addr 0xfffffff007a04110',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/kernelcache/iokit_kext.macho',
+    'option iokitclasses on',
+    'read symbols',
+    'load function meta_of_derived',
+    'decompile',
+    'print C',
+    'load addr 0xfffffff007a04010',
+    'decompile',
+    'print C',
+    'load function Derived::m2',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'IOKITCLASSES #1: off leaves the metaclass object a bare address'
+count = 1
+literal = 'return 0xfffffff007a06040;'
+
+[[match]]
+name = 'IOKITCLASSES #2: off leaves the constructor unnamed'
+count = 2
+regex = 'sub_fffffff007a04000\(0xfffffff007a060[04]0,"'
+
+[[match]]
+name = 'IOKITCLASSES #3: off leaves the vtable-only override unnamed'
+count = 1
+regex = '^unsigned long sub_fffffff007a04110\('
+
+[[match]]
+name = 'IOKITCLASSES #4: on names the constructor found by vote'
+count = 1
+literal = 'OSMetaClass::OSMetaClass(gMetaClass,"Derived",gMetaClass,0x30);'
+
+[[match]]
+name = 'IOKITCLASSES #5: on names the metaclass object the initializer writes'
+count = 1
+literal = '*(unsigned long *)Derived::gMetaClass = 0xfffffff007a051d8;'
+
+[[match]]
+name = 'IOKITCLASSES #6: on names the override after the slot it overrides'
+count = 1
+regex = '^unsigned long Derived::m2\('

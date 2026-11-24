@@ -1,0 +1,151 @@
+[image]
+arch = 'MIPS:BE:64:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '03e0000800000000'
+
+# P1/P2 strict weak-address materialization before folding, with non-PIC,
+# large-model and mixed PIC forms. CLI replay checks zero/bound identities,
+# addends, independent fixed literals and exact call counts at O0/O2.
+#
+# The common-* objects (common.c) hold two COMMON objects beside the weak
+# function. The slot allocated for the weak address once started where COMMON
+# storage starts, so `counter += value` printed as a write of the slot and the
+# test read both objects; slot space is now reserved ahead of COMMON storage.
+# `same` compares its argument with the weak address through one immediate that
+# reaches the compare's subtraction and flags, which reads the slot once.
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/nullable-relocations/weak-n32.elf',
+    'read symbols',
+    'map prototype guard int guard(int value);',
+    'map prototype optional int optional(int value);',
+    'lo fu guard',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/nullable-relocations/weak-64.elf',
+    'read symbols',
+    'map prototype guard int guard(int value);',
+    'map prototype optional int optional(int value);',
+    'lo fu guard',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/nullable-relocations/weak-x86-64.elf',
+    'read symbols',
+    'map prototype guard int guard(int value);',
+    'map prototype optional int optional(int value);',
+    'lo fu guard',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/nullable-relocations/weak-x86-64-large.elf',
+    'read symbols',
+    'map prototype guard int guard(int value);',
+    'map prototype optional int optional(int value);',
+    'lo fu guard',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/nullable-relocations/address-n32.elf',
+    'read symbols',
+    'lo fu unrelated_literal',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/nullable-relocations/address-64.elf',
+    'read symbols',
+    'lo fu unrelated_literal',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/nullable-relocations/address-x86-64.elf',
+    'read symbols',
+    'lo fu unrelated_literal',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/nullable-relocations/address-x86-64-large.elf',
+    'read symbols',
+    'lo fu unrelated_literal',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/nullable-relocations/common-n32.elf',
+    'read symbols',
+    'map prototype guard int guard(int value);',
+    'map prototype optional int optional(int value);',
+    'lo fu guard',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/nullable-relocations/common-64.elf',
+    'read symbols',
+    'map prototype guard int guard(int value);',
+    'map prototype optional int optional(int value);',
+    'lo fu guard',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/nullable-relocations/common-x86-64.elf',
+    'read symbols',
+    'map prototype guard int guard(int value);',
+    'map prototype optional int optional(int value);',
+    'lo fu guard',
+    'decompile',
+    'print C',
+    'map prototype same int same(unsigned long candidate);',
+    'lo fu same',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'nullable-relocations #1: weak binding is tested'
+count = 7
+regex = 'if [^\n]*dat_[0-9a-f]+'
+
+[[match]]
+name = 'nullable-relocations #2: imported call keeps its argument'
+count = 7
+literal = 'optional(value)'
+
+[[match]]
+name = 'nullable-relocations #3: unrelated literal stays numeric'
+count = 4
+literal = 'return 0x402000;'
+
+[[match]]
+name = 'nullable-relocations #4: every tested operand is supported'
+count = 0
+regex = 'Nullable weak.*could not be modeled'
+
+[[match]]
+name = 'nullable-relocations #5: a COMMON object written beside a weak slot keeps its name'
+count = 3
+literal = 'counter += value;'
+
+[[match]]
+name = 'nullable-relocations #6: a COMMON object read beside a weak slot keeps its name'
+count = 3
+literal = 'return limit + 7;'
+
+[[match]]
+name = 'nullable-relocations #7: no COMMON object is read as the slot'
+count = 0
+regex = 'CONCAT|dat_[0-9a-f]+ \+= '
+
+[[match]]
+name = 'nullable-relocations #8: a compared weak address reads the slot'
+count = 1
+regex = 'candidate == dat_[0-9a-f]+;'

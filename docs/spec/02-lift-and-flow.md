@@ -1941,7 +1941,7 @@ statement and the fabricated return value goes away; that is not the default,
 because an `int3` does return to a debugger that steps past it, and the value of
 naming the pad does not depend on asserting that the process dies there. `option
 int3pad off` restores the unannotated rendering. Exercised by
-`tests/stages/kuna-int3pad.xml`.
+`tests/stages/kuna-int3pad.toml`.
 
 **(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/kuna-trapaftercall.xml`.
 
@@ -2032,7 +2032,7 @@ no-return halt a call that never returns gets, as `brktrap` does. A trap the
 table does not name (an `__builtin_trap`, a KGDB or kprobes breakpoint) keeps
 its rendering, and an image with no `__bug_table` pays one empty-list test per
 BRANCHIND. The AArch64 `#0x800` the previous paragraph leaves alone is matched
-here only through a table entry. Exercised by `tests/stages/kuna-kernelbug.xml`.
+here only through a table entry. Exercised by `tests/stages/kuna-kernelbug.toml`.
 
 **(kuna) The x86-64 `SYSCALL` user-op's ABI effects — `option x64syscall`,
 default `on`, x86-64-gated (DIV-152),
@@ -4122,7 +4122,7 @@ An `append` whose count the grow arm takes from a register set outside the head
 library name the image does not contain, on the strength of the grow call's
 argument shape alone, and no MSVC C++ corpus in the tree can measure it;
 `msvcstrappend` is on the `EXCLUDED_ON_PURPOSE` list in `p0_knowledge/modes.rs`,
-so `--mode aggressive` does not turn it on either. Exercised by `tests/stages/kuna-msvcstrappend.xml`: four constant appends, a loop
+so `--mode aggressive` does not turn it on either. Exercised by `tests/stages/kuna-msvcstrappend.toml`: four constant appends, a loop
 appending a register-carried byte through a specialized grow helper, a two-byte
 literal append whose returned reference is used, an unprovable register-count
 append, a collapse whose continuation zeroes the changed registers, and 29 near
@@ -4499,6 +4499,17 @@ shifts), SWAP, TSTNULL, MUL/MULU HL,DE and the ALTS/ALTSD prefixes (ALTS sources
 modelled). Every single-instruction line of z88dk's r4k and r6k tables decodes to the
 same instruction. Exercised by the `rabbit4000` row of `unlace-cli/tests/processors.toml`.
 
+### Toshiba TLCS-870/C (#98)
+
+`TLCS870C:LE:16:default` (`specs/Ghidra/Processors/TLCS870/data/languages/tlcs870c.slaspec`)
+is the TMP86 core: the TLCS-870 mnemonics with a new encoding, seven 16-bit registers and the
+SF/VF flags. Instructions are an optional prefix (source memory E0-E7/D4-D7/4F, destination
+memory F0-F7/54-57, register E8-EF) and a second opcode byte; each prefix group is its own
+subtable so the decoder resolves the second byte. Encodings follow Toshiba's TLCS-870/C
+instruction-set excerpt and were checked against the 4,212 encodings of the AS assembler's
+TLCS-870/C test (two AS deviations from the manual are corrected; see the README). Exercised
+by the `tlcs870c` row of `unlace-cli/tests/processors.toml`.
+
 ### IBM ROMP (#98)
 
 `specs/Ghidra/Processors/ROMP` is a SLEIGH module written for unlace from the IBM
@@ -4700,6 +4711,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/processors.toml` (`st20`) |
 | `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilegx`) |
 | `TILEPRO` | Tilera TILEPro (TILEPro32/TILEPro64, TILE64), parallel X/Y-mode bundles | `TILEPRO:LE:32:default` | TILEPro ISA reference (UG120); encodings generated from the binutils `tilepro` opcode table by `tools/gen_tilepro_sleigh.py`; checked against `tilepro-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilepro`) |
+| `CSKY` | C-SKY ABIv2 (CK801-CK860), integer ISA, both byte orders | `CSKY:LE:32:v2`, `CSKY:BE:32:v2` | C-SKY V2 instruction set manual; encodings from the binutils `csky-opc.h` table; checked against `csky-elf-objdump` | `unlace-cli/tests/processors.toml` (`csky`) |
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/processors.toml` (`v60*`) |
 | `PowerPC` (Gekko) | IBM Gekko / Broadway (PowerPC 750CL) paired singles | `PowerPC:BE:32:Gekko` | IBM PowerPC 750CL User's Manual (paired-single chapter); checked against `powerpc-elf-objdump -M gekko` 2.43.1 | `unlace-cli/tests/ppc_gekko.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
@@ -4708,6 +4720,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `MIPS` (MIPS-3D, SmartMIPS) | MIPS64 with MIPS-3D, MIPS32 with SmartMIPS (pre-R6 languages) | existing `MIPS:*:64:*` and `MIPS:*:32:*` pre-R6 languages | binutils MIPS opcode table (MIPS-3D/SmartMIPS rows), MIPS-3D (MD00099) and SmartMIPS ASE specifications; checked against `mips-elf-objdump` 2.43.1 | `unlace-cli/tests/mips_ase.rs` |
 | `NFP` | Netronome NFP-6xxx flow-processor microengine (ME v2.8, 8 contexts) | `NFP:LE:32:ME28` | binutils `opcodes/nfp-dis.c` and `include/opcode/nfp.h` field layouts; checked against binutils objdump (`elf64-nfp`) | `unlace-cli/tests/nfp_raw.rs` |
 | `TLCS870` | Toshiba TLCS-870 (TMP87xx) | `TLCS870:LE:16:default` | Toshiba TLCS-870 data books; MAME tlcs870 (BSD-3) | `unlace-cli/tests/processors.toml` (`tlcs870`) |
+| `TLCS870` (870/C) | Toshiba TLCS-870/C (TMP86xx) | `TLCS870C:LE:16:default` | Toshiba TLCS-870/C Series Instruction Set (INST-1..23, 1999); encodings checked against the AS assembler's TLCS-870/C test table | `unlace-cli/tests/processors.toml` (`tlcs870c`) |
 | `MMIX` | Knuth MMIX | `MMIX:BE:64:default` | MMIXware (Knuth), binutils `mmix` opcode table, GCC `config/mmix` ABI | `unlace-cli/tests/processors.toml` (`mmix`) |
 | `Z8000` | Zilog Z8002 (non-segmented), Z8001 (segmented) | `Z8002:BE:16:default`, `Z8001:BE:32:segmented` | Zilog Z8000 CPU Technical Manual + PLZ/ASM manual; MAME z8000 (BSD-3) cross-check; tgtakaoka/libasm (Apache-2.0) | `unlace-cli/tests/processors.toml` (`z8000`) |
 | `Z380` | Zilog Z380 (Native/Extended, Word/Long Word, DDIR W/LW/IB/IW) | `Z380:LE:32:default` | Zilog Z380 User's Manual DC-8297-03 (Appendix C opcode tables); flag macros adapted from the in-repo Z80 module | `unlace-cli/tests/processors.toml` (`z380`) |
@@ -4725,6 +4738,8 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`) |
 | `PowerPC` (Xenon VMX128) | Xbox 360 Xenon (64-bit PowerPC, AltiVec, VMX128) | `PowerPC:BE:64:Xenon` | Xenia emulator `ppc-instructions.xml` and VX128 decode formats (BSD-3) | `unlace-cli/tests/processors.toml` (`ppc_xenon_vmx128`) |
 | `S1C6200` | Seiko Epson S1C6200 / E0C6200 / E0C6200A 4-bit core | `S1C6200:BE:16:default` | Epson E0C6200/6200A Core CPU Manual (MF297-06a); checked against MAME `e0c6200` on all 4,096 encodings | `unlace-cli/tests/processors.toml` (`s1c6200`) |
+| `Propeller` (P2) | Parallax Propeller 2 (P2X8C4M64P), hub execution | `propeller2:LE:32:default` | Parallax "Propeller 2 Instructions" table v35 (encodings, operations, flags); checked against the flexspin assembler | `unlace-cli/tests/processors.toml` (`propeller2`) |
+| `S1C88` | Seiko Epson S1C88 8-bit core (Pokemon mini CPU) | `S1C88:LE:16:default` | Epson S1C88 Core CPU Manual (MF658-05); checked against MAME `minx` on all 768 opcode slots | `unlace-cli/tests/processors.toml` (`s1c88`) |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -5104,6 +5119,44 @@ names, RV32 and RV64, and LLVM-selected half-precision functions that
 decompile with no bad or unimplemented instruction.
 
 
+
+### RISC-V F and D
+
+`riscv.fd.sinc` decodes the F and D extensions. It is generated from the Sail model's
+`fext_insts.sail` and `dext_insts.sail` by `tools/gen_riscv_sail.py`
+(`docs/sleigh-from-isa-specs.md` has the command). It replaces the hand-written
+`riscv.rv32f.sinc`, `riscv.rv64f.sinc`, `riscv.rv32d.sinc` and `riscv.rv64d.sinc`; `riscv.rv32f.sinc`
+now holds only the `fliConstS` table that `riscv.zfa.sinc` displays through. It is included for
+FPSIZE 64, the only FLEN any RISC-V language uses.
+
+- Arithmetic, square root and conversions lift to `f+`/`f-`/`f*`/`f/`/`sqrt`/`int2float`/
+  `float2float` when the rounding mode is `rne`, or `dyn` (read as the `rne` a program starts with).
+  Conversions that are always exact (`fcvt.d.s`, `fcvt.d.w`, `fcvt.d.wu`) lift this way under every
+  mode. With a static `rtz`/`rdn`/`rup`/`rmm`, where p-code has no operation that rounds that way,
+  an inexact operation is a user operation named after the mnemonic (`fadd_s`). The exception is
+  float-to-integer conversion with `rtz`, the C cast: it truncates and saturates as the ISA does.
+  NaN and values above the range give the maximum, values below it the minimum (0 for the
+  unsigned forms). `fcvt.lu` handles values of 2^63 and above by subtracting 2^63 first.
+  Unsigned 64-bit integer-to-float conversion halves the value, keeping a sticky bit, when the top
+  bit is set.
+- The fused multiply-adds are user operations (`fmadd_d(a, b, c)`): p-code has no fused operation,
+  and `a * b + c` rounds twice. Exception flags are not modelled.
+- `fclass` builds its one-hot mask from the sign, exponent and mantissa. `fmin`/`fmax` return the
+  other operand for one NaN and the canonical NaN for two, and order -0 below +0. `feq`/`flt`/`fle`
+  are the p-code compares.
+- `fsgnj*` build the result from the sign and magnitude bits. The `rs2 = rs1` aliases `fmv`,
+  `fneg` and `fabs` (constructors with `op1519=op2024`) are a copy, `f-` and `abs()`.
+- Single-precision results are written NaN-boxed (`0xffffffff00000000 | zext(v)`), as `fassignS`
+  does. Single-precision sources are read as the low 32 bits of the register (`--unbox truncate`),
+  as the hand-written files did. A register that does not hold a boxed value therefore reads as
+  that value instead of the canonical NaN. Compiled code never produces that state, and the
+  exact read is held back until the decompiler can fold it away for values it knows are boxed.
+
+The generated file decodes what LLVM decodes: 2496/2496 RV64 and 2176/2176 RV32 sampled words, plus
+every near miss. The hand-written files rejected `fcvt.d.s`, `fcvt.d.w` and `fcvt.d.wu` with a
+static rounding mode. Against QEMU (`tools/sail_sleigh_compare.py --fp`), the generated file
+differs only on unboxed sources. The hand-written one differed on 109 of 251 sampled words:
+rounding, saturation, `fclass` (unimplemented) and the fused multiply-adds.
 
 ### RISC-V Zfa (#98)
 
@@ -5846,10 +5899,10 @@ several clauses the selector tests stay in the handler
 type.
 
 **Limits.** SjLj tables are not read. Pinned by
-`tests/stages/kuna-itaniumeh.xml` (two passes over the `itaniumeh/eh_x86_64.elf`
-fixture), `tests/stages/kuna-itaniumeh-cold.xml` (the partitioned build),
-`tests/stages/kuna-itaniumeh-a64.xml` (AArch64, x0/x1),
-`tests/stages/kuna-itaniumeh-arm.xml` (ARM32 and stripped Thumb EHABI tables,
+`tests/stages/kuna-itaniumeh.toml` (two passes over the `itaniumeh/eh_x86_64.elf`
+fixture), `tests/stages/kuna-itaniumeh-cold.toml` (the partitioned build),
+`tests/stages/kuna-itaniumeh-a64.toml` (AArch64, x0/x1),
+`tests/stages/kuna-itaniumeh-arm.toml` (ARM32 and stripped Thumb EHABI tables,
 a type named only by its `type_info` string) and
 `tests/stages/kuna-itaniumeh-clang.xml` (clang ranges that start before the
 call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.xml`

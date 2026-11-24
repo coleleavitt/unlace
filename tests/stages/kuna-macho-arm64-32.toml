@@ -1,0 +1,56 @@
+# An arm64_32 Mach-O (ILP32 AArch64, the watchOS ABI).
+#
+# Issue: a Mach-O with cputype CPU_TYPE_ARM64_32 was refused at load with
+# "unsupported machine Aarch64_Ilp32 (no kuna SLEIGH language)", and a
+# watchOS dyld shared cache, whose images are all arm64_32, with "image at
+# 0x1a094000 is not a 64-bit Mach-O". The AARCH64:LE:32:ilp32 language has
+# been in the specs all along; nothing selected it.
+#
+# Stage / sub-stage: P1 container parse, the object bootstrap's language
+# choice (`unlace-analysis/src/loadimage_object.rs (compose_language_id)`),
+# at `load file`.
+#
+# The XML wrapper only supplies the harness architecture. The fixture
+# `macho_arm64_32` (built from `macho_arm64_32.c`) is a thin arm64_32
+# executable with two functions.
+#
+# The image loads, both functions are listed, and `add3` decompiles.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_arm64_32',
+    'read symbols',
+    'functions',
+    'load function _add3',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'MACHOARM6432 #1: the image loads and its functions are listed'
+count = 1
+literal = '0x8000 _add3'
+
+[[match]]
+name = 'MACHOARM6432 #2: the entry is listed'
+count = 1
+literal = '0x800c _main'
+
+[[match]]
+name = 'MACHOARM6432 #3: a function decompiles'
+count = 1
+literal = 'return a0 + a1 + 3;'

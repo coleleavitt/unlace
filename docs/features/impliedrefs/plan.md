@@ -47,7 +47,7 @@ three ways:
 
 ## 4. Test
 
-`tests/stages/kuna-impliedrefs.xml`, one synthetic `<bytechunk>` carrying two
+`tests/stages/kuna-impliedrefs.toml`, one synthetic `<bytechunk>` carrying two
 gcc -O2 functions and four passes:
 
 | source | the bound it exercises | pass 1 (default) | pass 2 (option) |

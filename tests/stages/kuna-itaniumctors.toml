@@ -1,0 +1,135 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/itaniumctors_O0_x86_64.so',
+    'option itaniumeh off',
+    'option listing on',
+    'option itaniumrtti off',
+    'read symbols',
+    'load function on_stack',
+    'decompile',
+    'print C',
+    'load function 0x151c',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/itaniumctors_O0_x86_64.so',
+    'option itaniumeh off',
+    'option listing on',
+    'option itaniumrtti on',
+    'read symbols',
+    'load function on_stack',
+    'decompile',
+    'print C',
+    'load function 0x151c',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/itaniumctors_O2_x86_64.so',
+    'option itaniumeh off',
+    'option listing on',
+    'option itaniumrtti on',
+    'read symbols',
+    'load function make_dog',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/itaniumctors_wrap_O2_x86_64.so',
+    'option itaniumeh off',
+    'option listing on',
+    'option itaniumrtti on',
+    'read symbols',
+    'load function use_gadgets',
+    'decompile',
+    'print C',
+    'load function 0x1300',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = "itaniumctors #1: off: Dog's constructor call is unnamed"
+count = 1
+literal = 'sub_145c(v3,3,a0);'
+
+[[match]]
+name = "itaniumctors #2: off: Dog's destructor call is unnamed"
+count = 1
+literal = 'sub_14b4(v3);'
+
+[[match]]
+name = 'itaniumctors #3: off: the copy constructor is unnamed'
+count = 1
+literal = 'void sub_151c('
+
+[[match]]
+name = 'itaniumctors #4: on: on_stack calls the constructor by name'
+count = 1
+literal = 'zoo::Dog::Dog(v3,3,a0);'
+
+[[match]]
+name = 'itaniumctors #5: on: the destructor replaces its slot-index name'
+count = 1
+literal = 'zoo::Dog::~Dog(v3);'
+
+[[match]]
+name = 'itaniumctors #6: on: the copy constructor is named'
+count = 1
+literal = 'void zoo::Dog::Dog('
+
+[[match]]
+name = 'itaniumctors #7: on: it calls the base constructor by name'
+count = 1
+literal = 'zoo::Animal::Animal(a0,a1);'
+
+[[match]]
+name = 'itaniumctors #8: no virtual destructor: the constructor stays unnamed'
+count = 2
+literal = 'sub_1598(v4,a0);'
+
+[[match]]
+name = 'itaniumctors #9: no virtual destructor: the destructor stays unnamed'
+count = 2
+literal = 'sub_15c2(v4);'
+
+[[match]]
+name = 'itaniumctors #10: an inlining factory keeps its own name'
+count = 1
+literal = 'void make_dog('
+
+[[match]]
+name = 'itaniumctors #11: a by-value factory is not a constructor'
+count = 1
+literal = 'sub_1160(v3,a0);'
+
+[[match]]
+name = 'itaniumctors #12: a placement-new helper is not a constructor'
+count = 1
+literal = 'sub_1180(v4,a0);'
+
+[[match]]
+name = "itaniumctors #13: a holder's constructor is not its member's"
+count = 1
+literal = 'sub_1190(v5,a0);'
+
+[[match]]
+name = 'itaniumctors #14: a delete wrapper is not a constructor'
+count = 1
+literal = 'sub_11b0(v2);'
+
+[[match]]
+name = 'itaniumctors #15: the optimized destructor is still named'
+count = 1
+literal = 'void kit::Gadget::~Gadget('

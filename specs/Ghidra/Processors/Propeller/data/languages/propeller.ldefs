@@ -11,4 +11,15 @@
     <description>Parallax Propeller 1 (P8X32A) cog</description>
     <compiler name="default" spec="propeller.cspec" id="default"/>
   </language>
+  <language processor="Propeller"
+    endian="little"
+    size="32"
+    variant="P2"
+    version="1.0"
+    slafile="propeller2.sla"
+    processorspec="propeller2.pspec"
+    id="propeller2:LE:32:default">
+    <description>Parallax Propeller 2 (P2X8C4M64P), hub execution</description>
+    <compiler name="default" spec="propeller2.cspec" id="default"/>
+  </language>
 </language_definitions>

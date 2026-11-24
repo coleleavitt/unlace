@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="CSKY"
+            endian="little"
+            size="32"
+            variant="v2"
+            version="1.0"
+            slafile="csky_le.sla"
+            processorspec="csky.pspec"
+            id="CSKY:LE:32:v2">
+    <description>C-SKY ABIv2 (CK801, CK802, CK803, CK804, CK805, CK807, CK810, CK860), little endian</description>
+    <compiler name="default" spec="csky.cspec" id="default"/>
+    <external_name tool="gnu" name="csky"/>
+  </language>
+  <language processor="CSKY"
+            endian="big"
+            size="32"
+            variant="v2"
+            version="1.0"
+            slafile="csky_be.sla"
+            processorspec="csky.pspec"
+            id="CSKY:BE:32:v2">
+    <description>C-SKY ABIv2 (CK801, CK802, CK803, CK804, CK805, CK807, CK810, CK860), big endian</description>
+    <compiler name="default" spec="csky.cspec" id="default"/>
+    <external_name tool="gnu" name="csky"/>
+  </language>
+</language_definitions>

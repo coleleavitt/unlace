@@ -1,0 +1,69 @@
+# Outlined `objc_retain_x<N>` returns in x0, not x<N> (`option objc on`, `objcarc on|off`).
+#
+# Issue: clang's outlined retain takes the object in x19 and returns the retained
+# object in x0, the way every call-site reads it: `bl objc_retain_x19; mov x20, x0`.
+# The prototype declared the result in x19, so the copy into x20 took whatever x0
+# held before the call. On the Toyota app `-[AddMileageViewController viewDidLoad]`
+# therefore passed `vtable#7.method` the metatype from the type-metadata accessor
+# (`vtable#7.method(v2)`) where the call's `self` was meant.
+#
+# Fixture `macho_objc_outlined_retain_arm64` (source `.s` beside it, hand-written
+# because clang does not outline ARC retains from source here): the entry keeps
+# `self` in x19, calls an accessor that clobbers x0, builds the objc_super and
+# calls `bl _objc_retain_x19`, then `mov x20, x0` and calls the callee with it.
+#
+# Pass 1 (default): the call's argument is the entry's `self` (`a0`), the retain is
+# hidden. Pass 2 (`objcarc off`): the retain is shown with its argument and result,
+# `objc_retain_x19(a0)`, and the call takes that result.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_outlined_retain_arm64',
+    'option objc on',
+    'read symbols',
+    'load addr 0x1000004c4',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_outlined_retain_arm64',
+    'option objc on',
+    'option objcarc off',
+    'read symbols',
+    'load addr 0x1000004c4',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "OUTLINEDRET #1: default passes the entry's self to the callee, not the accessor's metadata"
+count = 1
+literal = '_holder_vtable7(a0);'
+
+[[match]]
+name = "OUTLINEDRET #2: default never passes the accessor's result to the callee"
+count = 0
+literal = '_holder_vtable7((void *)_holder_type_accessor())'
+
+[[match]]
+name = 'OUTLINEDRET #3: the entry takes its self as the parameter the call forwards'
+count = 2
+regex = '_holder_viewDidLoad\([^)]*a0\)'
+
+[[match]]
+name = 'OUTLINEDRET #4: off shows the retain with its argument and the result the call takes'
+count = 1
+literal = '_holder_vtable7(objc_retain_x19(a0));'

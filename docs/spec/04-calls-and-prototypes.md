@@ -872,7 +872,7 @@ but are no C variadics: past the receiver and selector they carry the method's
 arguments in registers exactly as the method takes them, so a call to one keeps
 its register trials (`[super greet:x]` passes `x` in `w2`).
 `tests/stages/kuna-darwinvarargs.toml` pins both targets, and
-`tests/stages/kuna-objcrefs.xml` the super send.
+`tests/stages/kuna-objcrefs.toml` the super send.
 
 The same two rules are also what `ActionInputPrototype` runs the function's
 **own** input Varnodes through, and there the premise behind step 4 does not
@@ -2169,6 +2169,8 @@ classified:
   the walk cannot place leaves the extent unstated as well, except the
   caller's frame pointer, which the CRT's `_NLG_Notify` records in a global; a
   local's address handed to a call is still taken to stay among the locals.
+  `KUNA_CALLEEPURGE_DEBUG=1` prints on stderr where each walk first gives up
+  on a property, and the extent each call site was given; it changes no output.
   (kuna `calleeargsmsvc`, default off, with `calleeargs` on) Two more pieces
   of the MSVC frame boilerplate are read as no escape
   (`kuna_calleepurge.rs (from_fs, scrambles)`). A local's address stored

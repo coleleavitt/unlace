@@ -13,6 +13,9 @@
 # (docs/processor-tests.md).
 
 [images]
+s1c88 = """
+31e502cc11f8ffffb005b103f0f380f8b0000391f5fdf8ff
+"""
 s1c6200 = """
 0a8103030e0f0fdf0fff0fff0fff0fff0e030e1404000c010fdf0fff0fff0fff0f440a810f5b0fdf
 """
@@ -139,6 +142,48 @@ fixture = "crates/unlace-cli/tests/fixtures/c28x/addb_lret.bin"
 [[family.function]]
 test = "c28x_add_immediate_and_return_decompiles"
 address = "0x8000"
+
+# The native C-SKY ABIv2 language decompiles code built with csky-elf-as -mcpu=ck810:
+# a load/accumulate loop closed by a 32-bit bnez, a push/bsr/pop call, and the
+# C-flag compares feeding inct and bf.
+[[family]]
+name = "csky"
+language = "CSKY:LE:32:v2"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/sum_call_cmp.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_load_loop_decompiles"
+address = "0x8000"
+expect = [
+    "v1 += *a0++;",  # ld.w, addu and the pointer increment
+    "} while (a1);",  # bnez closes the loop
+    "dat_20000000 = v1;",  # movih + st.w
+]
+
+[[family.function]]
+test = "csky_call_with_register_arguments_decompiles"
+address = "0x801c"
+expect = [
+    "return sub_8018(7,5) << 2;",  # r0/r1 arguments, bsr, and pop returning through lr
+]
+
+[[family.function]]
+test = "csky_c_flag_compares_decompile"
+address = "0x802a"
+expect = [
+    "if (a0 < a1)",  # cmplt sets C, inct consumes it
+    "a0 = a1;",
+]
+
+[[family.function]]
+test = "csky_unsigned_compare_branch_decompiles"
+address = "0x8032"
+expect = [
+    "if (a0 <= 99)",  # cmphsi + bf
+    "return 99;",
+]
 
 # The native RCA CDP1802 language (SCRT variant) decompiles a raw image: a
 # store-increment loop through R1 closed by BNZ, returning with SEP R5.
@@ -1846,3 +1891,113 @@ image = "x86_64_avx512_disp8"
 test = "x86_vpbroadcastb_disp8_is_not_scaled"
 address = "0x0"
 expect = ["((unsigned char *)a0)[1]"]
+
+# The Propeller 2 language decompiles flexspin (-2 -O1 --fcache=0) hub-execution output of
+# fixtures/propeller2/flexspin_hub.c: conditional (if_b/if_ae) arithmetic after a cmps, a
+# loop with rdlong, and a caller passing arguments through cog registers.
+[[family]]
+name = "propeller2"
+language = "propeller2:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/propeller2/flexspin_hub.bin"
+
+[[family.function]]
+test = "propeller2_conditional_arithmetic_decompiles"
+address = "0x4f4"
+expect = [
+    "if (dat_fc <= dat_f8)",
+    "dat_ec = dat_f8 * 3;",
+    "dat_ec = dat_fc + dat_ec;",
+]
+
+[[family.function]]
+test = "propeller2_hub_loop_decompiles"
+address = "0x514"
+expect = [
+    "for (dat_f4 = 0; dat_f4 < dat_fc; dat_f4 = dat_f4 + 1) {",
+    "dat_f0 += *dat_ec;",
+]
+
+[[family.function]]
+test = "propeller2_calls_decompile"
+address = "0x548"
+expect = [
+    "dat_f8 = 1;",
+    "sub_4f4();",
+    "sub_514();",
+]
+
+# The S1C88 language decompiles routines hand-assembled from the core manual's instruction
+# list: a compare and JRS NC with EX A,B (absolute difference), a caller using CARS, and
+# an ADD A,[HL] / INC HL / DJR NZ byte-sum loop.
+[[family]]
+name = "s1c88"
+language = "S1C88:LE:16:default"
+base = "0x0"
+image = "s1c88"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s1c88_compare_and_exchange_decompiles"
+address = "0x0"
+expect = [
+    "if (a0 < a1)",  # CP A,B then JRS NC skips EX A,B
+    "return v1 - a1;",
+]
+
+[[family.function]]
+test = "s1c88_cars_call_decompiles"
+address = "0x8"
+expect = ["sub_0(5,3)"]
+
+[[family.function]]
+test = "s1c88_djr_loop_sums_bytes"
+address = "0x10"
+expect = [
+    "v1 += *v2++;",  # ADD A,[HL] and INC HL in the DJR NZ body
+    "while (a1)",
+]
+
+# The Toshiba TLCS-870/C language decompiles routines assembled with the AS
+# macro assembler's TLCS-870/C target.
+[[family]]
+name = "tlcs870c"
+language = "TLCS870C:LE:16:default"
+base = "0xe000"
+fixture = "crates/unlace-cli/tests/fixtures/tlcs870c/funcs.bin"
+forbid = ["baddata"]
+
+# add a,5; cmp a,10h; jr nz; ld (80h),a; ret
+[[family.function]]
+test = "tlcs870c_add_compare_store"
+address = "0xe000"
+expect = [
+    "dat_80 = a0 + '\\x05';",
+    "return 0x10;",
+]
+
+# ld wa,(80h); add wa,bc; ld (82h),wa (source and destination prefixes)
+[[family.function]]
+test = "tlcs870c_word_add"
+address = "0xe020"
+expect = [
+    "dat_82 = dat_80 + a0;",
+]
+
+# ld a,7; call f1; inc a
+[[family.function]]
+test = "tlcs870c_call"
+address = "0xe040"
+expect = [
+    "return sub_e000(7) + '\\x01';",
+]
+
+# cmp a,c; jr sge (prefixed condition); ld a,c
+[[family.function]]
+test = "tlcs870c_signed_max"
+address = "0xe060"
+expect = [
+    "if (a0 < a1)",
+    "a0 = a1;",
+]

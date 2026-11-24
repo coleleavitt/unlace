@@ -1,0 +1,103 @@
+# The widened half of the measured libc signature table.
+#
+# `libcsigs` shipped 206 signatures, chosen by which callee would move the
+# type_match metric on the cases a rival decompiler already got right. That
+# question leaves out every import the corpus simply uses: the `*at` family,
+# the SELinux surface coreutils links against, the account and xattr names.
+# A caller that only ever hands its argument to one of those keeps the
+# inferred integer, because nothing in the program says what the pointer
+# addresses and the callee has no declaration to say it either.
+#
+# The selection rule for the widened set is mechanical: an UNDEFINED FUNC
+# symbol in at least three of the frozen corpus's 665 dynamically linked
+# binaries, not already carried, whose platform declaration reduces WHOLE to
+# the width-stable `Ty` vocabulary. Derivation, ranking and the rejected set
+# are in docs/features/libcwiden/.
+#
+# The XML wrapper only supplies the harness architecture. The pass clears it
+# and loads the real ELF.
+#
+# The fixture's four wrappers each pass a `const char *` parameter to exactly
+# one of the new imports (`faccessat`, `renameat`, `mkdirat`, `chroot`) and do
+# nothing else with it, so the parameter's type comes from the callee's
+# declaration or from nowhere; the callees are named, so the signature is what
+# the table adds.
+#
+# Source: crates/unlace-analysis/tests/fixtures/libcwiden_x86_64.c
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/libcwiden_x86_64',
+    'read symbols',
+    'lo fu can_write',
+    'decompile',
+    'print C',
+    'lo fu move_entry',
+    'decompile',
+    'print C',
+    'lo fu make_dir',
+    'decompile',
+    'print C',
+    'lo fu jail',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "KUNA-LIBCWIDEN #1: the faccessat wrapper's path is never a width-only integer"
+count = 0
+literal = 'can_write(unsigned int a0,unsigned long a1)'
+
+[[match]]
+name = "KUNA-LIBCWIDEN #2: faccessat's declaration types it"
+count = 1
+literal = 'can_write(int4 a0,char *a1)'
+
+[[match]]
+name = "KUNA-LIBCWIDEN #3: neither of renameat's names stays an integer"
+count = 0
+literal = 'move_entry(unsigned int a0,unsigned long a1,unsigned int a2,unsigned long a3)'
+
+[[match]]
+name = 'KUNA-LIBCWIDEN #4: both are char \*'
+count = 1
+literal = 'move_entry(int4 a0,char *a1,int4 a2,char *a3)'
+
+[[match]]
+name = "KUNA-LIBCWIDEN #5: the mkdirat wrapper's name is never an integer"
+count = 0
+literal = 'make_dir(unsigned int a0,unsigned long a1)'
+
+[[match]]
+name = 'KUNA-LIBCWIDEN #6: it is char \*'
+count = 1
+literal = 'make_dir(int4 a0,char *a1)'
+
+[[match]]
+name = "KUNA-LIBCWIDEN #7: chroot's one argument is never an integer"
+count = 0
+literal = 'jail(unsigned long a0)'
+
+[[match]]
+name = 'KUNA-LIBCWIDEN #8: it is char \*'
+count = 1
+literal = 'jail(char *a0)'
+
+[[match]]
+name = 'KUNA-LIBCWIDEN #9: every wrapper is named'
+count = 0
+literal = 'sub_11'

@@ -5002,11 +5002,16 @@ impl CloneBlockOps {
     }
 
     /// (kuna `returndup calls`) Give the clone of a call op its own copy of the
-    /// original's call spec; returns the new spec's fspec handle.
+    /// original's call spec; returns the new spec's fspec handle. A CALLIND
+    /// has no fspec input (its target is the pointer, and its spec has no entry
+    /// address to name), so its clone gets the spec but no handle.
     fn clone_call_spec(&self, data: &mut Funcdata, orig_op: OpId, clone_op: OpId) -> Option<uintb> {
         let idx = data.get_call_specs_index(orig_op)?;
         let spec = data.get_call_specs(idx).clone_for_op(clone_op);
         let new_idx = data.push_call_specs(spec);
+        if data.obank().get(orig_op)?.code() != OpCode::CPUI_CALL {
+            return None;
+        }
         let handle = crate::fspec::next_fspec_handle();
         let style = data.get_arch().kuna_name_style();
         data.get_call_specs(new_idx)

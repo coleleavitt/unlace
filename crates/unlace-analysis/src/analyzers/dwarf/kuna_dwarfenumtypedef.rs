@@ -5,7 +5,7 @@
 //! names it. The enum arm of the type mapper built a real enum only for a named DIE
 //! and flattened the anonymous one to its underlying integer, so a parameter of type
 //! `gnutls_close_request_t` took `1` where the header has `GNUTLS_SHUT_WR`. With
-//! the option on, an anonymous enumeration reached through a typedef is interned
+//! the option on (the default), an anonymous enumeration reached through a typedef is interned
 //! under the typedef's name, as an anonymous aggregate already is. A load-time env
 //! bridge (`KUNA_DWARFENUMTYPEDEF`), read while the DWARF pass builds its types.
 
@@ -14,10 +14,14 @@ use super::DieSnap;
 /// The load-time environment variable the CLI and the console set from the option.
 pub const DWARFENUMTYPEDEF_ENV: &str = "KUNA_DWARFENUMTYPEDEF";
 
-/// Is the option on? Off unless the bridge says `on`.
+/// Is the option on? On unless the bridge says `off`.
 pub fn enabled() -> bool {
-    std::env::var(DWARFENUMTYPEDEF_ENV)
-        .is_ok_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "on" | "1" | "true"))
+    std::env::var(DWARFENUMTYPEDEF_ENV).map_or(true, |v| {
+        !matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "off" | "0" | "false"
+        )
+    })
 }
 
 /// The name an enumeration DIE is interned under: its own, or with the option on

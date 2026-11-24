@@ -5,7 +5,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::xml::Element;
 use unlace_decomp::kuna_loadoptions::{self, LoadOptions, LoadScope};
 
@@ -191,6 +191,34 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
             isa,
             self.languages,
             RawBytes::File,
+        )
+    }
+
+    /// Load a headerless image from separate runs of bytes, each `(address,
+    /// bytes, flags)` with [`section_flags`](unlace_sleigh::loadimage::section_flags),
+    /// as [`bootstrap_from_raw_segments`](crate::engine::bootstrap_from_raw_segments) does.
+    pub fn raw_segments(
+        &self,
+        path: &str,
+        runs: Vec<(u64, Vec<u8>, u32)>,
+        entries: &[u64],
+    ) -> KunaResult<ConsoleProgram> {
+        let isa = self.resolved_isa()?;
+        let (image, base) = unlace_sleigh::loadimage::RawLoadImage::from_segments(path, runs)
+            .ok_or_else(|| {
+                KunaError::lowlevel(
+                    "raw segments: none holds a byte, two overlap, or one wraps the address space",
+                )
+            })?;
+        let _load = self.enter();
+        bootstrap_raw_image(
+            path,
+            self.target,
+            base,
+            entries,
+            isa,
+            self.languages,
+            RawBytes::Segmented(image),
         )
     }
 

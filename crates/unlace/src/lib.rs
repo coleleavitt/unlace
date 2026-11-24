@@ -8,6 +8,19 @@
 //! decompiles inside those bounds instead of rediscovering them.
 //!
 //! ```no_run
+//! use unlace::{Decompiler, Target};
+//!
+//! // A raw x86-64 blob loaded at 0x1000, with one function declared at its start.
+//! let code = std::fs::read("blob.bin")?;
+//! let mut decompiler = Decompiler::from_raw(code, Target::X86_64, 0x1000, &[], &[0x1000])?
+//!     .with_function(0x1000, Some(0x1040), Some("handler"))
+//!     .with_prototype(0x1000, "int handler(char *buf, int len)");
+//! let function = decompiler.decompile(0x1000)?;
+//! println!("{}", function.c);
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! ```no_run
 //! use unlace::Decompiler;
 //!
 //! // Declare a function discovery missed, with its bounds and prototype.
@@ -107,6 +120,131 @@ impl Decompiler {
         let scratch = scratch(bytes.as_ref())?;
         let mut decompiler = Self::with_request(utf8(&scratch)?, None);
         decompiler._scratch = Some(scratch);
+        Ok(decompiler)
+    }
+
+    /// Load headerless bytes: `bytes` is the image whose first byte is at `base`,
+    /// decoded as `target`, with code starting at each of `entries` (target
+    /// address units; discovery widens from them).
+    ///
+    /// With no `segments`, the whole of `bytes` is one code range. Otherwise
+    /// only the listed ranges of `bytes` are mapped, each with its access
+    /// rights: a read-only range's constants fold, a non-executable one is data.
+    /// Segment addresses are byte addresses (a byte-addressed target).
+    ///
+    /// ```no_run
+    /// use unlace::{Decompiler, Perms, Segment, Target};
+    ///
+    /// let image = std::fs::read("dump.bin")?;
+    /// let segments = [
+    ///     Segment::new(0x8000, 0x2000, Perms::RX),
+    ///     Segment::new(0xa000, 0x1000, Perms::R),
+    /// ];
+    /// let decompiler = Decompiler::from_raw(image, Target::ARM_THUMB, 0x8000, &segments, &[0x8001])?
+    ///     .with_isa("thumb");
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn from_raw(
+        bytes: impl AsRef<[u8]>,
+        target: Target,
+        base: u64,
+        segments: &[Segment],
+        entries: &[u64],
+    ) -> Result<Self> {
+        let bytes = bytes.as_ref();
+        if segments.is_empty() {
+            let scratch = scratch(bytes)?;
+            let raw = embed::Raw {
+                base,
+                entries: entries.to_vec(),
+                segments: None,
+            };
+            let mut decompiler = Self::with_request(utf8(&scratch)?, Some(raw));
+            decompiler._scratch = Some(scratch);
+            decompiler.request.target = Some(target.id().to_string());
+            return Ok(decompiler);
+        }
+        let mut regions = Vec::with_capacity(segments.len());
+        for segment in segments {
+            let invalid = |why: &str| {
+                Error::Segments(format!(
+                    "segment {:#x}+{:#x}: {why}",
+                    segment.address, segment.size
+                ))
+            };
+            let start = segment
+                .address
+                .checked_sub(base)
+                .ok_or_else(|| invalid("starts below the base"))?;
+            let end = start
+                .checked_add(segment.size)
+                .filter(|end| *end <= bytes.len() as u64)
+                .ok_or_else(|| invalid("runs past the end of the bytes"))?;
+            let run = bytes[start as usize..end as usize].to_vec();
+            regions.push((segment.address, run, segment.perms));
+        }
+        Self::from_memory(target, regions, entries)
+    }
+
+    /// Load headerless memory a framework's own loader already mapped: each
+    /// region is `(byte address, bytes, access rights)`; the space between
+    /// regions is not mapped. Code starts at each of `entries`.
+    ///
+    /// ```no_run
+    /// use unlace::{Decompiler, Perms, Target};
+    ///
+    /// let text = vec![0x55, 0x48, 0x89, 0xe5, 0x5d, 0xc3];
+    /// let rodata = b"hello\0".to_vec();
+    /// let decompiler = Decompiler::from_memory(
+    ///     Target::X86_64,
+    ///     vec![(0x401000, text, Perms::RX), (0x402000, rodata, Perms::R)],
+    ///     &[0x401000],
+    /// )?;
+    /// # Ok::<(), unlace::Error>(())
+    /// ```
+    pub fn from_memory(
+        target: Target,
+        regions: impl IntoIterator<Item = (u64, Vec<u8>, Perms)>,
+        entries: &[u64],
+    ) -> Result<Self> {
+        let mut runs: Vec<(u64, Vec<u8>, u32)> = regions
+            .into_iter()
+            .filter(|(_, bytes, _)| !bytes.is_empty())
+            .map(|(address, bytes, perms)| {
+                (
+                    address,
+                    bytes,
+                    embed::segment_flags(perms.execute, perms.write),
+                )
+            })
+            .collect();
+        runs.sort_by_key(|run| run.0);
+        let mut end = 0u64;
+        for (i, (address, bytes, _)) in runs.iter().enumerate() {
+            if i > 0 && *address < end {
+                return Err(Error::Segments(format!(
+                    "the region at {address:#x} overlaps the one before it"
+                )));
+            }
+            end = address.checked_add(bytes.len() as u64).ok_or_else(|| {
+                Error::Segments(format!(
+                    "the region at {address:#x} wraps the address space"
+                ))
+            })?;
+        }
+        let Some(base) = runs.first().map(|run| run.0) else {
+            return Err(Error::Segments("no region holds a byte".to_string()));
+        };
+        let image: Vec<u8> = runs.iter().flat_map(|run| run.1.iter().copied()).collect();
+        let scratch = scratch(&image)?;
+        let raw = embed::Raw {
+            base,
+            entries: entries.to_vec(),
+            segments: Some(runs),
+        };
+        let mut decompiler = Self::with_request(utf8(&scratch)?, Some(raw));
+        decompiler._scratch = Some(scratch);
+        decompiler.request.target = Some(target.id().to_string());
         Ok(decompiler)
     }
 
@@ -256,6 +394,51 @@ impl Decompiler {
     pub fn with_assertion(self, directive: impl Into<String>) -> Self {
         let directive = directive.into();
         self.change(|request| request.assertions.push(directive))
+    }
+
+    /// Say that code starts at `address`: an `--entry` seed for a raw image, a
+    /// declared function (`with_function(address, None, None)`) for a container.
+    ///
+    /// ```no_run
+    /// use unlace::{Decompiler, Target};
+    /// let decompiler = Decompiler::from_raw(std::fs::read("blob.bin")?, Target::X86_64, 0, &[], &[0])?
+    ///     .with_entry(0x200);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn with_entry(self, address: u64) -> Self {
+        if self.request.raw.is_none() {
+            return self.with_function(address, None, None);
+        }
+        self.change(|request| {
+            if let Some(raw) = request.raw.as_mut() {
+                raw.entries.push(address);
+            }
+        })
+    }
+
+    /// Declare that the function at `address` never returns (an `exit` or
+    /// `abort` wrapper the analysis did not recognize), so its callers'
+    /// decompiles stop at each call to it. Nothing starting there yet, a
+    /// function is declared first.
+    ///
+    /// ```no_run
+    /// let decompiler = unlace::Decompiler::open("a.out")?.with_noreturn(0x401200);
+    /// # Ok::<(), unlace::Error>(())
+    /// ```
+    pub fn with_noreturn(self, address: u64) -> Self {
+        self.change(|request| request.noreturn.push(address))
+    }
+
+    /// Apply the overrides stored in an `unlace project` file before this
+    /// decompiler's own (`--project`).
+    ///
+    /// ```no_run
+    /// let decompiler = unlace::Decompiler::open("a.out")?.with_project("a.unlace");
+    /// # Ok::<(), unlace::Error>(())
+    /// ```
+    pub fn with_project(self, path: impl AsRef<Path>) -> Self {
+        let path = path.as_ref().to_string_lossy().into_owned();
+        self.change(|request| request.project = Some(path))
     }
 
     /// Stop a function's decompile after `seconds` (`0` disables the budget).

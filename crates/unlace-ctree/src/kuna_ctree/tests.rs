@@ -15,7 +15,13 @@ fn maturity_only_rises() {
 fn children_follow_print_order() {
     let mut tree = CTree::new();
     let pre = tree.add_stmt(StmtKind::Opaque, None);
-    let then = tree.add_stmt(StmtKind::Return(None), None);
+    let then = tree.add_stmt(
+        StmtKind::Return {
+            value: None,
+            op: None,
+        },
+        None,
+    );
     let els = tree.add_stmt(StmtKind::Opaque, None);
     let c = tree.add_expr(ExprKind::Const { value: 1, size: 4 });
     let cond = tree.add_expr(ExprKind::Not(c));

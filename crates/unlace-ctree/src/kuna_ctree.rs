@@ -16,6 +16,16 @@ use unlace_base::types::uint4;
 use crate::context::{BlockId, OpId, VarnodeId};
 
 crate::kuna_flag!(
+    /// (kuna `boolreturn`) Print an `if` whose two arms only return `1` and `0` as
+    /// `return c;` (or `return !c;`), a rewrite of the C syntax tree.
+    Boolreturn,
+    "boolreturn",
+    "boolean results returned directly",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna `ctree`) Print the function body through its C syntax tree. Off by default while
     /// the tree printer is proven to print exactly what the block printer prints.
     Ctree,
@@ -125,8 +135,11 @@ pub enum StmtKind {
     /// An unstructured branch: `goto`, `break` or `continue` by the block-goto flags in
     /// `gototype`.
     Goto { target: BlockId, gototype: uint4 },
-    /// `return`.
-    Return(Option<ExprId>),
+    /// `return`; `op` is the `RETURN` op the statement's markup points at.
+    Return {
+        value: Option<ExprId>,
+        op: Option<OpId>,
+    },
     /// Not modelled yet: printed from its origin block.
     Opaque,
 }
@@ -309,7 +322,7 @@ impl CTree {
             | StmtKind::Stmts { .. }
             | StmtKind::Expr(_)
             | StmtKind::Goto { .. }
-            | StmtKind::Return(_)
+            | StmtKind::Return { .. }
             | StmtKind::Opaque => Vec::new(),
         }
     }
@@ -331,8 +344,8 @@ impl CTree {
             StmtKind::Loop { .. } => "loop".to_string(),
             StmtKind::Switch { parts } => format!("switch[{}]", parts.len()),
             StmtKind::Goto { gototype, .. } => format!("goto type={gototype:#x}"),
-            StmtKind::Return(None) => "return".to_string(),
-            StmtKind::Return(Some(e)) => format!("return {}", self.expr_text(*e)),
+            StmtKind::Return { value: None, .. } => "return".to_string(),
+            StmtKind::Return { value: Some(e), .. } => format!("return {}", self.expr_text(*e)),
             StmtKind::Opaque => "opaque".to_string(),
         };
         match stmt.origin {

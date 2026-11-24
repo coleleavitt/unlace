@@ -1694,7 +1694,7 @@ and none of them fire). Deferring the decision until the flow work-stack drains,
 and then asking whether the function decoded `dest` by another path, is the sound
 fix; it is a change to the walk's ordering rather than to this predicate.
 
-**(kuna) EVM internal calls — `option evmcalls`, default off,
+**(kuna) EVM internal calls — `option evmcalls`, default on,
 `crates/unlace-lift/src/p2_lift/kuna_evmcalls.rs (classify, ActionEvmCalls)`.** The
 EVM has no call instruction for code inside a contract: solc lowers an internal call
 to `PUSH ret; <arguments>; PUSH fn; JUMP` and the callee returns with a `JUMP` to
@@ -2795,6 +2795,14 @@ the case targets.
    table instead of dropping its branch bodies into an unresolved interior call.
    ARM's lifted PC+8 base, the predicate's fallthrough, and actual indirect calls
    retain their existing flow semantics.
+   (kuna) When one range of an intersection has a larger step,
+   `rangeutil.rs (CircleRange::new_stride)` moves the other's ends onto that
+   phase. It reports the result empty only when the first value of the new
+   phase lies outside the old range. Upstream compares the order of the two
+   ends instead, so a wrapping range whose left end rounds past the top was
+   dropped as empty. That lost the upper check of an OCaml tagged-int match:
+   `x + 1 < 0x1eb` pulled back to the even `x` is `[-1, 0x1ea)`, which is
+   `[0, 0x1ea)` at step 2 (`tests/stages/ocaml-tagged-guard.toml`).
    `find_smallest_normal` picks the candidate with the smallest reaching range
    as the normalized variable — refusing a 1-byte, 256-value candidate unless a
    table LOAD lies between it and the branch (a bare byte is not evidence of a
@@ -5464,6 +5472,11 @@ as context (`tools/gen_rvv_groups.py` generates the tables and the constructors)
 - **Old destination.** Every user operation that writes a vector register takes the old
   destination (group) as its first input. Tail- or mask-undisturbed elements, and every element
   when vl = 0, keep their old values.
+- **Vector crypto.** The Zvk* instructions (and Zvbb's) stay user operations. Their exact
+  semantics run over element groups up to the run-time `vl`, which p-code could only express as a
+  loop over indexed register-space accesses for every instruction. That prints as a pointer loop
+  over the register file, and heritage does not follow dynamically indexed register bytes, so
+  the data flow would be worse than the user operations give.
 - **`vset*`.** `vsetvli`, `vsetivli` and `vsetvl` write `vl` (the user operation's result, also
   in `rd`) and `vtype`. `vtype` is the immediate, or `rs2`, unless the vtype is reserved: then
   `vill` is set. Reserved here means bits above 7 set, LMUL encoding 4, or SEW above 64. A
@@ -5558,9 +5571,13 @@ FPSIZE 128), id `RISCV:LE:64:GQ`. The loader picks it for a 64-bit ELF whose
   fused forms and the integer conversions other than `rtz` are user operations.
 - **Display.** The exact conversions into Q print no rounding mode, as LLVM prints them.
 - **Not in this language.** Zfh, Zfa and Zfbfmin are generated for FLEN 64 and left out.
-- **Decompiler gaps.** The decompiler has no 16-byte float format, so quad constants print as
-  `FLOAT_UNKNOWN`. `fpargboxed` claims only 8-byte argument registers, so a narrower argument
-  keeps its NaN-unboxing test in this language.
+- **Constants.** A binary128 constant cannot be a constant varnode: they hold 64 bits. So the
+  generator writes every binary128 bound as the exact double it is, widened (`float2float(c:8)`).
+  That prints as the double, and compares against it fold back to double compares
+  (`satconvert` then prints the cast). The decompiler keeps no 16-byte float format for the same
+  reason.
+- **Argument unboxing.** `fpargboxed` folds the double unboxing test of a 16-byte argument or
+  return register. The float and half tests are 12 and 14 bytes wide and stay.
 - **Check.** QEMU has no Q, so this is checked against llvm-objdump only: every sampled word and
   near miss of rv_q/rv64_q/F/D agrees.
 

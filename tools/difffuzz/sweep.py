@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Regression sweep: run every difffuzz configuration with fixed seeds and small counts.
 
-Each configuration (an --arch with the Unicorn or the QEMU oracle) runs difffuzz.py in its own
-process. A configuration whose oracle is not installed (Unicorn missing, no QEMU user binary on
-PATH or in DIFFFUZZ_QEMU_DIR, no vector-capable llvm-objdump) is reported as unavailable, not
-failed. The summary JSON has one row per configuration with its outcome counts; the exit status
+Each configuration (an --arch with the Unicorn, QEMU, native or gdb-simulator oracle) runs
+difffuzz.py in its own process. A configuration whose oracle is not installed (Unicorn missing, no
+QEMU user binary on PATH or in DIFFFUZZ_QEMU_DIR, no vector-capable llvm-objdump, no dfsim driver
+or gdb in DIFFFUZZ_GDBSIM_DIR) is reported as unavailable, not failed. The summary JSON has one row per configuration with its outcome counts; the exit status
 is 1 when any configuration has a mismatch (or a length disagreement or missing input/output
 finding) that tools/difffuzz/sweep_known.json does not list as known, 2 when a configuration
 errored, and 0 otherwise.
@@ -42,6 +42,7 @@ CONFIGS = [
     ("xtensa", "qemu"), ("ppc64-p10", "qemu"), ("ppc64le-p10", "qemu"),
     ("moxie", "gdbsim"), ("ft32", "gdbsim"), ("iq2000", "gdbsim"), ("lm32", "gdbsim"), ("m32r", "gdbsim"),
     ("frv", "gdbsim"), ("h8300h", "gdbsim"), ("mn10300", "gdbsim"), ("v850", "gdbsim"),
+    ("pru", "gdbsim"), ("cr16", "gdbsim"), ("avr", "gdbsim"), ("bfin", "gdbsim"),
 ]
 FAILING = ("mismatch", "length", "missing-output", "missing-input")
 KNOWN = HERE / "sweep_known.json"

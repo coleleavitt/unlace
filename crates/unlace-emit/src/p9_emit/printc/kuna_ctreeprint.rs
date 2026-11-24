@@ -746,9 +746,23 @@ impl PrintC {
     }
 
     /// A condition a folded `if` after the first may have: a single leaf that prints
-    /// nothing before its test, with no label line and no comment.
+    /// nothing before its test, with no label line and no comment, or a `BlockCondition`
+    /// (`a && b`, `a || b`) every component of which is one.
     fn clean_guard_cond(&mut self, fd: &Funcdata, cond: BlockId) -> bool {
+        self.clean_guard_cond_at(fd, cond, 0)
+    }
+
+    fn clean_guard_cond_at(&mut self, fd: &Funcdata, cond: BlockId, depth: usize) -> bool {
         let sb = fd.sblocks_ref();
+        if sb.block(cond).get_type() == BlockType::Condition && depth < 64 {
+            let parts: Vec<BlockId> = (0..sb.block(cond).get_size())
+                .map(|k| sb.block(cond).get_block(k))
+                .collect();
+            return !parts.is_empty()
+                && parts
+                    .into_iter()
+                    .all(|part| self.clean_guard_cond_at(fd, part, depth + 1));
+        }
         let why = if sb.block(cond).get_type() != BlockType::Copy {
             Some("not a copy leaf")
         } else if !self.header_prints_nothing(fd, cond) {

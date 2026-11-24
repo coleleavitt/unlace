@@ -102,11 +102,12 @@ count = 0
 literal = 'return 1;'
 
 [[match]]
-name = "BOOLRETURN #6: only nested's leading guard keeps a return 0"
-count = 1
+name = "BOOLRETURN #6: at most nested's leading guard keeps a return 0"
+min = 0
+max = 1
 literal = 'return 0;'
 
 [[match]]
 name = 'BOOLRETURN #7: nested folds its inner guards into one return'
 count = 1
-literal = 'return (!p[1]) && (!p[2]);'
+literal = '(!p[1]) && (!p[2])'

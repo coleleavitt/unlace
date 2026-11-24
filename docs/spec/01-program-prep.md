@@ -406,6 +406,28 @@ so `in`/`out` and `lds`/`sts` reach the same bytes; R0-R31 outside the data spac
 labels every data-space register `<instance>_<register>` (`PORTA_DIR`, `TCA0_CNT`), so a
 peripheral access prints by name, not as `dat_400`.
 
+(unlace) The MSP430 families have their own languages, chosen with `--target` (an MSP430 ELF does
+not name its device): `TI_MSP430:LE:16:f1xx`, `f2xx`, `g2xx`, `f4xx` and `i2xx` on `TI_MSP430.sla`, and
+`TI_MSP430X:LE:32:f5xx`, `f6xx`, `fr2xx` (with FR4xx), `fr5xx` and `fr6xx` on `TI_MSP430X.sla`. Each
+has a pspec, `TI_MSP430_<family>.pspec`, which `tools/gen_msp430_pspec.py` writes from TI's BSD-3
+MSP430 GCC support files (the `<device>_symbols.ld` of every device). An address is labelled with
+the name every device of the family gives it, the spelling most of them use, and left unlabelled
+where the devices disagree (LCD_B against LCD_C, Timer_A against Timer_B); the legacy first-timer
+names (`TACTL`) count as the current ones (`TA0CTL`). A word port's halves take the byte port
+names code uses (`PAOUT` is labelled `P1OUT`, its high byte `P2OUT`). The peripheral space (to
+0x1ff, or 0xfff on the 5xx/6xx/FR cores) is volatile. The `default` languages keep Ghidra's F1xx
+pspec.
+
+(unlace) The TMS320C28x device families have their own languages, `tms320c28:LE:32:<family>` (f2802x,
+f2802x0, f2803x, f2805x, f2806x, f2807x, f2823x, f2833x, f2837xd, f2837xs, f2838x, f28002x, f28003x,
+f28004x, f280013x, f280015x, f28e12x, f28p55x, f28p551x, f28p65x), chosen with `--target`, on
+`tms320c28.sla`. Each has a pspec, `tms320c28_<family>.pspec`, which `tools/gen_c28_pspec.py` writes
+from TI C2000Ware's BSD-3 device support headers: each peripheral instance is a variable of a register
+structure (`volatile struct ADC_REGS AdcaRegs;`) that the family's linker command file places
+(CPU1's on a dual-core part), so every register is labelled `<instance>_<register>`
+(`AdcaRegs_ADCCTL1`, `EPwm1Regs_TBPRD`) at its word address, with 32-bit registers on even words, and
+each instance's frame is volatile. Lines under `#if` are kept as a CPU1 build compiles them.
+
 (unlace) The PIC18F Q-series families have their own languages, `PIC-18:LE:24:Q10`, `Q20`, `Q24`,
 `Q35`, `Q40`, `Q41`, `Q43`, `Q83` and `Q84`, chosen with `--target`. Each family has a pspec,
 `pic18q_<family>.pspec`, which `tools/gen_pic18q_pspec.py` writes from Microchip's Apache-2.0
@@ -1118,8 +1140,9 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   line up with angr's), apply the relocations, rebase defined symbols, and bind
   each undefined extern to a synthetic call target in an extern area above the
   sections so calls render by name (an extern reached by a plain data relocation
-  on the operand of an x86 `call`/`jmp`/`jcc` or an MSP430 `call #imm` counts as
-  code too, so i386 and MSP430 libcalls are named) (the next 4 KiB page plus one; on a 16-bit
+  on the operand of an x86 `call`/`jmp`/`jcc`, an MSP430 `call #imm` or an m68k
+  `jsr`/`jmp` (xxx).L or `bsr.l` counts as code too, so i386, MSP430 and m68k
+  libcalls are named) (the next 4 KiB page plus one; on a 16-bit
   machine the next 16 bytes, so AVR's 4 KiB `rcall` still reaches every libcall). A section header's size is a claim the file
   need not back, so the layout allocates zero-fill only for data — `SHT_NOBITS`
   storage and a data extent past the end of the file — and at most 256 MiB of it
@@ -9595,6 +9618,30 @@ both
   candidate to indicate availability. The check reads only the requested
   manifest location and its referenced banks. Reports and application each
   obtain their own explicit manifest inputs.
+- **Rust standard-library signatures** (`ruststdsigs off|exact|nearest`, default
+  off; `crates/unlace-analysis/src/analyzers/flirt/kuna_ruststdsigs.rs`): adds a
+  `.sig` for the Rust `std`, `core` and `alloc` to the FLIRT pass, built from an
+  installed rustup toolchain. A Rust binary links its rustc's precompiled standard
+  library, so those functions match the toolchain's rlibs up to relocations. The
+  image's `.comment` names its compiler (`rustc version 1.94.0-nightly (b68e16cfc
+  2026-01-11)`), and each toolchain under the rustup home (`RUSTUP_HOME`, else
+  `~/.rustup`) names its own in the `.comment` of its `libstd` objects. `exact` takes
+  the toolchain whose record equals the image's; `nearest` takes that one, else the
+  one whose record's date is closest, then the closest version. Its three rlibs go
+  through the `unlace flirt make` pattern and `.sig` writers once and the result is
+  cached (`XDG_CACHE_HOME`, else `~/.cache`, at
+  `unlace/ruststdsigs/<version>-<target>.sig`). Only an x86-64 or AArch64 Linux ELF
+  with a `rustc version` record is considered, and the matching is the FLIRT pass's
+  own, so it needs `flirt on` and the Listing. The choice travels as
+  `KUNA_RUSTSTDSIGS`, since the pass reads its signatures while the image loads.
+  Measured on stripped release binaries against their symbol tables (names, right,
+  `j_` jump stubs named for their target, wrong): a probe built by 1.95.0 with the
+  1.95.0 toolchain 140/135/3/2, one built by 1.100.0 with 1.100.0 150/145/3/2; with
+  the other of the two 70/63/3/4 and 71/64/3/4. The cargo-installed `fclones`
+  (1.101.0-nightly of 2026-11-05) takes 1.100.0 under `nearest` and gets
+  239/233/3/3; `json_typegen` and `wasm2es6js` (1.94.0 nightlies) take 1.95.0 and get
+  137/132/3/2 and 67/66/0/1. A wrong name is a function with another's identical
+  code.
 - **FLIRT signature writer** (`unlace flirt make`, a build-time command that no
   decompile reaches;
   `crates/unlace-analysis/src/analyzers/flirt/kuna_flirtpat.rs (patterns_from_object)`,
@@ -10476,7 +10523,7 @@ call-site indices, not code ranges, in its table. So every LSDA walker skips it
 personality whose name cannot be read is read as Itanium. With `itaniumeh` on,
 the pads are shown and no note is attached.
 
-**(kuna) MFC message-map handlers are functions** (`mfcmsgmap`, default-**off**;
+**(kuna) MFC message-map handlers are functions** (`mfcmsgmap`, default-**on**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_mfcmsgmap.rs`). An MFC window
 class routes messages through a static `AFX_MSGMAP` in `.rdata`
 (`pfnGetBaseMap`, `lpEntries`), and its `AFX_MSGMAP_ENTRY` array (`nMessage,
@@ -10494,7 +10541,7 @@ handlers. Every handler is an IDA 9.5 function start, and 194 were missing
 from the inventory before.
 
 **(kuna) A relocated pointer to an MSVC frame prologue is a function**
-(`msvcptrentry`, default-**off**;
+(`msvcptrentry`, default-**on**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvcptrentry.rs`). C++ code reaches
 much of itself only through pointers: vtable slots, MFC tables, callbacks pushed for
 the Win32 API, thread procedures. On a 32-bit PE the base-relocation table lists
@@ -10513,7 +10560,11 @@ a `ret` (`C3`, or `C2 iw` with a pop below 256) is a function pointer stored
 into a structure, aimed just past another function's end. MSVC loads its own
 mid-function labels with `mov eax, imm32` or pushes them (catch continuations,
 SEH handlers), and those forms are not read. On PEGRP32F.dll the second form gives
-264 targets, every one an IDA start, and 109 of them were new.
+264 targets, every one an IDA start, and 109 of them were new. Both
+passes ship on. With them, PEGRP32F's inventory misses 544 of IDA's 6,255
+starts instead of 1,437, with 2 more functions that IDA does not list, and 226
+of IDA's 277 switch tables are recovered instead of 195 (measured before the
+second form).
 
 **(kuna) MSVC throw metadata is labelled** (`msvceh`, default-**off**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvceh.rs (find_throw_infos)`).

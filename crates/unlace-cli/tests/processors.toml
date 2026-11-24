@@ -13,6 +13,18 @@
 # (docs/processor-tests.md).
 
 [images]
+c28x_epwm1_tbprd = """
+1f76010123283412060000000000000000000000
+"""
+c28x_epwm1_tbprd_classic = """
+1f76a00105283412060000000000000000000000
+"""
+msp430_p1_classic = """
+d24220002100304100000000
+"""
+msp430x_p1_p2 = """
+d24200020302304100000000
+"""
 # PIC18: movlw 5; movwf 0xb7, a; movwf 0x01, a; return
 pic18_access = """
 050eb76e016e1200
@@ -231,6 +243,31 @@ fixture = "crates/unlace-cli/tests/fixtures/c28x/addb_lret.bin"
 [[family.function]]
 test = "c28x_add_immediate_and_return_decompiles"
 address = "0x8000"
+
+# C2000 family languages label peripheral registers from C2000Ware's device headers:
+# movw DP,#page; mov @off,#0x1234; lretr writes EPwm1's TBPRD, at 0x4063 on the Type-4 ePWM parts
+# and at 0x6805 on the older ones (F28E12x and F28P65x place ePWM elsewhere).
+[[family]]
+name = "c28x_family_names"
+language = ["tms320c28:LE:32:f280013x", "tms320c28:LE:32:f280015x", "tms320c28:LE:32:f28002x", "tms320c28:LE:32:f28003x", "tms320c28:LE:32:f28004x", "tms320c28:LE:32:f2807x", "tms320c28:LE:32:f2837xd", "tms320c28:LE:32:f2837xs", "tms320c28:LE:32:f2838x", "tms320c28:LE:32:f28p551x", "tms320c28:LE:32:f28p55x"]
+base = "0x8000"
+image = "c28x_epwm1_tbprd"
+
+[[family.function]]
+test = "c28x_family_names_epwm"
+address = "0x8000"
+expect = ["EPwm1Regs_TBPRD = 0x1234;"]
+
+[[family]]
+name = "c28x_family_names_classic"
+language = ["tms320c28:LE:32:f2802x", "tms320c28:LE:32:f2803x", "tms320c28:LE:32:f2805x", "tms320c28:LE:32:f2806x", "tms320c28:LE:32:f2823x", "tms320c28:LE:32:f2833x"]
+base = "0x8000"
+image = "c28x_epwm1_tbprd_classic"
+
+[[family.function]]
+test = "c28x_family_names_classic_epwm"
+address = "0x8000"
+expect = ["EPwm1Regs_TBPRD = 0x1234;"]
 
 # The native C-SKY ABIv2 language decompiles code built with csky-elf-as -mcpu=ck810:
 # a load/accumulate loop closed by a 32-bit bnez, a push/bsr/pop call, and the
@@ -2972,8 +3009,10 @@ name = "evm_erc20_runtime"
 language = "EVM:BE:32:Cancun"
 base = "0"
 fixture = "crates/unlace-cli/tests/fixtures/evm/erc20_runtime_opt.bin"
+args = ["--option", "evmcalls", "off"]
 
-# Runtime code of `fixtures/evm/erc20.sol`'s Token (solc 0.8.24 --optimize). Jump-table recovery
+# Runtime code of `fixtures/evm/erc20.sol`'s Token (solc 0.8.24 --optimize), with evmcalls off so
+# the dispatcher still goes through jump-table recovery. Jump-table recovery
 # ran pow2select on 32-byte words, whose `1 << (size * 8 - 1)` overflowed (#687, fixed by #709).
 [[family.function]]
 test = "evm_erc20_runtime_dispatch"
@@ -4437,6 +4476,35 @@ test = "tricore_tc18_gcc_int_then_double"
 address = "g_idmul"
 expect = ["(double)a0 * a2"]
 
+# Option selectmul: the a * zext(c) + b * zext(!c) TriCore's ternary macro lifts sel/min/max to
+# prints as c ? a : b.
+[[family]]
+name = "tricore_tc18_gcc_selectmul"
+loader = "auto"
+args = ["--target", "tricore:LE:32:tc18", "--option", "selectmul", "on"]
+fixture = "crates/unlace-cli/tests/fixtures/tricore_tc18_gcc/gcc_select.elf"
+forbid = ["(unsigned int)(a"]
+
+[[family.function]]
+test = "tricore_tc18_selectmul_min"
+address = "s_min"
+expect = ["return a1 < a0 ? a1 : a0;"]
+
+[[family.function]]
+test = "tricore_tc18_selectmul_umax_negation"
+address = "s_umax"
+expect = ["a0 < a1 ? a1 : a0"]
+
+[[family.function]]
+test = "tricore_tc18_selectmul_sel_reads_the_not_equal"
+address = "s_sel"
+expect = ["? a1 : a2;"]
+
+[[family.function]]
+test = "tricore_tc18_selectmul_sel_expressions"
+address = "s_sel2"
+expect = ["? a1 + 1 : a2 * 3;"]
+
 # The AVR-Dx languages (avr8xt.sla, I/O at data 0, one pspec per series from Microchip's AVR-Dx_DFP)
 # name an `in` from the VPORT window and an `sts` to the PORT block.
 [[family]]
@@ -4449,6 +4517,31 @@ image = "avrxt_io"
 test = "avr_dx_io_names"
 address = "0x0"
 expect = ["PORTA_DIR = VPORTA_OUT;"]
+
+# MSP430 family languages: each family pspec labels its peripheral registers from TI's support files
+# (mov.b &P1IN, &P1OUT; ret). The classic families have P1 at 0x20; on the 5xx/6xx/FR cores port A
+# is a word at 0x200 whose halves take the byte names (P1IN at 0x200, P2OUT at 0x203).
+[[family]]
+name = "msp430_family_names_classic"
+language = ["TI_MSP430:LE:16:f1xx", "TI_MSP430:LE:16:f2xx", "TI_MSP430:LE:16:g2xx", "TI_MSP430:LE:16:f4xx"]
+base = "0x4000"
+image = "msp430_p1_classic"
+
+[[family.function]]
+test = "msp430_family_names_classic_ports"
+address = "0x4000"
+expect = ["P1OUT = P1IN;"]
+
+[[family]]
+name = "msp430x_family_names"
+language = ["TI_MSP430X:LE:32:f5xx", "TI_MSP430X:LE:32:f6xx", "TI_MSP430X:LE:32:fr2xx", "TI_MSP430X:LE:32:fr5xx", "TI_MSP430X:LE:32:fr6xx"]
+base = "0x4000"
+image = "msp430x_p1_p2"
+
+[[family.function]]
+test = "msp430x_family_names_byte_ports"
+address = "0x4000"
+expect = ["P2OUT = P1IN;"]
 
 # PIC18 Q-series (pic18q.sla, SFR page 0x400): an access-bank SFR is the family's register
 # (Q24 PIR1 at 0x4b7) and access-bank 0x01 is data 0x501; the classic language keeps 0xfb7 and 0x01.
@@ -4468,3 +4561,16 @@ test = "pic18_classic_access_bank"
 address = "0x0"
 language = "PIC-18:LE:24:PIC-18"
 expect = ["CCP3CON = 5;", "dat_1 = 5;"]
+
+# The shipped default `bpf` applies retindexuse on eBPF without the option.
+[[family]]
+name = "ebpf_retindexuse_default"
+language = "eBPF:LE:64:default"
+base = "0"
+image = "bpf_strlen"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "ebpf_retindexuse_default_counter_is_returned"
+address = "0x0"
+expect = ["return "]

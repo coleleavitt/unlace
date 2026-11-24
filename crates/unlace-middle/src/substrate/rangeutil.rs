@@ -345,7 +345,7 @@ impl CircleRange {
                 return true; // Step is completely off
             }
         }
-        let orig_order = *myleft < *myright;
+        let (orig_left, orig_right) = (*myleft, *myright);
         let left_rem = (*myleft % (step as uintb)) as uint4;
         let right_rem = (*myright % (step as uintb)) as uint4;
         if left_rem > rem {
@@ -362,12 +362,18 @@ impl CircleRange {
         *myleft &= mask;
         *myright &= mask;
 
-        let new_order = *myleft < *myright;
-        if orig_order != new_order {
-            return true;
-        }
-
-        false // not empty
+        // (kuna) Empty when the first value of the new phase is past the
+        // range. Upstream compares the order of the two ends before and
+        // after, which also calls a range empty when its left end wraps past
+        // the top onto the new phase: `[-1, 0x1ea)` at step 2 is `[0, 0x1ea)`.
+        let inside = if orig_left == orig_right {
+            true
+        } else if orig_left < orig_right {
+            orig_left <= *myleft && *myleft < orig_right
+        } else {
+            *myleft >= orig_left || *myleft < orig_right
+        };
+        !inside || (orig_left != orig_right && *myleft == *myright)
     }
 
     /// Make a range fit in a new domain (C++ `newDomain`, `rangeutil.cc:143`).

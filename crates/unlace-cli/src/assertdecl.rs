@@ -252,6 +252,7 @@ pub(crate) fn console_form(d: &Directive, target: Option<&str>) -> Result<Consol
             Some(f) => return Err(unbindable(&f)),
             None => (Slot::Symbol, format!("isolate {symbol}")),
         },
+        Body::NoReturn { func } => (Slot::Program, format!("function noreturn {func}")),
     };
     Ok(ConsoleForm { slot, line })
 }

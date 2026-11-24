@@ -6,6 +6,7 @@
 pub mod flow;
 pub mod kuna_arithhelpers; // (kuna) 32-bit runtime arithmetic helpers (__udivdi3, __aeabi_uldivmod, _alldiv) as C operators
 pub mod kuna_armflowcontext;
+pub mod kuna_armhoist; // (kuna `armhoist`) hoist the ops both arms of a branch share before structuring
 pub mod kuna_brktrap; // (kuna) an AArch64 brk compiler trap ends the flow instead of returning through SoftwareBreakpoint
 pub mod kuna_callpopret; // (kuna) flow a call through a callee that pops the return address and rets to the grandparent
 pub mod kuna_calltrampoline; // (kuna) flow a call through a callee that discards the pushed return address

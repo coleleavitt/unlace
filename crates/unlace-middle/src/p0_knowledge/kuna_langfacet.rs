@@ -59,6 +59,13 @@ pub enum LangFacet {
         /// The interface, spelled as the linker spells it (`io.Writer`).
         interface: String,
     },
+    /// A named Go struct's interface-typed fields: `(byte offset, interface)`
+    /// for each, the interface spelled as the linker spells it. The field's
+    /// first word is the itab pointer (`crate::kuna_goitabcalls`).
+    GoInterfaceFields {
+        /// `(byte offset, interface)` per interface-typed field, in field order.
+        fields: Vec<(i32, String)>,
+    },
 }
 
 impl LangFacet {

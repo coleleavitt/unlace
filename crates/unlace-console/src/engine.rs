@@ -3598,6 +3598,15 @@ impl ConsoleProgram {
                         image_path,
                     ));
                 }
+                // (kuna `vtabletypes`) MSVC constructors and destructors are
+                // walked through the decoder, so they are found here too.
+                if analysis_pass_enabled(self.arch(), "vtabletypes") {
+                    merged.merge(unlace_analysis::passes::run_msvc_ctors(
+                        &bytes,
+                        self.arch(),
+                        image_path,
+                    ));
+                }
                 // (kuna `com`) COM ids and interfaces; off by default, and
                 // it builds types, so it runs only when asked for.
                 if analysis_pass_enabled(self.arch(), "com") {
@@ -3754,9 +3763,14 @@ impl ConsoleProgram {
         merged.context_paints.extend(input_context_paints);
         self.fid_databases = std::mem::take(&mut merged.fid_databases);
         // (kuna `typelib`) Last, so every other source of a prototype has
-        // spoken: the library declares only the imports nothing else did.
+        // spoken: the library declares only the imports, and the functions
+        // FLIRT, FID or a PDB named, that nothing else did.
         if let Some(facts) = merged.typelib.take() {
-            if let Err(message) = crate::kuna_typelib::seed(self.arch(), &facts, &mut merged) {
+            let said = match crate::kuna_typelib::seed(self.arch(), &facts, &mut merged) {
+                Ok((_, note)) => note,
+                Err(message) => Some(message),
+            };
+            if let Some(message) = said {
                 let path = self.image_path();
                 unlace_base::notes::say_once(&path, &format!("[kuna typelib] {message}"));
             }
@@ -3941,6 +3955,13 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         "gonoreturn" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::NoreturnKnown>()
+                .0
+        }
+        // (kuna `goitabcalls`) Interface parameters typed from the static itabs
+        // callers pass: only under the option.
+        "goitabargs" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_goitabcalls::GoItabCalls>()
                 .0
         }
         // (kuna) PE/Mach-O import-slot call binding — typed-slot `externref`
@@ -7737,7 +7758,7 @@ fn commit_analysis_output(
 
     // (kuna `itaniumeh`) Park the call-site table and the two registers the
     // unwinder fills at a pad. Empty unless the gate is on.
-    if !out.eh_call_sites.is_empty() {
+    if !out.eh_call_sites.is_empty() || !out.msvc_eh_sites.is_empty() {
         let mut table = unlace_decomp::kuna_itaniumeh::EhTable::new(out.eh_call_sites.clone());
         let arch = prog.arch();
         let reg = |names: &[&str]| {
@@ -7757,6 +7778,23 @@ fn commit_analysis_output(
         };
         table.exception_reg = reg(exc);
         table.selector_reg = reg(sel);
+        // (kuna `msvceh`) The catch funclets entered as pads, with the parent's
+        // frame register resolved.
+        if !out.msvc_eh_sites.is_empty() {
+            table.stack_reg = reg(&["RSP"]);
+            table.establisher_reg = reg(&["RDX"]);
+            let funclets = out
+                .msvc_funclets
+                .iter()
+                .map(|f| unlace_decomp::kuna_itaniumeh::FuncletPad {
+                    pad: f.pad,
+                    frame: f.frame_reg.as_deref().and_then(|r| reg(&[r])),
+                    frame_offset: f.frame_offset,
+                    returns: f.returns.clone(),
+                })
+                .collect();
+            table = table.with_msvc(out.msvc_eh_sites.clone(), funclets);
+        }
         prog.arch_mut().kuna_states.set(std::rc::Rc::new(table));
     }
 
@@ -8984,6 +9022,10 @@ fn commit_analysis_output(
     // 7c. An Objective-C direct method's `self`, the same unlocked hint; a
     //     function Swift already hinted keeps that one.
     commit_input_hints(prog, code_space, &out.objc_self_hints);
+    // 7c'. (kuna `goitabcalls`) A stripped Go function's interface table word,
+    //      typed from the static itabs its callers pass; a function another
+    //      source already hinted keeps that hint.
+    commit_input_hints(prog, code_space, &out.go_itab_inputs);
 
     // 7d. (kuna `swiftmetadata`) Each local Swift enum's case count by its
     //     metadata accessor: the bound of the table its `switch` indexes

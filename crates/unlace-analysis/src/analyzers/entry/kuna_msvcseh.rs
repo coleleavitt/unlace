@@ -32,7 +32,9 @@ use crate::rtti::models::ImageBytes;
 use crate::rtti::refkind::{End, RefKind};
 use crate::rtti::vftable::TextRanges;
 
-use super::kuna_msvcfuncinfo::{decode_fh3, is_fh3, language_handler, notes, runtime_functions};
+use super::kuna_msvcfuncinfo::{
+    decode_fh3, is_fh3, language_handler, name_funclet, notes, parent_names, runtime_functions,
+};
 
 /// Most scope records one table is read for.
 const MAX_SCOPES: u32 = 64;
@@ -150,8 +152,10 @@ fn x64_scopes(file: &object::File, bytes: &[u8], img: &ImageBytes, out: &mut Ana
     if handlers.is_empty() {
         return;
     }
+    let names = parent_names(file);
+    let mut named = FxHashSet::<u64>::default();
     let mut entries = FxHashSet::<u64>::default();
-    for (func, unwind) in runtime_functions(&pe, bytes, base) {
+    for (func, _, unwind) in runtime_functions(&pe, bytes, base) {
         let Some((handler, data)) = language_handler(img, base, unwind) else {
             continue;
         };
@@ -162,13 +166,22 @@ fn x64_scopes(file: &object::File, bytes: &[u8], img: &ImageBytes, out: &mut Ana
             continue;
         };
         scope_notes(func, &scopes, true, out);
+        let (mut filters, mut finallys) = (0usize, 0usize);
         for s in &scopes {
             let funclet = match s.kind {
                 SehKind::Except {
                     filter: Filter::Code(f),
                     ..
-                } => (f, "__except filter"),
-                SehKind::Finally { handler } => (handler, "__finally funclet"),
+                } => {
+                    filters += 1;
+                    name_funclet(&names, func, "filt", filters - 1, f, &mut named, out);
+                    (f, "__except filter")
+                }
+                SehKind::Finally { handler } => {
+                    finallys += 1;
+                    name_funclet(&names, func, "fin", finallys - 1, handler, &mut named, out);
+                    (handler, "__finally funclet")
+                }
                 _ => continue,
             };
             out.header_comments.push(CommentFact {

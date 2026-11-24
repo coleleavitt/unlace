@@ -766,6 +766,107 @@ mod tests {
         assert!(!is_throw_name(b"_CxxFrameHandler3"));
     }
 
+    /// The clang-cl fixture: three throws, a rethrow in a catch funclet, and a
+    /// try with three handlers.
+    #[test]
+    fn clang_cl_fixture() {
+        let path = format!(
+            "{}/tests/fixtures/msvceh_x64.exe",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
+        let file = object::File::parse(&bytes[..]).expect("parse");
+        let out = collect(&file, &bytes);
+        let sym = |a: u64| {
+            out.symbols
+                .iter()
+                .find(|s| s.addr == a)
+                .map(|s| s.name.clone())
+                .unwrap_or_default()
+        };
+        assert!(sym(0x1_4000_2198).starts_with("ThrowInfo<") && sym(0x1_4000_2198).contains("Err"));
+        assert!(sym(0x1_4000_2200).contains("Derived"));
+        assert_eq!(sym(0x1_4000_2238), "ThrowInfo<int>");
+        let comment = |a: u64| {
+            out.comments
+                .iter()
+                .find(|c| c.addr == a)
+                .map(|c| (c.func_addr, c.text.clone()))
+        };
+        assert_eq!(
+            comment(0x1_4000_102c),
+            Some((0x1_4000_1000, "throw int".to_string()))
+        );
+        assert_eq!(
+            comment(0x1_4000_1161),
+            Some((0x1_4000_114f, "rethrow".to_string()))
+        );
+        let tries: Vec<&str> = out
+            .header_comments
+            .iter()
+            .filter(|c| c.func_addr == 0x1_4000_109f && c.text.starts_with("eh: try"))
+            .map(|c| c.text.as_str())
+            .collect();
+        assert_eq!(tries.len(), 1, "{tries:?}");
+        assert!(
+            tries[0].contains("catch (...) -> 0x14000110d"),
+            "{}",
+            tries[0]
+        );
+        assert!(
+            out.header_comments
+                .iter()
+                .any(|c| c.func_addr == 0x1_4000_10c7 && c.text.contains("handler of 0x14000109f"))
+        );
+        let renamed = |a: u64| {
+            out.fid_names
+                .iter()
+                .find(|m| m.addr == a)
+                .map(|m| m.name.clone())
+        };
+        assert_eq!(
+            renamed(0x1_4000_10c7).as_deref(),
+            Some("sub_14000109f$catch$0")
+        );
+        assert_eq!(
+            renamed(0x1_4000_110d).as_deref(),
+            Some("sub_14000109f$catch$2")
+        );
+        assert_eq!(
+            renamed(0x1_4000_114f).as_deref(),
+            Some("sub_14000112f$catch$0")
+        );
+        let site = out
+            .msvc_eh_sites
+            .iter()
+            .find(|s| s.pad == 0x1_4000_10c7)
+            .expect("catch (Err &) record");
+        assert_eq!((site.start, site.end), (0x1_4000_10b8, 0x1_4000_10be));
+        assert_eq!(
+            out.msvc_eh_sites
+                .iter()
+                .filter(|s| s.start == 0x1_4000_10b8)
+                .count(),
+            3
+        );
+        let funclet = out
+            .msvc_funclets
+            .iter()
+            .find(|f| f.pad == 0x1_4000_10c7)
+            .expect("catch funclet");
+        assert_eq!(funclet.frame_reg.as_deref(), Some("RBP"));
+        assert_eq!(funclet.frame_offset, 0x40);
+        assert_eq!(funclet.returns, vec![(0x1_4000_10ea, 0x1_4000_10be)]);
+        assert!(
+            out.msvc_funclets
+                .iter()
+                .any(|f| f.pad == 0x1_4000_114f && f.returns.is_empty())
+        );
+        for f in [0x1_4000_10c7, 0x1_4000_10eb, 0x1_4000_110d, 0x1_4000_114f] {
+            assert!(out.entries.contains(&f), "{f:#x} not discovered");
+        }
+    }
+
     #[test]
     fn owners_by_pdata_range() {
         let owners = [(0x1000, 0x1040, 0x1000), (0x1080, 0x10c0, 0x1000)];

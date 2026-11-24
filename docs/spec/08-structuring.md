@@ -835,6 +835,12 @@ the schedule (`crates/unlace-decomp/src/infra/universalaction.rs
   cloned, SSA/def-use is untouched, and the printer re-emits the same ops in
   the new layout.
 
+`dedupitetail` has a pre-structuring counterpart, `option armhoist` (default
+off, `crates/unlace-lift/src/p2_lift/kuna_armhoist.rs (ActionArmHoist)`, §2.17):
+it moves the ops both arms of a branch share at their head or tail out of the
+arms in the pre-SSA p-code, so this chapter's structurer sees one copy instead
+of merging two leaves afterwards.
+
 A CFG split must leave every path performing the same writes, the same number
 of times. The p-code half of `node_split`,
 `crates/unlace-middle/src/substrate/funcdata_block.rs (CloneBlockOps)`,
@@ -1499,14 +1505,35 @@ iop input names the cloned call. Each path then prints its own call:
 `if (c) return f(b, 2); return f(a, 1);`.
 
 A block qualifies when it has no successors, two to four distinct
-predecessors, at most 16 ops, exactly one direct CALL, an argument of that call
-computed (within the block) from a MULTIEQUAL, and no INDIRECT that still
+predecessors, at most 16 ops, exactly one CALL (or CALLIND, below), an input of
+that call computed (within the block) from a MULTIEQUAL, and no INDIRECT that still
 creates the call's output (prototype recovery has not settled the output yet;
 a later fullloop pass retries). Each predecessor runs exactly one copy, so the
 split preserves behaviour. It is a value of `returndup` rather than its
 default because the source often wrote the merged form as a ternary argument
 (`lua_pushstring(L, isint ? "integer" : "float")`), and the binary cannot tell
 the two apart.
+
+A call block that falls through to one successor instead of returning
+qualifies on the same terms (its only branch may be a BRANCH), which is
+Hex-Rays' `UNMERGE_CALLS` (hexx64 `sub_191D80`). It is split with
+`crates/unlace-middle/src/substrate/funcdata_block.rs
+(Funcdata::node_split_through)`: the clone flows into the same successor, whose
+MULTIEQUALs gain the clone's values for the new edge. When the successor had
+no other predecessor, every value the block defines that is read beyond it,
+the call's result first of all, is merged back in a new MULTIEQUAL at the head
+of the successor (`funcdata_block.rs (Funcdata::merge_split_value)`), and the
+readers outside the two blocks read the merge. When the successor has other
+predecessors, the block's values may only reach it through its MULTIEQUALs, and
+any other reader leaves the block alone. A persistent or address-tied output
+also leaves it alone.
+
+The one call may also be a CALLIND, in either form of the block. Its target is
+an input like any other, so a block whose paths set different function
+pointers qualifies through the target as well as through the arguments. Each
+clone gets its own copy of the call spec, and after the split each path calls
+through its own pointer, which `ActionDeindirect` can then turn into a direct
+call when that pointer is a known function.
 
 ### orchain — the split that must not happen (decbench)
 

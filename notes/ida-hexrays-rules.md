@@ -26,7 +26,7 @@ meaning is read from its pseudocode (microcode opcodes: 4 mov, 42 jcnd, 43-52 co
 | `CONVERT_IF_TO_SET`, `RECOGNIZE_SETNZ`/`2`, `RECOGNIZE_SETZ`/`SETX` | `sub_18D990`, `sub_18DE60`.. | `if (c) x = 1; else x = 0;` -> `x = c` (both arms one `mov` of 0/1 to the same place) | yes: `iteboolean` (after structuring) and Ghidra's boolean rules |
 | `FLATTEN_JNS` | `sub_18BE40` | a block that starts with an `add` followed only by flag-setting `set*` ops feeding a sign jump is folded into the comparison | unclear; check on a -O2 `if (a + b < 0)` shape |
 | `INVERT_JX_GOTO` | `sub_18ABC0` | invert a conditional jump to drop a goto | yes: structurer |
-| **`REMOVE_MUL_OVERFLOW_CHECK`** | `sub_18DC60` | an overflow-checked multiply (jump on the high half, `-1` on overflow) feeding a call becomes the helper `saturated_mul(a, b)`: the `operator new[](n * sizeof(T))` pattern MSVC and clang emit | **none** |
+| **`REMOVE_MUL_OVERFLOW_CHECK`** | `sub_18DC60` | an overflow-checked multiply (jump on the high half, `-1` on overflow) feeding a call becomes the helper `saturated_mul(a, b)`: the `operator new[](n * sizeof(T))` pattern MSVC and clang emit | yes: `satmul` (default off), `p3_dataflow/kuna_satmul.rs` |
 | `REMOVED SECURITY COOKIE` | `sub_18E880` | drop the cookie check before return | yes: `msvcstackguard`, `stackguard` |
 | `SDIV_POWER2`, `SDIVMOD_POWER2`, `SDIV2A`/`2B`, `SMOD2` | `sub_18E9B0`, `sub_18AE70`, `sub_18B8D0`.. | signed division/remainder by 2^k | yes: `pow2select` |
 | **`UMOD`, `UMOD-30BIT`** | `sub_12DD80` | an unsigned remainder by an odd constant n written as a fold of 30- or 32-bit chunks: it computes the multiplicative order of 2 mod n (up to 64) and requires it to divide 30 or 32 | **probably none** (Ghidra's `RuleDivOpt` handles magic multiplies, not chunk folding); verify with `x % 3`, `x % 5` at -O2 on a 32-bit target |
@@ -80,7 +80,7 @@ Ctree maturity levels in the same binary (`sub_46C7E0`): `CMAT_ZERO`, `CMAT_BUIL
 
 | # | gap | value | size |
 |---|---|---|---|
-| 1 | `saturated_mul`: fold the checked `n * sizeof(T)` before `operator new[]` (x86 `mul` + `jo`/`seto`, clang `__builtin_mul_overflow` lowering, AArch64 `umulh` + `cmp`) into one helper | M (every C++ `new T[n]`) | S |
+| 1 | ~~`saturated_mul`~~ (done: option `satmul`): fold the checked `n * sizeof(T)` before `operator new[]` (x86 `mul` + `jo`/`seto`, clang `__builtin_mul_overflow` lowering, AArch64 `umulh` + `cmp`) into one helper | M (every C++ `new T[n]`) | S |
 | 2 | Java `synchronized` and `finally` on DEX, extending `javatry` | M (Android) | S-M |
 | 3 | Pre-structuring hoist of identical arm heads/tails (EXTRACT_*), so the hoisted code is not structured twice | M (GED) | M |
 | 4 | Remainder by small odd constants via chunk folding (UMOD-30BIT), after a measurement shows the shape exists in our corpora | L | S |

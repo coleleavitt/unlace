@@ -163,7 +163,7 @@
 # (kuna GH-7451) Zfa fli.s constant table: the rs1 field (op1519) is a 5-bit
 # index into the architectural fli constant table, not a register operand.
 # https://github.com/NationalSecurityAgency/ghidra/issues/7451
-fliConstS: "min"             is op1519=0  { export 0:$(SFLEN); }
+fliConstS: "-1.0"            is op1519=0  { export 0:$(SFLEN); }
 fliConstS: "min"             is op1519=1  { export 1:$(SFLEN); }
 fliConstS: "1.52587890625e-05" is op1519=2  { export 2:$(SFLEN); }
 fliConstS: "3.0517578125e-05"  is op1519=3  { export 3:$(SFLEN); }

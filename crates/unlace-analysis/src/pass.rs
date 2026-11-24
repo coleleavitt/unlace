@@ -589,6 +589,11 @@ pub struct AnalysisOutput {
     /// (kuna `itaniumeh`) The `.gcc_except_table` call-site records that have a
     /// landing pad, with each pad's clauses. Committed only under `itaniumeh`.
     pub eh_call_sites: Vec<unlace_decomp::kuna_itaniumeh::EhCallSite>,
+    /// (kuna `msvceh`) MSVC x64 try regions as call-site records whose pads are
+    /// catch funclets. Produced only by [`crate::entry::kuna_msvcfuncinfo`].
+    pub msvc_eh_sites: Vec<unlace_decomp::kuna_itaniumeh::EhCallSite>,
+    /// (kuna `msvceh`) The catch funclets those records enter.
+    pub msvc_funclets: Vec<unlace_decomp::kuna_itaniumeh::MsvcFunclet>,
     /// (kuna `callerreads`) Every direct call of the Listing walk as `(callee
     /// entry, return address)`; the decompile step decodes a `void` function's
     /// callers from there.
@@ -858,6 +863,12 @@ pub struct AnalysisOutput {
     /// symbol table under the same gate. Name-only (not typed) so an itab
     /// address used polymorphically keeps rendering the symbol.
     pub go_itabs: Vec<SymFact>,
+    /// (kuna `goitabcalls`) Interface parameters of a stripped Go binary: each
+    /// callee register a static itab is passed in, typed as a pointer to the
+    /// interface's itab record. Produced by the Listing consumer
+    /// [`crate::gotypes::kuna_itabargs::GoItabArgsPass`], which runs only under
+    /// the option; committed as input hints.
+    pub go_itab_inputs: Vec<InputHintFact>,
     /// (kuna `swifttypes`) The Swift type-layout facts. See [`SwiftTypeFacts`].
     pub swift_types: SwiftTypeFacts,
     /// (kuna `swiftobjcthunk`) Each function the Swift metadata pass named
@@ -1166,6 +1177,7 @@ impl AnalysisOutput {
         self.cortexm_scs = self.cortexm_scs.or(other.cortexm_scs);
         self.go_type_globals.extend(other.go_type_globals);
         self.go_itabs.extend(other.go_itabs);
+        self.go_itab_inputs.extend(other.go_itab_inputs);
         self.swift_enum_cases.extend(other.swift_enum_cases);
         self.swift_types
             .typed_data
@@ -1223,6 +1235,8 @@ impl AnalysisOutput {
         self.noreturn.extend(other.noreturn);
         self.no_fallthru_calls.extend(other.no_fallthru_calls);
         self.eh_call_sites.extend(other.eh_call_sites);
+        self.msvc_eh_sites.extend(other.msvc_eh_sites);
+        self.msvc_funclets.extend(other.msvc_funclets);
         self.call_returns.extend(other.call_returns);
         self.kernel_bugs.extend(other.kernel_bugs);
         self.arm_pool_extents.extend(other.arm_pool_extents);
@@ -1333,6 +1347,10 @@ pub struct TypeLibFacts {
     pub imports: Vec<(String, u64)>,
     /// The imported names no function the image defines shares, sorted.
     pub named: Vec<String>,
+    /// The PE optional-header `Subsystem` (1 native, 2/3 Windows GUI/CUI,
+    /// 10..=13 EFI), which picks the IDA Windows type libraries; `None` for an
+    /// image that is not a PE.
+    pub subsystem: Option<u16>,
 }
 
 /// (kuna `formatstring static`) One printf/scanf-family call site whose format

@@ -698,6 +698,11 @@ pub fn universal_sched_hooked(
             crate::kuna_bitidioms::RuleIntAbs::new("analysis")
         ),
         rrow!(
+            "satmul",
+            "analysis",
+            crate::kuna_satmul::RuleSaturatedMul::new("analysis")
+        ),
+        rrow!(
             "strcpychain",
             "analysis",
             crate::kuna_helperrole::RuleStrcpyChain::new("analysis")
@@ -1416,6 +1421,11 @@ pub fn universal_sched_hooked(
             // C++ adjacency (coreaction.cc:5751-5756) pinned by
             // verify_w8x_allowlist.rs.  A kuna-only pass does not get to split it.
             act!(crate::kuna_outline::ActionOutline::boxed("blockrecovery")),
+            // (kuna) armhoist (option `armhoist`, default-OFF): move the ops both
+            // arms of a branch share at their head or tail out of the arms, so
+            // structuring sees one copy. Pre-SSA like outline (self-gated on the
+            // Ssa fact) and before varnodeprops, outside its pinned adjacency.
+            act!(crate::kuna_armhoist::ActionArmHoist::boxed("blockrecovery")),
             act!(ActionVarnodeProps::boxed("base")),
             // (kuna) Install a previously-detected lowered switch BEFORE heritage
             // (coreaction.cc:5755).  `enabled` resolves the C++
@@ -1484,6 +1494,11 @@ pub fn universal_sched_hooked(
             act!(Box::new(crate::condexe::ActionConditionalExe::new(
                 "conditionalexe"
             ))),
+            // (kuna) option `phithread` (default off): thread a join that branches
+            // on a merged constant, splitting the arms that feed it.
+            act!(crate::kuna_phithread::ActionPhiThread::boxed(
+                "conditionalexe"
+            )),
             act!(ActionConditionalConst::boxed("analysis")),
             act!(crate::kuna_rangefold::ActionRangeFold::boxed("unreachable")),
             act!(crate::kuna_cmpmerge::ActionBranchMerge::boxed(

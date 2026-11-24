@@ -3699,11 +3699,39 @@ a virtual call on the object reads through the named slot. The rule fires on
 Itanium classes too, wherever a value is typed `C_vtbl *` (a load of a typed
 `vptr` field).
 
-Not typed: a vftable serving a virtual base, and the functions it holds (the
-virtual base has no fixed displacement); a class whose structure name two
-classes share; and `this` of a function whose holders share no class at the
-subobject's offset 0, which is what identical-code folding and `_purecall`
-leave.
+A vftable serving a virtual base has no non-virtual base at its offset: the
+virtual base's displacement is stated only by the vbtable, which the analysis
+does not read. MSVC lays the virtual bases out after the non-virtual part, in
+the order of their vbtable entries, so chapter 01 places them by that order
+(`kuna_msvcvtabletypes.rs (vbase_offsets)`), and the methods in such a vftable
+take the virtual base as `this` (MSVC passes the virtual base's subobject, a
+vtordisp thunk adjusting it first where one is needed). The virtual base is
+still not embedded in the class structure, since its displacement differs
+between the classes that derive from it.
+
+Constructors and destructors
+(`crates/unlace-analysis/src/analyzers/rtti/kuna_msvcctors.rs (run)`, run at
+the analysis commit, since it decodes the image) are the functions that store
+their class's vftable through `this`. A candidate is a function the image calls
+directly whose first kilobyte references a vftable. It is walked along its
+fall-through path with the Itanium constructor walker
+(`kuna_itaniumctors.rs (Walker)`), `this` placed by the default convention on
+x64 and by `__thiscall` (ECX) on x86, and only a vftable stored through `this`
+counts; the class whose offset-0 vftable is stored, every other stored vftable
+being its own or a base's, owns it. A store after a call `this` was not passed
+to (a by-value return slot filled after other work) disqualifies it. MSVC
+constructors return `this`, so an owner that does is `C::C`; one that does not
+and that a function in `C`'s own vftable calls (the scalar or vector deleting
+destructor) is `C::~C`. A function the symbol table already names keeps it.
+Named or not, its `this` gets the `C *` hint: a helper that stores `C`'s
+vftable into the object it is passed is handed a `C`.
+
+Not typed: a class whose structure name two classes share; `this` of a
+function whose holders share no class at the subobject's offset 0, which is
+what identical-code folding and `_purecall` leave; and a virtual base whose
+vftable the vbtable order does not account for (a vftable left over, a virtual
+base that finds none, or a slot count that differs from the virtual base's own
+vftable), together with the functions such a vftable holds.
 
 ### A COM request's out-parameter is the interface its id names (`kuna_comtyping.rs`)
 

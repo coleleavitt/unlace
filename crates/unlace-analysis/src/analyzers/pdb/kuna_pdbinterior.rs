@@ -92,7 +92,9 @@ impl AnalysisPass for PdbInteriorPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         AnalysisOutput {
-            pdb_bodies: eligible_pdb_bodies(ctx.file, ctx.bytes, ctx.image_path),
+            pdb_bodies: super::guarded("pdbinterior", || {
+                eligible_pdb_bodies(ctx.file, ctx.bytes, ctx.image_path)
+            }),
             ..AnalysisOutput::default()
         }
     }
@@ -120,7 +122,7 @@ pub fn eligible_pdb_bodies(
         return Vec::new();
     };
     let candidates = locate::pdb_candidates(image_path, &cv);
-    let (Some(image_base), false) = (pe_image_base(bytes), candidates.is_empty()) else {
+    let Some(image_base) = pe_image_base(bytes) else {
         return Vec::new();
     };
     let Some(mut pdb) = open_fingerprint_matched(&candidates, &cv) else {

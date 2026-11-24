@@ -646,9 +646,9 @@ Three tiers:
 | a call to a function that returns a struct prints with no arguments, e.g. mk();, and the next call takes the wrong local | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
 | code after a call to an abort or assert-failure helper is merged into the other branch with a v = &Stack... assignment | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
 | a parameter read after a call through a function pointer prints as an unassigned local | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
-| if (c) { return 1; } else { return 0; } where the source returns the comparison | [`boolreturn`](#boolreturn----on--off-default-off) |
-| a predicate function prints as an if/else of two constant returns | [`boolreturn`](#boolreturn----on--off-default-off) |
-| if (c) return 0; ... return 1; where the source has return a && b; | [`boolreturn`](#boolreturn----on--off-default-off) |
+| if (c) { return 1; } else { return 0; } where the source returns the comparison | [`boolreturn`](#boolreturn----on--off-default-on) |
+| a predicate function prints as an if/else of two constant returns | [`boolreturn`](#boolreturn----on--off-default-on) |
+| if (c) return 0; ... return 1; where the source has return a && b; | [`boolreturn`](#boolreturn----on--off-default-on) |
 | if (c) { ...long body... } else { abort(); } with the error path last | [`noretfirst`](#noretfirst----on--off-default-on) |
 | the main path of a function is nested in an if whose else only exits | [`noretfirst`](#noretfirst----on--off-default-on) |
 | if (a) { if (b) { ... } } where the source wrote one if (a && b) | [`nestedand`](#nestedand----on--off-default-on) |
@@ -2027,7 +2027,7 @@ The control surface: each of these can make output worse on the wrong source sha
 
 - **Symptoms:** a fastcall or custom-convention call takes a trailing stack argument that the next thiscall in the same expression chain pops; a later thiscall in an operator<< chain prints with no argument; an MSVC function with an EH frame or a /GS cookie gives its callers no stack-argument bound.
 - **What it does:** On x86-32 Windows, with calleeargs on, let the callee walk that bounds a direct call's stack arguments read through the MSVC frame boilerplate instead of stating nothing. Two things in every MSVC C++ function with an exception frame or a /GS cookie made the walk give up: the SEH registration stores the address of a local record into fs:[0] (mov fs:[0],eax), which is a stack address stored through a pointer the walk cannot place, and the /GS prologue scrambles the cookie with the frame pointer (xor eax,ebp) and stores it, which is a stack-derived value the walk cannot place. With this on, a local address stored through FS is not an escape (only the exception dispatcher reads the TEB exception list), and an INT_XOR of a stack address with a value that is neither a stack address nor a constant is data. The callee's extent is then stated, so a call to a register-only (fastcall or MSVC custom-convention) callee no longer takes the pushes the compiler made early for a later call: in std::ostream chains `stream << text << value` the value went to the first operator<< and the operator that pops it printed without it.
-- **When to flip:** Off by default. Turn it on for MSVC x86-32 C++ images where a call to a __fastcall or custom-convention helper (std::operator<< taking the stream in ECX and the text in EDX) prints with a trailing argument that a later __thiscall call in the same chain pops, or where every EH-framed or /GS-protected callee keeps the upstream stack-argument test.
+- **When to flip:** Off by default and staying opt-in: measured 2026-11-24 over the Holley EFI DLLs (USBCAN-Driver, PEGRP32F, SLABHIDDevice, SLABHIDtoUART, CP210xManufacturing, WdfCoInstaller01009) and vswhere.exe, about 8,600 functions, it changes 2 functions, both for the better (in PEGRP32F, sub_102c26d0 drops a junk second argument, and it and sub_10288560 then inline a call result), and none for the worse. The saved-ESP slot, zero-argument-call and callee-saved-pop inferences that came after it (#746, #793, #828, #852) did not raise that count: most MSVC callees still state no extent, because a call to an import or a virtual call leaves the walk's stack pointer bounded. Turn it on for an MSVC x86-32 C++ image where a call to a __fastcall or custom-convention helper (std::operator<< taking the stream in ECX and the text in EDX) prints with a trailing argument that a later __thiscall call in the same chain pops. KUNA_CALLEEPURGE_DEBUG=1 shows where each callee walk stops.
 - **Where / provenance:** P4/active-input-trial-scoring · kuna · new-analysis · holley-ltcgchain
 - **Example:** `--option calleeargsmsvc on`
 
@@ -2791,13 +2791,13 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P4/extrapop · kuna · new-analysis · kuna-spsolve
 - **Example:** `option spsolve off`
 
-### `boolreturn` -- on | off, default `off`
+### `boolreturn` -- on | off, default `on`
 
 - **Symptoms:** if (c) { return 1; } else { return 0; } where the source returns the comparison; a predicate function prints as an if/else of two constant returns; if (c) return 0; ... return 1; where the source has return a && b;.
 - **What it does:** C output only: print an if/else whose body and else each print one statement, `return 1;` and `return 0;` in either order, as the one statement `return (cond);`, or `return !(cond);` when the body returns 0; `return (cond);` only when the condition is a `&&`/`||` chain or a comparison that does not print as a bare truth test, so the value stays 0 or 1. Also fold the trailing run of a list: ifs without else whose body only returns 0, 1 or a comparison, ending in such a return, print as one return of a short-circuit expression that keeps the tests in order (`if (!a) return 0; return b < c;` prints `return (a) && b < c;`; `c ? 0 : T` is `!c && T`, `c ? 1 : T` is `c || T`, `c ? X : 0` is `c && X`, `c ? X : 1` is `!c || X`). Each arm must be a basic-block leaf with no label line and no comment whose only printed statement is a RETURN of an integer value; only the first folded if may print statements before its test, and the condition prints through the same render as the if header. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function, as `option ctree on` does.
-- **When to flip:** Turn on when the source likely returned a comparison directly (predicates, `is_x` helpers, comparison callbacks), which compilers lower to two constant returns. Leave off to keep the if/else the binary literally has: the same object code comes from a source that wrote the if/else.
+- **When to flip:** On by default: a predicate whose tests the compiler lowered to constant returns prints as the one short-circuit `return` the source most likely wrote (`return (a) && b < c;`). DecBench O2-noinline (unlace-2feb8da847, DecBench GED, the 47 binaries where it fires): 266 functions changed, GED sum 3,178 -> 2,703 (-475), 61 to GED 0 and 11 off it, 184 better and 63 worse. Turn it off to keep the if/else and guard returns the binary literally has: the same object code comes from a source that wrote them.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-boolreturn
-- **Example:** `option boolreturn on`
+- **Example:** `option boolreturn off`
 
 ### `noretfirst` -- on | off, default `on`
 

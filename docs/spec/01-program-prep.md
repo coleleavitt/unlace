@@ -1356,7 +1356,7 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   no object architecture, told apart by `e_machine`) covers the 32-bit literal
   halves `REL32_LO`/`REL32_HI` (`S + A - P`, the `s_getpc_b64` pair of every
   call and global) and `ABS32_LO`/`ABS32_HI`, and the `ABS32`, `REL32`, `ABS64`
-  and `REL64` data words; the GOT forms stay unsupported. eBPF objects are REL-only and every program ships as one,
+  and `REL64` data words; the GOT forms stay unsupported. A TI C2000 object (`EM_TI_C2000`) counts symbol values, symbol sizes and `r_offset` in 16-bit words, while its section sizes and bytes are in bytes. The layout keeps byte VMAs and scales those three by the address unit (`loader/kuna_wordaddr.rs`), so a function's entry, extent and relocation sites land on its bytes. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from

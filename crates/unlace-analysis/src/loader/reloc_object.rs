@@ -382,6 +382,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
     let mut diagnostics = RelocDiagnostics::default();
     let architecture = file.architecture();
     let machine = elf_machine(file);
+    let unit = super::kuna_wordaddr::address_unit_bytes(machine);
     let little_endian = file.is_little_endian();
 
     // --- Pass 1: assign a load VMA to every SHF_ALLOC section, snapshot bytes.
@@ -680,6 +681,8 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         // their label.
         let mut riscv_hi: HashMap<u64, i128> = HashMap::new();
         for (offset, reloc) in relocs {
+            // A word-addressed object counts r_offset in its address unit.
+            let offset = offset.wrapping_mul(unit);
             let r_type = kuna_mipsreloc::r_type_of(&reloc);
             let spec = match reloc_apply::classify_elf(architecture, machine, &reloc) {
                 Ok(Some(spec)) => spec,
@@ -875,7 +878,8 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             opd_descriptors.push((base.wrapping_add(sym.address()), entry));
             (entry, code.index, entry - code.vma)
         } else {
-            (base.wrapping_add(sym.address()), sec_idx, sym.address())
+            let offset = sym.address().wrapping_mul(unit);
+            (base.wrapping_add(offset), sec_idx, offset)
         };
         let section_name = file
             .section_by_index(sec_idx)
@@ -894,7 +898,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         });
         funcsyms.push((vma, name));
         if sym.size() > 0 {
-            funcsizes.push((vma, sym.size()));
+            funcsizes.push((vma, sym.size().wrapping_mul(unit)));
         }
     }
     funcsizes.sort_unstable_by(|a, b| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
@@ -1116,10 +1120,11 @@ fn resolve_symbol(
     architecture: Architecture,
 ) -> Option<ResolvedRelocationTarget> {
     let sym = file.symbol_by_index(idx).ok()?;
+    let unit = super::kuna_wordaddr::address_unit_bytes(elf_machine(file));
     match sym.section() {
         SymbolSection::Section(sec_idx) => {
             vma_of.get(&sec_idx).map(|base| ResolvedRelocationTarget {
-                address: base.wrapping_add(sym.address()),
+                address: base.wrapping_add(sym.address().wrapping_mul(unit)),
                 thumb: (architecture == Architecture::Arm && sym.kind() == SymbolKind::Text)
                     .then(|| sym.address() & 1 != 0),
             })
@@ -1153,7 +1158,7 @@ fn resolve_symbol(
             })
         }
         SymbolSection::Absolute => Some(ResolvedRelocationTarget {
-            address: sym.address(),
+            address: sym.address().wrapping_mul(unit),
             thumb: (architecture == Architecture::Arm && sym.kind() == SymbolKind::Text)
                 .then(|| sym.address() & 1 != 0),
         }),

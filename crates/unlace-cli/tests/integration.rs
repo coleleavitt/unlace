@@ -111,6 +111,8 @@ mod st20_raw;
 
 #[path = "stm8_raw.rs"]
 mod stm8_raw;
+#[path = "tilegx_raw.rs"]
+mod tilegx_raw;
 #[path = "tlcs90_raw.rs"]
 mod tlcs90_raw;
 #[path = "tms320c3x_raw.rs"]

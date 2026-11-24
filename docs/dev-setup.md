@@ -112,6 +112,11 @@ baseline only for a sanctioned change, with `UNLACE_BLESS=1` on the same command
 `UNLACE_BLESS=1 cargo test -p unlace-harness --test parity datatests` (stages: `stage_tests`).
 It refuses while any assertion fails.
 
+`scripts/check_layers.py` (run by the unittest line) fails on a new module path (`crate::`,
+`super::`, `self::`) from a lower band to a higher one (middle < lift < structure < bandb < emit <
+driver; the bands are listed in the script). Invert the dependency instead of adding it to
+`scripts/layers-allowlist.txt`; that list only shrinks.
+
 To run only some files, set `UNLACE_PARITY_FILES` to a comma-separated list of paths or globs
 (`*` matches any run of characters, `/` included; `?` one character). Each is matched against a
 file's repository-relative path, its file name and its name without the extension, so

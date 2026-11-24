@@ -354,6 +354,11 @@ fn trace_refusal(f: &Expr, cand: &Expr, why: &str, witness: Option<&[u64]>) {
 /// condition for equality at the full width.
 fn exhaustive_witness(a: &Expr, b: &Expr, n: usize) -> Option<Vec<u64>> {
     let bits = (EXHAUSTIVE_BITS / n.max(1)).clamp(1, 8);
+    exhaustive_witness_at(a, b, n, bits)
+}
+
+/// [`exhaustive_witness`] over every input of `bits` bits per leaf.
+fn exhaustive_witness_at(a: &Expr, b: &Expr, n: usize, bits: usize) -> Option<Vec<u64>> {
     let mask = (1u64 << bits) - 1;
     let mut leaves = [0u64; MAX_LEAVES];
     (0..1u64 << (bits * n.min(MAX_LEAVES)))
@@ -723,6 +728,7 @@ mod tests {
         let b = Expr::Or(l(0), l(1));
         assert!(exhaustive_witness(&a, &b, 2).is_some());
         assert!(exhaustive_witness(&a, &a, 2).is_none());
+        assert!(exhaustive_witness_at(&a, &b, 2, 8).is_some());
     }
 
     #[test]
@@ -736,7 +742,8 @@ mod tests {
     #[test]
     fn every_rule_is_an_identity() {
         // Each rule's sides, read back as expressions over the pattern variables,
-        // agree at random inputs and at every small-width input.
+        // agree at random inputs, at every small-width input, and at every 8-bit
+        // input over the leaves the rule names.
         for r in rules() {
             let (Some(lhs), Some(rhs)) =
                 (r.searcher.get_pattern_ast(), r.applier.get_pattern_ast())
@@ -746,6 +753,27 @@ mod tests {
             let (a, b) = (pattern_expr(lhs), pattern_expr(rhs));
             assert!(mba::agree(&a, &b, 3, u64::MAX), "rule {}", r.name);
             assert!(exhaustive_witness(&a, &b, 3).is_none(), "rule {}", r.name);
+            let n = leaves_used(&a).max(leaves_used(&b));
+            assert!(
+                exhaustive_witness_at(&a, &b, n, 8).is_none(),
+                "rule {} at 8 bits",
+                r.name
+            );
+        }
+    }
+
+    /// The number of leaves `e` names: one more than its highest leaf index.
+    fn leaves_used(e: &Expr) -> usize {
+        match e {
+            Expr::Leaf(i) => i + 1,
+            Expr::Const(_) => 0,
+            Expr::Neg(a) | Expr::Not(a) | Expr::Mul(a, _) => leaves_used(a),
+            Expr::Add(a, b)
+            | Expr::Sub(a, b)
+            | Expr::Prod(a, b)
+            | Expr::And(a, b)
+            | Expr::Or(a, b)
+            | Expr::Xor(a, b) => leaves_used(a).max(leaves_used(b)),
         }
     }
 

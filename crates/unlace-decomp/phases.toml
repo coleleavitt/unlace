@@ -1868,6 +1868,25 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "sfofxor"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace-1271"
+summary = "Fold the x86 SF != OF signed-less idiom. When a one-byte XOR (INT_XOR or BOOL_XOR) reads the direct definitions INT_SLESS(a, b) and INT_SBORROW(a, b) with the same a and b in the same order, the XOR becomes INT_SLESS(a, b). For the sign flag as the ISA defines it (the sign of a - b) and the signed overflow of a - b, SF xor OF is exactly the signed a < b, which is what the x86 jl and jge conditions test. Strictly structural: an XOR whose operands are not that pair of definitions is never touched, and only direct definitions match (no COPY or SUBPIECE peeling). Off by default because the identity depends on the lifter's flag definitions, which must be checked before the option is trusted; the rule has not been measured against the 675 datatest assertions, the stage corpus or the speed budget."
+use_when = "Turn on for x86 code where a jl or jge after a cmp prints as an XOR of a sign test and an overflow test, after checking on a sample function that the lifted SF is the sign of the subtraction. Default off: it is an identity over the flag model rather than a structural cleanup, and the flag model has not been verified against the lifter."
+example = "option sfofxor on"
+source_decompiler = "unlace"
+inspiration = "x86 signed condition codes: SF xor OF is the signed less-than of the subtraction (Intel SDM, Jcc conditions L and GE)"
+change_kind = "transform"
+tier = "transform"
+symptoms = "a jl or jge after cmp prints as an XOR of a sign test and an overflow test|SF != OF in a signed comparison of two registers|(a < b) ^ __OFSUB__(a, b) in a signed branch condition"
+
+[[settable]]
 option = "satconvert"
 values = "on|off"
 default = "on"

@@ -57,6 +57,7 @@ pub mod ruleaction_7;
 pub mod satconvert;
 pub mod satmul;
 pub mod selectdiv;
+pub mod sfofxor;
 pub mod simdlane;
 pub mod spillstoreguard;
 pub mod splitstorekeep;

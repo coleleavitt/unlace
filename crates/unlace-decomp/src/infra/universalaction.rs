@@ -753,6 +753,11 @@ pub fn universal_sched_hooked(
             crate::flagcompare::RuleSborrowGe::with_group("analysis")
         ),
         rrow!(
+            "sfofxor",
+            "analysis",
+            crate::sfofxor::RuleSfOfXor::new("analysis")
+        ),
+        rrow!(
             "shiftcompare",
             "analysis",
             crate::ruleaction_2::RuleShiftCompare

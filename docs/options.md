@@ -62,6 +62,9 @@ Three tiers:
 | a float-to-int conversion followed by clamps to -0x80000000 and 0x7fffffff | [`satconvert`](#satconvert----on--off-default-on) |
 | v = 0; if (x <= -1.0) after an unsigned conversion | [`satconvert`](#satconvert----on--off-default-on) |
 | (int)x where the clamps for NaN and overflow should not print | [`satconvert`](#satconvert----on--off-default-on) |
+| a jl or jge after cmp prints as an XOR of a sign test and an overflow test | [`sfofxor`](#sfofxor----on--off-default-off) |
+| SF != OF in a signed comparison of two registers | [`sfofxor`](#sfofxor----on--off-default-off) |
+| (a < b) ^ __OFSUB__(a, b) in a signed branch condition | [`sfofxor`](#sfofxor----on--off-default-off) |
 | a < b or a == b printed as two tests where a <= b would do | [`cmpmerge`](#cmpmerge----on--off-default-off) |
 | a0 != a1 && !(a0 < a1) on floats | [`cmpmerge`](#cmpmerge----on--off-default-off) |
 | two branches in a row test the same value against neighbouring constants and jump to one place | [`cmpmerge`](#cmpmerge----on--off-default-off) |
@@ -1570,6 +1573,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default: C leaves an out-of-range float-to-integer conversion undefined, so `(int)x` is what the source said, and the ladder appears only where the ISA defines the saturation. Flip off to see the ISA's exact result for NaN and out-of-range values.
 - **Where / provenance:** P3/simplification-quiescence · unlace · presentation-default · unlace-satconvert
 - **Example:** `option satconvert off`
+
+### `sfofxor` -- on | off, default `off`
+
+- **Symptoms:** a jl or jge after cmp prints as an XOR of a sign test and an overflow test; SF != OF in a signed comparison of two registers; (a < b) ^ __OFSUB__(a, b) in a signed branch condition.
+- **What it does:** Fold the x86 SF != OF signed-less idiom. When a one-byte XOR (INT_XOR or BOOL_XOR) reads the direct definitions INT_SLESS(a, b) and INT_SBORROW(a, b) with the same a and b in the same order, the XOR becomes INT_SLESS(a, b). For the sign flag as the ISA defines it (the sign of a - b) and the signed overflow of a - b, SF xor OF is exactly the signed a < b, which is what the x86 jl and jge conditions test. Strictly structural: an XOR whose operands are not that pair of definitions is never touched, and only direct definitions match (no COPY or SUBPIECE peeling). Off by default because the identity depends on the lifter's flag definitions, which must be checked before the option is trusted; the rule has not been measured against the 675 datatest assertions, the stage corpus or the speed budget.
+- **When to flip:** Turn on for x86 code where a jl or jge after a cmp prints as an XOR of a sign test and an overflow test, after checking on a sample function that the lifted SF is the sign of the subtraction. Default off: it is an identity over the flag model rather than a structural cleanup, and the flag model has not been verified against the lifter.
+- **Where / provenance:** P3/simplification-quiescence · unlace · transform · unlace-1271
+- **Example:** `option sfofxor on`
 
 ### `cmpmerge` -- on | off, default `off`
 

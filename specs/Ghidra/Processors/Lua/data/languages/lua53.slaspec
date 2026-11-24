@@ -1,0 +1,218 @@
+# Lua 5.3 virtual machine bytecode (PUC-Rio Lua 5.3.0 - 5.3.6).
+# Written for unlace from the public Lua 5.3 sources (lopcodes.h, lvm.c; MIT licence) and checked
+# against luac53 -l -l built from the same sources.
+# One instruction is a 32-bit little-endian word: OP(0..5) A(6..13) C(14..22) B(23..31);
+# Bx = bits 14..31, sBx = Bx - 131071, Ax = bits 6..31. An RK operand (B or C) with bit 8 set names
+# constant K[x & 0xff]. Jumps count instructions, so a target is inst_next + 4 * sBx.
+# Values, registers r0..r255, the K and U spaces and the user-ops are those of the Lua 5.4 module.
+
+define endian=little;
+define alignment=4;
+
+define space code type=ram_space size=4 default;
+define space K type=ram_space size=4 wordsize=8;
+define space U type=ram_space size=4 wordsize=8;
+define space register type=register_space size=4;
+
+define register offset=0x0 size=4 [ PC LR SP ];
+define register offset=0x10 size=8 [ RV CR ];
+define register offset=0x2000 size=4 [ contextreg ];
+define context contextreg
+  cdiff = (0,8) noflow
+  ndiff = (9,17) noflow
+;
+define register offset=0x1000 size=8 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 r32 r33 r34 r35 r36 r37 r38 r39 r40 r41 r42 r43 r44 r45 r46 r47 r48 r49 r50 r51 r52 r53 r54 r55 r56 r57 r58 r59 r60 r61 r62 r63 r64 r65 r66 r67 r68 r69 r70 r71 r72 r73 r74 r75 r76 r77 r78 r79 r80 r81 r82 r83 r84 r85 r86 r87 r88 r89 r90 r91 r92 r93 r94 r95 r96 r97 r98 r99 r100 r101 r102 r103 r104 r105 r106 r107 r108 r109 r110 r111 r112 r113 r114 r115 r116 r117 r118 r119 r120 r121 r122 r123 r124 r125 r126 r127 r128 r129 r130 r131 r132 r133 r134 r135 r136 r137 r138 r139 r140 r141 r142 r143 r144 r145 r146 r147 r148 r149 r150 r151 r152 r153 r154 r155 r156 r157 r158 r159 r160 r161 r162 r163 r164 r165 r166 r167 r168 r169 r170 r171 r172 r173 r174 r175 r176 r177 r178 r179 r180 r181 r182 r183 r184 r185 r186 r187 r188 r189 r190 r191 r192 r193 r194 r195 r196 r197 r198 r199 r200 r201 r202 r203 r204 r205 r206 r207 r208 r209 r210 r211 r212 r213 r214 r215 r216 r217 r218 r219 r220 r221 r222 r223 r224 r225 r226 r227 r228 r229 r230 r231 r232 r233 r234 r235 r236 r237 r238 r239 r240 r241 r242 r243 r244 r245 r246 r247 r248 r249 r250 r251 r252 r253 r254 r255 ];
+
+define token instr(32)
+  op   = (0,5)
+  A    = (6,13)
+  ra   = (6,13)
+  C    = (14,22)
+  rc   = (14,21)
+  kc   = (14,21)
+  chi  = (22,22)
+  cc   = (14,22)
+  B    = (23,31)
+  rb   = (23,30)
+  kb   = (23,30)
+  bhi  = (31,31)
+  bc   = (23,31)
+  Bx   = (14,31)
+  Ax   = (6,31)
+;
+
+attach variables [ ra rb rc ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 r32 r33 r34 r35 r36 r37 r38 r39 r40 r41 r42 r43 r44 r45 r46 r47 r48 r49 r50 r51 r52 r53 r54 r55 r56 r57 r58 r59 r60 r61 r62 r63 r64 r65 r66 r67 r68 r69 r70 r71 r72 r73 r74 r75 r76 r77 r78 r79 r80 r81 r82 r83 r84 r85 r86 r87 r88 r89 r90 r91 r92 r93 r94 r95 r96 r97 r98 r99 r100 r101 r102 r103 r104 r105 r106 r107 r108 r109 r110 r111 r112 r113 r114 r115 r116 r117 r118 r119 r120 r121 r122 r123 r124 r125 r126 r127 r128 r129 r130 r131 r132 r133 r134 r135 r136 r137 r138 r139 r140 r141 r142 r143 r144 r145 r146 r147 r148 r149 r150 r151 r152 r153 r154 r155 r156 r157 r158 r159 r160 r161 r162 r163 r164 r165 r166 r167 r168 r169 r170 r171 r172 r173 r174 r175 r176 r177 r178 r179 r180 r181 r182 r183 r184 r185 r186 r187 r188 r189 r190 r191 r192 r193 r194 r195 r196 r197 r198 r199 r200 r201 r202 r203 r204 r205 r206 r207 r208 r209 r210 r211 r212 r213 r214 r215 r216 r217 r218 r219 r220 r221 r222 r223 r224 r225 r226 r227 r228 r229 r230 r231 r232 r233 r234 r235 r236 r237 r238 r239 r240 r241 r242 r243 r244 r245 r246 r247 r248 r249 r250 r251 r252 r253 r254 r255 ];
+
+define pcodeop luaNil;
+define pcodeop luaLoadKX;
+define pcodeop luaGetTable;
+define pcodeop luaSetTable;
+define pcodeop luaNewTable;
+define pcodeop luaAdd;
+define pcodeop luaSub;
+define pcodeop luaMul;
+define pcodeop luaMod;
+define pcodeop luaPow;
+define pcodeop luaDiv;
+define pcodeop luaIDiv;
+define pcodeop luaUnm;
+define pcodeop luaNot;
+define pcodeop luaLen;
+define pcodeop luaConcat;
+define pcodeop luaClose;
+define pcodeop luaEq;
+define pcodeop luaLt;
+define pcodeop luaLe;
+define pcodeop luaTruthy;
+define pcodeop luaCall;
+define pcodeop luaCallResult;
+define pcodeop luaCallMulti;
+define pcodeop luaForStep;
+define pcodeop luaForLoop;
+define pcodeop luaIsNil;
+define pcodeop luaSetList;
+define pcodeop luaClosure;
+define pcodeop luaVararg;
+define pcodeop luaGetGlobal;
+define pcodeop luaSetGlobal;
+define pcodeop luaReturnMulti;
+
+RA1: "r"^v is A [ v = A + 1; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RA2: "r"^v is A [ v = A + 2; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RA3: "r"^v is A [ v = A + 3; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RA4: "r"^v is A [ v = A + 4; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RA5: "r"^v is A [ v = A + 5; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RA6: "r"^v is A [ v = A + 6; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RA7: "r"^v is A [ v = A + 7; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RA8: "r"^v is A [ v = A + 8; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RA9: "r"^v is A [ v = A + 9; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RA10: "r"^v is A [ v = A + 10; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+
+RB0: "r"^v is B [ v = B + 0; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RB1: "r"^v is B [ v = B + 1; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RB2: "r"^v is B [ v = B + 2; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RB3: "r"^v is B [ v = B + 3; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RB4: "r"^v is B [ v = B + 4; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+RB5: "r"^v is B [ v = B + 5; ] { local p:4 = 0x1000 + v * 8; export *[register]:8 p; }
+KBx: "K"^Bx is Bx { export *[K]:8 Bx; }
+KB: "K"^kb is kb { export *[K]:8 kb; }
+KC: "K"^kc is kc { export *[K]:8 kc; }
+UB: "U"^B is B { export *[U]:8 B; }
+UA: "U"^A is A { export *[U]:8 A; }
+RKB: rb is bhi=0 & rb { export rb; }
+RKB: KB is bhi=1 & KB { export KB; }
+RKC: rc is chi=0 & rc { export rc; }
+RKC: KC is chi=1 & KC { export KC; }
+Skip: dest is epsilon [ dest = inst_next + 4; ] { export *:4 dest; }
+SJ: dest is Bx [ dest = inst_next + (Bx - 131071) * 4; ] { export *:4 dest; }
+
+:MOVE ra, rb is op=0 & ra & rb & bhi=0 { ra = rb; }
+:LOADK ra, KBx is op=1 & ra & KBx { ra = KBx; }
+:LOADKX ra is op=2 & ra { ra = luaLoadKX(); }
+:LOADBOOL ra, B, C is op=3 & ra & B & C & cc=0 { ra = B; }
+:LOADBOOL ra, B, C is op=3 & ra & B & C & Skip { ra = B; goto Skip; }
+:LOADNIL ra, B is op=4 & ra & B & bc=0 { ra = luaNil(); }
+:LOADNIL ra, B is op=4 & ra & B & bc=1 & RA1 { ra = luaNil(); RA1 = luaNil(); }
+:LOADNIL ra, B is op=4 & ra & B & bc=2 & RA1 & RA2 { ra = luaNil(); RA1 = luaNil(); RA2 = luaNil(); }
+:LOADNIL ra, B is op=4 & ra & B & bc=3 & RA1 & RA2 & RA3 { ra = luaNil(); RA1 = luaNil(); RA2 = luaNil(); RA3 = luaNil(); }
+:LOADNIL ra, B is op=4 & ra & B & bc=4 & RA1 & RA2 & RA3 & RA4 { ra = luaNil(); RA1 = luaNil(); RA2 = luaNil(); RA3 = luaNil(); RA4 = luaNil(); }
+:LOADNIL ra, B is op=4 & ra & B & bc=5 & RA1 & RA2 & RA3 & RA4 & RA5 { ra = luaNil(); RA1 = luaNil(); RA2 = luaNil(); RA3 = luaNil(); RA4 = luaNil(); RA5 = luaNil(); }
+:LOADNIL ra, B is op=4 & ra & B & bc=6 & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 { ra = luaNil(); RA1 = luaNil(); RA2 = luaNil(); RA3 = luaNil(); RA4 = luaNil(); RA5 = luaNil(); RA6 = luaNil(); }
+:LOADNIL ra, B is op=4 & ra & B & bc=7 & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 & RA7 { ra = luaNil(); RA1 = luaNil(); RA2 = luaNil(); RA3 = luaNil(); RA4 = luaNil(); RA5 = luaNil(); RA6 = luaNil(); RA7 = luaNil(); }
+:LOADNIL ra, B is op=4 & ra & B { ra = luaNil(); }
+:GETUPVAL ra, UB is op=5 & ra & UB { ra = UB; }
+:SETUPVAL ra, UB is op=9 & ra & UB { UB = ra; }
+:GETTABUP ra, UB, RKC is op=6 & ra & UB & RKC { ra = luaGetTable(UB, RKC); }
+:GETTABLE ra, rb, RKC is op=7 & ra & rb & bhi=0 & RKC { ra = luaGetTable(rb, RKC); }
+:SETTABUP UA, RKB, RKC is op=8 & UA & RKB & RKC { luaSetTable(UA, RKB, RKC); }
+:SETTABLE ra, RKB, RKC is op=10 & ra & RKB & RKC { luaSetTable(ra, RKB, RKC); }
+:NEWTABLE ra, B, C is op=11 & ra & B & C { ra = luaNewTable(B:2, C:2); }
+:SELF ra, rb, RKC is op=12 & ra & rb & bhi=0 & RKC & RA1 { obj:8 = rb; RA1 = obj; ra = luaGetTable(obj, RKC); }
+:ADD ra, RKB, RKC is op=13 & ra & RKB & RKC { ra = luaAdd(RKB, RKC); }
+:SUB ra, RKB, RKC is op=14 & ra & RKB & RKC { ra = luaSub(RKB, RKC); }
+:MUL ra, RKB, RKC is op=15 & ra & RKB & RKC { ra = luaMul(RKB, RKC); }
+:DIV ra, RKB, RKC is op=18 & ra & RKB & RKC { ra = luaDiv(RKB, RKC); }
+:MOD ra, RKB, RKC is op=16 & ra & RKB & RKC { ra = luaMod(RKB, RKC); }
+:POW ra, RKB, RKC is op=17 & ra & RKB & RKC { ra = luaPow(RKB, RKC); }
+:IDIV ra, RKB, RKC is op=19 & ra & RKB & RKC { ra = luaIDiv(RKB, RKC); }
+:BAND ra, RKB, RKC is op=20 & ra & RKB & RKC { ra = RKB & RKC; }
+:BOR ra, RKB, RKC is op=21 & ra & RKB & RKC { ra = RKB | RKC; }
+:BXOR ra, RKB, RKC is op=22 & ra & RKB & RKC { ra = RKB ^ RKC; }
+:SHL ra, RKB, RKC is op=23 & ra & RKB & RKC { b:8 = RKB; c:8 = RKC; ra = (b << c) | (b >> (-c)); }
+:SHR ra, RKB, RKC is op=24 & ra & RKB & RKC { b:8 = RKB; c:8 = RKC; ra = (b >> c) | (b << (-c)); }
+:UNM ra, rb is op=25 & ra & rb & bhi=0 { ra = luaUnm(rb); }
+:BNOT ra, rb is op=26 & ra & rb & bhi=0 { ra = ~rb; }
+:NOT ra, rb is op=27 & ra & rb & bhi=0 { ra = luaNot(rb); }
+:LEN ra, rb is op=28 & ra & rb & bhi=0 { ra = luaLen(rb); }
+CATS: is cdiff=1 & RB0 & RB1 { t:8 = luaConcat(RB0, RB1); export t; }
+CATS: is cdiff=2 & RB0 & RB1 & RB2 { t:8 = luaConcat(RB0, RB1, RB2); export t; }
+CATS: is cdiff=3 & RB0 & RB1 & RB2 & RB3 { t:8 = luaConcat(RB0, RB1, RB2, RB3); export t; }
+CATS: is cdiff=4 & RB0 & RB1 & RB2 & RB3 & RB4 { t:8 = luaConcat(RB0, RB1, RB2, RB3, RB4); export t; }
+CATS: is cdiff=5 & RB0 & RB1 & RB2 & RB3 & RB4 & RB5 { t:8 = luaConcat(RB0, RB1, RB2, RB3, RB4, RB5); export t; }
+CATS: is B & C { b:2 = B; c:2 = C; t:8 = luaConcat(b, c); export t; }
+:CONCAT ra, B, C is op=29 & ra & B & C & CATS [ cdiff = C - B; ] { ra = CATS; }
+:JMP SJ is op=30 & A=0 & SJ { goto SJ; }
+:JMP A, SJ is op=30 & A & SJ { a:2 = A; luaClose(a); goto SJ; }
+:EQ A, RKB, RKC is op=31 & A & RKB & RKC & Skip { c:1 = luaEq(RKB, RKC); if (c != A:1) goto Skip; }
+:LT A, RKB, RKC is op=32 & A & RKB & RKC & Skip { c:1 = luaLt(RKB, RKC); if (c != A:1) goto Skip; }
+:LE A, RKB, RKC is op=33 & A & RKB & RKC & Skip { c:1 = luaLe(RKB, RKC); if (c != A:1) goto Skip; }
+:TEST ra, C is op=34 & ra & C & Skip { c:1 = luaTruthy(ra); if (c != C:1) goto Skip; }
+:TESTSET ra, rb, C is op=35 & ra & rb & bhi=0 & C & Skip { c:1 = luaTruthy(rb); if (c != C:1) goto Skip; ra = rb; }
+CRes: is cc=1 { }
+CRes: is cc=0 & ra { ra = CR; }
+CRes: is cc=2 & ra { ra = CR; }
+CRes: is cc=3 & ra & RA1 { ra = CR; RA1 = luaCallResult(1:1); }
+CRes: is cc=4 & ra & RA1 & RA2 { ra = CR; RA1 = luaCallResult(1:1); RA2 = luaCallResult(2:1); }
+CRes: is cc=5 & ra & RA1 & RA2 & RA3 { ra = CR; RA1 = luaCallResult(1:1); RA2 = luaCallResult(2:1); RA3 = luaCallResult(3:1); }
+CRes: is cc=6 & ra & RA1 & RA2 & RA3 & RA4 { ra = CR; RA1 = luaCallResult(1:1); RA2 = luaCallResult(2:1); RA3 = luaCallResult(3:1); RA4 = luaCallResult(4:1); }
+CRes: is cc=7 & ra & RA1 & RA2 & RA3 & RA4 & RA5 { ra = CR; RA1 = luaCallResult(1:1); RA2 = luaCallResult(2:1); RA3 = luaCallResult(3:1); RA4 = luaCallResult(4:1); RA5 = luaCallResult(5:1); }
+CRes: is cc=8 & ra & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 { ra = CR; RA1 = luaCallResult(1:1); RA2 = luaCallResult(2:1); RA3 = luaCallResult(3:1); RA4 = luaCallResult(4:1); RA5 = luaCallResult(5:1); RA6 = luaCallResult(6:1); }
+CRes: is cc=9 & ra & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 & RA7 { ra = CR; RA1 = luaCallResult(1:1); RA2 = luaCallResult(2:1); RA3 = luaCallResult(3:1); RA4 = luaCallResult(4:1); RA5 = luaCallResult(5:1); RA6 = luaCallResult(6:1); RA7 = luaCallResult(7:1); }
+CRes: is ra { ra = CR; }
+:CALL ra, B, C is op=36 & B & ra & bc=1 & C & CRes { CR = luaCall(ra); build CRes; }
+:TAILCALL ra, B, C is op=37 & B & ra & bc=1 & C { RV = luaCall(ra); return [LR]; }
+:CALL ra, B, C is op=36 & B & ra & bc=2 & RA1 & C & CRes { CR = luaCall(ra, RA1); build CRes; }
+:TAILCALL ra, B, C is op=37 & B & ra & bc=2 & RA1 & C { RV = luaCall(ra, RA1); return [LR]; }
+:CALL ra, B, C is op=36 & B & ra & bc=3 & RA1 & RA2 & C & CRes { CR = luaCall(ra, RA1, RA2); build CRes; }
+:TAILCALL ra, B, C is op=37 & B & ra & bc=3 & RA1 & RA2 & C { RV = luaCall(ra, RA1, RA2); return [LR]; }
+:CALL ra, B, C is op=36 & B & ra & bc=4 & RA1 & RA2 & RA3 & C & CRes { CR = luaCall(ra, RA1, RA2, RA3); build CRes; }
+:TAILCALL ra, B, C is op=37 & B & ra & bc=4 & RA1 & RA2 & RA3 & C { RV = luaCall(ra, RA1, RA2, RA3); return [LR]; }
+:CALL ra, B, C is op=36 & B & ra & bc=5 & RA1 & RA2 & RA3 & RA4 & C & CRes { CR = luaCall(ra, RA1, RA2, RA3, RA4); build CRes; }
+:TAILCALL ra, B, C is op=37 & B & ra & bc=5 & RA1 & RA2 & RA3 & RA4 & C { RV = luaCall(ra, RA1, RA2, RA3, RA4); return [LR]; }
+:CALL ra, B, C is op=36 & B & ra & bc=6 & RA1 & RA2 & RA3 & RA4 & RA5 & C & CRes { CR = luaCall(ra, RA1, RA2, RA3, RA4, RA5); build CRes; }
+:TAILCALL ra, B, C is op=37 & B & ra & bc=6 & RA1 & RA2 & RA3 & RA4 & RA5 & C { RV = luaCall(ra, RA1, RA2, RA3, RA4, RA5); return [LR]; }
+:CALL ra, B, C is op=36 & B & ra & bc=7 & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 & C & CRes { CR = luaCall(ra, RA1, RA2, RA3, RA4, RA5, RA6); build CRes; }
+:TAILCALL ra, B, C is op=37 & B & ra & bc=7 & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 & C { RV = luaCall(ra, RA1, RA2, RA3, RA4, RA5, RA6); return [LR]; }
+:CALL ra, B, C is op=36 & B & ra & bc=8 & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 & RA7 & C & CRes { CR = luaCall(ra, RA1, RA2, RA3, RA4, RA5, RA6, RA7); build CRes; }
+:TAILCALL ra, B, C is op=37 & B & ra & bc=8 & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 & RA7 & C { RV = luaCall(ra, RA1, RA2, RA3, RA4, RA5, RA6, RA7); return [LR]; }
+:CALL ra, B, C is op=36 & B & ra & bc=9 & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 & RA7 & RA8 & C & CRes { CR = luaCall(ra, RA1, RA2, RA3, RA4, RA5, RA6, RA7, RA8); build CRes; }
+:TAILCALL ra, B, C is op=37 & B & ra & bc=9 & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 & RA7 & RA8 & C { RV = luaCall(ra, RA1, RA2, RA3, RA4, RA5, RA6, RA7, RA8); return [LR]; }
+:CALL ra, B, C is op=36 & ra & B & C & CRes { b:2 = B; CR = luaCallMulti(ra, b); build CRes; }
+:TAILCALL ra, B, C is op=37 & ra & B & C { b:2 = B; RV = luaCallMulti(ra, b); return [LR]; }
+:RETURN ra, B is op=38 & ra & B & bc=1 { return [LR]; }
+:RETURN ra, B is op=38 & ra & B & bc=0 { RV = luaReturnMulti(ra); return [LR]; }
+:RETURN ra, B is op=38 & ra & B { RV = ra; return [LR]; }
+:FORLOOP ra, SJ is op=39 & ra & SJ & RA1 & RA2 & RA3 { ra = luaForStep(ra, RA2); c:1 = luaForLoop(ra, RA1, RA2); if (c == 0) goto inst_next; RA3 = ra; goto SJ; }
+:FORPREP ra, SJ is op=40 & ra & SJ & RA2 { ra = luaSub(ra, RA2); goto SJ; }
+:TFORCALL ra, C is op=41 & ra & C & cc=1 & RA1 & RA2 & RA3 { RA3 = luaCall(ra, RA1, RA2); }
+:TFORCALL ra, C is op=41 & ra & C & cc=2 & RA1 & RA2 & RA3 & RA4 { RA3 = luaCall(ra, RA1, RA2); RA4 = luaCallResult(1:1); }
+:TFORCALL ra, C is op=41 & ra & C & cc=3 & RA1 & RA2 & RA3 & RA4 & RA5 { RA3 = luaCall(ra, RA1, RA2); RA4 = luaCallResult(1:1); RA5 = luaCallResult(2:1); }
+:TFORCALL ra, C is op=41 & ra & C & cc=4 & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 { RA3 = luaCall(ra, RA1, RA2); RA4 = luaCallResult(1:1); RA5 = luaCallResult(2:1); RA6 = luaCallResult(3:1); }
+:TFORCALL ra, C is op=41 & ra & C & RA1 & RA2 & RA3 { RA3 = luaCall(ra, RA1, RA2); }
+:TFORLOOP ra, SJ is op=42 & ra & SJ & RA1 { c:1 = luaIsNil(RA1); if (c != 0) goto inst_next; ra = RA1; goto SJ; }
+:SETLIST ra, B, C is op=43 & B & ra & bc=1 & C & RA1 { c:2 = C; luaSetList(ra, c, RA1); }
+:SETLIST ra, B, C is op=43 & B & ra & bc=2 & C & RA1 & RA2 { c:2 = C; luaSetList(ra, c, RA1, RA2); }
+:SETLIST ra, B, C is op=43 & B & ra & bc=3 & C & RA1 & RA2 & RA3 { c:2 = C; luaSetList(ra, c, RA1, RA2, RA3); }
+:SETLIST ra, B, C is op=43 & B & ra & bc=4 & C & RA1 & RA2 & RA3 & RA4 { c:2 = C; luaSetList(ra, c, RA1, RA2, RA3, RA4); }
+:SETLIST ra, B, C is op=43 & B & ra & bc=5 & C & RA1 & RA2 & RA3 & RA4 & RA5 { c:2 = C; luaSetList(ra, c, RA1, RA2, RA3, RA4, RA5); }
+:SETLIST ra, B, C is op=43 & B & ra & bc=6 & C & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 { c:2 = C; luaSetList(ra, c, RA1, RA2, RA3, RA4, RA5, RA6); }
+:SETLIST ra, B, C is op=43 & B & ra & bc=7 & C & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 & RA7 { c:2 = C; luaSetList(ra, c, RA1, RA2, RA3, RA4, RA5, RA6, RA7); }
+:SETLIST ra, B, C is op=43 & B & ra & bc=8 & C & RA1 & RA2 & RA3 & RA4 & RA5 & RA6 & RA7 & RA8 { c:2 = C; luaSetList(ra, c, RA1, RA2, RA3, RA4, RA5, RA6, RA7, RA8); }
+:SETLIST ra, B, C is op=43 & ra & B & C { b:2 = B; c:2 = C; luaSetList(ra, c, b); }
+:CLOSURE ra, Bx is op=44 & ra & Bx { bx:4 = Bx; ra = luaClosure(bx); }
+:VARARG ra, B is op=45 & ra & B & bc=2 { ra = luaVararg(0:2); }
+:VARARG ra, B is op=45 & ra & B & bc=3 & RA1 { ra = luaVararg(0:2); RA1 = luaVararg(1:2); }
+:VARARG ra, B is op=45 & ra & B & bc=4 & RA1 & RA2 { ra = luaVararg(0:2); RA1 = luaVararg(1:2); RA2 = luaVararg(2:2); }
+:VARARG ra, B is op=45 & ra & B & bc=5 & RA1 & RA2 & RA3 { ra = luaVararg(0:2); RA1 = luaVararg(1:2); RA2 = luaVararg(2:2); RA3 = luaVararg(3:2); }
+:VARARG ra, B is op=45 & ra & B { b:2 = B; ra = luaVararg(b); }
+:EXTRAARG Ax is op=46 & Ax { }

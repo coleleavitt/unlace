@@ -4610,6 +4610,15 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 AVX-512 Disp8*N from LLVM (#98)
+
+The compressed displacement of 134 AVX-512 constructors (sub-vector broadcasts, inserts and
+extracts, `vpmov[sz]x`, byte/word expand and compress, scalar FP16, ...) comes from LLVM's
+`CD8_Scale`, and a few constructors gained their missing immediate or the right memory size.
+Before, a disp8 in these was scaled by the wrong N, so `vpbroadcastb zmm0, [rdi + 1]` read
+`[rdi + 4]`. `tools/x86_avx512_sweep.py` reruns the comparison against `llvm-objdump`.
+Exercised by the `x86_64_avx512_disp8` row of `unlace-cli/tests/processors.toml`.
+
 ### x86 prefix, BSF/BSR and MOVSXD fixes (#548)
 
 Found by `tools/difffuzz`. In 64-bit mode a REX prefix that another prefix (a
@@ -4679,7 +4688,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `2650` | Signetics 2650 / 2650A / 2650B | `2650:BE:16:default` | Signetics 2650 Microprocessor manual, 2650 data sheet | `unlace-cli/tests/s2650_raw.rs` |
 | `MeP` | Toshiba MeP-c4 core, both byte orders | `MeP:BE:32:default`, `MeP:LE:32:default` | binutils `cpu/mep-core.cpu` (CGEN), GCC `mep.h` | `unlace-cli/tests/mep.rs` |
 | `V810` | NEC V810 (Virtual Boy, PC-FX) | `V810:LE:32:default` | NEC uPD70732 user's manual, Virtual Boy development manual, MAME `v810` | `unlace-cli/tests/v810.rs` |
-| `Lua` | Lua 5.4 VM bytecode (one function's code array) | `Lua:LE:32:5.4` | Lua 5.4 `lopcodes.h`/`lvm.c` (MIT), reference manual; oracle `luac5.4 -l -l` | `unlace-cli/tests/lua54.rs` |
+| `Lua` | Lua 5.1, 5.2, 5.3 and 5.4 VM bytecode (one function's code array) | `Lua:LE:32:5.1`, `Lua:LE:32:5.2`, `Lua:LE:32:5.3`, `Lua:LE:32:5.4` | each release's `lopcodes.h`/`lvm.c` (MIT), reference manual; oracle `luac -l` of 5.1.5, 5.2.4, 5.3.6, 5.4.8 | `unlace-cli/tests/lua54.rs`, `processors.toml` (`lua5x`) |
 | `CDP1802` | RCA CDP1802 COSMAC | `CDP1802:BE:16:default`, `CDP1802:BE:16:SCRT` | RCA CDP1802 data sheet, User Manual MPM-201 | `unlace-cli/tests/cdp1802_raw.rs` |
 | `IQ2000` | Vitesse IQ2000 | `iq2000:BE:32:default` | binutils CGEN `cpu/iq2000.cpu` and `cpu/iq2000m.cpu`, GCC `config/iq2000` | `unlace-cli/tests/iq2000_raw.rs` |
 | `SCMP` | National SC/MP, INS8060 SC/MP II | `SCMP:LE:16:default` | National SC/MP Technical Description, INS8060 data sheet | `unlace-cli/tests/scmp_raw.rs` |
@@ -4702,6 +4711,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/processors.toml` (`st20`) |
 | `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilegx`) |
 | `TILEPRO` | Tilera TILEPro (TILEPro32/TILEPro64, TILE64), parallel X/Y-mode bundles | `TILEPRO:LE:32:default` | TILEPro ISA reference (UG120); encodings generated from the binutils `tilepro` opcode table by `tools/gen_tilepro_sleigh.py`; checked against `tilepro-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilepro`) |
+| `CSKY` | C-SKY ABIv2 (CK801-CK860), integer ISA, both byte orders | `CSKY:LE:32:v2`, `CSKY:BE:32:v2` | C-SKY V2 instruction set manual; encodings from the binutils `csky-opc.h` table; checked against `csky-elf-objdump` | `unlace-cli/tests/processors.toml` (`csky`) |
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/processors.toml` (`v60*`) |
 | `PowerPC` (Gekko) | IBM Gekko / Broadway (PowerPC 750CL) paired singles | `PowerPC:BE:32:Gekko` | IBM PowerPC 750CL User's Manual (paired-single chapter); checked against `powerpc-elf-objdump -M gekko` 2.43.1 | `unlace-cli/tests/ppc_gekko.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
@@ -4729,6 +4739,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `PowerPC` (Xenon VMX128) | Xbox 360 Xenon (64-bit PowerPC, AltiVec, VMX128) | `PowerPC:BE:64:Xenon` | Xenia emulator `ppc-instructions.xml` and VX128 decode formats (BSD-3) | `unlace-cli/tests/processors.toml` (`ppc_xenon_vmx128`) |
 | `S1C6200` | Seiko Epson S1C6200 / E0C6200 / E0C6200A 4-bit core | `S1C6200:BE:16:default` | Epson E0C6200/6200A Core CPU Manual (MF297-06a); checked against MAME `e0c6200` on all 4,096 encodings | `unlace-cli/tests/processors.toml` (`s1c6200`) |
 | `Propeller` (P2) | Parallax Propeller 2 (P2X8C4M64P), hub execution | `propeller2:LE:32:default` | Parallax "Propeller 2 Instructions" table v35 (encodings, operations, flags); checked against the flexspin assembler | `unlace-cli/tests/processors.toml` (`propeller2`) |
+| `S1C88` | Seiko Epson S1C88 8-bit core (Pokemon mini CPU) | `S1C88:LE:16:default` | Epson S1C88 Core CPU Manual (MF658-05); checked against MAME `minx` on all 768 opcode slots | `unlace-cli/tests/processors.toml` (`s1c88`) |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

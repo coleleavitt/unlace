@@ -1482,8 +1482,25 @@ pub(crate) fn collect_deep(
     })
 }
 
-/// Materialize `rw` before `op` and make `op` a `COPY` of it.
+/// Materialize `rw` before `op` and make `op` a `COPY` of it. Declined,
+/// with `op` untouched, when a leaf is a free varnode (one heritage has not
+/// reached yet): it already has its one reader, so no new op can read it, and
+/// a rewrite to a bare leaf (`(x | y) - (~x & y)` is `x`) would leave `op`
+/// a `COPY` with no input for the next rule of its old opcode to read.
 pub(crate) fn replace(data: &mut Funcdata, op: OpId, rw: &Rewrite, size: int4) -> int4 {
+    let free = |vn: VarnodeId| {
+        data.vbank()
+            .get(vn)
+            .is_none_or(|v| v.is_free() && !v.is_spacebase())
+    };
+    if rw
+        .leaves
+        .iter()
+        .any(|l| matches!(l, LeafRef::Vn(vn) if free(*vn)))
+        || rw.seen.iter().any(|(vn, _)| free(*vn))
+    {
+        return 0;
+    }
     let res = emit(data, op, &rw.simple, rw, size);
     let copy = crate::context::TypeOp::new(OpCode::CPUI_COPY, 0, "COPY");
     data.op_set_opcode(op, copy);

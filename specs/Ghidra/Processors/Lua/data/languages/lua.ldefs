@@ -11,4 +11,37 @@
     <description>Lua 5.4 virtual machine bytecode (PUC-Rio luac, little-endian)</description>
     <compiler name="default" spec="lua.cspec" id="default"/>
   </language>
+  <language processor="Lua"
+            endian="little"
+            size="32"
+            variant="5.1"
+            version="1.0"
+            slafile="lua51.sla"
+            processorspec="lua.pspec"
+            id="Lua:LE:32:5.1">
+    <description>Lua 5.1 virtual machine bytecode (PUC-Rio luac, little-endian)</description>
+    <compiler name="default" spec="lua.cspec" id="default"/>
+  </language>
+  <language processor="Lua"
+            endian="little"
+            size="32"
+            variant="5.2"
+            version="1.0"
+            slafile="lua52.sla"
+            processorspec="lua.pspec"
+            id="Lua:LE:32:5.2">
+    <description>Lua 5.2 virtual machine bytecode (PUC-Rio luac, little-endian)</description>
+    <compiler name="default" spec="lua.cspec" id="default"/>
+  </language>
+  <language processor="Lua"
+            endian="little"
+            size="32"
+            variant="5.3"
+            version="1.0"
+            slafile="lua53.sla"
+            processorspec="lua.pspec"
+            id="Lua:LE:32:5.3">
+    <description>Lua 5.3 virtual machine bytecode (PUC-Rio luac, little-endian)</description>
+    <compiler name="default" spec="lua.cspec" id="default"/>
+  </language>
 </language_definitions>

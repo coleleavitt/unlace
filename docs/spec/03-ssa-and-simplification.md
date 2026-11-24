@@ -3879,6 +3879,19 @@ stale earlier compare; a constant pointer is left to `RuleLoadVarnode`, which
 also resolves the spacebase-placeholder tail that a bare COPY would drop; a
 free pointer is declined. Always on (DIV-158).
 
+**boxedcompare** —
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_boxedcompare.rs
+(RuleBoxedCompare)`, oppool1, fires on `INT_EQUAL`/`INT_NOTEQUAL`. *Pattern:* one operand is
+the all-ones constant of its size, and every bit of the other is known to be 1. This is the
+NaN-unboxing test of a RISC-V single- or half-precision register read, `SUB84(f >> 32, 0) ==
+0xffffffff`, after a boxed write (`0xffffffff00000000 | zext(x)`), a boxed constant, or a loop join
+of such values. The proof is a bounded walk (64 definitions) that keeps the bits known to be 1
+through constants, `COPY`, `INT_ZEXT`, `INT_OR`, `INT_AND`, shifts by a constant, `PIECE`,
+`SUBPIECE` and `MULTIEQUAL` (every input must agree). An input, any other definition or an
+exhausted budget proves nothing, so a function's own parameters stay unproven. *Rewrite:* the
+compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
+unboxing dies. Exact, so always on.
+
 **x87truncate** —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_x87truncate.rs
 (RuleX87Truncate)`, oppool1, fires on CALLOTHER. *Pattern:* one of the x87
@@ -4598,7 +4611,12 @@ multiplier too wide means no proof and no rewrite.
 The replacement is applied only when it has fewer ops than the tree and 64
 pseudo-random full-width evaluations agree with it. The new ops go before the
 root, and the root becomes a `COPY` of the result; dead-code elimination removes
-the old tree. Pinned by `tests/stages/kuna-mba.toml` (two leaves) and
+the old tree. A tree with a leaf (or a reused subtree) that is still a free
+varnode, one heritage has not reached, is left alone: a free varnode keeps its
+single reader, so no new op can read it, and a rewrite to a bare leaf would
+leave the root a `COPY` with no input
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_mba.rs (replace)`; CoreADI32.dll
+under `mba on` panicked in `RuleTermOrder` this way). Pinned by `tests/stages/kuna-mba.toml` (two leaves) and
 `tests/stages/kuna-mba-groups.toml` (a four-leaf group, six leaves in three
 groups, and the polynomial) and `tests/stages/kuna-mba-solve.toml` (constant
 operands, a shared complement, a complemented sum, a leaf plus a boolean term,
@@ -4737,7 +4755,9 @@ corpus hung against `collect_terms`. On `libCoreADI.so` (19 functions found)
 core, two runs each), all of it saturations that find nothing. Since then the
 rule remembers, per function, each tree it saturated without a replacement
 (its fingerprint, op count and budget) and does not saturate it again when
-the pool revisits the op.
+the pool revisits the op. On d963789525, with that memo, the patchelf run
+executes 7.6% more instructions with the option on (122.6G vs 114.0G),
+and the corpus results and the outputs above are the same as without it.
 
 Example: `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, one substitution
 applied to the result of another, becomes `(x | y) + z`: the seed folds the

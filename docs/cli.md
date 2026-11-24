@@ -2037,6 +2037,14 @@ a narrowed run, `decompile-project --stream`, under `--option protoorder off`,
 and on a `--jobs N` run that does not name it; naming it alongside `--jobs N` is
 refused. `KUNA_CALLBACKTYPE_TRACE=1` prints each park or refusal and its reason.
 
+On x86-32 Windows, `KUNA_CALLEEPURGE_DEBUG=1` traces the callee walk behind
+`calleeargs` and the proven callee pops on stderr. Each walk prints the address
+where it first gives up on a property (a budget, an undecodable or computed
+jump, an unplaced stack access, a stack address live at a call, an unbalanced
+or disagreeing return, a fall into another entry), every nested call that
+states no extent, and one summary line. Each call site prints the extent it was
+given, or that it got none.
+
 ### `unlace functions --summary` — orientation in one call
 
 ```bash

@@ -5,7 +5,8 @@
 //! branch the unboxing would otherwise print. Under `fpargboxed` (RISC-V only) the upper half
 //! of an FP argument register on entry, and of `fa0`/`fa1` written by a call, counts as all
 //! ones too, as the psABI requires a float argument or return value narrower than FLEN to be
-//! NaN-boxed.
+//! NaN-boxed. A half-precision read tests the upper 48 bits instead; those count as all ones
+//! when they are exactly bits 16..63 of such a register, the shape only a half unboxing reads.
 
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -72,6 +73,10 @@ fn boxed_register(data: &Funcdata, vn: VarnodeId) -> u64 {
         if !argument {
             continue;
         }
+        if start == 2 && size == 6 {
+            // bits 16..63: the unboxing test of a half-precision value
+            return unlace_base::address::calc_mask(6);
+        }
         // register bit 8 * start + i is varnode bit i; bits 32..63 of the register are ones
         let low = 32u64.saturating_sub(8 * start);
         if low >= 64 {
@@ -80,6 +85,29 @@ fn boxed_register(data: &Funcdata, vn: VarnodeId) -> u64 {
         return (u64::MAX << low) & unlace_base::address::calc_mask(size);
     }
     0
+}
+
+/// Is `vn` a whole boxed FP register (an 8-byte argument on entry or call result)?
+fn whole_boxed(data: &Funcdata, vn: VarnodeId) -> bool {
+    data.vbank().get(vn).is_some_and(|v| v.get_size() == 8) && boxed_register(data, vn) != 0
+}
+
+/// Is `vn` a whole boxed FP register shifted right by 16 (the half unboxing test's source)?
+fn upper_half_word(data: &Funcdata, vn: VarnodeId) -> bool {
+    let Some(op) = data
+        .vbank()
+        .get(vn)
+        .and_then(|v| v.get_def())
+        .and_then(|d| data.obank().get(d))
+    else {
+        return false;
+    };
+    op.code() == OpCode::CPUI_INT_RIGHT
+        && op
+            .get_in(1)
+            .and_then(|c| data.vbank().get(c))
+            .is_some_and(|c| c.is_constant() && c.get_offset() == 16)
+        && op.get_in(0).is_some_and(|w| whole_boxed(data, w))
 }
 
 /// Bits of `vn` that are 1 on every path through bit operations, shifts by a constant,
@@ -139,6 +167,8 @@ fn known_ones(data: &Funcdata, vn: VarnodeId, budget: &mut u32) -> u64 {
             input(0) << (low * 8) | input(1)
         }
         OpCode::CPUI_SUBPIECE => match constant(1) {
+            Some(2) if size == 6 && op.get_in(0).is_some_and(|w| whole_boxed(data, w)) => mask,
+            Some(0) if size == 6 && op.get_in(0).is_some_and(|w| upper_half_word(data, w)) => mask,
             Some(shift) if shift < 8 => input(0) >> (shift * 8),
             _ => 0,
         },

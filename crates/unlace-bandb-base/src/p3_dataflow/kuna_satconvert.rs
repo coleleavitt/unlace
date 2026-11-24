@@ -45,13 +45,56 @@ fn truncation(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
     input(data, op, 0)
 }
 
-fn float_value(data: &Funcdata, vn: VarnodeId) -> Option<f64> {
-    let c = constant(data, vn)?;
-    match size(data, vn) {
-        4 => Some(f64::from(f32::from_bits(c as u32))),
-        8 => Some(f64::from_bits(c)),
+fn half_to_f64(h: u16) -> f64 {
+    let sign = if h >> 15 == 1 { -1.0 } else { 1.0 };
+    let exp = i32::from((h >> 10) & 0x1f);
+    let man = f64::from(h & 0x3ff);
+    match exp {
+        0 => sign * man * 2f64.powi(-24),
+        31 if man == 0.0 => sign * f64::INFINITY,
+        31 => f64::NAN,
+        _ => sign * (1.0 + man / 1024.0) * 2f64.powi(exp - 15),
+    }
+}
+
+/// The value of a `size`-byte IEEE float (half, single or double) with these bits.
+fn float_of_bits(bits: u64, size: int4) -> Option<f64> {
+    match size {
+        2 => Some(half_to_f64(bits as u16)),
+        4 => Some(f64::from(f32::from_bits(bits as u32))),
+        8 => Some(f64::from_bits(bits)),
         _ => None,
     }
+}
+
+fn float_value(data: &Funcdata, vn: VarnodeId) -> Option<f64> {
+    float_of_bits(constant(data, vn)?, size(data, vn))
+}
+
+/// The next `size`-byte float after the one with these bits, up or down; an infinity or NaN
+/// is its own neighbour.
+fn neighbour(bits: u64, size: int4, up: bool) -> Option<f64> {
+    let width = 8 * u32::try_from(size).ok()?;
+    let sign = 1u64 << (width - 1);
+    let inf = match size {
+        2 => 0x7c00,
+        4 => 0x7f80_0000,
+        8 => 0x7ff0_0000_0000_0000,
+        _ => return None,
+    };
+    let (neg, mag) = (bits & sign != 0, bits & (sign - 1));
+    if mag >= inf {
+        return float_of_bits(bits, size);
+    }
+    let next = if neg != up {
+        // away from zero
+        bits + 1
+    } else if mag == 0 {
+        if up { 1 } else { sign | 1 }
+    } else {
+        bits - 1
+    };
+    float_of_bits(next, size)
 }
 
 /// `cond` evaluated at `p`, when it is a float test of `x` against a constant (through
@@ -94,8 +137,8 @@ fn evaluate(data: &Funcdata, cond: VarnodeId, x: VarnodeId, p: f64) -> Option<bo
     Some(r != flip)
 }
 
-/// The float constants the clamps compare against.
-fn thresholds(data: &Funcdata, cond: VarnodeId) -> Vec<f64> {
+/// The float constants the clamps compare against, as (bits, size).
+fn thresholds(data: &Funcdata, cond: VarnodeId) -> Vec<(u64, int4)> {
     let mut cond = cond;
     while let Some(neg) = def_of(data, cond, OpCode::CPUI_BOOL_NEGATE) {
         match input(data, neg, 0) {
@@ -110,7 +153,9 @@ fn thresholds(data: &Funcdata, cond: VarnodeId) -> Vec<f64> {
         return vec![];
     };
     (0..o.num_input())
-        .filter_map(|i| o.get_in(i).and_then(|v| float_value(data, v)))
+        .filter_map(|i| o.get_in(i))
+        .filter(|&v| float_value(data, v).is_some())
+        .filter_map(|v| Some((constant(data, v)?, size(data, v))))
         .collect()
 }
 
@@ -149,14 +194,23 @@ fn ladder(data: &Funcdata, phi: OpId) -> Option<(Vec<Clamp>, VarnodeId, VarnodeI
 
 /// Whether the ladder computes C's saturating conversion to a `bytes`-wide integer, signed or
 /// unsigned, at every point where its tests can change: each threshold, its neighbours, the
-/// infinities, zero and NaN.
+/// infinities, zero and NaN. Neighbours are taken in the constant's own format, the format
+/// `x` has, so a half bound such as -65504 is not tested at doubles no half input can be.
 fn saturates(data: &Funcdata, clamps: &[Clamp], x: VarnodeId, bytes: int4) -> bool {
     let bits = 8 * bytes as u32;
     let mask = unlace_base::address::calc_mask(bytes);
     let mut points = vec![f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 0.0, -0.5, -1.0];
     for c in clamps {
-        for t in thresholds(data, c.cond) {
-            points.extend([t, next(t, true), next(t, false)]);
+        for (b, sz) in thresholds(data, c.cond) {
+            points.extend(
+                [
+                    float_of_bits(b, sz),
+                    neighbour(b, sz, true),
+                    neighbour(b, sz, false),
+                ]
+                .into_iter()
+                .flatten(),
+            );
         }
     }
     let pass = |signed: bool| {
@@ -191,21 +245,6 @@ fn saturates(data: &Funcdata, clamps: &[Clamp], x: VarnodeId, bytes: int4) -> bo
         })
     };
     pass(true) || pass(false)
-}
-
-fn next(t: f64, up: bool) -> f64 {
-    if !t.is_finite() {
-        return t;
-    }
-    let b = t.to_bits();
-    let n = if (t >= 0.0) == up {
-        b + 1
-    } else if t == 0.0 {
-        (1u64 << 63) | 1
-    } else {
-        b - 1
-    };
-    f64::from_bits(n)
 }
 
 /// Collapse an exactly saturating conversion ladder to its truncation (see the module docs).

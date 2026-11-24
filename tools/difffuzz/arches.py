@@ -5,8 +5,11 @@ Each Arch names the registers it compares as (sleigh name, unicorn constant) pai
 split into the single-bit flag registers SLEIGH keeps, and a filter for the mnemonics whose result a
 reference cannot be compared on (privileged, trapping, timing, randomness).
 """
+import os
 import random
 import re
+import subprocess
+import tempfile
 
 import capstone as cs
 import unicorn as uc
@@ -87,6 +90,13 @@ class Arch:
     def canonical(self, cand) -> bool:
         """False for an encoding the reference decoder accepts but the architecture reserves."""
         return True
+
+    def ignored(self, mnemonic, operands, state):
+        # QEMU 8.2 tests the 64-bit sign of a narrow ,TSV/,O overflow, so it misses the 32-bit
+        # overflow the architecture traps on; SLEIGH stops at the trap
+        if state.skipped_callother and ("tsv" in mnemonic or re.match(r"(add|sub|sh\dadd)\w*o\b", mnemonic)):
+            return {"*"}
+        return set()
 
     def skip(self, cand) -> bool:
         """An encoding whose architected result the reference is known not to follow."""
@@ -496,14 +506,29 @@ class Arm32(Arch32):
         return (word & 0xF8000000) | 0x10 | (0x20 if self.thumb else 0)
 
     def skip(self, cand):
-        # Writes to pc are left to flow tests.
-        return bool(re.search(r"\bpc\b", cand["op_str"]))
+        # Writes to pc are left to flow tests; a supervisor call would run a system call.
+        return bool(re.search(r"\bpc\b", cand["op_str"])) or cand["mnemonic"].startswith("svc")
 
     def canonical(self, cand):
         """Capstone decodes A32 encodings whose should-be-zero fields are set; SLEIGH rejects them.
-        Keep an encoding only when Keystone assembles Capstone's text back to the same bytes."""
+        Keep an encoding only when Keystone assembles Capstone's text back to the same bytes, and an
+        LDRD/STRD only with an even first register below lr. T32: a shifted-register data-processing
+        op with bit 15 of its second halfword set, or a saturate/bit-field op with bit 10 of its
+        first, is UNPREDICTABLE."""
+        b = cand["bytes"]
         if self.thumb:
-            return True
+            if len(b) != 4:
+                return True
+            hw1 = b[1] << 8 | b[0]
+            if (hw1 & 0xFE00) == 0xEA00 and b[3] & 0x80:
+                return False
+            return not ((hw1 & 0xFA00) == 0xF200 and not b[3] & 0x80 and (hw1 >> 4) & 0x10 and hw1 & 0x400)
+        m = re.match(r"^(?:ld|st)rd\w*$", cand["mnemonic"]) and re.match(r"(\w+),", cand["op_str"])
+        if m:
+            n = {"sb": 9, "sl": 10, "fp": 11, "ip": 12, "sp": 13, "lr": 14}.get(m.group(1))
+            n = n if n is not None else int(m.group(1)[1:]) if re.fullmatch(r"r\d+", m.group(1)) else 0
+            if n % 2 or n == 14:
+                return False
         try:
             import keystone
         except ImportError:
@@ -1397,4 +1422,169 @@ class Sparc32(Sparc64):
         return {"x_cf", "x_vf", "x_zf", "x_nf"}
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32())}
+class _Insn:
+    def __init__(self, raw, mnemonic, op_str):
+        self.bytes, self.mnemonic, self.op_str = raw, mnemonic, op_str
+
+
+class ObjdumpDis:
+    """A fixed-width decoder over a multi-target binutils objdump ($DIFFFUZZ_OBJDUMP, default
+    ~/.local/share/difffuzz-binutils/bin/objdump, built with --enable-targets=all) for the
+    architectures Capstone 5 lacks. prime() decodes a batch of encodings in one objdump run."""
+
+    def __init__(self, machine, big, width=4, opts=()):
+        self.machine, self.big, self.width, self.opts = machine, big, width, list(opts)
+        self.cache = {}
+
+    @staticmethod
+    def path():
+        return os.environ.get("DIFFFUZZ_OBJDUMP", os.path.expanduser("~/.local/share/difffuzz-binutils/bin/objdump"))
+
+    def prime(self, raws):
+        todo = [r for r in dict.fromkeys(raws) if r not in self.cache]
+        if not todo:
+            return
+        with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
+            f.write(b"".join(todo))
+            name = f.name
+        try:
+            cmd = [self.path(), "-D", "-b", "binary", "-m", self.machine, "-EB" if self.big else "-EL", *self.opts, name]
+            out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+        finally:
+            os.unlink(name)
+        got = {}
+        for line in out.splitlines():
+            m = re.match(r"\s*([0-9a-f]+):\t((?:[0-9a-f]{2} )+)\s*\t?(.*)$", line)
+            if not m:
+                continue
+            off = int(m.group(1), 16)
+            text = m.group(3).strip()
+            if off % self.width or not text or text.startswith(("(bad)", ".word", ".long", ".byte", ".short", "#")):
+                continue
+            mn, ops = (re.split(r"\s+", text, maxsplit=1) + [""])[:2]
+            got[off // self.width] = (mn, ops.strip())
+        for i, r in enumerate(todo):
+            self.cache[r] = got.get(i)
+
+    def disasm(self, raw, addr):
+        raw = bytes(raw[:self.width])
+        if raw not in self.cache:
+            self.prime([raw])
+        e = self.cache[raw]
+        if e is not None:
+            yield _Insn(raw, e[0], e[1])
+
+
+class ObjdumpArch(Arch32):
+    """An architecture decoded by ObjdumpDis; gen() draws encodings in batches and primes them."""
+    objdump_machine = ""
+    objdump_opts = ()
+    _dis = None
+    _buf: list = []
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = ObjdumpDis(self.objdump_machine, self.big, 4, self.objdump_opts)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(32).to_bytes(4, "big" if self.big else "little")
+
+    def gen(self, rng):
+        if not self._buf:
+            self._buf = [self.draw(rng) for _ in range(4096)]
+            self.capstone().prime(self._buf)
+            self._buf.reverse()
+        return self._buf.pop()
+
+
+HPPA_DENY = re.compile(
+    r"^(b|bl|b,.*|bl,.*|bv.*|be.*|ble.*|blr.*|bb.*|comb.*|comib.*|cmpb.*|cmpib.*|addb.*|addib.*|movb.*|movib.*|"
+    r"gate.*|break|diag|rfi.*|ssm|rsm|mtsm|mtctl|mfctl|mtsp|mfsp|mtsar.*|ldsid|probe.*|lpa.*|lci|pdtlb.*|pitlb.*|"
+    r"idtlb.*|iitlb.*|pdc.*|fdc.*|fic.*|sync.*|f.*|c[a-z]*w.*|copr.*|spop.*|cldd.*|cstd.*|ldcw.*|ldcd.*|nop|"
+    r"mfia|pushbts|pushnom|popbts|clrbts|ldwa.*|stwa.*|ldda.*|stda.*|idtlbt|iitlbt)$"
+)
+
+
+class Hppa(ObjdumpArch):
+    """PA-RISC 1.1 integer instructions against qemu-hppa (--oracle qemu), decoded by binutils.
+    Branches, system, cache/TLB, floating-point and coprocessor instructions are not generated.
+    The carry bit and the nullification of the next instruction are compared."""
+    name = "hppa"
+    lang = "pa-risc:BE:32:default"
+    elf_machine = 15
+    big = True
+    pc = "iaoq_front"
+    gprs = [(n, None) for n in ["r1", "rp"] + [f"r{i}" for i in range(3, 27)] + ["dp", "r28", "r29", "sp", "r31"]] + [("sar", None)]
+    pc_const = None
+    flags_reg = "psw"
+    flag_bits = {"pswCB": 0, "nullifyCond": 1}
+    deny = HPPA_DENY
+    objdump_machine = "hppa1.1"
+
+    def unicorn(self):
+        raise NotImplementedError("hppa runs with --oracle qemu")
+
+    def fix_flags(self, word):
+        return word & ~2                      # the instruction under test is not nullified itself
+
+    def fix_inputs(self, init, rng):
+        init["sar"] &= 0x1F
+
+    def canonical(self, cand):
+        # binutils decodes PA-RISC 2.0 forms whatever -m says; the language is PA-RISC 1.1
+        mn = cand["mnemonic"]
+        w = int.from_bytes(cand["bytes"][:4], "big")
+        if (w >> 26) in (0x17, 0x1F) or ",bc" in mn or "(null)" in mn:
+            return False                                     # PA 2.0 LDW,M / STW,M, cache hints, reserved conditions
+        if (w >> 26) == 0x03 and (w >> 10) & 3 == 3:
+            return False                                     # reserved cache-control hint
+        if re.match(r"uxor,n?(sdc|sbc|shc)|uaddcm.*,n?[sn]w[zc]|stdby", mn):
+            return False                                     # carry conditions on UXOR; PA 2.0 word conditions, STDBY
+        if "*" in mn or re.match(r"(ldd|std|extrd|depd|depdi|shrpd|permh|hshl|hshr|hshladd|hshradd|havg|hadd|"
+                                 r"hsub|mixh|mixw|ldda|stda|ldcd|cmpb|cmpib|addb|addib|bb|popbts|pushbts|"
+                                 r"pushnom|clrbts|mfia|dcor|idcor|ds)\b", mn):
+            return False
+        return True
+
+
+ALPHA_DENY = re.compile(
+    r"^(br|bsr|b[a-z]+|fb[a-z]+|jmp|jsr|ret|jsr_coroutine|call_pal|callsys|halt|imb|bpt|bugchk|rduniq|wruniq|"
+    r"pal.*|hw_.*|mb|wmb|trapb|excb|rpcc|rc|rs|fetch.*|ecb|wh64.*|implver|amask|ld[lq]_l|st[lq]_c|"
+    r"f.*|cpys.*|mt_fpcr|mf_fpcr|itof.*|ftoi.*|sqrt.*|cvt.*|add[sgtf].*|sub[sgtf].*|mul[sgtf].*|div[sgtf].*|"
+    r"cmp[gt].*|ld[sgtf]|st[sgtf]|nop|unop|fnop|.*\.\.\.)$"
+)
+
+
+class Alpha(ObjdumpArch):
+    """Alpha (21264, Digital UNIX names) integer instructions against qemu-alpha -cpu ev67
+    (--oracle qemu), decoded by binutils. Branches, PALcode, barriers, locked memory and
+    floating-point instructions are not generated."""
+    name = "alpha"
+    lang = "21264:LE:64:unix"
+    elf_machine = 0x9026
+    elf64 = True
+    until = (1 << 64) - 1
+    big = False
+    pc = "PC"
+    gprs = [(n, None) for n in ["v0", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "s0", "s1", "s2", "s3",
+                                "s4", "s5", "FP", "a0", "a1", "a2", "a3", "a4", "a5", "t8", "t9", "t10", "t11",
+                                "ra", "pv", "at", "GP", "SP"]]
+    pc_const = None
+    deny = ALPHA_DENY
+    objdump_machine = "alpha"
+
+    def unicorn(self):
+        raise NotImplementedError("alpha runs with --oracle qemu")
+
+    def draw(self, rng):
+        # mostly integer operates (0x10..0x13, 0x1c) and integer loads/stores
+        op = rng.choice([0x10] * 40 + [0x11] * 40 + [0x12] * 40 + [0x13] * 20 + [0x1C] * 40 +
+                        [0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x28, 0x29, 0x2C, 0x2D])
+        return ((op << 26) | rng.getrandbits(26)).to_bytes(4, "little")
+
+    def addr_ok(self, a):
+        return Arch.addr_ok(self, a)
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha())}

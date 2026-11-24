@@ -46,7 +46,9 @@
 //!   a constructor or a helper a constructor or destructor was inlined into (a
 //!   by-value factory's return slot, a placement-new helper, the constructor of a
 //!   class whose first member is a `C`, a `delete p` wrapper), and the stores are
-//!   the same, so it is left alone. A `this` stored to a second frame slot is an
+//!   the same, so it is left alone, unless its stores build `C` from a base: a
+//!   base's vptr, or a call passed `this`, before `C`'s own, and nothing after it
+//!   ([`built_after_base`]). A `this` stored to a second frame slot is an
 //!   inlined callee's parameter (an always_inline constructor) unless a call
 //!   follows, which makes it the compiler's own spill across that call. A
 //!   constructor calls nothing before its stores but its bases' constructors,
@@ -165,6 +167,9 @@ pub struct ClassVtables {
     pub primary_slots: Vec<Option<u64>>,
     /// Every vptr value of this class: the primary first, then each secondary.
     pub vptrs: Vec<u64>,
+    /// The primary vtable starts with two null slots, GCC's destructor pair of an
+    /// abstract class (`kuna_itaniumrtti.rs (null_dtor_pair)`).
+    pub null_dtor_pair: bool,
 }
 
 /// Every `(D1 or D0 entry, class)` pair, as facts, plus the classes found to have
@@ -188,6 +193,14 @@ fn destructor_slots(walker: &Walker, classes: &[ClassVtables]) -> (Vec<SymFact>,
     };
     let mut out: Vec<SymFact> = Vec::new();
     let mut has_virtual_dtor: HashSet<usize> = HashSet::new();
+    // The slot index of each class's complete destructor, where known.
+    let mut dtor_at: HashMap<usize, usize> = HashMap::new();
+    for (c, cls) in classes.iter().enumerate() {
+        if cls.null_dtor_pair {
+            has_virtual_dtor.insert(c);
+            dtor_at.insert(c, 0);
+        }
+    }
     for (c, cls) in classes.iter().enumerate() {
         let slots = &cls.primary_slots;
         let mut shaped: Vec<(usize, u64)> = Vec::new();
@@ -224,6 +237,9 @@ fn destructor_slots(walker: &Walker, classes: &[ClassVtables]) -> (Vec<SymFact>,
             continue;
         }
         has_virtual_dtor.insert(c);
+        if let Some(&(i, _)) = shaped.first() {
+            dtor_at.entry(c).or_insert(i);
+        }
         let name = dtor_name(&cls.name);
         for (i, f) in shaped {
             out.push(SymFact {
@@ -244,8 +260,79 @@ fn destructor_slots(walker: &Walker, classes: &[ClassVtables]) -> (Vec<SymFact>,
             }
         }
     }
+    inherited_destructor_slots(classes, &mut dtor_at, &mut has_virtual_dtor, &mut out);
     dedup(&mut out);
     (out, has_virtual_dtor)
+}
+
+/// The destructors of a class whose own slots do not show them (a `D1` that
+/// stores no vptr because nothing in it can observe one, or only a base's vptr
+/// from the base destructor it inlined), from where its base keeps them: under
+/// single inheritance a class's primary vtable extends its base's, so the base's
+/// destructor slots are its own `D1` and `D0`, the destructors every class
+/// derived from one with a virtual destructor has. Taken only on a single
+/// inheritance chain (every two ancestors one the other's), when both slots are
+/// the class's own (not the base's entries) and hold different functions, and
+/// when no other class's slots claim them.
+fn inherited_destructor_slots(
+    classes: &[ClassVtables],
+    dtor_at: &mut HashMap<usize, usize>,
+    has_virtual_dtor: &mut HashSet<usize>,
+    out: &mut Vec<SymFact>,
+) {
+    let named: HashSet<u64> = out.iter().map(|s| s.addr).collect();
+    let mut order: Vec<usize> = (0..classes.len()).collect();
+    order.sort_by_key(|&c| (classes[c].ancestors.len(), c));
+    let chain = |c: usize| {
+        let a = &classes[c].ancestors;
+        a.iter().all(|&x| {
+            a.iter().all(|&y| {
+                x == y || classes[x].ancestors.contains(&y) || classes[y].ancestors.contains(&x)
+            })
+        })
+    };
+    let mut found: Vec<(usize, u64, u64)> = Vec::new();
+    for c in order {
+        if dtor_at.contains_key(&c) || !chain(c) {
+            continue;
+        }
+        let Some((a, k)) = classes[c]
+            .ancestors
+            .iter()
+            .filter_map(|&a| dtor_at.get(&a).map(|&k| (a, k)))
+            .max_by_key(|&(a, _)| classes[a].ancestors.len())
+        else {
+            continue;
+        };
+        let slots = &classes[c].primary_slots;
+        let (Some(Some(d1)), Some(Some(d0))) = (slots.get(k), slots.get(k + 1)) else {
+            continue;
+        };
+        let base = &classes[a].primary_slots;
+        if d1 == d0 || base.get(k) == Some(&Some(*d1)) || base.get(k + 1) == Some(&Some(*d0)) {
+            continue;
+        }
+        dtor_at.insert(c, k);
+        has_virtual_dtor.insert(c);
+        found.push((c, *d1, *d0));
+    }
+    let mut claims: HashMap<u64, usize> = HashMap::new();
+    for cls in classes {
+        for f in cls.primary_slots.iter().flatten() {
+            *claims.entry(*f).or_default() += 1;
+        }
+    }
+    for (c, d1, d0) in found {
+        for f in [d1, d0] {
+            if claims.get(&f) == Some(&1) && !named.contains(&f) {
+                out.push(SymFact {
+                    addr: f,
+                    name: dtor_name(&classes[c].name),
+                    kind: SymKind::Function,
+                });
+            }
+        }
+    }
 }
 
 /// The constructor names of `classes`: functions in no vtable whose `this` stores
@@ -270,22 +357,27 @@ fn constructors(
         if in_a_vtable.contains(&entry) {
             continue;
         }
-        let walked = walker.walk(entry, &owner_of, MAX_INSNS).stores;
-        // An unoptimized constructor calls nothing before it stores but its
-        // bases' constructors, each passed `this`; a by-value return slot spilled
+        let walk = walker.walk(entry, &owner_of, MAX_INSNS);
+        let walked = &walk.stores;
+        // A constructor calls nothing before it stores but its bases'
+        // constructors, each passed `this`; a by-value return slot spilled
         // across other calls is stored through the same way.
-        if walked
-            .iter()
-            .any(|s| !s.spilled || (s.after_call && !s.after_build))
-        {
+        if walked.iter().any(|s| s.after_call && !s.after_build) {
             continue;
         }
         let Some(c) = owning_class(&pairs(walked.iter()), &owner_of, classes) else {
             continue;
         };
-        // A constructor calls its bases' constructors before it stores its own
-        // vptr; a destructor stores first, and a pure virtual one has no slot.
-        if !classes[c].ancestors.is_empty() && walked.iter().any(|s| !s.after_call) {
+        // Unoptimized: every store through `this` reloaded from its own spill,
+        // and, with a base, after the base constructor's call (a destructor
+        // stores first, and a pure virtual one has no slot).
+        let unoptimized = walked.iter().all(|s| s.spilled)
+            && (classes[c].ancestors.is_empty() || walked.iter().all(|s| s.after_call));
+        if !unoptimized
+            && (walk.returns_this
+                || walk.second
+                || !built_after_base(walked, c, &owner_of, classes))
+        {
             continue;
         }
         let virtual_dtor = has_virtual_dtor.contains(&c)
@@ -303,6 +395,38 @@ fn constructors(
     }
     dedup(&mut out);
     out
+}
+
+/// Whether `stores` build `C` the way an optimized constructor does: its bases
+/// first, then `C`. The last vptr stored at offset 0 is `C`'s primary, no
+/// ancestor's follows the first of `C`'s, and before it either an ancestor's
+/// primary vptr was stored there (an inlined base constructor) or a call was
+/// passed `this` (an out-of-line one). A destructor stores in the other order,
+/// its own vptr and then each base's, and a helper that inlined one does the
+/// same; a by-value factory returns its slot and is ruled out before.
+fn built_after_base(
+    stores: &[Store],
+    c: usize,
+    owner_of: &HashMap<u64, (usize, bool)>,
+    classes: &[ClassVtables],
+) -> bool {
+    let at0: Vec<&Store> = stores.iter().filter(|s| s.off == 0).collect();
+    let own = |s: &Store| owner_of.get(&s.vptr) == Some(&(c, true));
+    let Some(last) = at0.last() else {
+        return false;
+    };
+    let Some(first_own) = at0.iter().position(|s| own(s)) else {
+        return false;
+    };
+    let base_first = at0[..first_own].iter().any(|s| {
+        owner_of
+            .get(&s.vptr)
+            .is_some_and(|&(b, primary)| primary && classes[c].ancestors.contains(&b))
+    });
+    own(last)
+        && at0[first_own..].iter().all(|s| own(s))
+        && !classes[c].ancestors.is_empty()
+        && (base_first || at0[first_own].after_build)
 }
 
 pub(super) fn owners(classes: &[ClassVtables]) -> HashMap<u64, (usize, bool)> {
@@ -914,7 +1038,73 @@ mod tests {
             ancestors: ancestors.iter().copied().collect(),
             primary_slots: Vec::new(),
             vptrs: vptrs.to_vec(),
+            null_dtor_pair: false,
         }
+    }
+
+    fn store(vptr: u64, after_build: bool) -> Store {
+        Store {
+            vptr,
+            off: 0,
+            spilled: false,
+            after_call: after_build,
+            after_branch: after_build,
+            after_build,
+        }
+    }
+
+    /// An optimized constructor stores its base's vptr (or calls the base
+    /// constructor with `this`) before its own; a destructor stores in the other
+    /// order, and a class with no base shows no order at all.
+    #[test]
+    fn an_optimized_constructor_builds_its_base_first() {
+        let base = class("Base", &[], &[0x100]);
+        let derived = class("Derived", &[0], &[0x200]);
+        let classes = vec![base, derived];
+        let owner_of = owners(&classes);
+        let inlined = [store(0x100, false), store(0x200, false)];
+        assert!(built_after_base(&inlined, 1, &owner_of, &classes));
+        let called = [store(0x200, true)];
+        assert!(built_after_base(&called, 1, &owner_of, &classes));
+        let dtor = [store(0x200, false), store(0x100, false)];
+        assert!(!built_after_base(&dtor, 1, &owner_of, &classes));
+        let alone = [store(0x200, false)];
+        assert!(!built_after_base(&alone, 1, &owner_of, &classes));
+        let root = [store(0x100, true)];
+        assert!(!built_after_base(&root, 0, &owner_of, &classes));
+    }
+
+    /// A class derived from an abstract base whose destructor slots are null
+    /// keeps its own destructors there; a class with two unrelated bases, or a
+    /// slot its base's vtable holds too, is left alone.
+    #[test]
+    fn destructors_follow_the_base_null_slots() {
+        let mut base = class("PLObject", &[], &[0x9000]);
+        base.null_dtor_pair = true;
+        let mut string = class("PLString", &[0], &[0x9100]);
+        string.primary_slots = vec![Some(0x100), Some(0x110), Some(0x120)];
+        let mut deeper = class("PLText", &[0, 1], &[0x9200]);
+        deeper.primary_slots = vec![Some(0x200), Some(0x210), Some(0x120)];
+        let other = class("Other", &[], &[0x9300]);
+        let mut both = class("Both", &[0, 3], &[0x9400]);
+        both.primary_slots = vec![Some(0x300), Some(0x310)];
+        let classes = vec![base, string, deeper, other, both];
+        let mut dtor_at = HashMap::from([(0usize, 0usize)]);
+        let mut has = HashSet::from([0usize]);
+        let mut out = Vec::new();
+        inherited_destructor_slots(&classes, &mut dtor_at, &mut has, &mut out);
+        dedup(&mut out);
+        let names: Vec<(u64, &str)> = out.iter().map(|s| (s.addr, s.name.as_str())).collect();
+        assert_eq!(
+            names,
+            [
+                (0x100, "PLString::~PLString"),
+                (0x110, "PLString::~PLString"),
+                (0x200, "PLText::~PLText"),
+                (0x210, "PLText::~PLText"),
+            ]
+        );
+        assert!(has.contains(&2) && !has.contains(&4));
     }
 
     #[test]

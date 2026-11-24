@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<processor_spec>
+  <programcounter register="PC"/>
+  <default_symbols>
+    <symbol name="abort" address="syscall:0xb6fc1a11"/>
+    <symbol name="sol_panic_" address="syscall:0x686093bb"/>
+    <symbol name="sol_log_" address="syscall:0x207559bd"/>
+    <symbol name="sol_log_64_" address="syscall:0x5c2a3178"/>
+    <symbol name="sol_log_compute_units_" address="syscall:0x52ba5096"/>
+    <symbol name="sol_log_pubkey" address="syscall:0x7ef088ca"/>
+    <symbol name="sol_create_program_address" address="syscall:0x9377323c"/>
+    <symbol name="sol_try_find_program_address" address="syscall:0x48504a38"/>
+    <symbol name="sol_sha256" address="syscall:0x11f49d86"/>
+    <symbol name="sol_keccak256" address="syscall:0xd7793abb"/>
+    <symbol name="sol_blake3" address="syscall:0x174c5122"/>
+    <symbol name="sol_secp256k1_recover" address="syscall:0x17e40350"/>
+    <symbol name="sol_get_clock_sysvar" address="syscall:0xd56b5fe9"/>
+    <symbol name="sol_get_epoch_schedule_sysvar" address="syscall:0x23a29a61"/>
+    <symbol name="sol_get_fees_sysvar" address="syscall:0x3b97b73c"/>
+    <symbol name="sol_get_rent_sysvar" address="syscall:0xbf7188f6"/>
+    <symbol name="sol_get_last_restart_slot" address="syscall:0x188a0031"/>
+    <symbol name="sol_memcpy_" address="syscall:0x717cc4a3"/>
+    <symbol name="sol_memmove_" address="syscall:0x434371f8"/>
+    <symbol name="sol_memcmp_" address="syscall:0x5fdcde31"/>
+    <symbol name="sol_memset_" address="syscall:0x3770fb22"/>
+    <symbol name="sol_invoke_signed_c" address="syscall:0xa22b9c85"/>
+    <symbol name="sol_invoke_signed_rust" address="syscall:0xd7449092"/>
+    <symbol name="sol_alloc_free_" address="syscall:0x83f00e8f"/>
+    <symbol name="sol_set_return_data" address="syscall:0xa226d3eb"/>
+    <symbol name="sol_get_return_data" address="syscall:0x5d2245e4"/>
+    <symbol name="sol_log_data" address="syscall:0x7317b434"/>
+    <symbol name="sol_get_processed_sibling_instruction" address="syscall:0xadb8efc8"/>
+    <symbol name="sol_get_stack_height" address="syscall:0x85532d94"/>
+    <symbol name="sol_curve_validate_point" address="syscall:0xaa2607ca"/>
+    <symbol name="sol_curve_group_op" address="syscall:0xdd1c41a6"/>
+    <symbol name="sol_curve_multiscalar_mul" address="syscall:0x60a40880"/>
+    <symbol name="sol_curve_pairing_map" address="syscall:0xf111a47e"/>
+    <symbol name="sol_alt_bn128_group_op" address="syscall:0xae0c318b"/>
+    <symbol name="sol_alt_bn128_compression" address="syscall:0x334fd5ed"/>
+    <symbol name="sol_big_mod_exp" address="syscall:0x780e4c15"/>
+    <symbol name="sol_poseidon" address="syscall:0xc4947c21"/>
+    <symbol name="sol_remaining_compute_units" address="syscall:0xedef5aee"/>
+    <symbol name="sol_get_epoch_rewards_sysvar" address="syscall:0xfdba2b3b"/>
+    <symbol name="sol_get_epoch_stake" address="syscall:0x5be92f4a"/>
+    <symbol name="sol_get_sysvar" address="syscall:0x13c1b505"/>
+  </default_symbols>
+</processor_spec>

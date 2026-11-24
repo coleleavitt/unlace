@@ -39,9 +39,10 @@
 //!
 //! **Nonlinear MBA.** An arithmetic op read by a bitwise op is a leaf above, so
 //! `((2 * x | c1) - x) + c2 ^ c3`, which is `x ^ c`, has no linear reading. When
-//! the tree has such an op, it is collected once more with those ops and the ops
-//! of several readers inlined and its constants kept as numbers (at most three
-//! leaves). Its candidates are the linear MBA that agrees with it on the 0/1
+//! neither collection folds a tree that mixes bitwise and arithmetic ops, it is
+//! collected once more with arithmetic under bitwise ops and the ops of several
+//! readers inlined and its constants kept as numbers (at most three leaves).
+//! A left shift by a constant is a multiply by its power of two throughout. Its candidates are the linear MBA that agrees with it on the 0/1
 //! points, the same for the tree xor its value at zero (then xor-ed back), and
 //! for one leaf `x | c` and `x & c`. None is equal by construction, so each
 //! needs a proof, the job z3 does in gooMBA: every op but a product of two terms
@@ -868,7 +869,17 @@ fn is_arith(op: OpCode) -> bool {
             | OpCode::CPUI_INT_SUB
             | OpCode::CPUI_INT_2COMP
             | OpCode::CPUI_INT_MULT
+            | OpCode::CPUI_INT_LEFT
     )
+}
+
+/// The constant amount of the `INT_LEFT` `op`, below the width of `size`:
+/// such a shift is a multiply by `2^k` in the tree.
+fn shift_amount(data: &Funcdata, op: OpId, size: int4) -> Option<u64> {
+    let o = data.obank().get(op)?;
+    let v = data.vbank().get(o.get_in(1)?)?;
+    let k = v.get_offset();
+    (v.is_constant() && k < 8 * size as u64).then_some(k)
 }
 
 /// A leaf of the tree: a varnode, or a constant operand of a bitwise op. The
@@ -950,11 +961,12 @@ impl Collector<'_> {
         let code = def
             .and_then(|op| self.data.obank().get(op))
             .map(|o| o.code());
-        let deep = self.deep;
-        let Some((op, code)) = def
-            .zip(code)
-            .filter(|&(_, c)| is_candidate(c) && (deep || !(under && is_arith(c))))
-        else {
+        let (deep, data, size) = (self.deep, self.data, self.size);
+        let Some((op, code)) = def.zip(code).filter(|&(op, c)| {
+            (is_candidate(c)
+                || (c == OpCode::CPUI_INT_LEFT && shift_amount(data, op, size).is_some()))
+                && (deep || !(under && is_arith(c)))
+        }) else {
             return self.leaf(LeafRef::Vn(vn));
         };
         self.mixed |= under && is_arith(code);
@@ -1053,6 +1065,10 @@ impl Collector<'_> {
         let a = Box::new(self.vn(i0, under)?);
         if code == OpCode::CPUI_INT_2COMP {
             return Some(Expr::Neg(a));
+        }
+        if code == OpCode::CPUI_INT_LEFT {
+            let k = shift_amount(self.data, op, self.size)?;
+            return Some(Expr::Mul(a, (1u64 << k) & mask_of(self.size)));
         }
         let b = Box::new(self.vn(i1?, under)?);
         Some(match code {
@@ -1393,7 +1409,8 @@ fn rewrite_nonlinear(data: &Funcdata, op: OpId, code: OpCode, size: int4) -> Opt
     };
     let expr = col.op(op, code, false)?;
     let n = col.leaves.len();
-    if !col.mixed || n == 0 || n > MAX_NONLINEAR_LEAVES {
+    let mba = col.mixed || (col.bitwise && expr.has_arith());
+    if !mba || n == 0 || n > MAX_NONLINEAR_LEAVES {
         return None;
     }
     let budget = expr.ops().saturating_sub(col.shared_ops);
@@ -1873,6 +1890,22 @@ mod tests {
         );
         let s = nonlinear_simplify(&f, 1, 32, f.ops()).expect("proven");
         assert_eq!(s, Expr::Xor(x(), c(0x1f4bf7f4)));
+    }
+
+    #[test]
+    fn keys_a_compiler_split_are_one_constant_again() {
+        // (x ^ 0xc0d76561) + (x & 0x40d76561) * 2 == x + 0xc0d76561 at 32 bits
+        let f = Expr::Add(
+            Box::new(Expr::Xor(x(), c(0xc0d76561))),
+            Box::new(Expr::Mul(and(x(), c(0x40d76561)), 2)),
+        );
+        let s = nonlinear_simplify(&f, 1, 32, f.ops()).expect("proven");
+        assert_eq!(s.ops(), 1, "{s:?}");
+        assert!(agree(&f, &s, 1, u32::MAX as u64));
+        // (x ^ 0x40d76561) + 0x80000000 == x ^ 0xc0d76561 at 32 bits
+        let f = Expr::Add(Box::new(Expr::Xor(x(), c(0x40d76561))), c(0x8000_0000));
+        let s = nonlinear_simplify(&f, 1, 32, f.ops()).expect("proven");
+        assert_eq!(s, Expr::Xor(x(), c(0xc0d76561)));
     }
 
     #[test]

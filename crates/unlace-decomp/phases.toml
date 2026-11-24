@@ -6021,7 +6021,7 @@ symptoms = "many sub_<addr> functions that end in _Unwind_Resume()|a stripped c+
 [[settable]]
 option = "functails"
 values = "on|off"
-default = "off"
+default = "on"
 destructive = false
 phase = "P1"
 subphase = "code-data-partition"
@@ -7117,7 +7117,7 @@ symptoms = "a call to a one-instruction b thunk prints sub_<addr> although the t
 [[settable]]
 option = "nullsubs"
 values = "on|off"
-default = "off"
+default = "on"
 destructive = false
 phase = "P1"
 subphase = "code-data-partition"

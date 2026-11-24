@@ -248,7 +248,7 @@ crate::kuna_flag!(
     "functails",
     "Single-owner .cold parts kept as their owner's tails",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 crate::kuna_flag!(
@@ -767,7 +767,7 @@ crate::kuna_flag!(
     "nullsubs",
     "Placeholder empty functions named nullsub_<addr>",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 crate::kuna_flag!(

@@ -687,6 +687,15 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna) Bind `__swiftcall` to every function that calls a Swift runtime entry point (`swiftcallers`). Default off.
+    Swiftcallers,
+    "swiftcallers",
+    "Swift calling convention for Swift runtime callers",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna) Resume the Listing walk from new callback roots instead of rebuilding it (`incrementalwalk`). Default on.
     Incrementalwalk,
     "incrementalwalk",

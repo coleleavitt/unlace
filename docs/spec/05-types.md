@@ -4124,7 +4124,13 @@ compare (signed or not) in one of the one or two blocks reached by walking up
 single-entry edges; for an equality, an equality in the block directly above
 (along a single-entry edge) or in a single-entry successor. The other operand's
 words must be a pair (`is_pair`: two adjacent input words or the SUBPIECEs of
-one whole), or, for an ordered compare only, two constants. Two zero tests are
+one whole), or, for an ordered compare only, two constants. The same low-word
+equality also pairs when a `BOOL_AND` (for `==`) or `BOOL_OR` (for `!=`)
+reading it combines it with the same equality of the two high words
+(`bool_linked`): that is the branchless `(xlo ^ ylo) | (xhi ^ yhi)` GCC and
+MinGW emit, which upstream's `RuleOrCompare` splits into `xlo != ylo || xhi
+!= yhi` before the XOR trigger above sees an `INT_XOR`, so without it a
+`long long` equality stays four `int` parameters. Two zero tests are
 never paired, because `!a && !b` over two separate `int` parameters gives
 the same code. The pair is joined as above and the upstream forms fold the
 compare. The option is off by default because two separate parameters compared

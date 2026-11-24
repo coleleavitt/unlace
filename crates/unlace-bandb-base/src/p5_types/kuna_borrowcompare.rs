@@ -1106,7 +1106,8 @@ fn pair_branch(data: &Funcdata) -> bool {
 /// the words are pieces of one value. An unsigned low-word `<` pairs with an
 /// ordered high-word compare up to two single-entry blocks above it; a
 /// low-word `==`/`!=` pairs with a high-word `==`/`!=` in the block
-/// directly above or below. The other operand's words must be a pair too (two
+/// directly above or below, or with one a BOOL_AND/BOOL_OR combines it with
+/// (`bool_linked`). The other operand's words must be a pair too (two
 /// adjacent input words or the SUBPIECEs of one whole), or two constants for
 /// an ordered compare; a pair of zero tests is not enough, since two separate
 /// `int` parameters compiled from `!a && !b` give the same code.
@@ -1123,7 +1124,7 @@ fn branch_input_pair(data: &mut Funcdata, op: OpId) -> int4 {
         let Some(hi) = input_above(data, lo) else {
             continue;
         };
-        if branch_linked(data, op, hi, other) {
+        if branch_linked(data, op, hi, other) || bool_linked(data, op, hi, other) {
             joined |= join(data, lo, hi);
         }
     }
@@ -1195,6 +1196,37 @@ fn branch_linked(data: &Funcdata, op: OpId, hi: VarnodeId, olo: VarnodeId) -> bo
                 && c.get_in(1)
                     .is_some_and(|cond| hi_compare(data, cond, hi, olo, ordered, 0))
         })
+    })
+}
+
+/// Whether the low-word equality `op` is combined, by a BOOL_AND reading a
+/// `==` or a BOOL_OR reading a `!=`, with the same equality of `hi` and the
+/// high word that goes with `olo` (a pair, not constants): the branchless
+/// `(xlo ^ ylo) | (xhi ^ yhi)` once upstream's `RuleOrCompare` has split it
+/// into `xlo != ylo || xhi != yhi` before the XOR trigger saw it.
+fn bool_linked(data: &Funcdata, op: OpId, hi: VarnodeId, olo: VarnodeId) -> bool {
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
+    let opc = o.code();
+    let comb = match opc {
+        OpCode::CPUI_INT_EQUAL => OpCode::CPUI_BOOL_AND,
+        OpCode::CPUI_INT_NOTEQUAL => OpCode::CPUI_BOOL_OR,
+        _ => return false,
+    };
+    let Some(out) = o.get_out() else {
+        return false;
+    };
+    if olo == hi || vn_const(data, olo).is_some() {
+        return false;
+    }
+    ops_reading(data, out, comb).into_iter().any(|b| {
+        let (Some(p), Some(q)) = (input(data, b, 0), input(data, b, 1)) else {
+            return false;
+        };
+        let other = if p == out { q } else { p };
+        matches!(def_of(data, other), Some((_, c)) if c == opc)
+            && hi_compare(data, other, hi, olo, false, 0)
     })
 }
 

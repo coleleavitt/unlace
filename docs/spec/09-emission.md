@@ -5833,7 +5833,9 @@ its negation) and `x` (`c ? 1 : x` is `c || x`, `c ? x : 1` is `!c || x`,
 its `ONLY_BRANCH` render, an arm as its `RETURN`'s value, and `?`/`:`/`&&`/`||`
 between operands.
 
-With `option noretfirst on` (C output; default off), the pass then takes an
+With `option noretfirst on` (C output; default off; the option also breaks
+P8's terminal-arm tie toward the no-return arm, `docs/spec/08-structuring.md`),
+the pass then takes an
 `if`/`else` without a goto, neither rewritten above, whose structured arms
 differ in whether they have an out edge (one returns or ends in a no-return call,
 the other falls through). The arm without an out edge becomes the `if`'s only

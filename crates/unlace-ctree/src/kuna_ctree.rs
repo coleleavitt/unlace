@@ -25,15 +25,7 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna `noretfirst`) Print the arm of an `if`/`else` that never falls through first and
-    /// the other arm after the `if`, a rewrite of the C syntax tree.
-    Noretfirst,
-    "noretfirst",
-    "non-returning arm first",
-    unset: false,
-    shipped: false
-);
+pub use crate::kuna_coreoptions::Noretfirst;
 
 crate::kuna_flag!(
     /// (kuna `nestedand`) Print an `if` whose whole body is another `if` (neither with an

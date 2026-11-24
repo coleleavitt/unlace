@@ -9,7 +9,8 @@
 #           cmp $0x1eb,%r8 ; jge default
 #           mov %r8,%rax ; add $-0x1da,%rax ; sar $1,%rax
 #           lea table(%rip),%rdx ; movslq (%rdx,%rax,4),%rax ; add %rax,%rdx ; jmp *%rdx
-#     table: 8 rows (cases returning 10..17), then 8 words that are not rows
+#     table: 8 rows (cases returning 10..17), then 8 words that point one byte into
+#     those cases, as the rows after an OCaml table land mid-instruction
 #
 # The upper check, x + 1 < 0x1eb pulled back to the even x = 2b, is the range
 # [-1, 0x1ea); intersecting it with x's stride-2 range wrapped its left end onto
@@ -25,7 +26,7 @@ symbols = [ { space = 'ram', offset = '0x1000', name = 'tagged' } ]
 space = 'ram'
 offset = '0x1000'
 readonly = true
-hex = '0fb6074c8d4400014981f8c10100007c5e4981f8db0100007c5b4981f8eb0100007d584c89c0480526feffff48d1f8488d154e000000486304824801c2ffe2b80a000000c3b80b000000c3b80c000000c3b80d000000c3b80e000000c3b80f000000c3b810000000c3b811000000c3b864000000c3b865000000c3b866000000c30f1f00bbffffffc1ffffffc7ffffffcdffffffd3ffffffd9ffffffdfffffffe5ffffff0000ff7f0010ff7f0020ff7f0030ff7f0040ff7f0050ff7f0060ff7f0070ff7f'
+hex = '0fb6074c8d4400014981f8c10100007c5e4981f8db0100007c5b4981f8eb0100007d584c89c0480526feffff48d1f8488d154e000000486304824801c2ffe2b80a000000c3b80b000000c3b80c000000c3b80d000000c3b80e000000c3b80f000000c3b810000000c3b811000000c3b864000000c3b865000000c3b866000000c30f1f00bbffffffc1ffffffc7ffffffcdffffffd3ffffffd9ffffffdfffffffe5ffffffbcffffffc2ffffffc8ffffffceffffffd4ffffffdaffffffe0ffffffe6ffffff'
 
 [script]
 commands = [
@@ -46,6 +47,6 @@ count = 0
 regex = 'case 0x1e[a-f]:|case 0x1f'
 
 [[match]]
-name = 'OCAML-TAGGED #3: the dispatch is a switch, not a computed call'
+name = 'OCAML-TAGGED #3: no row lands mid-instruction'
 count = 0
-literal = 'jump-as-call'
+literal = 'halt_baddata'

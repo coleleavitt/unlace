@@ -13,7 +13,7 @@ use std::rc::Rc;
 use unlace_base::address::{
     calc_mask, count_leading_zeros, popcount, sign_extend, sign_extend_sized, signbit_negative,
 };
-use unlace_base::error::{UnlaceError, UnlaceResult};
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{Wrap, int4, int8, uint4, uintb};
 use unlace_num::multiprecision::{
     add128, leftshift128, set_u128, subtract128, udiv128, uless128, ulessequal128,
@@ -114,15 +114,6 @@ fn new_extended_constant(
         data.op_insert_before(piece_op, op);
     }
     Ok(new_const_vn)
-}
-
-/// `Varnode::getTypeReadFacing(op)` — the read-facing data-type resolution
-/// (union/flow aware) is W6.  // STUB(W6)
-#[inline]
-fn type_read_facing_stub(_data: &Funcdata, _vn: VarnodeId, _op: OpId) -> UnlaceResult<()> {
-    Err(UnlaceError::lowlevel(
-        "ruleaction_6: Varnode::getTypeReadFacing is a W6 type-facing surface",
-    ))
 }
 
 // =============================================================================
@@ -1009,13 +1000,16 @@ impl RulePtrsubCharConstant {
         RulePtrsubCharConstant { group: g.into() }
     }
 
-    /// Try to push a collapsed constant pointer further through a descendant
-    /// PTRADD (C++ `RulePtrsubCharConstant::pushConstFurther`).
-    ///
-    /// The dtype/newConstant-with-pointer-type commit is W6/W3-varnode; the shape
-    /// guards (`PTRADD`, slot 0, constant index) are transcribed.  Returns
-    /// `false` whenever it cannot complete.
-    fn push_const_further(data: &mut Funcdata, op: OpId, slot: int4, _val: uintb) -> bool {
+    /// Push a collapsed constant pointer further through a descendant PTRADD
+    /// (C++ `RulePtrsubCharConstant::pushConstFurther`, ruleaction.cc:7375).
+    /// Returns `true` when the PTRADD became a COPY of the folded constant.
+    fn push_const_further(
+        data: &mut Funcdata,
+        outtype: Rc<crate::dtype::Datatype>,
+        op: OpId,
+        slot: int4,
+        val: uintb,
+    ) -> bool {
         if code(data, op) != OpCode::CPUI_PTRADD {
             return false;
         }
@@ -1026,9 +1020,16 @@ impl RulePtrsubCharConstant {
         if !is_const(data, vn) {
             return false;
         }
-        // newconst->updateType(outtype);          -- STUB(W6) pointer datatype
-        // opRemoveInput(op,2); opRemoveInput(op,1); opSetOpcode(op,CPUI_COPY);  -- STUB(W6)
-        false // STUB(W6): cannot stamp pointer type / change opcode -> no push
+        let mult = offset(data, in_vn(data, op, 2));
+        let val = val.wrapping_add(offset(data, vn).wrapping_mul(mult));
+        let newconst = data.new_constant(size(data, vn), val);
+        data.vn_update_type(newconst, outtype);
+        data.op_remove_input(op, 2);
+        data.op_remove_input(op, 1);
+        set_opcode(data, op, OpCode::CPUI_COPY);
+        data.op_set_input(op, newconst, 0)
+            .expect("ptrsubcharconstant: opSetInput");
+        true
     }
 }
 
@@ -1045,17 +1046,104 @@ impl Rule for RulePtrsubCharConstant {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
+        use crate::dtype::type_metatype;
         let sb = in_vn(data, op, 0);
-        // Datatype *sbType = sb->getTypeReadFacing(op);  -- STUB(W6)
-        //   The whole guard chain (TYPE_PTR -> TYPE_SPACEBASE -> getAddress / scope
-        //   isReadOnly / stringManager->isString) is W6/W4.  The descendant
-        //   push-const loop (pushConstFurther) and the COPY conversion are also W6.
-        //   Without the read-facing type we cannot proceed.
-        let _push = Self::push_const_further as fn(&mut Funcdata, OpId, int4, uintb) -> bool;
-        if type_read_facing_stub(data, sb, op).is_err() {
-            return 0; // STUB(W6)
+        let sb_type = data.vn_type_read_facing(sb, op);
+        if sb_type.get_metatype() != type_metatype::TYPE_PTR {
+            return 0;
         }
-        0
+        let Some(dt) = sb_type.get_ptr_to() else {
+            return 0;
+        };
+        if dt.get_metatype() != type_metatype::TYPE_SPACEBASE {
+            return 0;
+        }
+        let vn1 = in_vn(data, op, 1);
+        if !is_const(data, vn1) {
+            return 0;
+        }
+        let outvn = out_vn(data, op);
+        let outtype = data.vn_type_def_facing(outvn);
+        if outtype.get_metatype() != type_metatype::TYPE_PTR {
+            return 0;
+        }
+        let Some(basetype) = outtype.get_ptr_to() else {
+            return 0;
+        };
+        if !basetype.is_char_print() {
+            return 0;
+        }
+        let opaddr = op_addr(data, op);
+        let Some(symaddr) = dt.spacebase_get_address(
+            offset(data, vn1),
+            size(data, vn1),
+            &opaddr,
+            data.get_arch().manage(),
+        ) else {
+            return 0;
+        };
+        // C++ `scope->isReadOnly(symaddr,1,op->getAddr())` on the spacebase's scope.
+        // Only the global scope is reachable here; a stack-frame spacebase names
+        // its function-local scope, which this port declines to query.
+        let (_, localframe) = match dt.spacebase_parts() {
+            Some(parts) => parts,
+            None => return 0,
+        };
+        if !localframe.is_invalid() {
+            return 0;
+        }
+        let flags = data
+            .get_arch()
+            .query_global_properties(&symaddr, 1, &opaddr);
+        if flags & crate::varnode::varnode_flags::readonly == 0 {
+            return 0;
+        }
+        // C++ `data.getArch()->stringManager->isString(symaddr,basetype)`: the
+        // decoded-string cache and the loader are shared with the printer.
+        let (Some(strings), Some(loader)) = (
+            data.get_arch().internal_strings.clone(),
+            data.get_arch().loader.clone(),
+        ) else {
+            return 0;
+        };
+        let is_string = {
+            let mut mgr = strings.borrow_mut();
+            let mut ld = loader.borrow_mut();
+            let mut is_trunc = false;
+            !mgr.get_string_data(&symaddr, &basetype, &mut **ld, &mut is_trunc)
+                .is_empty()
+        };
+        if !is_string {
+            return 0;
+        }
+        let outsize = size(data, outvn);
+        let base_val = offset(data, vn1);
+        let mut remove_copy = false;
+        if !data
+            .vbank()
+            .get(outvn)
+            .expect("ruleaction_6: stale vn")
+            .is_addr_force()
+        {
+            remove_copy = true;
+            for subop in data.descend_snapshot(outvn) {
+                let subslot = slot_of(data, subop, outvn);
+                if !Self::push_const_further(data, Rc::clone(&outtype), subop, subslot, base_val) {
+                    remove_copy = false;
+                }
+            }
+        }
+        if remove_copy {
+            data.op_destroy(op);
+        } else {
+            let newvn = data.new_constant(outsize, base_val);
+            data.vn_update_type(newvn, Rc::clone(&outtype));
+            data.op_remove_input(op, 1);
+            data.op_set_input(op, newvn, 0)
+                .expect("ptrsubcharconstant: opSetInput");
+            set_opcode(data, op, OpCode::CPUI_COPY);
+        }
+        1
     }
 }
 

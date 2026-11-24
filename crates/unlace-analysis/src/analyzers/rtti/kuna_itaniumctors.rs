@@ -79,6 +79,9 @@ use unlace_sleigh::translate::PcodeEmit;
 use crate::listing::Listing;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, SymFact, SymKind};
 
+/// The longest unconditional forward jump the constructor walk follows.
+const MAX_FORWARD_JUMP: u64 = 0x200;
+
 /// How far the walk follows one candidate from its entry. A vptr store sits in
 /// the first few dozen instructions of a constructor even at `-O0`.
 pub(super) const MAX_INSNS: usize = 256;
@@ -115,7 +118,13 @@ impl AnalysisPass for ItaniumCtorsPass {
         }
         if let Some(walker) = Walker::new(ctx) {
             let (mut symbols, has_virtual_dtor) = destructor_slots(&walker, &classes);
-            symbols.extend(constructors(&walker, listing, &classes, &has_virtual_dtor));
+            let ctor_walker = walker.clone().with_forward_jumps();
+            symbols.extend(constructors(
+                &ctor_walker,
+                listing,
+                &classes,
+                &has_virtual_dtor,
+            ));
             symbols.retain(|s| !named_already(ctx, s.addr));
             out.symbols = symbols;
         }
@@ -606,8 +615,12 @@ struct State {
 
 /// The per-binary facts every walk shares: where `this` and the stack pointer
 /// live, what a call leaves intact, and how much a call pops.
+#[derive(Clone)]
 pub(super) struct Walker<'a> {
     ctx: &'a AnalysisCtx<'a>,
+    /// Follow an unconditional forward jump of at most [`MAX_FORWARD_JUMP`]
+    /// bytes instead of ending the walk there.
+    forward_jumps: bool,
     sp: Key,
     this_reg: Option<Key>,
     /// `this` passed in memory: its frame offset from the entry stack pointer.
@@ -696,7 +709,16 @@ impl<'a> Walker<'a> {
             ret_reg,
             extrapop,
             transparent: HashSet::new(),
+            forward_jumps: false,
         })
+    }
+
+    /// The same walker following unconditional forward jumps within a function:
+    /// an optimized constructor lays out its member initializers across
+    /// branches and joins them with a `jmp` before its own vptr store.
+    pub(super) fn with_forward_jumps(mut self) -> Self {
+        self.forward_jumps = true;
+        self
     }
 
     /// The same walker stepping over every call to one of `helpers`.
@@ -735,9 +757,19 @@ impl<'a> Walker<'a> {
                 break;
             };
             let mut conditional = false;
+            let mut jump_to: Option<u64> = None;
             let mut leaves = false;
             let mut raised = None;
             for (opc, out, ins) in &ops {
+                let forward = (*opc == OpCode::CPUI_BRANCH && self.forward_jumps && !conditional)
+                    .then(|| ins.first().filter(|t| !is_constant(t)).map(|t| t.offset))
+                    .flatten()
+                    .filter(|&t| t > at && t - at <= MAX_FORWARD_JUMP);
+                if let Some(t) = forward {
+                    jump_to = Some(t);
+                    conditional = true;
+                    continue;
+                }
                 match opc {
                     OpCode::CPUI_CBRANCH => {
                         conditional = true;
@@ -797,7 +829,7 @@ impl<'a> Walker<'a> {
             if leaves || len == 0 {
                 break;
             }
-            at += len;
+            at = jump_to.take().unwrap_or(at + len);
         }
         walk
     }

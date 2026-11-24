@@ -110,6 +110,7 @@ f41fbff8b010001a81c7e00893e8001b
 
 [script]
 commands = [
+    'option boolreturn off',
     'option bejoin on',
     'lo fu neg_one',
     'decompile',

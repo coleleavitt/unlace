@@ -362,9 +362,11 @@ its machine is read from the ELF header
 `EM_ARC_COMPACT2` (195, ARC EM and HS) selects `ARC:LE:32:ARCv2` or
 `ARC:BE:32:ARCv2` by the image's byte order (§2). `EM_ARC_COMPACT` (93,
 ARC600/ARC700) is not mapped: its 16-bit encodings differ and it has no
-language yet, so it still needs an explicit `--target`. A relocatable ARC
-object loads, but its relocation types are not applied; a call to an undefined
-symbol keeps the unrelocated displacement.
+language yet, so it still needs an explicit `--target`. A relocatable ARCv2
+object's `bl`/`b` (`S25W_PCREL`/`S25H_PCREL` and their `_PLT` spellings, the
+displacement from `P & !3`), middle-endian long immediates (`32_ME`) and data
+words (`32`, `PC32`) are applied (`reloc_apply.rs (classify_arc)`); the
+small-data forms against `_SDA_BASE_` and the GOT forms are not.
 
 (kuna, unlace#680) A WebAssembly relocatable object (`.o`) has no `name`
 section; its function and global names come from the `WASM_SYMBOL_TABLE`
@@ -402,9 +404,15 @@ Five further machines are routed the same way:
 - `EM_OPENRISC` (92) and `EM_XTENSA` (94) take the language of the header's byte order.
 - `EM_CSKY` (252) selects ABIv1 when `e_flags` bits 28-31 are 1, and ABIv2 otherwise, in the
   header's byte order.
+- `EM_TI_C2000` (141) selects `tms320c28:LE:32:default` (cl2000 EABI objects).
 - `EM_CUDA` (190) selects the SASS language of the `sm_NN` in `e_flags`. The SM number is in
   bits 8-15 from ELF ABI version 8 (CUDA 12.8 ptxas), and in bits 0-7 before that. An
   architecture with no SASS language (sm_30, sm_32) still needs `--target`.
+
+(unlace) TI compilers (cl2000 and its siblings) emit every branch target inside a function as a
+`$C$L<n>` symbol typed `STT_FUNC`, local, size 0. The ELF symbol-table inventory skips these
+(`crates/unlace-analysis/src/loader/kuna_tilocallabels.rs`), so they are not decompiled as functions
+of their own.
 
 (kuna) PowerPC32 ELF APU requirements are read by
 `crates/unlace-analysis/src/loader/kuna_ppcaputarget.rs` when the
@@ -1084,7 +1092,10 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   non-empty section out above `0x400000` (`RELOC_BASE`, matching CLE so addresses
   line up with angr's), apply the relocations, rebase defined symbols, and bind
   each undefined extern to a synthetic call target in an extern area above the
-  sections so calls render by name. A section header's size is a claim the file
+  sections so calls render by name (an extern reached by a plain data relocation
+  on the operand of an x86 `call`/`jmp`/`jcc` or an MSP430 `call #imm` counts as
+  code too, so i386 and MSP430 libcalls are named) (the next 4 KiB page plus one; on a 16-bit
+  machine the next 16 bytes, so AVR's 4 KiB `rcall` still reaches every libcall). A section header's size is a claim the file
   need not back, so the layout allocates zero-fill only for data — `SHT_NOBITS`
   storage and a data extent past the end of the file — and at most 256 MiB of it
   per object (`reloc_object.rs (ZERO_FILL_LIMIT)`); code is laid out at the bytes
@@ -3821,6 +3832,16 @@ loader's ranges under this pass's id
 (`crates/unlace-console/src/engine.rs (object_import_slot_stash)`), so
 they commit with that pass's facts and the call in `if (f) f(x);` binds to `f`.
 Other images are unaffected.
+An undefined symbol of a relocatable object is entered as an extern function
+when a relocation that marks a branch or call reaches it. On x86 the opcode
+bytes in front of a plain PC-relative rel32 field say so: COFF's
+`IMAGE_REL_I386_REL32` and `IMAGE_REL_AMD64_REL32`, and ELF's `R_386_PC32`, carry
+no call flag, so a field after `E8` (`call`), `E9` (`jmp`) or `0F 80`..`0F 8F`
+(`jcc`) marks its symbol code
+(`crates/unlace-analysis/src/loader/kuna_x86_relcode.rs (code_targets)`).
+Before this a COFF object's `call _exit` reached an unnamed `sub_402010`, which
+is not a no-return name, so flow ran past the call into the next section and
+failed the function.
 Undefined weak MIPS and x86-64 code-address operands in relocatable ELF objects
 also retain their nullable identity before SSA. The relocation walker
 `crates/unlace-analysis/src/loader/kuna_nullable_reloc.rs (references)`
@@ -4406,7 +4427,10 @@ moves.
   address (`callpopret`). Data sections are unchanged. Measured: 217 of 234 runs in
   Lua's AArch64 `.text`, 214 of 215 in a static-pie `ldconfig`, 78 of 78 in
   `lldb-dap` and 4 of 4 in `ld.so` are dropped, every dropped one instruction
-  bytes.
+  bytes. The pass runs at `load file`, before any `option` line, so the rule
+  reads the option as `KUNA_CODESTRINGS`: the CLI exports it, and the console's
+  `option codestrings` sets it for the next `load file`. Read from the
+  architecture, as it was, `off` never reached the pass.
 
 - **Library prototypes** (`libproto`, the `ApplyDataArchiveAnalyzer` analog,
   `crates/unlace-analysis/src/analyzers/protos/mod.rs (LibProtoPass)`):
@@ -6177,7 +6201,9 @@ moves.
   gives the prototype (keyed to the image's own name) or the no-return verdict.
   A name the table holds as spelled is never retried, so the ladder only adds
   facts. This is IDA's type-library lookup ladder (`guess_tinfo`,
-  `cleanup_name`).
+  `cleanup_name`). The passes that climb it run at `load file`, so they read
+  the option as `KUNA_NAMELADDER` (exported by the CLI, set for the next
+  `load file` by the console's `option nameladder`).
 
 - **Discriminant-value naming**
   (`crates/unlace-analysis/src/analyzers/dwarf/kuna_variantnames.rs`,
@@ -7563,7 +7589,12 @@ every other binary's pass list is byte-identical to before the pass existed):
   `BTreeNode` vptr first) out of line in that shape; `PLArray::PLArray`, whose
   inlined base stores nothing, stays unnamed. The class of a member that
   is itself built from a base (`Holder`'s first member a `Derived`) shows the same
-  order, and its constructor is then named `Derived::Derived`. A
+  order, and its constructor is then named `Derived::Derived`. For a constructor the
+  walk also follows an unconditional forward jump of at most 512 bytes rather than
+  ending there: GCC lays an optimized constructor's member initializers out across
+  branches and joins them with a `jmp` ahead of its own vptr store (apfs-fuse's
+  `BTreeNodeVar(BTree &, ...)` stores the inlined `BTreeNode` vptr, branches over a
+  `shared_ptr` copy, and stores its own after the join). A
   `this` the function stores to a second frame slot is an inlined callee's
   parameter home (an always_inline constructor inlined into the function) until a
   call follows, which makes it the compiler's own spill across that call; a store
@@ -7811,8 +7842,9 @@ every other binary's pass list is byte-identical to before the pass existed):
     `Toyota.Foo` under `swiftdemangle`, the runtime spelling off), the same
     mapping the method labels use, while the lookups between the ObjC tables
     keep the runtime spelling. On a Swift image (one with `__swift5_fieldmd`
-    that the Swift pass runs on) under `swifttypes`, a Swift class's layout is
-    left to the field descriptors:
+    that the Swift pass runs on) under `swifttypes` (read at load as
+    `KUNA_SWIFTTYPES`, since this pass runs before any `option` line), a
+    Swift class's layout is left to the field descriptors:
     the ivar list encodes Swift-typed stored properties as nothing, so the ObjC
     pass only declares the record and `swifttypes` completes it with the Swift
     names and types — one struct per class (Toyota: `Toyota.AddMileageViewController`

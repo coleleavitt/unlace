@@ -6,7 +6,8 @@ from LLVM's AMDGPU back end as an encoder: every mnemonic in the spec was assemb
 of the encoding; AMD's published "Vega" Instruction Set Architecture reference describes
 the semantics. No LLVM or AMD text is copied. No prior SLEIGH for GCN or RDNA was found.
 
-Language: `AMDGPU:LE:64:GFX9`, the GCN5 encodings of gfx900-gfx90a (Vega, MI50/MI60).
+Language: `AMDGPU:LE:64:GFX9`, the GCN5 encodings of gfx900-gfx908 (Vega, MI50/MI60); CDNA 2 and 3 have
+their own languages (below).
 
 Lane model: a vector instruction is lifted for one lane. A VGPR is that lane's 32-bit value
 (pairs are 64-bit varnodes at either alignment), a compare writes 0 or 1 into VCC or its
@@ -45,6 +46,44 @@ LDS reduction with barriers, f64/i64 arithmetic, 16-bit arithmetic); every funct
 both objects decompiles with no bad instruction, and `llvm-objdump` lists no mnemonic the
 spec lacks. Tests: `crates/unlace-cli/tests/amdgpu_raw.rs`.
 
+## CDNA: `AMDGPU:LE:64:GFX90A` and `AMDGPU:LE:64:GFX942`
+
+`amdgcn_gfx90a.slaspec` (CDNA 2, MI200) and `amdgcn_gfx942.slaspec` (CDNA 3, gfx940-gfx942, MI300) are
+generated from the GFX9 spec by `tools/gen_amdgpu_cdna.py`. `tools/regen_amdgpu_cdna.sh` reruns the
+probes and the generator with LLVM 22 on PATH. `tools/amdgpu_cdna_probe.py map` lists, for every opcode of
+the GFX9 formats, LLVM's gfx900 and CDNA mnemonic. Each GFX9 constructor is kept, moved to the opcode
+its name has on the target (`v_mul_legacy_f32` becomes the VOP3-only opcode 673, since CDNA gives VOP2
+opcode 4 to `v_fmac_f64`), or dropped (gfx942 removes `v_mac_f32`, `v_mad_f32`, `v_mad_legacy_f32`).
+The GFX9 flat atomics, which always wrote their destination, are replaced: an atomic returns the
+old value only with glc (gfx942: sc0). The include `amdgcn_<cpu>_cdna.sinc` adds:
+
+- `v_fmac_f32/f64`, `v_xnor_b32`, `v_pk_fmac_f16`, the `v_dot*c` accumulating dots (user-ops), VOP3
+  `v_mul_legacy_f32`, the f16 `v_fma/mad/min/max_f16` VOP3 forms the GFX9 base lacks, and gfx942's
+  `v_lshl_add_u64`, `v_mov_b64` and fp8/bf8 conversions (user-ops).
+- VOP3P (bits 31-23 = 110100111). This covers the packed 16-bit operations, `v_pk_fma/mul/add/mov_b32`
+  on VGPR pairs (op_sel and op_sel_hi pick each lane's dword), and the dot and fma_mix operations.
+- The accumulation registers `a0`-`a255` (register space offset 0x6000), `v_accvgpr_read/write/mov_b32`, and
+  every MFMA and SMFMAC opcode `probe mfma` lists, with LLVM's tile sizes. The result and the
+  accumulator are AGPR tuples when acc_cd (word 0 bit 15) is set and VGPR tuples otherwise; A and B are
+  AGPRs when the acc bits (word 1 bits 27-28) are set. Each MFMA is a user-op named after the
+  instruction; an SMFMAC accumulates into its result and takes the index VGPR.
+- The global and flat atomics, including the f32, f64 and packed forms.
+
+CDNA is wave64 only, so the GFX9 lane model applies unchanged.
+
+Oracle: probe encodings against `llvm-objdump --mcpu=gfx90a`/`gfx942`: every MFMA/SMFMAC encoding (each
+opcode with acc_cd and the A/B acc bits; 216 on gfx90a, 368 on gfx942), both accvgpr moves and every
+global/flat atomic (with and without glc, `off` and SGPR base) print the same text. The other formats
+match at least as many probe encodings as the GFX9 spec does against gfx900. The fixture kernels
+(`cdna_kernels.cl` at -O3, `real_kernels.cl`, `gfx900_kernels.cl`, `wave64_kernels.cl`,
+`wave64_ballot.cl` and MFMA, packed-f32 and f32/f64-atomic test kernels at -O2 and -O3) built for both
+targets list no undecoded instruction, give the same mnemonic as `llvm-objdump` at every address, and
+decompile with no bad instruction.
+
+Gaps: AGPR data operands of loads, stores and DS (the acc bit), DPP and SDWA (as on GFX9), gfx942's
+`global_load_lds_*`, the cbsz/abid/blgp MFMA modifiers (decoded but not displayed), and the GFX9 base's
+gaps in 16-bit VOP3 forms beyond the four above.
+
 ## RDNA: `AMDGPU:LE:64:GFX10` and `AMDGPU:LE:64:GFX11`
 
 `amdgcn_gfx10.slaspec` (RDNA 1/2, gfx1010-gfx1036) and `amdgcn_gfx11.slaspec` (RDNA 3, gfx1100-gfx1103)
@@ -69,7 +108,10 @@ cache-control instructions new in these generations (`s_clause`, `s_delay_alu`,
 `s_waitcnt_*cnt`, `s_inst_prefetch`, ...) decode as no-ops.
 
 Gaps beyond GFX9's: on gfx10, VOP3P (packed math), MIMG and the dot operations are not decoded;
-on both, the export and LDS-direct instructions are not. gfx11's true16 forms, VOP3P,
+on both, the export and LDS-direct instructions are not. The VOP3-only `v_add_co_u32`,
+`v_sub_co_u32` and `v_subrev_co_u32` print without an `_e64` suffix, as LLVM does, and
+`v_permlane16_b32`/`v_permlanex16_b32` are the `permlane16`/`permlanex16` user-ops on the old
+destination, the source and both lane-select SGPRs. gfx11's true16 forms, VOP3P,
 WMMA and MIMG come from the generated includes below.
 
 Oracle: `fixtures/amdgpu/gfx900_kernels.cl` and the four GFX9 test kernels built with clang
@@ -112,9 +154,9 @@ constructors to the base spec (the probe skips opcodes the base already decodes 
 prints a half for them); then rerun `gen_amdgpu_wave64.py`.
 
 Oracle: the probe encodings against `llvm-objdump`. Of the 436 valid VOP3 encodings (destination
-field 0x7e, which `v_cmpx` requires), 430 print
-the same mnemonic (the rest: `v_mqsad_u32_u8` and `v_permlane16/x16_b32`, not decoded, and the
-base spec's `v_add/sub/subrev_co_u32_e64` spelling), and 132 of the 133 that name a half print
+field 0x7e, which `v_cmpx` requires), all but `v_mqsad_u32_u8` print the same mnemonic (when
+this was first measured, 430 did: `v_permlane16/x16_b32` and the `v_add/sub/subrev_co_u32`
+suffix were fixed later), and 132 of the 133 that name a half print
 the same text (the other is the probe's VGPR as a `v_cndmask_b16` mask); of the 496 VOPC, VOP1
 and VOP2 encodings with halves, all but `v_swap_b16` and the base spec's `v_mov_b16`/`v_not_b16`
 spelling print the same text; all 34 VOP3P encodings print the same mnemonic; and 3,632 MIMG

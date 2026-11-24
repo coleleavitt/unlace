@@ -1341,6 +1341,104 @@ class MicroBlazeElHarness(MicroBlazeHarness):
     big = False
 
 
+# ---------------------------------------------------------------- Xtensa (little endian, 16/24-bit)
+
+def xt_bytes(ws):
+    out = b""
+    for w in ws:
+        out += bytes([w & 0xFF, (w >> 8) & 0xFF]) if isinstance(w, tuple) else bytes([w & 0xFF, (w >> 8) & 0xFF, (w >> 16) & 0xFF])
+    return out
+
+
+def xt_l32i(t, s, off):
+    return (off // 4) << 16 | 2 << 12 | s << 8 | t << 4 | 2
+
+
+def xt_s32i(t, s, off):
+    return (off // 4) << 16 | 6 << 12 | s << 8 | t << 4 | 2
+
+
+def xt_movi(t, imm):
+    return (imm & 0xFF) << 16 | 0xA << 12 | ((imm >> 8) & 0xF) << 8 | t << 4 | 2
+
+
+def xt_slli(r, s, sa):
+    e = 32 - sa
+    return ((e >> 4) & 1) << 20 | 1 << 16 | r << 12 | s << 8 | (e & 0xF) << 4
+
+
+def xt_or(r, s, t):
+    return 2 << 20 | r << 12 | s << 8 | t << 4
+
+
+def xt_li32(r, v, tmp):
+    """movi r,byte3; then slli r,r,8; movi tmp,byte; or r,r,tmp for the lower bytes."""
+    c = [xt_movi(r, (v >> 24) & 0xFF)]
+    for sh in (16, 8, 0):
+        c += [xt_slli(r, r, 8), xt_movi(tmp, (v >> sh) & 0xFF), xt_or(r, r, tmp)]
+    return c
+
+
+class XtensaHarness:
+    """a0..a15 at 4*i, SAR at 64, marker at 72. A free register holds the table address and is
+    loaded last, then J reaches the instruction (no delay slots). SAR goes through wsr/rsr."""
+    qemu = ("qemu-xtensa", [])
+    machine = 94
+    big = False
+    elf32 = True
+    table_size = 80
+    marker_at = 72
+
+    def __init__(self):
+        self.s = 15
+        self.scratch_names = []
+
+    def choose_scratch(self, arch, regs, written):
+        for i in range(15, 1, -1):
+            n = arch.gprs[i][0]
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.s = i
+                self.scratch_names = [n]
+                return True
+        return False
+
+    def prologue(self, target):
+        s = self.s
+        t = 2 if s != 2 else 3
+        c = [xt_movi(s, 0x3E), xt_slli(s, s, 16)]                               # TABLES = 0x3E0000
+        c += [xt_l32i(t, s, 64), 0x130300 | t << 4]                             # wsr.sar t
+        for i in range(16):
+            if i != s:
+                c.append(xt_l32i(i, s, 4 * i))
+        c.append(xt_l32i(s, s, 4 * s))
+        here = PROLOGUE + 3 * len(c)
+        c.append(((target - (here + 4)) & 0x3FFFF) << 6 | 6)                    # j target
+        return xt_bytes(c)
+
+    def epilogue(self, dumps, marker):
+        s = self.s
+        t, u = [r for r in (7, 8, 9, 10) if r != s][:2]
+        c = [xt_movi(s, 0x3E), xt_slli(s, s, 16), 8 << 16 | 0xD << 12 | s << 8 | s << 4 | 2]   # addmi s,s,0x800
+        for i in range(16):
+            if i != s:
+                c.append(xt_s32i(i, s, 4 * i))
+        c += [0x030300 | t << 4, xt_s32i(t, s, 64)]                             # rsr.sar t
+        c += xt_li32(t, marker, u) + [xt_s32i(t, s, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [xt_movi(2, 13), xt_movi(6, 1)] + xt_li32(3, base, 5) + xt_li32(4, size, 5) + [0x005000]   # write; syscall
+        c += [xt_movi(2, 118), xt_movi(6, 0), 0x005000]                         # exit(0)
+        return xt_bytes(c)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs):
+            struct.pack_into("<I", t, 4 * i, init.get(n, 0) & 0xFFFFFFFF)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        return {n: struct.unpack_from("<I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs)}, 0
+
+
 HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
              "mipsr6": MipsR6Harness, "mips64r6": Mips64R6Harness, "nios2": Nios2Harness, "sh4": Sh4Harness,
              "ppc": lambda: PpcHarness(("qemu-ppc", ["-cpu", "7457"]), 20, True, False),
@@ -1348,7 +1446,7 @@ HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "r
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness, "hppa": HppaHarness, "alpha": AlphaHarness, "or1k": Or1kHarness, "microblaze": MicroBlazeHarness, "microblazeel": MicroBlazeElHarness}
+             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness, "hppa": HppaHarness, "alpha": AlphaHarness, "or1k": Or1kHarness, "microblaze": MicroBlazeHarness, "microblazeel": MicroBlazeElHarness, "xtensa": XtensaHarness}
 
 
 def qemu_path(name):

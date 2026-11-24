@@ -1870,10 +1870,7 @@ impl AnalysisPass for LibcTypesPass {
             types,
             word_size,
             layout,
-            ctx.arch
-                .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
-                .0,
+            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
         );
         seed_named_prototypes(
             &mut out,
@@ -1882,10 +1879,7 @@ impl AnalysisPass for LibcTypesPass {
             types,
             word_size,
             layout,
-            ctx.arch
-                .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
-                .0,
+            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(
             &mut out,
@@ -1902,10 +1896,7 @@ impl AnalysisPass for LibcTypesPass {
             types,
             word_size,
             layout,
-            ctx.arch
-                .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
-                .0,
+            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(&mut out, &resolved, LIBC_NAMED, types, word_size, layout);
         seed_named_prototypes(
@@ -1915,10 +1906,7 @@ impl AnalysisPass for LibcTypesPass {
             types,
             word_size,
             layout,
-            ctx.arch
-                .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
-                .0,
+            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(
             &mut out,

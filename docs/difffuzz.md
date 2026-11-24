@@ -124,6 +124,9 @@ mnemonics). Capstone 5 does not decode them. QEMU runs with
   vtype, vxsat, vxrm, fcsr and vstart. Half of the x registers point into a 64 KiB data
   region, which is always mapped and compared. When QEMU raises SIGILL (a register group, SEW
   or EEW the instruction does not allow) the case is retried at LMUL 1 with each SEW.
+- **vtype as context.** Each encoding is lifted after a `vsetvli x0, x0` of each vtype it is run
+  at (`lift_variants`), so the decoder sees the vtype the harness sets, and the case is run with
+  the first of those vtypes QEMU accepts.
 - **What is compared.** `riscv.rvv.sinc` lifts every vector instruction to a user operation,
   so element values cannot be compared. The p-code runs twice, each time with different
   random user-operation results. A byte written the same way in both runs must equal QEMU's
@@ -132,6 +135,9 @@ mnemonics). Capstone 5 does not decode them. QEMU runs with
   gives every register the p-code does not read new contents, keeping vl, vtype, vxrm and
   fcsr. If a byte the p-code writes through a user operation changes, the result is
   `missing-input`, tagged with the case's tail/mask policy (`tu/mu` etc.).
+- **After vtype context (`tools/gen_rvv_groups.py`)** (pinned `unlace-92c033f5ca`, 400
+  encodings, seeds 5/6): VLEN 128 247 match, 17 with findings; VLEN 256 239 match, 29 with
+  findings. Every remaining finding is fflags or vxsat, which the lift leaves out.
 - **First run** (pinned `unlace-cc4eab698b`, 400 encodings each):
   - VLEN 128: 146 match, 111 with findings, 143 reference exceptions. The exceptions are
     SIGSEGV on indexed and strided addresses outside the region, and SIGILL on encodings

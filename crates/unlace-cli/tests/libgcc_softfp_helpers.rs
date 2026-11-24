@@ -66,3 +66,15 @@ fn eight_byte_values_wait_for_a_model_that_holds_them() {
     let dadd = decompile("lanai.o", "dadd", &[]);
     assert!(!dadd.contains(" *"), "{dadd}");
 }
+
+/// The #864 repro: GNU gcc 15.3 objects whose `scale` ends in a call to
+/// `__addsf3`.
+#[test]
+fn gcc_soft_float_scale_returns_its_sum() {
+    for object in ["gcc-csky.o", "gcc-or1k.o", "gcc-arc.o", "gcc-xtensa.o"] {
+        let out = decompile(object, "scale", &[]);
+        assert!(out.contains("return __addsf3("), "{object}: {out}");
+        assert!(out.contains("__floatsisf(a1)"), "{object}: {out}");
+        assert!(!out.starts_with("void"), "{object}: {out}");
+    }
+}

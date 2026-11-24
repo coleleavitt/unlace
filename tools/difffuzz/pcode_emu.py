@@ -142,7 +142,12 @@ def step(state, ops, addr, size, max_steps=20000):
             state.write("ram", ptr, v["size"], rd(v))
             continue
         if opc == "LOAD":
-            r = state.read("ram", rd(ins[1]), osz)
+            # space id 0 is the constant space: a dynamic export into it (`export *[const]:8 tmp`)
+            # loads the pointer value itself
+            if ins[0]["offset"] == 0:
+                r = rd(ins[1]) & mask(osz)
+            else:
+                r = state.read("ram", rd(ins[1]), osz)
         else:
             r = _eval(opc, ins, rd, osz)
         state.write(*_vn(out), r)

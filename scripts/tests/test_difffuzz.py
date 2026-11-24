@@ -45,11 +45,19 @@ class PcodeEmuTests(unittest.TestCase):
     def test_unwritten_memory_reads_the_fill_and_writes_are_recorded(self):
         st = self.state(big=True)
         st.set("A", 0x10)
-        ops = [op("LOAD", vn("register", 4, 4), vn("const", 0, 8), vn("register", 0, 4)),
-               op("STORE", None, vn("const", 0, 8), vn("register", 0, 4), vn("const", 0xAB, 1))]
+        ops = [op("LOAD", vn("register", 4, 4), vn("const", 3, 8), vn("register", 0, 4)),
+               op("STORE", None, vn("const", 3, 8), vn("register", 0, 4), vn("const", 0xAB, 1))]
         step(st, ops, 0, 4)
         self.assertEqual(st.get("B"), 0x10111213)
         self.assertEqual(st.writes, {0x10: 0xAB})
+
+    def test_load_from_the_constant_space_is_the_pointer(self):
+        st = self.state()
+        st.set("A", 0x1FFFFF0)
+        ops = [op("LOAD", vn("register", 4, 4), vn("const", 0, 8), vn("register", 0, 4))]
+        step(st, ops, 0, 4)
+        self.assertEqual(st.get("B"), 0x1FFFFF0)
+        self.assertEqual(st.accesses, [])
 
     def test_branch_to_ram_is_the_next_pc(self):
         st = self.state()

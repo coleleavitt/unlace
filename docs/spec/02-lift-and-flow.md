@@ -5660,6 +5660,22 @@ Found by `tools/difffuzz` against Unicorn.
   `th_logicflags()`, so with S they set C from the shifter (`ThumbExpandImm12` or `thshift2`),
   as `ORR`, `EOR` and `TST` already did; before, `ANDS.W r8,r11,r9,ROR #21` left C unchanged.
 
+### PowerPC lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz --oracle qemu` (`qemu-ppc`, `qemu-ppc64` and `qemu-ppc64le`).
+
+- `divw.` (`ppc_instructions.sinc`) no longer sets XER[OV] and XER[SO]: only the `o` forms
+  record overflow, as `divwu.` already did. Before, `divw. r7,r16,r8` cleared an OV that was set.
+- `lhbrx` and `lwbrx` load the halfword or word in the image's byte order and reverse it,
+  so they are correct in the little-endian languages too; they composed the result from
+  single bytes in big-endian order, so on `PowerPC:LE:64:*` `lhbrx` returned the bytes
+  unreversed. `ldbrx` and `stdbrx` (`ppc_isa.sinc`) lift to the byte-reversed doubleword
+  load and store instead of the `LoadDoublewordByteReverseIndexed` and
+  `StoreDoublewordByteReverseIndexed` user ops, and `ldbrx` reads `(RA|0)`.
+- `stswi` with a byte count that is not a multiple of 4 stores only the leftmost bytes of its
+  last register (`storeRegisterPartial` in `ppc_common.sinc`); it stored the whole word, so
+  `stswi r23,r3,17` wrote 20 bytes.
+
 ### AArch64 rounding, saturation and by-element operands (#546)
 
 - `SRSRA`/`URSRA` add the rounding bit (`(x >> s) + ((x >> (s-1)) & 1)`, which cannot overflow);

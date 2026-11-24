@@ -1,0 +1,49 @@
+# pairlocal: a long long local on 32-bit x86 joins at its phis.
+#
+# Source (gcc -m32 -O1 -fno-pic, ld -Ttext=0x10000 with a stub g):
+#   long long g(long long);
+#   long long f(int a, int b, long long c) {
+#     long long t;
+#     if (a == 1) t = b; else if (a == 2) t = (unsigned)b * 3; else t = 0;
+#     return g(c + t);
+#   }
+#
+# t lives in edx:eax. Heritage gives each half its own MULTIEQUAL at the
+# join, so with the option off the sum reads `a2 + CONCAT44(v3,v2)`
+# (`v3 = a1 >> 0x1f; v2 = a1;`, `v3 = 0; v2 = a1 * 3;`, `v3 = 0; v2 = 0;`).
+# With `pairlocal on` each edge's pair becomes one 64-bit value (SEXT(b),
+# ZEXT(b * 3), 0) and the CONCAT44 is gone.
+
+[image]
+arch = 'x86:LE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 'pairlocal_f' },
+    { space = 'ram', offset = '0x1004c', name = 'g' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+readonly = true
+hex = '5383ec088b4c24188b5c241c837c2410017424b800000000ba00000000837c241002741a83ec0801c811da5250e81a00000083c4185bc38b44241499ebe68b4424148d0440ba00000000ebd88b4424048b542408c3'
+
+[script]
+commands = [
+    'lo fu pairlocal_f',
+    'decompile',
+    'print C',
+    'option pairlocal on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'PAIRLOCAL #1: only the run with the option off prints CONCAT44'
+count = 1
+literal = 'CONCAT44'
+
+[[match]]
+name = 'PAIRLOCAL #2: both runs call g'
+count = 2
+regex = 'g\('

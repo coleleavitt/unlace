@@ -113,7 +113,7 @@ jobs:
 
   # The T4 corpus (tools/semantic/README.md): every function of the construct cases is decompiled,
   # its emitted C compiled in place of the original and run. Fails only when a row that passes in
-  # tools/semantic/baseline.json no longer passes (run.py --baseline); newly passing rows are listed.
+  # tools/semantic/baseline.toml no longer passes (run.py --baseline); newly passing rows are listed.
   semantic:
     name: semantic compile-and-run
     if: github.event_name != 'pull_request'
@@ -173,7 +173,7 @@ jobs:
           mkdir -p out
           python3 tools/semantic/run.py --unlace target/release/unlace --sleighpath specs \
             --config x86_64-gcc,x86_64-clang,aarch64-zig --opt O0,O2 --jobs "$(nproc)" \
-            --baseline tools/semantic/baseline.json --json out/semantic.json --markdown out/semantic.md
+            --baseline tools/semantic/baseline.toml --json out/semantic.json --markdown out/semantic.md
 
       - name: Table for the run summary
         if: always()

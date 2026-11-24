@@ -26,6 +26,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -312,6 +313,25 @@ def markdown(rows):
     return "\n".join(out) + "\n"
 
 
+BASELINE_HEADER = (
+    "# Outcome of every semantic row (\"<config> <opt> <case>.<function>\") on the host named in\n"
+    "# notes/semantic-results.md. Written by --save-baseline, read by --baseline.\n"
+)
+
+
+def write_outcomes(path, outcomes):
+    """Save {row: outcome} as TOML: one quoted key per row, sorted, so a re-save diffs per row."""
+    lines = [BASELINE_HEADER + "[outcomes]"]
+    lines += ["%s = %s" % (json.dumps(k), json.dumps(outcomes[k])) for k in sorted(outcomes)]
+    Path(path).write_text("\n".join(lines) + "\n")
+
+
+def read_outcomes(path):
+    """The {row: outcome} map a --save-baseline run wrote."""
+    with open(path, "rb") as f:
+        return tomllib.load(f)["outcomes"]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--unlace", default=os.environ.get("UNLACE", "unlace"), help="unlace binary (default $UNLACE, else PATH)")
@@ -361,11 +381,11 @@ def main():
         Path(args.markdown).write_text(table)
     outcomes = {"%(config)s %(opt)s %(case)s.%(function)s" % r: r["outcome"] for r in rows}
     if args.save_baseline:
-        Path(args.save_baseline).write_text(json.dumps(outcomes, indent=1, sort_keys=True) + "\n")
+        write_outcomes(args.save_baseline, outcomes)
     if any(r["outcome"] == "setup" for r in rows):
         return 2
     if args.baseline:
-        base = json.loads(Path(args.baseline).read_text())
+        base = read_outcomes(args.baseline)
         lost = sorted(k for k, v in base.items() if v == "pass" and outcomes.get(k, "pass") != "pass")
         gained = sorted(k for k, v in outcomes.items() if v == "pass" and base.get(k, "pass") != "pass")
         for k in lost:

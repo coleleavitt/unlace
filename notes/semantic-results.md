@@ -2,7 +2,7 @@
 
 First run of `tools/semantic` (see its README), 2026-11-24, with the main pin
 `unlace-c451bbc6e5`. Host: gcc 15.3.0, clang 22.1.8, zig 0.15.2 (aarch64-linux-musl, static),
-qemu-aarch64 10.2.2. Emitted C is compiled at -O0 with -fwrapv. `tools/semantic/baseline.json`
+qemu-aarch64 10.2.2. Emitted C is compiled at -O0 with -fwrapv. `tools/semantic/baseline.toml`
 holds these outcomes.
 
 Of 348 rows, 292 pass, 17 compute a wrong result, 39 do not compile, and unlace fails none
@@ -141,7 +141,7 @@ so no AArch64 function compiled until the driver stripped the debug info.
 
 ## Status after the fixes (2026-11-24)
 
-Fixed in main, not yet re-measured (`baseline.json` still holds the first run's outcomes; re-save it
+Fixed in main, not yet re-measured (`baseline.toml` still holds the first run's outcomes; re-save it
 with one suite run on a build of current main):
 
 | Item | PR |

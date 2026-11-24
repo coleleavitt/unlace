@@ -579,6 +579,11 @@ pub fn universal_sched_hooked(
             crate::ruleaction_1::RuleOrCollapse::new("analysis")
         ),
         rrow!(
+            "maskjoin",
+            "analysis",
+            crate::kuna_maskjoin::RuleMaskJoin::new("analysis")
+        ),
+        rrow!(
             "andorlump",
             "analysis",
             crate::ruleaction_1::RuleAndOrLump::new("analysis")

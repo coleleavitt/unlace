@@ -94,10 +94,10 @@ Three tiers:
 | __aeabi_uldivmod() / __aeabi_idiv() / __aeabi_lmul() called with missing or reordered arguments on ARM | [`arithhelpers`](#arithhelpers----on--off-default-on) |
 | __alldiv / __allrem called and the caller returns void on an MSVC x86-32 image | [`arithhelpers`](#arithhelpers----on--off-default-on) |
 | a 64-bit division on a 32-bit target prints as a helper call | [`arithhelpers`](#arithhelpers----on--off-default-on) |
-| __aeabi_dadd(a,b) / __aeabi_fmul(a,b) printed where the source has a + b or a * b | [`aeabifloat`](#aeabifloat----on--off-default-off) |
-| __aeabi_i2d(n), __aeabi_d2iz(x), __aeabi_f2d(x) printed where the source has a cast | [`aeabifloat`](#aeabifloat----on--off-default-off) |
-| __aeabi_dcmplt(a,b) != 0 printed where the source compares two doubles | [`aeabifloat`](#aeabifloat----on--off-default-off) |
-| soft-float ARM arithmetic reads as a chain of helper calls | [`aeabifloat`](#aeabifloat----on--off-default-off) |
+| __aeabi_dadd(a,b) / __aeabi_fmul(a,b) printed where the source has a + b or a * b | [`aeabifloat`](#aeabifloat----on--off-default-on) |
+| __aeabi_i2d(n), __aeabi_d2iz(x), __aeabi_f2d(x) printed where the source has a cast | [`aeabifloat`](#aeabifloat----on--off-default-on) |
+| __aeabi_dcmplt(a,b) != 0 printed where the source compares two doubles | [`aeabifloat`](#aeabifloat----on--off-default-on) |
+| soft-float ARM arithmetic reads as a chain of helper calls | [`aeabifloat`](#aeabifloat----on--off-default-on) |
 | an Objective-C method is mostly objc_retain/objc_release lines | [`objcarc`](#objcarc----on--off-default-on) |
 | objc_retainAutoreleasedReturnValue() rendered with no argument and its result typed unsigned long | [`objcarc`](#objcarc----on--off-default-on) |
 | objc_storeStrong(&self->field, x) where an assignment is meant | [`objcarc`](#objcarc----on--off-default-on) |
@@ -1559,13 +1559,13 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P2/flow-classification · kuna · correctness-fix · kuna-arithhelpers
 - **Example:** `option arithhelpers off`
 
-### `aeabifloat` -- on | off, default `off`
+### `aeabifloat` -- on | off, default `on`
 
 - **Symptoms:** __aeabi_dadd(a,b) / __aeabi_fmul(a,b) printed where the source has a + b or a * b; __aeabi_i2d(n), __aeabi_d2iz(x), __aeabi_f2d(x) printed where the source has a cast; __aeabi_dcmplt(a,b) != 0 printed where the source compares two doubles; soft-float ARM arithmetic reads as a chain of helper calls.
 - **What it does:** Replace a call to one of the Arm run-time ABI's floating-point helpers with the operation it implements, via synthesized `<callfixup>` payloads, so it prints as the C operator or cast: `__aeabi_dadd`, `__aeabi_dsub`, `__aeabi_drsub`, `__aeabi_dmul`, `__aeabi_ddiv` and their `f` forms as `+`, `-`, `*`, `/`; `__aeabi_dcmpeq`, `dcmplt`, `dcmple`, `dcmpge`, `dcmpgt` and the `f` forms as `==`, `<`, `<=`, `>=`, `>` (0 when unordered), `dcmpun`/`fcmpun` as a NaN test; `d2iz`, `d2uiz`, `d2lz`, `f2iz`, `f2uiz`, `f2lz` as a truncating cast, `d2f`/`f2d` as a precision cast, and `i2d`, `ui2d`, `l2d`, `i2f`, `ui2f`, `l2f` as an integer-to-float cast. Operands are read from r0..r3 under the base standard (RTABI32 3.1), a `double` low word first on little-endian and high word first on big-endian, and the result is written to r0 or r0:r1, so `return __aeabi_dadd(a,b);` prints `return a + b;`, `v1 = __aeabi_i2d(n); return __aeabi_dmul(v,v1);` prints `return v * (double)n;` and `__aeabi_dcmplt(a,b)` prints `a < b`. A conversion to `unsigned` is read as the signed conversion to the next wider integer, exact wherever the C cast is defined. `d2ulz`, `f2ulz`, `ul2d` and `ul2f`, which p-code has no exact form for, and the flag-returning `cdcmp`/`cfcmp` comparisons keep their calls. Each helper is also targeted under the libgcc name of the same routine (`__adddf3`, `__muldf3`, `__extendsfdf2`, `__floatsidf`, `__fixdfsi`, `__fixdfdi`, ...), which a static image may list first and newlib calls directly, but not the three-way `__eqdf2`/`__ltdf2` family, and with one more leading underscore, as `arithhelpers` does. A relocatable object's undefined helpers are matched too: the load-time call-fixup scan matches every kuna family whatever its option, and the commit installs only the families that are on.
-- **When to flip:** A soft-float ARM image (or a hard-float one on a single-precision FPU, for its doubles) prints its floating-point arithmetic as `__aeabi_dadd(a,b)`, `__aeabi_fmul(...)`, `__aeabi_i2d(n)`, `__aeabi_d2iz(x)` calls. Off by default: the fold takes the image's helpers to be the IEEE 754 round-to-nearest ones RTABI32 specifies; a library built for flush-to-zero or another rounding mode computes something else. On a hard-float caller the double returned in r0:r1 and moved to d0 still prints as two masked halves of a union cast.
+- **When to flip:** On by default: RTABI32 requires the helpers to be IEEE 754 round-to-nearest, so the fold changes no value on a conforming image. Flip OFF to see the helper calls, for a firmware that links its own non-IEEE helpers under the AEABI names (a flush-to-zero library, a fixed-point shim), or to read which helper a caller reached.
 - **Where / provenance:** P2/flow-classification · kuna · presentation-default · unlace-aeabifloat
-- **Example:** `option aeabifloat on`
+- **Example:** `option aeabifloat off`
 
 ### `objcarc` -- on | off, default `on`
 
@@ -1986,7 +1986,7 @@ The control surface: each of these can make output worse on the wrong source sha
 ### `pairparam` -- on | off, default `on`
 
 - **Symptoms:** a long long parameter on i386 or 32-bit ARM prints as two int parameters; a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters.
-- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow, a carry or a two-word equality links them, or when the function only ever reads them concatenated (every reader of either word is a PIECE of the two, high word first).
+- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow, a carry or a two-word equality links them.
 - **When to flip:** On by default.
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option pairparam off`

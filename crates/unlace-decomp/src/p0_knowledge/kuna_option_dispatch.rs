@@ -302,6 +302,7 @@ kuna_options! { self, p1;
     "foldcallret" => registered!(crate::kuna_callretfold::FoldCallReturns),
     "indirectonly" => registered!(crate::kuna_indirectonly::MarkIndirectOnly),
     "typemerge" => registered!(crate::kuna_typemerge::TypeMergeMode),
+    "phiarm" => registered!(crate::kuna_phiarm::PhiArmSplit),
     "impliedrefs" => {
         let (val, msg) = crate::kuna_impliedrefs::OptionImpliedRefs.apply(p1)?;
         self.max_implied_ref = val;

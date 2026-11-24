@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_341() {
-    assert_eq!(kuna_num_settables(), 341);
-    assert_eq!(SETTABLE_TABLE.len(), 341);
+fn settable_count_is_343() {
+    assert_eq!(kuna_num_settables(), 343);
+    assert_eq!(SETTABLE_TABLE.len(), 343);
 }
 
 #[test]
-fn tier_counts_are_70_core_170_transform_101_analysis() {
+fn tier_counts_are_70_core_172_transform_101_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_170_transform_101_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 170, 101));
+    assert_eq!((core, transform, analysis), (70, 172, 101));
 }
 
 #[test]
@@ -966,7 +966,8 @@ fn option_values_live_value_present_for_129() {
     // +1 for `guarddispatch` (live_field = guard_dispatch).
     // +1 for `flownames` (live_field = flow_names).
     // +1 for `llscfold` (live_field = llsc_fold); `atomics` is four-valued, so it has none.
-    assert_eq!(with_live, 142);
+    // +1 for `armpairparam` (live_field = arm_pair_params).
+    assert_eq!(with_live, 143);
 }
 
 #[test]

@@ -3397,6 +3397,28 @@ tier = "transform"
 symptoms = "a long long parameter on i386 or 32-bit ARM prints as two int parameters|a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters"
 
 [[settable]]
+option = "armpairparam"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P4"
+subphase = "prototype-source"
+strength = "HARD"
+rewind = "P3"
+issue = "pairparam"
+summary = "Treat an even-aligned argument register pair (r0:r1, r2:r3 on 32-bit ARM) as one 8-byte parameter slot of an unprototyped function, so pairparam can join a long long passed in registers."
+use_when = "Off by default: it changes the recovered prototype of every unprototyped 32-bit ARM function whose register pair a borrow, carry or two-word equality links (pairparam must be on). Turn it on for ARM32 firmware or libraries with 64-bit arithmetic where a long long parameter prints as two int parameters and its compare as an SBORROW4 or CONCAT44 chain. The pairing follows the input model's general register entries in order: the first word sits at an even position among them, as the AAPCS join align rule places a 64-bit value."
+example = "option armpairparam on"
+live_field = "arm_pair_params"
+live_true = "on"
+live_false = "off"
+source_decompiler = "kuna"
+inspiration = "32-bit ARM: a long long argument in an aligned register pair recovered as two int parameters (AAPCS, cspec join align rule); Hex-Rays joins it"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a long long parameter on 32-bit ARM prints as two int parameters in r0 and r1 or r2 and r3|a 64-bit compare on 32-bit ARM prints as an SBORROW4 or CONCAT44 chain over two register parameters"
+
+[[settable]]
 option = "regsigned"
 values = "on|off"
 default = "off"

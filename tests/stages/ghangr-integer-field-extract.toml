@@ -1,3 +1,7 @@
+# `ghangr-integer-field-extract.toml` checks narrow, narrow-then-widen, and shifted integer fields
+# in C, Go and Rust. Native CLI tests execute the complete emitted callers against boundary values
+# and check that each helper is called once.
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

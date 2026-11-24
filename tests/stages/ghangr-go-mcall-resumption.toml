@@ -1,3 +1,7 @@
+# `ghangr-go-mcall-resumption.toml` checks the continuation after a Go scheduler switch,
+# independent terminal propagation through a lookalike wrapper, and explicit function and
+# call-site overrides.
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

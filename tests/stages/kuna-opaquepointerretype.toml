@@ -1,3 +1,11 @@
+# `probe` keeps `&frame[1]` in a saved register (ARM32 r4, PowerPC32 r29); `retype` to a pointer
+# to a bodiless `struct Opaque` added a default one-byte frame range that split the array, the
+# copy holding the address was propagated away, and the retype was refused with `int4 *v3` printed
+# instead. P6 frame layout under the stable-names replay (`p6_variables/funcdata_spacebase.rs`
+# `gather_open`): a value carrying a replayed retype's lock whose pointee has no size lays its
+# range out by the pointee it was printed with (`kuna_stablenames.rs` `printed_pointee`) always on
+# (`retype` directive)
+
 [image]
 arch = 'ARM:LE:32:v8:default'
 symbols = [

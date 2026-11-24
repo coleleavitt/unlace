@@ -1,3 +1,8 @@
+# `ghangr-go-dwarf-string-inputs.toml` checks the two physical Go string input words, the ABI slot
+# after an earlier scalar, numeric byte iteration, a retained bounds branch, and explicit
+# prototype precedence. The stage also exercises malformed pairs and a word-identical scalar
+# signature.
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

@@ -1,3 +1,7 @@
+# `ghangr-rust-boolean-conversions.toml` checks byte-to-Boolean casts, masked values and narrowed
+# callback results. Its CLI companion compiles complete C and Rust output under the same asserted
+# prototypes and checks every byte value and call counts. The original fixture is only decompiled.
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

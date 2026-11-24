@@ -1,3 +1,9 @@
+# `ghangr-go-pointer-arithmetic-32.toml` and `ghangr-go-pointer-arithmetic-64.toml` check live
+# pointer bases through constant, negative and signed dynamic byte offsets in Go loads, stores and
+# returns. Integer-address reconstruction remains a control. The CLI companion builds both
+# authored assembly fixtures and runs the complete emitted functions with Go pointer checks and
+# full-array canaries.
+
 [image]
 arch = 'x86:LE:32:default:gcc'
 symbols = [

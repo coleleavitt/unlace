@@ -1,3 +1,8 @@
+# Authored Itanium constructor/destructor naming P1 external-refinement (a function storing a
+# class's vptr through `this` is `C::C`, or `C::~C` in the class's own vtable; a class without a
+# virtual destructor, an inlining factory and optimized helpers a constructor or destructor was
+# inlined into are left alone) `option itaniumrtti off\ on` with `option listing on`
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

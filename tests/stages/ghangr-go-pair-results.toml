@@ -1,3 +1,8 @@
+# `ghangr-go-pair-results.toml` checks opt-in paired 64-bit Go integer results, ordinary local
+# struct storage, destructuring calls and nested result selection. Its console companion covers
+# the option gate, malformed cross-unit DWARF, metadata collisions, indirect calls and complete
+# emitted native Go bodies.
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

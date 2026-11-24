@@ -1,3 +1,8 @@
+# - `kuna-integer-float-rounding.toml`, `kuna-integer-float-rounding64.toml`,
+# `kuna-integer-float-rounding-x87.toml`: an integer-to-float conversion keeps its rounding
+# through a later float conversion or a narrower float trace (always on), while exact
+# intermediates, x87 extended conversions and `fld1` still combine.
+
 [image]
 arch = 'sparc:BE:32:default:default'
 symbols = [

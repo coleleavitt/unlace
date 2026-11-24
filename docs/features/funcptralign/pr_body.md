@@ -196,7 +196,7 @@ invented bit-clear is gone, and the callee type is finally recovered.
 
 ## Test
 
-`tests/stages/ghdec-funcptralign.xml` — two-pass, hand-laid ARM Thumb-2 dispatcher
+`tests/stages/ghdec-funcptralign.toml` — two-pass, hand-laid ARM Thumb-2 dispatcher
 (`push {r4,lr}; mov r4,r0; ldr r3,[r0,#4]; cmp r3,#0; beq +1; mov r0,r4; blx r3; pop {r4,pc}`),
 the reduced `dwHandleInterrupt` shape. Pass 1 is the default pipeline; pass 2 re-runs with
 `option thumbfuncptr off`, the *other* live `funcptr_align` reader (GH-8471 / DIV-2), so

@@ -3612,6 +3612,11 @@ impl ConsoleProgram {
                 if analysis_pass_enabled(self.arch(), "com") {
                     merged.merge(unlace_analysis::passes::run_com(&bytes, self.arch()));
                 }
+                // (kuna `dextrpc`) DriverKit IORPC types; off by default, and
+                // it builds types, so it runs only when asked for.
+                if analysis_pass_enabled(self.arch(), "dextrpc") {
+                    merged.merge(unlace_analysis::passes::run_dextrpc(&bytes, self.arch()));
+                }
                 // Deferred Listing build + consumer/fast-inventory run, gated
                 // on the matching option. The call-fixup seed list is the names
                 // the load-time pass flagged resolved to addresses via the
@@ -4044,6 +4049,15 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Com>()
                 .0
+        }
+        "dextrpc" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Dextrpc>()
+                .0
+                && arch
+                    .kuna_options
+                    .get::<unlace_decomp::kuna_analysisgates::Osclassinfo>()
+                    .0
         }
         "strings" => {
             arch.kuna_options

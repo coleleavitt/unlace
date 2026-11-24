@@ -1,0 +1,96 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_fmt_write_real_x86_64',
+    'read symbols',
+    'option setlanguage rust-language',
+    'option rustfmt on',
+    'load function write_unsigned',
+    'decompile',
+    'print C',
+    'option rustfmt all',
+    'print C',
+    'load function write_signed',
+    'decompile',
+    'print C',
+    'load function write_flags',
+    'decompile',
+    'print C',
+    'load function write_literal',
+    'decompile',
+    'print C',
+    'load function write_empty',
+    'decompile',
+    'print C',
+    'load function write_string',
+    'decompile',
+    'print C',
+    'load function write_pair',
+    'decompile',
+    'print C',
+    'load function write_custom',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'off and custom formatting preserve runtime writes'
+count = 2
+literal = 'core::fmt::write('
+
+[[match]]
+name = 'all seven writes use a scoped trait import'
+count = 7
+literal = 'use std::fmt::Write as _;'
+
+[[match]]
+name = 'all seven writes preserve the byte result'
+count = 7
+literal = '.is_err()'
+
+[[match]]
+name = 'unsigned String mutation'
+count = 1
+regex = 'write!\(.*"\[\{\}\]".*\*const u32'
+
+[[match]]
+name = 'signed newline String mutation'
+count = 1
+regex = 'writeln!\(.*"\{\}".*\*const i64'
+
+[[match]]
+name = 'static flags and repeated indices'
+count = 1
+regex = 'writeln!\(.*"\{:#010x\}/\{:·>12\}"'
+
+[[match]]
+name = 'literal braces Unicode NUL and extra newline'
+count = 1
+regex = 'writeln!\(.*"\{\{é🙂\}\}\\0\\n"'
+
+[[match]]
+name = 'empty output still preserves the writer and result'
+count = 1
+regex = 'write!\(.*,""\)'
+
+[[match]]
+name = 'string fill width and precision'
+count = 1
+regex = 'write!\(.*"\|\{:🦀\^10.3\}\|".*from_utf8_unchecked'
+
+[[match]]
+name = 'mixed arguments retain their order'
+count = 1
+regex = 'write!\(.*"\{\}: \{\}".*\*const u32.*from_utf8_unchecked'

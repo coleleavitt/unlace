@@ -118,5 +118,74 @@ class GenerateTests(unittest.TestCase):
         self.assertEqual(e[3][2][1], "<<")
 
 
+FP_SAIL = """\
+union clause instruction = TOY_FSGNJ : (fregidx, fregidx, fregidx)
+
+mapping clause encdec = TOY_FSGNJ(rs2, rs1, rd)
+  <-> 0b0010000 @ encdec_freg(rs2) @ encdec_freg(rs1) @ 0b000 @ encdec_freg(rd) @ 0b1010011
+
+mapping clause assembly = TOY_FSGNJ(rs2, rs1, rd)
+  <-> "fsgnj.s" ^ spc() ^ freg_name(rd) ^ sep() ^ freg_name(rs1) ^ sep() ^ freg_name(rs2)
+
+function clause execute TOY_FSGNJ(rs2, rs1, rd) = {
+  let a = F_S(rs1);
+  let b = F_S(rs2);
+  F_S(rd) = b[31..31] @ a[30..0];
+  RETIRE_SUCCESS
+}
+
+union clause instruction = TOY_LB : (regidx, regidx)
+
+mapping clause encdec = TOY_LB(rs1, rd)
+  <-> 0b000000000000 @ encdec_reg(rs1) @ 0b000 @ encdec_reg(rd) @ 0b0000011
+
+mapping clause assembly = TOY_LB(rs1, rd)
+  <-> "lb" ^ spc() ^ reg_name(rd) ^ sep() ^ "(" ^ reg_name(rs1) ^ ")"
+
+function clause execute TOY_LB(rs1, rd) = {
+  let v : bits(8) = match mem_read(Read(Data), 0, 0, X(rs1), 1, false, false, false) {
+    Ok(v) => v,
+    Err(e) => return e,
+  };
+  X(rd) = sign_extend(v);
+  RETIRE_SUCCESS
+}
+"""
+
+FP_TOKENS = TOKENS.replace("  op2024=(20,24)", "  op2024=(20,24)\n  op0711=(7,11)\n  op1519=(15,19)")
+
+
+class FloatAndMemoryTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        sail = os.path.join(self.dir.name, "toy.sail")
+        tokens = os.path.join(self.dir.name, "reg.sinc")
+        Path(sail).write_text(FP_SAIL)
+        Path(tokens).write_text(FP_TOKENS)
+        model = g.Model()
+        model.load(sail, True)
+        self.gen = g.Gen(model, g.load_tokens(tokens), 160)
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def texts(self):
+        cons, _ = self.gen.run(64)
+        return {mn: text for mn, m, v, text in cons}
+
+    def test_single_precision_operands_are_unboxed_and_the_result_boxed(self):
+        text = self.texts()["fsgnj.s"]
+        self.assertIn(":fsgnj.s frd,frs1,frs2 is", text)
+        self.assertIn("0xffffffff:4", text)
+        self.assertIn("0x7fc00000", text)
+        self.assertIn("0xffffffff00000000", text)
+
+    def test_a_memory_read_is_a_ram_load(self):
+        text = self.texts()["lb"]
+        self.assertIn(":lb rd,(rs1) is", text)
+        self.assertIn("*[ram]:1 rs1", text)
+        self.assertIn("sext(", text)
+
+
 if __name__ == "__main__":
     unittest.main()

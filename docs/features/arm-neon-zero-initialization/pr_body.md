@@ -60,7 +60,7 @@ crackmes.one `68d40081224c0ec5dcedc2d2` (ARM32 ELF `trap`, `_start_main`), whose
 
 ## The tests
 
-`tests/stages/ghdec-constspaceload.xml` runs the fixture twice and pins both
+`tests/stages/ghdec-constspaceload.toml` runs the fixture twice and pins both
 arms; six unit tests cover the equal-width rewrite, both declined width
 mismatches and each declining clause; `tests/cli/arm-neon-zero-initialization.json`
 is the promoted acceptance probe. `make test` 675/675 and `make test-stages`

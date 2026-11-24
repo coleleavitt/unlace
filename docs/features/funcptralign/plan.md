@@ -51,7 +51,7 @@ because the registry records no-flag bug fixes (DIV-43...DIV-53).
   the stale STUB(W4) module-header note, and three rule-level unit tests
   (align=0 inert, align=1 strips `& ~1`, align=2 strips `& ~3` and declines
   `& ~1`).
-- `tests/stages/ghdec-funcptralign.xml` - two-pass ARM/Thumb end-to-end test
+- `tests/stages/ghdec-funcptralign.toml` - two-pass ARM/Thumb end-to-end test
   (0/2 pre-fix, 2/2 post-fix), plus the corpus-file-count bump in
   `decompiler/crates/kuna-base/src/xml.rs` and the re-recorded
   `docs/baseline-stages.json`.

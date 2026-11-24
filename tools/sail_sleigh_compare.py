@@ -20,7 +20,7 @@ register values. The p-code of each spec (unlace raw-pcode --json) is
 interpreted, and with --qemu the same words run natively under qemu-user as
 the reference. A spec that lifts the word to a CALLOTHER is counted as opaque.
 """
-import argparse, json, os, random, re, struct, subprocess, sys, tempfile
+import argparse, json, math, os, random, re, struct, subprocess, sys, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gen_riscv_sail import opcodes  # noqa: E402
@@ -159,13 +159,29 @@ def enc_u(op, rd, imm):
 
 S0, A0, A1, A2, A7 = 8, 10, 11, 12, 17
 
-def harness(tests, data_addr):
-    """ld a1,0(s0); ld a2,8(s0); <word>; sd a0,16(s0); addi s0,s0,24 per test,
-    then write(1, data, len) and exit(0)."""
+SLOT = 32
+
+def harness_mem(tests, data_addr):
+    """Per test: ld a0,0(s0); ld a2,8(s0); addi a1,s0,16; <word>; sd a0,24(s0);
+    addi s0,s0,32: the word works on the doubleword at s0+16."""
     code = [enc_u(0x37, S0, data_addr)]
     for w in tests:
-        code += [enc_i(0x03, A1, 3, S0, 0), enc_i(0x03, A2, 3, S0, 8), w, enc_s(0x23, 3, S0, A0, 16), enc_i(0x13, S0, 0, S0, 24)]
-    n = 24 * len(tests)
+        code += [enc_i(0x03, A0, 3, S0, 0), enc_i(0x03, A2, 3, S0, 8), enc_i(0x13, A1, 0, S0, 16), w,
+                 enc_s(0x23, 3, S0, A0, 24), enc_i(0x13, S0, 0, S0, SLOT)]
+    n = SLOT * len(tests)
+    code += [enc_i(0x13, A0, 0, 0, 1), enc_u(0x37, A1, data_addr), enc_u(0x37, A2, (n + 0x800) & ~0xfff), enc_i(0x13, A2, 0, A2, n - ((n + 0x800) & ~0xfff)),
+             enc_i(0x13, A7, 0, 0, 64), 0x73, enc_i(0x13, A0, 0, 0, 0), enc_i(0x13, A7, 0, 0, 93), 0x73]
+    return b''.join(struct.pack('<I', c) for c in code)
+
+def harness(tests, data_addr):
+    """Per test: ld a1,0(s0); ld a2,8(s0); fld fa1,0(s0); fld fa2,8(s0); <word>;
+    sd a0,16(s0); fsd fa0,24(s0); addi s0,s0,32. Then write(1, data, len) and
+    exit(0)."""
+    code = [enc_u(0x37, S0, data_addr)]
+    for w in tests:
+        code += [enc_i(0x03, A1, 3, S0, 0), enc_i(0x03, A2, 3, S0, 8), enc_i(0x07, A1, 3, S0, 0), enc_i(0x07, A2, 3, S0, 8), w,
+                 enc_s(0x23, 3, S0, A0, 16), enc_s(0x27, 3, S0, A0, 24), enc_i(0x13, S0, 0, S0, SLOT)]
+    n = SLOT * len(tests)
     code += [enc_i(0x13, A0, 0, 0, 1), enc_u(0x37, A1, data_addr), enc_u(0x37, A2, (n + 0x800) & ~0xfff), enc_i(0x13, A2, 0, A2, n - ((n + 0x800) & ~0xfff)),
              enc_i(0x13, A7, 0, 0, 64), 0x73, enc_i(0x13, A0, 0, 0, 0), enc_i(0x13, A7, 0, 0, 93), 0x73]
     return b''.join(struct.pack('<I', c) for c in code)
@@ -178,12 +194,47 @@ def fix_regs(w, m):
             w = (w & ~f) | (r << lo)
     return w
 
+FREG_BASE = 0x3000
+FMT = {2: 'e', 4: 'f', 8: 'd'}
+
+def fl(v, size):
+    return struct.unpack('<' + FMT[size], (v & ((1 << (8 * size)) - 1)).to_bytes(size, 'little'))[0]
+
+def bits(f, size):
+    if math.isnan(f):
+        return {2: 0x7e00, 4: 0x7fc00000, 8: 0x7ff8000000000000}[size]
+    try:
+        return int.from_bytes(struct.pack('<' + FMT[size], f), 'little')
+    except OverflowError:
+        return int.from_bytes(struct.pack('<' + FMT[size], math.copysign(math.inf, f)), 'little')
+
+def ffloor(f):
+    if math.isnan(f) or math.isinf(f) or f == 0:
+        return f
+    r = float(math.floor(f))
+    return math.copysign(0.0, f) if r == 0 else r
+
+def fround_away(f):
+    if math.isnan(f) or math.isinf(f) or f == 0:
+        return f
+    a = abs(f)
+    r = float(math.floor(a))
+    if a - r >= 0.5:
+        r += 1.0
+    return math.copysign(r, f)
+
+def ftrunc_int(f):
+    if math.isnan(f) or math.isinf(f):
+        return 0
+    return int(f)
+
 class Pcode:
     def __init__(self, xlen):
         self.xlen = xlen
 
-    def run(self, ops, regs, regoff, next_addr):
+    def run(self, ops, regs, regoff, next_addr, fregs=None, ram=None):
         mem = {}
+        written = set()
         rsz = self.xlen // 8
         def wr(vn, val):
             for i in range(vn['size']):
@@ -197,6 +248,11 @@ class Pcode:
             return v
         for r, val in regs.items():
             wr({'space': 'register', 'offset': regoff(r), 'size': rsz}, val)
+        for addr, val in (ram or {}).items():
+            for b in range(8):
+                mem[('ram', addr + b)] = (val >> (8 * b)) & 0xff
+        for r, val in (fregs or {}).items():
+            wr({'space': 'register', 'offset': FREG_BASE + 8 * r, 'size': 8}, val)
         i = 0
         steps = 0
         while i < len(ops):
@@ -225,6 +281,21 @@ class Pcode:
                 return None
             if op == 'CALLOTHER':
                 return 'opaque'
+            if op == 'STORE':
+                addr = rd(ins[1])
+                val = rd(ins[2])
+                for b in range(ins[2]['size']):
+                    mem[('ram', addr + b)] = (val >> (8 * b)) & 0xff
+                i += 1
+                continue
+            if op == 'LOAD':
+                addr = rd(ins[1])
+                v = 0
+                for b in range(out['size']):
+                    v |= mem.get(('ram', addr + b), 0) << (8 * b)
+                wr(out, v)
+                i += 1
+                continue
             s0 = ins[0]['size']
             r = {
                 'COPY': lambda: x[0],
@@ -255,20 +326,56 @@ class Pcode:
                 'POPCOUNT': lambda: bin(x[0]).count('1'),
                 'LZCOUNT': lambda: 8 * s0 - x[0].bit_length(),
                 'INT_CARRY': lambda: int(x[0] + x[1] >= 1 << (8 * s0)),
+                'FLOAT_NAN': lambda: int(math.isnan(fl(x[0], s0))),
+                'FLOAT_EQUAL': lambda: int(fl(x[0], s0) == fl(x[1], s0)),
+                'FLOAT_NOTEQUAL': lambda: int(fl(x[0], s0) != fl(x[1], s0)),
+                'FLOAT_LESS': lambda: int(fl(x[0], s0) < fl(x[1], s0)),
+                'FLOAT_LESSEQUAL': lambda: int(fl(x[0], s0) <= fl(x[1], s0)),
+                'FLOAT_FLOOR': lambda: bits(ffloor(fl(x[0], s0)), s0),
+                'FLOAT_CEIL': lambda: bits(-ffloor(-fl(x[0], s0)), s0),
+                'FLOAT_ROUND': lambda: bits(fround_away(fl(x[0], s0)), s0),
+                'FLOAT_NEG': lambda: bits(-fl(x[0], s0), s0),
+                'FLOAT_ABS': lambda: bits(abs(fl(x[0], s0)), s0),
+                'FLOAT_ADD': lambda: bits(fl(x[0], s0) + fl(x[1], s0), s0),
+                'FLOAT_SUB': lambda: bits(fl(x[0], s0) - fl(x[1], s0), s0),
+                'FLOAT_MULT': lambda: bits(fl(x[0], s0) * fl(x[1], s0), s0),
+                'FLOAT_FLOAT2FLOAT': lambda: bits(fl(x[0], s0), sz),
+                'FLOAT_TRUNC': lambda: ftrunc_int(fl(x[0], s0)),
+                'FLOOR': lambda: bits(ffloor(fl(x[0], s0)), s0),
+                'CEIL': lambda: bits(-ffloor(-fl(x[0], s0)), s0),
+                'ROUND': lambda: bits(fround_away(fl(x[0], s0)), s0),
+                'TRUNC': lambda: ftrunc_int(fl(x[0], s0)),
+                'NAN': lambda: int(math.isnan(fl(x[0], s0))),
+                'INT2FLOAT': lambda: bits(float(sx(x[0], s0)), sz),
+                'FLOAT2FLOAT': lambda: bits(fl(x[0], s0), sz),
             }.get(op)
             if r is None:
                 raise RuntimeError('p-code op %s' % op)
+            if out['space'] == 'register':
+                written.add(out['offset'])
             wr(out, r() & M)
             i += 1
+        if ram is not None:
+            addr = next(iter(ram))
+            m = 0
+            for b in range(8):
+                m |= mem.get(('ram', addr + b), 0) << (8 * b)
+            return ('m', rd({'space': 'register', 'offset': regoff(A0), 'size': rsz}), m)
+        if fregs is not None:
+            fa0 = FREG_BASE + 8 * A0
+            if fa0 in written:
+                return ('f', rd({'space': 'register', 'offset': fa0, 'size': 8}))
+            return ('x', rd({'space': 'register', 'offset': regoff(A0), 'size': rsz}))
         return rd({'space': 'register', 'offset': regoff(A0), 'size': rsz})
 
-def run_qemu(a, tmp, ws, vecs):
+def run_qemu(a, tmp, ws, vecs, mems):
     tests = [w for w in ws for _ in vecs]
     owner = [(w, x, y) for w in ws for x, y in vecs]
-    code = harness(tests, 0)
+    hz = harness_mem if a.mem else harness
+    code = hz(tests, 0)
     data_addr = (BASE + len(code) + 0x1fff) & ~0xfff
-    code = harness(tests, data_addr)
-    data = b''.join(struct.pack('<QQQ', x, y, 0) for _, x, y in owner)
+    code = hz(tests, data_addr)
+    data = b''.join(struct.pack('<QQQQ', x, y, mems.get((x, y), 0), 0) for _, x, y in owner)
     prog = os.path.join(tmp, 'qemu1.elf')
     with open(prog, 'wb') as f:
         f.write(elf(code, 64, data, data_addr))
@@ -276,7 +383,8 @@ def run_qemu(a, tmp, ws, vecs):
     p = subprocess.run([a.qemu, '-cpu', a.cpu, prog], capture_output=True)
     if p.returncode != 0 or len(p.stdout) != len(data):
         return None
-    return [struct.unpack_from('<Q', p.stdout, 24 * j + 16)[0] for j in range(len(owner))]
+    out = [struct.unpack_from('<QQ', p.stdout, SLOT * j + 16) for j in range(len(owner))]
+    return [('m', r[1], r[0]) for r in out] if a.mem else out
 
 def raw_pcode(path, unl, spec, n):
     """Each word's p-code; a word that does not decode ends a listing, so the
@@ -295,6 +403,58 @@ def raw_pcode(path, unl, spec, n):
         start = max(last + 4, (err.get('address', start) + 4) if err else end)
     return out
 
+def pick(g, wv):
+    """The QEMU result (a0, fa0) for the register the p-code wrote."""
+    if isinstance(g, tuple) and g[0] == 'm':
+        return wv
+    if isinstance(g, tuple):
+        return (g[0], wv[1] if g[0] == 'f' else wv[0])
+    return wv[0] if isinstance(wv, tuple) else wv
+
+def is_nan_bits(v):
+    if math.isnan(fl(v, 8)):
+        return 'd'
+    if v >> 32 == 0xffffffff and math.isnan(fl(v, 4)):
+        return 's'
+    if v >> 16 == 0xffffffffffff and math.isnan(fl(v, 2)):
+        return 'h'
+    return None
+
+def same(g, w):
+    """Equal results; for an FP destination two NaNs of the same format
+    (and boxing) count as equal, since p-code does not model NaN payloads."""
+    if g == w:
+        return True
+    if isinstance(g, tuple) and isinstance(w, tuple) and g[0] == w[0] == 'f':
+        n = is_nan_bits(g[1])
+        return n is not None and n == is_nan_bits(w[1])
+    return False
+
+def show(v):
+    if isinstance(v, tuple):
+        return '%s:%s' % (v[0], ','.join(hex(x) for x in v[1:]))
+    return v if isinstance(v, str) else hex(v)
+
+FP_POOL = [0x0, 0x8000000000000000, 0x3fe0000000000000, 0x3ff8000000000000, 0x4004000000000000, 0xc004000000000000,
+           0xbfe0000000000000, 0x7ff0000000000000, 0xfff0000000000000, 0x7ff8000000000000, 0x7ff4000000000000,
+           0x400d99999999999a, 0xc00d99999999999a, 0x4340000000000001, 0x41e0000000000000, 0xc1e0000000200000,
+           0x41f0000000000001, 0x3fdfffffffffffff]
+F32_POOL = [0x0, 0x80000000, 0x3f000000, 0x3fc00000, 0x40200000, 0xc0200000, 0xbf000000, 0x7f800000, 0xff800000,
+            0x7fc00000, 0x7fa00000, 0x406ccccd, 0xc06ccccd, 0x4b000001, 0x3effffff]
+F16_POOL = [0x0, 0x8000, 0x3800, 0x3e00, 0x4100, 0xc100, 0xb800, 0x7c00, 0xfc00, 0x7e00, 0x7d00, 0x4366, 0x6400, 0x37ff]
+
+def fp_value(rng):
+    k = rng.random()
+    if k < 0.3:
+        return rng.choice(FP_POOL)
+    if k < 0.55:
+        return 0xffffffff00000000 | rng.choice(F32_POOL)
+    if k < 0.75:
+        return 0xffffffffffff0000 | rng.choice(F16_POOL)
+    if k < 0.85:
+        return rng.choice(F32_POOL)
+    return rng.getrandbits(64)
+
 def semantics(a):
     rng = random.Random(a.seed)
     ref = opcodes(a.opcodes, a.exts.split(','))
@@ -308,8 +468,15 @@ def semantics(a):
     edge = [0, 1, (1 << a.xlen) - 1, 1 << (a.xlen - 1), (1 << (a.xlen - 1)) - 1, 0x80, 0xff00ff00ff00ff00 & ((1 << a.xlen) - 1), 31, 32, 63, 64]
     vecs = []
     for _ in range(a.vectors):
-        pick = lambda: rng.choice(edge) if rng.random() < 0.3 else rng.getrandbits(a.xlen)
-        vecs.append((pick(), pick()))
+        if a.fp:
+            vecs.append((fp_value(rng), fp_value(rng)))
+            continue
+        val = lambda: rng.choice(edge) if rng.random() < 0.3 else rng.getrandbits(a.xlen)
+        vecs.append((val(), val()))
+    mems = {}
+    if a.mem:
+        for x, y in vecs:
+            mems[(x, y)] = x if rng.random() < 0.4 else rng.getrandbits(64)
     tmp = a.keep or tempfile.mkdtemp()
     one = os.path.join(tmp, 'one.elf')
     open(one, 'wb').write(elf(b''.join(struct.pack('<I', w) for _, w in words), a.xlen))
@@ -327,7 +494,12 @@ def semantics(a):
             outs = []
             for x, y in vecs:
                 try:
-                    outs.append(interp.run(ins['ops'], {A1: x, A2: y, A0: 0xdead}, regoff, BASE + 4 * i + 4))
+                    xm = (1 << a.xlen) - 1
+                    if a.mem:
+                        outs.append(interp.run(ins['ops'], {A0: x & xm, A1: 0x1000, A2: y & xm}, regoff, BASE + 4 * i + 4, None, {0x1000: mems[(x, y)]}))
+                        continue
+                    outs.append(interp.run(ins['ops'], {A1: x & xm, A2: y & xm, A0: 0xdead}, regoff, BASE + 4 * i + 4,
+                                           {A1: x, A2: y, A0: 0xdead} if a.fp else None))
                 except RuntimeError as ex:
                     outs.append('error: %s' % ex)
             results[k][w] = outs
@@ -339,33 +511,37 @@ def semantics(a):
             for x, y in vecs:
                 tests.append(w)
                 owner.append((w, x, y))
-        code = harness(tests, 0)
+        hz = harness_mem if a.mem else harness
+        code = hz(tests, 0)
         data_addr = (BASE + len(code) + 0x1fff) & ~0xfff
-        code = harness(tests, data_addr)
-        data = b''.join(struct.pack('<QQQ', x, y, 0) for _, x, y in owner)
+        code = hz(tests, data_addr)
+        data = b''.join(struct.pack('<QQQQ', x, y, mems.get((x, y), 0), 0) for _, x, y in owner)
         prog = os.path.join(tmp, 'qemu.elf')
         open(prog, 'wb').write(elf(code, 64, data, data_addr))
         os.chmod(prog, 0o755)
         p = subprocess.run([a.qemu, '-cpu', a.cpu, prog], capture_output=True)
         if p.returncode == 0 and len(p.stdout) == len(data):
             for j, (w, x, y) in enumerate(owner):
-                oracle.setdefault(w, []).append(struct.unpack_from('<Q', p.stdout, 24 * j + 16)[0])
+                r = struct.unpack_from('<QQ', p.stdout, SLOT * j + 16)
+                oracle.setdefault(w, []).append(('m', r[1], r[0]) if a.mem else r)
         else:
             # some word traps (a reserved encoding QEMU rejects): run each
             # word on its own and leave the trapping ones without a reference
             for n, w in words:
-                got = run_qemu(a, tmp, [w], vecs)
+                got = run_qemu(a, tmp, [w], vecs, mems)
                 if got is not None:
                     oracle[w] = got
     report = {}
     names = dict((w, n) for n, w in words)
     for k in specs:
         agree = opaque = undecoded = wrong = unchecked = 0
+        undec_names = set()
         bad = []
         for n, w in words:
             got = results[k][w]
             if got == 'undecoded':
                 undecoded += 1
+                undec_names.add(n)
                 continue
             if 'opaque' in got:
                 opaque += 1
@@ -380,14 +556,19 @@ def semantics(a):
                     unchecked += 1
                     continue
                 want = other[0]
-            if got == want:
+            if oracle is not None:
+                want = [pick(g, wv) for g, wv in zip(got, want)]
+            diff = [i for i in range(len(got)) if not same(got[i], want[i])]
+            if not diff:
                 agree += 1
             else:
                 wrong += 1
-                j = next(i for i in range(len(got)) if got[i] != want[i])
-                bad.append({'word': '0x%08x' % w, 'insn': names[w], 'a1': hex(vecs[j][0]), 'a2': hex(vecs[j][1]), 'got': got[j] if isinstance(got[j], str) else hex(got[j]), 'want': hex(want[j])})
+                j = diff[0]
+                bad.append({'word': '0x%08x' % w, 'insn': names[w], 'a1': hex(vecs[j][0]), 'a2': hex(vecs[j][1]), 'got': show(got[j]), 'want': show(want[j])})
         ref_name = 'qemu' if oracle else 'the other spec'
         print('%s rv%d vs %s: %d words agree on all %d vectors, %d differ, %d opaque (CALLOTHER), %d undecoded%s' % (k, a.xlen, ref_name, agree, len(vecs), wrong, opaque, undecoded, ', %d with no reference (every other spec is opaque)' % unchecked if unchecked else ''))
+        if undec_names:
+            print('  undecoded: %s' % ', '.join(sorted(undec_names)))
         by = {}
         for b in bad:
             by.setdefault(b['insn'], []).append(b)
@@ -419,6 +600,8 @@ def main():
             p.add_argument('--vectors', type=int, default=16)
             p.add_argument('--qemu')
             p.add_argument('--keep', help='write the test ELFs into this directory')
+            p.add_argument('--mem', action='store_true', help='memory instructions: rd=a0 starts as the vector, rs1=a1 points at a doubleword holding a second value, rs2=a2; compare a0 and that doubleword')
+            p.add_argument('--fp', action='store_true', help='also load fa1/fa2 with the vectors (FP-flavoured values), and compare fa0 when the p-code writes it')
             p.add_argument('--cpu', default='rv64,zba=true,zbb=true,zbc=true,zbs=true,zbkb=true,zbkx=true,zicond=true')
     a = ap.parse_args()
     return decode(a) if a.cmd == 'decode' else semantics(a)

@@ -1,0 +1,113 @@
+# decbench: in a RUN of structurally identical assignment diamonds, kuna
+# re-rolls only every other one.
+#   Case: O0-bash-bash-shell_initialize  (docs/decbench/triage/)
+#
+# On that case three source-identical call arguments
+# (`privileged_mode||restricted||should_be_restricted||running_setuid`) come
+# out as ONE re-rolled boolean assignment and TWO explicit
+# `if (...) v = 1; else { v = 0; }` diamonds.  Scaling a chain of N identical
+# diamonds, kuna recovers exactly ceil(N/2) of them (measured N = 1..8:
+# 1 1 2 2 3 3 4 4).
+#
+# Source of this testcase (gcc -O0 -fno-pie -fno-stack-protector -c), three
+# identical constant-assignment diamonds in a row.  The indirect calls keep the
+# object relocation-free and force the merged value onto a stack slot, so both
+# arms of each diamond COPY a constant into the SAME storage (the shape
+# `iteregion` matches):
+#
+#     int t(int c, void (*g)(void), void (*f)(int))
+#     {
+#       int x;
+#       g(); if (c) x = 7; else x = 9; f(x);
+#       g(); if (c) x = 7; else x = 9; f(x);
+#       g(); if (c) x = 7; else x = 9; f(x);
+#       return x;
+#     }
+#
+# Root cause (P8, kuna's own passes).  `iteregion` and `iteboolean` share the
+# leaf helper `leaf_bblock` (`p8_structure/kuna_iteregion.rs`), which descends a
+# `BlockList` of ONE component but returns None for a list of two or more:
+#
+#     BlockType::Ls | BlockType::Graph =>
+#         if blk.get_size() != 1 { return None; }
+#
+# The collapse structurer concatenates a just-collapsed predecessor together
+# with the following condition block into a two-component `BlockList`, and that
+# list becomes component 0 of the next `BlockIf`.  A chain of identical diamonds
+# alternates between the two shapes, so every other one is declined, and which
+# ones are missed depends on the NEIGHBOURING structure, not on the diamond
+# itself.  Confirmed by instrumenting `match_ite_assignment` on this exact
+# object: the folded diamonds report `cond_ty=Copy cbr=true`, the declined one
+# `cond_ty=Ls cond_sz=2 cbr=false`, with both arms passing every other test.
+#
+# The fix (part of `iteregion` and `iteboolean`) descends a condition-position
+# `BlockList` to its LAST component before the leaf test.  It is sound because
+# the rewrite is print-only and the printer already renders that shape:
+# `emit_block_if` emits the condition component once under NO_BRANCH (its
+# statements) and once under ONLY_BRANCH (its branch), while `emit_block_ls`
+# emits every component under NO_BRANCH but only the LAST under ONLY_BRANCH,
+# so the leading components print as ordinary statements before the `if` header
+# either way.  Restricted to `BlockList`: `emit_block_graph` ignores ONLY_BRANCH,
+# so a `BlockGraph` is deliberately excluded.
+#
+# Stage model: P8 "goto-quality" (S8 structured-tree rewrite), rendered in P9.
+# The pass is print-only (it widens which condition blocks `iteregion`/
+# `iteboolean` accept, and mutates no p-code).  Without it 2 of the 3
+# identical diamonds fold and the middle one stays an explicit
+# `if (c) v1 = 7; else { v1 = 9; }`; all 3 fold, and the statements around
+# them are unchanged.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x101000', name = 't' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x101000'
+hex = '''
+f30f1efa554889e54883ec30897dec488975e0488955d8488b45e0ffd0837dec
+007409c745fc07000000eb07c745fc090000008b45fc488b55d889c7ffd2488b
+45e0ffd0837dec007409c745fc07000000eb07c745fc090000008b45fc488b55
+d889c7ffd2488b45e0ffd0837dec007409c745fc07000000eb07c745fc090000
+008b45fc488b55d889c7ffd28b45fcc9c3
+'''
+
+[script]
+commands = [
+    'lo fu t',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'itecondlist #1: the middle diamond is never left as an explicit if/else true arm'
+count = 0
+literal = 'v1 = 7;'
+
+[[match]]
+name = 'itecondlist #2: nor its else arm'
+count = 0
+literal = 'v1 = 9;'
+
+[[match]]
+name = 'itecondlist #3: never only ceil(3/2) = 2 of the 3 identical diamonds'
+count = 0
+literal = 'ternary x2'
+
+[[match]]
+name = 'itecondlist #4: all 3 of them are recovered'
+count = 1
+literal = 'ternary x3'
+
+[[match]]
+name = 'itecondlist #5: every recovered diamond renders as the same ternary statement'
+count = 3
+literal = 'v1 = (a0) ? 7 : 9;'
+
+[[match]]
+name = 'itecondlist #6: the surrounding indirect calls are untouched'
+count = 3
+literal = '(*a2)(v1);'

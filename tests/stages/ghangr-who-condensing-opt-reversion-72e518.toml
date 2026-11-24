@@ -1,0 +1,116 @@
+# angr "who condensing opt reversion" (test_who_condensing_opt_reversion,
+# x86_64/decompiler/who.o::scan_entries) -> the SAILR CrossJumpReverter.
+#
+# Compilers perform Irreducible Statement Condensing (ISC, "cross jumping"):
+# identical tail code reached from several predecessors is condensed into ONE
+# shared basic block, and all but one predecessor reach it by a goto.  In
+# who.o::scan_entries the two identical `v1 = *a1;` reload tails (the
+# `need_deadprocs && v1 == 8` case and the skip/else path) were condensed into
+# one shared block, so kuna emits exactly one residual goto:
+#
+#     else if (need_deadprocs and v1 == 8) {
+#         print_deadprocs(a1);
+#         goto label_4012b5;            // (the residual cross-jump goto)
+#     }
+#     ...
+#     else { label_4012b5: v1 = *a1; }  // (shared, condensed tail)
+#     if (v1 == 2) { ... }              // (both paths converge here)
+#
+# angr's CrossJumpReverter (angr/analyses/decompiler/optimization_passes/
+# cross_jump_reverter.py; Basque et al., USENIX Security 2024 "SAILR") reverts
+# the condensing by DUPLICATING the shared tail back into the goto source so both
+# paths fall straight through and the goto/label vanish.  This is the sibling of
+# the `gotoreduce` option (which duplicates *return* tails, a closed path); the
+# cross-jump variant duplicates a NON-return, fall-through tail and additionally
+# proves a convergence precondition (the goto's structured fall-through already
+# reaches the tail's successor) so the duplication is semantics-preserving.
+#
+# Minimised x86-64 reproducer (gcc layout, faithful to scan_entries' CFG): a
+# do/while loop over a gated cascade of `if (v1 == K) { call print_K; v1 = *p; }`
+# arms (each with its own reload, jumping forward to the convergence test), plus
+# the deadprocs arm gated by a COMPOUND guard `if ((need && v1 == 8))` whose body
+# is `call print_8;` then a BACKWARD goto into the shared `v1 = *p` reload tail
+# (which the skip/else path falls into).  That backward cross-jump into a shared,
+# fall-through tail is exactly the ISC-condensed shape Ghidra's CollapseStructure
+# (and kuna's region structurer) must express as a goto.
+#
+#   cj:    loop { eax = gate();
+#                 if (!eax) { shared: v1=*p; goto conv; }
+#                 v1 = *p;
+#                 if (v1==1){call sub1; v1=*p; goto conv}
+#                 else if (v1==3){call sub3; v1=*p; goto conv}
+#                 else if (v1==5){call sub5; v1=*p; goto conv}
+#                 else if (v1==6){call sub6; v1=*p; goto conv}
+#                 else if (need && v1==8){call sub8; goto shared}  // <- cross jump
+#           conv: if (v1==2) sink(); p+=0x40; } while(p);
+#   gate/sub1/sub3/sub5/sub6/sub8/sink: ret stubs.
+#
+# Pass 1 (option crossjumprevert off, the DEFAULT): the deadprocs arm renders
+# `else if ((a1 != 0) && (v1 == 8)) { sub8(); goto label_X; }` with a labelled
+# shared tail `label_X: v1 = *a0;` -> assertions P1 (the goto) and P1b (the
+# label).
+# Pass 2 (option crossjumprevert on): the shared tail is duplicated back into the
+# deadprocs arm (`sub8(); v1 = *a0;`), the goto/label vanish, and a
+# `crossjumprevert:` warning is logged -> assertion P2 (the log).  P3 pins the
+# TOTAL goto-label count across both passes at exactly one (one in pass 1, zero in
+# pass 2): the reversion removed the only goto.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'cj' },
+    { space = 'ram', offset = '0x100080', name = 'gate' },
+    { space = 'ram', offset = '0x100083', name = 'sub1' },
+    { space = 'ram', offset = '0x100084', name = 'sub3' },
+    { space = 'ram', offset = '0x100085', name = 'sub5' },
+    { space = 'ram', offset = '0x100086', name = 'sub6' },
+    { space = 'ram', offset = '0x100087', name = 'sub8' },
+    { space = 'ram', offset = '0x100088', name = 'sink' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+hex = '534889fb4189f4e87400000085c0751b0fb7036683f8027505e86a0000004883c3404885db75e05b415cc30fb7036683f801750ae84a0000000fb703ebd56683f803750ae83b0000000fb703ebc56683f805750ae82c0000000fb703ebb56683f806750ae81d0000000fb703eba54585e474a06683f808759ae809000000eb9031c0c3c3c3c3c3c3c3'
+
+[script]
+commands = [
+    # kuna: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
+    'option gotoreduce off',
+    'option crossjumprevert off',
+    'option dedupitetail off',
+    'option regionlooprefine off',
+    'option ifelseflatten off',
+    'option switchmultipred off',
+    'option tailcalljump off',
+    'option foldcallret off',
+    'option branchflip off',
+    'lo fu cj',
+    'decompile',
+    'print C',
+    'option crossjumprevert on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+# (DIV-38 warnstyle: warnings render as terse // slugs at end of line; asserts re-worded.)
+[[match]]
+name = 'P1: default (crossjumprevert off) emits the condensed cross-jump goto'
+count = 1
+literal = 'goto label_'
+
+[[match]]
+name = 'P1b: default labels the shared condensed tail'
+count = 1
+regex = 'label_[0-9a-f]+:'
+
+[[match]]
+name = 'P2: on duplicates the cross-jump tail and logs the reversion'
+count = 1
+literal = '// crossjump-dupe'
+
+[[match]]
+name = 'P3: TOTAL goto-label count across both passes is 1 (off: 1, on: 0)'
+count = 1
+literal = 'goto label_'

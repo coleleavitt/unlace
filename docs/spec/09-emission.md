@@ -1599,9 +1599,9 @@ an unsigned narrow value prints as that value, since the guard already casts it
 and the shift reads it the same (`(unsigned int)v4 < 32u ? (unsigned int)1 << v4 :
 0u` where a narrowed counter printed `(unsigned int)(unsigned int)v4`;
 `unsigned_extension_source`). The 12-byte reproduction
-and emitted-form checks are in `tests/stages/kuna-arm-register-shift.xml`; signed
+and emitted-form checks are in `tests/stages/kuna-arm-register-shift.toml`; signed
 comparison and ASR consumers are in
-`tests/stages/kuna-arm-register-shift-signed.xml`.
+`tests/stages/kuna-arm-register-shift-signed.toml`.
 
 The guard is omitted when the count's non-zero mask is below 32, since the
 count then cannot reach 32: a count masked by `0x1f` or less, or a right shift
@@ -1611,7 +1611,7 @@ the repeatability proof is not required. Option `armshiftguard` (P9,
 cast-policy, default `on`) controls the unproven counts: `off` prints them the
 same plain way, `(uint4)x << (count & 0xff)`, which matches ARM only for counts
 below 32 and drops the conditional's branch from the control-flow graph. Both
-cases are pinned in `tests/stages/kuna-armshiftguard.xml`.
+cases are pinned in `tests/stages/kuna-armshiftguard.toml`.
 
 **(kuna) Fixed ARM LSL with a signed operand in C.** A constant-count 32-bit
 `INT_LEFT` still computes the low 32 bits when its declared operand is signed.
@@ -1634,7 +1634,7 @@ before emission. The repair runs only under option `armconstshift` (default
 off, and kept out of the `aggressive` preset): firmware tests nearly every
 register flag with a sign-bit shift such as `x << 0x18 < 0`, and the defined
 form `(int)((unsigned int)x << 0x18) < 0` adds a cast pair to each one, so the
-shipped default keeps the shorter spelling. `tests/stages/kuna-arm-constant-shift.xml`
+shipped default keeps the shorter spelling. `tests/stages/kuna-arm-constant-shift.toml`
 pins the unconverted default pass and the casts and signed consumers with the
 option on; `unlace-cli/tests/arm_constant_shift.rs` compiles the unchanged bodies
 as C11 at `-O0` and `-O2`, with and without UBSan, and compares counts 0, 1, 2,
@@ -1746,7 +1746,7 @@ statement-carrying clause lands in the else slot — in practice after a
 §8.1 `branchflip` arm swap. A debug-build assertion in
 `printc.rs (PrintC::emit_block_if)` requires every registered brace to be
 resolved by its own frame, either fired or self-cancelled; the shape is pinned
-end-to-end by `tests/stages/ghdec-branchflip-armswap.xml`.
+end-to-end by `tests/stages/ghdec-branchflip-armswap.toml`.
 
 **The declined-structure shell.** If the structured tree is *absent* (S8
 produced no `sblocks`), the printer does not emit a flat op listing: it keeps
@@ -2040,7 +2040,7 @@ address comes from `printc.rs (spacebase_unnamed_address)`, the C++
 *functional* render `PTRSUB(ESP, 8)`, kuna's behavior before this leaf existed:
 `PTRSUB` is an internal p-code operator and `ESP` a raw machine register, and
 emitting either makes the whole function something no C parser accepts
-(`tests/stages/ghdec-spacebase-unnamed.xml`, DIV-46).
+(`tests/stages/ghdec-spacebase-unnamed.toml`, DIV-46).
 
 An unnamed **incoming address** has a narrower, reconstructible case. For
 `x86:LE:64:default:gcc` with the ordinary SysV prototype model, an eight-byte,
@@ -2285,7 +2285,7 @@ entirely). `void` is therefore only the **fallback** under a pointer, for
 the residual sizes with no natural single C type (0, 3, 5, 6, 7, …); as a
 scalar those sizes keep `undefined<N>` (DIV-48,
 `printc.rs (realtype_unknown_base)`, exercised by
-`tests/stages/ghdec-realtypes-pointee.xml`). A genuine `TYPE_VOID` pointee
+`tests/stages/ghdec-realtypes-pointee.toml`). A genuine `TYPE_VOID` pointee
 is not a residual unknown and never enters the relabel, so the opaque
 `void *` of `free`/`malloc`/`memcpy` is unaffected. Per-symbol format assertions
 (`map convert`, `force varnode`, `force constant`, `force datatype`) override
@@ -4887,7 +4887,7 @@ pattern (avxlifter.so 0x1c1a0) and reorders FMA operands the same way
 display only: the IR keeps the user-op, so every rule that keys on its index
 is unaffected. Changes 0/675 datatest assertions; the stage test
 `gh9184-x86-fma-ymm256.xml` now accepts either spelling of its FMA sanity
-check. Pinned by `tests/stages/kuna-avxintrinsics.xml`.
+check. Pinned by `tests/stages/kuna-avxintrinsics.toml`.
 
 Not done (the rest of IDA's avxlifter): vector datatypes (`__m256`), re-fusing
 the per-lane SLEIGH bodies of VEX float ops into one vector op, folding
@@ -5195,7 +5195,7 @@ therefore prints `__arm_mte_set_tag(a0);` for its first granule and
 `StorePtrTag(a0 + 0x10,a0);` for its second. The memory-tagging user ops
 exist only when the same option has set the `ShowMemTag` context (chapter
 02). `off` restores the SLEIGH names and the tag-free lift. Pinned by
-`tests/stages/kuna-acleintrinsics.xml`.
+`tests/stages/kuna-acleintrinsics.toml`.
 
 ### Rust formatting macros
 

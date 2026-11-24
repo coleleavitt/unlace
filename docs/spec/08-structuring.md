@@ -118,10 +118,13 @@ the callee.
 **`noretfirst` — the no-return arm as the clause.** `option noretfirst on`
 (default off) breaks the same tie by the arms' exits instead, and before
 `guardarm` looks at it: of the two eligible arms, the one whose exit leaf ends
-in an artificial no-return halt (`ExitLeafFacts::is_noreturn_halt`, the
-`op_mark_halt` bit a no-return callee sets) becomes the clause, so the
+in an artificial no-return halt that follows a call (`ExitLeafFacts::is_noreturn_call`:
+the `op_mark_halt` no-return bit, with a `CALL`/`CALLIND` earlier in the block, or,
+for a halt in a block of its own, at the end of every predecessor) becomes the clause, so the
 function's own `return` stays flat after the `if` (`if (!p) fatal(); return
-p;`). When both arms or neither end in a no-return call, the tie falls through
+p;`). A halt `funcboundflow` plants where a branch's own fall-through reached
+the next function's entry follows no call, so it does not count (taken as the
+clause, it printed an empty `if` body). When both arms or neither end in a no-return call, the tie falls through
 to `guardarm` or the out-index order. This is the predicate `guardarm`
 rejects for unoptimized code (`make-prime-list xalloc`); on optimized code,
 where layout no longer follows the source, it is the better signal, and it is

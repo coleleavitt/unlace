@@ -1,0 +1,40 @@
+# Synthetic push; movw/movt r1,0x50000000; ldm r1,{r0,r2,r3,r4}; pop.
+
+[image]
+arch = 'ARM:LE:32:v7'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'read_four' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '10402de9001000e3001045e31d0091e81080bde8'
+
+[script]
+commands = [
+    'volatile 0x50000000 16',
+    'load function read_four',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'volatile LDM: first read'
+count = 1
+literal = '= dat_50000000;'
+
+[[match]]
+name = 'volatile LDM: second read'
+count = 1
+literal = '= dat_50000004;'
+
+[[match]]
+name = 'volatile LDM: third read'
+count = 1
+literal = '= dat_50000008;'
+
+[[match]]
+name = 'volatile LDM: fourth read'
+count = 1
+literal = '= dat_5000000c;'

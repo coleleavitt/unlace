@@ -247,7 +247,7 @@ Owning files:
 - `decompiler/crates/unlace-decomp/src/p6_variables/kuna_paramcopyhoist.rs` (new)
 - `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_merge.rs` (`op_insert_end_pred` consults it)
 - `phases.toml` + `p0_knowledge/options.rs` row; catalog count bumps
-- `docs/spec/` P6 chapter; `tests/stages/ghdec-paramcopyhoist.xml` two-pass testcase
+- `docs/spec/` P6 chapter; `tests/stages/ghdec-paramcopyhoist.toml` two-pass testcase
 
 Scope: **small** -- one module, one call site, one option row.
 

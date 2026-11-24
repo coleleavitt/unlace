@@ -1,0 +1,113 @@
+//! (kuna) A floating-point result returned in a higher vector register implies
+//! the lower ones.
+//!
+//! AAPCS64 returns a homogeneous floating-point aggregate in consecutive vector
+//! registers from `v0` (`struct { float x, y, z; }` in `s0`, `s1`, `s2`), and
+//! the output model's `join_per_primitive` rule lays one out the same way. A
+//! member the function returns untouched from its own argument
+//! (`struct hfa mkh(float a) { return (struct hfa){a, 2 * a, 3 * a}; }` leaves
+//! `s0` as it came in) is an unaffected input to the ancestor check, which
+//! rejects it, and the output fill-in then cannot start at `s1`: the function
+//! came out `void mkh(void)`. A computed value a RETURN alone reads in a higher
+//! register is a result (a compiler does not compute a dead value), so
+//! [`keep_lower_results`] also keeps the first lane of each lower floating
+//! output entry the RETURNs read as the function's own input.
+
+use crate::dtype::type_class;
+use crate::fspec::ParamActive;
+use crate::funcdata::Funcdata;
+use unlace_num::opcodes::OpCode;
+
+/// The index among the model's floating output entries of the entry holding
+/// `[off, off+size)` in the space `space`.
+fn float_entry(data: &Funcdata, space: usize, off: u64, size: i32) -> Option<usize> {
+    let proto = data.get_func_proto();
+    if !proto.has_model() {
+        return None;
+    }
+    let list = proto.model().output_list()?;
+    list.get_entry()
+        .iter()
+        .filter(|e| e.get_type() == type_class::TYPECLASS_FLOAT && e.get_join_record().is_none())
+        .position(|e| {
+            e.get_space().get_index() as usize == space
+                && e.get_base() <= off
+                && off.saturating_add(size.max(0) as u64)
+                    <= e.get_base().saturating_add(e.get_size().max(0) as u64)
+        })
+}
+
+/// Mark active the trial at the start of each floating output entry below the
+/// highest one an active trial lies in, when every live RETURN reads there the
+/// function's own input at that storage.
+pub fn keep_lower_results(
+    data: &Funcdata,
+    active: &mut ParamActive,
+    return_ops: &[crate::context::OpId],
+) {
+    if data.get_func_proto().is_output_locked() {
+        return;
+    }
+    let mut placed = Vec::new();
+    for i in 0..active.get_num_trials() {
+        let t = active.get_trial(i);
+        let Some(space) = t.get_address().get_space() else {
+            continue;
+        };
+        let off = t.get_address().get_offset();
+        if let Some(entry) = float_entry(data, space.get_index() as usize, off, t.get_size()) {
+            placed.push((i, entry, t.is_active()));
+        }
+    }
+    let Some(top) = placed
+        .iter()
+        .filter(|(_, _, a)| *a)
+        .map(|(_, e, _)| *e)
+        .max()
+        .filter(|e| *e > 0)
+    else {
+        return;
+    };
+    let entries: Vec<(u64, i32)> = {
+        let proto = data.get_func_proto();
+        let Some(list) = proto.model().output_list() else {
+            return;
+        };
+        list.get_entry()
+            .iter()
+            .filter(|e| {
+                e.get_type() == type_class::TYPECLASS_FLOAT && e.get_join_record().is_none()
+            })
+            .map(|e| (e.get_base(), e.get_size()))
+            .collect()
+    };
+    for lower in 0..top {
+        if placed.iter().any(|(_, e, a)| *e == lower && *a) {
+            continue;
+        }
+        let Some(&(base, _)) = entries.get(lower) else {
+            return;
+        };
+        let Some(&(idx, _, _)) = placed.iter().find(|(i, e, _)| {
+            *e == lower && active.get_trial(*i).get_address().get_offset() == base
+        }) else {
+            return;
+        };
+        let slot = active.get_trial(idx).get_slot();
+        let own_input = return_ops.iter().all(|&r| {
+            let Some(o) = data.obank().get(r) else {
+                return true;
+            };
+            if o.is_dead() || o.get_halt_type() != 0 || o.code() != OpCode::CPUI_RETURN {
+                return true;
+            }
+            o.get_in(slot)
+                .and_then(|v| data.vbank().get(v))
+                .is_some_and(|v| v.is_input())
+        });
+        if !own_input {
+            return;
+        }
+        active.get_trial_mut(idx).mark_active();
+    }
+}

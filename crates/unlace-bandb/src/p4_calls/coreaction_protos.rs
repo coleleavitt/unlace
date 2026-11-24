@@ -2158,6 +2158,9 @@ impl Action for ActionReturnRecovery {
                         let trial = active.get_trial_mut(i);
                         data.ancestor_op_use(maxancestor, vn, op, trial, 0, 0)
                     };
+                    if std::env::var_os("KUNA_RETREC_TRACE").is_some() {
+                        eprintln!("retrec {} opuse trial {} only {}", data.get_name(), i, only);
+                    }
                     if only {
                         active.get_trial_mut(i).mark_active();
                     }
@@ -2180,6 +2183,7 @@ impl Action for ActionReturnRecovery {
             crate::kuna_callresultuse::yield_to_own_value(data, &mut active, &return_ops);
             crate::kuna_callresultuse::settle_planted(data, &mut active);
             crate::kuna_zerofillreturn::drop_zero_fill(data, &mut active, &return_ops);
+            crate::kuna_hfareturn::keep_lower_results(data, &mut active, &return_ops);
             crate::kuna_armfloatreturn::narrow_returns(data, &mut active);
             crate::kuna_retsysreg::drop_set_aside(data, &mut active, &return_ops);
             crate::kuna_x87emptyreturn::drop_empty(data, &mut active, &return_ops);

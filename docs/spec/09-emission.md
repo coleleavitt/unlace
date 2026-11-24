@@ -5735,7 +5735,14 @@ Nesting deeper than 2048 blocks stays opaque. `split_statements` then takes the
 tree to `statements`: each leaf holds its basic block's ops in order (a
 `BlockCopy` through the block it mirrors; a leaf of more than 2^20 ops is not
 split), and the leaf printer (`emit_basic_block_ops_in`, with the same filters
-as the block walk) prints from that list. `PrintC::ctree_rewrite` then takes it to `rewritten`:
+as the block walk) prints from that list. `PrintC::ctree_rewrite` first moves three print plans
+into the tree (`ctree_take_plans`): each `if` `switchmerge` prints as a switch
+becomes `SwitchOf`, and `emit_block` asks `switch_of`; `gotonext`'s goto types go
+onto the tree's goto statements (an if-goto's body, a goto block's jump), a goto
+block whose jump it drops loses that statement, and `emit_block_if` and
+`emit_block_goto_from` read both from the tree (`tree_goto_type`); the
+`voidtailreturn` `RETURN` is removed from the op list of the one leaf holding
+it, and the printer's own check is cleared. It then takes the tree to `rewritten`:
 every `if` that the `iteboolean` test and then the `iteregion` test (the same
 tests, in the same order, that `emit_block_if` made while printing) accept becomes
 an assignment statement (`dest = cond`, `dest = !cond`, or `dest = cond ? A : B`
@@ -5753,6 +5760,16 @@ condition block's statements above it as for an `if`, then `return ( cond );` or
 `return !( cond );` through the `ONLY_BRANCH` render of the header, with the
 body's `RETURN` as the statement's markup. The option builds the tree even when
 `ctree` is off.
+
+With `option retternary on` (C output; default off), an `if`/`else` the forms
+above leave, whose arms are such leaves each printing one `RETURN` of a constant
+or an explicit variable, becomes one return (`return_ternary_shape`): a `1` or
+`0` arm against a `bool`-typed variable `x` gives `Or`/`And` of the condition (or
+its negation) and `x` (`c ? 1 : x` is `c || x`, `c ? x : 1` is `!c || x`,
+`c ? x : 0` is `c && x`, `c ? 0 : x` is `!c && x`); any other pair gives
+`Ternary(cond, A, B)`. `emit_return_value` prints the value: a condition through
+its `ONLY_BRANCH` render, an arm as its `RETURN`'s value, and `?`/`:`/`&&`/`||`
+between operands.
 
 With `option noretfirst on` (C output; default off), the pass then takes an
 `if`/`else` without a goto, neither rewritten above, whose structured arms
@@ -5778,6 +5795,17 @@ switch-merge or Itanium exception `if`; the fold repeats on the new body.
 `And` exactly as `emit_block_condition` prints a `&&` of two condition blocks: the
 left operand in the `ONLY_BRANCH` state, the `&&` token, the right leaf
 comma-separated, each parenthesized.
+
+With `option orexit on` (C output; default off), a pass over every sequence,
+before the `nestedand` pass, folds adjacent `if`s without else into the first
+while they leave the same way (`fold_equal_exits`): if-gotos to one target whose
+`gotonext` goto type matches, or bodies each printing only a `return` of the same
+constant (value and size) or the same explicit HighVariable. Every `if` after the
+first must print nothing before its test, have a single-leaf condition with no
+comment and no label, and every `if` must be in statement position and not a
+switch-merge or Itanium exception `if`. The first `if`'s condition becomes
+`Or(cond, next)` and the folded `if` an empty sequence, which prints nothing.
+`emit_cond_expr` prints `Or` as it prints `And`, with the `||` token.
 
 The walk is `printc/kuna_ctreeprint.rs`. The body prints from the root's
 statements; `emit_block` first asks the tree for the statement built from its

@@ -53,6 +53,13 @@ Three tiers:
 | rep movsq / rep stosd from -Os code printed as a loop instead of memcpy/memset | [`repstring`](#repstring----on--off-default-on) |
 | a struct copy prints as a 16-iteration word loop | [`repstring`](#repstring----on--off-default-on) |
 | a strcmp against a short constant prints as a do/while over two byte pointers and a count | [`repstring`](#repstring----on--off-default-on) |
+| LOCK(); and UNLOCK(); around a plain load and store | [`atomics`](#atomics----on--off-default-off) |
+| a lock xadd, lock cmpxchg or lock inc prints as an ordinary update | [`atomics`](#atomics----on--off-default-off) |
+| an AArch64 ldaddal, swpal or casal prints as a plain load and store with no sign of atomicity | [`atomics`](#atomics----on--off-default-off) |
+| a compare-exchange retry loop whose compare and store moved out of the loop | [`atomics`](#atomics----on--off-default-off) |
+| an AArch64 do/while loop around ExclusiveMonitorPass and ExclusiveMonitorsStatus | [`llscfold`](#llscfold----on--off-default-off) |
+| a shared_ptr or Arc reference count update prints as a loop with a char status variable | [`llscfold`](#llscfold----on--off-default-off) |
+| `if ((bool)ExclusiveMonitorPass(p,0x10))` in a loop | [`llscfold`](#llscfold----on--off-default-off) |
 | a struct copy prints as eight paired assignments through a register | [`copyrun`](#copyrun----on--off-default-on) |
 | *a0 = *a1; a0[1] = v1; ... for a fixed-size memcpy | [`copyrun`](#copyrun----on--off-default-on) |
 | SSE xmm0 lanes shuttle a buffer one word at a time | [`copyrun`](#copyrun----on--off-default-on) |
@@ -209,6 +216,8 @@ Three tiers:
 | two object views of one frame address become unrelated local variables | [`stackviews`](#stackviews----on--off-default-off) |
 | spurious uninitialized local (xStack_N) returned after storing through a pointer to a local | [`stackalias`](#stackalias----on--off-default-off-destructive-opt-in) |
 | store through a take-address-of-local pointer dropped as dead so the later read is garbage | [`stackalias`](#stackalias----on--off-default-off-destructive-opt-in) |
+| every function-pointer call in a /guard:cf PE prints as (*__guard_dispatch_icall_fptr)(...) | [`guarddispatch`](#guarddispatch----on--off-default-on) |
+| indirect call target dropped and the dispatch slot called instead | [`guarddispatch`](#guarddispatch----on--off-default-on) |
 | bogus (*pcVar1)() indirect call after calling a struct-returning function on sparc | [`sparcstructret`](#sparcstructret----on--off-default-on) |
 | function tail dropped after a sparc call followed by unimp | [`sparcstructret`](#sparcstructret----on--off-default-on) |
 | switch rendered as nested if/else-if compare tree over one variable | [`loweredswitch`](#loweredswitch----on--off--linear--tree--all-default-on) |
@@ -234,6 +243,7 @@ Three tiers:
 | a byte loaded with ldrb is declared unsigned int and used as an index | [`regnarrow`](#regnarrow----on--off-default-on) |
 | an int local prints as unsigned long on x86-64 though every value is a zero-extended 32-bit result | [`regnarrow`](#regnarrow----on--off-default-on) |
 | a long long parameter on i386 or 32-bit ARM prints as two int parameters | [`pairparam`](#pairparam----on--off-default-on) |
+| a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters | [`pairparam`](#pairparam----on--off-default-on) |
 | a signed char loaded with ldrsb is declared int | [`regsigned`](#regsigned----on--off-default-off) |
 | a short counter prints as int with (int)(short) casts at every use | [`regsigned`](#regsigned----on--off-default-off) |
 | an int local prints as long on x86-64 though every value is a movsxd | [`regsigned`](#regsigned----on--off-default-off) |
@@ -528,6 +538,10 @@ Three tiers:
 | a declared local is never written and never read anywhere in the function | [`indirectonly`](#indirectonly----on--off-default-off) |
 | a `vN = slot;` ... `slot = vN;` round-trip copy pair around a loop that only reads the slot | [`indirectonly`](#indirectonly----on--off-default-off) |
 | a call result assigned to a temporary that is immediately assigned to a stack slot | [`indirectonly`](#indirectonly----on--off-default-off) |
+| one local is assigned unrelated values in different parts of the function | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| a loop counter reused later as an unrelated result or return code | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| two source variables of the same type print as one name | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| a saved argument and a later call result share one declared local | [`typemerge`](#typemerge----on--storage--off-default-on) |
 | an inlined callee body is spliced into the caller and should read as a call | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | want to pull a chosen region out of a function into a named pseudofunction | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | acting on an almostregion inline-candidate report by hand or with an llm | [`outline`](#outline----off----default-off-destructive-opt-in) |
@@ -588,6 +602,12 @@ Three tiers:
 | the main path of a function is nested in an if whose else only exits | [`noretfirst`](#noretfirst----on--off-default-off) |
 | if (a) { if (b) { ... } } where the source wrote one if (a && b) | [`nestedand`](#nestedand----on--off-default-off) |
 | a chain of tests on one pointer prints as nested ifs with no else | [`nestedand`](#nestedand----on--off-default-off) |
+| if (c) { return a; } else { return b; } where the source returned c ? a : b | [`retternary`](#retternary----on--off-default-off) |
+| a function ends in two returns of a variable and a constant | [`retternary`](#retternary----on--off-default-off) |
+| if (a) goto L; if (b) goto L; where the source wrote one if (a  | [`orexit`](#orexit----on--off-default-off) |
+|  | [`orexit`](#orexit----on--off-default-off) |
+|  b) | [`orexit`](#orexit----on--off-default-off) |
+| several adjacent ifs each return the same constant | [`orexit`](#orexit----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -1135,6 +1155,10 @@ Three tiers:
 | loop counters print as v5, v3, v1 instead of i, j, k | [`contextnames`](#contextnames----on--off-default-off) |
 | the accumulator a function returns keeps a vN name | [`contextnames`](#contextnames----on--off-default-off) |
 | nested loops are hard to tell apart in stripped code | [`contextnames`](#contextnames----on--off-default-off) |
+| a local loaded from a struct field keeps a vN name | [`flownames`](#flownames----on--off-default-off) |
+| v3 = p->len instead of len = p->len | [`flownames`](#flownames----on--off-default-off) |
+| a char pointer local named vN | [`flownames`](#flownames----on--off-default-off) |
+| a pointer to a named struct named vN | [`flownames`](#flownames----on--off-default-off) |
 | a double parameter stored into a global prints as unsigned long and moves ahead of the integer parameters | [`floatglobals`](#floatglobals----on--off-default-on) |
 | a float parameter copied into a global prints as unsigned int | [`floatglobals`](#floatglobals----on--off-default-on) |
 | a global passed to a float parameter prints as a union reinterpretation ((union { unsigned int from; float to; }){ .from = dat_10001d78 }).to | [`floatglobals`](#floatglobals----on--off-default-on) |
@@ -1233,6 +1257,9 @@ Three tiers:
 | case N: goto label_X; next to default: label_X: | [`switchmerge`](#switchmerge----on--off-default-on) |
 | output printed with option ctree on differs from the same function printed with it off | [`ctree`](#ctree----on--off-default-off) |
 | a C-level cleanup needs the printed statement tree rather than the structured block graph | [`ctree`](#ctree----on--off-default-off) |
+| a debug build shows a generic register name where the DWARF information names a local | [`honestgaps`](#honestgaps----on--off-default-off) |
+| a function with unimplemented instructions says so in its header but not where | [`honestgaps`](#honestgaps----on--off-default-off) |
+| the real-binary harness cannot tell which functions lost information | [`honestgaps`](#honestgaps----on--off-default-off) |
 
 ## Toggleable transforms
 
@@ -1333,6 +1360,22 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default. Flip off when a `rep movsb` copies forward over its own output on purpose -- an LZ77 decoder's overlapping match copy is defined for the instruction and not for memcpy -- or to see the instruction's loop.
 - **Where / provenance:** P3/simplification-quiescence · kuna · presentation-default · GH-1650
 - **Example:** `option repstring off`
+
+### `atomics` -- on | off, default `off`
+
+- **Symptoms:** LOCK(); and UNLOCK(); around a plain load and store; a lock xadd, lock cmpxchg or lock inc prints as an ordinary update; an AArch64 ldaddal, swpal or casal prints as a plain load and store with no sign of atomicity; a compare-exchange retry loop whose compare and store moved out of the loop.
+- **What it does:** Print an atomic read-modify-write instruction as the GCC/Clang `__sync_*` builtin it performs. SLEIGH lifts an x86 `lock`-prefixed instruction as `LOCK()`, a load, an update, a store and `UNLOCK()`, and an AArch64 LSE atomic (`ldadd`, `ldclr`, `ldeor`, `ldset`, `swp`, `cas` and their `a`/`l`/`al` and `st` forms) or a RISC-V AMO as the same load and store with nothing marking it, so the C showed a plain update between `LOCK();` and `UNLOCK();` or no sign of atomicity at all. `kuna_atomics` evaluates each instruction's p-code right after it is lifted, over every path through its internal branches (at most four), with `Old` for the value the location holds when the instruction starts, and rewrites it in place when the value it writes is `Old + X`, `Old - X`, `Old & X`, `Old | X`, `Old ^ X` or `~Old` (`__sync_fetch_and_add/sub/and/or/xor`), `X` (`__sync_lock_test_and_set`), or `N` on exactly the path where `Old == E` (`__sync_val_compare_and_swap(p, E, N)`), with `X`, `E` and `N` independent of `Old`; the builtin's result is `Old`. Declined: another user operation inside the lock envelope (an HLE hint), an update that leaves the location unchanged (`lock orq $0, (%rsp)`, the fence compilers emit), `lock neg`, `cmpxchg8b`/`cmpxchg16b`, `casp`, the min/max forms, an unlocked x86 update and every instruction of a Go image (`goatomicreturn` owns those). The builtins carry the call flag and guard writable memory across themselves like a call (`kuna_memoryguard`). Inert off x86, AArch64 and RISC-V.
+- **When to flip:** Off by default. Turn on to read lock-free code (reference counts, spin locks, lock-free queues) as the atomic operations it performs instead of LOCK()/UNLOCK() envelopes or plain loads and stores. The `__sync` names do not encode a memory order: the AArch64 acquire/release markers stay as `LOAcquire()`/`LORelease()`.
+- **Where / provenance:** P2/flow-classification · kuna · presentation-default · unlace-19
+- **Example:** `option atomics on`
+
+### `llscfold` -- on | off, default `off`
+
+- **Symptoms:** an AArch64 do/while loop around ExclusiveMonitorPass and ExclusiveMonitorsStatus; a shared_ptr or Arc reference count update prints as a loop with a char status variable; `if ((bool)ExclusiveMonitorPass(p,0x10))` in a loop.
+- **What it does:** AArch64: fold a load-exclusive/store-exclusive retry loop into the `__sync_*` builtin its successful iteration performs, as option `atomics` names the single-instruction LSE forms: `ldaxr; add; stlxr; cbnz` becomes `__sync_fetch_and_add(p, x)` and a compare-exchange loop (`ldaxr; cmp; b.ne fail; stlxr; cbnz`) becomes `__sync_val_compare_and_swap(p, e, n)`. Pre-SSA, the loop head (holding the load), the store-exclusive's blocks (a branch on `ExclusiveMonitorPass`, then the STORE and `ExclusiveMonitorsStatus`) and the status test are evaluated symbolically as one atomic update with the monitor passing and the status 0: one LOAD and one STORE through one pointer register that the monitor also checks, the status test leaving the loop, and a stored value `Old op X` or `X` (`op` one of `+ - & | ^`), or, for a compare-exchange, a value independent of `Old` stored only when the head finds `Old == E`. Any value the loop reads from a register or temporary it also writes refuses the fold, because a retry would see a different value; so does a compare's exit that does more than `clrex` before branching back. The load becomes the builtin, the pass and status become the constants 1 and 0 and the store a dead copy, so dead-branch removal deletes the back edge. The builtin guards memory like a call. Inert off AArch64 (only AArch64 declares the monitor user operations).
+- **When to flip:** Off by default. Turn on with `atomics` to read AArch64 code built without LSE (shared_ptr and Arc reference counts, std::atomic updates) as the atomic operations it performs; leave off when the loop's failure path or its exact instruction sequence matters.
+- **Where / provenance:** P2/flow-classification · kuna · presentation-default · unlace-19
+- **Example:** `option llscfold on`
 
 ### `copyrun` -- on | off, default `on`
 
@@ -1710,6 +1753,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P6/alias-facets · ghidra-upstream · opt-in-tool · GH-8500
 - **Example:** `option stackalias on`
 
+### `guarddispatch` -- on | off, default `on`
+
+- **Symptoms:** every function-pointer call in a /guard:cf PE prints as (*__guard_dispatch_icall_fptr)(...); indirect call target dropped and the dispatch slot called instead.
+- **What it does:** Print a call through a Control Flow Guard dispatch slot as the indirect call it guards.
+- **When to flip:** On by default: an image built with Control Flow Guard calls a function pointer as `mov rax, target; call [__guard_dispatch_icall_fptr]`, and the dispatch routine validates `rax` and jumps to it. On, a CALLIND whose target its instruction loads from a dispatch slot the PE load configuration names (`__guard_dispatch_icall_fptr`, `__guard_xfg_dispatch_icall_fptr`) calls the target register `rax` instead (x86-64 only), so `(*__guard_dispatch_icall_fptr)(a, b)` becomes `(*f)(a, b)`. The guard check itself is not shown. Only a PE with a load configuration fills the slot set, so it is inert everywhere else (0/675). Flip off to see the call through the dispatch slot as the instructions state it.
+- **Where / provenance:** P2/flow-classification · kuna · presentation-default · kuna-pe-loadconfig
+- **Example:** `option guarddispatch off`
+
 ### `sparcstructret` -- on | off, default `on`
 
 - **Symptoms:** bogus (*pcVar1)() indirect call after calling a struct-returning function on sparc; function tail dropped after a sparc call followed by unimp.
@@ -1768,8 +1819,8 @@ The control surface: each of these can make output worse on the wrong source sha
 
 ### `pairparam` -- on | off, default `on`
 
-- **Symptoms:** a long long parameter on i386 or 32-bit ARM prints as two int parameters.
-- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow or carry links them.
+- **Symptoms:** a long long parameter on i386 or 32-bit ARM prints as two int parameters; a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters.
+- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow, a carry or a two-word equality links them.
 - **When to flip:** On by default.
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option pairparam off`
@@ -2390,6 +2441,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P6/merge-aggressiveness · ghidra · presentation-default · kuna-indirectonly
 - **Example:** `option indirectonly on`
 
+### `typemerge` -- on | storage | off, default `on`
+
+- **Symptoms:** one local is assigned unrelated values in different parts of the function; a loop counter reused later as an unrelated result or return code; two source variables of the same type print as one name; a saved argument and a later call result share one declared local.
+- **What it does:** Narrow which variables ActionMergeType joins. Merge::mergeByDatatype (merge.cc:359-401) gathers every HighVariable of the function, groups them by identical data-type, and lets mergeLinear join any two in a group whose lifetimes do not overlap, wherever each is stored: two distinct source variables that only share a type (two `int` counters of two loops, a saved argument and a later result) print as one reused local, and a value that crossed a call or a phi in another register becomes the same name as an unrelated one. `on` is that upstream pass byte-for-byte. `storage` keeps the type grouping but lets a high join a group only when every instance of it and every instance of the group's first high sit in one and the same storage (same space, offset and size; kuna_typemerge.rs (single_storage)), so a register or stack slot that the compiler reused for one variable still reads as one variable while values held in different registers stay apart. `off` skips the type grouping entirely. Both narrower modes leave the required merges, ActionMergeCopy, ActionMergeAdjacent, ActionDominantCopy and the prior-decompile variable groups (kuna_stablenames.rs (variable_groups)) untouched; they only drop speculative joins, so every variable they keep apart is one upstream would have printed as the same name.
+- **When to flip:** ON (upstream) by default: it is the pass that folds dozens of same-typed temporaries into a handful of reused locals, and the narrower modes print more declarations. Flip to `storage` when one local is assigned values that clearly mean different things in different parts of the function (a loop counter reused as a return code, a saved argument overwritten by an unrelated result) and you want the variables the machine kept in different places printed apart; it keeps a variable the compiler spilled to one slot or held in one register whole. Flip to `off` to see every speculative same-type join undone, at the cost of the most declarations. The narrower modes have not yet been measured against DWARF variable boundaries on a corpus, which is what a default change would need.
+- **Where / provenance:** P6/merge-aggressiveness · kuna · presentation-default · unlace-20
+- **Example:** `option typemerge storage`
+
 ### `outline` -- off | <fn>:<head>-<exit>[;...], default `off` (destructive opt-in)
 
 - **Symptoms:** an inlined callee body is spliced into the caller and should read as a call; want to pull a chosen region out of a function into a named pseudofunction; acting on an almostregion inline-candidate report by hand or with an llm.
@@ -2533,6 +2592,22 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on when nested ifs with no else read as one source condition (`if (p && p->x)` chains a compiler laid out as separate tests). Leave off to keep each test as its own if, as Ghidra prints it; with no else the two forms run the same code.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-nestedand
 - **Example:** `option nestedand on`
+
+### `retternary` -- on | off, default `off`
+
+- **Symptoms:** if (c) { return a; } else { return b; } where the source returned c ? a : b; a function ends in two returns of a variable and a constant.
+- **What it does:** C output only: print an if/else (no goto) whose body and else each print one statement, a return of a constant or of a named variable, as one return. A 1 or 0 arm against a bool variable x joins with the condition: `c ? 1 : x` prints `return (c) || x;`, `c ? x : 1` prints `return !(c) || x;`, `c ? x : 0` prints `return (c) && x;`, `c ? 0 : x` prints `return !(c) && x;`; any other pair prints `return (c) ? A : B;`. Each arm must be a basic-block leaf with no label line and no comment; the condition prints through the same render as the if header, and the statements in front of the test print above it. Two constant returns 1 and 0 take the `boolreturn` form when that option is on. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function.
+- **When to flip:** Turn on when the source likely returned one expression (`return ok ? a : b;`, `return !c || flag;`), which compilers lower to two returns. Leave off to keep the if/else of returns the binary literally has; both are the same object code.
+- **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-retternary
+- **Example:** `option retternary on`
+
+### `orexit` -- on | off, default `off`
+
+- **Symptoms:** if (a) goto L; if (b) goto L; where the source wrote one if (a ; ;  b); several adjacent ifs each return the same constant.
+- **What it does:** C output only: fold a run of adjacent ifs without else that leave the same way into the first, over the conditions joined by ||: `if (a) goto L; if (b) goto L;` becomes `if ((a) || (b)) goto L;`, and the same for a break or continue to one target or a return of one constant or one variable. Because each body leaves, the second test only runs when the first is false, so the fold keeps the behaviour. Every if after the first must print nothing before its test (no statement, no comment, no label), its condition must be a single leaf, and no if may print as a switch or an exception form or sit inside a condition. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function.
+- **When to flip:** Turn on when consecutive tests share one exit (argument validation, early-out chains) and read better as one condition. Leave off to keep one if per test, as Ghidra prints it.
+- **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-orexit
+- **Example:** `option orexit on`
 
 ## Analysis & loader passes
 
@@ -3269,7 +3344,7 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 ### `uefi` -- on | off, default `on`
 
 - **Symptoms:** an EFI driver entry point takes two undefined8 parameters; a UEFI boot service call renders as (**(code **)(*(long *)(param_2 + 0x60) + 0x140))(...); a protocol GUID in .data is an unnamed 16-byte blob; a DXE core's static boot-services table is raw words; a UEFI driver calls a protocol member as (**(code **)(dat_1a60 + 0x18))(...); gBS is dat_1a70 and every boot service call outside the entry is an offset off it; a driver binding Supported/Start/Stop function is sub_xxx with untyped parameters; a PEIM entry is typed (EFI_HANDLE, EFI_SYSTEM_TABLE *); an SMM driver calls through an untyped gSmst; which module implements the protocol this driver locates.
-- **What it does:** UEFI module markup for a PE image whose Subsystem is an EFI application, boot driver, runtime driver or ROM (10..13). The entry point gets the locked prototype EFI_STATUS _ModuleEntryPoint(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable). EFI_SYSTEM_TABLE, EFI_BOOT_SERVICES, EFI_RUNTIME_SERVICES, EFI_DXE_SERVICES, EFI_PEI_SERVICES, the console text protocols and EFI_GUID are built from the UEFI and PI specifications with natural alignment for the image's pointer width, and every service member is a typed function pointer, so `SystemTable->BootServices->LocateProtocol(&guid, 0, &iface)` renders as a member call with its arguments. Every 16-byte value in a data section equal to a GUID declared in the EDK2 package files (965 names, gEfiLoadedImageProtocolGuid and the rest) is named and typed EFI_GUID. A service table the module defines statically (the DXE, PEI and SMM cores) is found by its EFI_TABLE_HEADER signature (IBI SYST, BOOTSERV, RUNTSERV, DXE_SERV, PEI SERV) and typed. The ARM PEI-services getters (Thumb `mrc p15,0,r0,c13,c0,2; bx lr`, the A32 form, and AArch64 `mrs x0, tpidr_el0; ret`) are named ArmReadTpidrurw and return EFI_PEI_SERVICES **. The pass also follows the service tables through the module's code: the globals the entry stores them in are named and typed (gImageHandle, gST, gBS, gRT, gDS, gSmst, gMmst); LocateProtocol, HandleProtocol, OpenProtocol, SmmLocateProtocol/MmLocateProtocol and LocatePpi type their interface out-parameter from the GUID argument, using the interface structs of 371 protocol and PPI GUIDs generated from the EDK2 MdePkg and MdeModulePkg headers (edk2-stable202505), so a call through the interface names its member; InstallProtocolInterface, InstallMultipleProtocolInterfaces, the MM installs, InstallPpi and NotifyPpi type the installed instance (or descriptor list) and name each function it points at <Interface><Member> with the member's prototype; an interface installed under a GUID with no struct gets one synthesized from the instance (Function_<off>/Field_<off>). A PEIM is entered as (VOID *FileHandle, EFI_PEI_SERVICES **PeiServices) and a standalone-MM module with EFI_MM_SYSTEM_TABLE *; an SMM driver's gSmst is typed EFI_SMM_SYSTEM_TABLE2 * from GetSmstLocation; the X64/IA32 GetPeiServicesTablePointer (sidt) and the PeiServices<Service> forwarding functions of a PEIM are recognized. Beside the kuna-uefi.index that `unlace unpack <firmware> --protocols` writes, a module takes its phase from its FFS file type and each interface lookup gets a comment naming the module of the volume that installs the interface, with the instance address and member functions.
+- **What it does:** UEFI module markup for a PE image whose Subsystem is an EFI application, boot driver, runtime driver or ROM (10..13). The entry point gets the locked prototype EFI_STATUS _ModuleEntryPoint(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable). EFI_SYSTEM_TABLE, EFI_BOOT_SERVICES, EFI_RUNTIME_SERVICES, EFI_DXE_SERVICES, EFI_PEI_SERVICES, the console text protocols and EFI_GUID are built from the UEFI and PI specifications with natural alignment for the image's pointer width, and every service member is a typed function pointer, so `SystemTable->BootServices->LocateProtocol(&guid, 0, &iface)` renders as a member call with its arguments. Every 16-byte value in a data section equal to a GUID declared in the EDK2 package files (965 names, gEfiLoadedImageProtocolGuid and the rest) is named and typed EFI_GUID. A service table the module defines statically (the DXE, PEI and SMM cores) is found by its EFI_TABLE_HEADER signature (IBI SYST, BOOTSERV, RUNTSERV, DXE_SERV, PEI SERV) and typed. The ARM PEI-services getters (Thumb `mrc p15,0,r0,c13,c0,2; bx lr`, the A32 form, and AArch64 `mrs x0, tpidr_el0; ret`) are named ArmReadTpidrurw and return EFI_PEI_SERVICES **. The pass also follows the service tables through the module's code: the globals the entry stores them in are named and typed (gImageHandle, gST, gBS, gRT, gDS, gSmst, gMmst); LocateProtocol, HandleProtocol, OpenProtocol, SmmLocateProtocol/MmLocateProtocol and LocatePpi type their interface out-parameter from the GUID argument, using the interface structs of 371 protocol and PPI GUIDs generated from the EDK2 MdePkg and MdeModulePkg headers (edk2-stable202505), so a call through the interface names its member; InstallProtocolInterface, InstallMultipleProtocolInterfaces, the MM installs, InstallPpi and NotifyPpi type the installed instance (or descriptor list) and name each function it points at <Interface><Member> with the member's prototype; SmmRegisterProtocolNotify/MmRegisterProtocolNotify name their callback <Guid>Notify with its Interface parameter typed from the GUID; an interface installed under a GUID with no struct gets one synthesized from the instance (Function_<off>/Field_<off>). A PEIM is entered as (VOID *FileHandle, EFI_PEI_SERVICES **PeiServices) and a standalone-MM module with EFI_MM_SYSTEM_TABLE *; an SMM driver's gSmst is typed EFI_SMM_SYSTEM_TABLE2 * from GetSmstLocation; the X64/IA32 GetPeiServicesTablePointer (sidt) and the PeiServices<Service> forwarding functions of a PEIM are recognized. Beside the kuna-uefi.index that `unlace unpack <firmware> --protocols` writes, a module takes its phase from its FFS file type and each interface lookup gets a comment naming the module of the volume that installs the interface, with the instance address and member functions.
 - **When to flip:** On by default; it only acts on EFI-subsystem PE images, so every other input is byte-identical. Flip off to see the module without the EFI types: the entry then takes two untyped words and every service call is an indirect call through an offset. To link protocol lookups to their implementations across a firmware image, unpack it with `unlace unpack FIRMWARE --protocols` and decompile the modules in the directory it wrote. `KUNA_UEFI_DEBUG=1` prints every service call the pass read.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida95-53
 - **Example:** `option uefi off`
@@ -3654,6 +3729,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **Where / provenance:** P6/naming-policy · kuna · presentation-default · kuna-contextnames
 - **Example:** `option contextnames on`
 
+### `flownames` -- on | off, default `off`
+
+- **Symptoms:** a local loaded from a struct field keeps a vN name; v3 = p->len instead of len = p->len; a char pointer local named vN; a pointer to a named struct named vN.
+- **What it does:** Name a numbered local from the structure fields and the type it meets when no declaration or library call names it. `kuna_flownames` reads two kinds of evidence for the `libcnames` alias walk: a named field the value is loaded from or stored to through a typed pointer (`len = p->len`, `p->len = len`), or copied out of or into a member of a stack structure (`size = st.st_size`), counted only when every field the local meets has the same name, leading underscores dropped (`_flags` gives `flags`); and the local's own type, `str` for a `char` pointer, `wstr` for a wide-character pointer and `p_<name>` for a pointer to a named structure (`p_passwd`, the last `::` component without template arguments for a C++ type). A field the analysis made up (`field_0x10`), padding (`__pad0`, `__glibc_reserved`, `unused`), and a structure it synthesized (`struct_3`, `astruct_1`) name nothing. A field name ranks below a library argument and above a role name (`dest`/`src`) and `result`; a type name is the weakest evidence of all. The walk numbers every local exactly as with the option off and only then prints the name, so `v4` stays the same variable in every mode, a directive may name the local by either spelling, a clash takes `_2`, `_3`, ... in evidence order, and no spelling repeats a name another variable, the scope or a callee holds. Naming a local after the parameter it is passed to is upstream's `lookForFuncParamNames` for a locked callee prototype and `libcnames` for the built-in library tables; this option adds the evidence neither has.
+- **When to flip:** Turn on for stripped code that works through typed structures: `v3 = a0->st_size;` prints `st_size = a0->st_size;`, a `char *` local prints `str` and a `struct passwd *` local `p_passwd`. Off by default because it renames locals that other features' stage assertions and CLI tests spell as `vN`, and because a type name says less than the name a reader would choose.
+- **Where / provenance:** P6/naming-policy · ida · presentation-default · kuna-flownames
+- **Example:** `option flownames on`
+
 ### `floatglobals` -- on | off, default `on`
 
 - **Symptoms:** a double parameter stored into a global prints as unsigned long and moves ahead of the integer parameters; a float parameter copied into a global prints as unsigned int; a global passed to a float parameter prints as a union reinterpretation ((union { unsigned int from; float to; }){ .from = dat_10001d78 }).to; firmware calls of float helpers wrap every global argument in a union.
@@ -3877,6 +3960,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Leave it off. Turn it on to check the tree printer against the block printer on a binary (nothing should change), or while moving a C-level cleanup into the tree. It is a migration switch: once the tree path is the only printer, the option goes away.
 - **Where / provenance:** P9/brace-form · kuna · opt-in-tool · kuna-ctree
 - **Example:** `option ctree on`
+
+### `honestgaps` -- on | off, default `off`
+
+- **Symptoms:** a debug build shows a generic register name where the DWARF information names a local; a function with unimplemented instructions says so in its header but not where; the real-binary harness cannot tell which functions lost information.
+- **What it does:** Name in the output the losses the decompile otherwise drops without a word, each as a warning comment at the site that --json lists under its own kind. An instruction SLEIGH decodes but has no p-code for, stepped over as a no-op under the ignoreunimplemented policy, gets `notmodelled: <insn> has no p-code semantics; stepped over as a no-op` at its address (before, one header line said the function ignored unimplemented instructions, never which). A DWARF register local that no write of its register reaching its range can carry, which the decompile drops so its name never appears, gets a header line `debuginfo: DWARF local <name> (range from 0x...) not bound: no write of its register reaches it`. Losses that already print (decode-failure halts, funcboundflow and instruction-budget truncation, out-of-bounds flow, unrecovered jump tables) are unchanged.
+- **When to flip:** Turn on when auditing how much of a binary the output can be trusted for: with --json each record lists these sites in warnings and the document totals every warning kind in warning_kinds. Leave off for the upstream text.
+- **Where / provenance:** P2/decode-error-policy · kuna · opt-in-tool · unlace-33-honestgaps
+- **Example:** `option honestgaps on`
 
 ## Programmatic use
 

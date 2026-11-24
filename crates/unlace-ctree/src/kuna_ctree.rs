@@ -46,6 +46,27 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna `retternary`) Print an `if` whose two arms only return a constant or a variable
+    /// as one `return c ? A : B;` (or `c || x`-style for a `bool` variable against `0`/`1`),
+    /// a rewrite of the C syntax tree.
+    Retternary,
+    "retternary",
+    "returns of cheap values joined into one",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
+    /// (kuna `orexit`) Fold adjacent `if`s without else that leave the same way into one
+    /// `if` over `a || b`, a rewrite of the C syntax tree.
+    Orexit,
+    "orexit",
+    "same-exit ifs folded into ||",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna `ctree`) Print the function body through its C syntax tree. Off by default while
     /// the tree printer is proven to print exactly what the block printer prints.
     Ctree,
@@ -152,6 +173,9 @@ pub enum StmtKind {
     /// A `switch`: the structured switch's components in order, the head first, then the
     /// case blocks.
     Switch { parts: Vec<StmtId> },
+    /// An `if` that prints as the structured switch `switch` it was merged into
+    /// (`switchmerge`).
+    SwitchOf { switch: BlockId },
     /// An unstructured branch: `goto`, `break` or `continue` by the block-goto flags in
     /// `gototype`.
     Goto { target: BlockId, gototype: uint4 },
@@ -357,6 +381,7 @@ impl CTree {
             | StmtKind::Expr(_)
             | StmtKind::Goto { .. }
             | StmtKind::Return { .. }
+            | StmtKind::SwitchOf { .. }
             | StmtKind::Opaque => Vec::new(),
         }
     }
@@ -380,6 +405,7 @@ impl CTree {
             StmtKind::Goto { gototype, .. } => format!("goto type={gototype:#x}"),
             StmtKind::Return { value: None, .. } => "return".to_string(),
             StmtKind::Return { value: Some(e), .. } => format!("return {}", self.expr_text(*e)),
+            StmtKind::SwitchOf { switch } => format!("switch-of {switch:?}"),
             StmtKind::Opaque => "opaque".to_string(),
         };
         match stmt.origin {

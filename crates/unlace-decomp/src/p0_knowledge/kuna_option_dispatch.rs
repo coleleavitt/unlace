@@ -133,6 +133,7 @@ kuna_options! { self, p1;
     "v850indirectbranch" => registered!(crate::kuna_v850indbranch::V850IndirectBranch),
     "ptrauthtrap" => registered!(crate::kuna_coreoptions::PtrauthTrap),
     "relronoreturn" => registered!(crate::decompile_drive::RelroNoreturn),
+    "guarddispatch" => registered!(crate::kuna_guarddispatch::GuardDispatch),
     "outlinedinline" => registered!(crate::flow::OutlinedInline),
     "calleeretpurge" => registered!(crate::kuna_calleeretpurge::CalleeRetPurge),
     "stackexitanchor" => registered!(crate::kuna_stackexitanchor::StackExitAnchor),
@@ -227,6 +228,7 @@ kuna_options! { self, p1;
     "rodatastring" => registered!(crate::kuna_rodatastring::RodataString),
     "switchmodbound" => registered!(crate::jumptable::SwitchModuloBound),
     "switchextent" => registered!(crate::jumptable::SwitchExtent),
+    "honestgaps" => registered!(crate::kuna_honestgaps::HonestGaps),
     "constselectjump" => registered!(crate::kuna_constselectjump::ConstSelectMode),
     "switchguardbound" => registered!(crate::jumptable::SwitchGuardBound),
     "highsliceguard" => registered!(crate::jumptable::HighsliceGuard),
@@ -271,6 +273,8 @@ kuna_options! { self, p1;
     "devectorize" => registered!(crate::kuna_devectorize::DevectorizeReduction),
     "strlenscan" => registered!(crate::kuna_strlenscan::StrlenScan),
     "repstring" => registered!(crate::kuna_repstring::RepString),
+    "atomics" => registered!(crate::kuna_atomicops::Atomics),
+    "llscfold" => registered!(crate::kuna_atomicops::LlscFold),
     "copyrun" => registered!(crate::kuna_copyrun::CopyRun),
     "regionstructure" => registered!(crate::region_structurer::RegionStructure),
     "guardarm" => registered!(crate::kuna_ifnoexit::GuardArm),
@@ -297,6 +301,7 @@ kuna_options! { self, p1;
     "switchreturn" => registered!(crate::kuna_switchreturn::SwitchReturn),
     "foldcallret" => registered!(crate::kuna_callretfold::FoldCallReturns),
     "indirectonly" => registered!(crate::kuna_indirectonly::MarkIndirectOnly),
+    "typemerge" => registered!(crate::kuna_typemerge::TypeMergeMode),
     "impliedrefs" => {
         let (val, msg) = crate::kuna_impliedrefs::OptionImpliedRefs.apply(p1)?;
         self.max_implied_ref = val;
@@ -354,6 +359,7 @@ kuna_options! { self, p1;
     "castnarrow" => registered!(crate::kuna_castnarrow::CastNarrow),
     "libcnames" => registered!(crate::kuna_libcnames::LibcNames),
     "contextnames" => registered!(crate::kuna_contextnames::ContextNames),
+    "flownames" => registered!(crate::kuna_flownames::FlowNames),
     "declorder" => registered!(crate::kuna_declorder::DeclOrder),
     "castwiden" => registered!(crate::kuna_castwiden::CastWidenMode),
     "ptrdepthcap" => registered!(crate::coreaction_infertypes::Ptrdepthcap),
@@ -641,6 +647,8 @@ kuna_options! { self, p1;
     "boolreturn" => registered!(crate::kuna_ctree::Boolreturn),
     "noretfirst" => registered!(crate::kuna_ctree::Noretfirst),
     "nestedand" => registered!(crate::kuna_ctree::Nestedand),
+    "retternary" => registered!(crate::kuna_ctree::Retternary),
+    "orexit" => registered!(crate::kuna_ctree::Orexit),
     "macho-arm64e" => {
         let (val, msg) = <crate::kuna_macho_arm64e::MachoArm64e as crate::kuna_optionset::KunaOption>::parse(p1)?;
         self.load_options_mut().macho_arm64e = val.0;

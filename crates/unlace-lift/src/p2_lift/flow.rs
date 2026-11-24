@@ -365,6 +365,18 @@ pub trait FlowEnvironment {
         (None, None)
     }
 
+    /// (kuna `guarddispatch`) The register holding the real target, when the
+    /// CALLIND `op` calls through a Control Flow Guard dispatch slot. See
+    /// [`kuna_guarddispatch`](crate::kuna_guarddispatch). The default shell
+    /// reports `None`.
+    fn guard_dispatch_target(
+        &self,
+        _fd: &Funcdata,
+        _op: OpId,
+    ) -> Option<unlace_num::pcoderaw::VarnodeData> {
+        None
+    }
+
     /// (kuna `--assert callee`) Did the caller state where the indirect jump at
     /// `site` goes? See [`kuna_calleeoverride`](crate::kuna_calleeoverride).
     fn stated_callee_site(&self, _fd: &Funcdata, _site: &Address) -> bool {
@@ -652,6 +664,14 @@ pub trait FlowEnvironment {
     /// reports `false` (the silent `return;`).  See
     /// [`kuna_decodehalt`](crate::kuna_decodehalt).
     fn decode_halt_reports(&self) -> bool {
+        false
+    }
+
+    /// (kuna `honestgaps`) Does an instruction stepped over under the
+    /// `ignoreunimplemented` policy get a warning at its address naming it?
+    /// The default shell reports `false`.  See
+    /// [`kuna_honestgaps`](crate::kuna_honestgaps).
+    fn honest_gaps(&self) -> bool {
         false
     }
 
@@ -2383,13 +2403,21 @@ truncating the fall-through here"
         self.overlap_cbranch_target = None; // (kuna overlapbranch) per-instruction
         let mut ends_in_call = false;
         let mut call_before_pad = false;
-        if let Some(firstop) = first_new {
+        if let Some(mut firstop) = first_new {
             // (kuna retpushedhalf) The push/pop stack-maintenance shape is only
             // visible here: copy propagation later collapses the store and the
             // load into a bare register-to-register COPY.
             let mut insn_ops = vec![firstop];
             while let Some(next) = self.dead_next(*insn_ops.last().expect("non-empty")) {
                 insn_ops.push(next);
+            }
+            if flowoverride == crate::overrides::flow_type::NONE {
+                if let Some(first) = super::kuna_atomics::rewrite(&mut self.data, &insn_ops) {
+                    if first != firstop {
+                        firstop = first;
+                        insn_ops.insert(0, first);
+                    }
+                }
             }
             (self.data.hooks().retpushedhalf_observe_instruction)(&mut self.data, &insn_ops);
             if flowoverride == crate::overrides::flow_type::NONE {
@@ -2765,11 +2793,16 @@ truncating the fall-through here"
     fn handle_decode_error(&mut self, curaddr: &Address, err: KunaError) -> KunaResult<int4> {
         match &err {
             KunaError::Unimpl {
-                instruction_length, ..
+                instruction_length,
+                explain,
             } => {
                 let reports = self.env.decode_halt_reports();
                 if (self.flags & flow_flags::ignore_unimplemented) != 0 {
                     let step = *instruction_length;
+                    if self.env.honest_gaps() {
+                        let text = crate::kuna_honestgaps::not_modelled_text(explain);
+                        self.data.warning(&text, curaddr);
+                    }
                     if !self.has_unimplemented() {
                         self.flags |= flow_flags::unimplemented_present;
                         if reports {
@@ -3963,6 +3996,14 @@ truncating the fall-through here"
             return self.check_for_flow_modification(op, &entry);
         }
 
+        if let Some(reg) = self.env.guard_dispatch_target(&self.data, op) {
+            let addr = Address::new(
+                reg.space.expect("guarddispatch: register without a space"),
+                reg.offset,
+            );
+            let target = self.data.new_varnode(reg.size as int4, &addr, None);
+            self.data.op_set_input(op, target, 0)?;
+        }
         self.build_call_specs(op, Address::default(), true)?;
         self.qlst_count += 1;
         // (kuna `fastfailnoreturn`) A Windows `int 0x29` lifts to `intloc =

@@ -2159,9 +2159,15 @@ impl Action for ActionMergeType {
         //
         // Drive `Merge::merge_by_datatype` over the loc-ordered Varnode slice
         // (`beginLoc()..endLoc()`) via the persistent `covermerge`.
+        //
+        // (kuna, option `typemerge`) narrows which same-typed highs join.
         let range: Vec<crate::context::VarnodeId> = data.vbank().iter_loc().collect();
+        let mode = data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_typemerge::TypeMergeMode>();
         data.with_covermerge(|merge, data| {
-            let _ = merge.merge_by_datatype(data, &range);
+            let _ = merge.merge_by_datatype(data, &range, mode);
         });
         0
     }

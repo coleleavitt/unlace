@@ -4211,7 +4211,13 @@ impl PrintC {
                     source_comments.insert(*high, comment);
                 }
             }
-            for (&high, &owner) in &self.local_name_aliases {
+            let mut aliases: Vec<_> = self
+                .local_name_aliases
+                .iter()
+                .map(|(&high, &owner)| (high, owner))
+                .collect();
+            aliases.sort_unstable();
+            for (high, owner) in aliases {
                 let comments = source_comments
                     .remove(&owner)
                     .into_iter()
@@ -4866,7 +4872,9 @@ impl PrintC {
         let tree_on = arch.kuna_options.get::<crate::kuna_ctree::Ctree>().0
             || arch.kuna_options.get::<crate::kuna_ctree::Boolreturn>().0
             || arch.kuna_options.get::<crate::kuna_ctree::Noretfirst>().0
-            || arch.kuna_options.get::<crate::kuna_ctree::Nestedand>().0;
+            || arch.kuna_options.get::<crate::kuna_ctree::Nestedand>().0
+            || arch.kuna_options.get::<crate::kuna_ctree::Retternary>().0
+            || arch.kuna_options.get::<crate::kuna_ctree::Orexit>().0;
         self.ctree = if tree_on && !self.is_flat() {
             crate::kuna_ctreebuild::build(fd)
         } else {
@@ -4957,8 +4965,8 @@ impl PrintC {
             BlockType::Copy => self.emit_block_copy(fd, arch, blk),
             BlockType::Basic => self.emit_block_basic(fd, arch, blk),
             BlockType::Ls => self.emit_block_ls(fd, arch, blk),
-            BlockType::If => match self.switch_plans.ifs.get(&blk) {
-                Some(&sw) => self.emit_block_switch(fd, arch, sw),
+            BlockType::If => match self.switch_of(blk) {
+                Some(sw) => self.emit_block_switch(fd, arch, sw),
                 None => self.emit_block_if(fd, arch, blk),
             },
             BlockType::Graph => self.emit_block_graph(fd, arch, blk),
@@ -5054,6 +5062,70 @@ impl PrintC {
         }
     }
 
+    /// (kuna `boolreturn`, `retternary`) Print the value of a `return` the C syntax tree made
+    /// from an `if`: a `Branch` through the `ONLY_BRANCH` render of its condition block (it
+    /// parenthesizes itself), `Not` as `!`, an `Op` as the returned value of that `RETURN`
+    /// (a constant or a variable), and `?:`, `&&`, `||` between their operands.
+    fn emit_return_value(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        expr: crate::kuna_ctree::ExprId,
+    ) {
+        use crate::kuna_ctree::ExprKind;
+        use crate::prettyprint::Emit;
+        let Some(kind) = self.ctree.as_ref().map(|tree| tree.expr(expr).kind.clone()) else {
+            return;
+        };
+        let token = |emit: &mut PrintEmit, text: &str| {
+            emit.spaces(1, 0);
+            emit.tag_op(text, SyntaxHighlight::NoColor, &MarkupRef::none());
+            emit.spaces(1, 0);
+        };
+        match kind {
+            ExprKind::Branch(block) => {
+                self.context.push_mod();
+                self.context.set_mod(modifiers::ONLY_BRANCH);
+                self.emit_block(fd, arch, block);
+                self.context.pop_mod();
+            }
+            ExprKind::Not(inner) => {
+                self.emit.tag_op(
+                    tokens::BOOLEAN_NOT.print1,
+                    SyntaxHighlight::NoColor,
+                    &MarkupRef::none(),
+                );
+                self.emit_return_value(fd, arch, inner);
+            }
+            ExprKind::Op(ret) => {
+                if let Some(vn) = fd.obank().get(ret).and_then(|o| o.get_in(1)) {
+                    self.push_vn_ir(fd, arch, vn, ret);
+                }
+            }
+            ExprKind::Ternary(cond, yes, no) => {
+                self.emit_return_value(fd, arch, cond);
+                token(&mut self.emit, "?");
+                self.emit_return_value(fd, arch, yes);
+                token(&mut self.emit, ":");
+                self.emit_return_value(fd, arch, no);
+            }
+            ExprKind::And(left, right) | ExprKind::Or(left, right) => {
+                let and = matches!(kind, ExprKind::And(..));
+                self.emit_return_value(fd, arch, left);
+                token(
+                    &mut self.emit,
+                    if and {
+                        tokens::BOOLEAN_AND.print1
+                    } else {
+                        tokens::BOOLEAN_OR.print1
+                    },
+                );
+                self.emit_return_value(fd, arch, right);
+            }
+            _ => {}
+        }
+    }
+
     /// (kuna `nestedand`) Print a condition of the C syntax tree in the `ONLY_BRANCH` state:
     /// a `Branch` as its condition block's branch, an `And` the way
     /// [`emit_block_condition`](Self::emit_block_condition) prints a `&&` of two condition
@@ -5070,9 +5142,10 @@ impl PrintC {
             Some(tree) => tree.expr(expr).kind.clone(),
             None => return,
         };
+        let is_or = matches!(kind, ExprKind::Or(..));
         match kind {
             ExprKind::Branch(block) => self.emit_block(fd, arch, block),
-            ExprKind::And(left, right) => {
+            ExprKind::And(left, right) | ExprKind::Or(left, right) => {
                 let right_block = match self
                     .ctree
                     .as_ref()
@@ -5087,7 +5160,11 @@ impl PrintC {
                 self.context.unset_mod(modifiers::ONLY_BRANCH);
                 self.context.set_mod(modifiers::COMMA_SEPARATE);
                 let pol = ReversePolish {
-                    tok: &tokens::BOOLEAN_AND,
+                    tok: if is_or {
+                        &tokens::BOOLEAN_OR
+                    } else {
+                        &tokens::BOOLEAN_AND
+                    },
                     visited: 1,
                     paren: false,
                     op: None,
@@ -5830,8 +5907,8 @@ impl PrintC {
             }
             None => {}
         }
-        if let Some((cond_block, ret_op, negate)) = self.return_form(blk) {
-            self.emit_block_if_return(fd, arch, cond_block, ret_op, negate);
+        if let Some((cond_block, ret_op, value)) = self.return_form(blk) {
+            self.emit_block_if_return(fd, arch, cond_block, ret_op, value);
             return;
         }
         let size = fd.sblocks_ref().block(blk).get_size();
@@ -5932,9 +6009,12 @@ impl PrintC {
         // instead of a braced body.
         let goto_target = fd.sblocks_ref().block(blk).get_if_goto_target();
         if let Some(target) = goto_target {
-            let gototype = self
-                .goto_rewrites
-                .gototype(blk, fd.sblocks_ref().block(blk).get_if_goto_type());
+            let gototype = match self.tree_goto_type(blk) {
+                Some(Some(gototype)) => gototype,
+                _ => self
+                    .goto_rewrites
+                    .gototype(blk, fd.sblocks_ref().block(blk).get_if_goto_type()),
+            };
             // (kuna outlang) C's one-line `if (cond) goto L;` needs no braces; a
             // language that requires block braces gets `if cond { goto-form }`.
             if self.lang().caps.brace_elision {
@@ -6421,7 +6501,7 @@ impl PrintC {
         arch: &Architecture,
         cond_block: BlockId,
         ret_op: OpId,
-        negate: bool,
+        value: crate::kuna_ctree::ExprId,
     ) {
         use crate::prettyprint::Emit;
 
@@ -6457,17 +6537,7 @@ impl PrintC {
             &stmt_markup,
         );
         self.emit.spaces(1, 0);
-        if negate {
-            self.emit.tag_op(
-                tokens::BOOLEAN_NOT.print1,
-                SyntaxHighlight::NoColor,
-                &MarkupRef::none(),
-            );
-        }
-        self.context.push_mod();
-        self.context.set_mod(modifiers::ONLY_BRANCH);
-        self.emit_block(fd, arch, cond_block);
-        self.context.pop_mod();
+        self.emit_return_value(fd, arch, value);
         self.emit.end_statement(sid);
         self.emit
             .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
@@ -7080,15 +7150,24 @@ impl PrintC {
             self.emit_part(fd, arch, blk, 0);
         }
         self.context.pop_mod();
-        if self.goto_rewrites.silent.contains(&blk) {
+        let tree_jump = self.tree_goto_type(blk);
+        let silent = match tree_jump {
+            Some(None) => fd.sblocks_ref().block(blk).get_goto_target().is_some(),
+            Some(Some(_)) => false,
+            None => self.goto_rewrites.silent.contains(&blk),
+        };
+        if silent {
             self.flush_eol_warnings();
             return;
         }
         if let Some(target) = fd.sblocks_ref().block(blk).get_goto_target() {
             self.emit.tag_line();
-            let gototype = self
-                .goto_rewrites
-                .gototype(blk, fd.sblocks_ref().block(blk).get_goto_type());
+            let gototype = match tree_jump {
+                Some(Some(gototype)) => gototype,
+                _ => self
+                    .goto_rewrites
+                    .gototype(blk, fd.sblocks_ref().block(blk).get_goto_type()),
+            };
             self.emit_goto_statement(fd, inner, target, gototype);
             // (kuna warnstyle, DIV-39) pending block warnings land after the
             // trailing goto/break/continue.

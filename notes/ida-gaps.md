@@ -1,0 +1,76 @@
+# What IDA 9.5 does that unlace does not, re-checked on main (2026-11-24)
+
+Prioritised feature gaps between IDA 9.5 (kernel, Hex-Rays, plugins, loaders) and unlace `main` at
+`4ca24a5ff1`. It builds on `notes/ida-module-survey.md` (2026-11-22, kuna `all`) and
+`notes/ida-apple-mechanisms.md` (Apple, not repeated here), and re-checks every row against today's
+tree: several survey gaps have since closed (Cortex-M SCS, DWARF register locals, a .til decoder,
+stomped Go pclntab magic). Design limits of IDA (for positioning) are in `notes/ida-limits.md`.
+
+Method. IDA side: the idb-rs SQLite exports in `~/SiteResearch/ida-pro/sqlite/<category>__<module>.sqlite`
+(pseudocode, strings, xrefs) and the derived link database `~/SiteResearch/ida-pro/derived/ida-links.sqlite`
+(`build_links.py` beside it). An "evidence" cell names a function in that module's dump; re-check
+with
+
+```sh
+D=~/SiteResearch/ida-pro/derived/ida-links.sqlite
+sqlite3 -readonly $D "select mod,text,func_name from string_users where mod='<module>' and text like '%<needle>%'"
+sqlite3 -readonly ~/SiteResearch/ida-pro/sqlite/<cat>__<module>.sqlite "select text from pseudocode where ea=<addr>"
+```
+
+unlace side: `docs/options.md` (the catalog) and `rg` over `crates/`; "none" means no option row and no
+code hit for the named terms (listed per row). Value: H = changes output on a whole binary class, M =
+one idiom or one ecosystem, L = niche. Size: S < 1 PR-day, M = a few PRs, L = a track.
+
+## Top 10
+
+| # | gap | IDA evidence | unlace today | value | size |
+|---|---|---|---|---|---|
+| 1 | MSVC C++ exceptions: FuncInfo/FH4 + IP-to-state maps, try/catch in pseudocode, catch funclets folded back into their parent, `throw` from `_CxxThrowException` + ThrowInfo | eh34: `sub_3F6E0` (EH3 FuncInfo validation, `num_ip_to_state_entries`), `sub_3CB60` (EH4 unwind map), `sub_3EEC0` (try-block map), `sub_59300`/`sub_19200` (catch handlers, `inline_catch_handlers`), `sub_42980` (`make_descend_catch_scaffolding`), `sub_640E0` (states in microcode), `sub_2DA30` (global settings); eh_parse struct layouts; x86 SEH4 in pc | none: no `FuncInfo`/`__CxxFrameHandler`/`ThrowInfo` outside `unlace-lumina`; only `itaniumeh` (GCC/Clang) | H (all MSVC C++, 32-bit SEH malware) | L (throw helper alone S) |
+| 2 | Windows type libraries applied to PE imports: Win32/NT/DDK prototypes with named struct pointers | 154 shipped .til files, `mssdk_win10.til` 221,872 symbols / 91,863 types, `ntddk`, `ntapi`; Hex-Rays reads callee types through `get_named_type` (24 modules call `get_idati`) | partial: `--option typelib <file>.til` already works on a PE (`kuna_til.rs`, #217); missing are automatic choice, several libraries, and precedence over `kuna_win32sigs.rs` (146 names typed `void *` on purpose, which shadow 99 richer til declarations). Details and measurements: `notes/ida-typelib-pe.md` | H (PE type match: the til declares 96.7% of import references on 152 driver PEs) | S-M (never commit SDK-derived tables) |
+| 3 | PDB types, prototypes, locals, line numbers | pdb: `sub_6F920` (TPI types), `sub_50C20` (prototypes), `sub_4F240` (locals), `sub_34C10` (vtables) (survey §3.3) | partial: `pdb` recovers names, `pdbinterior` extents; no TPI reader (`rg 'TPI|FieldList' crates/unlace-analysis/src/analyzers/pdb` empty) | H (every PE with a PDB, system DLLs via msdl) | L |
+| 4 | MSVC class typing: `X` with `__vftable` to typed `X_vtbl`, `this` typing, "load typed X_vtbl retypes its base as X" | rtti.so names; libida builds `<Class>_vtbl`; hexx64 `sub_4311A0` back-propagation (survey #3) | partial: `rtti` names classes and vftables on PE; `vtabletypes` types Itanium only | M-H (Windows C++) | M |
+| 5 | Atomic idioms: `lock`-prefixed RMW as `_InterlockedExchangeAdd` etc., AArch64 LSE CAS, LL/SC loops as one atomic op | hexx64 `sub_8AC80` (`_Interlocked*` table, also `__segmentlimit`), hexarm `sub_899B0` (C11 `atomic_*`) | mostly done (#245): options `atomics` (x86 `lock`, AArch64 LSE, RISC-V AMO as `__sync_*`) and `llscfold` (ldaxr/stlxr loops), both default off; left: MSVC `_Interlocked*` spelling on PE images, `cmpxchg16b`/`casp` pairs | M (kernels, `shared_ptr`, `Arc`, RTOS) | S (left part) |
+| 6 | PE Load Config: CFG function table (address-taken functions as entries), guard check/dispatch slots, SafeSEH/EH-continuation tables, delay-load imports | loaders__pe `sub_18EE0` -> `sub_8540` (`___guard_fids_table`), delay-load walk `sub_9B20` (survey #10) | none: no `guard_fids`/`DelayImport`/`LOAD_CONFIG` in `crates/unlace-analysis` | M (PE function recall, MSVC DLLs) | S each |
+| 7 | Merged variables: duplicate a call block or a one-register join per predecessor before variable merging (Hex-Rays UNMERGE_CALLS, BREAK_PHI_ARM_MERGES) | hexx64 `sub_191D80`, `sub_1915E0` (survey #12) | none before Merge; `returndup`, `crossjumprevert`, `dedupitetail` act after structuring | M (DecBench merged variables, GED) | M |
+| 8 | 64-bit values on 32-bit little-endian targets: `long long` parameters joined, hi/lo compare chains folded | hexx64 rules 3CHECK64/CMP64/JNZ64 (`sub_129630`, `sub_1F49A0`, `sub_282040`) | partial: `arithhelpers` (runtime helpers), `bejoin` (big-endian returns), `double.rs` (Ghidra SplitVarnode); no parameter pairing on x86-32/ARM32 LE | M (i386 PE, ARM32 firmware) | M |
+| 9 | COM: GUIDs named `CLSID_*`/`IID_*` from a table, interface vtables typed at `CoCreateInstance`/`QueryInterface` | comhelper `sub_3780` (`Scanning for CLSIDs...`), `sub_42E0` (reads `clsid.cfg`, 1 MB), `sub_2580` (GUID parse), types `IDispatchVtbl` via `apply_tinfo` | none: no `CLSID`/`IID_` code | M (Windows malware, Office/shell code) | S (naming) + M (typing; needs #2) |
+| 10 | Go inline tree and line numbers: inlined calls marked from `FUNCDATA_InlTree`, source lines from `pcfile`/`pcln` | golang `sub_22C80` (InlTree), `sub_22AB0` (inlinedCall layouts), `sub_D2F0` (`import_lnnums`, option `GOLANG_IMPORT_LNNUMS`) | none: `pclntab/` reads `pcsp`/`pcfile`/`pcln` offsets for extents only; no InlTree | M (Go: names the inlined callee at each site; file:line comments) | S-M |
+
+## The rest, ranked
+
+| gap | IDA evidence | unlace today | value | size |
+|---|---|---|---|---|
+| Thumb/ARM switch helpers recognised by body, not name (stripped M0/-Os firmware) | arm.so `sub_87DC0` (matches up to 16 code words) | name prefix only (`listing/kuna_poolextents.rs:111` `"__gnu_thumb1_case_"`) | M (ARM firmware) | S-M |
+| Variable names from any callee's parameter names, struct field names, and `goodname.cfg`-style rewrites of demangled names (`std::basic_string<char,...>` -> `std::string`) | hexx64 `sub_4CE070`/`sub_4CC7C0`/`sub_4CA750`; `cfg/goodname.cfg` (32 PCRE rules) | partial: `libcnames` (libc tables), `contextnames` (off) | M (readability, name scores) | S-M |
+| Nonlinear MBA with proof: an oracle of precomputed simplest forms plus Z3 to prove each rewrite (timeouts configurable) | goomba strings `MBA_Z3_TIMEOUT`, `VD_MBA_ORACLE_PATH`, `VD_MSYNTH_PATH`, `Satisfiable. Counterexample:`; 462 functions | partial: `mba` (default off) simplifies linear MBA up to 6 leaves, no solver | L-M (obfuscated code) | M-L |
+| Interface dispatch typing for Go: `tab->fun[i]` calls show the method | golang `sub_17960` builds `iface.I.T` with typed method pointers (survey #15) | partial: `gotypeglobals` names itabs; method typing deferred (`gotypes/kuna_itabs.rs`) | M (Go) | M |
+| DriverKit IORPC dispatch (`Dispatch(IORPC)` prototypes, `OSClassDescription`, superclass layout from a type library with size checks) | dku `sub_6C30`, `sub_C4B0`/`sub_B6B0` | partial: `iokitclasses`, `osclassinfo` (IOKit C++); no IORPC dispatch | L (DriverKit .dext) | S-M |
+| Borland/Delphi RTTI descriptors (classes, dynarrays, interfaces) | bdescr `sub_2C90`, `sub_3610`, `sub_32B0` | none (Borland appears only in DOS startup code) | L (Delphi malware) | M |
+| UEFI cross-module protocol links (install -> implementation) | uefi `sub_14820`, `sub_29D00` (survey #14) | partial: `uefi` types boot/runtime services and protocol GUIDs (`analyzers/uefi/protocols.txt`), `storetype uefi` | L-M | M |
+| Processor modules with no SLEIGH spec here: RX, RL78, H8/H8500, C166, TMS320C6x/C5x, ST7/ST9, Alpha, M32R, i960, DSP56K, Z8, PDP-11 | `procs/`: 74 modules vs 44 SLEIGH families in `specs/Ghidra/Processors` | none (no spec) | L-M (automotive/industrial firmware: RX, RL78, C166, TMS320) | L each (a SLEIGH spec) |
+
+## Closed since the 2026-11-22 survey (do not re-open)
+
+| survey gap | now |
+|---|---|
+| #1/#9 Cortex-M peripheral volatility and core peripherals | `cortexmscs`: typed volatile SCS globals; `cortexmpriv`; `--svd` via `loader/firmware/svd.rs` |
+| #11 DWARF register locals / location lists | `dwarfscopes`: register locals ("the longest single-register entry of its location list"), lexical blocks, inlined subroutines |
+| #2 type-library input (in part) | IDA .til decoder `kuna_til.rs` (#217); Linux libc library from musl headers (`typelib`); PE still open (row 2) |
+| stomped Go pclntab magic (garble-style) | `pclntab/kuna_gomoduledata.rs` recovers the layout when the magic is not one of the four known values (IDA: `sub_AAC0`/`sub_B1C0`) |
+| FLIRT apply and make, Lumina | `flirt` (sig v5-v11), `unlace flirt make` (`analyzers/flirt/kuna_flirtpat.rs`); crate `unlace-lumina` |
+| AVX lifting (avxlifter) | `avxintrinsics`, `lanefuse`, `vectorabi`, `devectorize` |
+| patfind (function-start patterns) | `analyzers/entry/patterns/*_patterns.xml` (the same Ghidra pattern files patfind reads) |
+| firmware containers (uImage, bFLT, MBN, MD1, UEFI FV, zip/tar) | `loader/firmware/containers.rs`, `uefifv.rs`, `bundles.rs` |
+
+## Not gaps by decision
+
+Debuggers (bochs/gdb/xnu/ios/dalvik `*_user`, `*_stub`), an MCP server, plugins and emulation are out
+of scope (Cole, 2026-11-23). The callee plugin (change a call target by hand) is `--assert` / project
+state territory, not an analysis.
+
+## Cross-module facts used for ranking (from `ida-links.sqlite`)
+
+- How heavily each plugin leans on the kernel's type system (a proxy for "this feature is mostly type
+  application"): `select caller_mod, sum(sites) from api_use where callee_name in ('apply_tinfo','set_tinfo','get_named_type','create_tinfo','get_idati') group by 1 order by 2 desc`.
+- Which kernel APIs each gap's plugin needs: `select callee_name, sites from api_use where caller_mod='eh34' and callee_mod='libida' order by sites desc limit 40`.
+- Which shipped TILs declare a symbol IDA's modules import or call externally (298 names; `memcpy` is in 35 of the 154): `select * from til_symbol_origin where name='pthread_create'`.

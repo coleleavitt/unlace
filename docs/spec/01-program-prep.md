@@ -6464,6 +6464,25 @@ moves.
   Each entry is committed as a function symbol under its CRT name (plus a
   placeholder rename for one another fact already installed) and as a call-fixup
   fact; a match only names and tags, and a near miss of any one byte is no match.
+  On a 32-bit ARM image the pass likewise recognizes libgcc's Thumb-1 switch
+  helpers (`__gnu_thumb1_case_uqi`, `_sqi`, `_uhi`, `_shi`, `_si`) by their
+  instructions
+  (`crates/unlace-analysis/src/analyzers/callfixup/kuna_thumb1casesig.rs`).
+  gcc compiles a Thumb-1 switch (ARMv6-M, or `-Os`) as `bl helper` followed by
+  the case table, and the helper returns into the case the index in `r0`
+  selects; the cspec's `switch*_r0` fixups model that, but only by name, so in a
+  stripped image the call read as an ordinary call returning into the table and
+  every case was lost. Each helper is a fixed routine of nine to eleven Thumb
+  instructions (`libgcc/config/arm/lib1funcs.S`), matched whole at a halfword
+  boundary (big-endian images are read both ways, since BE8 code is stored
+  little-endian), and each hit becomes a function symbol under the libgcc name,
+  a rename of its `sub_` name and a call-fixup fact, which the commit installs
+  on every global function of that name. The word helper's fixup
+  (`switch32_si_r0`) adds the table entry to the word-aligned table address and
+  stays in Thumb state, as the helper does (`adds r0,r1; mov lr,r0; mov pc,lr`);
+  the vendored body scaled the entry by four and added it to the return
+  address, which sent the cases to the wrong addresses. armcc's
+  `__ARM_common_switch8` is still matched by name only.
 - **Linux kernel `__bug_table`** (`kernelbug`, always on, inert without the
   section; `crates/unlace-analysis/src/analyzers/kernelbug/mod.rs
   (KernelBugPass)`): the kernel's `WARN_ON`/`BUG_ON` macros plant a trap (`ud2`,

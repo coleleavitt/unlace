@@ -235,7 +235,7 @@ impl AnalysisPass for GoItabArgsPass {
                 itabs.len(),
                 votes.len()
             );
-            for at in itab_leas.iter().take(8) {
+            for at in itab_leas.iter().take(64) {
                 let mut next = listing.instruction_at(*at).and_then(|i| i.fall_through);
                 let mut trail = Vec::new();
                 for _ in 0..MAX_STEPS {
@@ -243,15 +243,32 @@ impl AnalysisPass for GoItabArgsPass {
                         break;
                     };
                     trail.push(format!(
-                        "{} {} flows={:x?} call={}",
-                        insn.mnemonic, insn.operands, insn.flows, insn.flow.is_call
+                        "{:#x} {} {} flows={:x?} call={} jump={} ft={}",
+                        insn.addr,
+                        insn.mnemonic,
+                        insn.operands,
+                        insn.flows,
+                        insn.flow.is_call,
+                        insn.flow.is_jump,
+                        insn.flow.has_fallthrough
                     ));
                     if insn.flow.is_call || !insn.flow.has_fallthrough {
                         break;
                     }
                     next = insn.fall_through;
                 }
-                eprintln!("[kuna goitabargs] lea {at:#x}: {}", trail.join(" ; "));
+                let outcome = listing
+                    .instruction_at(*at)
+                    .and_then(|i| lea_target(&i.operands))
+                    .and_then(|(dest, _)| {
+                        let reg = INTEGER_REGISTERS.iter().copied().find(|r| *r == dest)?;
+                        call_after(listing, *at, reg)
+                    });
+                eprintln!(
+                    "[kuna goitabargs] lea {at:#x} -> {:x?}: {}",
+                    outcome,
+                    trail.join(" ; ")
+                );
             }
         }
         for ((callee, index), interfaces) in votes {

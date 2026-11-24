@@ -1,0 +1,51 @@
+# Two symbols at one entry: gcc's local `recurse.localalias`, which an ELF
+# lists among its local symbols before the global `recurse` (gcc makes one for
+# a recursive weak function). The first loader symbol named the function, so
+# it printed as `recurse.localalias`, not a C identifier, and the export's
+# header declared it (tools/semantic calls, gcc -O0 and -O2). The name the
+# inventory ranks first now names it.
+#
+# fixtures/localalias/recurse-gcc-O2: recurse.c, gcc -O2 -fno-pie -no-pie
+# -nostdlib -static -fcf-protection=none -fno-asynchronous-unwind-tables
+# -Wl,--build-id=none, debug info and .comment stripped.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/localalias/recurse-gcc-O2',
+    'read symbols',
+    'load function recurse',
+    'decompile',
+    'print C',
+    'load function _start',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'Loader alias #1: the function is named recurse'
+count = 1
+regex = '^\w[\w ]* \**recurse\('
+
+[[match]]
+name = 'Loader alias #2: the local alias names nothing'
+count = 0
+literal = 'localalias'
+
+[[match]]
+name = 'Loader alias #3: a call to it names recurse'
+count = 1
+literal = 'recurse(5);'

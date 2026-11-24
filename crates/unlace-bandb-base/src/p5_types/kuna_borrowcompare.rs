@@ -915,23 +915,27 @@ fn xor_input_pair(data: &mut Funcdata, op: OpId) -> int4 {
 /// then a value of its own: the function only ever uses the eight bytes
 /// together, as a soft-float caller does with a `double` it hands to
 /// `__aeabi_dadd` (`CONCAT44(a1,a0)` beside `unsigned int a0,unsigned int
-/// a1`). Only under `armpairparam`, on every target: the i386 MSVC
-/// `__stdcall` helpers' callers read their stack words concatenated as well,
-/// and `arithhelpers` prints those as `CONCAT44(a1,a0) / CONCAT44(a3,a2)`.
+/// a1`). Only for an aligned argument register pair under `armpairparam`
+/// (`kuna_armpairparam::joined_pair`): stack words never, since the i386
+/// MSVC `__stdcall` helpers' callers read theirs concatenated as well, and
+/// `arithhelpers` prints those as `CONCAT44(a1,a0) / CONCAT44(a3,a2)`.
 fn piece_input_pair(data: &mut Funcdata, op: OpId) -> int4 {
-    if !data
-        .get_arch()
-        .kuna_options
-        .get::<crate::kuna_armpairparam::ArmPairParams>()
-        .0
-    {
-        return 0;
-    }
     let (Some(hi), Some(lo)) = (input(data, op, 0), input(data, op, 1)) else {
         return 0;
     };
     let size = size_of(data, lo);
     if size <= 0 || size > 4 || size_of(data, hi) != size {
+        return 0;
+    }
+    let Some(base) = data
+        .vbank()
+        .get(lo)
+        .zip(data.vbank().get(hi))
+        .map(|(l, h)| std::cmp::min(l.get_addr(), h.get_addr()).clone())
+    else {
+        return 0;
+    };
+    if !crate::kuna_armpairparam::joined_pair(data, &base, 2 * size) {
         return 0;
     }
     if input_above(data, lo) != Some(hi) {

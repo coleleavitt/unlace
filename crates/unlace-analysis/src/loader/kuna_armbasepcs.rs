@@ -41,7 +41,7 @@ impl AnalysisPass for ArmBasePcsPass {
         {
             return out;
         }
-        out.models = base_pcs_functions(ctx.file, ctx.bytes)
+        out.models = base_pcs_functions(ctx)
             .into_iter()
             .map(|func_addr| ModelFact {
                 func_addr,
@@ -55,8 +55,20 @@ impl AnalysisPass for ArmBasePcsPass {
 }
 
 /// The entry of every defined global or weak function symbol (the Thumb bit
-/// cleared) and the address of every resolved import, sorted and unique.
-fn base_pcs_functions(file: &object::File, bytes: &[u8]) -> Vec<u64> {
+/// cleared) and the address of every resolved import, a relocatable object's
+/// undefined symbols included (`fmod` in a `.o`), sorted and unique.
+fn base_pcs_functions(ctx: &AnalysisCtx) -> Vec<u64> {
+    let (file, bytes) = (ctx.file, ctx.bytes);
+    let relocated: Vec<u64> = ctx
+        .image
+        .map(|image| {
+            crate::protos::loaded_import_addrs(file, bytes, image)
+                .1
+                .into_iter()
+                .map(|(_, addr)| addr)
+                .collect()
+        })
+        .unwrap_or_default();
     let mut addrs: Vec<u64> = file
         .symbols()
         .chain(file.dynamic_symbols())
@@ -71,6 +83,7 @@ fn base_pcs_functions(file: &object::File, bytes: &[u8]) -> Vec<u64> {
                 .into_iter()
                 .map(|(_, addr)| addr),
         )
+        .chain(relocated)
         .collect();
     addrs.sort_unstable();
     addrs.dedup();

@@ -1,0 +1,188 @@
+# AVX-IFMA (VEX VPMADD52LUQ/HUQ), AVX-VNNI, SM3 and SHA512 (Intel SDM, Intel ISE). User operations; every form
+# clears the destination above its vector length. Cross-checked with llvm-objdump (tools/x86_avx512_sweep.py).
+
+define pcodeop vpmadd52luq_avxifma;
+define pcodeop vpmadd52huq_avxifma;
+:VPMADD52LUQ XmmReg1, vexVVVV_XmmReg, XmmReg2_m128 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W1) & vexVVVV_XmmReg; byte=0xB4; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+{ local tmp:16 = vpmadd52luq_avxifma(XmmReg1, vexVVVV_XmmReg, XmmReg2_m128); ZmmReg1 = zext(tmp); }
+:VPMADD52LUQ YmmReg1, vexVVVV_YmmReg, YmmReg2_m256 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W1) & vexVVVV_YmmReg; byte=0xB4; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+{ local tmp:32 = vpmadd52luq_avxifma(YmmReg1, vexVVVV_YmmReg, YmmReg2_m256); ZmmReg1 = zext(tmp); }
+:VPMADD52HUQ XmmReg1, vexVVVV_XmmReg, XmmReg2_m128 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W1) & vexVVVV_XmmReg; byte=0xB5; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+{ local tmp:16 = vpmadd52huq_avxifma(XmmReg1, vexVVVV_XmmReg, XmmReg2_m128); ZmmReg1 = zext(tmp); }
+:VPMADD52HUQ YmmReg1, vexVVVV_YmmReg, YmmReg2_m256 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W1) & vexVVVV_YmmReg; byte=0xB5; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+{ local tmp:32 = vpmadd52huq_avxifma(YmmReg1, vexVVVV_YmmReg, YmmReg2_m256); ZmmReg1 = zext(tmp); }
+
+define pcodeop vsm3msg1;
+define pcodeop vsm3msg2;
+define pcodeop vsm3rnds2;
+:VSM3MSG1 XmmReg1, vexVVVV_XmmReg, XmmReg2_m128 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_XmmReg; byte=0xDA; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+{ local tmp:16 = vsm3msg1(XmmReg1, vexVVVV_XmmReg, XmmReg2_m128); ZmmReg1 = zext(tmp); }
+:VSM3MSG2 XmmReg1, vexVVVV_XmmReg, XmmReg2_m128 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_XmmReg; byte=0xDA; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+{ local tmp:16 = vsm3msg2(XmmReg1, vexVVVV_XmmReg, XmmReg2_m128); ZmmReg1 = zext(tmp); }
+:VSM3RNDS2 XmmReg1, vexVVVV_XmmReg, XmmReg2_m128, imm8 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0) & vexVVVV_XmmReg; byte=0xDE; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8
+{ local tmp:16 = vsm3rnds2(XmmReg1, vexVVVV_XmmReg, XmmReg2_m128, imm8:1); ZmmReg1 = zext(tmp); }
+
+define pcodeop vsha512msg1;
+define pcodeop vsha512msg2;
+define pcodeop vsha512rnds2;
+:VSHA512MSG1 YmmReg1, XmmReg2 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F2) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0xCC; mod=3 & (YmmReg1 & ZmmReg1) & XmmReg2
+{ local tmp:32 = vsha512msg1(YmmReg1, XmmReg2); ZmmReg1 = zext(tmp); }
+:VSHA512MSG2 YmmReg1, YmmReg2 is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_F2) & $(VEX_0F38) & vexVVVV=0 & $(VEX_W0); byte=0xCD; mod=3 & (YmmReg1 & ZmmReg1) & YmmReg2
+{ local tmp:32 = vsha512msg2(YmmReg1, YmmReg2); ZmmReg1 = zext(tmp); }
+:VSHA512RNDS2 YmmReg1, vexVVVV_YmmReg, XmmReg2 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_YmmReg; byte=0xCB; mod=3 & (YmmReg1 & ZmmReg1) & XmmReg2
+{ local tmp:32 = vsha512rnds2(YmmReg1, vexVVVV_YmmReg, XmmReg2); ZmmReg1 = zext(tmp); }
+
+# AVX-VNNI (VEX VPDPBUSD/VPDPBUSDS/VPDPWSSD/VPDPWSSDS): dword dot products accumulated into the
+# destination, the S forms saturating the exact sum to a signed dword (Intel SDM). Checked natively.
+:VPDPBUSD XmmReg1, vexVVVV_XmmReg, XmmReg2_m128 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_XmmReg; byte=0x50; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+{
+    local xa:16 = vexVVVV_XmmReg;
+    local xb:16 = XmmReg2_m128;
+    local xd:16 = XmmReg1;
+    local xp0:4 = zext(xa[0,8]) * sext(xb[0,8]) + zext(xa[8,8]) * sext(xb[8,8]) + zext(xa[16,8]) * sext(xb[16,8]) + zext(xa[24,8]) * sext(xb[24,8]);
+    xd[0,32] = xd[0,32] + xp0;
+    local xp1:4 = zext(xa[32,8]) * sext(xb[32,8]) + zext(xa[40,8]) * sext(xb[40,8]) + zext(xa[48,8]) * sext(xb[48,8]) + zext(xa[56,8]) * sext(xb[56,8]);
+    xd[32,32] = xd[32,32] + xp1;
+    local xp2:4 = zext(xa[64,8]) * sext(xb[64,8]) + zext(xa[72,8]) * sext(xb[72,8]) + zext(xa[80,8]) * sext(xb[80,8]) + zext(xa[88,8]) * sext(xb[88,8]);
+    xd[64,32] = xd[64,32] + xp2;
+    local xp3:4 = zext(xa[96,8]) * sext(xb[96,8]) + zext(xa[104,8]) * sext(xb[104,8]) + zext(xa[112,8]) * sext(xb[112,8]) + zext(xa[120,8]) * sext(xb[120,8]);
+    xd[96,32] = xd[96,32] + xp3;
+    ZmmReg1 = zext(xd);
+}
+:VPDPBUSD YmmReg1, vexVVVV_YmmReg, YmmReg2_m256 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_YmmReg; byte=0x50; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+{
+    local xa:32 = vexVVVV_YmmReg;
+    local xb:32 = YmmReg2_m256;
+    local xd:32 = YmmReg1;
+    local xp0:4 = zext(xa[0,8]) * sext(xb[0,8]) + zext(xa[8,8]) * sext(xb[8,8]) + zext(xa[16,8]) * sext(xb[16,8]) + zext(xa[24,8]) * sext(xb[24,8]);
+    xd[0,32] = xd[0,32] + xp0;
+    local xp1:4 = zext(xa[32,8]) * sext(xb[32,8]) + zext(xa[40,8]) * sext(xb[40,8]) + zext(xa[48,8]) * sext(xb[48,8]) + zext(xa[56,8]) * sext(xb[56,8]);
+    xd[32,32] = xd[32,32] + xp1;
+    local xp2:4 = zext(xa[64,8]) * sext(xb[64,8]) + zext(xa[72,8]) * sext(xb[72,8]) + zext(xa[80,8]) * sext(xb[80,8]) + zext(xa[88,8]) * sext(xb[88,8]);
+    xd[64,32] = xd[64,32] + xp2;
+    local xp3:4 = zext(xa[96,8]) * sext(xb[96,8]) + zext(xa[104,8]) * sext(xb[104,8]) + zext(xa[112,8]) * sext(xb[112,8]) + zext(xa[120,8]) * sext(xb[120,8]);
+    xd[96,32] = xd[96,32] + xp3;
+    local xp4:4 = zext(xa[128,8]) * sext(xb[128,8]) + zext(xa[136,8]) * sext(xb[136,8]) + zext(xa[144,8]) * sext(xb[144,8]) + zext(xa[152,8]) * sext(xb[152,8]);
+    xd[128,32] = xd[128,32] + xp4;
+    local xp5:4 = zext(xa[160,8]) * sext(xb[160,8]) + zext(xa[168,8]) * sext(xb[168,8]) + zext(xa[176,8]) * sext(xb[176,8]) + zext(xa[184,8]) * sext(xb[184,8]);
+    xd[160,32] = xd[160,32] + xp5;
+    local xp6:4 = zext(xa[192,8]) * sext(xb[192,8]) + zext(xa[200,8]) * sext(xb[200,8]) + zext(xa[208,8]) * sext(xb[208,8]) + zext(xa[216,8]) * sext(xb[216,8]);
+    xd[192,32] = xd[192,32] + xp6;
+    local xp7:4 = zext(xa[224,8]) * sext(xb[224,8]) + zext(xa[232,8]) * sext(xb[232,8]) + zext(xa[240,8]) * sext(xb[240,8]) + zext(xa[248,8]) * sext(xb[248,8]);
+    xd[224,32] = xd[224,32] + xp7;
+    ZmmReg1 = zext(xd);
+}
+:VPDPBUSDS XmmReg1, vexVVVV_XmmReg, XmmReg2_m128 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_XmmReg; byte=0x51; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+{
+    local xa:16 = vexVVVV_XmmReg;
+    local xb:16 = XmmReg2_m128;
+    local xd:16 = XmmReg1;
+    local xs0:8 = sext(xd[0,32]) + zext(xa[0,8]) * sext(xb[0,8]) + zext(xa[8,8]) * sext(xb[8,8]) + zext(xa[16,8]) * sext(xb[16,8]) + zext(xa[24,8]) * sext(xb[24,8]);
+    xd[0,32] = (xs0:4) * zext((xs0 s<= 0x7fffffff) && (xs0 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs0 s> 0x7fffffff) + 0x80000000 * zext(xs0 s< sext(0x80000000:4));
+    local xs1:8 = sext(xd[32,32]) + zext(xa[32,8]) * sext(xb[32,8]) + zext(xa[40,8]) * sext(xb[40,8]) + zext(xa[48,8]) * sext(xb[48,8]) + zext(xa[56,8]) * sext(xb[56,8]);
+    xd[32,32] = (xs1:4) * zext((xs1 s<= 0x7fffffff) && (xs1 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs1 s> 0x7fffffff) + 0x80000000 * zext(xs1 s< sext(0x80000000:4));
+    local xs2:8 = sext(xd[64,32]) + zext(xa[64,8]) * sext(xb[64,8]) + zext(xa[72,8]) * sext(xb[72,8]) + zext(xa[80,8]) * sext(xb[80,8]) + zext(xa[88,8]) * sext(xb[88,8]);
+    xd[64,32] = (xs2:4) * zext((xs2 s<= 0x7fffffff) && (xs2 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs2 s> 0x7fffffff) + 0x80000000 * zext(xs2 s< sext(0x80000000:4));
+    local xs3:8 = sext(xd[96,32]) + zext(xa[96,8]) * sext(xb[96,8]) + zext(xa[104,8]) * sext(xb[104,8]) + zext(xa[112,8]) * sext(xb[112,8]) + zext(xa[120,8]) * sext(xb[120,8]);
+    xd[96,32] = (xs3:4) * zext((xs3 s<= 0x7fffffff) && (xs3 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs3 s> 0x7fffffff) + 0x80000000 * zext(xs3 s< sext(0x80000000:4));
+    ZmmReg1 = zext(xd);
+}
+:VPDPBUSDS YmmReg1, vexVVVV_YmmReg, YmmReg2_m256 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_YmmReg; byte=0x51; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+{
+    local xa:32 = vexVVVV_YmmReg;
+    local xb:32 = YmmReg2_m256;
+    local xd:32 = YmmReg1;
+    local xs0:8 = sext(xd[0,32]) + zext(xa[0,8]) * sext(xb[0,8]) + zext(xa[8,8]) * sext(xb[8,8]) + zext(xa[16,8]) * sext(xb[16,8]) + zext(xa[24,8]) * sext(xb[24,8]);
+    xd[0,32] = (xs0:4) * zext((xs0 s<= 0x7fffffff) && (xs0 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs0 s> 0x7fffffff) + 0x80000000 * zext(xs0 s< sext(0x80000000:4));
+    local xs1:8 = sext(xd[32,32]) + zext(xa[32,8]) * sext(xb[32,8]) + zext(xa[40,8]) * sext(xb[40,8]) + zext(xa[48,8]) * sext(xb[48,8]) + zext(xa[56,8]) * sext(xb[56,8]);
+    xd[32,32] = (xs1:4) * zext((xs1 s<= 0x7fffffff) && (xs1 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs1 s> 0x7fffffff) + 0x80000000 * zext(xs1 s< sext(0x80000000:4));
+    local xs2:8 = sext(xd[64,32]) + zext(xa[64,8]) * sext(xb[64,8]) + zext(xa[72,8]) * sext(xb[72,8]) + zext(xa[80,8]) * sext(xb[80,8]) + zext(xa[88,8]) * sext(xb[88,8]);
+    xd[64,32] = (xs2:4) * zext((xs2 s<= 0x7fffffff) && (xs2 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs2 s> 0x7fffffff) + 0x80000000 * zext(xs2 s< sext(0x80000000:4));
+    local xs3:8 = sext(xd[96,32]) + zext(xa[96,8]) * sext(xb[96,8]) + zext(xa[104,8]) * sext(xb[104,8]) + zext(xa[112,8]) * sext(xb[112,8]) + zext(xa[120,8]) * sext(xb[120,8]);
+    xd[96,32] = (xs3:4) * zext((xs3 s<= 0x7fffffff) && (xs3 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs3 s> 0x7fffffff) + 0x80000000 * zext(xs3 s< sext(0x80000000:4));
+    local xs4:8 = sext(xd[128,32]) + zext(xa[128,8]) * sext(xb[128,8]) + zext(xa[136,8]) * sext(xb[136,8]) + zext(xa[144,8]) * sext(xb[144,8]) + zext(xa[152,8]) * sext(xb[152,8]);
+    xd[128,32] = (xs4:4) * zext((xs4 s<= 0x7fffffff) && (xs4 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs4 s> 0x7fffffff) + 0x80000000 * zext(xs4 s< sext(0x80000000:4));
+    local xs5:8 = sext(xd[160,32]) + zext(xa[160,8]) * sext(xb[160,8]) + zext(xa[168,8]) * sext(xb[168,8]) + zext(xa[176,8]) * sext(xb[176,8]) + zext(xa[184,8]) * sext(xb[184,8]);
+    xd[160,32] = (xs5:4) * zext((xs5 s<= 0x7fffffff) && (xs5 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs5 s> 0x7fffffff) + 0x80000000 * zext(xs5 s< sext(0x80000000:4));
+    local xs6:8 = sext(xd[192,32]) + zext(xa[192,8]) * sext(xb[192,8]) + zext(xa[200,8]) * sext(xb[200,8]) + zext(xa[208,8]) * sext(xb[208,8]) + zext(xa[216,8]) * sext(xb[216,8]);
+    xd[192,32] = (xs6:4) * zext((xs6 s<= 0x7fffffff) && (xs6 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs6 s> 0x7fffffff) + 0x80000000 * zext(xs6 s< sext(0x80000000:4));
+    local xs7:8 = sext(xd[224,32]) + zext(xa[224,8]) * sext(xb[224,8]) + zext(xa[232,8]) * sext(xb[232,8]) + zext(xa[240,8]) * sext(xb[240,8]) + zext(xa[248,8]) * sext(xb[248,8]);
+    xd[224,32] = (xs7:4) * zext((xs7 s<= 0x7fffffff) && (xs7 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs7 s> 0x7fffffff) + 0x80000000 * zext(xs7 s< sext(0x80000000:4));
+    ZmmReg1 = zext(xd);
+}
+:VPDPWSSD XmmReg1, vexVVVV_XmmReg, XmmReg2_m128 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_XmmReg; byte=0x52; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+{
+    local xa:16 = vexVVVV_XmmReg;
+    local xb:16 = XmmReg2_m128;
+    local xd:16 = XmmReg1;
+    local xp0:4 = sext(xa[0,16]) * sext(xb[0,16]) + sext(xa[16,16]) * sext(xb[16,16]);
+    xd[0,32] = xd[0,32] + xp0;
+    local xp1:4 = sext(xa[32,16]) * sext(xb[32,16]) + sext(xa[48,16]) * sext(xb[48,16]);
+    xd[32,32] = xd[32,32] + xp1;
+    local xp2:4 = sext(xa[64,16]) * sext(xb[64,16]) + sext(xa[80,16]) * sext(xb[80,16]);
+    xd[64,32] = xd[64,32] + xp2;
+    local xp3:4 = sext(xa[96,16]) * sext(xb[96,16]) + sext(xa[112,16]) * sext(xb[112,16]);
+    xd[96,32] = xd[96,32] + xp3;
+    ZmmReg1 = zext(xd);
+}
+:VPDPWSSD YmmReg1, vexVVVV_YmmReg, YmmReg2_m256 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_YmmReg; byte=0x52; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+{
+    local xa:32 = vexVVVV_YmmReg;
+    local xb:32 = YmmReg2_m256;
+    local xd:32 = YmmReg1;
+    local xp0:4 = sext(xa[0,16]) * sext(xb[0,16]) + sext(xa[16,16]) * sext(xb[16,16]);
+    xd[0,32] = xd[0,32] + xp0;
+    local xp1:4 = sext(xa[32,16]) * sext(xb[32,16]) + sext(xa[48,16]) * sext(xb[48,16]);
+    xd[32,32] = xd[32,32] + xp1;
+    local xp2:4 = sext(xa[64,16]) * sext(xb[64,16]) + sext(xa[80,16]) * sext(xb[80,16]);
+    xd[64,32] = xd[64,32] + xp2;
+    local xp3:4 = sext(xa[96,16]) * sext(xb[96,16]) + sext(xa[112,16]) * sext(xb[112,16]);
+    xd[96,32] = xd[96,32] + xp3;
+    local xp4:4 = sext(xa[128,16]) * sext(xb[128,16]) + sext(xa[144,16]) * sext(xb[144,16]);
+    xd[128,32] = xd[128,32] + xp4;
+    local xp5:4 = sext(xa[160,16]) * sext(xb[160,16]) + sext(xa[176,16]) * sext(xb[176,16]);
+    xd[160,32] = xd[160,32] + xp5;
+    local xp6:4 = sext(xa[192,16]) * sext(xb[192,16]) + sext(xa[208,16]) * sext(xb[208,16]);
+    xd[192,32] = xd[192,32] + xp6;
+    local xp7:4 = sext(xa[224,16]) * sext(xb[224,16]) + sext(xa[240,16]) * sext(xb[240,16]);
+    xd[224,32] = xd[224,32] + xp7;
+    ZmmReg1 = zext(xd);
+}
+:VPDPWSSDS XmmReg1, vexVVVV_XmmReg, XmmReg2_m128 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_XmmReg; byte=0x53; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128
+{
+    local xa:16 = vexVVVV_XmmReg;
+    local xb:16 = XmmReg2_m128;
+    local xd:16 = XmmReg1;
+    local xs0:8 = sext(xd[0,32]) + sext(xa[0,16]) * sext(xb[0,16]) + sext(xa[16,16]) * sext(xb[16,16]);
+    xd[0,32] = (xs0:4) * zext((xs0 s<= 0x7fffffff) && (xs0 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs0 s> 0x7fffffff) + 0x80000000 * zext(xs0 s< sext(0x80000000:4));
+    local xs1:8 = sext(xd[32,32]) + sext(xa[32,16]) * sext(xb[32,16]) + sext(xa[48,16]) * sext(xb[48,16]);
+    xd[32,32] = (xs1:4) * zext((xs1 s<= 0x7fffffff) && (xs1 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs1 s> 0x7fffffff) + 0x80000000 * zext(xs1 s< sext(0x80000000:4));
+    local xs2:8 = sext(xd[64,32]) + sext(xa[64,16]) * sext(xb[64,16]) + sext(xa[80,16]) * sext(xb[80,16]);
+    xd[64,32] = (xs2:4) * zext((xs2 s<= 0x7fffffff) && (xs2 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs2 s> 0x7fffffff) + 0x80000000 * zext(xs2 s< sext(0x80000000:4));
+    local xs3:8 = sext(xd[96,32]) + sext(xa[96,16]) * sext(xb[96,16]) + sext(xa[112,16]) * sext(xb[112,16]);
+    xd[96,32] = (xs3:4) * zext((xs3 s<= 0x7fffffff) && (xs3 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs3 s> 0x7fffffff) + 0x80000000 * zext(xs3 s< sext(0x80000000:4));
+    ZmmReg1 = zext(xd);
+}
+:VPDPWSSDS YmmReg1, vexVVVV_YmmReg, YmmReg2_m256 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_YmmReg; byte=0x53; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256
+{
+    local xa:32 = vexVVVV_YmmReg;
+    local xb:32 = YmmReg2_m256;
+    local xd:32 = YmmReg1;
+    local xs0:8 = sext(xd[0,32]) + sext(xa[0,16]) * sext(xb[0,16]) + sext(xa[16,16]) * sext(xb[16,16]);
+    xd[0,32] = (xs0:4) * zext((xs0 s<= 0x7fffffff) && (xs0 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs0 s> 0x7fffffff) + 0x80000000 * zext(xs0 s< sext(0x80000000:4));
+    local xs1:8 = sext(xd[32,32]) + sext(xa[32,16]) * sext(xb[32,16]) + sext(xa[48,16]) * sext(xb[48,16]);
+    xd[32,32] = (xs1:4) * zext((xs1 s<= 0x7fffffff) && (xs1 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs1 s> 0x7fffffff) + 0x80000000 * zext(xs1 s< sext(0x80000000:4));
+    local xs2:8 = sext(xd[64,32]) + sext(xa[64,16]) * sext(xb[64,16]) + sext(xa[80,16]) * sext(xb[80,16]);
+    xd[64,32] = (xs2:4) * zext((xs2 s<= 0x7fffffff) && (xs2 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs2 s> 0x7fffffff) + 0x80000000 * zext(xs2 s< sext(0x80000000:4));
+    local xs3:8 = sext(xd[96,32]) + sext(xa[96,16]) * sext(xb[96,16]) + sext(xa[112,16]) * sext(xb[112,16]);
+    xd[96,32] = (xs3:4) * zext((xs3 s<= 0x7fffffff) && (xs3 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs3 s> 0x7fffffff) + 0x80000000 * zext(xs3 s< sext(0x80000000:4));
+    local xs4:8 = sext(xd[128,32]) + sext(xa[128,16]) * sext(xb[128,16]) + sext(xa[144,16]) * sext(xb[144,16]);
+    xd[128,32] = (xs4:4) * zext((xs4 s<= 0x7fffffff) && (xs4 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs4 s> 0x7fffffff) + 0x80000000 * zext(xs4 s< sext(0x80000000:4));
+    local xs5:8 = sext(xd[160,32]) + sext(xa[160,16]) * sext(xb[160,16]) + sext(xa[176,16]) * sext(xb[176,16]);
+    xd[160,32] = (xs5:4) * zext((xs5 s<= 0x7fffffff) && (xs5 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs5 s> 0x7fffffff) + 0x80000000 * zext(xs5 s< sext(0x80000000:4));
+    local xs6:8 = sext(xd[192,32]) + sext(xa[192,16]) * sext(xb[192,16]) + sext(xa[208,16]) * sext(xb[208,16]);
+    xd[192,32] = (xs6:4) * zext((xs6 s<= 0x7fffffff) && (xs6 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs6 s> 0x7fffffff) + 0x80000000 * zext(xs6 s< sext(0x80000000:4));
+    local xs7:8 = sext(xd[224,32]) + sext(xa[224,16]) * sext(xb[224,16]) + sext(xa[240,16]) * sext(xb[240,16]);
+    xd[224,32] = (xs7:4) * zext((xs7 s<= 0x7fffffff) && (xs7 s>= sext(0x80000000:4))) + 0x7fffffff * zext(xs7 s> 0x7fffffff) + 0x80000000 * zext(xs7 s< sext(0x80000000:4));
+    ZmmReg1 = zext(xd);
+}

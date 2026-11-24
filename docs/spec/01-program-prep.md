@@ -397,6 +397,15 @@ matching generic targets). RDNA images take the wave32 language, because the
 wave size is in the kernel descriptor, not the ELF header; wave64 code and
 GFX9.4, GCN 1-4 and GFX12 images still need an explicit `--target`.
 
+(unlace) The AVR-Dx parts (AVRxt core) have their own languages,
+`avr8:LE:16:avrda`, `avrdb`, `avrdd` and `avrdu`, chosen with `--target`; the ELF
+header cannot tell an AVR-Dx part from an Xmega. They share `avr8xt.sla`: I/O at data address 0,
+so `in`/`out` and `lds`/`sts` reach the same bytes; R0-R31 outside the data space; and a
+16-bit PC. Each series has its own pspec, `avr8dx_<series>.pspec`, which
+`tools/gen_avr_dx_pspec.py` writes from Microchip's Apache-2.0 AVR-Dx device pack. The pspec
+labels every data-space register `<instance>_<register>` (`PORTA_DIR`, `TCA0_CNT`), so a
+peripheral access prints by name, not as `dat_400`.
+
 Five further machines are routed the same way:
 - `EM_68K` (4) selects `68000:BE:32:Coldfire` when `e_flags` names a ColdFire ISA
   (`EF_M68K_CF_MASK`), `68000:BE:32:default` for `EF_M68K_M68000`, and `68000:BE:32:MC68020`
@@ -1356,7 +1365,7 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   no object architecture, told apart by `e_machine`) covers the 32-bit literal
   halves `REL32_LO`/`REL32_HI` (`S + A - P`, the `s_getpc_b64` pair of every
   call and global) and `ABS32_LO`/`ABS32_HI`, and the `ABS32`, `REL32`, `ABS64`
-  and `REL64` data words; the GOT forms stay unsupported. A TI C2000 object (`EM_TI_C2000`) counts symbol values, symbol sizes and `r_offset` in 16-bit words, while its section sizes and bytes are in bytes. The layout keeps byte VMAs and scales those three by the address unit (`loader/kuna_wordaddr.rs`), so a function's entry, extent and relocation sites land on its bytes. eBPF objects are REL-only and every program ships as one,
+  and `REL64` data words; the GOT forms stay unsupported. A TI C2000 object (`EM_TI_C2000`) counts symbol values, symbol sizes and `r_offset` in 16-bit words, while its section sizes and bytes are in bytes. The layout keeps byte VMAs and scales those three by the address unit (`loader/kuna_wordaddr.rs`), so a function's entry, extent and relocation sites land on its bytes. Its relocations (`reloc_apply::classify_c28x`, TI SPRAC71C table 11-5) write word addresses, the target's byte address halved: `R_C28X_ABS22` (5) and the type 20 cl2000 puts on `LCR` calls fill the 6 + 16 bits of an `LCR`/`MOVL #22bit` word pair, and `R_C28X_ABS16`/`ABS32` fill data words, each with its REL addend read from the field. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from
@@ -10464,7 +10473,14 @@ continuations, SEH handlers) do not start with a frame. GCC and MinGW encode
 `mov ebp,esp` as `89 E5`, so their SJLJ landing pads never match either; those
 are why `addrtakenentry` stays x86-64-only. On PEGRP32F.dll it finds 1,255
 targets, every one an IDA 9.5 function start, and 452 of them were missing from
-the inventory. Code built with frame-pointer omission gives it nothing.
+the inventory. Code built with frame-pointer omission has no prologue to test,
+so a second form is read for it. The relocated immediate of a
+`mov r/m32, imm32` (`C7 /0` with a memory operand) in code whose target follows
+a `ret` (`C3`, or `C2 iw` with a pop below 256) is a function pointer stored
+into a structure, aimed just past another function's end. MSVC loads its own
+mid-function labels with `mov eax, imm32` or pushes them (catch continuations,
+SEH handlers), and those forms are not read. On PEGRP32F.dll the second form gives
+264 targets, every one an IDA start, and 109 of them were new.
 
 **(kuna) MSVC throw metadata is labelled** (`msvceh`, default-**off**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvceh.rs (find_throw_infos)`).

@@ -2605,6 +2605,11 @@ impl Funcdata {
                 {
                     continue;
                 }
+                // (kuna) `carryuse`: the carry test of a returned sum.  See
+                // [`crate::p4_calls::kuna_carryuse`].
+                if (self.hooks().carryuse_carry_test)(self, opmatch, op, vn) {
+                    continue;
+                }
                 match code {
                     OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_BRANCHIND => {
                         res = false;

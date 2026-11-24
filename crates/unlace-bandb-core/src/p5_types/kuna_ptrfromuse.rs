@@ -179,6 +179,53 @@ pub fn pointer_from_use(
     tlst.get_type_pointer(ptrsize, ptrto, word_size).ok()
 }
 
+crate::kuna_flag!(
+    /// (kuna `ptrfromlocal`) Extend [`pointer_from_use`]'s walk to a pointer-width value a call
+    /// returns or a load reads, when its type is still unknown.
+    PtrFromLocal,
+    "ptrfromlocal",
+    "use-derived void * for call results and loaded words",
+    unset: false,
+    shipped: false
+);
+
+/// (kuna `ptrfromlocal`) The `void *` candidate for a pointer-width value `vn` that a `CALL`,
+/// `CALLIND` or `LOAD` writes, when the same walk as [`pointer_from_use`] finds it used as a
+/// memory base and nothing inconsistent with a pointer. A call whose prototype locks its output
+/// declines; the caller offers the candidate only over an unknown or integer vote (the `int8`
+/// an `INT_ADD` reader votes), never over a pointer, float or composite one.
+pub fn pointer_from_local_use(data: &Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
+    let v = data.vbank().get(vn)?;
+    if v.is_input() || v.is_constant() || v.is_type_lock() || v.is_annotation() {
+        return None;
+    }
+    let def_op = v.get_def()?;
+    let def = data.obank().get(def_op)?;
+    if !matches!(
+        def.code(),
+        OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_LOAD
+    ) {
+        return None;
+    }
+    if let Some(i) = data.get_call_specs_index(def_op)
+        && data.get_call_specs(i).proto().is_output_locked()
+    {
+        return None;
+    }
+    let size = v.get_size();
+    let arch = Rc::clone(data.get_arch());
+    let tlst = arch.types()?;
+    let spc = Rc::clone(arch.manage().get_default_data_space()?);
+    if size != spc.get_addr_size() as int4 {
+        return None;
+    }
+    if !walk_is_base(data, vn) {
+        return None;
+    }
+    let ptrto = tlst.get_type_void().ok()?;
+    tlst.get_type_pointer(size, ptrto, spc.get_word_size()).ok()
+}
+
 /// Bounded breadth-first walk over the transitive descendants of `start`.  True
 /// when at least one terminal use is a LOAD/STORE address and no use refuses.
 /// Breadth first makes the hop cap a property of the graph -- everything within

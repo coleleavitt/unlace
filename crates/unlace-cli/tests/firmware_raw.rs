@@ -142,6 +142,22 @@ fn intel_hex_with_svd_names_peripherals_and_interrupts() {
     assert!(out.contains("GPIOA.ODR = GPIOA.ODR ^ 0x20;"));
 }
 
+/// `--svd` names a bundled device as well as a file: the STM32F401's own
+/// description (ST, Apache-2.0) names the same peripherals as the test SVD.
+#[test]
+fn svd_names_a_bundled_device() {
+    let hex = common::fixture("cortexm3_raw.hex");
+    let (out, err, code) = common::run_kuna(&["decompile-all", &hex, "--svd", "STM32F401CC"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(err.contains("bundled description STM32F401 for STM32F401CC"), "{err}");
+    assert!(out.contains("void USART1_IRQHandler(void)"), "{out}");
+    assert!(out.contains("USART1.DR = 0x78;"), "{out}");
+    assert!(out.contains("GPIOA.ODR = GPIOA.ODR ^ 0x20;"), "{out}");
+    let (_, err, code) = common::run_kuna(&["decompile-all", &hex, "--svd", "STM32F103C8"]);
+    assert_ne!(code, 0);
+    assert!(err.contains("no bundled device of that name"), "{err}");
+}
+
 /// `cortexm3_raw.elf`: `clang --target=thumbv7m-none-eabi -mcpu=cortex-m3 -Os
 /// -ffreestanding -nostdlib -fuse-ld=lld -Wl,-T,cortexm3_raw.ld
 /// -Wl,-e,Reset_Handler -Wl,-z,max-page-size=4 cortexm3_raw.c -o

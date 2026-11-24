@@ -1134,8 +1134,11 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   at VMA 0: the faithful loader maps whichever sorts first and every symbol
   collapses onto address 0, so with MSVC function-level linking (`/Gy`, one COMDAT
   `.text` per function — the default for real builds) all but one function
-  disappear. `crates/unlace-analysis/src/loader/reloc_object.rs (RelocLayout)`
-  reproduces angr CLE's relocatable backend for both: lay each memory-resident,
+  disappear. A Mach-O `MH_OBJECT` places its sections one after another from 0, so
+  it maps, but none of its relocations is applied: an arm64 `.o` decompiled to an
+  empty body, its flow ending at an unrelocated `bl`, and an x86-64 one read its
+  globals at junk addresses. `crates/unlace-analysis/src/loader/reloc_object.rs (RelocLayout)`
+  reproduces angr CLE's relocatable backend for all three: lay each memory-resident,
   non-empty section out above `0x400000` (`RELOC_BASE`, matching CLE so addresses
   line up with angr's), apply the relocations, rebase defined symbols, and bind
   each undefined extern to a synthetic call target in an extern area above the
@@ -1149,7 +1152,25 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   per object (`reloc_object.rs (ZERO_FILL_LIMIT)`); code is laid out at the bytes
   the file holds, because absent bytes are not instructions. A section cut short
   this way is laid out at its reduced size, one left with no bytes is dropped,
-  and each is named on the loader's diagnostic line. The analyzer tier's
+  and each is named on the loader's diagnostic line. A Mach-O object takes every section but
+  the `S_ATTR_DEBUG` ones (`__DWARF`, `__LD,__compact_unwind`). Its symbols hold
+  addresses in the object's own layout, so their section offsets are taken
+  against the section's `addr`, and the assembler's `ltmp`/`l_`/`L` labels name
+  no function. `reloc_apply.rs (classify_macho)` reads the relocation by its
+  `r_type`: ARM64 `BRANCH26` (a call when the word is `bl`), `PAGE21`, `PAGEOFF12`
+  (`add`, or a load/store scaled by its access size, which the one type does not
+  say), `GOT_LOAD_PAGE21`/`PAGEOFF12` and `TLVP_LOAD_*` through a synthetic slot,
+  `POINTER_TO_GOT`, `UNSIGNED`, and an arm64e `AUTHENTICATED_POINTER` written as its
+  plain target; x86-64 `GOT_LOAD`, `GOT` and `TLV` through a slot and
+  `SIGNED_{1,2,4}`, the rest by their generic kinds. An `ARM64_RELOC_ADDEND` is the
+  addend of the relocation it precedes. `reloc_object.rs (macho_target)` adjusts the
+  target value. A section target (`r_extern = 0`) keeps the referent's pre-link
+  address in the field, so the value is the section's move, plus for a
+  PC-relative field the place's pre-link address. A `SUBTRACTOR` pair is the minuend
+  less the subtrahend. An x86-64 `SIGNED_k` field already holds the addend less
+  `k`, which `object` subtracts again, so `k` is added back. The rebased view
+  writes the laid-out `addr` into each `section_64` and moves each `N_SECT`
+  symbol's `n_value` with its section (`kuna_relocrebase.rs (patch_macho)`). The analyzer tier's
   rebased view (`kuna_relocrebase.rs (rebased_view)`) writes the same reduced
   sizes into its section headers, so no pass scans the declared extent. COMMON symbols instead reserve their
   full size (ELF `st_size`, COFF symbol value), using the ELF alignment carried
@@ -2064,7 +2085,19 @@ symbols; an address that already has a name keeps it. A companion that carries
 DWARF also feeds the DWARF analyzer
 (`crates/unlace-analysis/src/analyzers/dwarf/mod.rs (DwarfPass)` runs
 over the companion when the image has no `.debug_info`), since the addresses
-are the image's own; MiniDebugInfo has no DWARF. The loader also reports a `PT_LOAD`
+are the image's own; MiniDebugInfo has no DWARF. A debug file that `dwz -m`
+compressed (Fedora/RHEL `-debuginfo`, Debian/Ubuntu `-dbgsym`) keeps the
+strings and partial units several packages share in a supplementary file its
+`.gnu_debugaltlink` names with that file's build-id;
+`elf_debuglink.rs (find_altlink)` looks for it at the named path (absolute,
+with `/usr/lib/debug` also tried under each `KUNA_DEBUG_DIRS` root, or
+relative to the debug file), then by build-id under the debug directories,
+and accepts it only if its build-id matches. The DWARF analyzer then sets it as
+gimli's supplementary `Dwarf` (`Dwarf::set_sup`), so names in
+`DW_FORM_GNU_strp_alt` / `DW_FORM_strp_sup` resolve. A `DW_FORM_GNU_ref_alt`
+reference into the supplementary file's partial units is not followed yet
+(the per-unit DIE snapshot resolves only unit-local references), so a type
+that lives only there stays unknown. The loader also reports a `PT_LOAD`
 that maps an address another `PT_LOAD` already mapped from different file bytes
 (`elf_debuglink.rs (overlapping_loads)`), a shape only a hand-made or hostile
 image has; which bytes win is unchanged.
@@ -3666,6 +3699,14 @@ funcsym stream:
   calls `os_unfair_lock_lock_with_options` through an island on iOS 16 and
   through `HomeKit`'s rewritten stub on iOS 14, and both render the name.
 
+- **Empty functions** (kuna `nullsubs`, default off,
+  `crates/unlace-console/src/engine/kuna_thunknames.rs (name_nullsubs)`): after
+  the thunks are named, a discovered function still named by a placeholder whose
+  first instruction, after at most one that emits no p-code (`endbr64`, `bti`), is
+  a return doing nothing but its own stack and link-register work (`LOAD`,
+  `INT_ADD`, `INT_AND`, `COPY`) becomes `nullsub_<addr>` with the placeholder's
+  address spelling, IDA's `AF_NULLSUB`. On MIPS and SPARC those ops would be the
+  delay slot's, so the return must be alone. A name in use is left alone.
 - **Jump thunks** (kuna `thunknames`, default on,
   `crates/unlace-console/src/engine/kuna_thunknames.rs`): a function
   whose first instruction is a direct unconditional branch is a thunk (a
@@ -4704,7 +4745,24 @@ moves.
   present is read (`_win10`, then `_win81`, `_win8`, `_win7`, `_vista`,
   `_ws03`, `_xp`, `_2000`, `_nt`, then the bare name), and a user-mode or
   native image also reads the newest Native API library (`ntapi`,
-  `ntapi64`). Which files were read, and any that could not be, is said once on
+  `ntapi64`); an AArch64 EFI image reads `arm/uefi64`.
+
+  An ELF or Mach-O image reads the libraries `TypeLibPass` names for it
+  (`kuna_typelib.rs (til_slots)`, carried as `TypeLibFacts::til_slots`): per
+  slot a list of candidate paths relative to the `til` directory, of which the
+  first present is read (or, when the variable names a subdirectory such as
+  `til/arm`, the first present by file name). A Linux ELF reads
+  `gnulnx_<arch>` and the `gnuunx` (32-bit) or `gnuunx64` library it is built
+  on (x86, x86-64, ARM, AArch64, 32-bit PowerPC; PowerPC64's `gnulnx_ppc64`
+  stands alone). An ELF whose loader is `/system/bin/linker[64]`, or which
+  imports from `libc.so` under Bionic's `LIBC` version, reads `android_arm` or
+  `android_arm64` instead. A Mach-O reads one SDK library: for iOS (the
+  `LC_BUILD_VERSION` or `LC_VERSION_MIN_IPHONEOS` platform, simulator
+  included) `iphoneos64_sdkNN` on AArch64 and `iphoneos_sdk12` on 32-bit ARM;
+  otherwise `macosNN_sdk00_arm64` or `macosNN_sdk00_x64` (an x86-64 image
+  built with a 10.x SDK first tries `macosx64_sdk15`/`sdk14`). The library
+  for the major SDK version the image names is preferred, then older ones,
+  then newer ones (`by_preference`). Which files were read, and any that could not be, is said once on
   stderr (`[kuna typelib] UNLACE_TIL_DIR: read ...`); an unreadable library is
   skipped, where a listed file that cannot be read is an error.
 
@@ -6855,6 +6913,25 @@ moves.
   Each entry is committed as a function symbol under its CRT name (plus a
   placeholder rename for one another fact already installed) and as a call-fixup
   fact; a match only names and tags, and a near miss of any one byte is no match.
+  On a little-endian ARM PE it also recognizes the Windows on ARM `/GS` helpers
+  `__security_push_cookie` and `__security_pop_cookie` by their bytes
+  (`crates/unlace-analysis/src/analyzers/callfixup/kuna_armgscookiesig.rs`), with the
+  `movw`/`movt` immediates of `__security_cookie`'s address masked out, as IDA 9.5's
+  `arm.so` does. The push helper allocates the word below its caller's stack pointer that
+  holds the scrambled cookie and returns with `sp` four bytes lower; the pop helper checks
+  and releases it. `ARM_win.cspec`'s `security_push_cookie` and `security_pop_cookie`
+  fixups model exactly that stack effect (`sp = sp - 4`, `sp = sp + 4`); as plain calls
+  every stack reference of the caller after the push was four bytes off, and its first
+  stack argument read as its second. With the fixups the cookie word and its check leave
+  the C, as `msvcstackguard` removes the x86 cookie.
+  The same pass names the MSVC 64-bit arithmetic helpers the `kuna_arithhelpers`
+  fixups target (`__allmul`, `__alldiv`, `__allrem`, `__alldvrm`, `__aulldiv`,
+  `__aullrem`, `__aulldvrm`, `__allshl`, `__allshr`, `__aullshr`) by their complete
+  instruction streams up to the last `ret`
+  (`crates/unlace-analysis/src/analyzers/callfixup/kuna_msvcarithsig.rs`); the
+  objects carry no relocation, so nothing is wildcarded. Without it a stripped
+  i386 PE prints each `long long` multiply, divide or shift as a call with four
+  32-bit words.
   On a 32-bit ARM image the pass likewise recognizes libgcc's Thumb-1 switch
   helpers (`__gnu_thumb1_case_uqi`, `_sqi`, `_uhi`, `_shi`, `_si`) by their
   instructions
@@ -10508,6 +10585,24 @@ included, after the `coldentry` entries are added. A cold throw path reached by
 an ordinary branch (`may_throw.cold`) is not a landing-pad target and stays a
 function. x86/x86-64 ELF only.
 
+**(kuna) Or any other single-owner cold part** (`functails`, default off;
+`crates/unlace-analysis/src/analyzers/entry/kuna_ehcold.rs (cold_tails)`). The
+same test without the landing pad takes every `.cold` part IDA keeps as a
+function tail (`AF_FTAIL`, libida `append_func_tail`): a lone `ud2` after an
+assertion, an error call, an unlikely branch. An FDE body qualifies when no
+function symbol names its start, no direct `call rel32` targets it, every direct
+`jmp`/`jcc rel32` into it comes from one other FDE body (its owner), it lies
+before that owner, and its start is off the 16-byte alignment GCC and Clang give
+a function at -O2 but not a cold part. The last two tests keep a real function
+that only one other function tail-calls. The bodies go out on the `ehcold`
+channel, so the commit drops every entry inside one; the owner's flow decodes
+the part as before. Against IDA 9.5's own databases of its loaders, the IDA
+tail chunks kuna lists as functions drop from 9/51/4/18 to 2/12/0/5
+(pe/elf/coff/dex.so), and one function IDA keeps is lost (pe.so 0x62fe). The
+owners' C does not change, since their flow already decoded the parts; the parts
+stop being decompiled as functions of their own.
+x86/x86-64 ELF only.
+
 **(kuna) The pads that stay hidden are named** (`ehnote`, default-**on**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_itaniumeh.rs (eh_notes)`).
 Unless `itaniumeh` shows them, a landing pad is unreachable code: the cleanups
@@ -12718,6 +12813,13 @@ unmatched `PUSH`/`SUB SP` still open) was implemented, measured, and dominated b
 it on both precision and recall. As with `ptrentry`, the region is the
 entry-ordered one — the nearest preceding discovered entry — which is the
 granularity the tier has and errs conservative on a sparsely discovered image.
+An accepted target becomes a region boundary for the next pass, and the scan
+repeats until it finds nothing new (at most eight rounds). A routine reached by
+a tail branch from another tail-branch target lies inside the first one's region
+until that one is accepted. libopencm3's `_usbd_standard_request` is found in
+the first round, and the `_usbd_standard_request_device`, `_interface` and
+`_endpoint` it tail-branches to are found in the second. Before, their bodies
+printed inside it.
 Two of the four guards are satisfied by an *absent* model rather than by
 evidence: the predecessor test reads the reference model and the epilogue test
 the disassembly text, and a walk can be told to capture neither (above), which
@@ -13398,6 +13500,16 @@ contradicted too. On the stripped U-Boot O2-noinline image these rules leave
 recall at 92.0% and raise precision from 92.6% to 98.6%; `parse_label` and
 `malloc` stay whole.
 
+A `ptrentry` target is checked against the raw Thumb scan's roots the same
+way (`kuna_ptrentry.rs (shrinkwrap_roots)`). Its decoded run, following
+fall-through only for at most eight instructions and stopping at a call, a
+return or an unconditional branch, may reach a root no call targets. Then the
+target is the routine's real entry and the root its shrink-wrapped `push`: the
+root is withdrawn, the target becomes a walk root, and the Listing is rebuilt.
+libopencm3's `dwc_poll` (`ldr.w r12,[r0,#0xdc]; push.w {...}`, reached only
+through the driver table) was a 4-byte stub and a separate 472-byte
+`sub_8001718` before.
+
 One inventory recovery shares its decodes. Frame validation, the AIF gap walks
 (including the prior inventory's), prefix reconciliation and every Listing
 rebuild decode the same image again. A decode is kept only when SLEIGH certifies
@@ -13864,6 +13976,25 @@ an RV32 `ET_EXEC` a number that lands in a mapped section files a `Data` row —
 same floor the constant scan applies to a lone immediate. RV64 builds that number
 with `addiw` and is not affected. The page or high half on its own is not a
 carried reference.
+
+(kuna, option `movwpairs`) A 32-bit address built in two 16-bit halves
+starts no carry by the rule above, because the low half is usually below the
+floor: `movw r0,#0x1cc; movt r0,#3` (A32 or T32) or `mov x0,#0x230; movk
+x0,#0x22,lsl #16` (AArch64 `movz`/`movk`, `-mcmodel=large`) left the global it reads
+and writes, the string it passes and the callback it registers referenced by
+nothing. With `movwpairs access` an instruction whose encoding is a low-half move
+(A32/T32 `movw`, AArch64 `movz` with no shift) and whose p-code writes a register
+from a constant leaves that register as a *half*: carried like any value, but
+naming nothing while it is below the floor. The high-half move that completes it
+(`movt`, `movk` with a shift, recognised by encoding too) leaves the whole value,
+which is then an ordinary carried address, so a `LOAD` or `STORE` through it is a
+`Read` or a `Write`. `movwpairs on` also files the completed value as `Data` at the
+completing instruction where it lands in a mapped section (IDA's "valid addresses
+only" reading of `MOVT` pairs), which is a judgement: a number built the same way
+that lands in a section names it. Everything else of the carry applies unchanged
+(eight hops, no joins along the run, a `movk` that only re-inserts zero upper
+halves changes nothing), and big-endian code is not read. `off` (the default) is
+the behaviour above.
 
 A constant subtracted from a carried address biases that address rather than
 naming another one. Swift builds a string literal's object as `adrp/add` of the
@@ -15128,7 +15259,15 @@ earlier one and padding gaps. The CLI asserts the structure (`typedef`), the
 peripheral as a typed global at its base (`data`) and its register range as
 volatile, for an object file (an ELF, an ESP image, the ELF a container
 wraps) as for a raw image, and names the IRQ handlers a raw image's vector
-table found from the interrupts.
+table found from the interrupts. A leading XML declaration is dropped before
+the reader sees it (the vendors' files declare `standalone="no"`, which the
+kuna XML grammar does not take). `svd.rs (bundled)` reads a device from
+`svd_devices.br`, the descriptions `tools/gen_svd_bundle.py` cuts from the
+vendors' device packs down to what `parse` reads and stores as one Brotli
+stream (180 devices, 77 KiB); `--svd` takes a bundled name when no file of
+that name exists, the bundled name equal to the argument or else the longest
+that covers it (case-insensitive, `X` matching one character, the part number
+going on past the name).
 
 `bundles.rs (Bundle::parse)` lists the members of the inputs that hold several
 images, without decoding them. A tar archive is recognized by its first
@@ -15337,3 +15476,5 @@ candidate, while preserving PE/Mach-O import slots inside executable sections an
 caller-declared-entry precedence.
 
 (kuna) **`__eh_frame` FDE starts on Mach-O** (`crates/unlace-analysis/src/analyzers/entry/kuna_machoehframe.rs (MachoEhFrameStartsPass)`, option `machoehframe`, default-on). A Mach-O describes most functions' unwinding in `__unwind_info` and falls back to a DWARF FDE in `__TEXT,__eh_frame` for a function the compact encoding cannot describe (a variable stack adjustment, an unusual register save). Each FDE's `pcBegin` is a function start, exactly as on ELF, where the always-on discovery already reads `.eh_frame` (oracle 3); the pass runs that same walk (`scan_eh_frame_starts`, now accepting a Mach-O's `__eh_frame`) and keeps the starts that lie in an executable section and carry no symbol. Like `__unwind_info` the section lives in `__TEXT` and survives the strip of `LC_FUNCTION_STARTS`; unlike it, every FDE is a real function start with no folding, and the pass is cheap, so it is on by default, as IDA's Mach-O loader runs its `eh_frame` parse on every load. On an image that keeps `LC_FUNCTION_STARTS` it adds nothing.
+
+(kuna) **`LC_DATA_IN_CODE` runs are data to the Listing** (`crates/unlace-analysis/src/loader/kuna_machodataincode.rs (data_in_code_ranges)`, always on). clang lays an x86-64 switch's jump table and a Thumb `tbb`/`tbh` table into `__text` after the dispatch, and ARM literal pools between functions, and records each run as a `data_in_code_entry` (`offset`, `length`, `kind` 1 to 5: data, 8/16/32-bit jump table, absolute 32-bit jump table). The Listing build cuts those ranges out of the executable ranges the walk decodes (`listing/mod.rs`), so a table's bytes are neither decoded as instructions nor reach the gap and prologue sweeps; the jump-table readers take their own executable ranges and still read the tables. In a linked image `offset` is a file offset from the Mach-O header and is placed through the section holding it; in an `MH_OBJECT` it is a pre-link address. A table with an entry of any other kind is ignored whole (a dyld-cache image's `dataoff` names another sub-cache file).

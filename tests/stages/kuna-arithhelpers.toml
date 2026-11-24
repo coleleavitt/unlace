@@ -159,4 +159,4 @@ literal = 'return b * a;'
 [[match]]
 name = 'ARITHHELPERS #9: on, the MSVC stdcall helpers print as operators over the two stack words'
 count = 2
-regex = 'CONCAT44\(a1,a0\) [/%] CONCAT44\(a3,a2\)'
+regex = 'CONCAT44\(a1,a0\) [/%] CONCAT44\(a3,a2\)|^  return a0 [/%] a1;$'

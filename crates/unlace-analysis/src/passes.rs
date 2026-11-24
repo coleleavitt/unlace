@@ -713,6 +713,8 @@ fn deferred_entry_passes() -> Vec<Box<dyn AnalysisPass>> {
         Box::new(crate::entry::FuncStartPatternPass),
         Box::new(crate::entry::kuna_coldentry::ColdEntryPass),
         Box::new(crate::entry::kuna_ehcold::EhColdPass),
+        // (kuna `functails`) Every other single-owner `.cold` part, commit gated.
+        Box::new(crate::entry::kuna_ehcold::FuncTailsPass),
         Box::new(crate::entry::kuna_mfcmsgmap::MfcMsgMapPass),
         Box::new(crate::entry::kuna_msvcptrentry::MsvcPtrEntryPass),
         Box::new(crate::protos::kuna_importvote::ImportVotePass),
@@ -1682,6 +1684,50 @@ pub fn run_listing_consumers_replaying_observed(
                 std::rc::Rc::clone(code_space),
                 listing.exec_ranges(),
             );
+        }
+    }
+    // (kuna) A pointer target that runs straight into a start only the raw
+    // Thumb scan found is the routine's real entry and the start its
+    // shrink-wrapped `push`: the start is withdrawn and the target walked.
+    if !thumb_roots.is_empty() && !ptrentry_out.is_empty() {
+        if let Some(code_space) = arch.manage().get_default_code_space() {
+            let uncalled: std::collections::BTreeSet<u64> = thumb_roots
+                .iter()
+                .copied()
+                .filter(|&root| {
+                    listing
+                        .refs_to(root)
+                        .iter()
+                        .all(|r| r.kind != crate::listing::RefKind::Call)
+                })
+                .collect();
+            let merged = crate::aif::kuna_ptrentry::shrinkwrap_roots(
+                translate,
+                std::rc::Rc::clone(code_space),
+                listing.exec_ranges(),
+                &ptrentry_out,
+                &uncalled,
+            );
+            if !merged.is_empty() {
+                let roots: std::collections::BTreeSet<u64> =
+                    merged.iter().map(|&(_, root)| root).collect();
+                seeds.retain(|s| !roots.contains(s));
+                seeds.extend(merged.iter().map(|&(target, _)| target));
+                seeds.sort_unstable();
+                seeds.dedup();
+                listing = crate::listing::Listing::build_tracking_frames_without_image(
+                    &file,
+                    arch,
+                    translate,
+                    &seeds,
+                    &funcsym_seeds,
+                    &seed_names,
+                    detail,
+                    plan,
+                    None,
+                    thumb_memo.as_ref(),
+                );
+            }
         }
     }
     let mut fast_pointer_seeds = Vec::new();

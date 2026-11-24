@@ -125,7 +125,7 @@ name = 'finalorder #4: the entry component prints first'
 count = 1
 regex = [
     '^ *$',
-    '^  v5 = dat_26558;$',
+    '^  v6 = dat_26558;$',
 ]
 
 [[match]]

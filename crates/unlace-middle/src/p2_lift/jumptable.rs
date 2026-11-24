@@ -1727,6 +1727,43 @@ fn eval_guard_expr(
 /// The op-coupled wrapper lives in `jumptable.rs` (not `rangeutil.rs`) because it
 /// reads the function IR (`Funcdata`), which is above the value-set layer.
 #[doc(hidden)]
+/// (kuna) How many CBRANCHs that test one value (`x == c`, `x != c`)
+/// [`JumpBasicModel::analyze_guards`] looks past beyond its two range checks.
+const MAX_EQUALITY_GUARDS: int4 = 2;
+
+/// (kuna) Does the condition `vn` compare a value with one constant for
+/// equality? Such a test removes one value from the switch's range, so the
+/// range check behind it still bounds the switch: OCaml tests `r == 0x41`
+/// between `r < 0x75` and `r >= 0x57`.
+fn tests_one_value(fd: &Funcdata, vn: VarnodeId) -> bool {
+    let mut vn = vn;
+    for _ in 0..2 {
+        let Some(op) = fd
+            .vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|o| fd.obank().get(o))
+        else {
+            return false;
+        };
+        match op.code() {
+            OpCode::CPUI_BOOL_NEGATE => match op.get_in(0) {
+                Some(next) => vn = next,
+                None => return false,
+            },
+            OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL => {
+                return (0..2).any(|s| {
+                    op.get_in(s)
+                        .and_then(|v| fd.vbank().get(v))
+                        .is_some_and(|v| v.is_constant())
+                });
+            }
+            _ => return false,
+        }
+    }
+    false
+}
+
 pub fn circlerange_pull_back(
     fd: &Funcdata,
     rng: &mut CircleRange,
@@ -2551,7 +2588,9 @@ impl JumpBasicModel {
 
         let mut bl = rootbl;
         let mut pathout = pathout_in;
-        for i in 0..maxbranch {
+        let mut counted = 0;
+        let mut i = 0;
+        while counted < maxbranch && i < maxbranch + MAX_EQUALITY_GUARDS {
             let prevbl;
             let indpath;
             if pathout >= 0 && fd.bblocks_ref().block(bl).size_out() == 2 {
@@ -2608,6 +2647,7 @@ impl JumpBasicModel {
             }
             bl = prevbl;
             let mut vn = fd.obank().get(cbranch).unwrap().get_in(1).unwrap();
+            let equality = tests_one_value(fd, vn);
             let mut rng = CircleRange::new_bool(toswitchval);
 
             let indpathstore = if fd.bblocks_ref().block(prevbl).get_flip_path() {
@@ -2645,6 +2685,10 @@ impl JumpBasicModel {
                     vn,
                     false,
                 ));
+            }
+            i += 1;
+            if !equality {
+                counted += 1;
             }
         }
     }
@@ -2799,7 +2843,7 @@ impl JumpBasicModel {
     /// functions, while the index only ever holds `c` or `k ^ c`. Only an index
     /// a table LOAD reads qualifies: a destination selected straight between
     /// constant addresses is `constselectjump`'s decision.
-    fn narrow_boolean_selector(&mut self, fd: &Funcdata, maxtablesize: uint4) {
+    fn narrow_boolean_selector(&mut self, fd: &Funcdata, indop: OpId, maxtablesize: uint4) {
         if self.is_model2 || self.jrange().get_size() <= maxtablesize as uintb {
             return;
         }
@@ -2814,6 +2858,9 @@ impl JumpBasicModel {
             let Some(start_op) = self.path_meld.get_earliest_op(pos) else {
                 continue;
             };
+            if !self.selector_values_reach_code(fd, indop, &values, start_op, vn) {
+                continue;
+            }
             let mut exact = JumpValuesRange::new();
             exact.set_values(values);
             exact.set_start_vn(vn);
@@ -2822,6 +2869,40 @@ impl JumpBasicModel {
             self.jrange = Some(Box::new(exact));
             return;
         }
+    }
+
+    /// (kuna) Does every value of a narrowed selector emulate through the path
+    /// to a destination in the dispatch's own section? A value set read from a
+    /// stale stack constant (a slot whose call INDIRECT the jump-table partial
+    /// collapsed, still holding its 0xaaaa... filler) indexes far past the
+    /// table, and a model with that set would keep the default-path model from
+    /// bounding the table by its clamp (trustd `_nc_intersect_tree_with_subtrees`).
+    fn selector_values_reach_code(
+        &self,
+        fd: &Funcdata,
+        indop: OpId,
+        values: &[uintb],
+        start_op: OpId,
+        start_vn: VarnodeId,
+    ) -> bool {
+        let Some(at) = fd.obank().get(indop).map(|o| o.get_addr().clone()) else {
+            return false;
+        };
+        let Some(space) = at.get_space().cloned() else {
+            return false;
+        };
+        values.iter().all(|&value| {
+            let mut emul = EmulateFunction::new(fd);
+            for &(seed_vn, seed_val) in self.loop_carried_seeds.iter() {
+                emul.seed_varnode_value(seed_vn, seed_val);
+            }
+            emul.set_load_collect(true);
+            emul.emulate_path(value, &self.path_meld, start_op, start_vn)
+                .is_ok_and(|dest| {
+                    fd.get_arch()
+                        .in_section_of(&at, &Address::new(Rc::clone(&space), dest))
+                })
+        })
     }
 
     /// (kuna) The bytes the selector's map occupies, as the first and last
@@ -3403,7 +3484,7 @@ impl JumpBasicModel {
             .ok_or_else(|| KunaError::lowlevel("recoverModel: switch op has no parent block"))?;
         self.find_normalized(fd, parent, -1, matchsize, maxtablesize, indop)?;
         self.narrow_readonly_selector_domain(fd, maxtablesize);
-        self.narrow_boolean_selector(fd, maxtablesize);
+        self.narrow_boolean_selector(fd, indop, maxtablesize);
         self.skip_stranding_variable(fd, indop, matchsize, maxtablesize);
         let unbounded =
             self.jrange().get_size() > maxtablesize as uintb && !self.guard_bounds_table(fd);

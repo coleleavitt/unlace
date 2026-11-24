@@ -112,39 +112,39 @@ commands = [
 [[match]]
 name = 'LOADGUARDRANGE #1: the guard bound sizes the array over all six real elements (filled to the next mapped local, like Ghidra)'
 count = 1
-regex = 'int2 v7 \[8\]; // ([^\n]+ \| )?stack - 0x24( \| [^\n]+)?$'
+regex = 'int2 v8 \[8\]; // ([^\n]+ \| )?stack - 0x24( \| [^\n]+)?$'
 
 [[match]]
 name = 'LOADGUARDRANGE #2: the array is never capped at the min_items fallback, two short of the real extent'
 count = 0
-literal = 'int2 v7 [4]; // stack - 0x24'
+regex = 'int2 v\d+ \[4\]; // stack - 0x24'
 
 [[match]]
 name = 'LOADGUARDRANGE #3: element 4 is never split off as a separate never-assigned scalar'
 count = 0
-regex = 'int2 v8; // ([^\n]+ \| )?stack - 0x1c( \| [^\n]+)?$'
+regex = 'int2 v\d+; // ([^\n]+ \| )?stack - 0x1c( \| [^\n]+)?$'
 
 [[match]]
 name = 'LOADGUARDRANGE #4: element 5 is never split off as a separate never-assigned scalar'
 count = 0
-regex = 'int2 v9; // ([^\n]+ \| )?stack - 0x1a( \| [^\n]+)?$'
+regex = 'int2 v\d+; // ([^\n]+ \| )?stack - 0x1a( \| [^\n]+)?$'
 
 [[match]]
 name = 'LOADGUARDRANGE #5: the single indexed store writes the array in bounds'
 count = 1
-literal = 'v7[v3] = cli_atoi(a1);'
+literal = 'v8[v6] = cli_atoi(a1);'
 
 [[match]]
 name = 'LOADGUARDRANGE #6: element 4 is read through the array, in bounds'
 count = 1
-literal = '-100 <= v7[4]'
+literal = '-100 <= v8[4]'
 
 [[match]]
 name = 'LOADGUARDRANGE #7: element 5 is read through the array, in bounds'
 count = 1
-literal = 'v7[5] <= 0x11'
+literal = 'v8[5] <= 0x11'
 
 [[match]]
 name = 'LOADGUARDRANGE #8: the config bytes are never stored from unassigned scalars'
 count = 0
-literal = '*(char *)(v2 + 10) = v8;'
+regex = '\*\(char \*\)\(v\d+ \+ 10\) = v\d+;'

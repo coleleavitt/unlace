@@ -2195,7 +2195,13 @@ classified:
   in a `stream << text << value` chain, where `operator<<(const char *)` takes
   the stream in ECX and the text in EDX, the `value` pushed before it for the
   `__thiscall` `operator<<(unsigned long)` that pops it went to the first call
-  and the second printed without it.
+  and the second printed without it. Under the same option a direct call
+  followed by a one-byte `int3` ends its path in the walk: MSVC places `int3`
+  after a call that does not return (`_CxxThrowException`, which the walk cannot
+  see does not return), and falling through it ran into the next function, whose
+  return left the stack unbalanced, so every caller of a stream inserter that can
+  throw (`basic_ios::setstate`) lost its extent (`KUNA_CALLEEPURGE_DEBUG` on
+  Holley `USBCAN-Driver.dll`: `0x10001eb0` falls from `0x10001f1f` into `0x10001f20`).
   A third piece places the stack pointer again in the epilogue
   (`kuna_calleepurge.rs (msvc_saved_sp)`). An EH prologue saves the exact
   stack pointer for its catch funclets (`mov [ebp-0x10],esp`, after the
@@ -5680,6 +5686,21 @@ register pair, and Thumb-2 widened nine `int` returns to `unsigned long long`
 and gave one `void` function a return, so the other targets keep upstream's
 test unless `on` is set.
 
+### (kuna) `carryuse` — a returned sum that is also tested for its carry
+
+`Funcdata::onlyOpUse` also refuses a RETURN trial whose value reaches a branch. A
+target with no carry flag adds a 64-bit value as two 32-bit adds and moves the carry
+with an unsigned compare of the low sum against one of its addends, on Xtensa as a
+branch (`add a2,a10,a8; bgeu a2,a8,1f; addi a3,a3,1`), so the low word of a returned
+64-bit sum is refused and `long long f(...) { return a * b + (a >> 3); }` prints
+`void`. With option `carryuse` (default `off`),
+`crates/unlace-middle/src/p4_calls/kuna_carryuse.rs (carry_test)` skips, for a
+RETURN trial only, an `INT_LESS` or `INT_LESSEQUAL` that compares the walked value,
+when an `INT_ADD` defines it, with one of that add's inputs (the same Varnode, or a
+constant of equal size and value). That compare is the sum's carry test, not a use
+that competes with the return, and the walk does not follow its boolean. Every other
+use, and every use on an argument trial, is scored as before.
+
 ### (kuna) `returnpair` — the register-pair return split
 
 Provenance: upstream issue GH-6990, implemented kuna-side
@@ -5905,6 +5926,19 @@ neither half: the model never returns `EDX` on its own, and keeping it printed a
 dead byte write after a call (`movb gc1,%dl; xorb $0,%dl; ret`, or `setne %dl;
 ret`) as `unsigned int f(...)` returning the call's leftover `EDX`. The function
 then returns `void`, as it does when no pair forms.
+
+The walk keeps a half when *any* path computes it. Under `option retpairpaths on`
+(default off) the second register of such a join must be computed on *every*
+path instead (`kuna_returnuncomputed.rs (second_half_on_every_path)`, the
+`computes_everywhere` walk with the same placement test): a phi that reaches the
+RETURN with the caller's own `EDX`, or a call's clobber, on one path is not a
+returned half, because a function that returns a 64-bit value writes `EDX` on
+every path. MSVC's `int __fastcall CmdBufStartCommand` (SysWOW64
+`TpmCoreProvisioning.dll` `0x100a4bec`) returns early with `EDX` untouched and
+otherwise leaves the last call's register argument in it, and printed `return
+CONCAT44(a1,v1);`; with the option it returns `v1`. A fastcall function that
+hands back its own `EDX` argument as the high word on one path loses that half,
+which is why the rule is an option.
 
 A high register the function set to zero is computed too, so the pair of a
 zero-extended 64-bit return survives this repair. The earlier trim that narrowed

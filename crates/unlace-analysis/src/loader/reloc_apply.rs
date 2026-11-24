@@ -34,7 +34,9 @@
 //! partially writing a field that is unresolved, malformed, misaligned, outside
 //! its range or section, or dependent on a linker veneer or missing TOC.
 
-use object::{Architecture, Relocation, RelocationEncoding, RelocationFlags, RelocationKind, elf};
+use object::{
+    Architecture, Relocation, RelocationEncoding, RelocationFlags, RelocationKind, elf, macho,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum RelocationFailure {
@@ -68,73 +70,151 @@ enum Specific {
     ArmBranch24,
     ArmThumbBranch24,
     ArmPrel31,
-    ArcBranch25 { word: bool },
+    ArcBranch25 {
+        word: bool,
+    },
     ArcMiddleEndian32,
     XtensaSlot0,
     XtensaWord,
     Or1kRel26,
-    Or1kHalf { adjust: bool, high: bool },
+    Or1kHalf {
+        adjust: bool,
+        high: bool,
+    },
     Or1kSplit16,
     CskyBsr26,
-    ArmMovw { thumb: bool, top: bool, pc: bool },
+    ArmMovw {
+        thumb: bool,
+        top: bool,
+        pc: bool,
+    },
     PcRelativeData,
     Aarch64Branch26,
-    Aarch64AdrPage { checked: bool },
+    Aarch64AdrPage {
+        checked: bool,
+    },
     Aarch64AddLo12,
-    Aarch64LdstLo12 { scale: u8 },
-    PpcRel24 { addend: bool },
+    Aarch64LdstLo12 {
+        scale: u8,
+    },
+    PpcRel24 {
+        addend: bool,
+    },
     PpcAbs24,
-    PpcBranch14 { pc: bool },
-    PpcHalf16 { form: PpcHalf, pc: bool },
-    Ppc64Toc16 { form: PpcHalf },
+    PpcBranch14 {
+        pc: bool,
+    },
+    PpcHalf16 {
+        form: PpcHalf,
+        pc: bool,
+    },
+    Ppc64Toc16 {
+        form: PpcHalf,
+    },
     Ppc64Toc64,
-    Data { bytes: u8, pc: bool },
+    Data {
+        bytes: u8,
+        pc: bool,
+    },
     SparcWdisp30,
-    SparcHi22 { pc: bool },
-    SparcLo10 { pc: bool },
-    SparcSethi { shift: u8 },
-    SparcSimm { shift: u8, mask: u16 },
-    SparcDisp { bits: u8 },
+    SparcHi22 {
+        pc: bool,
+    },
+    SparcLo10 {
+        pc: bool,
+    },
+    SparcSethi {
+        shift: u8,
+    },
+    SparcSimm {
+        shift: u8,
+        mask: u16,
+    },
+    SparcDisp {
+        bits: u8,
+    },
     SparcWdisp16,
     LarchPcalaHi20,
     LarchLo12,
     LarchCall36,
-    LarchBranch { bits: u8 },
+    LarchBranch {
+        bits: u8,
+    },
     LanaiBranch25,
     LanaiAbs21,
-    LanaiHalf { high: bool },
-    CudaAbs32 { high: bool },
+    LanaiHalf {
+        high: bool,
+    },
+    CudaAbs32 {
+        high: bool,
+    },
     CudaAbs47,
     C28xAbs22,
-    C28xData { words: u8 },
-    HexBranch { mask: u32, extended: bool },
-    HexExtender { pc: bool },
-    HexLow6 { form: HexLow6 },
-    AvrPcrel { bits: u8 },
-    AvrLdi { shift: u8, neg: bool, pm: bool },
+    C28xData {
+        words: u8,
+    },
+    HexBranch {
+        mask: u32,
+        extended: bool,
+    },
+    HexExtender {
+        pc: bool,
+    },
+    HexLow6 {
+        form: HexLow6,
+    },
+    AvrPcrel {
+        bits: u8,
+    },
+    AvrLdi {
+        shift: u8,
+        neg: bool,
+        pm: bool,
+    },
     AvrCall,
     AvrWordPm,
-    AmdgpuHalf { pc: bool, high: bool },
+    AmdgpuHalf {
+        pc: bool,
+        high: bool,
+    },
     Aarch64AdrLo21,
-    Aarch64Imm19 { load: bool },
+    Aarch64Imm19 {
+        load: bool,
+    },
     Aarch64Imm14,
-    Aarch64Movw { shift: u8, checked: bool },
+    Aarch64Movw {
+        shift: u8,
+        checked: bool,
+    },
     RiscvHi20,
-    RiscvLo12 { store: bool },
+    RiscvLo12 {
+        store: bool,
+    },
     RiscvPcrelHi20,
-    RiscvPcrelLo12 { store: bool },
+    RiscvPcrelLo12 {
+        store: bool,
+    },
     RiscvCall,
     RiscvBranch,
     RiscvJal,
     RiscvRvcBranch,
     RiscvRvcJump,
-    RiscvAddSub { sub: bool },
+    RiscvAddSub {
+        sub: bool,
+    },
     RiscvSet,
-    Riscv6 { sub: bool },
+    Riscv6 {
+        sub: bool,
+    },
     PcRel32,
     BpfImm64,
     BpfCall,
-    Generic { bits: u8 },
+    /// An arm64e `ARM64_RELOC_AUTHENTICATED_POINTER` word: the low 32 bits
+    /// hold the addend, the high ones the signing schema.
+    MachoAuthPointer,
+    Generic {
+        bits: u8,
+    },
 }
 
 impl Specific {
@@ -292,6 +372,106 @@ impl RelocationSpec {
                     | Specific::BpfCall
             )
     }
+}
+
+/// [`classify`] for a Mach-O relocation, by its `r_type`: `object` gives every
+/// ARM64 instruction form, x86-64's `SIGNED_{1,2,4}`, `GOT`, `GOT_LOAD` and `TLV`
+/// no generic kind. `insn` is the little-endian word at the place, which an
+/// `ARM64_RELOC_PAGEOFF12` needs: the one type covers `add` and every
+/// load/store size. A `GOT` or `TLV` form addresses the target's slot.
+pub fn classify_macho(
+    arch: Architecture,
+    reloc: &Relocation,
+    insn: Option<u32>,
+) -> Result<Option<RelocationSpec>, RelocationFailure> {
+    let RelocationFlags::MachO {
+        r_type,
+        r_pcrel,
+        r_length,
+    } = reloc.flags()
+    else {
+        return classify(arch, reloc);
+    };
+    let bytes = 1u8 << r_length.min(3);
+    let spec = |specific, width, call, got| {
+        Ok(Some(RelocationSpec {
+            specific,
+            width,
+            call,
+            got,
+        }))
+    };
+    match arch {
+        Architecture::Aarch64 | Architecture::Aarch64_Ilp32 => match r_type {
+            macho::ARM64_RELOC_UNSIGNED if matches!(bytes, 4 | 8) => spec(
+                Specific::Data { bytes, pc: false },
+                usize::from(bytes),
+                false,
+                false,
+            ),
+            macho::ARM64_RELOC_BRANCH26 => spec(
+                Specific::Aarch64Branch26,
+                4,
+                insn.is_none_or(|i| i & 0x8000_0000 != 0),
+                false,
+            ),
+            macho::ARM64_RELOC_PAGE21 => {
+                spec(Specific::Aarch64AdrPage { checked: true }, 4, false, false)
+            }
+            macho::ARM64_RELOC_PAGEOFF12 => match insn.and_then(macho_lo12_form) {
+                Some(form) => spec(form, 4, false, false),
+                None => Err(RelocationFailure::InvalidEncoding),
+            },
+            macho::ARM64_RELOC_GOT_LOAD_PAGE21 | macho::ARM64_RELOC_TLVP_LOAD_PAGE21 => {
+                spec(Specific::Aarch64AdrPage { checked: true }, 4, false, true)
+            }
+            macho::ARM64_RELOC_GOT_LOAD_PAGEOFF12 | macho::ARM64_RELOC_TLVP_LOAD_PAGEOFF12 => {
+                match insn.and_then(macho_lo12_form) {
+                    Some(form) => spec(form, 4, false, true),
+                    None => Err(RelocationFailure::InvalidEncoding),
+                }
+            }
+            macho::ARM64_RELOC_POINTER_TO_GOT if matches!(bytes, 4 | 8) => spec(
+                Specific::Data { bytes, pc: r_pcrel },
+                usize::from(bytes),
+                false,
+                true,
+            ),
+            macho::ARM64_RELOC_AUTHENTICATED_POINTER => {
+                spec(Specific::MachoAuthPointer, 8, false, false)
+            }
+            _ => Err(RelocationFailure::Unsupported),
+        },
+        Architecture::X86_64 => match r_type {
+            macho::X86_64_RELOC_GOT_LOAD | macho::X86_64_RELOC_GOT | macho::X86_64_RELOC_TLV => {
+                spec(Specific::PcRel32, 4, false, true)
+            }
+            macho::X86_64_RELOC_SIGNED_1
+            | macho::X86_64_RELOC_SIGNED_2
+            | macho::X86_64_RELOC_SIGNED_4 => {
+                spec(Specific::Data { bytes: 4, pc: true }, 4, false, false)
+            }
+            _ => classify(arch, reloc),
+        },
+        _ => classify(arch, reloc),
+    }
+}
+
+/// The low-12 form of an ARM64 instruction a `PAGEOFF12` patches: `add`
+/// (immediate), or a load/store with an unsigned offset scaled by its access
+/// size (`opc<1>:size` for a 128-bit SIMD access).
+fn macho_lo12_form(insn: u32) -> Option<Specific> {
+    if insn & 0x7f80_0000 == 0x1100_0000 {
+        return Some(Specific::Aarch64AddLo12);
+    }
+    if insn & 0x3b00_0000 != 0x3900_0000 {
+        return None;
+    }
+    let size = (insn >> 30) as u8;
+    let simd = insn & 0x0400_0000 != 0;
+    let wide = insn & 0x0080_0000 != 0;
+    let scale = if simd && size == 0 && wide { 4 } else { size };
+    Some(Specific::Aarch64LdstLo12 { scale })
 }
 
 /// `EM_LANAI`, which the `object` crate maps to no architecture.
@@ -1378,6 +1558,12 @@ fn apply_info(
             Ok(())
         }
         Specific::BpfImm64 => bpf_imm64(field, little_endian, reloc, symbol),
+        Specific::MachoAuthPointer => {
+            let raw = read_signed(field, little_endian) as u64;
+            let addend = i128::from(raw as u32 as i32);
+            write_integer(field, little_endian, (symbol as i128 + addend) as u64);
+            Ok(())
+        }
         Specific::BpfCall => bpf_call(field, little_endian, reloc, symbol, place),
         Specific::Generic { bits } => generic(field, little_endian, reloc, symbol, place, bits),
     }

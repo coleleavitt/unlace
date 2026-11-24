@@ -1,0 +1,49 @@
+# OCaml match: an equality test between the range checks keeps the far bound.
+#
+# coqtop camlCamlinternalFormat__fix_int_precision and parse_after_at check the
+# tagged value r = 2b+1 with r < 0x75, then r == 0x41, then r >= 0x57, and index
+# the table with (r - 0x56) >> 1. The guard analysis reads two CBRANCHs back from
+# the dispatch, so the equality test used up the upper check's place and the table
+# was bounded by r's width. A test of one value does not bound a range, and the
+# analysis now looks past such tests. Synthetic x86-64 copy:
+#
+#     movzbl (%rdi),%eax ; lea 0x1(%rax,%rax,1),%r8
+#     cmp $0x75,%r8 ; jge high ; cmp $0x41,%r8 ; je eq ; cmp $0x57,%r8 ; jl low
+#     mov %r8,%rax ; add $-0x56,%rax ; sar $1,%rax
+#     lea table(%rip),%rdx ; movslq (%rdx,%rax,4),%rax ; add %rax,%rdx ; jmp *%rdx
+#     table: 15 rows, then 8 words that point one byte into the cases
+#
+# Stage: P2 switch-model.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [ { space = 'ram', offset = '0x1000', name = 'eqguard' } ]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '0fb6074c8d4400014983f8757d564983f84174564983f8577c564c89c04883c0aa48d1f8488d154d000000486304824801c2ffe2b80a000000c3b80b000000c3b80c000000c3b80d000000c3b80e000000c3b80f000000c3b810000000c3b811000000c3b864000000c3b865000000c3b866000000c36690bcffffffc2ffffffc8ffffffceffffffd4ffffffdaffffffe0ffffffe6ffffffbcffffffc2ffffffc8ffffffceffffffd4ffffffdaffffffe0ffffffbdffffffc3ffffffc9ffffffcfffffffd5ffffffdbffffffe1ffffffe7ffffff'
+
+[script]
+commands = [
+    'lo fu eqguard',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'OCAML-EQGUARD #1: the last row the range checks admit is a case'
+count = 1
+regex = 'case 0x72:'
+
+[[match]]
+name = 'OCAML-EQGUARD #2: no row past the upper check'
+count = 0
+regex = 'case 0x7[4-9a-f]:|case 0x[8-9a-f][0-9a-f]:|case 0x1[0-9a-f][0-9a-f]:'
+
+[[match]]
+name = 'OCAML-EQGUARD #3: no row lands mid-instruction'
+count = 0
+literal = 'halt_baddata'

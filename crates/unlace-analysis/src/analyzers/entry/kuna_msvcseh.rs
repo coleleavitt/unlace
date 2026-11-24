@@ -1,0 +1,504 @@
+//! (kuna `msvceh`) MSVC structured exception handling scope tables, and x86 C++
+//! `FuncInfo`.
+//!
+//! A `__try` block's filter and handler are reached only by the exception
+//! dispatcher, so the function's pseudocode shows the guarded code and nothing
+//! of `__except` or `__finally`. Each form says where they are:
+//!
+//! - x64: an `UNWIND_INFO` naming `__C_specific_handler` carries a scope table,
+//!   `{Count; {Begin, End, Handler, JumpTarget}[Count]}` (RVAs). `JumpTarget` 0
+//!   is a `__finally` whose funclet is `Handler`; otherwise `Handler` is the
+//!   filter funclet (or 1, `EXCEPTION_EXECUTE_HANDLER`) and `JumpTarget` the
+//!   `__except` block inside the function.
+//! - x86: the prologue pushes the scope table with the frame handler:
+//!   `push -2; push table; push __except_handler4` (SEH4, `push -1` for SEH3), or
+//!   `push size; push table; call __SEH_prolog4`. An SEH4 table starts with four
+//!   cookie offsets; each record is `{EnclosingLevel, Filter, Handler}`, a null
+//!   filter marking `__finally`.
+//! - x86 C++: the prologue pushes a handler stub (`push -1; push stub; mov eax,
+//!   fs:[0]`, or `mov eax, stub; call __EH_prolog3`) whose tail is
+//!   `mov eax, FuncInfo; jmp __CxxFrameHandler3`; the `FuncInfo` is read as on x64
+//!   with absolute references.
+//!
+//! Each becomes header comments, and on x64 each filter and `__finally` funclet
+//! names its parent and is a discovered entry.
+
+use object::Object;
+use object::read::pe::PeFile64;
+use unlace_decomp::kuna_fasthash::FxHashSet;
+
+use crate::pass::{AnalysisOutput, CommentFact};
+use crate::rtti::models::ImageBytes;
+use crate::rtti::refkind::{End, RefKind};
+use crate::rtti::vftable::TextRanges;
+
+use super::kuna_msvcfuncinfo::{decode_fh3, is_fh3, language_handler, notes, runtime_functions};
+
+/// Most scope records one table is read for.
+const MAX_SCOPES: u32 = 64;
+/// How far before a handler stub's `mov eax, FuncInfo` its entry may be.
+const STUB_SPAN: u64 = 48;
+const TRYLEVEL_NONE4: u32 = 0xFFFF_FFFE;
+const TRYLEVEL_NONE3: u32 = 0xFFFF_FFFF;
+
+/// One `__try` scope.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SehScope {
+    /// x64: the guarded range; x86: `None` (the code sets the try level).
+    pub range: Option<(u64, u64)>,
+    /// x86: the enclosing try level, `None` at the outermost.
+    pub enclosing: Option<u32>,
+    pub kind: SehKind,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SehKind {
+    /// `__except`: the filter (a funclet or block, or a constant filter
+    /// expression), then the handler block.
+    Except { filter: Filter, handler: u64 },
+    /// `__finally` with its termination handler.
+    Finally { handler: u64 },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Filter {
+    Code(u64),
+    Constant(i32),
+}
+
+impl SehScope {
+    pub fn describe(&self) -> String {
+        let head = match (self.range, self.enclosing) {
+            (Some((b, e)), _) => format!("__try [{b:#x}, {e:#x})"),
+            (None, Some(l)) => format!("__try (inside level {l})"),
+            (None, None) => "__try".to_string(),
+        };
+        match &self.kind {
+            SehKind::Except { filter, handler } => {
+                let f = match filter {
+                    Filter::Code(a) => format!("filter {a:#x}"),
+                    Filter::Constant(1) => "EXCEPTION_EXECUTE_HANDLER".to_string(),
+                    Filter::Constant(0) => "EXCEPTION_CONTINUE_SEARCH".to_string(),
+                    Filter::Constant(-1) => "EXCEPTION_CONTINUE_EXECUTION".to_string(),
+                    Filter::Constant(c) => format!("{c}"),
+                };
+                format!("{head}: __except ({f}) -> {handler:#x}")
+            }
+            SehKind::Finally { handler } => format!("{head}: __finally {handler:#x}"),
+        }
+    }
+}
+
+/// The pass body for x64 SEH, x86 SEH and x86 C++ `FuncInfo`.
+pub fn collect(
+    file: &object::File,
+    bytes: &[u8],
+    img: &ImageBytes,
+    code: &[(u64, &[u8])],
+) -> AnalysisOutput {
+    let mut out = AnalysisOutput::default();
+    let text = TextRanges::new(file);
+    match file.architecture() {
+        object::Architecture::X86_64 => x64_scopes(file, bytes, img, &mut out),
+        object::Architecture::I386 => {
+            for (func, scopes) in x86_seh(img, &text, code) {
+                scope_notes(func, &scopes, false, &mut out);
+            }
+            let rk = RefKind::new(false, 0, End::Little);
+            for (func, info) in x86_funcinfos(img, code) {
+                if let Some(decoded) = decode_fh3(img, &rk, 0, info) {
+                    notes(func, &decoded, false, &mut out);
+                }
+            }
+        }
+        _ => {}
+    }
+    out
+}
+
+fn scope_notes(func: u64, scopes: &[SehScope], separate: bool, out: &mut AnalysisOutput) {
+    let tail = if separate {
+        "the filter and __finally bodies are separate funclets"
+    } else {
+        "the filter and handler blocks are not shown"
+    };
+    for (i, s) in scopes.iter().enumerate() {
+        let level = if separate {
+            String::new()
+        } else {
+            format!(" (level {i})")
+        };
+        out.header_comments.push(CommentFact {
+            func_addr: func,
+            addr: func,
+            text: format!("seh{level}: {}; {tail}", s.describe()),
+        });
+    }
+}
+
+/// x64 `__C_specific_handler` scope tables.
+fn x64_scopes(file: &object::File, bytes: &[u8], img: &ImageBytes, out: &mut AnalysisOutput) {
+    let Ok(pe) = PeFile64::parse(bytes) else {
+        return;
+    };
+    let base = file.relative_address_base();
+    let handlers: FxHashSet<u64> = crate::loader::pe_iat::resolve_pe_imports(file, bytes)
+        .into_iter()
+        .filter(|s| std::str::from_utf8(&s.name).is_ok_and(is_c_specific_handler))
+        .map(|s| s.addr)
+        .collect();
+    if handlers.is_empty() {
+        return;
+    }
+    let mut entries = FxHashSet::<u64>::default();
+    for (func, unwind) in runtime_functions(&pe, bytes, base) {
+        let Some((handler, data)) = language_handler(img, base, unwind) else {
+            continue;
+        };
+        if !handlers.contains(&handler) {
+            continue;
+        }
+        let Some(scopes) = x64_scope_table(img, base, data) else {
+            continue;
+        };
+        scope_notes(func, &scopes, true, out);
+        for s in &scopes {
+            let funclet = match s.kind {
+                SehKind::Except {
+                    filter: Filter::Code(f),
+                    ..
+                } => (f, "__except filter"),
+                SehKind::Finally { handler } => (handler, "__finally funclet"),
+                _ => continue,
+            };
+            out.header_comments.push(CommentFact {
+                func_addr: funclet.0,
+                addr: funclet.0,
+                text: format!("seh: {} of {func:#x}", funclet.1),
+            });
+            if entries.insert(funclet.0) {
+                out.entries.push(funclet.0);
+            }
+        }
+    }
+}
+
+/// `__C_specific_handler`, with or without leading underscores.
+pub fn is_c_specific_handler(name: &str) -> bool {
+    name.trim_start_matches('_') == "C_specific_handler"
+}
+
+/// The x64 `SCOPE_TABLE` at `data`.
+pub fn x64_scope_table(img: &ImageBytes, base: u64, data: u64) -> Option<Vec<SehScope>> {
+    let count = rd(img, data)?;
+    if count == 0 || count > MAX_SCOPES {
+        return None;
+    }
+    let mut v = Vec::new();
+    for i in 0..count as u64 {
+        let r = img.read(data + 4 + i * 16, 16)?;
+        let w = |o: usize| u32::from_le_bytes([r[o], r[o + 1], r[o + 2], r[o + 3]]);
+        let (begin, end, handler, jump) = (w(0), w(4), w(8), w(12));
+        if begin == 0 || end <= begin {
+            return None;
+        }
+        let kind = if jump == 0 {
+            if handler == 0 {
+                return None;
+            }
+            SehKind::Finally {
+                handler: base + handler as u64,
+            }
+        } else {
+            let filter = if handler < 0x10 || handler >= 0xFFFF_FFF0 {
+                Filter::Constant(handler as i32)
+            } else {
+                Filter::Code(base + handler as u64)
+            };
+            SehKind::Except {
+                filter,
+                handler: base + jump as u64,
+            }
+        };
+        v.push(SehScope {
+            range: Some((base + begin as u64, base + end as u64)),
+            enclosing: None,
+            kind,
+        });
+    }
+    Some(v)
+}
+
+fn rd(img: &ImageBytes, at: u64) -> Option<u32> {
+    img.read(at, 4)
+        .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+}
+
+fn u32_at(b: &[u8], i: usize) -> Option<u32> {
+    let s = b.get(i..i + 4)?;
+    Some(u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+}
+
+/// Every x86 SEH3/SEH4 prologue in `code` with its scope table, by function.
+pub fn x86_seh(
+    img: &ImageBytes,
+    text: &TextRanges,
+    code: &[(u64, &[u8])],
+) -> Vec<(u64, Vec<SehScope>)> {
+    let mut out = Vec::new();
+    let mut seen = FxHashSet::<u64>::default();
+    for &(base, data) in code {
+        for i in 0..data.len() {
+            let Some((start, table, seh4)) = x86_seh_prologue(data, i) else {
+                continue;
+            };
+            let func = base + start as u64;
+            if seen.contains(&func) {
+                continue;
+            }
+            if let Some(scopes) = x86_scope_table(img, text, table as u64, seh4) {
+                seen.insert(func);
+                out.push((func, scopes));
+            }
+        }
+    }
+    out
+}
+
+/// `(function start, scope table, SEH4?)` if an SEH prologue starts at `i`:
+/// `6A FE|FF 68 <table> 68 <handler>` (after an optional `55 8B EC`), or
+/// `6A nn|68 nnnnnnnn` then `68 <table> E8 <__SEH_prolog4>`.
+pub fn x86_seh_prologue(data: &[u8], i: usize) -> Option<(usize, u32, bool)> {
+    let at = |k: usize| data.get(k).copied();
+    if at(i)? == 0x6A
+        && matches!(at(i + 1)?, 0xFE | 0xFF)
+        && at(i + 2)? == 0x68
+        && at(i + 7)? == 0x68
+    {
+        let table = u32_at(data, i + 3)?;
+        let start = if i >= 3 && data[i - 3..i] == [0x55, 0x8B, 0xEC] {
+            i - 3
+        } else {
+            i
+        };
+        return Some((start, table, at(i + 1)? == 0xFE));
+    }
+    let after = match at(i)? {
+        0x6A => i + 2,
+        0x68 => i + 5,
+        _ => return None,
+    };
+    if at(after)? == 0x68 && at(after + 5)? == 0xE8 {
+        return Some((i, u32_at(data, after + 1)?, true));
+    }
+    None
+}
+
+/// The scope table at `table`: SEH4 after its 16-byte cookie header.
+pub fn x86_scope_table(
+    img: &ImageBytes,
+    text: &TextRanges,
+    table: u64,
+    seh4: bool,
+) -> Option<Vec<SehScope>> {
+    let (records, none) = if seh4 {
+        let gs = rd(img, table)?;
+        let eh = rd(img, table + 8)?;
+        if (gs != TRYLEVEL_NONE4 && gs < 0x8000_0000) || eh < 0x8000_0000 {
+            return None;
+        }
+        (table + 16, TRYLEVEL_NONE4)
+    } else {
+        (table, TRYLEVEL_NONE3)
+    };
+    let mut v = Vec::new();
+    for i in 0..MAX_SCOPES {
+        let Some(r) = img.read(records + i as u64 * 12, 12) else {
+            break;
+        };
+        let w = |o: usize| u32::from_le_bytes([r[o], r[o + 1], r[o + 2], r[o + 3]]);
+        let (enclosing, filter, handler) = (w(0), w(4), w(8));
+        if !(enclosing == none || enclosing < i)
+            || !text.contains(handler as u64)
+            || (filter != 0 && !text.contains(filter as u64))
+        {
+            break;
+        }
+        v.push(SehScope {
+            range: None,
+            enclosing: (enclosing != none).then_some(enclosing),
+            kind: if filter == 0 {
+                SehKind::Finally {
+                    handler: handler as u64,
+                }
+            } else {
+                SehKind::Except {
+                    filter: Filter::Code(filter as u64),
+                    handler: handler as u64,
+                }
+            },
+        });
+    }
+    (!v.is_empty()).then_some(v)
+}
+
+/// Every x86 C++ function whose prologue installs a `__CxxFrameHandler3` stub,
+/// as `(function start, FuncInfo)`.
+pub fn x86_funcinfos(img: &ImageBytes, code: &[(u64, &[u8])]) -> Vec<(u64, u64)> {
+    let mut stubs = Vec::new();
+    for &(base, data) in code {
+        for i in 0..data.len().saturating_sub(9) {
+            if data[i] == 0xB8 && data[i + 5] == 0xE9 {
+                let fi = u32_at(data, i + 1).unwrap_or(0) as u64;
+                if fi != 0 && is_fh3(img, fi) {
+                    stubs.push((base + i as u64, fi));
+                }
+            }
+        }
+    }
+    stubs.sort_unstable();
+    if stubs.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut seen = FxHashSet::<u64>::default();
+    for &(base, data) in code {
+        for i in 0..data.len() {
+            let Some((start, stub)) = x86_eh_prologue(data, i) else {
+                continue;
+            };
+            let k = stubs.partition_point(|&(s, _)| s < stub as u64);
+            let Some(&(mov, fi)) = stubs.get(k) else {
+                continue;
+            };
+            if mov - stub as u64 > STUB_SPAN {
+                continue;
+            }
+            let func = base + start as u64;
+            if seen.insert(func) {
+                out.push((func, fi));
+            }
+        }
+    }
+    out
+}
+
+/// `(function start, stub)` if a C++ EH prologue starts at `i`:
+/// `6A FF 68 <stub> 64 A1 00 00 00 00` (after an optional `55 8B EC`), or
+/// `B8 <stub> E8 <__EH_prolog3>` after its `push size`.
+pub fn x86_eh_prologue(data: &[u8], i: usize) -> Option<(usize, u32)> {
+    let at = |k: usize| data.get(k).copied();
+    if at(i)? == 0x6A
+        && at(i + 1)? == 0xFF
+        && at(i + 2)? == 0x68
+        && data.get(i + 7..i + 13)? == [0x64, 0xA1, 0, 0, 0, 0]
+    {
+        let start = if i >= 3 && data[i - 3..i] == [0x55, 0x8B, 0xEC] {
+            i - 3
+        } else {
+            i
+        };
+        return Some((start, u32_at(data, i + 3)?));
+    }
+    if at(i)? == 0xB8 && at(i + 5)? == 0xE8 {
+        let start = if i >= 2 && data[i - 2] == 0x6A {
+            i - 2
+        } else if i >= 5 && data[i - 5] == 0x68 {
+            i - 5
+        } else {
+            return None;
+        };
+        return Some((start, u32_at(data, i + 1)?));
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn words(ws: &[u32]) -> Vec<u8> {
+        ws.iter().flat_map(|w| w.to_le_bytes()).collect()
+    }
+
+    #[test]
+    fn x64_scope_table_except_and_finally() {
+        let base = 0x1_4000_0000u64;
+        let data = base + 0x3000;
+        let bytes = words(&[2, 0x1010, 0x1030, 1, 0x1040, 0x1050, 0x1060, 0x1900, 0]);
+        let img = ImageBytes::from_spans(vec![(data, bytes.as_slice())]);
+        let s = x64_scope_table(&img, base, data).expect("table");
+        assert_eq!(
+            s[0].describe(),
+            "__try [0x140001010, 0x140001030): __except (EXCEPTION_EXECUTE_HANDLER) -> 0x140001040"
+        );
+        assert_eq!(
+            s[1].describe(),
+            "__try [0x140001050, 0x140001060): __finally 0x140001900"
+        );
+    }
+
+    #[test]
+    fn x86_seh4_prologue_and_table() {
+        let mut code = vec![0x55, 0x8B, 0xEC, 0x6A, 0xFE, 0x68];
+        code.extend_from_slice(&0x0040_3000u32.to_le_bytes());
+        code.push(0x68);
+        code.extend_from_slice(&0x0040_1800u32.to_le_bytes());
+        assert_eq!(x86_seh_prologue(&code, 3), Some((0, 0x0040_3000, true)));
+        let table = words(&[
+            0xFFFF_FFFE,
+            0,
+            0xFFFF_FFCC,
+            0,
+            0xFFFF_FFFE,
+            0x0040_1050,
+            0x0040_1060,
+            0,
+            0,
+            0x0040_1070,
+            0xFFFF_FFFE,
+            0,
+            0xFFFF_FF00,
+        ]);
+        let img = ImageBytes::from_spans(vec![(0x0040_3000, table.as_slice())]);
+        let text = TextRanges::for_test(vec![(0x0040_1000, 0x0040_2000)]);
+        let s = x86_scope_table(&img, &text, 0x0040_3000, true).expect("table");
+        assert_eq!(s.len(), 2);
+        assert_eq!(
+            s[0].describe(),
+            "__try: __except (filter 0x401050) -> 0x401060"
+        );
+        assert_eq!(
+            s[1].describe(),
+            "__try (inside level 0): __finally 0x401070"
+        );
+    }
+
+    #[test]
+    fn x86_seh_prolog4_helper_form() {
+        let mut code = vec![0x6A, 0x10, 0x68];
+        code.extend_from_slice(&0x0040_3000u32.to_le_bytes());
+        code.push(0xE8);
+        code.extend_from_slice(&[0, 0, 0, 0]);
+        assert_eq!(x86_seh_prologue(&code, 0), Some((0, 0x0040_3000, true)));
+    }
+
+    #[test]
+    fn x86_cxx_eh_prologues() {
+        let mut code = vec![0x55, 0x8B, 0xEC, 0x6A, 0xFF, 0x68];
+        code.extend_from_slice(&0x0040_1900u32.to_le_bytes());
+        code.extend_from_slice(&[0x64, 0xA1, 0, 0, 0, 0]);
+        assert_eq!(x86_eh_prologue(&code, 3), Some((0, 0x0040_1900)));
+        let mut code = vec![0x6A, 0x0C, 0xB8];
+        code.extend_from_slice(&0x0040_1900u32.to_le_bytes());
+        code.push(0xE8);
+        code.extend_from_slice(&[0, 0, 0, 0]);
+        assert_eq!(x86_eh_prologue(&code, 2), Some((0, 0x0040_1900)));
+    }
+
+    #[test]
+    fn c_specific_handler_names() {
+        assert!(is_c_specific_handler("__C_specific_handler"));
+        assert!(!is_c_specific_handler("__CxxFrameHandler3"));
+    }
+}

@@ -18,7 +18,8 @@
 //! `ThrowInfo` (or zeroed with `rcx`, a rethrow) gets an instruction comment in
 //! the function `.pdata` places it in. References are image-relative on x64 and
 //! absolute on x86 ([`RefKind`]). The x64 catch side (`FuncInfo`, FH4,
-//! funclets) is [`super::kuna_msvcfuncinfo`], run from the same pass.
+//! funclets) is [`super::kuna_msvcfuncinfo`], SEH scope tables and x86 C++
+//! `FuncInfo` are [`super::kuna_msvcseh`], all run from the same pass.
 
 use object::{BinaryFormat, Object, ObjectSection, SectionKind};
 use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
@@ -126,6 +127,7 @@ pub fn collect<'a>(file: &'a object::File<'a>, bytes: &[u8]) -> AnalysisOutput {
     let code = exec_sections(file);
     let targets = throw_targets(file, bytes);
     out.merge(super::kuna_msvcfuncinfo::collect(file, bytes, &img));
+    out.merge(super::kuna_msvcseh::collect(file, bytes, &img, &code));
     let infos = find_throw_infos(&img, &rk, &text);
     if infos.is_empty() && targets.is_empty() {
         return out;
@@ -157,7 +159,7 @@ pub fn collect<'a>(file: &'a object::File<'a>, bytes: &[u8]) -> AnalysisOutput {
 }
 
 /// Every executable section as `(vma, bytes)`.
-fn exec_sections<'a>(file: &'a object::File<'a>) -> Vec<(u64, &'a [u8])> {
+pub(crate) fn exec_sections<'a>(file: &'a object::File<'a>) -> Vec<(u64, &'a [u8])> {
     let mut v = Vec::new();
     for sec in file.sections() {
         let exec = sec.kind() == SectionKind::Text

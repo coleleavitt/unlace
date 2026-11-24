@@ -3705,6 +3705,35 @@ classes share; and `this` of a function whose holders share no class at the
 subobject's offset 0, which is what identical-code folding and `_purecall`
 leave.
 
+### A COM request's out-parameter is the interface its id names (`kuna_comtyping.rs`)
+
+`CoCreateInstance(&CLSID_ShellLink, 0, 1, &IID_IShellLinkW, &p)` writes an
+`IShellLinkW *` through its out-parameter, which the API declares `void **`,
+so without more the object is an untyped word and every call through it is an
+offset off the table it points at. Under `com` the analysis commits the
+address of every interface id the image holds with the interface struct it
+names (chapter 01), and
+`crates/unlace-bandb-base/src/p5_types/kuna_comtyping.rs (out_param_type)`
+answers `TypeOpCall::getInputLocal` for the out-parameter of a request whose
+interface-id argument folds to one of those addresses (through copies, casts and
+a `PTRSUB` off the zero base): the argument is a pointer to a pointer to the
+interface, so the stack slot or global it addresses is typed, the loads through
+it read `lpVtbl` and a method, and the call prints as
+`p->lpVtbl->SetPath(p, L"...")`. The requests are the imported `ole32`
+entry points that take an interface id, matched by name without a DLL
+qualifier, an `__imp_` prefix or a `stdcall` decoration
+(`crates/unlace-bandb-base/src/p5_types/kuna_comtyping.rs (REQUESTS)`),
+and two calls through an object's own table: slot 0 with at least three
+arguments (`QueryInterface(This, riid, ppv)`) and, with at least four, slot 3
+(`IClassFactory::CreateInstance(This, pUnkOuter, riid, ppv)`), each only when
+the call's first argument is the object the table was read from. The answer is
+given ahead of the locked `void **` of the request's prototype
+(`crates/unlace-bandb-core/src/p5_types/coreaction_infertypes.rs (call_input_type_local)`),
+so the argument keeps a cast to the declared type and the object its own.
+Without an interface id the decompiler can fold to an address (an id read from
+a table the code indexes, or built on the stack) the out-parameter stays
+`void **`.
+
 ## 5.3 Ranges & consume bits
 
 The rest of the S5 fact fabric (the framing derives from the study in
@@ -4008,7 +4037,7 @@ change it, leaves 4-byte writes that a joined parameter could only print as
 partial stores into it), the prototype model accepts the two words as one
 parameter (`possible_input_param` on the joined
 storage: a stack slot, not two separate argument registers such as ARM's r0
-and r1, which only a declared prototype can join), and that word appears with coefficient +-1 in the same
+and r1, which only a declared prototype or option `armpairparam` (chapter 4) can join), and that word appears with coefficient +-1 in the same
 linear sum as `c` among the values `c` reaches (or in the difference of a
 compare's operands). Propagating the low word's borrow or carry into the high
 word is what makes the two words one value. The rule also fires on an INT_XOR

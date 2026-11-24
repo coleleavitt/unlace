@@ -825,22 +825,7 @@ fn moduledata_text(
     h: &PcHeader,
     header_vma: u64,
 ) -> Option<u64> {
-    let minor = crate::loader::gobuildinfo::buildinfo_blob(file)
-        .and_then(|blob| crate::loader::gobuildinfo::go_version(blob, |va, n| img.read(va, n)))
-        .filter(|v| v.0 == 1)
-        .map(|v| v.1);
-    let md = kuna_gomodlayout::locate(
-        file,
-        img,
-        header_vma,
-        minor,
-        h.ptr_size as u64,
-        &|img, va| {
-            img.read(va, h.ptr_size as usize)
-                .map(|b| rd_ptr(b, h.ptr_size, h.end))
-        },
-    );
-    if let Some(md) = md.filter(|md| md.ftab_len == h.nfunc.wrapping_add(1)) {
+    if let Some(md) = module_record(file, img, h, header_vma) {
         return Some(md.text);
     }
     for name in [
@@ -870,6 +855,37 @@ fn moduledata_text(
         }
     }
     None
+}
+
+/// The Go minor release the build-info blob names, for a go1.x image.
+fn go_minor(file: &object::File, img: &ImageBytes) -> Option<u16> {
+    crate::loader::gobuildinfo::buildinfo_blob(file)
+        .and_then(|blob| crate::loader::gobuildinfo::go_version(blob, |va, n| img.read(va, n)))
+        .filter(|v| v.0 == 1)
+        .map(|v| v.1)
+}
+
+/// The `moduledata` of the module whose `pcHeader` is at `header_vma`, read
+/// through its release's layout ([`kuna_gomodlayout`]) and accepted only when
+/// its `ftab` holds `nfunc + 1` entries.
+fn module_record(
+    file: &object::File,
+    img: &ImageBytes,
+    h: &PcHeader,
+    header_vma: u64,
+) -> Option<kuna_gomodlayout::Moduledata> {
+    kuna_gomodlayout::locate(
+        file,
+        img,
+        header_vma,
+        go_minor(file, img),
+        h.ptr_size as u64,
+        &|img, va| {
+            img.read(va, h.ptr_size as usize)
+                .map(|b| rd_ptr(b, h.ptr_size, h.end))
+        },
+    )
+    .filter(|md| md.ftab_len == h.nfunc.wrapping_add(1))
 }
 
 /// Address of the lowest `SectionKind::Text` section — the `moduledata.text` of an
@@ -986,6 +1002,7 @@ pub(crate) mod kuna_gomcall;
 pub mod kuna_gomodlayout;
 mod kuna_gomoduledata;
 pub mod kuna_gonoreturn;
+pub mod kuna_gopcln;
 
 #[cfg(test)]
 mod tests;

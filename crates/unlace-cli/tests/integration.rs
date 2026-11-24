@@ -133,6 +133,8 @@ mod arm_interwork_cli;
 #[path = "arm_isa_cli.rs"]
 mod arm_isa_cli;
 
+#[path = "arm_register_pair_params.rs"]
+mod arm_register_pair_params;
 #[path = "arm_variadic_returns.rs"]
 mod arm_variadic_returns;
 

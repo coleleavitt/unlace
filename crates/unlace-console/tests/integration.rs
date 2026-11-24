@@ -391,6 +391,9 @@ mod verify_outlang_rust_syntax;
 #[path = "verify_pdbinterior.rs"]
 mod verify_pdbinterior;
 
+#[path = "verify_pdbtypes.rs"]
+mod verify_pdbtypes;
+
 #[path = "verify_pdecode.rs"]
 mod verify_pdecode;
 

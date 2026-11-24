@@ -3684,6 +3684,28 @@ address = "pick"
 expect = ["0x2c", "scale7("]
 
 # Xtensa executable (EM_XTENSA, little-endian, gcc 15.3 windowed ABI) routes to Xtensa:LE:32:default (#776).
+# Xtensa ET_REL (little-endian, windowed): call8, l32r literals and branches take SLOT0_OP.
+[[family]]
+name = "elfroute_xtensa_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/xtensa.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_xtensa_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_xtensa_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_xtensa_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
 [[family]]
 name = "elfroute_xtensa_elf"
 loader = "auto"

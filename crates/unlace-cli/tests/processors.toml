@@ -2415,6 +2415,8 @@ test = "ignition_wide_operands_decode"
 address = "0x0"
 expect = [
     "return js_mul(js_add(a1,300),100000);",
+]
+
 # The META FPU instructions decode and lift: F MOVD between data and FX registers, F ADD and
 # F MUL, F ITOF, F CMP with #0 and a conditional F NEG (NEGFLO) after it. Built with
 # metag-linux-gnu-as 2.45 -mcpu=metac21 -mfpu=metac21.

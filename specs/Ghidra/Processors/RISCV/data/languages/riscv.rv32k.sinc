@@ -1,59 +1,141 @@
-# RV32 Crypto Extension
-# NOTE  0.6.2
+# RISC-V scalar cryptography (Scalar Crypto 1.0.1): Zknh SHA-256, Zksh SM3 and
+# Zksed SM4 for RV32 and RV64, and the RV32-only Zknh SHA-512 halves and Zkne/Zknd
+# AES. The RV64-only forms are in riscv.rv64k.sinc. Zbkb, Zbkc and Zbkx are in
+# riscv.rv32b.sinc. Encodings checked against LLVM's RISC-V assembler and
+# disassembler. The hash functions lift to their rotate/shift definitions; the
+# S-box based AES and SM4 rounds are user operations.
 
-# bs 00001 rs2 rs1 010 rd 0101011 saes32.encs
-:saes32.encs   rd, rs1, rs2, bs is rd & rs1 & rs2 & bs & op0006=0x2b & op1214=0x2 & op2529=0x1  unimpl
+define pcodeop sm4ed;
+define pcodeop sm4ks;
 
-# bs 00000 rs2 rs1 010 rd 0101011 saes32.encsm
-:saes32.encsm  rd, rs1, rs2, bs is rd & rs1 & rs2 & bs & op0006=0x2b & op1214=0x2 & op2529=0x0  unimpl
+# Zknh SHA-256
 
-# bs 00011 rs2 rs1 010 rd 0101011 saes32.decs
-:saes32.decs   rd, rs1, rs2, bs is rd & rs1 & rs2 & bs & op0006=0x2b & op1214=0x2 & op2529=0x3  unimpl
+:sha256sig0 rd,rs1 is rs1 & rd & op0006=0x13 & funct3=0x1 & op2031=0x102
+{
+	local x:4 = rs1:4;
+	local r:4 = ((x >> 7) | (x << 25)) ^ ((x >> 18) | (x << 14)) ^ (x >> 3);
+	assignW(rd, r);
+}
 
-# bs 00010 rs2 rs1 010 rd 0101011 saes32.decsm
-:saes32.decsm  rd, rs1, rs2, bs is rd & rs1 & rs2 & bs & op0006=0x2b & op1214=0x2 & op2529=0x2  unimpl
+:sha256sig1 rd,rs1 is rs1 & rd & op0006=0x13 & funct3=0x1 & op2031=0x103
+{
+	local x:4 = rs1:4;
+	local r:4 = ((x >> 17) | (x << 15)) ^ ((x >> 19) | (x << 13)) ^ (x >> 10);
+	assignW(rd, r);
+}
 
-# 0000111 00000 rs1 111 rd 0101011 ssha256.sig0
-:ssha256.sig0  rd, rs1  is rd & rs1 & op0006=0x2b & op1214=0x7 & op2024=0x00 & op2531=0x07  unimpl
+:sha256sum0 rd,rs1 is rs1 & rd & op0006=0x13 & funct3=0x1 & op2031=0x100
+{
+	local x:4 = rs1:4;
+	local r:4 = ((x >> 2) | (x << 30)) ^ ((x >> 13) | (x << 19)) ^ ((x >> 22) | (x << 10));
+	assignW(rd, r);
+}
 
-# 0000111 00001 rs1 111 rd 0101011 ssha256.sig1
-:ssha256.sig1  rd, rs1  is rd & rs1 & op0006=0x2b & op1214=0x7 & op2024=0x01 & op2531=0x07  unimpl
+:sha256sum1 rd,rs1 is rs1 & rd & op0006=0x13 & funct3=0x1 & op2031=0x101
+{
+	local x:4 = rs1:4;
+	local r:4 = ((x >> 6) | (x << 26)) ^ ((x >> 11) | (x << 21)) ^ ((x >> 25) | (x << 7));
+	assignW(rd, r);
+}
 
-# 0000111 00010 rs1 111 rd 0101011 ssha256.sum0
-:ssha256.sum0  rd, rs1  is rd & rs1 & op0006=0x2b & op1214=0x7 & op2024=0x02 & op2531=0x07  unimpl
+# Zksh SM3
 
-# 0000111 00011 rs1 111 rd 0101011 ssha256.sum1
-:ssha256.sum1  rd, rs1  is rd & rs1 & op0006=0x2b & op1214=0x7 & op2024=0x03 & op2531=0x07  unimpl
+:sm3p0 rd,rs1 is rs1 & rd & op0006=0x13 & funct3=0x1 & op2031=0x108
+{
+	local x:4 = rs1:4;
+	local r:4 = x ^ ((x << 9) | (x >> 23)) ^ ((x << 17) | (x >> 15));
+	assignW(rd, r);
+}
 
-# 0001100 rs2 rs1 111 rd 0101011 ssha512.sum0r
-:ssha512.sum0r rd, rs1, rs2  is rd & rs1 & rs2 & op0006=0x2b & op1214=0x7 & op2531=0x0c  unimpl
+:sm3p1 rd,rs1 is rs1 & rd & op0006=0x13 & funct3=0x1 & op2031=0x109
+{
+	local x:4 = rs1:4;
+	local r:4 = x ^ ((x << 15) | (x >> 17)) ^ ((x << 23) | (x >> 9));
+	assignW(rd, r);
+}
 
-# 0001101 rs2 rs1 111 rd 0101011 ssha512.sum1r
-:ssha512.sum1r rd, rs1, rs2  is rd & rs1 & rs2 & op0006=0x2b & op1214=0x7 & op2531=0x0d  unimpl
+# Zksed SM4
 
-# 0001000 rs2 rs1 111 rd 0101011 ssha512.sig0l
-:ssha512.sig0l rd, rs1, rs2  is rd & rs1 & rs2 & op0006=0x2b & op1214=0x7 & op2531=0x08  unimpl
+:sm4ed rd,rs1,rs2,bs is rs1 & rs2 & rd & bs & op0006=0x33 & funct3=0x0 & op2529=0x18
+{
+	rd = sm4ed(rs1, rs2, bs);
+}
 
-# 0001001 rs2 rs1 111 rd 0101011 ssha512.sig0h
-:ssha512.sig0h rd, rs1, rs2  is rd & rs1 & rs2 & op0006=0x2b & op1214=0x7 & op2531=0x09  unimpl
+:sm4ks rd,rs1,rs2,bs is rs1 & rs2 & rd & bs & op0006=0x33 & funct3=0x0 & op2529=0x1a
+{
+	rd = sm4ks(rs1, rs2, bs);
+}
 
-# 0001010 rs2 rs1 111 rd 0101011 ssha512.sig1l
-:ssha512.sig1l rd, rs1, rs2  is rd & rs1 & rs2 & op0006=0x2b & op1214=0x7 & op2531=0x0a  unimpl
+@if ADDRSIZE == "32"
+# Zknh SHA-512 on RV32: each instruction computes one 32-bit half of a SHA-512
+# sigma or sum function of the 64-bit value rs2:rs1 (rs2 the high word).
 
-# 0001011 rs2 rs1 111 rd 0101011 ssha512.sig1h
-:ssha512.sig1h rd, rs1, rs2  is rd & rs1 & rs2 & op0006=0x2b & op1214=0x7 & op2531=0x0b  unimpl
+:sha512sum0r rd,rs1,rs2 is rs1 & rs2 & rd & op0006=0x33 & funct3=0x0 & funct7=0x28
+{
+	local x:8 = (zext(rs2) << 32) | zext(rs1);
+	local r:8 = ((x << 25) | (x >> 39)) ^ ((x << 30) | (x >> 34)) ^ ((x >> 28) | (x << 36));
+	rd = r:4;
+}
 
-# 0000111 01000 rs1 111 rd 0101011 ssm3.p0
-:ssm3.p0       rd, rs1  is rd & rs1 & op0006=0x2b & op1214=0x7 & op2024=0x08 & op2531=0x07  unimpl
+:sha512sum1r rd,rs1,rs2 is rs1 & rs2 & rd & op0006=0x33 & funct3=0x0 & funct7=0x29
+{
+	local x:8 = (zext(rs2) << 32) | zext(rs1);
+	local r:8 = ((x << 23) | (x >> 41)) ^ ((x >> 14) | (x << 50)) ^ ((x >> 18) | (x << 46));
+	rd = r:4;
+}
 
-# 0000111 01001 rs1 111 rd 0101011 ssm3.p1
-:ssm3.p1       rd, rs1  is rd & rs1 & op0006=0x2b & op1214=0x7 & op2024=0x09 & op2531=0x07  unimpl
+:sha512sig0l rd,rs1,rs2 is rs1 & rs2 & rd & op0006=0x33 & funct3=0x0 & funct7=0x2a
+{
+	local x:8 = (zext(rs2) << 32) | zext(rs1);
+	local r:8 = ((x >> 1) | (x << 63)) ^ ((x >> 7) | (x << 57)) ^ ((x >> 8) | (x << 56));
+	rd = r:4;
+}
 
-# bs 00100 rs2 rs1 011 rd 0101011 ssm4.ed
-:ssm4.ed       rd, rs1, rs2, bs is rd & rs1 & rs2 & bs & op0006=0x2b & op1214=0x3 & op2529=0x4  unimpl
+:sha512sig1l rd,rs1,rs2 is rs1 & rs2 & rd & op0006=0x33 & funct3=0x0 & funct7=0x2b
+{
+	local x:8 = (zext(rs2) << 32) | zext(rs1);
+	local r:8 = ((x << 3) | (x >> 61)) ^ ((x >> 6) | (x << 58)) ^ ((x >> 19) | (x << 45));
+	rd = r:4;
+}
 
-# bs 00101 rs2 rs1 011 rd 0101011 ssm4.ks
-:ssm4.ks       rd, rs1, rs2, bs is rd & rs1 & rs2 & bs & op0006=0x2b & op1214=0x3 & op2529=0x5  unimpl
+:sha512sig0h rd,rs1,rs2 is rs1 & rs2 & rd & op0006=0x33 & funct3=0x0 & funct7=0x2e
+{
+	local x:8 = (zext(rs2) << 32) | zext(rs1);
+	local r:8 = ((x >> 1) | (x << 63)) ^ ((x & 0xffffffff) >> 7) ^ ((x >> 8) | (x << 56));
+	rd = r:4;
+}
 
-# 0000111 shamtw 01010 111 rd 0101011 pollentropy
-:pollentropy   rd, shamtw  is rd & shamtw & op0006=0x2b & op1214=0x7 & op1519=0x0a & op2531=0x07  unimpl
+:sha512sig1h rd,rs1,rs2 is rs1 & rs2 & rd & op0006=0x33 & funct3=0x0 & funct7=0x2f
+{
+	local x:8 = (zext(rs2) << 32) | zext(rs1);
+	local r:8 = ((x << 3) | (x >> 61)) ^ ((x & 0xffffffff) >> 6) ^ ((x >> 19) | (x << 45));
+	rd = r:4;
+}
+
+# Zkne / Zknd AES on RV32: one S-box column of a round, selected by bs.
+
+define pcodeop aes32esi;
+define pcodeop aes32esmi;
+define pcodeop aes32dsi;
+define pcodeop aes32dsmi;
+
+:aes32esi rd,rs1,rs2,bs is rs1 & rs2 & rd & bs & op0006=0x33 & funct3=0x0 & op2529=0x11
+{
+	rd = aes32esi(rs1, rs2, bs);
+}
+
+:aes32esmi rd,rs1,rs2,bs is rs1 & rs2 & rd & bs & op0006=0x33 & funct3=0x0 & op2529=0x13
+{
+	rd = aes32esmi(rs1, rs2, bs);
+}
+
+:aes32dsi rd,rs1,rs2,bs is rs1 & rs2 & rd & bs & op0006=0x33 & funct3=0x0 & op2529=0x15
+{
+	rd = aes32dsi(rs1, rs2, bs);
+}
+
+:aes32dsmi rd,rs1,rs2,bs is rs1 & rs2 & rd & bs & op0006=0x33 & funct3=0x0 & op2529=0x17
+{
+	rd = aes32dsmi(rs1, rs2, bs);
+}
+@endif

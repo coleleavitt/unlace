@@ -720,6 +720,10 @@ pub struct AnalysisOutput {
     /// whatever the image's default convention is. The commit boundary declares
     /// the prototypes parked under these names with that model.
     pub c_runtime_imports: Vec<String>,
+    /// The Control Flow Guard dispatch pointer slots a PE load configuration
+    /// names (`__guard_dispatch_icall_fptr` and its XFG variants), as VMAs. A
+    /// call through one is the call through the target register it guards.
+    pub guard_dispatch_slots: Vec<u64>,
     /// Processor-context decode-mode paints (the kuna analog of ARM's
     /// `ARM_ElfExtension`/`ArmSymbolAnalyzer` `programContext.setValue(TMode,…)`).
     /// Each sets a SLEIGH context variable over an address range; the commit boundary
@@ -1251,6 +1255,7 @@ impl AnalysisOutput {
         self.arm_float_prototypes.extend(other.arm_float_prototypes);
         self.main_decl_at.extend(other.main_decl_at);
         self.c_runtime_imports.extend(other.c_runtime_imports);
+        self.guard_dispatch_slots.extend(other.guard_dispatch_slots);
         self.context_paints.extend(other.context_paints);
         self.inventory_context_paints
             .extend(other.inventory_context_paints);

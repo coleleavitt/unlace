@@ -55,7 +55,7 @@
 //! panics and never errors — it only ever produces *more* names.
 
 use object::pe::{ImageNtHeaders32, ImageNtHeaders64};
-use object::read::pe::{ImageNtHeaders, ImportTable, PeFile, PeFile32, PeFile64};
+use object::read::pe::{ImageNtHeaders, ImageThunkData, ImportTable, PeFile, PeFile32, PeFile64};
 use object::read::{Object, ObjectSection};
 use object::{FileKind, LittleEndian as LE};
 
@@ -99,11 +99,11 @@ pub(crate) fn resolve_pe_imports(file: &object::File, bytes: &[u8]) -> Vec<Impor
 pub(crate) fn resolve_pe_import_slots(bytes: &[u8]) -> Vec<(u64, u64)> {
     match FileKind::parse(bytes) {
         Ok(FileKind::Pe64) => match PeFile64::parse(bytes) {
-            Ok(pe) => slot_ranges::<ImageNtHeaders64>(&pe, 8),
+            Ok(pe) => slot_ranges::<ImageNtHeaders64>(&pe, bytes, 8),
             Err(_) => Vec::new(),
         },
         Ok(FileKind::Pe32) => match PeFile32::parse(bytes) {
-            Ok(pe) => slot_ranges::<ImageNtHeaders32>(&pe, 4),
+            Ok(pe) => slot_ranges::<ImageNtHeaders32>(&pe, bytes, 4),
             Err(_) => Vec::new(),
         },
         _ => Vec::new(),
@@ -167,7 +167,7 @@ fn is_c_runtime_dll(dll: &[u8]) -> bool {
 
 /// [`resolve_pe_import_slots`] over a typed `PeFile`: reuse the INT/IAT lockstep
 /// walk purely for its slot-VA side table, then widen each slot to its pointer.
-fn slot_ranges<Pe: ImageNtHeaders>(pe: &PeFile<Pe>, ptr: u64) -> Vec<(u64, u64)> {
+fn slot_ranges<Pe: ImageNtHeaders>(pe: &PeFile<Pe>, bytes: &[u8], ptr: u64) -> Vec<(u64, u64)> {
     let mut slot_to_name: std::collections::HashMap<u64, Vec<u8>> =
         std::collections::HashMap::new();
     let mut discard: Vec<ImportSym> = Vec::new();
@@ -180,6 +180,7 @@ fn slot_ranges<Pe: ImageNtHeaders>(pe: &PeFile<Pe>, ptr: u64) -> Vec<(u64, u64)>
             &mut slot_to_name,
         );
     }
+    walk_delay_import_table(pe, bytes, ptr, &mut discard, &mut slot_to_name);
     let mut slots: Vec<u64> = slot_to_name.into_keys().collect();
     slots.sort_unstable();
     slots
@@ -208,6 +209,7 @@ fn collect<Pe: ImageNtHeaders>(
     if let Ok(Some(it)) = pe.import_table() {
         walk_import_table::<Pe>(&it, image_base, ptr, &mut out, &mut slot_to_name);
     }
+    walk_delay_import_table(pe, bytes, ptr, &mut out, &mut slot_to_name);
 
     // Thunk veneers: a direct `call thunk` to a `jmp [rip+disp]` (`FF 25 …`)
     // veneer that jumps through an IAT slot we just named.  Decode the veneers
@@ -335,6 +337,81 @@ fn walk_import_table<Pe: ImageNtHeaders>(
             i += 1;
         }
     }
+}
+
+/// Walk the delay-load import directory (`IMAGE_DELAYLOAD_DESCRIPTOR`, data
+/// directory 13) the way [`walk_import_table`] walks the regular one: the `i`-th
+/// name-table entry names the `i`-th delay IAT slot. Until its first call a
+/// slot holds the address of the image's own load thunk, which resolves the
+/// import and patches the slot; that thunk is named `__imp_load_<name>`.
+fn walk_delay_import_table<Pe: ImageNtHeaders>(
+    pe: &PeFile<Pe>,
+    bytes: &[u8],
+    ptr: u64,
+    out: &mut Vec<ImportSym>,
+    slot_to_name: &mut HashMap<u64, Vec<u8>>,
+) {
+    let sections = pe.section_table();
+    let Ok(Some(dt)) = pe
+        .data_directories()
+        .delay_load_import_table(bytes, &sections)
+    else {
+        return;
+    };
+    let Ok(mut descs) = dt.descriptors() else {
+        return;
+    };
+    let image_base = pe.relative_address_base();
+    while let Ok(Some(desc)) = descs.next() {
+        // Attributes bit 0 clear is the pre-VC7 form, which stores VAs where
+        // the current one stores RVAs.
+        let rva = |field: u32| match desc.attributes.get(LE) & 1 {
+            0 => (field as u64).wrapping_sub(image_base) as u32,
+            _ => field,
+        };
+        let dll = dt.name(rva(desc.dll_name_rva.get(LE))).unwrap_or(b"");
+        let iat_rva = rva(desc.import_address_table_rva.get(LE));
+        let Ok(mut names) = dt.thunks(rva(desc.import_name_table_rva.get(LE))) else {
+            continue;
+        };
+        let iat = sections.pe_data_at(bytes, iat_rva).unwrap_or(&[]);
+        let mut i = 0u64;
+        while let Ok(Some(thunk)) = names.next::<Pe>() {
+            let index = i;
+            i += 1;
+            let name = match thunk.is_ordinal() {
+                true => ordinal_import_name(dll, thunk.ordinal()),
+                false => match dt.hint_name(rva(thunk.address())) {
+                    Ok((_, n)) => n.to_vec(),
+                    Err(_) => continue,
+                },
+            };
+            let slot_va = image_base
+                .wrapping_add(iat_rva as u64)
+                .wrapping_add(index.wrapping_mul(ptr));
+            if let Some(thunk_va) = read_slot(iat, index, ptr).filter(|&va| va != 0) {
+                let load_name = [&b"__imp_load_"[..], &name].concat();
+                out.push(ImportSym {
+                    addr: thunk_va,
+                    name: load_name,
+                    kind: ImportSymKind::Import,
+                });
+            }
+            slot_to_name.insert(slot_va, name.clone());
+            out.push(ImportSym {
+                addr: slot_va,
+                name,
+                kind: ImportSymKind::Import,
+            });
+        }
+    }
+}
+
+/// The `index`-th little-endian `ptr`-byte word of `table`, or `None` past its end.
+fn read_slot(table: &[u8], index: u64, ptr: u64) -> Option<u64> {
+    let at = usize::try_from(index.checked_mul(ptr)?).ok()?;
+    let word = table.get(at..at.checked_add(ptr as usize)?)?;
+    Some(word.iter().rev().fold(0u64, |v, &b| (v << 8) | b as u64))
 }
 
 /// The name of an import-by-ordinal: the built-in export table's name for a
@@ -642,6 +719,41 @@ mod tests {
         );
         // No extension: the whole string is the stem.
         assert_eq!(synth_ordinal_name(b"mylib", 3), b"mylib_Ordinal_3".to_vec());
+    }
+
+    /// A delay-loaded import names its delay IAT slot, which the import
+    /// binding then treats like a regular IAT slot, and the image's load thunk
+    /// the slot holds until the first call (`__imp_load_<name>`).
+    #[test]
+    fn delay_load_imports_name_slots_and_load_thunks() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/pe_guardcf_x86_64.exe"
+        );
+        let bytes = std::fs::read(path).expect("read fixture");
+        let file = object::File::parse(bytes.as_slice()).expect("parse PE");
+        let syms: Vec<(u64, String)> = resolve_pe_imports(&file, &bytes)
+            .into_iter()
+            .map(|s| (s.addr, String::from_utf8(s.name).unwrap()))
+            .collect();
+        for (addr, name) in [
+            (0x140003020, "dl_add"),
+            (0x140003028, "dl_mul"),
+            (0x140001156, "__imp_load_dl_add"),
+            (0x140001162, "__imp_load_dl_mul"),
+        ] {
+            assert!(
+                syms.contains(&(addr, name.to_string())),
+                "{name}@{addr:#x} missing from {syms:#x?}"
+            );
+        }
+        let slots = resolve_pe_import_slots(&bytes);
+        for slot in [0x140003020, 0x140003028] {
+            assert!(
+                slots.contains(&(slot, slot + 8)),
+                "{slot:#x} missing from {slots:#x?}"
+            );
+        }
     }
 
     #[test]

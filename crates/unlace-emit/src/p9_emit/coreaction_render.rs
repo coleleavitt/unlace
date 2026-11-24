@@ -1280,9 +1280,9 @@ fn is_pointer(
                 }
             }
             OpCode::CPUI_CALLOTHER => {
-                if !glb.kuna_options.get::<crate::kuna_repstring::RepString>().0
-                    || crate::kuna_repstring::input_type(data, op, slot).is_none()
-                {
+                let rep = glb.kuna_options.get::<crate::kuna_repstring::RepString>().0
+                    && crate::kuna_repstring::input_type(data, op, slot).is_some();
+                if !rep && crate::kuna_atomics::input_type(data, op, slot).is_none() {
                     return None;
                 }
             }

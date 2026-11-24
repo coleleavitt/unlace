@@ -146,3 +146,12 @@ runtime.panicBounds32X
 runtime.panicExtend
 runtime.panicSimdImm
 os.Exit
+
+# (kuna, #28) runtime/asm_*.s `runtime.goexit` (the frame a goroutine returns
+# into; it calls goexit1, "does not return"), runtime/stack.go
+# `runtime.morestackc` (body is throw), runtime/signal_windows.go
+# `runtime.dieFromException` (ends in RaiseFailFastException, "bypasses all
+# exception handlers").
+runtime.goexit
+runtime.morestackc
+runtime.dieFromException

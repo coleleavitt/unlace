@@ -164,6 +164,7 @@ it until the label is gone.
 | `docs/improvement-pipeline.md` | The autonomous improvement pipeline + feature-PR requirements. |
 | `docs/re-pipeline.md` | The RE-friction loop (agents solve crackmes, record gaps, self-merge). |
 | `docs/decbench-loop.md` | The decbench benchmark / improvement campaign. |
+| `docs/quality-harness.md` | The ground-truth quality harness: compile a DWARF corpus, score per function, A/B an option into SQLite. |
 | `docs/modes.md` | `--mode auto\|reliable\|aggressive\|fast` presets and thresholds. |
 | `docs/multilang.md` | Multi-language source support (Rust/Go/Swift): sourcelang plane, idiom engine. |
 | `docs/observatory.md` | The local codebase observatory (`PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna target/release/unlace`). |

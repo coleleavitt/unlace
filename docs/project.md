@@ -92,6 +92,14 @@ than the timeout fails with "database is locked" and changes nothing. Readers, i
 `decompile --project` that is running, see a consistent snapshot and never block a writer. Two writers
 setting the same key: the later commit wins. A `set` of several directives is all or nothing.
 
+## From an IDA database
+
+`unlace idb import <db.i64|db.idb> [--project FILE | --binary BIN]` fills a project from an IDA
+database: its local types, functions (entries, extents, names), prototypes and comments, as the
+`typedef`, `function`, `prototype` and `comment` rows above. The database records the hash of the
+file IDA loaded; importing into a project bound to other bytes is refused unless `--force`. See
+`docs/cli.md`, "unlace idb".
+
 ## Review in git
 
 `unlace project export FILE` writes the whole state as canonical JSON. Every list is sorted by its key,

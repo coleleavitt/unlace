@@ -121,7 +121,17 @@ fn make(argv: &[String]) -> Result<(), (i32, String)> {
             "the inputs define no function with a global name".to_string(),
         )
     })?;
-    std::fs::write(&out, write_pat(&lib.patterns))
+    let built = build_sig(&lib.patterns, &lib.data_names, target, &libname);
+    let excluded: Vec<FuncPattern> = built.as_ref().map_or_else(
+        |_| Vec::new(),
+        |b| {
+            b.collisions
+                .iter()
+                .flat_map(|c| c.patterns.clone())
+                .collect()
+        },
+    );
+    std::fs::write(&out, write_pat(&lib.patterns, &excluded))
         .map_err(|e| (1, format!("cannot write {out}: {e}")))?;
     for names in pattern_collisions(&lib.patterns) {
         eprintln!(
@@ -135,7 +145,7 @@ fn make(argv: &[String]) -> Result<(), (i32, String)> {
     );
 
     let Some(sig) = sig else { return Ok(()) };
-    let built = build_sig(&lib.patterns, &lib.data_names, target, &libname).map_err(|e| (1, e))?;
+    let built = built.map_err(|e| (1, e))?;
     for c in &built.collisions {
         eprintln!(
             "unlace flirt make: collision: {} are not told apart; left out of {sig}",

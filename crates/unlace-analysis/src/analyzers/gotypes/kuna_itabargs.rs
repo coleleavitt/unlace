@@ -182,6 +182,133 @@ pub(crate) fn votes(
     out
 }
 
+/// The x86-64 general registers by encoding number.
+const REGISTERS_BY_NUMBER: [&str; 16] = [
+    "RAX", "RCX", "RDX", "RBX", "RSP", "RBP", "RSI", "RDI", "R8", "R9", "R10", "R11", "R12", "R13",
+    "R14", "R15",
+];
+
+/// Every `LEA r64,[rip+disp32]` (`REX.W 8D /r`, ModRM `mod=00 rm=101`) in the
+/// image's executable sections whose target is a static itab:
+/// `(instruction VMA, destination register, itab VMA)`. A byte scan, so it
+/// finds the call sites the Listing walk did not reach (in a stripped Go
+/// binary the walk misses everything only a function value calls, `main.main`
+/// among them); a false hit inside another instruction must still decode into
+/// a walk that reaches a call, and must agree with every other vote.
+fn scanned_itab_leas(
+    file: &object::File,
+    itabs: &BTreeMap<u64, String>,
+) -> Vec<(u64, &'static str, u64)> {
+    use object::{Object, ObjectSection, SectionKind};
+    let mut out = Vec::new();
+    for section in file.sections() {
+        if section.kind() != SectionKind::Text {
+            continue;
+        }
+        let Ok(bytes) = section.data() else {
+            continue;
+        };
+        let base = section.address();
+        for i in 0..bytes.len().saturating_sub(6) {
+            let rex = bytes[i];
+            if (rex != 0x48 && rex != 0x4c) || bytes[i + 1] != 0x8d || bytes[i + 2] & 0xc7 != 0x05 {
+                continue;
+            }
+            let number = usize::from((bytes[i + 2] >> 3) & 7) + if rex == 0x4c { 8 } else { 0 };
+            let Ok(disp) = <[u8; 4]>::try_from(&bytes[i + 3..i + 7]) else {
+                continue;
+            };
+            let Some(next) = base.checked_add(i as u64 + 7) else {
+                continue;
+            };
+            let target = next.wrapping_add(i32::from_le_bytes(disp) as i64 as u64);
+            if itabs.contains_key(&target) {
+                out.push((next - 7, REGISTERS_BY_NUMBER[number], target));
+            }
+        }
+    }
+    out
+}
+
+/// [`call_after`] over instructions decoded on the spot instead of the
+/// Listing's: the callee and the registers still holding the itab at the first
+/// direct call after the `LEA` at `at` (7 bytes long).
+fn decoded_call_after(
+    translate: &dyn unlace_sleigh::translate::Translate,
+    code_space: &std::rc::Rc<unlace_base::space::AddrSpace>,
+    at: u64,
+    reg: &'static str,
+) -> Option<(u64, Vec<&'static str>)> {
+    use crate::listing::classify::classify;
+    use crate::listing::decode::{Decoded, decode_one_with_assembly};
+    let mut held: Vec<&'static str> = vec![reg];
+    let mut next = at.checked_add(7)?;
+    let mut decoded = Decoded::default();
+    for _ in 0..MAX_STEPS {
+        decode_one_with_assembly(translate, next, code_space, &mut decoded).ok()?;
+        if decoded.len == 0 {
+            return None;
+        }
+        let class = classify(&decoded.ops, next, decoded.len);
+        if class.flow.is_call {
+            if class.flow.is_indirect || class.flow.is_computed {
+                return None;
+            }
+            return match class.flows.as_slice() {
+                [callee] => Some((*callee, held)),
+                _ => None,
+            };
+        }
+        if class.flow.is_jump || class.flow.is_terminal || !class.flow.has_fallthrough {
+            return None;
+        }
+        let copied = copy_of_held(&decoded.mnemonic, &decoded.operands, &held);
+        held.retain(|r| !may_write(&decoded.mnemonic, &decoded.operands, r));
+        if let Some(dest) = copied {
+            if !held.contains(&dest) {
+                held.push(dest);
+            }
+        }
+        if held.is_empty() {
+            return None;
+        }
+        next = class.fall_through?;
+    }
+    None
+}
+
+/// The votes of [`scanned_itab_leas`], walked by [`decoded_call_after`].
+fn scanned_votes(
+    ctx: &AnalysisCtx,
+    itabs: &BTreeMap<u64, String>,
+    out: &mut BTreeMap<(u64, usize), BTreeSet<String>>,
+) -> usize {
+    let Some(code_space) = ctx.arch.manage().get_default_code_space().cloned() else {
+        return 0;
+    };
+    let translate = ctx.arch.translate();
+    let leas = scanned_itab_leas(ctx.file, itabs);
+    for &(at, reg, itab) in &leas {
+        if !INTEGER_REGISTERS.contains(&reg) {
+            continue;
+        }
+        let (Some(interface), Some((callee, held))) = (
+            itabs.get(&itab),
+            decoded_call_after(translate, &code_space, at, reg),
+        ) else {
+            continue;
+        };
+        for held_reg in held {
+            if let Some(index) = INTEGER_REGISTERS.iter().position(|r| *r == held_reg) {
+                out.entry((callee, index))
+                    .or_default()
+                    .insert(interface.clone());
+            }
+        }
+    }
+    leas.len()
+}
+
 /// (kuna `goitabcalls`) The stripped-binary interface-parameter pass (a
 /// Listing consumer, gated by the option).
 pub struct GoItabArgsPass;
@@ -211,7 +338,8 @@ impl AnalysisPass for GoItabArgsPass {
         }
         let types = ctx.arch.types();
         let mut hints = Vec::new();
-        let votes = votes(listing, &itabs);
+        let mut votes = votes(listing, &itabs);
+        let scanned = scanned_votes(ctx, &itabs, &mut votes);
         let debug = std::env::var_os("KUNA_GOITABARGS_DEBUG").is_some();
         if debug {
             let leas = listing
@@ -227,7 +355,7 @@ impl AnalysisPass for GoItabArgsPass {
                 .map(|(&at, _)| at)
                 .collect();
             eprintln!(
-                "[kuna goitabargs] instructions={} assembly={} lea={} itab_lea={} itabs={} votes={}",
+                "[kuna goitabargs] instructions={} assembly={} lea={} itab_lea={} scanned_lea={scanned} itabs={} votes={}",
                 listing.num_instructions(),
                 listing.has_assembly(),
                 leas,

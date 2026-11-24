@@ -637,8 +637,29 @@ impl Action for ActionForceGoto {
 
 /// Perform Common Sub-expression Elimination on `CPUI_MULTIEQUAL` ops (C++
 /// `ActionMultiCse`, `coreaction.hh:163`).  `flags = 0`.
+///
+/// `apply` (C++ `ActionMultiCse::apply`, coreaction.cc:894) runs `process_block`
+/// on every basic block until it makes no more merges.  Within one block, two
+/// MULTIEQUALs whose inputs agree slot by slot (COPYs skipped, values compared by
+/// `functional_equality_level`) compute the same value, so the later one is
+/// replaced by the other and destroyed.  A merge whose outputs both reach a
+/// RETURN, or one that is address-tied, keeps the output the source names.
 pub struct ActionMultiCse {
     base: ActionBase,
+}
+
+/// The space type of `vn`'s address (C++ `space_type_of`, `Varnode::getSpace`).
+fn multicse_space_type(data: &Funcdata, vn: VarnodeId) -> Option<unlace_base::space::spacetype> {
+    data.vbank()
+        .get(vn)?
+        .get_addr()
+        .get_space()
+        .map(|s| s.get_type())
+}
+
+/// Input `slot` of `op`, if the op has that many inputs.
+fn multicse_input(data: &Funcdata, op: OpId, slot: i32) -> Option<VarnodeId> {
+    data.obank().get(op)?.get_in(slot)
 }
 
 impl ActionMultiCse {
@@ -647,6 +668,187 @@ impl ActionMultiCse {
         Box::new(ActionMultiCse {
             base: ActionBase::new(0, "multicse", g),
         })
+    }
+
+    /// C++ `ActionMultiCse::preferredOutput`: which of two
+    /// equivalent MULTIEQUAL outputs survives.  `true` keeps `out2`.
+    fn preferred_output(data: &Funcdata, out1: VarnodeId, out2: VarnodeId) -> bool {
+        let feeds_return = |vn: VarnodeId| {
+            data.vbank().get(vn).is_some_and(|v| {
+                v.descend_iter().any(|op| {
+                    data.obank()
+                        .get(op)
+                        .is_some_and(|o| o.code() == OpCode::CPUI_RETURN)
+                })
+            })
+        };
+        if feeds_return(out1) {
+            return false;
+        }
+        if feeds_return(out2) {
+            return true;
+        }
+        let addr_tied = |vn: VarnodeId| data.vbank().get(vn).is_some_and(|v| v.is_addr_tied());
+        let internal = unlace_base::space::spacetype::IPTR_INTERNAL;
+        if !addr_tied(out1) {
+            if addr_tied(out2) {
+                return true;
+            } else if multicse_space_type(data, out1) == Some(internal)
+                && multicse_space_type(data, out2) != Some(internal)
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// C++ `ActionMultiCse::skipCopy`: a value a COPY produces stands for the
+    /// COPY's input.
+    fn skip_copy(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
+        let Some(v) = data.vbank().get(vn) else {
+            return vn;
+        };
+        if v.is_written() {
+            if let Some(def) = v.get_def() {
+                if let Some(o) = data.obank().get(def) {
+                    if o.code() == OpCode::CPUI_COPY {
+                        if let Some(src) = o.get_in(0) {
+                            return src;
+                        }
+                    }
+                }
+            }
+        }
+        vn
+    }
+
+    /// C++ `ActionMultiCse::findMatch`: an earlier MULTIEQUAL
+    /// in `bl`, before `target`, that reads `input` and whose every input matches
+    /// the `target`'s input in the same slot.
+    fn find_match(
+        data: &Funcdata,
+        bl: crate::context::BlockId,
+        target: OpId,
+        input: VarnodeId,
+    ) -> Option<OpId> {
+        for op in data.bb_ops(bl) {
+            if op == target {
+                break;
+            }
+            let numinput = data.obank().get(op).map_or(0, |o| o.num_input());
+            let reads_input = (0..numinput).any(|slot| {
+                multicse_input(data, op, slot).is_some_and(|vn| Self::skip_copy(data, vn) == input)
+            });
+            if !reads_input {
+                continue;
+            }
+            let mut buf1 = [input; 2];
+            let mut buf2 = [input; 2];
+            let mut index = 0;
+            while index < numinput {
+                let (Some(a), Some(b)) = (
+                    multicse_input(data, op, index),
+                    multicse_input(data, target, index),
+                ) else {
+                    break;
+                };
+                let in1 = Self::skip_copy(data, a);
+                let in2 = Self::skip_copy(data, b);
+                if in1 == in2 {
+                    index += 1;
+                    continue;
+                }
+                if unlace_middle::expression::functional_equality_level(
+                    in1,
+                    in2,
+                    &mut buf1,
+                    &mut buf2,
+                    data.vbank(),
+                    data.obank(),
+                ) != 0
+                {
+                    break;
+                }
+                index += 1;
+            }
+            if index == numinput {
+                return Some(op);
+            }
+        }
+        None
+    }
+
+    /// C++ `ActionMultiCse::processBlock` (coreaction.cc:846): merge one pair of
+    /// equivalent MULTIEQUALs in `bl`.  `Ok(true)` when a pair was merged.
+    fn process_block(
+        &mut self,
+        data: &mut Funcdata,
+        bl: crate::context::BlockId,
+    ) -> UnlaceResult<bool> {
+        let mut vnlist: Vec<VarnodeId> = Vec::new();
+        let mut targetop: Option<OpId> = None;
+        let mut pairop: Option<OpId> = None;
+        for op in data.bb_ops(bl) {
+            let opc = data.obank().get(op).map(|o| o.code());
+            if opc == Some(OpCode::CPUI_COPY) {
+                continue;
+            }
+            if opc != Some(OpCode::CPUI_MULTIEQUAL) {
+                break;
+            }
+            let vnpos = vnlist.len();
+            let numinput = data.obank().get(op).map_or(0, |o| o.num_input());
+            let mut slot = 0;
+            while slot < numinput {
+                let raw = multicse_input(data, op, slot).expect("multicse: MULTIEQUAL input");
+                let vn = Self::skip_copy(data, raw);
+                vnlist.push(vn);
+                if data.vbank().get(vn).is_some_and(|v| v.is_mark()) {
+                    pairop = Self::find_match(data, bl, op, vn);
+                    if pairop.is_some() {
+                        break;
+                    }
+                }
+                slot += 1;
+            }
+            if slot < numinput {
+                targetop = Some(op);
+                break;
+            }
+            for &vn in vnlist[vnpos..].iter() {
+                if let Some(v) = data.vbank_mut().get_mut(vn) {
+                    v.set_mark();
+                }
+            }
+        }
+        for &vn in vnlist.iter() {
+            if let Some(v) = data.vbank_mut().get_mut(vn) {
+                v.clear_mark();
+            }
+        }
+        let Some(targetop) = targetop else {
+            return Ok(false);
+        };
+        let pairop = pairop.expect("matching MULTIEQUAL is missing");
+        let out1 = data
+            .obank()
+            .get(pairop)
+            .and_then(|o| o.get_out())
+            .expect("MULTIEQUAL has no output");
+        let out2 = data
+            .obank()
+            .get(targetop)
+            .and_then(|o| o.get_out())
+            .expect("MULTIEQUAL has no output");
+        if Self::preferred_output(data, out1, out2) {
+            data.total_replace(out1, out2)?;
+            data.op_destroy(pairop);
+        } else {
+            data.total_replace(out2, out1)?;
+            data.op_destroy(targetop);
+        }
+        self.base.count += 1;
+        Ok(true)
     }
 }
 
@@ -665,21 +867,15 @@ impl Action for ActionMultiCse {
             base: self.base.clone(),
         }))
     }
-    fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        // C++ coreaction.cc:894 — ActionMultiCse::apply
-        //   bblocks = data.getBasicBlocks(); sz = bblocks.getSize();
-        //   for (i = 0; i < sz; ++i):
-        //       bl = bblocks.getBlock(i);
-        //       while (processBlock(data, bl)) {}   // repeat until no change
-        //   return 0;
-        //
-        // `processBlock` (coreaction.cc:846-892) scans a block for equivalent
-        // MULTIEQUAL ops (via `findMatch`/`preferredOutput`) and folds the
-        // redundant one, bumping `count` through the Funcdata edit surface.
-        //
-        // STUB(W8-funcdata): the block graph (`getBasicBlocks`) and the
-        // MULTIEQUAL fold (`opSetOutput`/`totalReplace`/`opDestroy`) are not in the
-        // merged tree.  Body transcribed; no change applied (count stays 0).
+    /// C++ `ActionMultiCse::apply` (coreaction.cc:894). A block whose merge fails
+    /// is left as it stood (the `Err` ends that block's loop), as the other
+    /// actions treat a rejected edit.
+    fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        let size = data.bblocks_get_size();
+        for index in 0..size {
+            let bl = data.bblocks_get_block(index);
+            while matches!(self.process_block(data, bl), Ok(true)) {}
+        }
         0
     }
 }

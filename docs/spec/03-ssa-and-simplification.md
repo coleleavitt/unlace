@@ -3385,6 +3385,14 @@ merge is repeated (at most eight rounds) until nothing merges, because merging
 two reads of a value exposes the identical ops over their outputs one layer at
 a time.
 
+**multicse** (upstream ActionMultiCse, always on, no option). `crates/unlace-emit/src/p9_emit/coreaction_render.rs`
+(ActionMultiCse), group `analysis`, runs on every basic block until it makes no more merges (C++ `ActionMultiCse::apply`,
+coreaction.cc:894). In a block, two MULTIEQUALs merge when their inputs agree slot by slot: a COPY input stands for its
+source, and two values count as equal when `functional_equality_level` says so. The later one is destroyed and its
+readers move to the earlier output, or the reverse when `preferred_output` says the other survives (a value that feeds
+a RETURN, or an address-tied one, wins). This is the strict Ghidra-parity merge that ActionLateCse does not do: it changes
+output for every function where two identical MULTIEQUALs appear in one block.
+
 Option `implweight N` changes `ActionMarkExplicit`
 (`crates/unlace-bandb/src/p6_variables/coreaction_cleanup.rs`):
 a varnode with more readers than `max_implied_ref` becomes a multi-reader

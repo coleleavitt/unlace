@@ -92,64 +92,87 @@ impl AnalysisPass for PdbPass {
     }
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        let mut out = AnalysisOutput::default();
-
-        // PE only (belt-and-suspenders on top of the format gate in passes.rs).
-        if ctx.file.format() != object::BinaryFormat::Pe {
-            return out;
-        }
-        // 1. The PE CodeView fingerprint (the {guid, age, path} the .pdb must match).
-        //    No CodeView record ⇒ no PDB to apply.
-        let Some(cv) = codeview::extract_codeview(ctx.bytes) else {
-            return out;
-        };
-        // 2. Locate: the ordered candidate list (explicit `kuna_pdb_path`, then the
-        //    record's own filename beside the image, then `<stem>.pdb`; the
-        //    opt-in symbol store is tried after them).
-        let candidates = locate::pdb_candidates(ctx.image_path, &cv);
-        // The RVA→VMA addend: the PE ImageBase. Absent (unparsable) ⇒ inert.
-        let Some(image_base) = pe_image_base(ctx.bytes) else {
-            return out;
-        };
-
-        // 3. Open each candidate in turn and apply the fingerprint gate; the first
-        //    match wins. Any failure (unreadable file, not a `.pdb`, no info
-        //    stream, or a GUID/age MISMATCH) moves on — NEVER apply a wrong/stale
-        //    PDB.
-        let Some(mut pdb) = open_fingerprint_matched(&candidates, &cv) else {
-            return out;
-        };
-
-        // 4. The fingerprint matched: walk the global symbols and emit the renames.
-        for mut f in walk::walk_functions(&mut pdb, image_base) {
-            if f.name.is_empty() {
-                continue;
-            }
-            // A public carries the decorated name (`?init@QMessageBoxPrivate@@…`);
-            // reduce it the way the loader reduces a COFF or ELF symbol.
-            if let Some(name) = crate::demangle::demangle_name(&f.name) {
-                f.name = name;
-            }
-            // The function must exist for the rename to bind, even when it is
-            // reachable ONLY through the PDB (no call edge / no funcsym). The
-            // idempotent SymFact add is a no-op when it already exists; the
-            // placeholder name it installs is what the fid_names rename overwrites.
-            out.symbols.push(SymFact {
-                addr: f.vma,
-                name: f.name.clone(),
-                kind: SymKind::Function,
-            });
-            // The label-gated rename (the FID precedent): overwrite the engine's own
-            // sub_*/FUN_* placeholder with the PDB name, never a real symbol.
-            out.fid_names.push(FidMatch {
-                addr: f.vma,
-                name: f.name,
-                by_signature: false,
-            });
-        }
-
-        out
+        guarded("pdb", || names(ctx))
     }
+}
+
+/// The function names of the matched `.pdb` (the body of [`PdbPass`]).
+fn names(ctx: &AnalysisCtx) -> AnalysisOutput {
+    let mut out = AnalysisOutput::default();
+
+    // PE only (belt-and-suspenders on top of the format gate in passes.rs).
+    if ctx.file.format() != object::BinaryFormat::Pe {
+        return out;
+    }
+    // 1. The PE CodeView fingerprint (the {guid, age, path} the .pdb must match).
+    //    No CodeView record ⇒ no PDB to apply.
+    let Some(cv) = codeview::extract_codeview(ctx.bytes) else {
+        return out;
+    };
+    // 2. Locate: the ordered candidate list (explicit `kuna_pdb_path`, then the
+    //    record's own filename beside the image, then `<stem>.pdb`; the
+    //    opt-in symbol store is tried after them).
+    let candidates = locate::pdb_candidates(ctx.image_path, &cv);
+    // The RVA→VMA addend: the PE ImageBase. Absent (unparsable) ⇒ inert.
+    let Some(image_base) = pe_image_base(ctx.bytes) else {
+        return out;
+    };
+
+    // 3. Open each candidate in turn and apply the fingerprint gate; the first
+    //    match wins. Any failure (unreadable file, not a `.pdb`, no info
+    //    stream, or a GUID/age MISMATCH) moves on — NEVER apply a wrong/stale
+    //    PDB.
+    let Some(mut pdb) = open_fingerprint_matched(&candidates, &cv) else {
+        return out;
+    };
+
+    // 4. The fingerprint matched: walk the global symbols and emit the renames.
+    for mut f in walk::walk_functions(&mut pdb, image_base) {
+        if f.name.is_empty() {
+            continue;
+        }
+        // A public carries the decorated name (`?init@QMessageBoxPrivate@@…`);
+        // reduce it the way the loader reduces a COFF or ELF symbol.
+        if let Some(name) = crate::demangle::demangle_name(&f.name) {
+            f.name = name;
+        }
+        // The function must exist for the rename to bind, even when it is
+        // reachable ONLY through the PDB (no call edge / no funcsym). The
+        // idempotent SymFact add is a no-op when it already exists; the
+        // placeholder name it installs is what the fid_names rename overwrites.
+        out.symbols.push(SymFact {
+            addr: f.vma,
+            name: f.name.clone(),
+            kind: SymKind::Function,
+        });
+        // The label-gated rename (the FID precedent): overwrite the engine's own
+        // sub_*/FUN_* placeholder with the PDB name, never a real symbol.
+        out.fid_names.push(FidMatch {
+            addr: f.vma,
+            name: f.name,
+            by_signature: false,
+        });
+    }
+
+    out
+}
+
+/// Run one PDB pass, turning a panic inside the `pdb` crate into "no PDB".
+///
+/// The `.pdb` is hostile input and the crate is not panic-free on it: an
+/// `LF_ARRAY` record whose dimension list is not followed by the end of the
+/// record trips an `assert!` in its type parser. A panic here is caught, reported
+/// once on stderr, and the pass contributes nothing. Only the crate's parsers can
+/// panic on the input, and they run between, never inside, the type factory's
+/// own updates, so unwinding out of one leaves the factory consistent.
+pub(crate) fn guarded<T: Default>(pass: &str, run: impl FnOnce() -> T) -> T {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).unwrap_or_else(|_| {
+        unlace_base::notes::say_once(
+            &format!("pdb-panic-{pass}"),
+            &format!("[kuna pdb] {pass}: the .pdb is malformed (its parser panicked); not applied"),
+        );
+        T::default()
+    })
 }
 
 /// The fingerprint-matched `.pdb` of the PE `ctx` loads, with the image base its

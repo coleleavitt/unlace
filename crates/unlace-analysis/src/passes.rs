@@ -637,11 +637,6 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // `.pdb`'s S_GPROC32/S_LPROC32 code lengths reported on `pdb_bodies`, for
         // the frameless leaves `.pdata` has no record of. Committed with `pdb`.
         passes.push(Box::new(crate::pdb::kuna_pdbinterior::PdbInteriorPass));
-        // (kuna `pdbtypes`/`pdblines`) The same `.pdb`'s types, prototypes,
-        // locals, globals and vftables, and its source lines; committed only when
-        // their gates and `pdb` are on.
-        passes.push(Box::new(crate::pdb::kuna_pdbtypes::PdbTypesPass));
-        passes.push(Box::new(crate::pdb::kuna_pdblines::PdbLinesPass));
         passes.push(Box::new(crate::kuna_cvftrace::CvfTracePass));
         passes.push(Box::new(crate::kuna_cvftrace::CvfTraceLinesPass));
     }
@@ -703,6 +698,10 @@ fn deferred_entry_passes() -> Vec<Box<dyn AnalysisPass>> {
         Box::new(crate::entry::kuna_coldentry::ColdEntryPass),
         Box::new(crate::entry::kuna_ehcold::EhColdPass),
         Box::new(crate::protos::kuna_importvote::ImportVotePass),
+        // (kuna `pdbtypes`/`pdblines`) A full read of the `.pdb`'s type,
+        // module and line streams: paid only when its gate (and `pdb`) is on.
+        Box::new(crate::pdb::kuna_pdbtypes::PdbTypesPass),
+        Box::new(crate::pdb::kuna_pdblines::PdbLinesPass),
     ]
 }
 
@@ -2737,17 +2736,14 @@ mod tests {
         let pe = ids(&passes_for(Compiler::Clang, object::BinaryFormat::Pe));
         assert!(pe.contains(&"pdb"), "PE pass set must carry the pdb pass");
         assert_eq!(
-            pe[pe.len() - 6..],
-            [
-                "pdb",
-                "pdbinterior",
-                "pdbtypes",
-                "pdblines",
-                "cvftrace",
-                "cvftrace_lines"
-            ],
+            pe[pe.len() - 4..],
+            ["pdb", "pdbinterior", "cvftrace", "cvftrace_lines"],
             "PDB metadata precedes CVF metadata"
         );
+        // The full-read PDB passes run at the commit, only when their gate is on.
+        assert!(!pe.contains(&"pdbtypes") && !pe.contains(&"pdblines"));
+        let deferred = ids(&deferred_entry_passes());
+        assert!(deferred.contains(&"pdbtypes") && deferred.contains(&"pdblines"));
         // A PE carries BOTH the rtti and pdb metadata passes (rtti then pdb).
         let rtti_i = pe.iter().position(|&p| p == "rtti");
         let pdb_i = pe.iter().position(|&p| p == "pdb");

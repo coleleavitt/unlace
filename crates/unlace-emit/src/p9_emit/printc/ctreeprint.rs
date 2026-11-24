@@ -634,11 +634,18 @@ impl PrintC {
                 boolreturn_trace(fd, || format!("run {id:?}: guard {sid:?} does not combine"));
                 break;
             };
-            value = next;
+            let rest = std::mem::replace(&mut value, next);
             folded.extend(first);
             first = Some(sid);
             if !self.clean_guard_cond(fd, cond) {
-                break;
+                let Some((peeled, lead)) = self.fold_cond_list_guards(fd, cond, &arm, &rest, 0)
+                else {
+                    break;
+                };
+                value = peeled;
+                if !self.clean_guard_cond(fd, lead) {
+                    break;
+                }
             }
         }
         let Some(first) = first else {
@@ -735,6 +742,91 @@ impl PrintC {
             value: Some(expr),
             op: Some(ret_op),
         };
+    }
+
+    /// (unlace `boolreturn`) Fold the guards a condition list carries in front of its test.
+    /// When the structurer concatenates a collapsed guard `if` with the next guard's
+    /// condition block, that condition is a `BlockList` `[if (g) return K;, test]`, and the
+    /// leading guard prints as a statement before the test. With `arm` the folded guard's
+    /// returned value and `rest` the run value after it, the run value from the first guard
+    /// of the list on, and that guard's condition: every leading component must be a guard
+    /// (`cond_list_guard`) whose body is a run value, every test after the first must print
+    /// nothing before it (`clean_guard_cond`), and the first guard's own condition list is
+    /// folded the same way. `None` leaves the list as the statements before the test.
+    fn fold_cond_list_guards(
+        &mut self,
+        fd: &Funcdata,
+        cond: BlockId,
+        arm: &RunTerm,
+        rest: &RunTerm,
+        depth: usize,
+    ) -> Option<(RunTerm, BlockId)> {
+        let sb = fd.sblocks_ref();
+        if depth >= 16 || sb.block(cond).get_type() != BlockType::Ls {
+            return None;
+        }
+        let parts: Vec<BlockId> = (0..sb.block(cond).get_size())
+            .map(|k| sb.block(cond).get_block(k))
+            .collect();
+        let (&test, guards) = parts.split_last()?;
+        if guards.is_empty() || !self.clean_guard_cond(fd, test) {
+            boolreturn_trace(fd, || format!("condition list {cond:?}: test prints"));
+            return None;
+        }
+        let mut value = combine_return(test, arm, rest)?;
+        let mut lead = test;
+        for (at, &part) in guards.iter().enumerate().rev() {
+            let Some((gcond, body)) = self.cond_list_guard(fd, part) else {
+                boolreturn_trace(fd, || {
+                    format!("condition list {cond:?}: {part:?} is no guard")
+                });
+                return None;
+            };
+            let (_, garm) = self.return_term(fd, body)?;
+            if at == 0
+                && let Some(found) = self.fold_cond_list_guards(fd, gcond, &garm, &value, depth + 1)
+            {
+                return Some(found);
+            }
+            value = combine_return(gcond, &garm, &value)?;
+            lead = gcond;
+            if at > 0 && !self.clean_guard_cond(fd, gcond) {
+                return None;
+            }
+        }
+        Some((value, lead))
+    }
+
+    /// A component of a condition list as a guard of a return run: an `if` without else and
+    /// without goto, not a switch-merge or exception `if`, that the tree did not rewrite. Its
+    /// condition block and its body block.
+    fn cond_list_guard(&self, fd: &Funcdata, blk: BlockId) -> Option<(BlockId, BlockId)> {
+        let block = fd.sblocks_ref().block(blk);
+        if block.get_type() != BlockType::If
+            || block.get_size() != 2
+            || block.get_if_goto_target().is_some()
+            || self.switch_plans.ifs.contains_key(&blk)
+            || self.is_eh_if(fd, blk)
+        {
+            return None;
+        }
+        let (cond, body) = (block.get_block(0), block.get_block(1));
+        if let Some(tree) = self.ctree.as_ref()
+            && let Some(id) = tree.node_for(blk)
+        {
+            let StmtKind::If {
+                cond: test,
+                els: None,
+                ..
+            } = &tree.stmt(id).kind
+            else {
+                return None;
+            };
+            if !matches!(tree.expr(*test).kind, ExprKind::Branch(c) if c == cond) {
+                return None;
+            }
+        }
+        Some((cond, body))
     }
 
     /// In a `BlockGraph`, does the `if` statement `id` fall through to the statement `next`,

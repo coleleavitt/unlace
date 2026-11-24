@@ -1,0 +1,69 @@
+# boolreturn (issue #9): a return run whose guards the structurer concatenated into the next
+# guard's condition. The block-concatenation rule folds a collapsed guard `if` with the next
+# guard's condition block into a BlockList, so the later guard's condition is
+# [if (g) return K;, test] and the run used to stop there, leaving the leading guard apart:
+#   wdest  - coreutils cp writable_destination (DecBench O2-noinline, x86-64 gcc), source
+#            return S_ISLNK (mode) || can_write_any_file () || faccessat (...) == 0;
+#   nested - the boolreturn-default nested case: three guards at the function body's root
+# Stage: 09 emission (C syntax tree rewrite), option boolreturn at its default.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x6370', name = 'wdest' },
+    { space = 'ram', offset = '0x16e20', name = 'can_write' },
+    { space = 'ram', offset = '0x3990', name = 'faccessat' },
+    { space = 'ram', offset = '0x105000', name = 'nested' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x6370'
+readonly = true
+hex = '81e200f0000081fa00a00000750ab801000000c30f1f400041544989f45589fd4883ec08e8870a010084c074134883c408b8010000005d415cc3660f1f4400004c89e689efb900020000ba02000000e8ccd5ffff85c00f94c04883c4085d415cc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x105000'
+readonly = true
+hex = '833f007518837f0400750f837f08007506b801000000c331c0c331c0c331c0c3'
+
+[script]
+commands = [
+    'parse line extern bool can_write(void);',
+    'parse line extern int4 faccessat(int4 fd,char *name,int4 mode,int4 flag);',
+    'parse line extern bool wdest(int4 fd,char *name,uint4 mode);',
+    'parse line extern int4 nested(int4 *p);',
+    'lo fu wdest',
+    'decompile',
+    'print C',
+    'lo fu nested',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'BOOLRETCONDLIST #1: no guard keeps a constant return 1'
+count = 0
+literal = 'return 1;'
+
+[[match]]
+name = 'BOOLRETCONDLIST #2: no guard keeps a constant return 0'
+count = 0
+literal = 'return 0;'
+
+[[match]]
+name = 'BOOLRETCONDLIST #3: wdest is one || return over its three tests in order'
+count = 1
+regex = 'return .*0xa000.*\|\|.*can_write\(\).*\|\| faccessat\(fd,name,2,0x200\) == 0;'
+
+[[match]]
+name = 'BOOLRETCONDLIST #4: nested is one && return over its three tests'
+count = 1
+regex = 'return .*\*p.*&&.*p\[1\].*&&.*p\[2\].*;'
+
+[[match]]
+name = 'BOOLRETCONDLIST #5: neither function prints an if'
+count = 0
+literal = 'if ('

@@ -2361,7 +2361,8 @@ mod tests {
         // and loader-name-localalias / gcc's f.localalias does not name f
         // and valist-declared / the promoted va_list ap is declared
         // and rawswitch-loop / a matched table whose cases loop back with a loaded index is labelled by it
-        assert_eq!(count, 1033, "corpus file count drifted");
+        // and boolreturn-condlist / guards concatenated into the next guard's condition join the return run
+        assert_eq!(count, 1034, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

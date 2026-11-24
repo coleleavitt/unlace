@@ -4484,6 +4484,21 @@ instructions are user ops. Exercised by the `nd100` family of
 `unlace-cli/tests/processors.toml` (hand-assembled add, signed max, P-relative
 load/store, call, shift and add-argument routines).
 
+### Rabbit 4000 / 5000 / 6000 (#98)
+
+`Rabbit4000:LE:16:default` and `Rabbit6000:LE:16:default` extend the Rabbit module
+(`rabbit.sinc` under `@define R4000` / `R6000`). On the 4000, LD r,g and the 8-bit ALU on
+a register or (HL) take the 7F prefix (a context bit the prefix sets), and the freed
+single-byte opcodes, the 6D page and new ED/DD/FD rows carry the 32-bit BCDE/JKHL
+registers, the PW-PZ pointer registers, 24-bit LDF accesses and the GT/GTU/LT/V
+conditions; the 5000 has the same set. A pointer-register access goes to the physical
+space unless the upper 16 bits are all ones (a long logical address), so an LDL-loaded
+constant pointer folds to the logical global. The 6000 adds the 49 page (ALU with
+pointer and stack operands, pointer block moves, SHA/MD5 round functions, register-chain
+shifts), SWAP, TSTNULL, MUL/MULU HL,DE and the ALTS/ALTSD prefixes (ALTS sources are not
+modelled). Every single-instruction line of z88dk's r4k and r6k tables decodes to the
+same instruction. Exercised by the `rabbit4000` row of `unlace-cli/tests/processors.toml`.
+
 ### IBM ROMP (#98)
 
 `specs/Ghidra/Processors/ROMP` is a SLEIGH module written for unlace from the IBM
@@ -4657,7 +4672,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `TLCS90` | Toshiba TLCS-90 (TMP90C840, TMP90C841, TMP90C844) | `TLCS90:LE:16:default` | Toshiba TLCS-48/90 data book (1988); MAME tlcs90 core | `unlace-cli/tests/tlcs90_raw.rs` |
 | `SAM8` | Samsung SAM8 (S3C8/S3F8), SAM88RCRI (S3C9/S3F9) | `SAM8:BE:16:default`, `SAM88RCRI:BE:16:default` | Samsung S3C8-series user's manual ch. 6 (instruction set), S3C9454B/F9454B user's manual | `unlace-cli/tests/processors.toml` (`sam8`) |
 | `EVM` | Ethereum Virtual Machine bytecode, Cancun opcode set | `EVM:BE:32:Cancun` | Ethereum Yellow Paper appendix H, evm.codes opcode reference, EIPs 145/1153/3855/4844/5656/7516 | `unlace-cli/tests/evm.rs` |
-| `Rabbit` | Rabbit Semiconductor Rabbit 2000 / Rabbit 3000A | `Rabbit2000:LE:16:default`, `Rabbit3000:LE:16:default` | Rabbit 2000/3000 Instruction Reference Manual (019-0098), Rabbit 2000/3000 User's Manuals, Dynamic C docs | `unlace-cli/tests/processors.toml` (`rabbit`) |
+| `Rabbit` | Rabbit Semiconductor Rabbit 2000 / 3000A / 4000 / 5000 / 6000 | `Rabbit2000:LE:16:default`, `Rabbit3000:LE:16:default`, `Rabbit4000:LE:16:default`, `Rabbit6000:LE:16:default` | Rabbit 2000/3000 Instruction Reference Manual and Rabbit Family Instruction Reference (019-0098), Rabbit 6000 instruction spreadsheet, Rabbit User's Manuals, Dynamic C docs; 4000/6000 checked against z88dk's r4k/r6k tables | `unlace-cli/tests/processors.toml` (`rabbit`, `rabbit4000`) |
 | `Lanai` | Lanai v11 (Myricom, Google) | `lanai:BE:32:default` | LLVM Lanai backend (`LanaiInstrFormats.td` format descriptions, `LanaiInstrInfo.td`, `LanaiCallingConv.td`) | `unlace-cli/tests/processors.toml` (`lanai`) |
 | `META` | Imagination Technologies META (Meta 1.1, 1.2, 2.1), GP instructions | `META:LE:32:default` | binutils `include/opcode/metag.h` and `opcodes/metag-dis.c` field layouts, Linux `arch/metag` ABI; checked against `metag-linux-gnu-objdump` | `unlace-cli/tests/meta_raw.rs` |
 | `S1C` | Epson S1C17 and S1C33000 cores | `S1C17:LE:24:default`, `S1C33:LE:32:default` | Epson S1C17 Core Manual Rev. 1.2, S1C33000 Core CPU Manual, S1C17 Startup Manual, S1C33 Application Note | `unlace-cli/tests/s1c_raw.rs` |
@@ -4685,6 +4700,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `S12Z` | NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) | `S12Z:BE:24:default` | NXP S12Z CPU RM; encodings checked against binutils s12z-opc.c (read only) | `unlace-cli/tests/processors.toml` (`s12z`) |
 | `V8Ignition` | V8 Ignition bytecode (V8 13.6, Node.js 24) | `V8Ignition:LE:32:13.6` | V8 `src/interpreter/bytecodes.h`, `bytecode-operands.h` (BSD-3-Clause); oracle `node --print-bytecode` | `unlace-cli/tests/v8ignition_raw.rs` |
 | `JavaCard` | Java Card virtual machine bytecode (Java Card Platform 3.1) | `JavaCard:BE:16:3.1` | Java Card Platform VM Specification v3.1, chapters 7 and 8 | `unlace-cli/tests/javacard_raw.rs` |
+| `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/starcore_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

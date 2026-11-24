@@ -4227,6 +4227,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `MicroBlaze` | AMD/Xilinx MicroBlaze | `MicroBlaze:BE:32:default`, `MicroBlaze:LE:32:default`, `MicroBlaze:BE:64:default`, `MicroBlaze:LE:64:default` | aleph-void/Ghidra-Rare (MicroBlaze) @ `87cc554e33`, MIT |
 | `xCORE` | XMOS xCORE | `xCORE:LE:32:XS3`, `xCORE:LE:32:XS2`, `xCORE:LE:32:XS1` | aleph-void/Ghidra-Rare (xCORE) @ `87cc554e33`, MIT |
 | `C7x` | TI C7000 DSP | `C7x:LE:64:C7100`, `C7x:LE:64:C7120`, `C7x:LE:64:C7504`, `C7x:LE:64:C7524` | aleph-void/Ghidra-Rare (C7x) @ `87cc554e33`, MIT |
+| `SASS` | NVIDIA GPU SASS | `SASS:LE:64:SM35`, `SASS:LE:64:SM52`, `SASS:LE:64:SM60`, `SASS:LE:64:SM70`, `SASS:LE:64:SM75`, `SASS:LE:64:SM80`, `SASS:LE:64:SM86`, `SASS:LE:64:SM89`, `SASS:LE:64:SM90`, `SASS:LE:64:SM100`, `SASS:LE:64:SM120` | aleph-void/Ghidra-Rare (SASS) @ `87cc554e33`, MIT |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

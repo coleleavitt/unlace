@@ -4959,8 +4959,8 @@ impl PrintC {
             BlockType::Copy => self.emit_block_copy(fd, arch, blk),
             BlockType::Basic => self.emit_block_basic(fd, arch, blk),
             BlockType::Ls => self.emit_block_ls(fd, arch, blk),
-            BlockType::If => match self.switch_plans.ifs.get(&blk) {
-                Some(&sw) => self.emit_block_switch(fd, arch, sw),
+            BlockType::If => match self.switch_of(blk) {
+                Some(sw) => self.emit_block_switch(fd, arch, sw),
                 None => self.emit_block_if(fd, arch, blk),
             },
             BlockType::Graph => self.emit_block_graph(fd, arch, blk),
@@ -6003,9 +6003,12 @@ impl PrintC {
         // instead of a braced body.
         let goto_target = fd.sblocks_ref().block(blk).get_if_goto_target();
         if let Some(target) = goto_target {
-            let gototype = self
-                .goto_rewrites
-                .gototype(blk, fd.sblocks_ref().block(blk).get_if_goto_type());
+            let gototype = match self.tree_goto_type(blk) {
+                Some(Some(gototype)) => gototype,
+                _ => self
+                    .goto_rewrites
+                    .gototype(blk, fd.sblocks_ref().block(blk).get_if_goto_type()),
+            };
             // (kuna outlang) C's one-line `if (cond) goto L;` needs no braces; a
             // language that requires block braces gets `if cond { goto-form }`.
             if self.lang().caps.brace_elision {
@@ -7141,15 +7144,24 @@ impl PrintC {
             self.emit_part(fd, arch, blk, 0);
         }
         self.context.pop_mod();
-        if self.goto_rewrites.silent.contains(&blk) {
+        let tree_jump = self.tree_goto_type(blk);
+        let silent = match tree_jump {
+            Some(None) => fd.sblocks_ref().block(blk).get_goto_target().is_some(),
+            Some(Some(_)) => false,
+            None => self.goto_rewrites.silent.contains(&blk),
+        };
+        if silent {
             self.flush_eol_warnings();
             return;
         }
         if let Some(target) = fd.sblocks_ref().block(blk).get_goto_target() {
             self.emit.tag_line();
-            let gototype = self
-                .goto_rewrites
-                .gototype(blk, fd.sblocks_ref().block(blk).get_goto_type());
+            let gototype = match tree_jump {
+                Some(Some(gototype)) => gototype,
+                _ => self
+                    .goto_rewrites
+                    .gototype(blk, fd.sblocks_ref().block(blk).get_goto_type()),
+            };
             self.emit_goto_statement(fd, inner, target, gototype);
             // (kuna warnstyle, DIV-39) pending block warnings land after the
             // trailing goto/break/continue.

@@ -5111,6 +5111,15 @@ moves.
     `EFI_PEI_PPI_DESCRIPTOR`; `NotifyPpi` does the same with
     `EFI_PEI_NOTIFY_DESCRIPTOR` and gives each callback the notify prototype
     with its PPI typed from the GUID.
+  - `SmmRegisterProtocolNotify` / `MmRegisterProtocolNotify` register an
+    `EFI_MM_NOTIFY_FN` the MM core calls once an interface is installed under
+    the GUID. A constant callback is named `<Guid>Notify` (the GUID's EDK2
+    name without its `g` and `Guid`, `Protocol_<Data1>` for an unknown one)
+    and given the prototype `EFI_STATUS(EFI_GUID *Protocol, <Interface> *Interface,
+    EFI_HANDLE Handle)`, so the interface the callback receives is typed from
+    the GUID like a `LocateProtocol` out-parameter and the walk follows it into
+    the callback. The boot-services `RegisterProtocolNotify` takes an event,
+    not a function, and is left alone.
   - A member whose prototype has an out-parameter `T **` for a known `T`
     (`EFI_SMM_BASE2_PROTOCOL.GetSmstLocation`) types what it is handed, which is
     how an SMM driver's `gSmst` is found.
@@ -14009,7 +14018,9 @@ from the peripheral or device, and `<interrupt>` names. `Peripheral::c_struct`
 lays a peripheral out as a C structure, dropping a register that overlaps an
 earlier one and padding gaps. The CLI asserts the structure (`typedef`), the
 peripheral as a typed global at its base (`data`) and its register range as
-volatile, and names IRQ handlers from the interrupts.
+volatile, for an object file (an ELF, an ESP image, the ELF a container
+wraps) as for a raw image, and names the IRQ handlers a raw image's vector
+table found from the interrupts.
 
 `bundles.rs (Bundle::parse)` lists the members of the inputs that hold several
 images, without decoding them. A tar archive is recognized by its first

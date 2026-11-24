@@ -292,3 +292,75 @@ fn the_builtin_library_reads_whole() {
         }
     }
 }
+
+fn windows(target: &str) -> Library<'static> {
+    let (_, text) = BUILTIN.iter().find(|(t, _)| *t == target).unwrap();
+    let lib = Library::parse(text).unwrap();
+    assert_eq!(lib.target, target);
+    lib
+}
+
+/// Both Windows libraries parse whole, and every x86 entry is a stdcall one
+/// whose keyword is left to the image's default model.
+#[test]
+fn the_windows_libraries_parse_and_name_their_targets() {
+    for target in ["windows x86", "windows x86_64"] {
+        let lib = windows(target);
+        let (functions, types) = lib.counts();
+        assert!(
+            functions > 7000 && types > 4000,
+            "{target}: {functions} {types}"
+        );
+        for name in [
+            "CreateFileW",
+            "ReadFile",
+            "VirtualAlloc",
+            "NtCreateFile",
+            "WSAStartup",
+        ] {
+            assert!(lib.functions.contains_key(name), "{target}: {name}");
+        }
+        assert!(
+            lib.functions
+                .values()
+                .all(|(held, text)| *held == super::Other::Same && !text.contains("__stdcall")),
+            "{target}"
+        );
+    }
+}
+
+/// The x64 Windows library declares a Win32 import with its SDK types, and a
+/// record it reaches lands at the size the SDK gives it.
+#[test]
+fn a_win32_import_reads_with_its_sdk_types() {
+    let lib = windows("windows x86_64");
+    let f = factory();
+    let mut reader = Reader::new(&lib, false, &f, ORG);
+    let create = reader.prototype("CreateFileW").unwrap();
+    assert_eq!(create.intypes.len(), 7);
+    assert_eq!(create.intypes[3].get_name(), "LPSECURITY_ATTRIBUTES");
+    assert_eq!(create.outtype.as_ref().unwrap().get_name(), "HANDLE");
+    let readfile = reader.prototype("ReadFile").unwrap();
+    assert_eq!(readfile.intypes.len(), 5);
+    let attrs = f.find_by_name("_SECURITY_ATTRIBUTES").unwrap().unwrap();
+    assert_eq!(attrs.get_size(), 24);
+    assert_eq!(
+        fields(&attrs),
+        [
+            (0, "nLength".into()),
+            (8, "lpSecurityDescriptor".into()),
+            (16, "bInheritHandle".into())
+        ]
+    );
+    let mut read = 0;
+    for name in lib.functions.keys() {
+        if reader.prototype(name).is_some() {
+            read += 1;
+        }
+    }
+    assert!(
+        read * 10 >= lib.functions.len() * 9,
+        "{read} of {}",
+        lib.functions.len()
+    );
+}

@@ -1298,7 +1298,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +2 for `atomics` and `llscfold`.
     // +1 for `msvceh`; its P1 row follows `rtti`.
     // +1 for `phiarm`; its P6 row sits after `typemerge`.
-    assert_eq!(json.matches("},\n").count(), 333);
+    // +1 for `calleesaved`; its P6 row sits after `phiarm`.
+    assert_eq!(json.matches("},\n").count(), 334);
 }
 
 #[test]

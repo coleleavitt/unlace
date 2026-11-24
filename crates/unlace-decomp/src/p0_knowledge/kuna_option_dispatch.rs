@@ -303,6 +303,7 @@ kuna_options! { self, p1;
     "indirectonly" => registered!(crate::kuna_indirectonly::MarkIndirectOnly),
     "typemerge" => registered!(crate::kuna_typemerge::TypeMergeMode),
     "phiarm" => registered!(crate::kuna_phiarm::PhiArmSplit),
+    "calleesaved" => registered!(crate::kuna_calleesaved::CalleeSavedSplit),
     "impliedrefs" => {
         let (val, msg) = crate::kuna_impliedrefs::OptionImpliedRefs.apply(p1)?;
         self.max_implied_ref = val;

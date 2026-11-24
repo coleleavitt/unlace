@@ -3891,7 +3891,8 @@ through constants, `COPY`, `INT_ZEXT`, `INT_OR`, `INT_AND`, shifts by a constant
 exhausted budget proves nothing, except that under option `fpargboxed` (default on,
 RISC-V only) an input in an FP argument register (`fa0`..`fa7`) has the bits that lie in
 the register's upper 32 known as ones: the whole register, or the `fa0+4:4` upper word that
-heritage splits off. The psABI passes a float argument narrower than FLEN NaN-boxed. Only those
+heritage splits off. The same holds for the `fa0`/`fa1` output of a `CALL` or `CALLIND`. The
+psABI passes and returns a float narrower than FLEN NaN-boxed. Only those
 upper bits are claimed, so a test of a float's own bits is never folded, and a half-precision
 parameter's 48-bit test stays. *Rewrite:* the
 compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
@@ -4778,6 +4779,15 @@ rule remembers, per function, each tree it saturated without a replacement
 the pool revisits the op. On d963789525, with that memo, the patchelf run
 executes 7.6% more instructions with the option on (122.6G vs 114.0G),
 and the corpus results and the outputs above are the same as without it.
+
+**Budgets.** Saturation runs in two rounds. The first stops at 500 e-nodes or
+5 iterations; a replacement it finds stands. When it finds nothing, the tree
+is left if the e-graph saturated (no rule adds anything, so a bigger budget
+finds nothing more) or if the tree has fewer than three bitwise ops; otherwise
+the second round continues on the same e-graph up to 4000 e-nodes and 12
+iterations. A tree with a single bitwise op gets no e-graph at all: it has no
+MBA identity to compose, and only `mba`'s closed form of the whole tree is
+tried.
 
 Example: `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, one substitution
 applied to the result of another, becomes `(x | y) + z`: the seed folds the

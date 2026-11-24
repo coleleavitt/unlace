@@ -260,7 +260,12 @@ impl PrintC {
             tree.stmt_mut(id).kind = StmtKind::Expr(expr);
         }
         if bool_return {
-            for id in ids_rev(self.ctree.as_ref()) {
+            let ids = self
+                .ctree
+                .as_ref()
+                .map(|tree| tree.stmt_ids())
+                .unwrap_or_default();
+            for id in ids {
                 self.fold_return_run(fd, id);
             }
         }
@@ -503,7 +508,10 @@ impl PrintC {
         }) else {
             return;
         };
-        let Some((tail_op, mut value)) = self.return_term(fd, tail_blk) else {
+        let Some((tail_op, mut value)) = self
+            .return_term(fd, tail_blk)
+            .or_else(|| self.folded_return(fd, tail))
+        else {
             return;
         };
         let mut first = None;
@@ -512,7 +520,10 @@ impl PrintC {
             let Some((cond, clause)) = self.return_guard(fd, sid) else {
                 break;
             };
-            let Some((_, arm)) = self.return_term(fd, clause) else {
+            let Some((_, arm)) = self.return_term(fd, clause).or_else(|| {
+                let then = self.ctree.as_ref()?.node_for(clause)?;
+                self.folded_return(fd, then)
+            }) else {
                 break;
             };
             let Some(next) = combine_return(cond, &arm, &value) else {
@@ -546,6 +557,49 @@ impl PrintC {
         for sid in folded {
             tree.stmt_mut(sid).kind = StmtKind::Seq(Vec::new());
         }
+    }
+
+    /// The statement `id` as one value of a return run when an earlier fold made it a
+    /// `return` of a `0`/`1` value (`Branch`, `Not`, `&&` or `||`, never a `?:`), alone or
+    /// as the one non-empty statement of a sequence, whose first condition prints nothing
+    /// before its test (`clean_guard_cond`): that `RETURN` and the value. Runs fold inner
+    /// sequences first, so `if (c) { if (!a) return 0; return b; } return 0;` folds to
+    /// `return c && a && b;`.
+    fn folded_return(&mut self, fd: &Funcdata, id: StmtId) -> Option<(OpId, RunTerm)> {
+        let (op, value, first) = {
+            let tree = self.ctree.as_ref()?;
+            let mut cur = id;
+            for _ in 0..64 {
+                let StmtKind::Seq(list) = &tree.stmt(cur).kind else {
+                    break;
+                };
+                let mut live = list
+                    .iter()
+                    .copied()
+                    .filter(|s| !matches!(&tree.stmt(*s).kind, StmtKind::Seq(l) if l.is_empty()));
+                let one = live.next()?;
+                if live.next().is_some() {
+                    return None;
+                }
+                cur = one;
+            }
+            let StmtKind::Return {
+                value: Some(value),
+                op: Some(op),
+            } = tree.stmt(cur).kind
+            else {
+                return None;
+            };
+            if !matches!(
+                tree.expr(value).kind,
+                ExprKind::Branch(_) | ExprKind::Not(_) | ExprKind::And(..) | ExprKind::Or(..)
+            ) {
+                return None;
+            }
+            (op, value, first_branch(tree, value)?)
+        };
+        self.clean_guard_cond(fd, first)
+            .then_some((op, RunTerm::Expr(value)))
     }
 
     /// The `if` statement `id` as a guard of a return run: an `if` without else and without
@@ -1143,6 +1197,8 @@ enum RunTerm {
     Cond(BlockId, bool),
     /// The value a `RETURN` returns.
     Value(OpId),
+    /// The `0`/`1` value of a `return` an earlier fold made.
+    Expr(ExprId),
     And(Box<RunTerm>, Box<RunTerm>),
     Or(Box<RunTerm>, Box<RunTerm>),
 }
@@ -1174,6 +1230,7 @@ fn add_run_term(tree: &mut crate::kuna_ctree::CTree, term: &RunTerm) -> Option<E
             }
         }
         RunTerm::Value(op) => tree.add_expr(ExprKind::Op(*op)),
+        RunTerm::Expr(expr) => *expr,
         RunTerm::And(left, right) | RunTerm::Or(left, right) => {
             let l = add_run_term(tree, left)?;
             let r = add_run_term(tree, right)?;

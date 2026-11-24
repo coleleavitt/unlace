@@ -499,7 +499,7 @@ class Ppc32(Arch32):
 
 TC_DENY = re.compile(
     r"^(j.*|call.*|ret|rfe|rfm|syscall|debug|trap.*|isync|dsync|svlcx|rslcx|bisr|ldlcx|lducx|stlcx|stucx|"
-    r"mfcr|mtcr|enable|disable|wait|nop|cachea.*|cachei.*|loop.*|fcall.*|fret|cmpswap.*|swap.*|ldmst|.*\.f|q.*|madd.*\.h|msub.*\.h)$"
+    r"mfcr|mtcr|enable|disable|wait|nop|cachea.*|cachei.*|loop.*|fcall.*|fret|cmpswap.*|swap.*|ldmst|.*\.f|q.*)$"
 )
 
 
@@ -548,7 +548,7 @@ class TriCore(Arch32):
             if width is not None and pos is not None and pos + width > 32:
                 return {"*"}
         # The q-format multiplies define n = 0 or 1 only; the 2-bit field's values 2 and 3 are reserved.
-        if mnemonic.endswith(".q") or mnemonic in ("mulr.h", "maddr.h", "msubr.h"):
+        if mnemonic.endswith(".q") or (mnemonic.endswith(".h") and mnemonic.startswith(("madd", "msub", "mul"))):
             m = re.search(r"#(\d+)$", operands)
             if m and int(m.group(1)) > 1:
                 return {"*"}

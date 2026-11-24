@@ -674,6 +674,23 @@ expect = [
     "return 0;",  # the fall-back path
 ]
 
+# The NXP S12Z language decompiles a hand-assembled add/compare/store routine.
+[[family]]
+name = "s12z"
+language = "S12Z:BE:24:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/s12z/add_store.bin"
+
+[[family.function]]
+test = "s12z_add_compare_store_decompiles"
+address = "0x0"
+expect = [
+    "if (a0 + 3U <= 0xf) {",  # the ADD / CMP / BCC test survives
+    "dat_8000 = a0 + 3U;",  # the store to 0x8000
+    "return 5;",  # the taken path
+    "return 0;",  # the fall-back path
+]
+
 # The IBM ROMP language (written from the RT PC Technical Reference)
 # decompiles a hand-assembled raw image of four routines.
 [[family]]

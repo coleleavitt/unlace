@@ -88,7 +88,7 @@ where `<PHASE>` ∈ analyze, design, code, build, test, docs, commit, pr. If you
   `git log --oneline | grep loweredswitch`, then read
   `crates/unlace-lift/src/p2_lift/kuna_loweredswitch.rs`, its anchors in `coreaction*.rs` /
   `universalaction.rs` / `options.rs` / `architecture.rs` / `phases.toml`, and
-  `tests/stages/ghangr-loweredswitch.xml`.
+  `tests/stages/ghangr-loweredswitch.toml`.
 - Reproduce the gap: `{{KUNA_PY}} -m scripts.pipeline.compare --entry {{TEST_NAME}}` (read both
   decompilations and the metrics/signals). Confirm angr really is better and pin down the *one*
   concrete structural difference you will fix. Name the owning stage/sub-stage from

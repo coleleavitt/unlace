@@ -5401,7 +5401,7 @@ gets the call-output local type `swift.pair`,
 a structure of two `undefined8` fields `_0` and `_1`
 (`pair_output_type`, consulted by `TypeOpCall::getOutputLocal`'s unlocked
 arm). The words then print as `v1._0` / `v1._1` instead of
-`SUB168(v1,0)` / `SUB168(v1,8)`. Pinned by `tests/stages/kuna-swiftinfer.xml`;
+`SUB168(v1,0)` / `SUB168(v1,8)`. Pinned by `tests/stages/kuna-swiftinfer.toml`;
 the read after a call and the imported method's `self` by
 `tests/stages/kuna-swiftself.toml`.
 
@@ -5417,7 +5417,7 @@ recovered output type, which it becomes). `RulePieceStructure` then splits the
 `description` getter declares `swift.pair` and returns `v1` after
 `v1._1 = "endCursor"; v1._0 = 0x…;` instead of returning
 `*(unsigned __int128 *)v1` from an `undefined16`. Pinned by
-`tests/stages/kuna-swiftinfer.xml`.
+`tests/stages/kuna-swiftinfer.toml`.
 
 ### (kuna) An MSVC by-value class sized at the call (`kuna_msvcbyval.rs`)
 
@@ -5983,7 +5983,7 @@ the record never returns the high register alone. A low register moved back
 needs no such rule: the repair keeps the low half whenever the high one is not
 real anyway.
 
-`tests/stages/gh6990-returnpair.xml` keeps the SPARC function returning one
+`tests/stages/gh6990-returnpair.toml` keeps the SPARC function returning one
 register, and `tests/stages/kuna-ownreturn.toml` pins the ARM shapes, the `svc`
 control and a hand-written `__ashrdi3` shape; `unlace-cli/tests/own_register_returns.rs`
 compiles the ARM, Thumb and RISC-V 32 output back and runs it against the
@@ -8191,7 +8191,7 @@ its callers read.
 
 Single-function `unlace decompile` builds the call at the definition too, which
 is what lets a prototype declared there reach the call (the
-`tests/stages/kuna-pltlocal.xml` passes); without one, a forwarded register is
+`tests/stages/kuna-pltlocal.toml` passes); without one, a forwarded register is
 still recovered only from a callee-first run, exactly as for a direct call.
 Over 67 shared objects (the 18 decbench x86-64 `.so` files, 13 x86-64 system
 libraries, 13 AArch64 and 9 ARM Thumb-2 Debian bookworm libraries, and 14

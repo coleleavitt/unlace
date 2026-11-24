@@ -1,0 +1,100 @@
+# Swift runtime class names in the types (`swiftdemangle` + `objcivars`).
+#
+# Issue: with `swiftdemangle` on, a Swift class's method label demangled
+# (`-[Toyota.AddMileageViewController viewDidLoad]`) but everything typed by
+# the class kept its runtime spelling: the instance struct `objcivars` built,
+# the `self` it typed (`_TtC6Toyota24AddMileageViewController *self`), the
+# `@"_TtC..."` ivar pointers, the embedded superclass. On the Toyota iOS app
+# (84 MB arm64) the same class then existed twice - `_TtC6Toyota24...` from
+# the ivar list and `Toyota.AddMileageViewController` from the Swift field
+# descriptors (`swifttypes`) - 3,114 runtime-named structs beside 4,886
+# demangled ones.
+#
+# Fix: one mapping from runtime name to shown name
+# (`analyzers/objc/kuna_swiftclassnames.rs`) names every type the ObjC pass
+# interns or declares; lookups between the ObjC tables keep the runtime
+# spelling. Under `swifttypes` on a Swift image the class's layout is left to
+# the field descriptors (the ivar list encodes Swift types as nothing), so
+# one struct per class remains.
+#
+# Fixture: `macho_swift_classnames_arm64` - three `objc_runtime_name`d
+# classes, `main.Car : main.Vehicle` with an `Engine *` ivar, no Swift
+# toolchain needed (see fixtures/README.md). `-[main.Car loadPerSeat:]`
+# reads the inherited `wheels`, the `engine` pointer and `seats`.
+#
+# Pass 1 (`option swiftdemangle off`, set before the `load file` it governs)
+# is the runtime spelling everywhere; pass 2 (default) shows `main.Car *self`,
+# `main.Engine *` and `self->engine`.
+#
+# `macho_swift_classnames_fieldmd_arm64` adds a `__swift5_fieldmd` section
+# with no record for these classes. Pass 3 (default) runs the Swift pass on
+# it, which owns a Swift class's layout and has none to give, so the record
+# stays declared only; the engine pointer, passed only as `objc_msgSend`'s
+# `void *` receiver, reads `((void **)self)[1]`. Pass 4 (`option sourcelang c`, set before the
+# `load file`) runs no Swift pass, so the ivar list builds the struct under
+# the demangled name.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_swift_classnames_arm64',
+    'option objc on',
+    'read symbols',
+    'load addr 0x1000006f8',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_swift_classnames_fieldmd_arm64',
+    'option objc on',
+    'read symbols',
+    'load addr 0x100000748',
+    'decompile',
+    'print C',
+    'option sourcelang c',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_swift_classnames_fieldmd_arm64',
+    'option objc on',
+    'read symbols',
+    'load addr 0x100000748',
+    'decompile',
+    'print C',
+    'option sourcelang auto',
+    'quit',
+]
+
+[[match]]
+name = 'swiftdemangle: self is typed with the demangled class struct'
+count = 3
+literal = '-[main.Car loadPerSeat:](main.Car *self'
+
+[[match]]
+name = 'swiftdemangle: the quoted-class ivar pointer names the demangled class'
+count = 2
+literal = 'main.Engine *v2;'
+
+[[match]]
+name = 'every pass with a layout: the ivars fold through the struct (inherited, pointer, own)'
+count = 2
+literal = 'v1 = (self->super).wheels;'
+
+[[match]]
+name = 'every pass with a layout: the engine pointer reads as a field'
+count = 2
+literal = 'v2 = self->engine;'
+
+[[match]]
+name = 'Swift image: the layout is left to the Swift pass, which has none for the class'
+count = 1
+literal = 'v2 = ((void **)self)[1];'

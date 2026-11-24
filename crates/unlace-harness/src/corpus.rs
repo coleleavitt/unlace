@@ -186,7 +186,7 @@ pub const CASES: &[Case] = &[
         // excluded.  The Rust flow reproduces the full sub-CFG => a genuine,
         // validated 5-block / 209-op PASS (NOT a degenerate projection).
         stem: "gh6990-returnpair",
-        corpus: "tests/stages/gh6990-returnpair.xml",
+        corpus: "tests/stages/gh6990-returnpair.toml",
         archid: "sparc:BE:32:default:default",
         sla_rel: "Ghidra/Processors/Sparc/data/languages/SparcV9_32.sla",
         entry_space: "ram",
@@ -236,7 +236,7 @@ pub const CASES: &[Case] = &[
         // 8051: an SFR `write_volatile_1` user-op is injected at a non-entry block
         // (`ActionConstbase` live-inject / volatile mapping) — unported.
         stem: "gh1243-8051-addc",
-        corpus: "tests/stages/gh1243-8051-addc.xml",
+        corpus: "tests/stages/gh1243-8051-addc.toml",
         archid: "8051:BE:16:default:default",
         sla_rel: "Ghidra/Processors/8051/data/languages/8051.sla",
         entry_space: "CODE",
@@ -357,7 +357,9 @@ pub fn bootstrap(c: &Case) -> Result<Bootstrap, String> {
     let capability = XmlArchitectureCapability::new();
     let mut arch = capability.build_architecture(corpus_path.to_str().unwrap(), "");
 
-    let xml = std::fs::read(&corpus_path).map_err(|e| format!("read corpus: {e}"))?;
+    let xml = unlace_stagefile::read_as_xml(&corpus_path)
+        .map_err(|e| format!("read corpus: {e}"))?
+        .into_bytes();
     let mut store = DocumentStorage::new();
     let doc_root = store
         .parse_document(&xml)

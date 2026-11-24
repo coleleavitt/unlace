@@ -1,0 +1,46 @@
+# GH-1276: "8051: while loop condition not simplified."
+# https://github.com/NationalSecurityAgency/ghidra/issues/1276
+#
+# The 8051 spec models the SUBB borrow / CY flag as the high (sign) bit of a
+# byte, so a boolean condition `b` is lowered into a sign test by shifting `b`
+# into bit 7 and signed-comparing against 0:  `(b << 7) s< 0`.  This is exactly
+# `b != 0`, but upstream has no rule for the boolean-into-sign-bit form, so the
+# shift-and-sign-test survives all the way into the rendered loop condition:
+#
+#   while ((BANK0_R4 < uVar1) << 7 < '\0') { ... }
+#
+# Stage model: S3 "simplification-quiescence" (which algebraic/peephole rules
+# fire).  kuna's RuleBoolSignLess (group "analysis", always on) recognizes
+# `INT_SLESS(INT_LEFT(b,k), 0)` where b's NZMask is exactly the single bit
+# that the shift lands in the sign position, and rewrites it to `b != 0`,
+# dropping the shift entirely: the condition is a clean boolean comparison
+# and no `<< 7` appears anywhere.
+
+[image]
+arch = '8051:BE:16:default:default'
+symbols = [
+    { space = 'CODE', offset = '0x0', name = 'FUN_0' },
+]
+
+[[image.bytes]]
+space = 'CODE'
+offset = '0x0'
+hex = 'e4fdfcc2998f992099100dedae0470010c14c394cdee943740ed3099037f01227f0022'
+
+[script]
+commands = [
+    'lo fu FUN_0',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'GH1276 #1: the (bool) << 7 s< 0 sign-bit idiom never survives'
+count = 0
+literal = "while ((BANK0_R4 < v1) << 7 < '\\0')"
+
+[[match]]
+name = 'GH1276 #2: the idiom folds to a clean comparison'
+count = 1
+literal = 'while (BANK0_R4 < v1)'

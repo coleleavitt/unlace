@@ -85,7 +85,7 @@ direct-address-keyboard-handler` reports `pass 1 / fail 0 / closed 1`.
 
 ## Tests
 
-- `tests/stages/tailcallframe.xml` — two-pass on a hand-built bytechunk, 4 assertions
+- `tests/stages/tailcallframe.toml` — two-pass on a hand-built bytechunk, 4 assertions
   (605 → 609 stage assertions, baseline re-recorded).
 - `decompiler/crates/kuna-decomp/src/p2_lift/kuna_tailcallframe/tests.rs` — 10 unit tests
   over hand-built IR (partial teardown, frameless leaf, `leave`, self-recursion,

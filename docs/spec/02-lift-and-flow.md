@@ -156,7 +156,7 @@ before it calls, returns or jumps away
 (`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (dead_after)`). ARM's `add`
 without `s` copies the carry into a scratch flag the next `mov` overwrites,
 which is the case this admits; and so does a compare's exit that branches back to the head after doing
-anything but `clrex`. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
+anything but `clrex`. An operand no storage holds at the load (`~x` for an outline `ldclr` helper's `bic`) is built with new ops in front of it. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
 `__sync_lock_test_and_set(p, X)` or `__sync_val_compare_and_swap(p, E, N)`, the
 monitor's pass and status become the constants 1 and 0, and the STORE a dead
 copy; dead-branch removal then deletes the back edge. A compare-exchange that
@@ -1286,6 +1286,32 @@ recovered switch table.
   helper also has an `entry|1` twin, and its calls resolve to the even entry).
   The gate is on the install, as for `msvcftol`.
 
+- **AEABI floating-point helpers** (`crates/unlace-lift/src/p2_lift/kuna_aeabifloat.rs`,
+  option **`aeabifloat`**, default off): on 32-bit ARM the same payload list
+  carries the run-time ABI's floating-point helpers (RTABI32 4.1.2), each body
+  the IEEE 754 operation the helper performs on its base-standard operands.
+  `__aeabi_dadd`, `dsub`, `drsub`, `dmul`, `ddiv` and the `f` forms are
+  `f+`, `f-` (operands swapped for `rsub`), `f*`, `f/`; the `int`
+  comparisons `dcmpeq`, `dcmplt`, `dcmple`, `dcmpge`, `dcmpgt` and the `f`
+  forms are `zext` of `f==`, `f<` or `f<=` (swapped for `ge` and `gt`),
+  false on unordered operands as the helpers return 0, and `dcmpun`/`fcmpun`
+  are `nan(a) | nan(b)`; `d2iz`, `d2lz`, `f2iz`, `f2lz` are `trunc`, `d2uiz`
+  and `f2uiz` the low word of an eight-byte `trunc` (exact for every result the
+  C cast defines), `d2f`/`f2d` `float2float`, and `i2d`, `l2d`, `i2f`, `l2f`
+  `int2float`, with `ui2d`/`ui2f` converting the zero-extended word. A `double`
+  is joined from r0:r1 (r2:r3 for the second operand) low word first on
+  little-endian and high word first on big-endian, and an eight-byte result is
+  split back the same way. So `return __aeabi_dadd(a,b);` prints
+  `return a + b;` and `dscale`'s `__aeabi_dmul(v, __aeabi_i2d(n))` prints
+  `return v * (double)n;`. `d2ulz`, `f2ulz`, `ul2d` and `ul2f` have no exact
+  p-code reading and keep their calls, typed by `aeabisigs`, as do the
+  flag-returning `cdcmp`/`cfcmp` comparisons. Default off: the fold takes the
+  image's helpers to be RTABI32's round-to-nearest IEEE ones, which a library
+  built for flush-to-zero or another rounding mode is not. The gate is on the
+  install, as for `arithhelpers`. On a hard-float caller that moves the
+  `r0:r1` result into `d0` (`vmov d0, r0, r1`), the result still prints as two
+  masked halves of a union cast joined by `+`.
+
 - **Objective-C ARC bookkeeping** (`crates/unlace-lift/src/p2_lift/kuna_objcarc.rs`,
   option **`objcarc`**, default on): the second kuna-owned call-fixup family,
   registered next to the one above. An ARC-compiled method is strewn with
@@ -1314,7 +1340,7 @@ recovered switch table.
   by stub and slot address: `id objc_retain(id)`, `void objc_storeStrong(id *, id)`,
   `id objc_alloc_init(Class)`, …, and `id objc_retain_x19(id obj @ x19)` returning
   in `x0`), so `obj = objc_retainAutoreleasedReturnValue((objc_object *)objc_msgSend(arg1,sel_inner))`
-  reads with its argument. The stage test `tests/stages/kuna-objcarc.xml` runs
+  reads with its argument. The stage test `tests/stages/kuna-objcarc.toml` runs
   `macho_objc_arc_arm64` (clang `-fobjc-arc -O2`) both ways: default,
   `-[Holder total:]` is `v1 = objc_msgSend(arg1,sel_count); v2 = objc_msgSend(arg1,sel_inner); return objc_msgSend(v2,sel_count) + v1;`
   with no release left; off, the five ARC calls are shown typed.
@@ -4533,7 +4559,16 @@ the root constructor adds the count-down-and-branch there as above (the test is 
 after the decrement). A write to that register by another instruction in between is not
 tracked; a loop register written from any other value marks nothing.
 
-Not modelled: StarCore `DOEN`/`DOSETUP` (not decoded).
+StarCore SC140 marks loop ends in the prefix words of execution sets (`LPMARKA`, `LPMARKB`),
+not by address. `DOSETUPn` records the start `SAn` and `DOENn`/`DOENSHn` the enabled loops
+and the short-loop flag in flowing context; the highest enabled loop is the active one. A
+mark that ends an iteration later than its own set passes noflow context forward set by set:
+`LPMARKB` two sets before the end of a long loop, or on the first set of a two-set short
+loop, reaches the last set, and `LPMARKA` on the last set (or on a one-set short loop) acts
+there. The root constructor adds the manual's test after that set: while `LCn > 1`, count
+down and branch directly to the start; otherwise clear `LCn`. The loop end clears the loop's
+enable bit for the code after it, so an enclosing loop becomes active again. A set carrying
+both marks (an inner and an outer loop ending together) and `CONT`/`CONTD` are not modelled.
 
 ### Vendored community processor modules (#98)
 
@@ -4949,7 +4984,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `S12Z` | NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) | `S12Z:BE:24:default` | NXP S12Z CPU RM; encodings checked against binutils s12z-opc.c (read only) | `unlace-cli/tests/processors.toml` (`s12z`) |
 | `V8Ignition` | V8 Ignition bytecode (V8 13.6, Node.js 24) | `V8Ignition:LE:32:13.6` | V8 `src/interpreter/bytecodes.h`, `bytecode-operands.h` (BSD-3-Clause); oracle `node --print-bytecode` | `unlace-cli/tests/v8ignition_raw.rs` |
 | `JavaCard` | Java Card virtual machine bytecode (Java Card Platform 3.1) | `JavaCard:BE:16:3.1` | Java Card Platform VM Specification v3.1, chapters 7 and 8 | `unlace-cli/tests/javacard_raw.rs` |
-| `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`) |
+| `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`, `starcore_loops`) |
 | `PowerPC` (Xenon VMX128) | Xbox 360 Xenon (64-bit PowerPC, AltiVec, VMX128) | `PowerPC:BE:64:Xenon` | Xenia emulator `ppc-instructions.xml` and VX128 decode formats (BSD-3) | `unlace-cli/tests/processors.toml` (`ppc_xenon_vmx128`) |
 | `S1C6200` | Seiko Epson S1C6200 / E0C6200 / E0C6200A 4-bit core | `S1C6200:BE:16:default` | Epson E0C6200/6200A Core CPU Manual (MF297-06a); checked against MAME `e0c6200` on all 4,096 encodings | `unlace-cli/tests/processors.toml` (`s1c6200`) |
 | `Propeller` (P2) | Parallax Propeller 2 (P2X8C4M64P), hub execution | `propeller2:LE:32:default` | Parallax "Propeller 2 Instructions" table v35 (encodings, operations, flags); checked against the flexspin assembler | `unlace-cli/tests/processors.toml` (`propeller2`) |
@@ -5616,7 +5651,7 @@ or `f0`, the return address in `r14`. A `float` is the leftmost four bytes of
 its register, so each floating-point register is listed as its short view and
 then whole. The caller's 160-byte register save area at `0(r15)` is in the
 callee's local range, because the callee's prologue stores into it.
-Exercised by `tests/stages/kuna-s390x.xml`.
+Exercised by `tests/stages/kuna-s390x.toml`.
 
 The module also decodes, with exact p-code: the high-word facility (`aih`, `alsih`,
 `alsihn`, `ahhhr`/`ahhlr`, `alhhhr`/`alhhlr`, `shhhr`/`shhlr`, `slhhhr`/`slhhlr`,
@@ -5710,6 +5745,24 @@ Found by `tools/difffuzz` against Unicorn.
   shifted-register forms (`ARMTHUMBinstructions.sinc`) take `thSBIT_CZN` and
   `th_logicflags()`, so with S they set C from the shifter (`ThumbExpandImm12` or `thshift2`),
   as `ORR`, `EOR` and `TST` already did; before, `ANDS.W r8,r11,r9,ROR #21` left C unchanged.
+
+### LoongArch lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz --arch loongarch64 --oracle qemu` (`qemu-loongarch64 -cpu max`).
+
+- `bstrins.w` and `bstrins.d` insert bits `[msb-lsb:0]` of `rj` at `[msb:lsb]` of `rd`; they
+  computed `bstrpick`'s field (bits `[msb:lsb]` of `rj`, shifted down) and cleared the low bits of
+  `rd`, so `bstrins.w s0,fp,23,14` left `s0` almost unchanged.
+- `slli.d`, `srli.d` and `srai.d` mask their 6-bit immediate with `0x3f`; with `0x1f` a shift by
+  32..63 was a shift by 0..31.
+- `rotr.w`, `rotri.w`, `rotr.d` and `rotri.d` rotate with a logical right shift; an arithmetic
+  one filled the rotated-in bits of a negative value with ones.
+- `bytepick.w` and `bytepick.d` concatenate the low bytes of `rk` with the high `sa` bytes of `rj`;
+  they masked the wrong ends, so `bytepick.w t5,a0,t4,0` returned `a0` instead of `t4`.
+- The float-to-integer conversions round as named: `ftintrm` toward minus infinity (`floor`),
+  `ftintrp` toward plus infinity (`ceil`), `ftintrz` toward zero; `ftint`, which uses the FCSR
+  mode, is the round-to-nearest-even user op that `ftintrne` already was. Before, all but
+  `ftintrne` truncated. The `.l.s` forms write the whole 64-bit register; they wrote its low word.
 
 ### PowerPC lifter fixes from differential fuzzing
 
@@ -6203,8 +6256,8 @@ fixture), `tests/stages/kuna-itaniumeh-cold.toml` (the partitioned build),
 `tests/stages/kuna-itaniumeh-a64.toml` (AArch64, x0/x1),
 `tests/stages/kuna-itaniumeh-arm.toml` (ARM32 and stripped Thumb EHABI tables,
 a type named only by its `type_info` string) and
-`tests/stages/kuna-itaniumeh-clang.xml` (clang ranges that start before the
-call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.xml`
+`tests/stages/kuna-itaniumeh-clang.toml` (clang ranges that start before the
+call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.toml`
 (pads folded into a shared handler).
 
 **(kuna) MSVC x64 catch funclets as pads** (`option msvceh on`, with

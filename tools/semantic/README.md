@@ -13,7 +13,7 @@ program is run with the original and with the decompiled function on the same fi
 | `cases/case.h` | `T` marks a function under test (`weak, noinline`), `P` prints one value. |
 | `shim.h` | The p-code helper spellings unlace prints (`CONCATxy`, `SUBxy`, `ZEXTxy`, `SEXTxy`, `CARRYn`, `SCARRYn`, `SBORROWn`, `NAN`, `POPCOUNT`, `builtin_memcpy`, ...). Everything else comes from unlace's own export header. |
 | `run.py` | The driver (Python 3, stdlib only). |
-| `baseline.json` | Outcome of every row on the host named in `notes/semantic-results.md`. |
+| `baseline.toml` | Outcome of every row on the host named in `notes/semantic-results.md`. |
 
 ## How a function is checked
 
@@ -53,7 +53,7 @@ python3 tools/semantic/run.py --unlace /path/to/unlace --sleighpath specs \
     --config x86_64-gcc,x86_64-clang,aarch64-zig --details
 python3 tools/semantic/run.py --unlace ... --cases switches,floats --opt O2   # a subset
 python3 tools/semantic/run.py --unlace ... --option boolreturn off            # an A/B of one option
-python3 tools/semantic/run.py --unlace ... --baseline tools/semantic/baseline.json
+python3 tools/semantic/run.py --unlace ... --baseline tools/semantic/baseline.toml
 ```
 
 `--details` prints the reason for every row that did not pass, `--json` writes every row,
@@ -83,7 +83,7 @@ as a corpus:
 - **Where:** the `semantic` job in `nightly.yml` (added 2026-11-24, not yet run on CI), not the per-PR `gates` job. It needs gcc,
   clang, zig and qemu-user-static on the runner (all apt or a release tarball), and one built
   `unlace` plus the compiled specs, which the nightly already produces.
-- **What fails it:** `run.py --baseline tools/semantic/baseline.json`: a row that passed and stops
+- **What fails it:** `run.py --baseline tools/semantic/baseline.toml`: a row that passed and stops
   passing fails the job; a newly passing row is reported and blessed by a commit that re-saves
   the baseline (the same rule as the datatest baseline: never re-save to hide a regression).
 - **Pinned compilers:** outcomes depend on the compiler's code generation, so the job pins its

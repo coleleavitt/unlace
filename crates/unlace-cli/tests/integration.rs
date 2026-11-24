@@ -44,6 +44,8 @@ mod m6800_family;
 mod m88k_raw;
 #[path = "mep.rs"]
 mod mep;
+#[path = "mmix_raw.rs"]
+mod mmix_raw;
 #[path = "meta_raw.rs"]
 mod meta_raw;
 #[path = "mips_ase.rs"]

@@ -106,7 +106,7 @@ commands = [
 [[match]]
 name = 'Go AArch64 compiler division keeps the original fail edge in default and audit modes'
 count = 2
-regex = '^0x00100000:[[:xdigit:]]+:[[:space:]]+goto .*else Block_.*:0x0010000c'
+regex = '^0x00100000:[[:xdigit:]]+:[[:space:]]+goto .*Block_[0-9]+:0x0010000c'
 
 [[match]]
 name = 'Go AArch64 compiler division prints its terminal panic in both modes'

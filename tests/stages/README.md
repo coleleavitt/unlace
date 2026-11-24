@@ -4,7 +4,10 @@
 
 A stage test is a `.toml` file here (older ones are Ghidra-style `<decompilertest>` XML; the
 vendored `tests/datatests` corpus stays XML). Both run through the same datatest runner
-(`cargo test -p unlace-harness --test parity stage_tests`, or `decomp_test_dbg`):
+(`cargo test -p unlace-harness --test parity stage_tests`, or `decomp_test_dbg`). The runner puts the
+`KUNA_*`/`UNLACE_*` environment back to its starting state before each file, so a load-time `option`
+one file's script sets (exported to the environment for `load file`) does not reach the next file;
+a test that needs such an option sets it itself:
 
 ```toml
 # What the test checks and why (comments are free).

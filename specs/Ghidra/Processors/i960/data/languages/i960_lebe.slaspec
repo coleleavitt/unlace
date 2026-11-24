@@ -1,0 +1,5 @@
+# i960 with big-endian data (80960Jx/Hx/Cx memory regions configured big-endian);
+# instructions are always little-endian
+define endian=big;
+
+@include "i960.sinc"

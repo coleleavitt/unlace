@@ -34,6 +34,8 @@ mod kr1878_raw;
 mod lanai_raw;
 #[path = "lua54.rs"]
 mod lua54;
+#[path = "m32c_raw.rs"]
+mod m32c_raw;
 #[path = "m32r_raw.rs"]
 mod m32r_raw;
 #[path = "m6800_family.rs"]
@@ -54,6 +56,8 @@ mod moxie_raw;
 mod nios2_raw;
 #[path = "pdp11_raw.rs"]
 mod pdp11_raw;
+#[path = "propeller_raw.rs"]
+mod propeller_raw;
 #[path = "rabbit_raw.rs"]
 mod rabbit_raw;
 #[path = "v60.rs"]
@@ -69,6 +73,8 @@ mod aarch64_sve2;
 mod cdp1802_raw;
 #[path = "i4004_raw.rs"]
 mod i4004_raw;
+#[path = "nova_raw.rs"]
+mod nova_raw;
 #[path = "ppc_spe2.rs"]
 mod ppc_spe2;
 #[path = "return_branch_cli.rs"]
@@ -1113,5 +1119,7 @@ mod types_header;
 #[path = "typelib.rs"]
 mod typelib;
 
+#[path = "msvcexport_cli.rs"]
+mod msvcexport_cli;
 #[path = "vexzeroupper_cli.rs"]
 mod vexzeroupper_cli;

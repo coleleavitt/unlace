@@ -4123,6 +4123,20 @@ literal append whose returned reference is used, an unprovable register-count
 append, a collapse whose continuation zeroes the changed registers, and 29 near
 misses, one defect each, that must stay unrolled in both passes.
 
+### Instruction buffer length (#98)
+
+The SLEIGH parser context buffers `MAX_INSTRUCTION_LEN` = 32 instruction bytes
+(`crates/unlace-sleigh/src/sleigh.rs`), twice upstream's 16, and `load_fill` reads
+that many at each decode. Long-operand ISAs need it: a NEC V60 Format II
+instruction with two double-displacement operands is 20 bytes, and VAX operand
+specifiers chain to well past 16. A read that starts past the buffer is still a
+`BadData` decode error ("Instruction is using more than 32 bytes"); the packed
+reads in `kuna_instructionbytes.rs` take any buffer width. A start address that
+is mapped zero-fills the rest of the read, as before, so a decode near the end of
+a segment sees the same bytes it did with 16. Valid x86 encodings stop at 15 bytes, so
+their decodes do not change; only a run of 16 to 31 redundant prefixes, which
+the CPU faults on, now decodes instead of failing.
+
 ### ARM CPSR control fields (GH-848)
 
 ARM-state `MRS CPSR` combines modeled NZCVQ flags with
@@ -4401,7 +4415,21 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `Clipper` | Fairchild/Intergraph CLIPPER C100/C300 | `clipper:LE:32:default` | written for unlace from the CLIPPER C300 data book, Apache-2.0 |
 | `ROMP` | IBM ROMP (RT PC) | `ROMP:BE:32:default` | written for unlace from the RT PC Hardware Technical Reference, Apache-2.0 |
 | `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
+| `Nova` | Data General Nova (Nova 1200/800/2, Nova 3, Nova 4) | `Nova:BE:16:default` | written for unlace from the DG Nova programmer's references, Apache-2.0 |
 <!-- vendor-rows -->
+
+### Data General Nova (#98)
+
+`specs/Ghidra/Processors/Nova` is a SLEIGH module written for unlace from Data
+General's Nova programmer's references (no prior SLEIGH existed):
+`Nova:BE:16:default`. Memory is word addressed. An operate instruction is one
+constructor per ALU function and shift: the carry out is a comparison, the
+17-bit rotate goes through carry, and the no-load flag and the skip condition
+are tested on the shifted result, so a `SUBZ#` with a carry skip folds to a C
+comparison. `JSR` links in AC3 and `JMP 0,3` returns; the Nova 3 `SAV`/`RET`
+frame lives on an upward-growing stack. Device I/O is a user op. Exercised by
+`unlace-cli/tests/nova_raw.rs` (hand-assembled add, unsigned max, page-zero
+load/store, rotate and Nova 3 frame-call routines decompile to the expected C).
 
 ### IBM ROMP (#98)
 
@@ -4533,6 +4561,8 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/tilegx_raw.rs` |
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/v60.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
+| `M16C` (`M32C_80`) | Renesas M32C/80 (M16C/80 set plus `MUL.L`, `DIV*.L`, `SHANC.L`, `SHLNC.L`) | `M32C/80:LE:24:default` | Renesas M32C/80 Series Software Manual REJ09B0319; checked against `m32c-elf-as` 2.43.1 | `unlace-cli/tests/m32c_raw.rs` |
+| `Propeller` | Parallax Propeller 1 (P8X32A) cog | `propeller:LE:16:default` | Propeller Manual v1.2 assembly reference, P8X32A datasheet opcode matrix | `unlace-cli/tests/propeller_raw.rs` |
 | `MIPS` (MIPS-3D, SmartMIPS) | MIPS64 with MIPS-3D, MIPS32 with SmartMIPS (pre-R6 languages) | existing `MIPS:*:64:*` and `MIPS:*:32:*` pre-R6 languages | binutils MIPS opcode table (MIPS-3D/SmartMIPS rows), MIPS-3D (MD00099) and SmartMIPS ASE specifications; checked against `mips-elf-objdump` 2.43.1 | `unlace-cli/tests/mips_ase.rs` |
 <!-- native-rows -->
 

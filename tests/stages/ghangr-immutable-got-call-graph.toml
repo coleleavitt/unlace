@@ -1,0 +1,44 @@
+# Immutable relative GOT calls contribute their actual callee to the public
+# xref/call graph. The console does not expose that read-only index; the
+# end-to-end assertions live in unlace-cli/tests/xrefs_immutable_got.rs. This
+# companion checks that existing C emission stays unchanged. The fixture is
+# repository-authored and contains both immutable and writable callback slots.
+# This strict correctness fix has no option and does not execute the fixture.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/immutable_got_calls_x86_64',
+    'read symbols',
+    'parse line extern long callback(long value);',
+    'parse line extern long through_got(long value);',
+    'parse line extern long through_mutable(long value);',
+    'load function through_got',
+    'decompile',
+    'print C',
+    'load function through_mutable',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Immutable GOT graph resolution keeps the existing named C call'
+count = 1
+literal = 'return callback(value);'
+
+[[match]]
+name = 'Immutable GOT graph resolution keeps writable C calls indirect'
+count = 1
+literal = '(*mutable_slot)('

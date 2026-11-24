@@ -57,7 +57,7 @@ cloned form. See `analysis.md` section 3.
 2. **Regression sweep** -- whole-binary `decompile-all --json` before/after over 12 corpus
    binaries, diffing per function. Requirement: the only functions that change are the
    three witnesses, and every surviving global store lands in a writable section.
-3. **Stage test** -- `tests/stages/ghdec-returncopysplit.xml`, the real `__get_hz` bytes at
+3. **Stage test** -- `tests/stages/ghdec-returncopysplit.toml`, the real `__get_hz` bytes at
    their real VMAs plus the read-only literal chunk; pass 1 default (the fix), pass 2
    `option togglerule splitcopy off` (the reference rendering with no split at all).
 4. **Gates** -- `make test` (675/675 PARITY OK, no re-pin), `make test-stages` (re-recorded

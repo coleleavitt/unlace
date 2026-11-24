@@ -1,0 +1,55 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/call_argument_extensions_x86_64',
+    'read symbols',
+    'map prototype pass_signed uint8 pass_signed(int4 value);',
+    'option outlang rust',
+    'load function pass_signed',
+    'decompile',
+    'print C',
+    'map prototype consume uint8 consume(uint8 value);',
+    'load function pass_signed',
+    'decompile',
+    'print C',
+    'option outlang go',
+    'load function pass_signed',
+    'decompile',
+    'print C',
+    'map prototype keep_signed uint8 keep_signed(int4 value);',
+    'load function keep_signed',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Missing recorded consumer preserves ordinary narrow argument'
+count = 1
+literal = 'consume(value)'
+
+[[match]]
+name = 'Explicit Rust consumer preserves zero extension'
+count = 1
+literal = 'consume((value as u32) as u64)'
+
+[[match]]
+name = 'Explicit Go consumer preserves zero extension'
+count = 1
+literal = 'consume(uint64(uint32(value)))'
+
+[[match]]
+name = 'Explicit Go consumer preserves sign extension'
+count = 1
+literal = 'consume(uint64(int64(value)))'

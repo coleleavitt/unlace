@@ -188,7 +188,7 @@ unlace decompile .../pe_noreturn_import.exe bail            # default, win32sigs
   ExitProcess(a0); // no-return
 ```
 
-`tests/stages/ghdec-peimportcall.xml` asserts the regex `ExitProcess\(\); // no-return`
+`tests/stages/ghdec-peimportcall.toml` asserts the regex `ExitProcess\(\); // no-return`
 (min=1 max=1), an empty-parens spelling frozen in by DIV-57 (#254) when kuna had no
 Win32 prototypes. ExitProcess really does take one UINT, so the arg-bearing output is
 correct and the regex is what is stale; what the test exists to protect -- peimportcall

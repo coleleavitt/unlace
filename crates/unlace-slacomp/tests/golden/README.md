@@ -101,6 +101,21 @@ The RISC-V entry includes the Zcmp/Zcmt constructors (`riscv.zc.sinc`), the
 with `slacomp`, which reproduces the previous RISC-V digest on the unmodified
 sources.
 
+The TriCore entry was regenerated with `slacomp` for the PSW.V and SHA carry fix (#563).
+`slacomp` reproduces the old digest (`d7aa54fe`) on the sources before the TC1.8 language
+(96dde146df), which moved `tricore.sinc` lines without updating this entry.
+
+Nine entries were regenerated with `slacomp` on 2026-11-24 for spec changes
+merged without a digest update: `x86.slaspec`, `x86-16.slaspec`, `x86-64.slaspec`
+(AMX bd55d54c2e, APX 6adfa01082/1607218cd7/c69d1d4c34, AVX10.2 fce2065c2f, difffuzz
+fixes bd863992e6/f075abe9bc/cedef485ca, ENQCMD/CMPccXADD 26c01cde84),
+`ARM8_le.slaspec` (8805de4647, 7edb763703), `mips32le.slaspec` and
+`mips64be.slaspec` (MIPS-3D/SmartMIPS 81a9d5a80c), `AARCH64.slaspec` (RME
+5e4ef07489, SVE2 4da2599458, SME 9a679cbf45, 25924b5ec8), `riscv.ilp32d.slaspec`
+(the Zba..Zfa/Zabha/crypto/RVV/T-Head commits from 20ac3cdfd2 to f52ef16d2a) and
+`hexagon.slaspec` (HMX 3bc22520bb). The same `slacomp` reproduces the other
+44 entries unchanged.
+
 `xml_ops.xml` is the same pinned C++ compiler's `-y` output for
 `snips/xml_ops.slaspec`. The CLI test compares XML output byte-for-byte in both
 single-file and recursive modes, including the `BUILD` and `INT_ADD` opcode

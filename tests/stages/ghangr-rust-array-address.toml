@@ -1,0 +1,97 @@
+# P9 raw array-address regression; nocastprinting keeps diagnostic output.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/array_address_x86_64',
+    'read symbols',
+    'option outlang rust',
+    'option ctypes off',
+    'option realtypes off',
+    'map prototype address_i64_s int8*address_i64_s(struct AddressFields*p,int8 i);',
+    'map prototype address_pointers_s uint1**address_pointers_s(struct AddressFields*p,int8 i);',
+    'map prototype nested_address_u int4*nested_address_u(int4(*p)[9],int8 i,uint8 j);',
+    'map prototype callback_address int4*callback_address(struct AddressFields*p,int8 i);',
+    'map prototype wrap_unsigned uint4*wrap_unsigned(struct AddressFields*p,uint8 i);',
+    'map prototype signed_address int4*signed_address(struct AddressFields*p,uint4 n);',
+    'map prototype left_address int4*left_address(struct AddressFields*p,uint4 n);',
+    'map prototype counted_index int8 counted_index(int8 i);',
+    'map prototype counted_base struct AddressFields*counted_base(struct AddressFields*p);',
+    'load function address_i64_s',
+    'decompile',
+    'print C',
+    'load function address_pointers_s',
+    'decompile',
+    'print C',
+    'load function nested_address_u',
+    'decompile',
+    'print C',
+    'load function callback_address',
+    'decompile',
+    'print C',
+    'load function wrap_unsigned',
+    'decompile',
+    'print C',
+    'load function signed_address',
+    'decompile',
+    'print C',
+    'load function left_address',
+    'decompile',
+    'print C',
+    'option nocastprinting on',
+    'load function address_i64_s',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust raw array address uses the byte scale'
+count = 1
+regex = '\(\&raw\ mut\ \(\*p\)\.i64\)\.wrapping_byte_offset\(\(i\ as\ isize\)\.wrapping_mul\(8\)\)'
+
+[[match]]
+name = 'Rust pointer array address keeps pointer elements'
+count = 1
+regex = '\(\&raw\ mut\ \(\*p\)\.pointers\)\.wrapping_byte_offset\(\(i\ as\ isize\)\.wrapping_mul\(8\)\)'
+
+[[match]]
+name = 'Rust raw nested array address keeps outer scaling'
+count = 1
+regex = '\(\&raw\ mut\ \*p\.wrapping_byte_offset\(\(i\ as\ isize\)\.wrapping_mul\(36\)\)\)'
+
+[[match]]
+name = 'Rust raw array address keeps callback order'
+count = 1
+regex = '\(\&raw\ mut\ \(\*counted_base\(p\)\)\.i32\)'
+
+[[match]]
+name = 'Rust raw array address preserves result pointer casts'
+count = 1
+regex = 'as\ \*mut\ i32\)\ as\ \*mut\ u32;'
+
+[[match]]
+name = 'Rust raw array address preserves literal width'
+count = 1
+regex = '::core::convert::identity::<i64>\(\-0x8000000000000000\ >>\ \(n\ as\ u8\ \&\ 0x3f\)\)'
+
+[[match]]
+name = 'Rust array integer decay uses a raw address'
+count = 1
+regex = 'i64::wrapping_add\(\&raw mut \(\*p\)\.i32 as i64,4 << \(n as u8 & 0x3f\)\) as \*mut i32;'
+
+[[match]]
+name = 'Rust array address cast suppression stays diagnostic'
+count = 1
+regex = 'return\ \&mut\ \(\*p\)\.i64\[i\];'

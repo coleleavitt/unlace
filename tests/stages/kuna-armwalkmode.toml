@@ -1,0 +1,104 @@
+# The ARM decode mode the Listing walk carries along its control flow
+# (`option armwalkmode on|off`, default on, GH-780).
+#
+# The XML wrapper only provides the harness architecture. Every pass clears
+# it and loads a synthetic stripped ARM32 ELF from `arm_interwork_le32.py`
+# with the Listing walk on, as every CLI surface runs it on ARM. An A32
+# entry at 0x2000000 calls a Thumb helper at 0x2000040 (`movs r0,#7; bx lr`)
+# with `blx` and an A32 helper at 0x2000080 (`add r0,r0,#1; bx lr`) with
+# `bl`. No symbol or mapping symbol names either mode.
+#
+# Pass 1, `arm_interwork_le32` (the issue's layout, `blx` first), option
+# off: the `blx` writes Thumb into the context database from 0x2000040 to
+# the end of the address space, the walk decodes the A32 helper in it, and
+# the decompiler prints `halt_missing()` (a Thumb decode starting at
+# 0x2000082).
+#
+# Pass 2, the same image, default: the `bl` target keeps the caller's A32
+# mode, so the A32 helper returns `a0 + 1`, the `blx` target still decodes
+# as Thumb and returns 7, and the entry passes the Thumb result to the A32
+# helper.
+#
+# Pass 3, `arm_interwork_bl_first_le32` (the two calls swapped), default:
+# the A32 helper returns `a0 + 1`.
+#
+# Pass 4, `arm_pointer_thumb_exe_le32` (gcc -O0, stripped), default: the
+# Thumb `t_ptr` at 0x10172 is reached only through a pointer table, so no
+# flow carries a mode to it, and it keeps the Thumb a `blx` below it wrote.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arm_interwork_le32',
+    'option listing on',
+    'option armwalkmode off',
+    'read symbols',
+    'load addr 0x2000080',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arm_interwork_le32',
+    'option listing on',
+    'read symbols',
+    'load addr 0x2000080',
+    'decompile',
+    'print C',
+    'load addr 0x2000040',
+    'decompile',
+    'print C',
+    'load addr 0x2000000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arm_interwork_bl_first_le32',
+    'option listing on',
+    'read symbols',
+    'load addr 0x2000080',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arm_pointer_thumb_exe_le32',
+    'option listing on',
+    'read symbols',
+    'load addr 0x10172',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'ARMWALKMODE #1: off, the A32 helper after the blx target decodes as Thumb'
+count = 1
+literal = 'halt_missing'
+
+[[match]]
+name = 'ARMWALKMODE #2: default, the bl target keeps A32 in both call orders'
+count = 2
+literal = 'return a0 + 1;'
+
+[[match]]
+name = 'ARMWALKMODE #3: default, the blx target decodes as Thumb and returns 7'
+count = 1
+literal = 'return 7;'
+
+[[match]]
+name = 'ARMWALKMODE #4: default, the entry passes the Thumb result to the A32 helper'
+count = 1
+literal = 'sub_2000080(sub_2000040())'
+
+[[match]]
+name = 'ARMWALKMODE #5: default, a pointer-only Thumb function keeps the mode a blx below it wrote'
+count = 1
+literal = 'v2 += sub_10158(v1);'

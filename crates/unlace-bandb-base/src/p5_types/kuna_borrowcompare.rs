@@ -1106,7 +1106,8 @@ fn pair_branch(data: &Funcdata) -> bool {
 /// the words are pieces of one value. An unsigned low-word `<` pairs with an
 /// ordered high-word compare up to two single-entry blocks above it; a
 /// low-word `==`/`!=` pairs with a high-word `==`/`!=` in the block
-/// directly above or below. The other operand's words must be a pair too (two
+/// directly above or below, or with one a BOOL_AND/BOOL_OR combines it with
+/// (`bool_linked`). The other operand's words must be a pair too (two
 /// adjacent input words or the SUBPIECEs of one whole), or two constants for
 /// an ordered compare; a pair of zero tests is not enough, since two separate
 /// `int` parameters compiled from `!a && !b` give the same code.
@@ -1123,11 +1124,46 @@ fn branch_input_pair(data: &mut Funcdata, op: OpId) -> int4 {
         let Some(hi) = input_above(data, lo) else {
             continue;
         };
-        if branch_linked(data, op, hi, other) {
+        if [lo, hi, other]
+            .into_iter()
+            .any(|w| addresses_memory(data, w, 0))
+        {
+            continue;
+        }
+        if branch_linked(data, op, hi, other) || bool_linked(data, op, hi, other) {
             joined |= join(data, lo, hi);
         }
     }
     joined as int4
+}
+
+/// Whether `vn`, directly or through a COPY or an addition, is the address
+/// of a LOAD or STORE: a word a function dereferences is a pointer (the first
+/// word of a two-word struct such as an iterator), never half of a
+/// `long long`.
+fn addresses_memory(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
+    let Some(v) = data.vbank().get(vn) else {
+        return false;
+    };
+    v.descend_iter().any(|op| {
+        let Some(o) = data.obank().get(op) else {
+            return false;
+        };
+        match o.code() {
+            OpCode::CPUI_LOAD | OpCode::CPUI_STORE => o.get_in(1) == Some(vn),
+            OpCode::CPUI_COPY
+            | OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_PTRADD
+            | OpCode::CPUI_PTRSUB
+            | OpCode::CPUI_MULTIEQUAL
+                if depth < 3 =>
+            {
+                o.get_out()
+                    .is_some_and(|out| addresses_memory(data, out, depth + 1))
+            }
+            _ => false,
+        }
+    })
 }
 
 /// The block whose CBRANCH reads `vn`, directly or through a BOOL_NEGATE.
@@ -1151,7 +1187,11 @@ fn branch_block(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<BlockId> {
 }
 
 /// Whether a branch next to the one the low-word compare `op` decides
-/// compares `hi` with the high word that goes with `olo`.
+/// compares `hi` with the high word that goes with `olo`. An ordered low
+/// compare needs both blocks above it to test the high words, one of them
+/// ordered: a 64-bit `<` decides on the high words twice (`jl`, then `jg`
+/// or `jne`) before it reaches the low words, while `hi <= 8 && lo <= 0xb`
+/// over two separate bounds tests them once.
 fn branch_linked(data: &Funcdata, op: OpId, hi: VarnodeId, olo: VarnodeId) -> bool {
     let Some(o) = data.obank().get(op) else {
         return false;
@@ -1186,15 +1226,54 @@ fn branch_linked(data: &Funcdata, op: OpId, hi: VarnodeId, olo: VarnodeId) -> bo
             }
         }
     }
-    near.into_iter().any(|bl| {
-        let Some(&cb) = data.bb_ops(bl).last() else {
+    let tests = |kind: bool| {
+        near.iter()
+            .filter(|&&bl| {
+                let Some(&cb) = data.bb_ops(bl).last() else {
+                    return false;
+                };
+                data.obank().get(cb).is_some_and(|c| {
+                    c.code() == OpCode::CPUI_CBRANCH
+                        && c.get_in(1)
+                            .is_some_and(|cond| hi_compare(data, cond, hi, olo, kind, 0))
+                })
+            })
+            .count()
+    };
+    if !ordered {
+        return tests(false) > 0;
+    }
+    tests(true) > 0 && tests(true) + tests(false) >= 2
+}
+
+/// Whether the low-word equality `op` is combined, by a BOOL_AND reading a
+/// `==` or a BOOL_OR reading a `!=`, with the same equality of `hi` and the
+/// high word that goes with `olo` (a pair, not constants): the branchless
+/// `(xlo ^ ylo) | (xhi ^ yhi)` once upstream's `RuleOrCompare` has split it
+/// into `xlo != ylo || xhi != yhi` before the XOR trigger saw it.
+fn bool_linked(data: &Funcdata, op: OpId, hi: VarnodeId, olo: VarnodeId) -> bool {
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
+    let opc = o.code();
+    let comb = match opc {
+        OpCode::CPUI_INT_EQUAL => OpCode::CPUI_BOOL_AND,
+        OpCode::CPUI_INT_NOTEQUAL => OpCode::CPUI_BOOL_OR,
+        _ => return false,
+    };
+    let Some(out) = o.get_out() else {
+        return false;
+    };
+    if olo == hi || vn_const(data, olo).is_some() {
+        return false;
+    }
+    ops_reading(data, out, comb).into_iter().any(|b| {
+        let (Some(p), Some(q)) = (input(data, b, 0), input(data, b, 1)) else {
             return false;
         };
-        data.obank().get(cb).is_some_and(|c| {
-            c.code() == OpCode::CPUI_CBRANCH
-                && c.get_in(1)
-                    .is_some_and(|cond| hi_compare(data, cond, hi, olo, ordered, 0))
-        })
+        let other = if p == out { q } else { p };
+        matches!(def_of(data, other), Some((_, c)) if c == opc)
+            && hi_compare(data, other, hi, olo, false, 0)
     })
 }
 

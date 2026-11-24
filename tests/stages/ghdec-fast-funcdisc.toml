@@ -1,0 +1,66 @@
+# Fast whole-project function discovery (`option fast_funcdisc on|off`).
+#
+# The XML wrapper only provides the harness architecture. Both passes clear
+# it and load the real public PE fixture through the same object bootstrap as
+# `decompile-project`.
+#
+# Pass 1 (`mode fast`, overridden with `fast_funcdisc off`) reproduces the
+# metadata-only inventory:
+# entry `0x140001010` is known, but its direct CALL target `0x140001000`
+# is absent from `functions`.
+#
+# Both passes also hold `option pdb off`: the fixture ships its matching
+# `pdb_prog.pdb` beside it, and the shipped `pdb` default (DIV-129) would
+# otherwise name both functions from the sidecar, which is a different test.
+#
+# Pass 2 applies only `mode fast`, exercising the shipped preset default. It
+# builds the rooted Listing, promotes the direct target into `functions` as
+# `sub_140001000`, and decompiles its real arithmetic body.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/pdb_prog.exe',
+    'mode fast',
+    'option fast_funcdisc off',
+    'option pdb off',
+    'read symbols',
+    'functions',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/pdb_prog.exe',
+    'mode fast',
+    'option pdb off',
+    'read symbols',
+    'functions',
+    'load function sub_140001000',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'FAST-FUNCDISC #1: loader-known entry is present in both inventories'
+count = 2
+literal = '0x140001010 sub_140001010'
+
+[[match]]
+name = 'FAST-FUNCDISC #2: direct callee is absent off and present on'
+count = 1
+literal = '0x140001000 sub_140001000'
+
+[[match]]
+name = 'FAST-FUNCDISC #3: the newly inventoried callee has a real decompiled body'
+count = 1
+literal = 'return a1 * 7 + a0 * 3;'

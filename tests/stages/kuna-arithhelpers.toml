@@ -1,0 +1,162 @@
+# Arithmetic runtime helpers as C operators (`option arithhelpers on|off`,
+# default on; stage P2 flow-classification, call-fixup injection).
+#
+# A 32-bit target delegates 64-bit division, modulo, multiplication and
+# shifts, and on ARM every integer division, to a runtime helper: libgcc's
+# __udivdi3 family, the ARM run-time ABI's __aeabi_uldivmod family, the MSVC
+# CRT's __stdcall _alldiv family. Each helper is a synthesized <callfixup>
+# whose p-code body is the operator, so the call prints as `a / b`.
+#
+# The XML wrapper only supplies the harness architecture. Each group clears
+# it and loads a real fixture from arithhelpers.c (sources and build lines
+# beside the fixtures):
+# - arithhelpers_i386: gcc -m32 ELF, libgcc linked in, DWARF-typed;
+# - arithhelpers_thumb: clang Thumb-1 (ARMv6-M) ELF calling __aeabi_*;
+# - arithhelpers_msvc_i386.exe: clang MSVC-ABI PE whose PDB names _alldiv.
+#
+# The first pass of each group (`option arithhelpers off`) reproduces the
+# opaque helper calls; the second (the shipped default) prints operators.
+# Assertions span the combined output of all passes.
+
+[image]
+arch = 'x86:LE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arithhelpers_i386',
+    'option arithhelpers off',
+    'read symbols',
+    'load function sdiv',
+    'decompile',
+    'print C',
+    'load function umod',
+    'decompile',
+    'print C',
+    'load function both',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arithhelpers_i386',
+    'read symbols',
+    'load function sdiv',
+    'decompile',
+    'print C',
+    'load function umod',
+    'decompile',
+    'print C',
+    'load function both',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arithhelpers_thumb',
+    'option arithhelpers off',
+    'read symbols',
+    'load function udiv',
+    'decompile',
+    'print C',
+    'load function shl',
+    'decompile',
+    'print C',
+    'load function mul',
+    'decompile',
+    'print C',
+    'load function idiv',
+    'decompile',
+    'print C',
+    'load function imod',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arithhelpers_thumb',
+    'read symbols',
+    'load function udiv',
+    'decompile',
+    'print C',
+    'load function shl',
+    'decompile',
+    'print C',
+    'load function mul',
+    'decompile',
+    'print C',
+    'load function idiv',
+    'decompile',
+    'print C',
+    'load function imod',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arithhelpers_msvc_i386.exe',
+    'option arithhelpers off',
+    'read symbols',
+    'load function _sdiv',
+    'decompile',
+    'print C',
+    'load function _smod',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arithhelpers_msvc_i386.exe',
+    'read symbols',
+    'load function _sdiv',
+    'decompile',
+    'print C',
+    'load function _smod',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'ARITHHELPERS #1: off keeps the libgcc and divmod helper calls'
+count = 3
+regex = '__(divdi3|umoddi3|divmoddi4)\('
+
+[[match]]
+name = 'ARITHHELPERS #2: off keeps the AEABI helper calls'
+count = 5
+regex = '__aeabi_(uldivmod|llsl|lmul|idiv|idivmod)\('
+
+[[match]]
+name = 'ARITHHELPERS #3: off keeps the MSVC helper calls'
+count = 2
+regex = '__all(div|rem)\('
+
+[[match]]
+name = 'ARITHHELPERS #4: on, 64-bit and AEABI 32-bit quotients print as division'
+count = 4
+literal = 'return a / b;'
+
+[[match]]
+name = 'ARITHHELPERS #5: on, 64-bit and AEABI 32-bit remainders print as modulo'
+count = 3
+literal = 'a % b;'
+
+[[match]]
+name = 'ARITHHELPERS #6: on, __divmoddi4 stores the remainder through its pointer'
+count = 1
+literal = '*r = a % b;'
+
+[[match]]
+name = 'ARITHHELPERS #7: on, the AEABI shift prints as an operator'
+count = 1
+literal = 'return a << n;'
+
+[[match]]
+name = 'ARITHHELPERS #8: on, the AEABI multiply prints as an operator'
+count = 1
+literal = 'return b * a;'
+
+[[match]]
+name = 'ARITHHELPERS #9: on, the MSVC stdcall helpers print as operators over the two stack words'
+count = 2
+regex = 'CONCAT44\(a1,a0\) [/%] CONCAT44\(a3,a2\)'

@@ -1,0 +1,67 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/scalar_call_results_x86_64',
+    'read symbols',
+    'map prototype narrow_bool bool narrow_bool(bool skip,uint8 value);',
+    'option outlang rust',
+    'option callrettype off',
+    'load function wide_value',
+    'decompile',
+    'print C',
+    'load function narrow_bool',
+    'decompile',
+    'print C',
+    'option callrettype on',
+    'load function wide_value',
+    'decompile',
+    'print C',
+    'load function narrow_bool',
+    'decompile',
+    'print C',
+    'map prototype wide_value uint8 wide_value(uint8 value);',
+    'load function narrow_bool',
+    'decompile',
+    'print C',
+    'option outlang go',
+    'load function narrow_bool',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Console has no recorded return in either option arm'
+count = 2
+literal = 'v1 = wide_value(value);'
+
+[[match]]
+name = 'Recovered callee still returns a full word'
+count = 2
+literal = 'fn wide_value(mut a0: u64) -> u64'
+
+[[match]]
+name = 'Explicit Rust prototype retains the narrowing cast'
+count = 1
+literal = 'v1 = wide_value(value) as u8;'
+
+[[match]]
+name = 'Rust Boolean conversion keeps its byte comparison'
+count = 3
+literal = 'return v1 != 0;'
+
+[[match]]
+name = 'Explicit Go prototype retains the narrowing conversion'
+count = 1
+literal = 'v1 = byte(wide_value(value))'

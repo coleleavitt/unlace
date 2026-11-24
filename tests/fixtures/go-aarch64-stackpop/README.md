@@ -14,7 +14,7 @@ readelf -r recursive.o
 ```
 
 The object has no relocations. Its 60 text bytes are embedded in
-`tests/stages/ghangr-go-aarch64-stackpop.xml`. The explicit scalar prototype
+`tests/stages/ghangr-go-aarch64-stackpop.toml`. The explicit scalar prototype
 isolates stack-slot preservation from return-width inference. With the old
 Go `abi-internal` extrapop of eight, the first call's result assignment is
 lost and the second call reads an uninitialized stack value instead of the

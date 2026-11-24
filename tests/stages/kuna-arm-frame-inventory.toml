@@ -1,0 +1,96 @@
+# Kuna #926 frame recovery and GH-299 literal-pool entries.
+# P1 code/data partition: armframes inventory (default) recovers disconnected
+# A32 frames, and aifpoolslide preserves the input after a loaded literal.
+# The two authored ELF fixtures have generators beside them. The first keeps
+# the existing AIF tail target at 0x1600 while adding its frame caller 0x1500.
+# The second puts a loaded MOV-shaped literal before a caller's input copy.
+# armframes off omits the frame; aifpoolslide off reproduces the early entry
+# and return-zero defect. The defaults recover the frame and preserve a0.
+
+[image]
+arch = 'ARM:LE:32:v7'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '1eff2fe1'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arm_frame_retain_le32',
+    'mode reliable',
+    'option listing on',
+    'option funcstart_patterns on',
+    'option aif on',
+    'option armframes off',
+    'read symbols',
+    'functions',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arm_frame_retain_le32',
+    'mode reliable',
+    'option listing on',
+    'option funcstart_patterns on',
+    'option aif on',
+    'read symbols',
+    'functions',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arm_frame_pool_le32',
+    'mode reliable',
+    'option listing on',
+    'option funcstart_patterns on',
+    'option aif on',
+    'read symbols',
+    'functions',
+    'load function sub_8000400',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/arm_frame_pool_le32',
+    'mode reliable',
+    'option listing on',
+    'option funcstart_patterns on',
+    'option aif on',
+    'option aifpoolslide off',
+    'option aifdataveto off',
+    'read symbols',
+    'functions',
+    'load function sub_80003fc',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'ARM-FRAME-INVENTORY #1: the disconnected frame is added only by default recovery'
+count = 1
+literal = '0x1500 sub_1500'
+
+[[match]]
+name = 'ARM-FRAME-INVENTORY #2: the prior tail target survives both passes'
+count = 2
+literal = '0x1600 sub_1600'
+
+[[match]]
+name = 'ARM-FRAME-INVENTORY #3: the literal-guarded caller begins at its own address'
+count = 1
+literal = '0x8000400 sub_8000400'
+
+[[match]]
+name = 'ARM-FRAME-INVENTORY #4: the literal guard preserves the incoming value'
+count = 1
+literal = 'return a0;'
+
+[[match]]
+name = 'ARM-FRAME-INVENTORY #5: disabling the guard reproduces the literal entry'
+count = 1
+literal = '0x80003fc sub_80003fc'
+
+[[match]]
+name = 'ARM-FRAME-INVENTORY #6: disabling the guard clobbers the incoming value'
+count = 1
+literal = 'return 0;'

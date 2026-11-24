@@ -12,7 +12,7 @@ the numbers behind it.
 | `decompiler/crates/kuna-decomp/src/p6_variables/varmap.rs` | `ScopeLocal::assign_default_names`, a one-line accessor onto the already-ported `Database::assign_default_names` |
 | `decompiler/crates/kuna-decomp/src/p6_variables/coreaction_cleanup.rs` | one call at the tail of `name_local_highs_angr`, after the spacebase attach pass |
 | `decompiler/crates/kuna-base/src/xml.rs` | corpus file count 190 -> 191 (counted from disk, not arithmetic) |
-| `tests/stages/ghdec-undefname.xml` | **new** -- two witnesses, two passes, 8 assertions |
+| `tests/stages/ghdec-undefname.toml` | **new** -- two witnesses, two passes, 8 assertions |
 | `docs/baseline-stages.json` | re-recorded from a live run: 386 -> 394 keys, purely the 8 new ones |
 | `docs/spec/06-variables-and-merge.md` | section 6.1, "Closing out the undefined names" |
 | `docs/history.md` | DIV row |
@@ -124,7 +124,7 @@ recorded rescore.
 
 ## Stage test
 
-`tests/stages/ghdec-undefname.xml` carries both mechanisms as real bytes -- `tar`
+`tests/stages/ghdec-undefname.toml` carries both mechanisms as real bytes -- `tar`
 `xstrcat` (the stale cache) and `ip` `set_qlen` (the unwired catch-all) -- with their
 callees stubbed. Pass 1 is the default pipeline; pass 2 sets `option dedupvardecls off`
 to pin that neither witness depends on the P9 declaration collapse.

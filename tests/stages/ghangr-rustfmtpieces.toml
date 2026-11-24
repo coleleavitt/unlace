@@ -1,0 +1,84 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_fmt_pieces_1.90.0',
+    'read symbols',
+    'option setlanguage rust-language',
+    'option rustfmt off',
+    'load function pieces_literal',
+    'decompile',
+    'print C',
+    'load function pieces_u32',
+    'decompile',
+    'print C',
+    'option rustfmt on',
+    'print C',
+    'load function pieces_literal',
+    'decompile',
+    'print C',
+    'load function pieces_empty',
+    'decompile',
+    'print C',
+    'load function pieces_pair',
+    'decompile',
+    'print C',
+    'load function pieces_narrow',
+    'decompile',
+    'print C',
+    'load function pieces_adjacent',
+    'decompile',
+    'print C',
+    'load function pieces_repeat',
+    'decompile',
+    'print C',
+    'load function pieces_flags',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'off and nondefault specifications retain the runtime sink'
+count = 4
+literal = '_print('
+
+[[match]]
+name = 'piece literal keeps Unicode braces and the extra newline'
+count = 1
+literal = 'println!("literal {{é🙂}}\n")'
+
+[[match]]
+name = 'empty piece array is empty printing'
+count = 1
+literal = 'print!("")'
+
+[[match]]
+name = 'default u32 argument is a typed read'
+count = 1
+regex = 'println!\("value \{\} end".*\*const u32'
+
+[[match]]
+name = 'stderr pair preserves narrow signed and wide unsigned types'
+count = 1
+regex = 'eprint!\("\{\} = \{\}".*\*const i8.*\*const u64'
+
+[[match]]
+name = 'all narrow widths retain exact formatter types'
+count = 1
+regex = 'println!\("\[\{\}\|\{\}\|\{\}\|\{\}\]".*\*const u8.*\*const i16.*\*const u16.*\*const i32'
+
+[[match]]
+name = 'adjacent arguments preserve empty separating pieces'
+count = 1
+regex = 'println!\("\{\}\{\}".*\*const u64.*\*const i64'

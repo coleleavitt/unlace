@@ -1,0 +1,137 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'byte_less' },
+    { space = 'ram', offset = '0x100020', name = 'byte_lesseq' },
+    { space = 'ram', offset = '0x100040', name = 'byte_shift' },
+    { space = 'ram', offset = '0x100060', name = 'byte_store' },
+    { space = 'ram', offset = '0x100080', name = 'byte_unsigned' },
+    { space = 'ram', offset = '0x1000a0', name = 'byte_loop_direct' },
+    { space = 'ram', offset = '0x1000c0', name = 'unsigned_loop' },
+    { space = 'ram', offset = '0x1000e0', name = 'unsigned_less64' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '4038f7400f9cc00fb6c0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100020'
+readonly = true
+hex = '4038f7400f9ec00fb6c0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100040'
+readonly = true
+hex = '4889f8c0f8020fb6c0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100060'
+readonly = true
+hex = 'c03f02c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100080'
+readonly = true
+hex = '4038f7400f92c00fb6c0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000a0'
+readonly = true
+hex = '4088f885f67406d0f8ffce75fac3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000c0'
+readonly = true
+hex = '4088f885f67406d0f8ffce75fac3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000e0'
+readonly = true
+hex = '4839f70f9cc00fb6c0c3'
+
+[script]
+commands = [
+    'option outlang rust',
+    'parse line extern unsigned int byte_less(unsigned long a, unsigned long b);',
+    'parse line extern unsigned int byte_lesseq(unsigned long a, unsigned long b);',
+    'parse line extern unsigned int byte_shift(unsigned long a);',
+    'parse line extern void byte_store(char *p);',
+    'parse line extern unsigned int byte_unsigned(unsigned long left, unsigned long right);',
+    'parse line extern char byte_loop_direct(char a, unsigned int n);',
+    'parse line extern unsigned char unsigned_loop(char value, unsigned int n);',
+    'parse line extern unsigned int unsigned_less64(unsigned long left, unsigned long right);',
+    'lo fu byte_less',
+    'decompile',
+    'print C',
+    'lo fu byte_lesseq',
+    'decompile',
+    'print C',
+    'lo fu byte_shift',
+    'decompile',
+    'print C',
+    'lo fu byte_store',
+    'decompile',
+    'print C',
+    'lo fu byte_unsigned',
+    'decompile',
+    'print C',
+    'lo fu byte_loop_direct',
+    'decompile',
+    'print C',
+    'lo fu unsigned_loop',
+    'decompile',
+    'print C',
+    'lo fu unsigned_less64',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust signed byte less-than reads signed values'
+count = 1
+literal = 'as i8) < ('
+
+[[match]]
+name = 'Rust signed byte less-or-equal reads signed values'
+count = 1
+literal = 'as i8) <= ('
+
+[[match]]
+name = 'Rust byte arithmetic shifts use signed operands'
+count = 2
+literal = 'as i8) >> 2'
+
+[[match]]
+name = 'Rust byte arithmetic shifts restore storage width'
+count = 2
+literal = ') >> 2) as u8'
+
+[[match]]
+name = 'Rust unsigned byte comparison remains unsigned'
+count = 1
+literal = 'return ((left as u8) < (right as u8)) as u32;'
+
+[[match]]
+name = 'Rust signed byte compound assignment preserves arithmetic shift'
+count = 1
+literal = 'a = ((a as i8) >> 1) as u8;'
+
+[[match]]
+name = 'Rust arithmetic shift overrides unsigned recovered input'
+count = 1
+literal = 'value = ((value as i8) >> 1) as u8;'
+
+[[match]]
+name = 'Rust signed comparison overrides unsigned recovered inputs'
+count = 1
+literal = '(left as i64) < (right as i64)'

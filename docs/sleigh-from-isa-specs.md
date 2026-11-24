@@ -91,6 +91,34 @@ other helpers the compiler cannot inline become user operations named after the 
 function, and a guard that allows several cubes of an operand's values (`rnum <_u 0xB`)
 becomes one constructor per cube.
 
+`riscv.zfa.sinc` comes from `extensions/FD/zfa_insts.sail` with
+`--exts rv_f_zfa,rv_d_zfa,rv_zfh_zfa,rv32_d_zfa --display-table constantidx=fliConstS --opaque-fallback`.
+For floating point, the compiler maps `encdec_freg` fields to `frd`/`frs1`/`frs2`/`frs3`,
+and reads and writes `F_H`/`F_S`/`F_D` with NaN-boxing for a 64-bit FLEN (`--flen`).
+It lowers the softfloat comparisons to `f<=`/`f<`, `f_is_NaN` to `nan()`, and
+`riscv_fNNroundToInt` with a static rounding mode to `floor`/`ceil`/`round`. It
+ignores `accrue_fflags`, splits a rounding-mode field into one constructor per
+mode with its name as display text, and handles tuples, `Some`/`None` and signed
+integers. `--display-table` displays a field through an existing subtable (the `fli`
+constants), and `--opaque-fallback` turns a clause the compiler cannot lower
+(`rne`, `dyn`) into a user operation instead of skipping it. The compare tool's `--fp`
+loads `fa1`/`fa2` with FP-flavoured values and compares `fa0` when the p-code
+writes it. Two NaNs of the same format count as equal, since p-code has no NaN
+payloads. On RV64 the generated file agrees with QEMU on all 34 non-opaque words
+over 128 vectors each; the hand-written file disagreed on 8.
+
+`riscv.zabha.sinc` comes from `extensions/A/zaamo_insts.sail` with
+`--exts rv_zabha,rv_zabha_zacas --only '^amo[a-z]+\.[bh](\.|$)'`. The compiler's
+abstract memory model takes address translation, PMP/PMA checks, triggers and alignment
+as never faulting. `mem_read` is a RAM load and `mem_write_value` a RAM store of the
+access width, and the privilege and access-type records are opaque values the model
+never reads. With that, the width-generic `AMO` clause compiles as written, including
+`amocas`'s compare-then-store branch. The assembly clause builds the mnemonic from
+`amo_mnemonic`, the width and `maybe_aqrl`, so each ordering suffix is its own
+constructor. The compare tool's `--mem` points `rs1` at a doubleword in the test's
+slot and compares `rd` and that doubleword after the word runs. On RV64 all 74
+sampled Zabha/Zacas words agree with QEMU over 64 vectors each.
+
 To compare another variant, copy `specs/Ghidra/Processors/RISCV/data/languages` into
 `<dir>/Ghidra/Processors/RISCV/data/languages`, replace `riscv.zb.sinc`, compile with
 `slacomp`, and pass `--sleighpath <dir>` to `unlace`.
@@ -178,15 +206,13 @@ generation time, not something the model can settle.
   clauses use record fields and tuple-valued mappings the parser does not read. Loads, stores, branches, F/D/Q, V
   and the privileged instructions are therefore out of reach until the
   compiler learns Sail's memory and control-flow primitives.
-- **Floating point, atomics and vectors.** On `zfa_insts.sail` the generator emits
-  nothing (86 clauses skipped). The encodings use the `encdec_freg` and rounding-mode
-  mappings, and the execute clauses read and write `F_D`/`F_H` with NaN-boxing, pattern-match
-  `Some(rm')`, destructure softfloat tuples and accrue `fflags`. `zaamo_insts.sail`
-  (which holds Zabha) is a single width-generic `AMO` clause over memory, exceptions and
-  reservation state. The V files have the same needs plus register groups and `vtype`.
-  `riscv.zfa.sinc`, `riscv.zabha.sinc` and `riscv.rvv.sinc` therefore stay hand-written.
-  Generating them would need an FP register mapping, p-code float operations for the
-  softfloat calls, and memory reads and writes in the compiler.
+- **Vectors (decided: stays hand-written).** Sail's V execute clauses loop over
+  `num_elem = VLEN*LMUL/SEW`, which comes from the runtime `vtype`/`vl` CSRs, and index
+  register groups at run time. Even the encdec guards read `get_sew()`. Nothing can be
+  unrolled into p-code, and `riscv.rvv.sinc` already lifts every instruction to a user
+  operation (`vd = vadd_vv(vs2, vs1)`). A generated file could only move the decoding's
+  provenance to Sail while churning the 672 user-operation names and arguments, so V
+  stays hand-written. Its decoding is checked against LLVM by `riscv_vector.rs`.
 - **Readability is not in the model.** Sail states what an instruction does,
   not how a decompiler should show it. The `--budget` and `--opaque` knobs
   stand in for the choices a spec author makes by hand.
@@ -205,6 +231,19 @@ generation time, not something the model can settle.
   BSD-licensed AARCHMRS JSON and LLVM TableGen are usable for decoding only,
   which `tools/gen_aarch64_ext.py` already does. XED gives x86 decoding but no
   semantics.
+
+## AArch64 reference semantics
+
+The Sail Arm-A model ([rems-project/sail-arm](https://github.com/rems-project/sail-arm),
+BSD-3-Clause-Clear) is an exact reference for AArch64, but running it means building the
+Sail toolchain (OCaml/opam) and its C emulator, then driving a full-system model. For
+the difffuzz cases in #546 (rounding, saturation, unsigned FP converts,
+`BFDOT`/`USDOT`/`SUDOT`, FEAT_MOPS) a cheaper exact oracle exists. QEMU 10.2 user mode
+(`qemu-aarch64 -cpu max`) executes every one of them, including the BF16, I8MM and MOPS
+encodings that Unicorn's older QEMU core rejects. A static ELF with the word between
+register loads and stores is enough, as the RISC-V harness in `tools/sail_sleigh_compare.py`
+does. Sail-arm is therefore not used as an oracle. It remains the source to try if
+AArch64 SLEIGH is ever generated, the way the RISC-V files are.
 
 ## Files
 

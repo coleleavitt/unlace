@@ -20,7 +20,7 @@
 //! reachable from the same walk — an over-strict skip drops the only declaration of a
 //! referenced name, and an unmerged second live range of one mapped slot adds a second
 //! declaration of a name that already has one (DIV-52, whose end-to-end witness is
-//! `tests/stages/ghdec-symbol-keyed-local-decls.xml`). Pinning both here keeps a fix
+//! `tests/stages/ghdec-symbol-keyed-local-decls.toml`). Pinning both here keeps a fix
 //! for either from re-opening the other.
 
 use std::path::PathBuf;

@@ -4,13 +4,15 @@
 Usage:
   llvm-tblgen --dump-json -I <llvm>/include -I <llvm>/lib/Target/X86 \
       <llvm>/lib/Target/X86/X86.td -o x86.json
-  tools/gen_x86_avx10.py x86.json specs/Ghidra/Processors/x86/data/languages/avx10_2.sinc [probe.txt]
+  tools/gen_x86_avx10.py x86.json specs/Ghidra/Processors/x86/data/languages/avx10_2.sinc
+  (also writes avx10_2_amx.sinc next to it)
 
 Every non-pseudo EVEX record with a HasAVX10_2* predicate is emitted. The records
 of one instruction form (plain, merge-masked, zero-masked, broadcast, {sae} and
 {rc} variants) fold into one constructor for the register form, one for the
 memory form and one for the {sae}/{rc} register form, in the style of avx512.sinc:
-masking through the Xmm/Ymm/ZmmOpMask* tables, Disp8*N from LLVM's CD8_Scale,
+masking through the Xmm/Ymm/ZmmOpMask* tables, Disp8*N from LLVM's CD8_Scale (the
+16-bit broadcast rows FV16/HV16 are in ia.sinc),
 and one user operation per mnemonic (avx10_<mnemonic>) whose inputs are the read
 operands (the old destination first for accumulating forms). VMOVRS* are loads,
 VMOVD/VMOVW zero-extending moves, and the VCOMX/VUCOMX/VCOMISBF16 compares set
@@ -347,13 +349,13 @@ class Gen:
 
 
 def vex_vnni(path, gen):
-    """The VEX AVX-VNNI-INT8/INT16 forms, which AVX10.2 promotes to EVEX and compilers still emit."""
+    """The VEX AVX-VNNI-INT8/INT16 and SM4 forms, which AVX10.2 promotes to EVEX and compilers still emit."""
     J = json.load(open(path))
     done = set()
     for n in sorted(J["!instanceof"]["X86Inst"]):
         r = J[n]
         ps = [p["def"] for p in r.get("Predicates", [])]
-        if r.get("isCodeGenOnly") or r["OpEnc"]["def"] != "EncVEX" or not set(ps) & {"HasAVXVNNIINT8", "HasAVXVNNIINT16"}:
+        if r.get("isCodeGenOnly") or r["OpEnc"]["def"] != "EncVEX" or not set(ps) & {"HasAVXVNNIINT8", "HasAVXVNNIINT16", "HasSM4"}:
             continue
         mn = r["AsmString"].split()[0]
         l = r["hasVEX_L"]
@@ -365,8 +367,9 @@ def vex_vnni(path, gen):
         op = gen.op("avx10_" + mn)
         gen.ctors.append(
             "# %s\n:%s %sReg1, vexVVVV_%sReg, %sReg2_%s is $(VEX_NDS) & $(VEX_L%d) & %s & $(VEX_0F38) & $(VEX_W0) & vexVVVV_%sReg; "
-            "byte=0x%02x; (%sReg1 & ZmmReg1) ... & %sReg2_%s\n{\n\tlocal res:%d = %s(%sReg1, vexVVVV_%sReg, %sReg2_%s);\n\tZmmReg1 = zext(res);\n}\n"
-            % (n, mn.upper(), V, V, V, m, 256 if l else 128, PRE[r["OpPrefix"]["def"]], V, bits(r["Opcode"]), V, V, m, b, op, V, V, V, m))
+            "byte=0x%02x; (%sReg1 & ZmmReg1) ... & %sReg2_%s\n{\n\tlocal res:%d = %s(%svexVVVV_%sReg, %sReg2_%s);\n\tZmmReg1 = zext(res);\n}\n"
+            % (n, mn.upper(), V, V, V, m, 256 if l else 128, PRE[r["OpPrefix"]["def"]], V, bits(r["Opcode"]), V, V, m, b, op,
+               ("%sReg1, " % V) if "$src1 = $dst" in (r.get("Constraints") or "") else "", V, V, m))
 
 
 def main():
@@ -382,26 +385,34 @@ def main():
     for grp in groups.values():
         g.group(grp)
     vex_vnni(sys.argv[1], g)
-    out = [HEADER, "@ifdef IA64", ""]
+    common, only64, withu, only16, amx = [], [], [], [], []
+    for c in g.ctors:
+        if "amxT" in c:
+            amx.append(c)
+        elif re.search(r"\b(Reg64|Rmr64|apxNDD\w*|LONGMODE_ON)\b", c):
+            only64.append(c)
+        elif "rexX4=1" in c:
+            withu.append(c)
+        elif "rexX4=0" in c:
+            withu.append(c)
+            only16.append(c.replace(" & rexX4=0", ""))
+        else:
+            common.append(c)
+    out = [HEADER, ""]
     out += ["define pcodeop %s;" % o for o in g.ops]
-    out += ["", "# Disp8*N for full- and half-vector memory operands with a 16-bit broadcast element.",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=0 & evexL=0 [ offs = 4; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=0 & evexL=1 [ offs = 5; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=0 & evexL=2 [ offs = 6; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xe & evexB=1 [ offs = 1; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=0 & evexL=0 [ offs = 3; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=0 & evexL=1 [ offs = 4; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=0 & evexL=2 [ offs = 5; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "evexDisp8N: offs is evexD8Type=1 & evexTType=0xf & evexB=1 [ offs = 1; evexDisp8=offs; ] { export *[const]:1 offs; }",
-            "",
-] + ['avx10CmpBf16: "VCMP%sBF16" is imm8=%d { }' % (p, i) for i, p in enumerate(CMP_PRED)] + [
+    out += [""] + ['avx10CmpBf16: "VCMP%sBF16" is imm8=%d { }' % (p, i) for i, p in enumerate(CMP_PRED)] + [
             'avx10CmpBf16: "VCMPBF16" is imm8 { }', "",
             'avx10Rc: "{rn-sae}" is evexL=0 { }', 'avx10Rc: "{rd-sae}" is evexL=1 { }',
             'avx10Rc: "{ru-sae}" is evexL=2 { }', 'avx10Rc: "{rz-sae}" is evexL=3 { }', ""]
     out += list(g.memtabs.values()) + [""]
-    out += g.ctors
-    out += ["@endif", ""]
+    out += common
+    out += ["# EVEX.U (rexX4) selects the 256-bit {sae} forms; 16-bit x86 keeps no U bit and has the 512-bit ones only.",
+            "@ifndef IA16", ""] + withu + ["@else", ""] + only16 + ["@endif", ""]
+    out += ["# 64-bit only: GPR64 and EGPR operands.", "@ifdef IA64", ""] + only64 + ["@endif", ""]
     open(sys.argv[2], "w").write("\n".join(out))
+    amxpath = sys.argv[2].replace(".sinc", "_amx.sinc")
+    open(amxpath, "w").write("\n".join([HEADER, "# The AMX-AVX512 row moves; included after amx.sinc by x86-64.slaspec.",
+                                        "@ifdef IA64", ""] + amx + ["@endif", ""]))
     print("%d records, %d constructors, %d user operations" % (len(recs), len(g.ctors), len(g.ops)), file=sys.stderr)
 
 

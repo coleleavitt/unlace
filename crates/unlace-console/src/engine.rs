@@ -3794,10 +3794,22 @@ impl ConsoleProgram {
         // ranges.
         let mut fde_bodies = std::mem::take(&mut merged.fde_bodies);
         fde_bodies.sort_unstable();
+        // (unlace, `functails`) A tail that starts exactly where its owner's FDE ends is
+        // the owner's fall-through: the owner's bound runs over it, so flow may fall into it.
+        let owned_tails = std::mem::take(&mut merged.owned_tails);
         // A PE function's `.pdata` record can be one chunk of a chained function,
         // so only the other images' extents bound flow.
         if !self.arch().get_description().contains("windows") {
-            self.arch_mut().unlace_fde_extents = Rc::new(fde_bodies.clone());
+            let mut extents = fde_bodies.clone();
+            for &(owner, tail) in &owned_tails {
+                if let Some(extent) = extents
+                    .iter_mut()
+                    .find(|e| e.0 == owner.0 && e.1 == owner.1)
+                {
+                    extent.1 = extent.1.max(tail.1);
+                }
+            }
+            self.arch_mut().unlace_fde_extents = Rc::new(extents);
         }
         unlace_analysis::entry::fdeinterior::suppress_interior_entries(
             &mut merged.entries,

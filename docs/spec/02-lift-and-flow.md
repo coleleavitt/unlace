@@ -3904,7 +3904,9 @@ the next cleanup rung, padding, or code no known entry names, which
 `funcboundflow` cannot bound. When the function's entry starts a
 single-function extent, fall-through to an address at or past the extent's end
 is truncated the way `funcboundflow` truncates at a foreign entry, with its own
-warning. A declared extent (`--define-function S-E`) still wins.
+warning. A declared extent (`--define-function S-E`) still wins. Under `functails`
+(chapter 01) a `.cold` tail that starts exactly where the function's extent ends is
+the function's own fall-through, so the extent runs to the end of that tail.
 
 ## 2.4 No-return at lift time
 

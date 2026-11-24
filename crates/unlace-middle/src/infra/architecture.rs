@@ -510,7 +510,8 @@ pub struct Architecture {
     pub arm_float_library_prototypes: Vec<(Option<Address>, crate::fspec::PrototypePieces)>,
 
     /// (unlace `fdeflowbound`) Every single-function unwind-table extent
-    /// `[start, end)`, sorted, committed by the analysis tier.
+    /// `[start, end)`, sorted, committed by the analysis tier. Under `functails`, an
+    /// owner's extent runs over a tail that starts exactly where it ends.
     pub unlace_fde_extents: Rc<Vec<(u64, u64)>>,
 
     /// (unlace, Phase 3) Ghidra-convention default naming (`FUN_`/`DAT_`/`LAB_` +

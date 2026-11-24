@@ -544,6 +544,11 @@ pub struct AnalysisOutput {
     /// part; every entry inside one is dropped at the commit. Produced only by
     /// [`crate::entry::ehcold`] (`ehcold`).
     pub eh_cold: Vec<(u64, u64)>,
+    /// (unlace `functails`) The `(owner, tail)` FDE bodies where the tail starts exactly
+    /// where its owner's FDE ends, so flow can fall from the owner into it. The commit
+    /// extends the owner's `fdeflowbound` extent over the tail. Produced only by
+    /// [`crate::entry::ehcold`] (`functails`).
+    pub owned_tails: Vec<((u64, u64), (u64, u64))>,
     /// (unlace) The direct call sites of each PLT import, by stub address.
     /// Produced only by [`crate::protos::importvote`] (`importvote`).
     pub import_call_sites: Vec<(u64, Vec<u64>)>,
@@ -1239,6 +1244,7 @@ impl AnalysisOutput {
         self.fde_bodies.extend(other.fde_bodies);
         self.fde_interior_entries.extend(other.fde_interior_entries);
         self.eh_cold.extend(other.eh_cold);
+        self.owned_tails.extend(other.owned_tails);
         self.import_call_sites.extend(other.import_call_sites);
         self.pdb_bodies.extend(other.pdb_bodies);
         self.entry_names.extend(other.entry_names);

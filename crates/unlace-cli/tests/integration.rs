@@ -104,6 +104,9 @@ mod sbpf;
 mod scmp_raw;
 #[path = "sparc_prologue_start.rs"]
 mod sparc_prologue_start;
+#[path = "st20_raw.rs"]
+mod st20_raw;
+
 #[path = "stm8_raw.rs"]
 mod stm8_raw;
 #[path = "tlcs90_raw.rs"]

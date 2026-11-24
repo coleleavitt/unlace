@@ -8882,8 +8882,11 @@ both
   belong to the inlinee and are skipped. `S_GDATA32`/`S_LDATA32` with a complete
   type become typed globals, and each `??_7` vftable public is typed as an array
   of code pointers, one per slot the virtuals its class or its primary base
-  introduces occupy (a per-base table of a multiply-inheriting class is left
-  untyped). The pass runs at the commit, with the deferred entry passes, and only
+  introduces occupy. A multiply-inheriting class's table for another base
+  (`??_7C@@6BB@@@`, named `C::vftable_for_B`) gets that base's slots: the class's
+  new virtuals go into its primary table. The raw symbol is read directly when
+  every name in it is a plain identifier; any other spelling goes through the
+  demangler, which types only a primary table. The pass runs at the commit, with the deferred entry passes, and only
   when `pdb` and `pdbtypes` are both on, so a default load never reads the type,
   module or line streams. Default off: it changes the
   output of every PE with a matching `.pdb`, and the x64 frame math has been

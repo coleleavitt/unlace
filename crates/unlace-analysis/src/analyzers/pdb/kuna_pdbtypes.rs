@@ -27,7 +27,9 @@
 //!   [`crate::pass::RegLocalFact`]s from the range's start.
 //! - **Globals.** `S_GDATA32`/`S_LDATA32` with a complete type become typed data.
 //! - **Vftables.** A `??_7` public is typed as an array of code pointers, one per
-//!   slot its class's virtuals occupy ([`TpiMapper::vftable_slots`]).
+//!   slot its class's virtuals occupy ([`TpiMapper::vftable_slots`]); a
+//!   multiply-inheriting class's table for another base (`C::vftable_for_B`)
+//!   has that base's slots.
 //!
 //! ## Where a frame-relative slot is
 //!
@@ -620,8 +622,9 @@ fn collect_data(
 }
 
 /// Each `??_7` vftable public whose class the TPI stream describes, typed as its
-/// slots of code pointers. A table for one base of a multiply-inheriting class
-/// (`A::` followed by `vftable'{for ...}`) is left out.
+/// slots of code pointers. A multiply-inheriting class has one table per base
+/// that brings a table of its own (`C::vftable_for_B`); its slots are the
+/// base's, the class's new virtuals going into its primary table.
 fn collect_vftables(
     symbols: &mut pdb::SymbolIter<'_>,
     map: &pdb::AddressMap<'_>,
@@ -636,11 +639,18 @@ fn collect_vftables(
         if p.function || !p.name.as_bytes().starts_with(b"??_7") {
             continue;
         }
-        let Some(demangled) = crate::demangle::demangle_name(&p.name.to_string()) else {
-            continue;
-        };
-        let Some(class) = vftable_class(&demangled) else {
-            continue;
+        let raw = p.name.to_string();
+        let (class, base) = match vftable_names(&raw) {
+            Some(names) => names,
+            None => {
+                let Some(demangled) = crate::demangle::demangle_name(&raw) else {
+                    continue;
+                };
+                let Some(class) = vftable_class(&demangled) else {
+                    continue;
+                };
+                (class.to_string(), None)
+            }
         };
         let Some(addr) = p
             .offset
@@ -652,7 +662,8 @@ fn collect_vftables(
         if globals.contains_key(&addr) {
             continue;
         }
-        let Some(slots) = tpi.vftable_slots(class).and_then(|s| i32::try_from(s).ok()) else {
+        let owner = base.as_deref().unwrap_or(&class);
+        let Some(slots) = tpi.vftable_slots(owner).and_then(|s| i32::try_from(s).ok()) else {
             continue;
         };
         let Some(slot) = tpi.code_pointer() else {
@@ -665,11 +676,46 @@ fn collect_vftables(
             addr,
             TypedDataFact {
                 addr,
-                name: format!("{class}::vftable"),
+                name: match &base {
+                    None => format!("{class}::vftable"),
+                    Some(b) => format!(
+                        "{class}::vftable_for_{}",
+                        b.rsplit("::").next().unwrap_or(b)
+                    ),
+                },
                 type_: t,
             },
         );
     }
+}
+
+/// The class of a `??_7` vftable symbol spelled with plain identifiers, and
+/// the base it serves when it is not the class's primary table:
+/// `??_7Square@geo@@6B@` is `geo::Square`'s own, `??_7C@@6BB@ns@@@` is `C`'s
+/// table for its base `ns::B`. `None` for any other spelling (a template, a
+/// back-reference), which the demangler path handles for a primary table.
+pub(crate) fn vftable_names(raw: &str) -> Option<(String, Option<String>)> {
+    let (scope, tail) = raw.strip_prefix("??_7")?.split_once("@@6B")?;
+    let class = qualified(scope)?;
+    let base = match tail {
+        "@" => None,
+        t => Some(qualified(t.strip_suffix("@@@")?)?),
+    };
+    Some((class, base))
+}
+
+/// `Square@geo` as `geo::Square`; `None` unless every component is a plain
+/// identifier.
+fn qualified(scope: &str) -> Option<String> {
+    let parts: Vec<&str> = scope.split('@').collect();
+    let plain = |p: &&str| {
+        p.bytes().next().is_some_and(|b| !b.is_ascii_digit())
+            && p.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    };
+    if !parts.iter().all(plain) {
+        return None;
+    }
+    Some(parts.into_iter().rev().collect::<Vec<_>>().join("::"))
 }
 
 /// The class a demangled vftable name belongs to (`geo::Square` for the table
@@ -824,7 +870,22 @@ mod tests {
     }
 
     #[test]
-    fn vftable_names() {
+    fn raw_vftable_names() {
+        assert_eq!(
+            vftable_names("??_7Square@geo@@6B@"),
+            Some(("geo::Square".to_string(), None))
+        );
+        assert_eq!(
+            vftable_names("??_7C@@6BB@ns@@@"),
+            Some(("C".to_string(), Some("ns::B".to_string())))
+        );
+        assert_eq!(vftable_names("??_7C@ns@@6BB@1@@"), None, "back-reference");
+        assert_eq!(vftable_names("??_7?$V@H@@6B@"), None, "template");
+        assert_eq!(vftable_names("?area@Square@geo@@UEBAHXZ"), None);
+    }
+
+    #[test]
+    fn demangled_vftable_names() {
         assert_eq!(vftable_class("geo::Square::`vftable'"), Some("geo::Square"));
         assert_eq!(
             vftable_class("const geo::Shape::`vftable'"),

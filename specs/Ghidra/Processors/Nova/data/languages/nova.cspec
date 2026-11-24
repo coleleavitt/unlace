@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- The Nova has no fixed linkage. JSR leaves the return address in AC3 and
+     JMP 0,3 returns; arguments in AC0-AC2 and the result in AC0 follow common
+     DG assembler practice. The Nova 3 stack (SP, FP) grows upward. -->
+<compiler_spec>
+  <data_organization>
+    <pointer_size value="2"/>
+    <short_size value="2"/>
+    <integer_size value="2"/>
+    <long_size value="4"/>
+    <long_long_size value="4"/>
+    <float_size value="4"/>
+    <double_size value="8"/>
+    <size_alignment_map>
+      <entry size="1" alignment="1"/>
+      <entry size="2" alignment="1"/>
+      <entry size="4" alignment="1"/>
+      <entry size="8" alignment="1"/>
+    </size_alignment_map>
+  </data_organization>
+  <global>
+    <range space="ram"/>
+  </global>
+  <stackpointer register="SP" space="ram" growth="positive"/>
+  <returnaddress>
+    <register name="AC3"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="__stdcall" extrapop="0" stackshift="0" strategy="register">
+      <input>
+        <pentry minsize="1" maxsize="2">
+          <register name="AC0"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2">
+          <register name="AC1"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2">
+          <register name="AC2"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="2">
+          <register name="AC0"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="SP"/>
+        <register name="FP"/>
+      </unaffected>
+      <killedbycall>
+        <register name="AC0"/>
+        <register name="AC1"/>
+        <register name="AC2"/>
+        <register name="AC3"/>
+        <register name="C"/>
+      </killedbycall>
+    </prototype>
+  </default_proto>
+</compiler_spec>

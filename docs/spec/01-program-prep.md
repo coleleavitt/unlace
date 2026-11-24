@@ -1266,9 +1266,14 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   upper `simm13` bits as the GNU linker does; `PC22`/`PC10` are the same two
   fields over `S + A - P`, and `DISP32` is the 32-bit PC-relative data word.
   The split forms truncate rather than range-check, and reject a REL-style
-  implicit addend, which cannot be reassembled from one half. SPARC64 (V9)
-  instruction relocations, and GOT/TLS forms that need linker-built tables,
-  remain unsupported. eBPF objects are REL-only and every program ships as one,
+  implicit addend, which cannot be reassembled from one half. SPARC64 (V9,
+  unlace#677) takes the same forms plus the medium-low 44-bit triple (`H44`
+  into a `sethi`, `M44` bits 21..12 and `L44` bits 11..0 into simm13), the
+  medium-any `HH22`/`HM10`/`LM22` halves, `DISP64`, and the branch
+  displacements `WDISP22` (`Bicc`/`FBfcc`), `WDISP19` (`BPcc`/`FBPfcc`) and
+  `WDISP16` (`BPr`, split d16hi/d16lo), range-checked; a `WDISP30` call whose
+  ends do not fit 32 bits is range-checked as a signed 32-bit displacement.
+  GOT/TLS forms that need linker-built tables remain unsupported. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from

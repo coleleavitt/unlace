@@ -160,6 +160,7 @@ it until the label is gone.
 | `docs/options.md` | The generated option catalog (tiers, symptoms, flip guidance). |
 | `docs/dev-setup.md` | Build recipe, local gates (`tools/hooks/`), git hooks, worktree layout. |
 | `docs/cli.md` | The full `unlace` CLI reference (flags, JSON schemas, watchdog, export). |
+| `docs/processor-tests.md` | Testing a new processor family: a row in `crates/unlace-cli/tests/processors.toml`, not a new `*_raw.rs`. |
 | `docs/project.md` | The project file: its SQLite schema, how `--project` applies it, concurrent writers. |
 | `docs/pr-bodies.md` | How to write a PR body (read before opening/editing any PR). |
 | `docs/prepr.md` | Optional pre-PR helpers: a call-arity diff over real MSVC binaries, and a diff lint. |

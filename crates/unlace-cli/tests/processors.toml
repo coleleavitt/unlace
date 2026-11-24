@@ -1317,3 +1317,61 @@ expect = [
     "return 5;",
     "return 0;",
 ]
+
+# The Norsk Data ND-100 language (written from the ND-100 Reference Manual)
+# decompiles a hand-assembled, word-addressed raw image.
+[[family]]
+name = "nd100"
+language = "ND100:BE:16:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/nd100/funcs.bin"
+forbid = ["baddata"]
+
+# RADD ST DA; EXIT
+[[family.function]]
+test = "nd100_rop_add"
+address = "0x10"
+expect = [
+    "return a0 + a1;",
+]
+
+# SKP IF DA GRE ST; COPY ST DA; EXIT
+[[family.function]]
+test = "nd100_skip_signed_max"
+address = "0x14"
+expect = [
+    "if (a0 < a1)",
+    "a0 = a1;",
+]
+
+# LDA *+40; ADD *+40; STA *+40; EXIT (words; symbols print bytes)
+[[family.function]]
+test = "nd100_p_relative_load_add_store"
+address = "0x20"
+expect = [
+    "dat_84 = dat_80 + dat_82;",
+]
+
+# COPY SL DA; STA save; SAA 5; SAT 7; JPL sub; LDX save; COPY SX DL; EXIT
+[[family.function]]
+test = "nd100_jpl_call"
+address = "0x28"
+expect = [
+    "sub_10(5,7);",
+]
+
+# SHA SHR 3; EXIT
+[[family.function]]
+test = "nd100_arithmetic_shift"
+address = "0x38"
+expect = [
+    "return a0 >> 3;",
+]
+
+# AAA -6; EXIT
+[[family.function]]
+test = "nd100_add_argument"
+address = "0x3c"
+expect = [
+    "return a0 + -6;",
+]

@@ -292,6 +292,24 @@ mnemonics). Capstone 5 does not decode them. QEMU runs with
     - FP ops do not write fflags and fixed-point ops do not write vxsat (17-19), as the scalar
       F/D lift also leaves the accrued flags out.
 
+### RISC-V extensions Capstone does not decode (`--llvm-mattr`)
+
+`--arch riscv64 --llvm-mattr +c,+zcb,... --objdump <llvm-objdump>` draws the candidates from what
+llvm-objdump decodes with that `-mattr` instead of from Capstone 5, which knows neither Zcb,
+Zcmp, Zcmt, Zimop, Zcmop, Zicond nor Zalasr. One word in four is a 16-bit encoding, and
+`--only REGEX` picks mnemonics. Two more options exist for the Zcmp language:
+- `--lang` lifts with another SLEIGH language: `RISCV:LE:64:Zcmp`, whose `c.fsdsp` space holds
+  Zcmp/Zcmt.
+- `--qemu-cpu` replaces the harness's `-cpu`. Zcmp needs
+  `rv64,c=false,zca=true,zcd=false,zcmp=true,zcmt=true`: QEMU still decodes `c.fsdsp` when C
+  and D are both on, `zcd=false` or not.
+
+First runs (pinned `unlace-5dac424f4f`):
+- Zca/Zcb/Zcmop/Zimop/Zicond/Zalasr: 1400 encodings, 1433 matches, no mismatch. QEMU 10.2
+  rejects the Zalasr loads with SIGILL, so those are not compared.
+- Zcmp/Zcmt: 300 encodings, 251 matches, no mismatch. Most of the rest touch a stack outside
+  the mapped pages, which is `bad-address`.
+
 On the #546 encodings, `--oracle qemu` runs `bfdot` and `usdot` (Unicorn raises
 `UC_ERR_EXCEPTION`) and agrees with Unicorn on the rest. In 300 random RISC-V instructions it
 finds `fle.s` reading an unboxed single (`d38c9fa1`): QEMU compares the canonical NaN and

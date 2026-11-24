@@ -4251,6 +4251,21 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `SH` | Renesas SuperH SH-2E/SH-3/SH-3E/SH-4A | `sh3:BE:32:default`, `sh3:LE:32:default`, `sh3e:BE:32:default`, `sh3e:LE:32:default`, `sh2e:BE:32:default` | aleph-void/ghidra-sh (fork of will07c5/ghidra-sh) @ `31c6ca03e9`, MIT |
 <!-- vendor-rows -->
 
+### Clean-room processor modules (#98)
+
+These processor directories hold SLEIGH specifications written in this
+repository from public ISA documentation (vendor manuals and datasheets, with
+binutils opcode tables and MAME, QEMU or LLVM sources read for semantics only);
+no prior SLEIGH was copied. Each directory's README lists its sources, what the
+p-code models and the gaps. Each language is covered by the language count in
+`unlace-sleigh/tests/verify_context_commits.rs`, and the named CLI test
+decompiles a small raw image with it (`--raw-image --target`).
+
+| Directory | Processors | Languages | Sources | Test |
+|---|---|---|---|---|
+| `TLCS90` | Toshiba TLCS-90 (TMP90C840, TMP90C841, TMP90C844) | `TLCS90:LE:16:default` | Toshiba TLCS-48/90 data book (1988); MAME tlcs90 core | `unlace-cli/tests/tlcs90_raw.rs` |
+<!-- native-rows -->
+
 ### WDC 65816 (#98)
 
 `specs/Ghidra/Processors/65816` vendors the SLEIGH specification of

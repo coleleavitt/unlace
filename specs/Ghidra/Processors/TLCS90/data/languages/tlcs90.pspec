@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Toshiba TLCS-90. Reset starts at 0000; the fixed vectors are 8 bytes apart
+     (SWI 0010, NMI 0018, watchdog 0020, INT0 0028, then the timer and serial interrupts).
+     The on-chip I/O registers of the TMP90C840 sit at FFC0-FFFF. -->
+<processor_spec>
+  <programcounter register="PC"/>
+  <register_data>
+    <register name="AF_" group="Alt"/>
+    <register name="BC_" group="Alt"/>
+    <register name="DE_" group="Alt"/>
+    <register name="HL_" group="Alt"/>
+    <register name="F_" group="Alt"/>
+    <register name="A_" group="Alt"/>
+    <register name="B_" group="Alt"/>
+    <register name="C_" group="Alt"/>
+    <register name="D_" group="Alt"/>
+    <register name="E_" group="Alt"/>
+    <register name="H_" group="Alt"/>
+    <register name="L_" group="Alt"/>
+    <register name="fS" group="Flags"/>
+    <register name="fZ" group="Flags"/>
+    <register name="fI" group="Flags"/>
+    <register name="fH" group="Flags"/>
+    <register name="fX" group="Flags"/>
+    <register name="fV" group="Flags"/>
+    <register name="fN" group="Flags"/>
+    <register name="fC" group="Flags"/>
+  </register_data>
+  <default_symbols>
+    <symbol name="RESET" address="ram:0000" entry="true"/>
+    <symbol name="SWI_ISR" address="ram:0010" entry="true"/>
+    <symbol name="NMI_ISR" address="ram:0018" entry="true"/>
+    <symbol name="INTWD_ISR" address="ram:0020" entry="true"/>
+    <symbol name="INT0_ISR" address="ram:0028" entry="true"/>
+  </default_symbols>
+</processor_spec>

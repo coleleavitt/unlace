@@ -23,6 +23,9 @@ Three tiers:
 | a rotate prints as a pair of opposite shifts ORed together | [`bitidioms`](#bitidioms----on--off-default-on) |
 | bswap or rev instructions decompile to shift and mask soup | [`bitidioms`](#bitidioms----on--off-default-on) |
 | hash or crc code full of paired shifts | [`bitidioms`](#bitidioms----on--off-default-on) |
+| new T[n] prints as a 128-bit multiply with a SUB168 high-half test and a -1 select | [`satmul`](#satmul----on--off-default-off) |
+| operator new[] is called with -(ulong)(overflow) ORed into n * size | [`satmul`](#satmul----on--off-default-off) |
+| a cmovo or seto after a mul feeds an allocation size | [`satmul`](#satmul----on--off-default-off) |
 | memcpy(d, s, strlen(s) + 1) is printed instead of strcpy(d, s) | [`helperroles`](#helperroles----on--off-default-on) |
 | an inlined strcpy shows as a strlen call followed by a memcpy | [`helperroles`](#helperroles----on--off-default-on) |
 | a variable-length array prints as &(&Stack[-8])[-n] | [`dynalloca`](#dynalloca----on--off-default-off) |
@@ -1320,6 +1323,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On (default). Flip off to see the raw shift-and-mask expressions, the cmov/cneg abs diamond and the one-instruction bsf/bsr loops, for example to check which bits a hand-written partial swap moves.
 - **Where / provenance:** P3/simplification-quiescence · kuna · presentation-default · kuna-bitidioms
 - **Example:** `--option bitidioms off`
+
+### `satmul` -- on | off, default `off`
+
+- **Symptoms:** new T[n] prints as a 128-bit multiply with a SUB168 high-half test and a -1 select; operator new[] is called with -(ulong)(overflow) ORed into n * size; a cmovo or seto after a mul feeds an allocation size.
+- **What it does:** Fold the overflow-checked multiply a compiler emits before operator new[] into saturated_mul(a, b): a select between the low half of a product and all-ones, where all-ones is chosen exactly when the product overflowed. The low half is SUBPIECE(zext(a) * zext(b), 0), a * b or a << k at the width W; the guard is the high half of the double-width product compared with zero (x86 mul + cmovo/seto, AArch64 umulh + cmp + csinv), the product compared with 2^W - 1, or the threshold a > (2^W - 1) / c for a constant factor c; the select is a MULTIEQUAL behind that branch (cmov, csinv) or an OR with the smeared flag -zext(overflow) (seto; neg; or, sbb; or). This is Hex-Rays' REMOVE_MUL_OVERFLOW_CHECK rule.
+- **When to flip:** Off by default: it prints a helper that is not C. Turn it on for C++ code where every new T[n] prints as a 128-bit multiply, a SUB168(..., 8) != 0 test and a -1 select (or a -(ulong)(overflow) mask ORed into the product) before operator new[].
+- **Where / provenance:** P3/simplification-quiescence · kuna · new-analysis · kuna-satmul
+- **Example:** `option satmul on`
 
 ### `helperroles` -- on | off, default `on`
 

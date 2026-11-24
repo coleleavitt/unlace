@@ -698,6 +698,11 @@ pub fn universal_sched_hooked(
             crate::kuna_bitidioms::RuleIntAbs::new("analysis")
         ),
         rrow!(
+            "satmul",
+            "analysis",
+            crate::kuna_satmul::RuleSaturatedMul::new("analysis")
+        ),
+        rrow!(
             "strcpychain",
             "analysis",
             crate::kuna_helperrole::RuleStrcpyChain::new("analysis")

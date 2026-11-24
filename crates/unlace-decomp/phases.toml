@@ -1619,6 +1619,28 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "satmul"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "kuna-satmul"
+summary = "Fold the overflow-checked multiply a compiler emits before operator new[] into saturated_mul(a, b): a select between the low half of a product and all-ones, where all-ones is chosen exactly when the product overflowed. The low half is SUBPIECE(zext(a) * zext(b), 0), a * b or a << k at the width W; the guard is the high half of the double-width product compared with zero (x86 mul + cmovo/seto, AArch64 umulh + cmp + csinv), the product compared with 2^W - 1, or the threshold a > (2^W - 1) / c for a constant factor c; the select is a MULTIEQUAL behind that branch (cmov, csinv) or an OR with the smeared flag -zext(overflow) (seto; neg; or, sbb; or). This is Hex-Rays' REMOVE_MUL_OVERFLOW_CHECK rule."
+use_when = "Off by default: it prints a helper that is not C. Turn it on for C++ code where every new T[n] prints as a 128-bit multiply, a SUB168(..., 8) != 0 test and a -1 select (or a -(ulong)(overflow) mask ORed into the product) before operator new[]."
+example = "option satmul on"
+live_field = "saturated_mul"
+live_true = "on"
+live_false = "off"
+source_decompiler = "kuna"
+inspiration = "Hex-Rays 9.5 REMOVE_MUL_OVERFLOW_CHECK (hexx64 sub_18DC60): the overflow-checked n * sizeof(T) before operator new[] becomes saturated_mul(n, sizeof(T))"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "new T[n] prints as a 128-bit multiply with a SUB168 high-half test and a -1 select|operator new[] is called with -(ulong)(overflow) ORed into n * size|a cmovo or seto after a mul feeds an allocation size"
+
+[[settable]]
 option = "helperroles"
 values = "on|off"
 default = "on"

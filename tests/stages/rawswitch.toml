@@ -11,7 +11,7 @@
 #           notrack jmp *%rax
 #     cases: return x + 10 .. x + 13 ; default: return 99
 #
-# Pass 1 (default, rawswitch off) keeps the computed call; pass 2 (option rawswitch
+# Pass 1 (option rawswitch off) keeps the computed call; pass 2 (option rawswitch
 # on) recovers the four rows. Stage: P2 switch-model.
 
 [image]
@@ -26,6 +26,7 @@ hex = '89f9b80500000083e80583f8037721488d3d22000000486304874801f83effe08d410ac38
 
 [script]
 commands = [
+    'option rawswitch off',
     'lo fu rawsw',
     'decompile',
     'print C',

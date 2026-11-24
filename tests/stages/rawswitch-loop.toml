@@ -17,7 +17,7 @@
 #     105b  case 3: lea 0xd(%rsi),%eax ; ret
 #     105f  default: mov $0x63,%eax ; ret
 #
-# Pass 1 (default, rawswitch off) keeps the computed call; pass 2 (option
+# Pass 1 (option rawswitch off) keeps the computed call; pass 2 (option
 # rawswitch on) prints the switch over the mode with the labels 5..8.
 # Stage: P2 switch-model.
 
@@ -33,6 +33,7 @@ hex = 'ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 [script]
 commands = [
+    'option rawswitch off',
     'lo fu rawloop',
     'decompile',
     'print C',

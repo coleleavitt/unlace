@@ -517,7 +517,7 @@ impl OptionRawSwitch {
 }
 
 /// (unlace) Recover a jump table from its x86-64 instructions when the models
-/// fail (option `rawswitch`, default off).
+/// fail (option `rawswitch`, default on).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RawSwitch(pub bool);
 
@@ -530,7 +530,7 @@ impl crate::optionset::UnlaceOption for RawSwitch {
     }
 
     fn shipped() -> Self {
-        RawSwitch(false)
+        RawSwitch(true)
     }
 
     fn parse(value: &str) -> UnlaceResult<(Self, String)> {

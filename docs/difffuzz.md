@@ -61,6 +61,16 @@ afterwards. The register file is unchanged.
   sign-extends the address. Release 6 compact branches (`b*c`, `j*c`) are compared; their target
   goes to a second epilogue. Unaligned loads and stores trap on QEMU and count as reference
   exceptions.
+- Nios II (`--arch nios2`, `nios2:LE:32:R1`) has no Unicorn or Capstone support, so it runs only
+  with `--oracle qemu`, and `arches.py` decodes mnemonics itself from the Nios II opcode tables.
+  QEMU dropped the target after 8.2: build `qemu-nios2` from a QEMU 8.2 tree
+  (`configure --target-list=nios2-linux-user --disable-system --disable-tools`; on glibc 2.41
+  rename `struct sched_attr` in `linux-user/syscall.c`, which the C library now defines) and put
+  its build directory on `PATH`. The harness is ELF32: r1..r31 load from and store to the
+  tables, write(2)/exit(2) through `trap` (r2 = 64 / 93). BR with non-zero A/B fields, RET not
+  naming ra and branch offsets off a word boundary are reserved and not generated; DIV/DIVU by
+  zero and DIV of INT_MIN by -1 are undefined; addresses at or above 0x7FFF0000 are outside
+  QEMU's guest space. First run (seed 7, 2000 encodings, 3 trials): 4977 matches, no mismatches.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.
@@ -184,3 +194,23 @@ and Capstone modes, the compared registers as `(sleigh name, unicorn constant)` 
 word and its bits, an instruction generator and the mnemonics to leave out. The hooks
 `ignored`, `skip`, `normalize`, `classify_decode` and `operand_mismatch` hold the
 architecture's undefined results and the reference's known quirks.
+
+## APX against a legacy reference
+
+Unicorn has no Intel APX, so `tools/difffuzz/apxcheck.py` checks the APX instructions of a real
+binary another way: it rewrites each one into legacy x86-64 code with the same effect and runs that
+in Unicorn, while the lifted p-code of the original runs from the same state. An extended GPR
+(R16-R31) is renamed to an R8-R15 register the instruction does not use; a new-data-destination
+form `op dst, src1, src2` becomes `mov T, src1; op T, src2; mov dst, T` through a free temporary
+(zero-extending an 8- or 16-bit result, as APX does); `{nf}` must leave every flag unchanged in the
+p-code; SETcc.zu/IMUL.zu add the zero-extension; PUSH2/POP2 become two PUSHes/POPs. CCMP/CTEST,
+CFCMOVcc, JMPABS, branches and RIP-relative operands are skipped.
+
+```sh
+clang -O2 -mapxf -fPIC -shared -o lib.so *.c
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/apxcheck.py lib.so --unlace <unlace> --sleighpath specs
+```
+
+On Lua 5.3 and zlib built with clang 22 and gcc 15 (`-O2 -mapxf`), 3131 of the 3272 distinct APX
+encodings were verified (at least one trial with in-range addresses) and none differed; replacing
+the NF ADD's sum with a difference in `apx_map4.sinc` makes the check report it.

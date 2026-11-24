@@ -32,6 +32,7 @@
 
 pub mod arm_markers;
 pub(crate) mod kuna_arctarget;
+pub(crate) mod kuna_elfmachinetarget;
 pub(crate) mod kuna_mipstarget;
 pub(crate) mod kuna_ppc64elfv2target;
 pub(crate) mod kuna_ppcaputarget;
@@ -152,6 +153,7 @@ pub mod gobuildinfo;
 pub mod noreturn;
 pub mod pe_iat;
 // (kuna) `armfloatreturn`: does an ARM ELF state the VFP procedure-call standard?
+pub mod kuna_armbasepcs;
 pub mod kuna_armfloatabi;
 // (kuna `armfuncmode`) an even ARM function symbol starts A32 code.
 pub mod kuna_armfuncmode;

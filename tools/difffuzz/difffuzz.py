@@ -300,6 +300,8 @@ def main():
         cands = rvv_backend.generate(rng, args.count, args.objdump, args.only)
     else:
         cands = generate(arch, rng, args.count)
+    if hasattr(arch, "order"):
+        cands = arch.order(cands)
     dis = arch.capstone()
     counts = collections.Counter()
     findings = []

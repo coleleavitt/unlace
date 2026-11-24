@@ -19,7 +19,7 @@ python3 -m venv ~/.local/share/difffuzz-venv
 `--arch` is `x86-64`, `aarch64`, `riscv64`, `arm` (A32), `thumb` (T32), `mips` (MIPS32 big-endian),
 `mips64`, `mips64r6`, `mipsr6` (MIPS64, MIPS64 Release 6 and MIPS32 Release 6, big-endian; use
 `--oracle qemu`), `ppc` (PowerPC 32 big-endian), `tricore`, or (QEMU oracle only) `ppc64`, `ppc64le`, `ppc64-isa`,
-`ppc64le-isa`, `s390x`, `s390x-vec` and `loongarch64`. `--sleighpath DIR` lifts with the `.sla`
+`ppc64le-isa`, `ppc64-p10`, `ppc64le-p10`, `s390x`, `s390x-vec` and `loongarch64`. `--sleighpath DIR` lifts with the `.sla`
 files under `DIR` instead of the built-in ones, so a spec edit can be checked right after
 `slacomp` without rebuilding unlace. The summary on stdout counts each outcome and lists the
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
@@ -31,7 +31,7 @@ input registers and the differing values.
 (`tools/difffuzz/qemu_backend.py`) for `aarch64` (`qemu-aarch64 -cpu max`), `riscv64`
 (`qemu-riscv64 -cpu max`), `mips` and `mips64` (`qemu-mips64 -cpu MIPS64R2-generic`), and `mipsr6`
 and `mips64r6` (`qemu-mips64 -cpu I6400`, an R6 ELF with no HI/LO in the harness). `ppc` (`qemu-ppc -cpu 7457`), and the QEMU-only `ppc64`, `ppc64le` (`PowerPC:*:64:default`),
-`ppc64-isa` and `ppc64le-isa` (`PowerPC:*:64:A2ALT`, Power ISA 3.0) on `qemu-ppc64` /
+`ppc64-isa`, `ppc64le-isa`, `ppc64-p10` and `ppc64le-p10` (`PowerPC:*:64:A2ALT`, Power ISA 3.1) on `qemu-ppc64` /
 `qemu-ppc64le -cpu power10`, `s390x` on `qemu-s390x -cpu max`, `loongarch64` on `qemu-loongarch64 -cpu max`, and `arm` and `thumb` on `qemu-arm -cpu max`. `DIFFFUZZ_QEMU_DIR` names directories (separated by `:`) searched before `PATH`
 for the QEMU binaries (a `--target-list=ppc-linux-user,...` build of QEMU 10 works). QEMU 10 implements
 what Unicorn's older QEMU core lacks or gets wrong: BF16, I8MM (`usdot`/`sudot`), MOPS,
@@ -189,7 +189,24 @@ afterwards. The register file is unchanged.
   their result uncompared (p-code rounds twice), `stfs` of a double outside single range
   (the ISA stores truncated bits) is `undefined`, and an `lfs` of a single sNaN (widened
   without quieting) is not compared. QEMU 10.2 also sets CR bit 14 for the A-form FP record
-  forms (`fmadd.`, `fsel.`, ...), so CR3 is not compared there.
+  forms (`fmadd.`, `fsel.`, `fdivs.`, ...), so CR3 is not compared there.
+- `ppc64-p10` and `ppc64le-p10` test the Power ISA 3.0/3.1 (POWER9/POWER10) instructions. Three
+  in four encodings come from the LLVM records in `specs/Ghidra/Processors/PowerPC/isa31_insts.json`
+  (prefixed 8-byte instructions, MMA, the new VMX/VSX/fixed-point ones; seven in ten prefixed
+  ones get a displacement below 64 KiB), the rest are random VMX/VSX/X-form words. Capstone 5
+  lacks the prefixed instructions, so they are decoded in batches by `llvm-objdump --mcpu=pwr10`
+  (`DIFFFUZZ_PPC_OBJDUMP`, or `llvm-objdump` on `PATH`, with the PowerPC target; the rustup
+  `llvm-tools` one has it) after `llvm-objcopy -I binary` next to it. The harness
+  (`PpcVsxHarness`) seeds and compares vs0..vs63 with `lxv`/`stxv` in place of the FPRs. The
+  8-byte instructions go first in each batch, so none crosses a 64-byte boundary (an alignment
+  interrupt), and data addresses stay below 2^31 (the epilogue builds them with `lis`/`ori`).
+  Doubleword 1 of a scalar VSX or FP result is undefined and not compared; FMAs, an extended
+  divide whose quotient does not fit, a vector divide by zero (or an overflowing one),
+  `xxextractuw`/`xxinsertw` with UIM above 12 and a store of a double outside single range
+  are not compared; FPSCR, `mffs`, the quad-precision and DFP/BCD instructions, and the
+  instructions LLVM decodes for a future ISA (`IsISAFuture`, which QEMU lacks) are not
+  generated. Seed 17, 2500 encodings (`ppc64le-p10`): 3089 matches, no mismatches; seed 18,
+  1500 encodings (`ppc64-p10`): 1953 matches and one mismatch, `divdeu` (fixed, below).
 - LoongArch64 (`Loongarch:LE:64:lp64d`) has no Unicorn or Capstone 5 support, so it runs only with
   `--oracle qemu`, and its encodings are decoded in batches by binutils objdump
   (`DIFFFUZZ_LA_OBJDUMP`, or `loongarch64-linux-gnu-objdump` on `PATH`; a `--target=loongarch64-linux-gnu`
@@ -411,7 +428,10 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
   shifted register did not set C from the shifter.
 - **PowerPC.** `divw.` set XER[OV]/[SO]; `lhbrx`/`lwbrx` were not byte-reversed in the
   little-endian languages; `ldbrx`/`stdbrx` were user ops; `stswi` with a partial last
-  register stored the whole word.
+  register stored the whole word. With `ppc64-p10`/`ppc64le-p10`: `sradi.` did not set CR0;
+  `divwe[u]`/`divde[u]` divided 0 by 0 or `RA` by `RB` instead of `RA || 0`; `bpermd`, `xxsel`,
+  the VSX compares, `xststdcdp`, `xscmpexpdp` and the other VSX user ops never wrote their target;
+  `stxsd`/`stxssp` were user ops (no store).
 - **LoongArch.** `bstrins.w`/`.d` had `bstrpick`'s semantics; `slli.d`/`srli.d`/`srai.d` masked the
   shift with `0x1f`; the rotates shifted arithmetically; `bytepick.w`/`.d` picked the wrong bytes;
   `ftintrm`/`ftintrp`/`ftint` truncated and the `.l.s` forms wrote only the low word.

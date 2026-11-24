@@ -3239,6 +3239,7 @@ CRM_val: crmval is CRM [crmval = CRM+0;] {export *[const]:1 crmval;}
 {
 	shiftCarry(S,SH);
 	A = S s>> SH;
+	cr0flags(A);
 }
 
 @endif

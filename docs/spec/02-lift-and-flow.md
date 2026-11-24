@@ -5828,6 +5828,31 @@ encoding of the exact families, three per instruction): no mismatch outside the 
 multiply-adds. A static musl image built for `-mcpu=z15` went from 49 of 113 functions
 halting to 7, all on the `0x0000` crash word.
 
+### PowerPC Power ISA 3.1 (POWER10) (#98)
+
+`specs/Ghidra/Processors/PowerPC/gen_isa31.py` writes `ppc_isa31.sinc` from `isa31_insts.json`,
+the 267 LLVM PowerPC TableGen records of Power ISA 3.1 (prefixed 8-byte instructions, MMA,
+the paired vector loads and stores, and the new fixed-point, VMX and VSX instructions) plus
+four ISA 3.0 records the vendored spec lacked. Every Power ISA language includes it except
+`PowerPC:BE:32:e200-SPE2`. A prefixed instruction is one constructor over a prefix token and
+a suffix token, with the 34-bit displacement or immediate assembled in a disassembly action;
+an `R=1` (PC-relative) address is `inst_start + D`. `acc0`-`acc7` are 64-byte registers over
+the VSRs they shadow. The generator gives exact p-code to the loads and stores (including
+the paired and the rightmost-element forms), `paddi`/`pli`, the byte reverses, `setbc`
+and its three variants, the mask moves, extracts, expands and counts, the 128-bit integer
+compares, shifts and rotate, the vector integer divides and moduli, the doubleword
+multiplies, the shift-double-by-bit-immediate, the clear-bytes, the vector string isolates,
+the blends and the immediate splats, and a user operation `p31_<mnemonic>` to the rest (MMA
+rank-k updates, permutes, inserts and extracts, bit gathers, quad-precision and BF16
+conversions). In `vsx.sinc`, the 83 VSX user operations that took their target as an
+argument now assign it, and the permutes, merges, selects, lane arithmetic and compares,
+scalar compares and data-class test, the ISA 3.0 scalar loads and stores, the direct moves
+and the byte reverses lift exactly. Decode was checked against `llvm-objdump --mcpu=pwr10`
+(every ISA 3.0/3.1 record decodes) and the p-code with `tools/difffuzz --arch ppc64le-p10` and
+`--arch ppc64-p10` against QEMU's `power10` CPU. A Lua 5.2 object built for `-mcpu=pwr10` went
+from 352 of 545 functions halting to 91, the count of its `-mcpu=pwr8` build. Details and
+gaps in `specs/Ghidra/Processors/PowerPC/README.md`.
+
 ### x86-64 lifter fixes from differential fuzzing
 
 `tools/difffuzz` (see `docs/difffuzz.md`) runs single x86-64 instructions through the
@@ -5937,6 +5962,13 @@ Found by `tools/difffuzz --oracle qemu` (`qemu-ppc`, `qemu-ppc64` and `qemu-ppc6
 - `stswi` with a byte count that is not a multiple of 4 stores only the leftmost bytes of its
   last register (`storeRegisterPartial` in `ppc_common.sinc`); it stored the whole word, so
   `stswi r23,r3,17` wrote 20 bytes.
+- `sradi.` sets CR0 from its result (`cr0flags`); it left CR0 unchanged.
+- The extended divides `divwe[u][o][.]` and `divde[u][o][.]` (`ppc_isa.sinc`) divide
+  `RA || 0` (64 bits for the word forms, 128 for the doubleword forms) by `RB`, and the `o`
+  forms set OV when the quotient does not fit. The word forms divided 0 by 0 and the
+  doubleword forms divided `RA` itself.
+- `bpermd` lifts to the bit permutation (each byte of `RS` selects a bit of `RB`) instead of
+  the `BitPermuteDoubleword` user operation, which did not write `RA`.
 
 ### AArch64 rounding, saturation and by-element operands (#546)
 

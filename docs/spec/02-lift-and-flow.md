@@ -4157,6 +4157,20 @@ used. Before, the C2000 family had no language. Exercised by
 `unlace-cli/tests/c28x_raw.rs` (a word-addressed `ADDB ACC,#5; LRET` image
 decompiles with no bad or unimplemented instruction).
 
+### Vendored community processor modules (#98)
+
+These processor directories vendor a community SLEIGH module unchanged (its
+license file and a provenance README with the pinned commit sit in the
+directory, and NOTICE credits it). Each language is compiled by `slacomp` like
+the Ghidra-vendored ones and is covered by the vendored-language count in
+`unlace-sleigh/tests/verify_context_commits.rs`, which compiles every
+`.slaspec` in the tree; a raw image selects one with `--raw-image --target`.
+
+| Directory | Processors | Languages | Upstream |
+|---|---|---|---|
+| `SM83` | Sharp SM83 (Game Boy LR35902) | `SM83:LE:16:default` | aleph-void/ghidra-sm83 (fork of minorum/ghidra-sm83) @ `617689a194`, Apache-2.0 |
+<!-- vendor-rows -->
+
 ### WDC 65816 (#98)
 
 `specs/Ghidra/Processors/65816` vendors the SLEIGH specification of

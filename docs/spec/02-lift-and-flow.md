@@ -1595,7 +1595,11 @@ stack-pointer deltas are measured over the already-decoded raw p-code — the
 *prologue*, accumulated forward from the function's entry address, and the
 *epilogue*, accumulated backward from the branch — and the branch is a tail call
 when the epilogue is a strictly positive teardown of exactly the prologue's
-frame. Both scans stop at the first control-flow op (so neither leaves the block
+frame. The prologue includes the stack motion of the branch that ends the entry
+run, but not of a call (whose push the callee's return removes): a stack
+machine's conditional jump pops its operand, so a CPython entry block
+`LOAD_FAST; POP_JUMP_IF_FALSE` builds no frame, and a jump that leaves the
+operand stack balanced inside the code object is not read as a tail call (#690). Both scans stop at the first control-flow op (so neither leaves the block
 it starts in), at a stack-pointer write that is not `SP = SP ± <const>` (a
 `leave`-style `SP = FP` restore is not modelled and declines), at an instruction
 address more than 16 bytes from its neighbour (so a hole in the decoded stream

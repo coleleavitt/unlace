@@ -231,6 +231,9 @@ struct GroupEffect {
     /// The instruction writes the stack pointer in a form the scan cannot
     /// account for (`leave`, an alloca), so no run through it is measurable.
     opaque: bool,
+    /// The control transfer is a call (`CPUI_CALL`/`CPUI_CALLIND`), whose own
+    /// push the callee's return takes back off.
+    call: bool,
 }
 
 /// Summarize every raw p-code op at instruction address `at`.
@@ -239,10 +242,15 @@ fn group_effect(data: &Funcdata, at: &Address, sp: &VarnodeStorage) -> GroupEffe
         delta: 0,
         flow: false,
         opaque: false,
+        call: false,
     };
     for (_, id) in data.obank().iter_at(at) {
         if is_flow_op(data, id) {
             eff.flow = true;
+            eff.call |= data
+                .obank()
+                .get(id)
+                .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
         }
         match sp_effect(data, id, sp) {
             SpEffect::None => {}
@@ -264,7 +272,11 @@ fn adjacent(cur: &Address, next: &Address, forward: bool) -> bool {
 
 /// Net constant stack-pointer delta over the straight-line run that *starts* at
 /// `entry` (the prologue), together with the bytes that run saved *through* the
-/// stack pointer, or `None` when the run cannot be accounted for.
+/// stack pointer, or `None` when the run cannot be accounted for.  A branch that
+/// ends the run counts its own stack motion: the frame is what is left when the
+/// entry block hands over, and a stack machine's conditional jump pops its
+/// operand (CPython `POP_JUMP_IF_FALSE`), so its `LOAD_FAST; POP_JUMP_IF_FALSE`
+/// entry block builds no frame.  A call's push is not counted.
 fn prologue_frame(data: &Funcdata, entry: &Address, sp: &VarnodeStorage) -> Option<(i64, u64)> {
     // Nothing decoded at the entry address: the caller asked about a Funcdata
     // whose entry is not this instruction stream.
@@ -278,6 +290,12 @@ fn prologue_frame(data: &Funcdata, entry: &Address, sp: &VarnodeStorage) -> Opti
     for _ in 0..MAX_SCAN_INSTRS {
         let eff = group_effect(data, &at, sp);
         if eff.flow {
+            if !eff.call {
+                if eff.opaque {
+                    return None;
+                }
+                delta = delta.wrapping_add(eff.delta);
+            }
             break;
         }
         if eff.opaque {

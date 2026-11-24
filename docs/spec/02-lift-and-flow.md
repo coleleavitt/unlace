@@ -4273,6 +4273,43 @@ per encoding against LLVM's names, RV32 and RV64, and LLVM-selected 8- and
 16-bit `atomicrmw`/`cmpxchg` functions that decompile with no bad or
 unimplemented instruction.
 
+
+### RISC-V vector extension (#98)
+
+`riscv.rvv.sinc` decodes the ratified vector extension (RVV 1.0) and the
+ratified vector extensions built on it: Zvbb, Zvbc, Zvkg, Zvkned, Zvknha/Zvknhb,
+Zvksed, Zvksh, Zvfbfmin and Zvfbfwma. It replaces a 0.9-draft table in which
+every instruction was `unimpl` (so any function that reached a `vsetvli`
+stopped at an unimplemented instruction) and which used draft names and
+encodings: `vlxei` instead of `vluxei`/`vloxei`, `vpopc.m`, `vmandnot.mm`,
+`vfredsum.vs`, the removed `vamo*` and `vdot` instructions, and 128- to
+1024-bit element loads. The file is generated: encodings from riscv-opcodes
+(`extensions/rv_v`, `rv_zv*`), mnemonics and operand order from LLVM's
+disassembler (`-M no-aliases`), including the segment forms
+(`vlseg<n>e<eew>.v`, `vlsseg`, `vluxseg`, `vloxseg` and their stores, one
+constructor per `nf`) and a separate constructor for each masked form
+(`vm=0`, displayed `,v0.t`). `vsetvli`/`vsetivli` print their `vtype` as
+`e<sew>,m<lmul>|mf<n>,ta|tu,ma|mu` (new token fields `op2325` for vsew and
+`op2029` for the 10-bit `vsetivli` immediate).
+
+Each instruction lifts to a user operation named after it, with dots as
+underscores (`vadd_vv`, `vlseg2e8_v`, `vsetvli`): its output is the
+register it writes (`vd`, `rd` for `vset*`, `vmv.x.s`, `vcpop.m`,
+`vfirst.m`, or the FP `rd` for `vfmv.f.s`; stores have none) and its inputs
+are the source operands in assembly order, with the old `vd` first for the
+multiply-accumulate, slide-up, scalar-move-into-vector and vector-crypto forms
+and for every masked form, and `v0` last for masked forms. Element-wise
+semantics depend on `vl` and `vtype` at run time, which a static lift cannot
+fix, so they stay inside the user operations; what is kept is the data flow
+between vector registers, scalar registers, FP registers and the memory
+addresses a load or store uses, so a vectorized function decompiles to a
+sequence of calls such as `v8 = vadd_vv(v8,v9)` instead of stopping.
+Exercised by `unlace-cli/tests/riscv_vector.rs`: all 1258 encoding shapes
+against LLVM's names (`fixtures/riscv_vector/probe64.txt`) and LLVM-lowered
+vector functions (load/add/store, a reduction into a scalar, an FMA with a
+scalar operand, a select) that decompile with no bad or unimplemented
+instruction, RV32 and RV64.
+
 ### RISC-V scalar cryptography (#98)
 
 `riscv.rv32k.sinc` (RV32 and RV64) and `riscv.rv64k.sinc` (RV64 only,

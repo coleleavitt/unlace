@@ -6,6 +6,9 @@
 #   sgnguard - movsbl; test; js: a signed guard on a sign-extended byte
 #   eqret    - cmp esi,edi; jne: if (a == b) return 1; return 0;
 #   ordered  - cmp edi,5; jg; setl: a guard, then a comparison tail
+#   nested   - three guards at the function body's root (a BlockGraph, #759): the inner
+#              if (!p[2]) return 1; return 0; folds as a truthy !x (#881), then joins the
+#              if (!p[1]) around it; the leading guard still prints apart (issue #9)
 # Stage: 09 emission (C syntax tree rewrite), option boolreturn at its default.
 
 [image]
@@ -15,6 +18,7 @@ symbols = [
     { space = 'ram', offset = '0x102000', name = 'sgnguard' },
     { space = 'ram', offset = '0x103000', name = 'eqret' },
     { space = 'ram', offset = '0x104000', name = 'ordered' },
+    { space = 'ram', offset = '0x105000', name = 'nested' },
 ]
 
 [[image.bytes]]
@@ -41,12 +45,19 @@ offset = '0x104000'
 readonly = true
 hex = '83ff057f0831c039d60f9cc0c331c0c3'
 
+[[image.bytes]]
+space = 'ram'
+offset = '0x105000'
+readonly = true
+hex = '833f007518837f0400750f837f08007506b801000000c331c0c331c0c331c0c3'
+
 [script]
 commands = [
     'parse line extern int4 gh558(int4 x);',
     'parse line extern int4 sgnguard(char c);',
     'parse line extern int4 eqret(uint4 a,uint4 b);',
     'parse line extern int4 ordered(int4 x,int4 y,int4 z);',
+    'parse line extern int4 nested(int4 *p);',
     'lo fu gh558',
     'decompile',
     'print C',
@@ -57,6 +68,9 @@ commands = [
     'decompile',
     'print C',
     'lo fu ordered',
+    'decompile',
+    'print C',
+    'lo fu nested',
     'decompile',
     'print C',
     'quit',
@@ -88,6 +102,11 @@ count = 0
 literal = 'return 1;'
 
 [[match]]
-name = 'BOOLRETURN #6: no constant return 0 is left'
-count = 0
+name = "BOOLRETURN #6: only nested's leading guard keeps a return 0"
+count = 1
 literal = 'return 0;'
+
+[[match]]
+name = 'BOOLRETURN #7: nested folds its inner guards into one return'
+count = 1
+literal = 'return (!p[1]) && (!p[2]);'

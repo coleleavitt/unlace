@@ -30,13 +30,16 @@ use std::collections::BTreeSet;
 use object::read::{Object, ObjectSymbol};
 
 use super::{
-    GoVer, ImageBytes, MAGIC_GO_1_18, MAGIC_GO_1_20, PcHeader, exec_end, functab_end, rd_ptr,
-    rd_u32, recover_go_header,
+    GoVer, ImageBytes, MAGIC_GO_1_18, MAGIC_GO_1_20, PcHeader, exec_end, functab_end,
+    gostackobjects, rd_ptr, rd_u32, recover_go_header,
 };
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, CommentFact, Phase};
 
 const PCDATA_INLTREEINDEX: u32 = 2;
 const FUNCDATA_INLTREE: u8 = 3;
+const FUNCDATA_STACKOBJECTS: u8 = 2;
+/// Stack objects named in one header comment before the rest are counted.
+const MAX_SHOWN_OBJECTS: usize = 8;
 /// Rows decoded from one pcvalue table, inline-tree hops followed from one site,
 /// and comments emitted per image: bounds against a corrupt table.
 const MAX_ROWS: usize = 100_000;
@@ -485,6 +488,29 @@ fn inl_record(img: &ImageBytes, t: &Tables, tree: u64, idx: i32) -> Option<(u32,
     })
 }
 
+/// The `FUNCDATA_StackObjects` table of `f` as one header clause, or `None` when the
+/// function has none or it does not decode. go1.16-1.17 tables hold absolute pointer
+/// maps and are not read.
+fn stack_objects(img: &ImageBytes, t: &Tables, f: &FuncRec) -> Option<String> {
+    if t.layout == Layout::Go116 {
+        return None;
+    }
+    let at = funcdata(img, t, f, FUNCDATA_STACKOBJECTS)?;
+    let objects = gostackobjects::read(img, at, t.h.ptr_size, t.h.end)?;
+    if objects.is_empty() {
+        return None;
+    }
+    let mut parts: Vec<String> = objects
+        .iter()
+        .take(MAX_SHOWN_OBJECTS)
+        .map(|o| format!("frame {:+} size {} ptrdata {}", o.off, o.size, o.ptrdata))
+        .collect();
+    if objects.len() > MAX_SHOWN_OBJECTS {
+        parts.push(format!("+{} more", objects.len() - MAX_SHOWN_OBJECTS));
+    }
+    Some(format!("stack objects: {}", parts.join("; ")))
+}
+
 /// The header position, the inlined-call markers and (`lines`) the
 /// per-statement positions of one function.
 fn function_facts(img: &ImageBytes, t: &Tables, f: &FuncRec, lines: bool) -> Facts {
@@ -528,6 +554,12 @@ fn function_facts(img: &ImageBytes, t: &Tables, f: &FuncRec, lines: bool) -> Fac
     if let Some((name, line)) = position(f.entry) {
         let line = f.start_line.filter(|&l| l > 0).unwrap_or(line);
         facts.header = Some(format!("source: {name}:{line}"));
+    }
+    if let Some(text) = stack_objects(img, t, f) {
+        facts.header = Some(match facts.header.take() {
+            Some(header) => format!("{header}; {text}"),
+            None => text,
+        });
     }
     let (Some(off), Some(tree)) = (
         pcdata(img, t, f, PCDATA_INLTREEINDEX),

@@ -7514,6 +7514,12 @@ every other binary's pass list is byte-identical to before the pass existed):
   through the index at each record's `entry + parentPc` (the instruction whose
   position is the call site, which on every layout also gives the parent), up
   to 64 hops, and the call site is the source position at that instruction.
+  On go1.18 and later the header comment also lists the function's
+  `FUNCDATA_StackObjects` table (funcdata index 2): a `uintptr` count, then
+  16-byte records `off, size, ptrdata, gcdataoff`, read as
+  `stack objects: frame <off> size <n> ptrdata <n>; ...`, at most eight objects
+  and then `+N more`. The frame offsets are not yet applied to the stack
+  variables and `gcdataoff` is not resolved, so the clause is a comment only.
   With `lines`, a second pass (`gopcln_lines`) also comments `<file>:<line>`
   at each PC where the position changes, the Go counterpart of `dwarf_lines`.
   Both passes run at the commit point, only when the option is on

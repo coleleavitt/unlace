@@ -22,6 +22,7 @@ define register offset=0x00 size=4 [
 	r0  r1  r2  r3  r4  r5  r6  r7  r8  r9  r10 r11 r12 r13 r14 r15
 	r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 ];
 define register offset=0x100 size=4 [ pc hi lo epc fpc ];
+define register offset=0x120 size=4 [ svbr ];
 define register offset=0x200 size=1 [ C ];
 define register offset=0x300 size=4 [ contextreg ];
 define register offset=0x400 size=16 [ vr0 vr1 vr2 vr3 vr4 vr5 vr6 vr7 vr8 vr9 vr10 vr11 vr12 vr13 vr14 vr15 ];
@@ -115,6 +116,8 @@ define token hwa(16)
 define token hwb(16)
 	b15_0  = (0,15)
 	b15    = (15,15)
+	b15_2  = (2,15)
+	b1_0   = (0,1)
 	b15_0s = (0,15) signed
 	b15_12 = (12,15)
 	b15_10 = (10,15)
@@ -202,6 +205,9 @@ define pcodeop coprocessor;
 define pcodeop return_from_exception;
 define pcodeop return_from_interrupt;
 define pcodeop tstnbz;
+define pcodeop java_pop;
+define pcodeop java_push;
+define pcodeop java_mode;
 define pcodeop mulall_s16_s;
 
 macro bitrev(d, s) {
@@ -419,6 +425,19 @@ pop16list: "r4-r18, r15" is h3_0=15 & h4=1 { r4 = *:4 (r14 + 0); r5 = *:4 (r14 +
 :st.h r5_7, mem16h is h15_11=0x15 & r5_7 & mem16h { *:2 mem16h = r5_7:2; }
 :st.w r5_7, mem16w is h15_11=0x16 & r5_7 & mem16w { *:4 mem16w = r5_7; }
 :st.w r5_7, mem16sp is h15_11=0x17 & r5_7 & mem16sp { *:4 mem16sp = r5_7; }
+
+# Java acceleration (CK802j): jmpix jumps through the table at svbr, indexed by the low
+# byte of rx times the entry size (16, 24, 32 or 40 bytes).
+jmpixsz: v is h1_0 [ v = (h1_0 + 2) << 3; ] { export *[const]:4 v; }
+jmpixsz32: v is b1_0 [ v = (b1_0 + 2) << 3; ] { export *[const]:4 v; }
+:jmpix r8_10, jmpixsz is h15_11=0x07 & h7_5=7 & h4_2=0 & r8_10 & jmpixsz { local t:4 = svbr + (r8_10 & 0xff) * jmpixsz; goto [t]; }
+:jmpix rx, jmpixsz32 is a31_26=0x3a & a25_21=0x0f & a20_18=0 & rx; b15_2=0 & jmpixsz32 { local t:4 = svbr + (rx & 0xff) * jmpixsz32; goto [t]; }
+:bpop.h r2_4 is h15_5=0xa5 & r2_4 & h1_0=0 { r2_4 = java_pop(2:1); }
+:bpop.w r2_4 is h15_5=0xa5 & r2_4 & h1_0=2 { r2_4 = java_pop(4:1); }
+:bpush.h r2_4 is h15_5=0xa7 & r2_4 & h1_0=0 { java_push(2:1, r2_4); }
+:bpush.w r2_4 is h15_5=0xa7 & r2_4 & h1_0=2 { java_push(4:1, r2_4); }
+:bmset is a31_26=0x30 & a25_16=0; b15_0=0x1020 { java_mode(1:1); }
+:bmclr is a31_26=0x30 & a25_16=0; b15_0=0x1420 { java_mode(0:1); }
 
 ################################################################
 # 32-bit instructions

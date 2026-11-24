@@ -4,7 +4,7 @@
   <programcounter register="PC"/>
 
   <default_symbols>
-    <!-- L3902 vector table at top of ROM. Per L39 TRM §3.5 / Table 3-5. -->
+    <!-- L3902 vector table at top of ROM. Per L39 TRM section 3.5 / Table 3-5. -->
     <symbol name="VEC_IRQ6"  address="FFF0" entry="false" type="code_ptr"/>
     <symbol name="VEC_IRQ5"  address="FFF2" entry="false" type="code_ptr"/>
     <symbol name="VEC_IRQ4"  address="FFF4" entry="false" type="code_ptr"/>

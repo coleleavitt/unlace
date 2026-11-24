@@ -38518,7 +38518,7 @@ G_8b3866d0: "a["^SI_6fb01925^"]" is f24_31=255 & f40_50=0 & SI_6fb01925 {  }
 { sass_BRX(); }
 # CALL.ABS.NOINC P1, 0x4  [fe40000c000000000000000017943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 G_a3c7c389^SI_ceca514f is f0_11=2371 & f91_91=0 & GD_619b08c9 & G_cfbd5bc4 & G_a3c7c389 & SI_ceca514f
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_ceca514f; call [target]; }
 # FRND.???0.CEIL R1, 1  [fe400000080003ff0000000017913]
 :^GD_619b08c9^"FRND"^G_0fa501fc^G_ec586db5^G_280c6664 SR16_23d^","^SF_e8cbb4d1 is f0_11=2323 & f91_91=0 & GD_619b08c9 & G_0fa501fc & G_ec586db5 & G_280c6664 & SR16_23d & SF_e8cbb4d1
 { local oz0:4 = SF_e8cbb4d1:4; SR16_23d = sass_FRND(oz0); }

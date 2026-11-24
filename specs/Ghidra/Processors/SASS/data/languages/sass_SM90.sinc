@@ -23966,7 +23966,7 @@ G_bb3dce63: ".INVALID3.LC" is f79_80=3 & f87_87=1 {  }
 { sass_CALL(); }
 # CALL.ABS.NOINC P1, 0x4  [fe40000c000000000000000017943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 G_a3c7c389^SI_ceca514f is f0_11=2371 & f91_91=0 & GD_619b08c9 & G_cfbd5bc4 & G_a3c7c389 & SI_ceca514f
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_ceca514f; call [target]; }
 # CALL.ABS.NOINC !P1, UR1 0x4  [fe4000cc000000000000001017943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 "!"^SP87_89^","^G_d94a9cab is f0_11=2371 & f90_91=3 & GD_619b08c9 & G_cfbd5bc4 & SP87_89 & G_d94a9cab
 { sass_CALL(); }

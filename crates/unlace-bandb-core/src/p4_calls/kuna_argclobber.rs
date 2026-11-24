@@ -158,7 +158,7 @@
 //! `Decline::Variadic` itself is only ever set from a DECLARED `...`, so on a
 //! stripped image it cannot fire at all. A stripped SysV variadic is STATED:
 //! `long vlog(int,long,...)` built with `gcc -O2` and stripped states three
-//! parameters, and `KUNA_PROTOORDER_TRACE=1` prints `state sub_11d0 params=3`.
+//! parameters, and `UNLACE_PROTOORDER_TRACE=1` prints `state sub_11d0 params=3`.
 //! What declines the drop there is the list itself — a register-save prologue
 //! reads every argument register there is, so the recovered list CARRIES the
 //! register the drop would take, and the first half of the clause refuses it.

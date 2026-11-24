@@ -403,7 +403,7 @@ fn narrow_signed_web(
     }
 }
 
-/// Is the decision trace on (`KUNA_REGNARROW_TRACE=1`)?
+/// Is the decision trace on (`UNLACE_REGNARROW_TRACE=1`)?
 fn trace() -> bool {
     unlace_base::env::var("UNLACE_REGNARROW_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }

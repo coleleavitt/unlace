@@ -38,7 +38,7 @@ enum Whole {
     Own,
 }
 
-/// Is the decline trace on (`KUNA_PAIRLOCAL_TRACE=1`)?
+/// Is the decline trace on (`UNLACE_PAIRLOCAL_TRACE=1`)?
 fn trace() -> bool {
     unlace_base::env::var("UNLACE_PAIRLOCAL_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }

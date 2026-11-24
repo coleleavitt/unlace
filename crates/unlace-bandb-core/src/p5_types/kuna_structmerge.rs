@@ -352,7 +352,7 @@ pub fn merge(
 
 /// The union was accepted and the factory still refused to complete it, so the
 /// reader falls back to a record of its own claims. One `structmerge:` line on
-/// stderr under `KUNA_STRUCTMERGE_TRACE=1`.
+/// stderr under `UNLACE_STRUCTMERGE_TRACE=1`.
 #[doc(hidden)]
 pub fn trace_mint_failed(name: &str, want: &Layout) {
     if unlace_base::env::var_os("UNLACE_STRUCTMERGE_TRACE").is_none() {
@@ -367,7 +367,7 @@ pub fn trace_mint_failed(name: &str, want: &Layout) {
 }
 
 /// One `structmerge:` line per candidate on stderr under
-/// `KUNA_STRUCTMERGE_TRACE=1`: which held structure was considered for a
+/// `UNLACE_STRUCTMERGE_TRACE=1`: which held structure was considered for a
 /// freshly measured layout, how many claims the two agree on, and what came of
 /// it. Silent, and free, when the variable is not set.
 fn trace(ct: &Datatype, want: &Layout, shared: usize, verdict: &str) {

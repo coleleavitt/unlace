@@ -1,7 +1,7 @@
 //! End-to-end decompiler benchmarks over committed fixtures, for CodSpeed
 //! (simulation mode in CI) and plain `cargo bench`.
 //!
-//! Every case reads the SLEIGH tree (`$KUNA_SPECS`, else the repo's `specs/`); each `.sla` comes
+//! Every case reads the SLEIGH tree (`$UNLACE_SPECS`, else the repo's `specs/`); each `.sla` comes
 //! from the `.sla` cache, compiled on first use. Setup that is not the measured
 //! stage (reading files, loading the image) runs in `with_inputs`, which divan
 //! and CodSpeed leave out of the measurement.

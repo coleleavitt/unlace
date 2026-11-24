@@ -749,7 +749,7 @@ impl FunctionTestCollection {
             bulkout.push_str(&file.contents);
         }
 
-        // KUNA_DUMP triage hook (the C++ (kuna) addition), even on error.
+        // UNLACE_DUMP triage hook (the C++ (kuna) addition), even on error.
         let mut results = String::new();
         if unlace_base::env::var_os("UNLACE_DUMP").is_some() {
             results.push_str(&format!("===KUNA_DUMP_BEGIN {}===\n", self.file_name));
@@ -912,7 +912,7 @@ pub fn run_test_files_each(test_files: &[String], spec_roots: &[String]) -> Vec<
 }
 
 /// Whether `name` is one of the environment variables load-time options travel in
-/// (`option sourcelang c` sets `KUNA_SOURCELANG`, `option goabi` sets `KUNA_GOABI`, ...).
+/// (`option sourcelang c` sets `UNLACE_SOURCELANG`, `option goabi` sets `UNLACE_GOABI`, ...).
 fn is_option_env(name: &std::ffi::OsStr) -> bool {
     let name = name.to_string_lossy().to_ascii_lowercase();
     name.starts_with("kuna_") || name.starts_with("unlace_")

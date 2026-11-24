@@ -10,7 +10,7 @@
 //!
 //! Each test drives the FULL datatest harness (the same `decomp_test_dbg` path the
 //! corpus scoring uses) over a real datatest binaryimage and inspects the rendered
-//! body via the KUNA_DUMP triage hook.  The verifiers grep for forbidden special-
+//! body via the UNLACE_DUMP triage hook.  The verifiers grep for forbidden special-
 //! casing (function names / addresses / registers / values / the `mystruct` type
 //! name); these tests pin the OBSERVABLE render so a future shortcut that fakes the
 //! `&v1` form (or special-cases switchhide) fails here.
@@ -20,7 +20,7 @@ use std::sync::Mutex;
 
 use unlace_harness::testfunction::run_test_files_with_specs;
 
-/// `KUNA_DUMP` is a PROCESS-GLOBAL env var; the three tests below share this binary
+/// `UNLACE_DUMP` is a PROCESS-GLOBAL env var; the three tests below share this binary
 /// and would race on the set/remove if run in parallel.  Serialize the render calls
 /// (and their env window) through one mutex so each test sees a clean dump.
 static RENDER_LOCK: Mutex<()> = Mutex::new(());
@@ -40,7 +40,7 @@ fn specs_dir_string() -> String {
     repo_root().join("specs").to_str().unwrap().to_string()
 }
 
-/// Render a single datatest's `print C` body via the KUNA_DUMP hook.  Returns the
+/// Render a single datatest's `print C` body via the UNLACE_DUMP hook.  Returns the
 /// raw harness output (the `===KUNA_DUMP_BEGIN..MID===` block holds the C body).
 fn render_datatest(stem: &str) -> Option<String> {
     if !unlace_slacomp::slacache::sla_path(&x86_64_sla()).is_ok() {
@@ -52,13 +52,13 @@ fn render_datatest(stem: &str) -> Option<String> {
     let specs = specs_dir_string();
     let files = vec![path];
     let mut out = String::new();
-    // Serialize the KUNA_DUMP env window + the render across the binary's tests.
+    // Serialize the UNLACE_DUMP env window + the render across the binary's tests.
     let _guard = RENDER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var("KUNA_DUMP", "1") };
+    unsafe { std::env::set_var("UNLACE_DUMP", "1") };
     run_test_files_with_specs(&files, std::slice::from_ref(&specs), &mut out);
     // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::remove_var("KUNA_DUMP") };
+    unsafe { std::env::remove_var("UNLACE_DUMP") };
     drop(_guard);
     assert!(
         !out.contains("Execution failed") && !out.contains("Did not apply tests in"),
@@ -67,7 +67,7 @@ fn render_datatest(stem: &str) -> Option<String> {
     Some(out)
 }
 
-/// Extract just the rendered C body (between the KUNA_DUMP markers).
+/// Extract just the rendered C body (between the UNLACE_DUMP markers).
 fn body_of(out: &str) -> String {
     let begin = out.find("===KUNA_DUMP_BEGIN").unwrap_or(0);
     let mid = out.find("===KUNA_DUMP_MID===").unwrap_or(out.len());

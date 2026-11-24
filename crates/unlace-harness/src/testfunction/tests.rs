@@ -668,8 +668,8 @@ fn expected_command_error_rejects_a_successful_command() {
 
 #[test]
 fn restore_option_env_drops_and_resets_option_variables() {
-    const ADDED: &str = "KUNA_TESTFUNCTION_ENV_ADDED";
-    const CHANGED: &str = "KUNA_TESTFUNCTION_ENV_CHANGED";
+    const ADDED: &str = "UNLACE_TESTFUNCTION_ENV_ADDED";
+    const CHANGED: &str = "UNLACE_TESTFUNCTION_ENV_CHANGED";
     // SAFETY: names no other test reads or writes.
     unsafe {
         std::env::remove_var(ADDED);

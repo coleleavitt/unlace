@@ -32,7 +32,7 @@ const MAX_OPS: usize = 64;
 const MAX_PATHS: usize = 4;
 const MAX_STEPS: usize = 128;
 
-/// (kuna) With `KUNA_ATOMICS_TRACE` set, say on stderr how far an atomic
+/// (kuna) With `UNLACE_ATOMICS_TRACE` set, say on stderr how far an atomic
 /// rewrite or a retry-loop fold got before it declined.
 macro_rules! trace {
     ($($arg:tt)*) => {

@@ -1,4 +1,4 @@
-//! (kuna) Test-only render fault: `KUNA_RENDER_FAULT=<addr>` (`0x` hex or
+//! (kuna) Test-only render fault: `UNLACE_RENDER_FAULT=<addr>` (`0x` hex or
 //! decimal) panics the printer partway through the document of the function
 //! whose entry is `<addr>`, after its opening brace. It exists so a test can
 //! check that one failed render leaves every later function of the batch
@@ -6,7 +6,7 @@
 
 use std::sync::OnceLock;
 
-pub const RENDER_FAULT_ENV: &str = "KUNA_RENDER_FAULT";
+pub const RENDER_FAULT_ENV: &str = "UNLACE_RENDER_FAULT";
 
 fn armed() -> Option<u64> {
     static AT: OnceLock<Option<u64>> = OnceLock::new();

@@ -30,7 +30,7 @@ use std::sync::Mutex;
 
 use unlace_harness::testfunction::run_test_files_with_specs;
 
-/// Serializes the `KUNA_DUMP` env set/remove across the parallel tests in this
+/// Serializes the `UNLACE_DUMP` env set/remove across the parallel tests in this
 /// (single) test binary — the dump hook is process-global, so two tests racing
 /// on the var could make one observe it unset and capture an empty render.
 static DUMP_ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -51,7 +51,7 @@ fn specs_dir_string() -> String {
 }
 
 /// Run one datatest file through the engine, returning its full Success/FAIL +
-/// KUNA_DUMP `print C` output (the dump hook routes the rendered C into `out`).
+/// UNLACE_DUMP `print C` output (the dump hook routes the rendered C into `out`).
 fn run_one(stem: &str) -> Option<String> {
     if !unlace_slacomp::slacache::sla_path(&x86_64_sla()).is_ok() {
         eprintln!("SKIP: x86-64.sla unavailable (no .slaspec under specs/)");
@@ -64,15 +64,15 @@ fn run_one(stem: &str) -> Option<String> {
     let specs = specs_dir_string();
     let files = vec![path];
     let mut out = String::new();
-    // The KUNA_DUMP triage hook routes the rendered `print C` into `out`.  Hold
+    // The UNLACE_DUMP triage hook routes the rendered `print C` into `out`.  Hold
     // the env lock across set→run→remove so parallel tests in this binary don't
     // race on the process-global var (which would yield an empty render).
     let _guard = DUMP_ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var("KUNA_DUMP", "1") };
+    unsafe { std::env::set_var("UNLACE_DUMP", "1") };
     run_test_files_with_specs(&files, std::slice::from_ref(&specs), &mut out);
     // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::remove_var("KUNA_DUMP") };
+    unsafe { std::env::remove_var("UNLACE_DUMP") };
     drop(_guard);
     assert!(
         !out.contains("Execution failed") && !out.contains("Did not apply tests in"),
@@ -81,7 +81,7 @@ fn run_one(stem: &str) -> Option<String> {
     Some(out)
 }
 
-/// Extract just the rendered `print C` body from the KUNA_DUMP envelope.
+/// Extract just the rendered `print C` body from the UNLACE_DUMP envelope.
 fn dump_body(out: &str) -> String {
     match (
         out.find("===KUNA_DUMP_BEGIN"),

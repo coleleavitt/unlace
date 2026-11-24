@@ -1,6 +1,6 @@
 //! (kuna) The `rule_block_if_no_exit` decision surface: the shared per-block
 //! facts the rule's arm tie-break and the deferred scan need, plus the
-//! `KUNA_RS_DEBUG` decision trace that measures them.
+//! `UNLACE_RS_DEBUG` decision trace that measures them.
 //!
 //! `CollapseStructure` runs against the `sblocks` `BlockCopy` mirror and has no
 //! `Funcdata` back-pointer, so anything that must read the live op list (a
@@ -80,7 +80,7 @@ pub fn halt_str(flags: uint4) -> String {
     v.join("|")
 }
 
-/// Whether the `KUNA_RS_DEBUG` decision trace is enabled.
+/// Whether the `UNLACE_RS_DEBUG` decision trace is enabled.
 pub fn trace_enabled() -> bool {
     unlace_base::env::var_os("UNLACE_RS_DEBUG").is_some()
 }

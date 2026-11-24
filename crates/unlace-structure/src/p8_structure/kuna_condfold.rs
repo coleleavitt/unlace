@@ -422,7 +422,7 @@ pub fn printed_shape(data: &Funcdata, ops: &[OpId]) -> Option<PrintedShape> {
         root_calls: 0,
     };
     // Charge ONE comma-chain element.  Every `out.stmts` increment goes through
-    // here, so the `KUNA_CONDFOLD_DEBUG=ops` listing and the width this function
+    // here, so the `UNLACE_CONDFOLD_DEBUG=ops` listing and the width this function
     // reports can never drift apart: a block measured at N lists exactly N ops.
     // (It used to be possible: the terminal CBRANCH was charged at its own
     // `continue`, which skipped the trace, so every block listed one op short of
@@ -565,7 +565,7 @@ pub fn prefix_eligible(data: &Funcdata, bb: BlockId, max_stmts: int4) -> bool {
 ///   precisely why it cannot serve as the width budget.  It survives because the
 ///   cross-leaf caps [`MAX_JOIN_LEAVES`]/[`MAX_JOIN_TOTAL_STMTS`] are expressed in it.
 fn shape_score(data: &Funcdata, bb: BlockId, max_stmts: int4) -> Option<ShapeVerdict> {
-    // Decline with a reason, traced to stderr under `KUNA_CONDFOLD_DEBUG=1` (run
+    // Decline with a reason, traced to stderr under `UNLACE_CONDFOLD_DEBUG=1` (run
     // `decomp_dbg` directly to see it; the `unlace` CLI drops the child's stderr).
     // Declining is always correct: the fold simply does not happen and today's
     // goto+label output stands.
@@ -711,7 +711,7 @@ pub struct ShapeVerdict {
     pub printed: int4,
 }
 
-/// `KUNA_CONDFOLD_DEBUG=ops`: also list every op [`printed_shape`] charges, so a
+/// `UNLACE_CONDFOLD_DEBUG=ops`: also list every op [`printed_shape`] charges, so a
 /// measured width can be reconciled against the emitted comma chain op by op.  This
 /// is the facility the consolidation's reviewer had to reconstruct by hand.
 ///
@@ -723,7 +723,7 @@ fn trace_ops() -> bool {
     unlace_base::env::var_os("UNLACE_CONDFOLD_DEBUG").is_some_and(|v| v == "ops")
 }
 
-/// Trace a Rule-B decline under `KUNA_CONDFOLD_DEBUG=1` (stderr; use `decomp_dbg`
+/// Trace a Rule-B decline under `UNLACE_CONDFOLD_DEBUG=1` (stderr; use `decomp_dbg`
 /// directly, the `unlace` CLI drops the child's stderr).
 fn trace(bb: BlockId, reason: &str) {
     if unlace_base::env::var_os("UNLACE_CONDFOLD_DEBUG").is_some() {
@@ -731,7 +731,7 @@ fn trace(bb: BlockId, reason: &str) {
     }
 }
 
-/// Trace an admitted relaxed fold under `KUNA_CONDFOLD_DEBUG=1` (stderr), naming the
+/// Trace an admitted relaxed fold under `UNLACE_CONDFOLD_DEBUG=1` (stderr), naming the
 /// engine that took it — `CollapseStructure` (§8.1) or `region_structurer` (§8.2) —
 /// and which admission rule fired.  Both engines carry the identical gate, and which
 /// one runs on a given function depends on whether the region structurer converges,
@@ -1160,7 +1160,7 @@ mod tests {
     fn printed_shape_charges_the_terminal_cbranch() {
         // `STORE; v = INT_ADD(..); if (v) ...` renders as a three-element comma
         // chain: the store, the assignment, and the condition itself.  The
-        // CBRANCH is the element `KUNA_CONDFOLD_DEBUG=ops` used to omit.
+        // CBRANCH is the element `UNLACE_CONDFOLD_DEBUG=ops` used to omit.
         let mut fd = scorer_fd();
         let bl = scorer_block(&mut fd, 0x2000, 2);
         push_void(&mut fd, bl, 0x2000, OpCode::CPUI_STORE, 3);

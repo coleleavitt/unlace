@@ -2190,6 +2190,26 @@ test = "amdgpu_gfx900_half_math_decompiles"
 address = "0x0"
 expect = ["if (v2 < v3)", "(v2 * v3 + v5 + v1) - v3;"]
 
+# `fixtures/amdgpu/gfx900_dpp.cl` at -O3 for gfx900: `rowsum` uses v_mov_b32_dpp/v_add_u32_dpp (row_shr),
+# whose lane exchange is the dpp_mov user-op; `bytes` packs bytes with v_or_b32_sdwa (src0_sel, dst_sel).
+[[family]]
+name = "amdgpu_gfx900_dpp_sdwa"
+language = "AMDGPU:LE:64:GFX9"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx900_dpp.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx900_dpp_decompiles"
+address = "0x0"
+expect = ["dpp_mov(", ",0x112)"]
+
+[[family.function]]
+test = "amdgpu_gfx900_sdwa_decompiles"
+address = "0x200"
+expect = ["* 0x100", "<< 0x10;"]
+
 # CDNA 2 (gfx90a, MI200): `fixtures/amdgpu/cdna_kernels.cl` at -O3. MFMA results and accumulators
 # live in AGPR tuples (a[0:15]) or VGPR tuples, read back with v_accvgpr_read_b32.
 [[family]]
@@ -2205,6 +2225,12 @@ forbid = ["halt_baddata"]
 test = "amdgpu_gfx90a_mfma_loop_decompiles"
 address = "0x0"
 expect = ["= mfma_f32_32x32x8f16(", "} while ("]
+
+# The accumulator tile is loaded into and stored from AGPRs (global_load/store_dwordx4 a[0:3]).
+[[family.function]]
+test = "amdgpu_gfx90a_agpr_store_decompiles"
+address = "0x0"
+expect = ["= SUB644("]
 
 [[family.function]]
 test = "amdgpu_gfx90a_mfma_f32_decompiles"

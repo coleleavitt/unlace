@@ -1990,6 +1990,18 @@ each function finishes and `decompile-graph` decompiles one function per row, so
 neither takes the order; both produce the option-off output and say so on stderr
 when it is asked for explicitly, rather than accepting it silently.
 
+`decompile-project --per-file` writes one file per function instead of the four
+whole-program artifacts: `functions/<addr:08x>_<name>.c` (the `decompile-all`
+rendering, or a `/* FAILED: ... */` stub) and `manifest.json`, which lists `addr`,
+`name`, `file` and `status` (`ok` or `failed`) for each function. Each file is written
+as its function lands, so an interrupted export keeps the functions it finished. A
+rerun reads the manifest and decompiles only the functions that are not complete on
+disk: a missing or empty file, a failed stub and a function recorded as `failed` are
+decompiled again. Because struct synthesis and callee-first typing see only the
+functions a run decompiles, a resumed run can name a `struct_N` or type a call
+differently from a single full run; the `.h`, `.asm` and README are not written in
+this mode. `--stream`, `--progress` and `--assert` are rejected with it.
+
 ### `--option calleevote` — what every caller passes (on by default)
 
 The callee-first run also works the other way. After the pass, a parameter a

@@ -113,6 +113,7 @@ kuna_options! { self, p1;
         Ok(msg)
     },
     "returnpair" => registered!(crate::kuna_returnpair::ReturnSingle),
+    "retpairpaths" => registered!(crate::kuna_returnuncomputed::RetPairPaths),
     "bitidioms" => registered!(crate::kuna_bitidioms::BitIdioms),
     "satmul" => registered!(crate::kuna_satmul::SatMul),
     "helperroles" => registered!(crate::kuna_helperrole::HelperRoles),

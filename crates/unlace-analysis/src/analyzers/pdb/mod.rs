@@ -57,6 +57,7 @@
 //! `run_default_analyses`.
 
 pub mod codeview;
+pub(crate) mod kuna_pdbframe;
 pub mod kuna_pdbinterior;
 pub mod kuna_pdblines;
 pub(crate) mod kuna_pdbtpi;
@@ -103,12 +104,9 @@ impl AnalysisPass for PdbPass {
             return out;
         };
         // 2. Locate: the ordered candidate list (explicit `kuna_pdb_path`, then the
-        //    record's own filename beside the image, then `<stem>.pdb`). Empty ⇒
-        //    inert.
+        //    record's own filename beside the image, then `<stem>.pdb`; the
+        //    opt-in symbol store is tried after them).
         let candidates = locate::pdb_candidates(ctx.image_path, &cv);
-        if candidates.is_empty() {
-            return out;
-        }
         // The RVA→VMA addend: the PE ImageBase. Absent (unparsable) ⇒ inert.
         let Some(image_base) = pe_image_base(ctx.bytes) else {
             return out;
@@ -163,16 +161,14 @@ pub(crate) fn open_matched(ctx: &AnalysisCtx) -> Option<(pdb::PDB<'static, std::
     }
     let cv = codeview::extract_codeview(ctx.bytes)?;
     let candidates = locate::pdb_candidates(ctx.image_path, &cv);
-    if candidates.is_empty() {
-        return None;
-    }
     let image_base = pe_image_base(ctx.bytes)?;
     let pdb = open_fingerprint_matched(&candidates, &cv)?;
     Some((pdb, image_base))
 }
 
 /// Open the first candidate `.pdb` whose own `{guid, age}` matches the PE's
-/// CodeView record, or `None` when the list is exhausted.
+/// CodeView record, then the symbol-store one ([`locate::symbol_store_candidate`],
+/// fetched from a server only when one is configured), or `None`.
 ///
 /// A candidate that does not exist is silently skipped — most images have no
 /// sidecar and that is not a defect. A candidate that IS there but does not match
@@ -184,34 +180,44 @@ pub(crate) fn open_fingerprint_matched(
     candidates: &[std::path::PathBuf],
     cv: &codeview::CodeViewInfo,
 ) -> Option<pdb::PDB<'static, std::fs::File>> {
-    for path in candidates {
-        let Ok(file) = std::fs::File::open(path) else {
-            continue;
-        };
-        let Ok(mut pdb) = pdb::PDB::open(file) else {
-            continue;
-        };
-        let Ok(info) = pdb.pdb_information() else {
-            continue;
-        };
-        let guid = info.guid.to_string();
-        if locate::fingerprint_ok(cv, &guid, info.age) {
-            return Some(pdb);
-        }
-        unlace_base::notes::say_once(
-            &path.display().to_string(),
-            &format!(
-                "[kuna pdb] {}: age {} guid {} does not match the image's CodeView record \
-                 (age {} guid {}); not applied",
-                path.display(),
-                info.age,
-                guid.to_uppercase(),
-                cv.age(),
-                cv.guid_string()
-                    .unwrap_or_else(|| "<none, NB10 record>".to_string()),
-            ),
-        );
+    if let Some(pdb) = candidates
+        .iter()
+        .find_map(|path| open_if_matching(path, cv))
+    {
+        return Some(pdb);
     }
+    let stored = locate::symbol_store_candidate(cv)?;
+    if candidates.contains(&stored) {
+        return None;
+    }
+    open_if_matching(&stored, cv)
+}
+
+/// Open `path` as a `.pdb` and return it when its `{guid, age}` matches `cv`.
+fn open_if_matching(
+    path: &std::path::Path,
+    cv: &codeview::CodeViewInfo,
+) -> Option<pdb::PDB<'static, std::fs::File>> {
+    let file = std::fs::File::open(path).ok()?;
+    let mut pdb = pdb::PDB::open(file).ok()?;
+    let info = pdb.pdb_information().ok()?;
+    let guid = info.guid.to_string();
+    if locate::fingerprint_ok(cv, &guid, info.age) {
+        return Some(pdb);
+    }
+    unlace_base::notes::say_once(
+        &path.display().to_string(),
+        &format!(
+            "[kuna pdb] {}: age {} guid {} does not match the image's CodeView record \
+             (age {} guid {}); not applied",
+            path.display(),
+            info.age,
+            guid.to_uppercase(),
+            cv.age(),
+            cv.guid_string()
+                .unwrap_or_else(|| "<none, NB10 record>".to_string()),
+        ),
+    );
     None
 }
 

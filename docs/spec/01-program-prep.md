@@ -8728,6 +8728,17 @@ both
   three `open` attempts, only on a PE that carries a CodeView record — and the
   `.pdb` is parsed only when one of them opens and matches.
 
+  A fourth tier is opt-in: `kuna_pdb_symsrv` names a symbol store, `<cache>` or
+  `<cache>*<url>` (an `srv*` prefix as in `_NT_SYMBOL_PATH` is accepted). Only
+  when the three tiers above find no match is the store's
+  `<cache>/<name>/<GUID hex><age hex>/<name>` (the SymStore layout, `<name>` the
+  same safe record name) tried, and with a URL a missing file is first fetched
+  from `<url>/<name>/<key>/<name>` by running `curl` (300 s, 4 GiB at most),
+  written beside its final name and renamed when complete, and tried at most
+  once per process and path; a failed fetch gets one `[kuna pdb]` line. The
+  fingerprint gate applies to it like any other candidate. Without the variable
+  nothing is looked up or fetched.
+
   **(kuna) Types, prototypes and locals** (`pdbtypes`, PE-only, default **off**;
   `crates/unlace-analysis/src/analyzers/pdb/kuna_pdbtypes.rs`,
   `kuna_pdbtpi.rs`). From the same fingerprint-matched `.pdb`, the TPI type
@@ -8753,8 +8764,14 @@ both
   the x64 stack pointer in the body is the entry stack pointer less the
   `S_FRAMEPROC` callee-saved bytes and fixed frame (`cbSaveRegs + cbFrame`, the
   convention MSVC and LLVM both write), and the i386 `EBP` frame pointer is the
-  entry stack pointer less the pushed `EBP`; an x64 frame pointer, an i386 stack
-  pointer and the virtual `$T0` frame depend on the prologue and are skipped. A
+  entry stack pointer less the pushed `EBP`. An x64 frame register (`RBP`,
+  `R13`) points where the function's `.pdata` unwind data puts it: the
+  `UNWIND_INFO` names the register and its scaled offset, and the codes listed
+  after `UWOP_SET_FPREG` ran before it, so the register is the entry stack pointer
+  less their pushes and allocations plus `16 * FrameOffset`
+  (`crates/unlace-analysis/src/analyzers/pdb/kuna_pdbframe.rs`); a chained record,
+  an epilog code or an unknown one leaves it unknown. An i386 stack pointer and the
+  virtual `$T0` frame depend on the prologue and are skipped. A
   slot below the return address becomes a named, typed stack local (the DWARF
   `LocalFact` channel); a register range of a non-parameter becomes a
   register-held local from the range's start; locals of an inlined call site

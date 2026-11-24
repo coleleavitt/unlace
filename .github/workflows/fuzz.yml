@@ -1,0 +1,48 @@
+name: Fuzz
+
+# Whole-pipeline fuzz sweep for `unlace-fuzz` (load, function discovery, decompile).
+# It runs on a schedule and on demand. The harness is stable Rust, not cargo-fuzz or
+# libfuzzer-sys: it sends random inputs through the `unlace` API and catches panics
+# (crates/unlace-fuzz/src/lib.rs). The seed corpus and the crash-corpus regression
+# run in the same test binary.
+#
+# A panic fails the job, and the test output names the iteration. Rerun with the same
+# UNLACE_FUZZ_ITERS to reproduce it.
+
+on:
+  schedule:
+    # 06:17 UTC daily, offset from the top of the hour.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: 'Random inputs to run (blank = 200000)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  fuzz:
+    name: unlace-fuzz sweep
+    runs-on: ubuntu-26.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Seed corpus, crash corpus and random sweep
+        env:
+          UNLACE_FUZZ_ITERS: ${{ github.event.inputs.iterations || '200000' }}
+        run: cargo test -p unlace-fuzz

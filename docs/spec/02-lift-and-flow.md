@@ -3908,6 +3908,10 @@ warning. A declared extent (`--define-function S-E`) still wins. Under `functail
 (chapter 01) a `.cold` tail that starts exactly where the function's extent ends is
 the function's own fall-through, so the extent runs to the end of that tail.
 
+### String-hash switch tables
+
+A switch on a string compiles to `switch (hash(s))` whose case constants are the folded hashes of its literals. `stringhashswitch.rs` holds the hash functions such switches use (CRC32, CRC32C, FNV-1 and FNV-1a, djb2 and djb2a, sdbm, Murmur3, Jenkins one-at-a-time, and the Java/Swift string hash) and builds a `hash -> string` table over a binary's string pool. The table is an annotation for case labels; no printer reads it yet and the discriminator loop is not matched, so the output of every function is unchanged. Recognising the hash loop in lowered p-code, and wiring the table into case printing behind an option, are the next steps.
+
 ## 2.4 No-return at lift time
 
 The mechanism is §2.1's halt plant: if `check_for_flow_modification` believes a
@@ -4039,6 +4043,26 @@ entry; `--to` any other target proves none; `--from` a function proves that
 entry alone and `--from` an instruction proves every entry. Pointer-only and
 non-call kind filters prove none. An entry whose flow fails or exceeds the
 budget is reported as a coverage note, since its import calls are then missing.
+
+### Anti-debug probe naming — `option antidebug`, default off (unlace)
+
+A direct call whose callee the flow pass named `IsDebuggerPresent`,
+`CheckRemoteDebuggerPresent`, `NtQueryInformationProcess`,
+`NtSetInformationThread`, `ptrace`, `rdtsc`, `GetTickCount`,
+`GetTickCount64`, `QueryPerformanceCounter`, `OutputDebugStringA` or
+`OutputDebugStringW` is an anti-debug probe. The flow pass consults the name
+recorded on the call spec, immediately after it builds that spec
+(`crates/unlace-lift/src/p2_lift/antidebug.rs`, `warn_probe`). Under
+`option antidebug warn` it buffers one warning at the call address, reading
+`anti-debug probe: <api> (<category>)`. The categories are a debugger check, a
+`ptrace` self-trace, a timing probe and a debugger-channel side effect.
+
+Under the default `off` nothing is matched and the flow is unchanged. Under
+`warn` the call statement, its types and the control flow around it are left
+as they are: the warning is the only output. The probe is a reviewable signal
+that evasion logic is present, not a proof that the binary is malicious: the warning names the call and
+makes no claim about intent. Indirect calls are not matched, since the callee
+name is not known at flow time.
 
 ## 2.5 Arch quirks
 

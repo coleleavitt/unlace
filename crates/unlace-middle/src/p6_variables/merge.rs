@@ -579,6 +579,56 @@ pub struct AddrTiedRange {
 // the bank + context; no Cover work.  They are transcribed verbatim, including the
 // short-circuit order, which is output-determining (the first failing test wins).
 
+/// Address-use and arithmetic-output flags over the instances of `high`, for the
+/// phi guard (`Merge::phi_address_arith_conflict`).  Address-use is a `LOAD` or
+/// `STORE` whose address input (slot 1) is an instance.  Arithmetic-output is an
+/// instance defined by pure integer arithmetic (no `IntAdd`, which is also pointer
+/// advance), through `COPY` chains.  Origin: `register_coalesce.rs`
+/// `classify_use_sites`, `address_arith_conflict`.
+fn phi_use_classes(ctx: &dyn MergeContext, high: HighVariableId) -> (bool, bool) {
+    let mut addr = false;
+    let mut arith = false;
+    for i in 0..ctx.high_num_instances(high) {
+        let vn = ctx.high_get_instance(high, i);
+        if !addr {
+            addr = ctx.vn_descend(vn).into_iter().any(|op| {
+                !ctx.op_is_dead(op)
+                    && matches!(ctx.op_code(op), OpCode::CPUI_LOAD | OpCode::CPUI_STORE)
+                    && ctx.op_in(op, 1) == Some(vn)
+            });
+        }
+        if !arith {
+            arith = phi_is_arith_output(ctx, vn, 0);
+        }
+    }
+    (addr, arith)
+}
+
+/// Is `vn` defined by pure integer arithmetic, possibly through a `COPY` chain
+/// (bounded depth)?  See [`phi_use_classes`].
+fn phi_is_arith_output(ctx: &dyn MergeContext, vn: VarnodeId, depth: u32) -> bool {
+    let Some(def) = ctx.vn_def(vn) else {
+        return false;
+    };
+    match ctx.op_code(def) {
+        OpCode::CPUI_INT_MULT
+        | OpCode::CPUI_INT_LEFT
+        | OpCode::CPUI_INT_RIGHT
+        | OpCode::CPUI_INT_SRIGHT
+        | OpCode::CPUI_INT_DIV
+        | OpCode::CPUI_INT_SDIV
+        | OpCode::CPUI_INT_REM
+        | OpCode::CPUI_INT_SREM
+        | OpCode::CPUI_INT_AND
+        | OpCode::CPUI_INT_OR
+        | OpCode::CPUI_INT_XOR => true,
+        OpCode::CPUI_COPY if depth < 8 => ctx
+            .op_in(def, 0)
+            .is_some_and(|src| phi_is_arith_output(ctx, src, depth + 1)),
+        _ => false,
+    }
+}
+
 impl Merge {
     /// Required (non-Cover) tests to merge two HighVariables (C++
     /// `Merge::mergeTestRequired`, `merge.cc:102-166`).
@@ -1583,6 +1633,20 @@ impl Merge {
         false
     }
 
+    /// Would a phi merge unify a value dereferenced as an address with a pure
+    /// arithmetic scalar?  Such a merged variable is declared a scalar, so the
+    /// dereference reads it as a pointer at runtime.  The check is structural
+    /// (use sites), so it holds even when both types are `Unknown`.
+    fn phi_address_arith_conflict(
+        ctx: &dyn MergeContext,
+        a: HighVariableId,
+        b: HighVariableId,
+    ) -> bool {
+        let (a_addr, a_arith) = phi_use_classes(ctx, a);
+        let (b_addr, b_arith) = phi_use_classes(ctx, b);
+        (a_addr && b_arith) || (a_arith && b_addr)
+    }
+
     /// Force input/output merges of all ops of a given opcode (C++
     /// `Merge::mergeOpcode`, `merge.cc:326-350`).  Merges in linear block order.
     pub fn merge_opcode(&mut self, ctx: &mut dyn MergeContext, opc: OpCode) -> UnlaceResult<()> {
@@ -1619,6 +1683,11 @@ impl Merge {
                     }
                     let h1 = ctx.vn_high(vn1).expect("merge_opcode: vn1 no high");
                     let h2 = ctx.vn_high(vn2).expect("merge_opcode: vn2 no high");
+                    if opc == OpCode::CPUI_MULTIEQUAL
+                        && Self::phi_address_arith_conflict(&*ctx, h1, h2)
+                    {
+                        continue;
+                    }
                     if Self::merge_test_required(ctx, h1, h2)
                         && !(ctx.pass_hooks().fputruncviews_keeps_highs_apart)(ctx, h1, h2)
                         && !(ctx.pass_hooks().globalvalue_keeps_apart)(ctx, h1, h2)

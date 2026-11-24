@@ -16,6 +16,8 @@ mod hexagon_hmx;
 mod huc6280;
 #[path = "konami.rs"]
 mod konami;
+#[path = "v8ignition_raw.rs"]
+mod v8ignition_raw;
 #[path = "kvx_raw.rs"]
 mod kvx_raw;
 #[path = "lua54.rs"]

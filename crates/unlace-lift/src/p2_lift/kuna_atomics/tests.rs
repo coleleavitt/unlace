@@ -250,3 +250,75 @@ fn spelled_swaps_compare_exchange_and_negates_subtraction() {
     }
     assert_eq!(msvc_atomic_builtin(BUILTIN_ATOMIC_FETCH_SUB, 4), None);
 }
+
+#[test]
+fn fold_evaluates_an_arm_status_compare() {
+    let zero = || Expr::Const(0, 4);
+    assert_eq!(fold(OpCode::CPUI_INT_SUB, &[zero(), zero()]), Some(0));
+    assert_eq!(fold(OpCode::CPUI_INT_LESSEQUAL, &[zero(), zero()]), Some(1));
+    assert_eq!(fold(OpCode::CPUI_INT_SBORROW, &[zero(), zero()]), Some(0));
+    assert_eq!(
+        fold(
+            OpCode::CPUI_INT_SBORROW,
+            &[Expr::Const(0x8000_0000, 4), Expr::Const(1, 4)]
+        ),
+        Some(1)
+    );
+    assert_eq!(
+        fold(
+            OpCode::CPUI_INT_CARRY,
+            &[Expr::Const(0xffff_ffff, 4), Expr::Const(1, 4)]
+        ),
+        Some(1)
+    );
+    assert_eq!(
+        fold(
+            OpCode::CPUI_INT_SLESS,
+            &[Expr::Const(0xffff_ffff, 4), zero()]
+        ),
+        Some(1)
+    );
+    assert_eq!(
+        fold(OpCode::CPUI_INT_RIGHT, &[zero(), Expr::Const(0x1f, 4)]),
+        Some(0)
+    );
+    assert_eq!(
+        fold(
+            OpCode::CPUI_INT_LEFT,
+            &[Expr::Const(1, 8), Expr::Const(64, 4)]
+        ),
+        Some(0)
+    );
+    assert_eq!(
+        fold(
+            OpCode::CPUI_INT_ADD,
+            &[Expr::Const(1, 16), Expr::Const(1, 16)]
+        ),
+        None
+    );
+    assert_eq!(sext(0x80, 1), -128);
+    assert_eq!(sext(0x7f, 1), 127);
+}
+
+#[test]
+fn equality_reads_a_flag_tested_against_one() {
+    let e = Expr::Start(Storage {
+        space: 2,
+        offset: 0,
+        size: 16,
+    });
+    let zf = Expr::Op(OpCode::CPUI_INT_EQUAL, 1, vec![e.clone(), Expr::Old]);
+    let tested = Expr::Op(
+        OpCode::CPUI_INT_EQUAL,
+        1,
+        vec![zf.clone(), Expr::Const(1, 1)],
+    );
+    assert_eq!(equality(&tested, true), Some(e.clone()));
+    assert_eq!(equality(&tested, false), None);
+    let clear = Expr::Op(OpCode::CPUI_INT_EQUAL, 1, vec![zf, Expr::Const(0, 1)]);
+    assert_eq!(equality(&clear, false), Some(e.clone()));
+    let half = Expr::Op(OpCode::CPUI_SUBPIECE, 8, vec![Expr::Old, Expr::Const(8, 4)]);
+    let differs = Expr::Op(OpCode::CPUI_INT_NOTEQUAL, 1, vec![half.clone(), e.clone()]);
+    assert_eq!(equality_of(&differs, false, &half), Some(e));
+    assert_eq!(equality_of(&differs, true, &half), None);
+}

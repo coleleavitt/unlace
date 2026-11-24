@@ -559,6 +559,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // (kuna `msvceh`) ThrowInfo/CatchableType labels and x64 throw-site
         // comments. Commit gated, default-OFF.
         passes.push(Box::new(crate::entry::kuna_msvceh::MsvcEhPass));
+        // (kuna `delphi`) Borland/Delphi VMTs, method names, type info and
+        // interface tables. Commit gated, default-OFF.
+        passes.push(Box::new(crate::delphi::DelphiPass));
     }
 
     // S1 Mach-O Core Foundation constant strings (CFStringPass): when the binary

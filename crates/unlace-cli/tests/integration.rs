@@ -8,12 +8,16 @@ mod c28x_raw;
 #[path = "chip8.rs"]
 mod chip8;
 mod common;
+#[path = "clipper_raw.rs"]
+mod clipper_raw;
 #[path = "fr_raw.rs"]
 mod fr_raw;
 #[path = "hexagon_hmx.rs"]
 mod hexagon_hmx;
 #[path = "iq2000_raw.rs"]
 mod iq2000_raw;
+#[path = "konami.rs"]
+mod konami;
 #[path = "m32r_raw.rs"]
 mod m32r_raw;
 #[path = "ft32_raw.rs"]
@@ -48,6 +52,8 @@ mod riscv_crypto;
 mod riscv_hints;
 #[path = "riscv_vector.rs"]
 mod riscv_vector;
+#[path = "riscv_xthead.rs"]
+mod riscv_xthead;
 #[path = "riscv_zabha.rs"]
 mod riscv_zabha;
 #[path = "riscv_zacas.rs"]
@@ -68,8 +74,12 @@ mod sparc_prologue_start;
 mod stm8_raw;
 #[path = "upd7725.rs"]
 mod upd7725;
+#[path = "uxn.rs"]
+mod uxn;
 #[path = "v810.rs"]
 mod v810;
+#[path = "visium_raw.rs"]
+mod visium_raw;
 #[path = "w65816_raw.rs"]
 mod w65816_raw;
 #[path = "x86_amx.rs"]

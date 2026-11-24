@@ -11,6 +11,7 @@ pub mod callfixup;
 pub mod cfstring;
 pub mod com;
 pub mod cortexmscs;
+pub mod delphi;
 pub mod demangle;
 pub mod dwarf;
 pub mod entry;

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="CLIPPER"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="clipper.sla"
+            processorspec="clipper.pspec"
+            id="clipper:LE:32:default">
+    <description>Fairchild/Intergraph CLIPPER C100/C300 (C400 abss/absd, s*)</description>
+    <compiler name="default" spec="clipper.cspec" id="default"/>
+  </language>
+</language_definitions>

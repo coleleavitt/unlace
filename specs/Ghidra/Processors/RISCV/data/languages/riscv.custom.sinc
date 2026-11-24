@@ -28,6 +28,7 @@ define pcodeop custom3.rd;
 define pcodeop custom3.rd.rs1;
 define pcodeop custom3.rd.rs1.rs2;
 
+@ifndef CUSTOM0_VENDOR
 :custom0 is op0001=0x3 & op0204=0x2 & op0506=0x0 & (op1214=0x0 | op1214=0x1 | op1214=0x5)
 {
 	custom0();
@@ -58,6 +59,7 @@ define pcodeop custom3.rd.rs1.rs2;
 	rd = custom0.rd.rs1.rs2(rs1, rs2);
 }
 
+@endif
 
 :custom1 is op0001=0x3 & op0204=0x2 & op0506=0x1 & (op1214=0x0 | op1214=0x1 | op1214=0x5)
 {

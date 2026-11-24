@@ -1461,6 +1461,7 @@ class BinutilsDis:
             text = m.group(3).strip()
             if off % self.width or not text or text.startswith(("(bad)", ".word", ".long", ".byte", ".short", "#", "*unknown*")):
                 continue
+            text = re.sub(r"^[0-9a-f]{8} ", "", text)          # FT32 prints the word first
             mn, ops = (re.split(r"\s+", text, maxsplit=1) + [""])[:2]
             got[off // self.width] = (mn, ops.strip())
         for i, r in enumerate(todo):
@@ -1767,4 +1768,197 @@ class Xtensa(ObjdumpArch):
         return not (cand["mnemonic"] == "slli" and cand["op_str"].endswith(", 32"))
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa())}
+class SlotDis(BinutilsDis):
+    """A variable-length decoder: each candidate starts a slot of `width` bytes padded with `pad`
+    (a NOP) so objdump starts every slot in step; the instruction's length is the distance to the
+    next decoded line in its slot."""
+
+    def __init__(self, machine, big, width, pad, unit):
+        BinutilsDis.__init__(self, machine, big, width)
+        self.pad, self.unit = pad, unit
+
+    def pack(self, raw):
+        return (raw + self.pad * self.width)[:self.width]
+
+    def prime(self, raws):
+        todo = [r for r in dict.fromkeys(raws) if r not in self.cache]
+        if not todo:
+            return
+        with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
+            f.write(b"".join(self.pack(r) for r in todo))
+            name = f.name
+        try:
+            cmd = [self.path(), "-D", "-b", "binary", "-m", self.machine, "-EB" if self.big else "-EL", name]
+            out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+        finally:
+            os.unlink(name)
+        lines = []
+        for line in out.splitlines():
+            m = re.match(r"\s*([0-9a-f]+):\t([0-9a-f]{2}(?: ?[0-9a-f]{2})*) *\t(.*)$", line)
+            if m:
+                lines.append((int(m.group(1), 16), m.group(3).strip()))
+        got = {}
+        for (off, text), nxt in zip(lines, lines[1:] + [(None, None)]):
+            if off % self.width:
+                continue
+            if not text or text.startswith(("(bad)", "bad", ".word", ".long", ".byte", ".short", "#", "*unknown*")):
+                continue
+            n = (nxt[0] if nxt[0] is not None else off + self.width) - off
+            mn, ops = (re.split(r"\s+", text, maxsplit=1) + [""])[:2]
+            got[off // self.width] = (mn, ops.strip(), n)
+        for i, r in enumerate(todo):
+            e = got.get(i)
+            self.cache[r] = e if e and e[2] <= len(r) else None
+
+    def disasm(self, raw, addr):
+        raw = bytes(raw)
+        if raw not in self.cache:
+            self.prime([raw])
+        e = self.cache[raw]
+        if e is not None:
+            yield _Insn(raw[:e[2]], e[0], e[1])
+
+
+MOXIE_DENY = re.compile(
+    r"^(beq|bne|blt|bgt|bltu|bgtu|bge|ble|bgeu|bleu|jmp|jmpa|jsr|jsra|ret|swi|brk|ssr|gsr|nop|bad)$"
+)
+
+
+class Moxie(ObjdumpArch):
+    """Moxie (big endian) against gdb's moxie simulator (--oracle gdbsim; sim/moxie is big endian only).
+    CMP is not checked: the SLEIGH spec keeps the compared operands (cmpa, cmpb) and the
+    simulator does not expose its condition codes. Branches, calls, traps and special-register
+    moves are not generated."""
+    name = "moxie"
+    lang = "moxie:BE:32:default"
+    elf_machine = 223
+    big = True
+    pc = "pc"
+    gprs = [(n, None) for n in ["fp", "sp"] + [f"r{i}" for i in range(14)]]
+    pc_const = None
+    deny = MOXIE_DENY
+    objdump_machine = "moxie"
+    gdbsim = "moxie"
+    gdb_pc = "pc"
+
+    def unicorn(self):
+        raise NotImplementedError("moxie runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("moxie", self.big, 16, b"\x0f\x00" if self.big else b"\x00\x0f", 2)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(48).to_bytes(6, "big")
+
+    # sim/moxie reads a stored register little endian and writes a fetched one big endian
+    sim_store_big = False
+    sim_fetch_big = True
+
+    def skip(self, cand):
+        # sim/moxie's mul.x multiplies zero-extended operands (its av, bv are unsigned)
+        return cand["mnemonic"] == "mul.x"
+
+    def ignored(self, mnemonic, operands, state):
+        regs = [r.strip().lstrip("$") for r in operands.split(",")]
+        # the shift count is the whole register; the simulator's C shift is undefined from 32 up
+        if mnemonic in ("ashl", "ashr", "lshr") and len(regs) == 2:
+            if regs[0] == regs[1]:
+                return {"*"}                    # the count register is the result: input unknown here
+            try:
+                if state.get(regs[1]) & 0xFFFFFFFF >= 32:
+                    return {"*"}
+            except KeyError:
+                pass
+        # push/pop with the stack register as the other operand
+        if mnemonic in ("push", "pop") and len(regs) == 2 and regs[0] == regs[1]:
+            return {"*"}
+        return set()
+
+
+FT32_DENY = re.compile(
+    r"^(jmp.*|call.*|return|reti|halt|stream.*|memcpy.*|memset.*|strcmp.*|strlen.*|stpcpy.*|lpm.*|lpmi.*|exa.*|"
+    r"link|unlink|ffs.*|nop)$"
+)
+
+
+class Ft32(ObjdumpArch):
+    """FTDI FT32 against gdb's ft32 simulator (--oracle gdbsim). FT32 is Harvard: the instruction
+    sits in program memory, data accesses go to the 64 KiB RAM the simulator places at 0x800000
+    (gdb_data_bias), so data pointers are drawn below 0x10000. Jumps, calls, the string/stream
+    operations and program-memory loads are not generated."""
+    name = "ft32"
+    lang = "ft32:LE:32:default"
+    elf_machine = 222
+    big = False
+    base = 0x1000
+    pc = "pc"
+    gprs = [(n, None) for n in [f"r{i}" for i in range(29)] + ["fp", "cc", "sp"]]
+    pc_const = None
+    deny = FT32_DENY
+    objdump_machine = "ft32"
+    gdbsim = "ft32"
+    gdb_pc = "pc"
+    gdb_data_bias = 0x800000
+    # sim/ft32 drops the low address bits of a halfword or word access; the language does not
+    misaligned_undefined = True
+
+    def unicorn(self):
+        raise NotImplementedError("ft32 runs with --oracle gdbsim")
+
+    def rand_reg(self, rng, bits):
+        k = rng.random()
+        if k < 0.35:
+            return rng.randrange(0x100, 0xFF00) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def addr_ok(self, a):
+        return a < 0x10000
+
+    def canonical(self, cand):
+        # FT32B compressed words (two 15-bit instructions, or "!" for an invalid pair) are not
+        # in the SLEIGH language
+        mn = cand["mnemonic"]
+        return mn != "!" and not mn.endswith(".") and ";" not in cand["op_str"]
+
+    def partial(self, mnemonic, operands):
+        # sim/ft32 computes every compare-type operation's overflow (and so GE, GT) with the
+        # subtraction formula, also for ADDCC, TST and BTST; there only z, c, s and a are compared
+        return {"cc": ~0x34} if mnemonic.startswith(("tst", "addcc", "btst")) else {}
+
+
+IQ2000_DENY = re.compile(
+    r"^(b[a-z0-9]*|j|jal|jr|jalr|jcr|syscall|break|sleep|mf[a-z0-9]*|mt[a-z0-9]*|cf[a-z0-9]*|ct[a-z0-9]*|"
+    r"c[0-3][a-z]*|lw[a-z]*c[0-3]|sw[a-z]*c[0-3]|ldw|sdw|nop|rfe|chk.*|lul.*|luc.*|luo.*|lur.*|lu[mprs].*|"
+    r"pkr.*|av.*|cam.*|cm.*|cr[ws].*|wb.*|rb.*|swwr.*|yield|sync)$"
+)
+
+
+class Iq2000(ObjdumpArch):
+    """Vitesse IQ2000 (big endian, MIPS-I-like) against gdb's iq2000 simulator (--oracle gdbsim).
+    Branches, jumps, traps, coprocessor and network-processor (lookup, CAM, packet) instructions
+    are not generated."""
+    name = "iq2000"
+    lang = "iq2000:BE:32:default"
+    elf_machine = 0xFEBA
+    big = True
+    pc = "pc"
+    gprs = [(f"r{i}", None) for i in range(1, 32)]
+    pc_const = None
+    deny = IQ2000_DENY
+    objdump_machine = "iq2000"
+    gdbsim = "iq2000"
+    gdb_pc = "pc"
+    # sim/iq2000 keeps instructions at 0x80000000 + address and data at the address (elf/iq2000.h)
+    gdb_code_bias = 0x80000000
+    gdb_data_bias = 0
+
+    def addr_ok(self, a):
+        return a < 0x800000
+
+    def unicorn(self):
+        raise NotImplementedError("iq2000 runs with --oracle gdbsim")
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000())}

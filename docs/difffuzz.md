@@ -175,6 +175,28 @@ afterwards. The register file is unchanged.
   leading zeros of the complement, so it returned 0 for every non-negative value; it is now the
   number of leading sign bits less one (31 for 0 and -1). Seeds 4 and 5, 3000 encodings each:
   7040 and 7164 matches, no mismatches.
+- gdb simulators (`--oracle gdbsim`, `tools/difffuzz/gdbsim_backend.py`) for architectures neither
+  Unicorn nor QEMU runs. `dfsim-<sim>` is `tools/difffuzz/dfsim.c` linked against gdb 16's
+  `sim/<sim>/libsim.a` (`build_dfsim.sh`; gdb configured with `--enable-targets=all --enable-sim`,
+  `CFLAGS=-std=gnu17` for GCC 15): it loads a one-page ELF with a `.text` section, then per case
+  takes memory writes, register stores (gdb's numbering, read from `maint print registers`), one
+  step and reads, over stdin/stdout. No prologue or epilogue is needed. `$DIFFFUZZ_GDBSIM_DIR`
+  (default `~/.local/share/difffuzz-gdbsim/bin`) holds the drivers and that gdb. Harvard targets
+  set `gdb_data_bias`/`gdb_code_bias`; `misaligned_undefined` makes a misaligned access undefined.
+  - Moxie (`--arch moxie`, `moxie:BE:32:default`; sim/moxie is big endian only): CMP is not
+    checked (the language keeps the operands, the simulator keeps its condition codes
+    internally). The simulator's `mul.x` multiplies zero-extended operands, so it is skipped, and
+    shifts by 32 or more are undefined (C shifts there). sim/moxie's register store reads little
+    endian and its fetch writes big endian. Seed 7, 2500 encodings: 5641 matches.
+  - FT32 (`--arch ft32`): instructions in program memory at 0x1000, data in the 64 KiB RAM the
+    simulator keeps at 0x800000. FT32B compressed words are not in the language. The simulator
+    computes every compare-type overflow with the subtraction formula, so ADDCC/TST/BTST compare
+    z, c, s and a only. Fixed in `ft32.slaspec`: the LDI/STI/EXI/LPMI offset is stored with bits
+    14:8 inverted when bit 7 is set (gas encodes it so, the simulator decodes it so; objdump prints
+    the raw field); PUSH/POP of `$sp` push the old value and pop into `$sp`; BEXTS past bit 31
+    reads zeros; TST.B/.S and ADDCC.B/.S work on 8/16 bits. Seed 8, 2500 encodings: 3592 matches.
+  - IQ2000 (`--arch iq2000`): instructions at 0x80000000 + address, data below 8 MiB. Seed 5,
+    2500 encodings: 5390 matches; no fix needed.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

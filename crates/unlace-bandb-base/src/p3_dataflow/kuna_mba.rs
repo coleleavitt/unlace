@@ -884,7 +884,7 @@ fn shift_amount(data: &Funcdata, op: OpId, size: int4) -> Option<u64> {
 
 /// A leaf of the tree: a varnode, or a constant operand of a bitwise op. The
 /// identities hold for every value of a leaf, so a constant can stand as one.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum LeafRef {
     Vn(VarnodeId),
     Const(u64),
@@ -1416,6 +1416,28 @@ pub(crate) struct DeepTree {
 }
 
 impl DeepTree {
+    /// The tree's value at four inputs where each leaf takes a value hashed
+    /// from its identity: the same for every spelling of the tree and every
+    /// order its leaves were met in.
+    pub(crate) fn fingerprint(&self, mask: u64) -> [u64; 4] {
+        let mut fp = [0u64; 4];
+        for (k, f) in fp.iter_mut().enumerate() {
+            let vals: Vec<u64> = self
+                .leaves
+                .iter()
+                .map(|l| {
+                    let mut h = 0xcbf2_9ce4_8422_2325u64 ^ k as u64;
+                    for b in format!("{l:?}").bytes() {
+                        h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+                    }
+                    splitmix(&mut h) & mask
+                })
+                .collect();
+            *f = self.expr.eval(&vals, mask);
+        }
+        fp
+    }
+
     pub(crate) fn into_rewrite(self, simple: Expr) -> Rewrite {
         Rewrite {
             simple,

@@ -4627,6 +4627,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/processors.toml` (`ez80`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/ez80_raw.rs` |
 | `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a) shader ISA, one-lane lift | `AMDGPU:LE:64:GFX9` | LLVM AMDGPU encodings (`llvm-mc -show-encoding`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/amdgpu_raw.rs` |
+| `KVX` | Kalray KVX kv3-1 (Coolidge v1) and kv3-2 (Coolidge v2), 64-bit mode; bundles of up to eight syllables with tail immediate extensions | `KVX:LE:64:kv3-1`, `KVX:LE:64:kv3-2` | encodings generated from the binutils `kvx` opcode table and disassembler register classes by `tools/gen_kvx_sleigh.py`; checked against `kvx-elf-objdump` | `unlace-cli/tests/kvx_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -4944,15 +4945,17 @@ instruction, RV32 and RV64.
 
 ### RISC-V scalar cryptography (#98)
 
-`riscv.rv32k.sinc` (RV32 and RV64) and `riscv.rv64k.sinc` (RV64 only,
-included by `riscv.lp64d.slaspec`) decode the ratified scalar cryptography
+`riscv.zk.sinc`, generated from the Sail model's `zkn_insts.sail` and
+`zks_insts.sail` by `tools/gen_riscv_sail.py` (`docs/sleigh-from-isa-specs.md`),
+decodes the ratified scalar cryptography
 extensions (Scalar Crypto 1.0.1): Zknh (`sha256sig0/1`, `sha256sum0/1`; on
 RV64 `sha512sig0/1`, `sha512sum0/1`; on RV32 the half-word forms
 `sha512sum0r`, `sha512sum1r`, `sha512sig0l/h`, `sha512sig1l/h`), Zksh
 (`sm3p0`, `sm3p1`), Zksed (`sm4ed`, `sm4ks`), and Zkne/Zknd (`aes32esi`,
 `aes32esmi`, `aes32dsi`, `aes32dsmi` on RV32; `aes64es`, `aes64esm`,
-`aes64ds`, `aes64dsm`, `aes64im`, `aes64ks1i`, `aes64ks2` on RV64). They
-replace the 0.6.2 draft those files carried, which put these instructions
+`aes64ds`, `aes64dsm`, `aes64im`, `aes64ks1i`, `aes64ks2` on RV64). It
+replaces the hand-written `riscv.rv32k.sinc` and `riscv.rv64k.sinc`, which
+decoded every word the same way; those had replaced the 0.6.2 draft, which put these instructions
 in the custom-1 and custom-2 opcode spaces (where vendor extensions live)
 under draft names (`ssha256.sig0`, `saes32.encs`, `pollentropy`, ...), all
 `unimpl`; the ratified encodings are in OP and OP-IMM.
@@ -4964,8 +4967,11 @@ the doubleword; each RV32 SHA-512 half forms the 64-bit value `rs2:rs1`
 (`rs2` high), applies its three 64-bit rotates (for `sig0h`/`sig1h` the
 middle term shifts only the low word) and keeps the low 32 bits. The AES
 and SM4 instructions, whose results go through an S-box, are user
-operations named after the instruction, taking `rs1`, `rs2` and, for the
-RV32 AES and SM4 forms, the byte select `bs` (`aes64ks1i` takes `rnum`).
+operations named after the instruction (`--opaque`), taking `rs1`, `rs2`
+and, for the RV32 AES and SM4 forms, the byte select `bs` (`aes64ks1i`
+takes `rnum`). `aes64ks2` lifts to its XOR definition. `aes64ks1i` decodes
+every `rnum`, as LLVM does, though Sail reserves 0xB..0xF
+(`--decode-reserved AES64KS1I`).
 Zbkb, Zbkc and Zbkx are in the bit manipulation files. The Zkr `seed` CSR
 and the vector crypto extensions (Zvk*) are not covered. Exercised by
 `unlace-cli/tests/riscv_crypto.rs`: one probe row per encoding against LLVM's

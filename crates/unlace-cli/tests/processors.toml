@@ -95,6 +95,10 @@ x86_32_avx10 = """
 c5fb1044240431c062f1ff082f84240c0000000f97c0c3
 """
 
+ppc_xenon_vmx128 = """
+100018cb102020cb14400c1a1462049a106029cb4e800020
+"""
+
 [[family]]
 name = "blackfin"
 language = "Blackfin:LE:32:default"
@@ -941,6 +945,39 @@ expect = [
     "10",  # the store to $10 survives
 ]
 
+# The native TILEPro language decompiles bundles built with tilepro-linux-gnu-as:
+# a load/accumulate loop closed by bnz with a store, a register swap inside one
+# bundle (parallel reads), and a jal with register arguments.
+[[family]]
+name = "tilepro"
+language = "TILEPRO:LE:32:default"
+base = "0x10000"
+fixture = "crates/unlace-cli/tests/fixtures/tilepro/sum_swap_call.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "tilepro_load_loop_decompiles"
+address = "0x10000"
+expect = [
+    "v1 += *a0++;",  # lw + add with the post-incremented pointer
+    "} while (a1);",  # bnz closes the loop
+    "dat_1000 = v1;",  # moveli + sw
+]
+
+[[family.function]]
+test = "tilepro_parallel_swap_decompiles"
+address = "0x10040"
+expect = [
+    "return a1 - a0;",  # { move r0, r1 ; move r1, r0 } swaps before the sub
+]
+
+[[family.function]]
+test = "tilepro_call_with_register_arguments_decompiles"
+address = "0x10050"
+expect = [
+    "return sub_10040(7,5) << 2;",  # r0/r1 arguments, jal, and the r0 result
+]
+
 # The native TILE-Gx language decompiles a raw image of hand-assembled bundles:
 # a counted loop, a call with register arguments, a conditional move, a register
 # swap inside one bundle (parallel reads) and a bit-field extract.
@@ -1659,6 +1696,21 @@ expect = [
     "return a0;",
 ]
 
+# The Xbox 360 Xenon language decodes VMX128: two lvx128 loads into vr64/vr65, vaddfp128,
+# vmulfp128 and an stvx128 store (encoded from Xenia's VX128 formats, blr from powerpc-elf-as).
+[[family]]
+name = "ppc_xenon_vmx128"
+language = "PowerPC:BE:64:Xenon"
+base = "0x82000000"
+image = "ppc_xenon_vmx128"
+
+[[family.function]]
+test = "xenon_vmx128_vector_math_decompiles"
+address = "0x82000000"
+expect = [
+    "void sub_82000000(unsigned int a0,unsigned int a1,unsigned int a2)",
+    "*(char (*)[16])(a2 & 0xfffffff0) = vmx128_vmulfp(vmx128_vaddfp(",
+]
 # The S1C6200 (E0C6200) language decompiles 12-bit instructions in big-endian words, assembled
 # by hand from the core manual: a carry-tested add, a caller that CALLs it within the page,
 # and an add bracketed by SDF/RDF, which decodes with the decimal adjustment.

@@ -3179,7 +3179,10 @@ ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 runs right after `ActionConditionalExe` in the same group. A join block J
 qualifies when it ends in a CBRANCH, holds only MULTIEQUALs followed by
 integer and boolean ops it can evaluate, and every value it defines is read
-only inside J. For each in edge whose MULTIEQUAL inputs are constants (looking
+only inside J. No MULTIEQUAL of J may read a value J defines: such a value is
+carried around a loop back into J (a loop counter tested at the loop head), and
+a moved edge would skip the step that computes it, leaving the counter defined
+only in terms of itself. For each in edge whose MULTIEQUAL inputs are constants (looking
 through COPYs), `kuna_phithread.rs (decided_target)` evaluates J's ops and
 the branch (honouring the boolean flip). When the branch is decided, the edge
 is moved past J onto the taken successor T (`Funcdata::switch_edge`): J's
@@ -4729,7 +4732,12 @@ corpus hung against `collect_terms`. On `libCoreADI.so` (19 functions found)
 `egraph` changes 3 functions, one of them beyond `mba`:
 `(-((~a0 | 0x4cee331d) + (a0 | 0xb311cce2)) - 2 ^ 0x53a5c4e9) * K` becomes
 `(a0 ^ 0x1f4bf7f4) * K`. `/usr/bin/patchelf` (332 functions) and
-`/usr/bin/bzip2` (84) are unchanged, at the same CPU time within noise.
+`/usr/bin/bzip2` (84) are unchanged, but on 00d4db1c62 the patchelf run executes
+26.9% more instructions with the option on (144.6G vs 114.0G, pinned to one
+core, two runs each), all of it saturations that find nothing. Since then the
+rule remembers, per function, each tree it saturated without a replacement
+(its fingerprint, op count and budget) and does not saturate it again when
+the pool revisits the op.
 
 Example: `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, one substitution
 applied to the result of another, becomes `(x | y) + z`: the seed folds the

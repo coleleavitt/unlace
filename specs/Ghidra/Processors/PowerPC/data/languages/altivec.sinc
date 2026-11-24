@@ -1300,6 +1300,7 @@ define pcodeop altv300_69;
 define pcodeop altv300_70;
 define pcodeop altv300_71;
 
+@ifndef XENON
 #################
 # 2.07 additions
 :bcdadd. vrD,vrA,vrB,PS		is OP=4 & BIT_10=1 & XOP_0_8=1 & vrA & vrB & vrD & PS {
@@ -1850,3 +1851,4 @@ define pcodeop altv300_71;
 :vsrv vrD,vrA,vrB			is OP=4 & vrD & vrA & vrB & XOP_0_10=1796 {
 	vrD = altv300_71(vrA,vrB);
 }
+@endif

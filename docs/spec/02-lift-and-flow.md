@@ -4415,7 +4415,21 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `Clipper` | Fairchild/Intergraph CLIPPER C100/C300 | `clipper:LE:32:default` | written for unlace from the CLIPPER C300 data book, Apache-2.0 |
 | `ROMP` | IBM ROMP (RT PC) | `ROMP:BE:32:default` | written for unlace from the RT PC Hardware Technical Reference, Apache-2.0 |
 | `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
+| `Nova` | Data General Nova (Nova 1200/800/2, Nova 3, Nova 4) | `Nova:BE:16:default` | written for unlace from the DG Nova programmer's references, Apache-2.0 |
 <!-- vendor-rows -->
+
+### Data General Nova (#98)
+
+`specs/Ghidra/Processors/Nova` is a SLEIGH module written for unlace from Data
+General's Nova programmer's references (no prior SLEIGH existed):
+`Nova:BE:16:default`. Memory is word addressed. An operate instruction is one
+constructor per ALU function and shift: the carry out is a comparison, the
+17-bit rotate goes through carry, and the no-load flag and the skip condition
+are tested on the shifted result, so a `SUBZ#` with a carry skip folds to a C
+comparison. `JSR` links in AC3 and `JMP 0,3` returns; the Nova 3 `SAV`/`RET`
+frame lives on an upward-growing stack. Device I/O is a user op. Exercised by
+`unlace-cli/tests/nova_raw.rs` (hand-assembled add, unsigned max, page-zero
+load/store, rotate and Nova 3 frame-call routines decompile to the expected C).
 
 ### IBM ROMP (#98)
 
@@ -4548,6 +4562,9 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/v60.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
 | `M16C` (`M32C_80`) | Renesas M32C/80 (M16C/80 set plus `MUL.L`, `DIV*.L`, `SHANC.L`, `SHLNC.L`) | `M32C/80:LE:24:default` | Renesas M32C/80 Series Software Manual REJ09B0319; checked against `m32c-elf-as` 2.43.1 | `unlace-cli/tests/m32c_raw.rs` |
+| `Propeller` | Parallax Propeller 1 (P8X32A) cog | `propeller:LE:16:default` | Propeller Manual v1.2 assembly reference, P8X32A datasheet opcode matrix | `unlace-cli/tests/propeller_raw.rs` |
+| `MIPS` (MIPS-3D, SmartMIPS) | MIPS64 with MIPS-3D, MIPS32 with SmartMIPS (pre-R6 languages) | existing `MIPS:*:64:*` and `MIPS:*:32:*` pre-R6 languages | binutils MIPS opcode table (MIPS-3D/SmartMIPS rows), MIPS-3D (MD00099) and SmartMIPS ASE specifications; checked against `mips-elf-objdump` 2.43.1 | `unlace-cli/tests/mips_ase.rs` |
+| `NFP` | Netronome NFP-6xxx flow-processor microengine (ME v2.8, 8 contexts) | `NFP:LE:32:ME28` | binutils `opcodes/nfp-dis.c` and `include/opcode/nfp.h` field layouts; checked against binutils objdump (`elf64-nfp`) | `unlace-cli/tests/nfp_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -4744,6 +4761,28 @@ unchanged. A raw `evlbbsplatbx r3,r3,r4; evaddd r3,r3,r5; blr` decompiles to
 `return *(unsigned char *)(a0 + a1) * 0x101010101010101ULL + a2;`. Exercised by
 `unlace-cli/tests/ppc_spe2.rs`; gaps (record-form CR updates, encodings binutils
 rejects) in `specs/Ghidra/Processors/PowerPC/README.md`.
+
+### MIPS-3D and SmartMIPS (#98)
+
+`mips3d.sinc` (included by `mips64be`/`mips64le`, so every pre-R6 MIPS64 language with
+64-bit FPRs) decodes the MIPS-3D ASE and `smartmips.sinc` (included by
+`mips32be`/`mips32le`) the SmartMIPS ASE, from the binutils opcode rows and the
+MIPS-3D and SmartMIPS specifications. Both occupy encodings reserved in the base ISA
+and require `REL6=0`, so no existing decode changes. MIPS-3D lifts exactly:
+`addr.ps`/`mulr.ps` reduce each source pair, `recip1`/`rsqrt1` are modelled as the
+full-precision reciprocal and reciprocal square root, `recip2` is `-(fs*ft - 1)`
+and `rsqrt2` half that, `cabs.cond` compares absolute values into condition code
+`cc` (PS: `cc` lower, `cc+1` upper; code n is FCSR bit 23 for n = 0, else 24 + n),
+`bc1any2`/`bc1any4` branch with a delay slot when any of 2 or 4 consecutive codes
+matches, and `cvt.ps.pw`/`cvt.pw.ps` convert each lane. SmartMIPS adds an 8-bit
+`ACX` register: `lwxs` loads from `base + 4*index`, `mflhxu`/`mtlhx` shift LO, HI
+and ACX, `multp`/`maddp` write or xor a GF(2) product (pcodeop `smartmips_multp`)
+into HI/LO and `pperm` is a pcodeop. Before, these words were bad instructions or
+opaque `SPECIAL2` placeholders. A raw `lwxs $2,$5($4)` decompiles to
+`return *(unsigned int *)(a0 + a1 * 4);`. Exercised by `unlace-cli/tests/mips_ase.rs`
+(probes of every row agreeing with `mips-elf-objdump`); gaps (ACX carry from the base
+multiply-accumulates, Toshiba TX19A whose encodings are not publicly documented) in
+`specs/Ghidra/Processors/MIPS/README.md`.
 
 ### RISC-V Zacas register pairs (#98)
 
@@ -5094,6 +5133,53 @@ its register, so each floating-point register is listed as its short view and
 then whole. The caller's 160-byte register save area at `0(r15)` is in the
 callee's local range, because the callee's prologue stores into it.
 Exercised by `tests/stages/kuna-s390x.xml`.
+
+### x86-64 lifter fixes from differential fuzzing
+
+`tools/difffuzz` (see `docs/difffuzz.md`) runs single x86-64 instructions through the
+SLEIGH p-code and through Unicorn from the same register state; each disagreement below was
+confirmed on hardware before the spec changed.
+
+- A 32-bit register destination clears bits 63:32 in 64-bit mode. `ia.sinc`, `lockable.sinc`,
+  `avx.sinc`, `avx512.sinc`, `avx512_manual.sinc` and `rdrand.sinc` now build
+  `check_Reg32_dest` (or `check_Rmr32_dest`) for `XADD m32,r32`, `XCHG m32,r32`,
+  `MOVBE r32,m32`, `MOVMSKPS`/`MOVMSKPD`, MMX `PEXTRW`, `LSL`, `RDRAND`/`RDSEED r32`,
+  the VEX and EVEX `VCVT[T]SS2SI`/`VCVT[T]SD2SI`/`VCVT[T]S[SDH]2USI`/`VCVT[T]SH2SI`,
+  `VMOVMSKPS`/`VMOVMSKPD`, `VPEXTRW` and `KMOV[BWD] r32`; before, `lock xadd [rdi],eax`
+  left the old upper half of RAX in place.
+- `MOV r32,Sreg` and `MOV r64,Sreg` (`8C` with a register operand) zero-extend the selector
+  into the whole register; only the 16-bit form writes 16 bits.
+- `90` with a REX prefix that lacks REX.B (`44 90`, `4C 90`, ...) is `NOP`, not
+  `XCHG EAX,EAX` (which zeroed the top of RAX).
+- The hint-NOP rows `0F 18`..`0F 1F` decode with REX.W (`NOP rm64`).
+- A repeated `66` prefix changes nothing: before, the second one toggled the operand size
+  back, so `66 66 35 imm16` decoded as a 7-byte `XOR EAX,imm32`.
+- `EXTRQ xmm,xmm` reads the bit index from bits 13:8 of the control register (it read 11:6),
+  and `EXTRQ`/`INSERTQ` treat a field length of 0 as 64, as the AMD APM defines.
+
+### AArch64 lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz` against Unicorn and checked against the Arm ARM.
+
+- `LDRSB`/`LDRSH` into a W register (immediate, register, unscaled and unprivileged forms in
+  `AARCH64base.sinc`) sign-extend the value to 32 bits and zero-extend that into the X register;
+  before, the immediate and register forms sign-extended to 64 bits and `LDURSB`/`LDTRSB` W
+  zero-extended the byte.
+- A write to a B, H, S or D register or to a 64-bit vector arrangement clears the rest of the Z
+  register. 395 constructors in `AARCH64neon.sinc` that named `Zd` but never called
+  `zext_zb`/`zext_zh`/`zext_zs`/`zext_zd` (scalar FP arithmetic and min/max, `FMADD`/`FMSUB`,
+  `BSL`/`BIT`/`BIF`, `EXT`, the saturating, rounding and narrowing shifts, the across-lanes
+  reductions, ...) now do, as do the 41 `LD1`..`LD4` and `LD1R`..`LD4R` constructors in
+  `AARCH64ldst.sinc` with 64-bit arrangements (one `zext_zd` per loaded register).
+- The fixed-point `FCVTZU d,d,#fbits` and `FCVTZU h,h,#fbits`, `SCVTF`/`UCVTF` `.4H`/`.8H`
+  `#fbits` and scalar `URSHR d,d,#shift` decode their shift with the element size of the
+  destination (`Imm_shr_imm64`/`Imm_shr_imm16`); `fcvtzu d22,d5,#50` printed `#-0xe`.
+
+### RISC-V compressed indirect jumps clear bit 0
+
+`c.jr`, `c.jalr` and `ret` (`riscv.rvc.sinc`) expand to `jalr`, which clears bit 0 of the
+target; they now jump to `rs1 & ~1` as the `jalr` constructors in `riscv.rv32i.sinc` already
+did. Found by `tools/difffuzz`.
 
 ## 2.9 Go stack-growth prologue folding
 

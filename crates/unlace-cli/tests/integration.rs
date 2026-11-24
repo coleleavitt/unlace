@@ -46,14 +46,20 @@ mod m88k_raw;
 mod mep;
 #[path = "meta_raw.rs"]
 mod meta_raw;
+#[path = "mips_ase.rs"]
+mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "moxie_raw.rs"]
 mod moxie_raw;
+#[path = "nfp_raw.rs"]
+mod nfp_raw;
 #[path = "nios2_raw.rs"]
 mod nios2_raw;
 #[path = "pdp11_raw.rs"]
 mod pdp11_raw;
+#[path = "propeller_raw.rs"]
+mod propeller_raw;
 #[path = "rabbit_raw.rs"]
 mod rabbit_raw;
 #[path = "v60.rs"]
@@ -69,6 +75,8 @@ mod aarch64_sve2;
 mod cdp1802_raw;
 #[path = "i4004_raw.rs"]
 mod i4004_raw;
+#[path = "nova_raw.rs"]
+mod nova_raw;
 #[path = "ppc_spe2.rs"]
 mod ppc_spe2;
 #[path = "return_branch_cli.rs"]

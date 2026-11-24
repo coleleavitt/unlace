@@ -1,8 +1,12 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
+#[path = "amdgpu_raw.rs"]
+mod amdgpu_raw;
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
 #[path = "chip8.rs"]
 mod chip8;
+#[path = "cpython_raw.rs"]
+mod cpython_raw;
 mod common;
 #[path = "evm.rs"]
 mod evm;
@@ -12,6 +16,8 @@ mod hexagon_hmx;
 mod huc6280;
 #[path = "konami.rs"]
 mod konami;
+#[path = "kvx_raw.rs"]
+mod kvx_raw;
 #[path = "lua54.rs"]
 mod lua54;
 #[path = "m6800_family.rs"]
@@ -23,10 +29,6 @@ mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 
-#[path = "v60.rs"]
-mod v60;
-#[path = "vax.rs"]
-mod vax;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
@@ -1061,6 +1063,8 @@ mod typelib;
 
 #[path = "calleeargsmsvc_cli.rs"]
 mod calleeargsmsvc_cli;
+#[path = "importcache_cli.rs"]
+mod importcache_cli;
 #[path = "msvccookie_return_cli.rs"]
 mod msvccookie_return_cli;
 #[path = "msvcexport_cli.rs"]

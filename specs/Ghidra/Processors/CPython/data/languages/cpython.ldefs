@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="CPython"
+            endian="little"
+            size="32"
+            variant="3.12"
+            version="1.0"
+            slafile="cpython312.sla"
+            processorspec="cpython.pspec"
+            id="CPython:LE:32:3.12">
+    <description>CPython 3.12 bytecode (one code object's co_code)</description>
+    <compiler name="default" spec="cpython.cspec" id="default"/>
+  </language>
+</language_definitions>

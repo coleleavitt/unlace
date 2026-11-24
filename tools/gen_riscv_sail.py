@@ -339,11 +339,15 @@ class Model:
         if m:
             self.vals[m.group(1)] = m.group(2).strip()
             return
-        m = re.match(r'function\s+(\w+)\s*\((.*?)\)\s*(?:->\s*[^=]*)?=\s*(.*)$', it, re.S)
+        m = re.match(r'function\s+(\w+)\s*\((.*?)\)\s*(?:->\s*([^=]*))?=\s*(.*)$', it, re.S)
         if m and m.group(1) not in ('clause',):
             params = [a.split(':')[0].strip() for a in m.group(2).split(',') if a.strip()]
+            if m.group(3) and m.group(1) not in self.vals:
+                ptys = [a.split(':', 1)[1].strip() for a in m.group(2).split(',') if ':' in a]
+                if len(ptys) == len(params):
+                    self.vals[m.group(1)] = '(%s) -> %s' % (', '.join(ptys), m.group(3).strip())
             try:
-                self.funcs[m.group(1)] = (params, P(m.group(3)).expr())
+                self.funcs[m.group(1)] = (params, P(m.group(4)).expr())
             except SailError:
                 pass
             return
@@ -949,6 +953,11 @@ class Compiler:
             return self.coerce(v, want)
         if f == 'unsigned':
             return self.to_int(self.expr(args[0], env, None))
+        if f == 'bit_to_bool':
+            v = self.expr(args[0], env, None)
+            if isinstance(v, C):
+                return C(bool(v.v), None, 'bool')
+            return self.tmp(1, '%s != 0' % self.fit(v, self.size(v)), 'bool')
         if f in ('bool_to_bit', 'bool_to_bits'):
             v = self.cond(args[0], env)
             if isinstance(v, C):
@@ -976,6 +985,17 @@ class Compiler:
             return self.tmp(INT_W, 'popcount(%s)' % low.name, 'int')
         if f in self.m.funcs:
             return self.inline(f, args, env, want)
+        if f in self.m.vals and f not in self.m.maps:
+            vals = [self.expr(a, env, None) for a in args]
+            sig = re.sub(r'^forall[^.]*\.\s*', '', self.m.vals[f], flags=re.S)
+            fenv = {}
+            m = re.match(r'^\((.*)\)\s*->\s*(.*)$', sig, re.S) or re.match(r'^(.*?)\s*->\s*(.*)$', sig, re.S)
+            if m:
+                for pt, v in zip(split_top(m.group(1)), vals):
+                    tm = re.match(r"^bits\s*\(\s*('\w+)\s*\)$", pt.strip())
+                    if tm and v.kind == 'bits' and v.w:
+                        fenv[tm.group(1)] = C(v.w, None, 'int')
+            return self.pcodeop(f, vals, sig, fenv, want)
         if f in self.m.maps:
             a = self.expr(args[0], env, None)
             for l, r in self.m.maps[f]:
@@ -1008,7 +1028,7 @@ class Compiler:
             if len(self.lines) - len(saved[0]) > self.budget:
                 raise Budget()
             return r
-        except Budget:
+        except (Budget, Unsupported):
             self.lines, self.ntmp, self.nlab, self.depth = saved[0], saved[1], saved[2], saved[3]
             return self.pcodeop(f, vals, sig, fenv, want)
 
@@ -1089,6 +1109,7 @@ class Gen:
         self.budget = budget
         self.opaque = set(opaque)
         self.parts = {}
+        self.reserved = set()
         self.report = {'constructors': [], 'skipped': [], 'pcodeops': []}
 
     def arg_types(self, ctor):
@@ -1140,6 +1161,8 @@ class Gen:
                 layout.append(('reg', pos - w, pos - 1, p[2][0][1]))
             elif p[0] == 'call' and p[1] in self.m.maps:
                 rbits = self.m.maps[p[1]][0][1]
+                if rbits[0] != 'bits':
+                    raise Unsupported('encoding mapping %s' % p[1])
                 w = rbits[2]
                 layout.append(('map', pos - w, pos - 1, (p[1], p[2][0][1])))
             elif p[0] == 'id':
@@ -1186,7 +1209,7 @@ class Gen:
         for combo in combos:
             yield from self.one(ctor, largs, types, names, layout, guard, combo, xlen, comp, asm_args, asm_pieces, exec_args, body)
 
-    def one(self, ctor, largs, types, names, layout, guard, combo, xlen, comp, asm_args, asm_pieces, exec_args, body):
+    def one(self, ctor, largs, types, names, layout, guard, combo, xlen, comp, asm_args, asm_pieces, exec_args, body, alt=None):
         genv = {}
         fixedval = {}
         for i, a in combo.items():
@@ -1225,10 +1248,18 @@ class Gen:
             elif kind == 'reg':
                 if lo not in REG_AT:
                     raise Unsupported('register field at bit %d' % lo)
-        if guard is not None:
+        if guard is not None and alt is None:
+            if ctor in self.reserved:
+                guard = drop_field_terms(guard, set(operand_fields))
             gw = self.guard_ok(guard, genv, operand_fields, names, comp, fixed)
             if gw is False:
                 return
+            if isinstance(gw, list):
+                for extra in gw:
+                    yield from self.one(ctor, largs, types, names, layout, guard, combo, xlen, comp, asm_args, asm_pieces, exec_args, body, alt=extra)
+                return
+        if alt:
+            fixed.update(alt)
         # operands
         env = {}
         regs = {}
@@ -1265,7 +1296,14 @@ class Gen:
         if mnem in self.opaque or ctor in self.opaque:
             op = mnem.replace('.', '_')
             comp.pcodeops.add(op)
-            comp.emit('%s = %s(%s);' % (ops[0], op, ', '.join(ops[1:])))
+            widths = {n: tw for n, w, tw in imm.values()}
+            args = []
+            for o in ops[1:]:
+                if o in widths:
+                    args.append(comp.tmp(widths[o], o).name)
+                else:
+                    args.append(o)
+            comp.emit('%s = %s(%s);' % (ops[0], op, ', '.join(args)))
         else:
             comp.expr(body, ex_env, None)
         lines = comp.lines
@@ -1317,7 +1355,21 @@ class Gen:
         for v in allowed:
             const_mask &= ~(v ^ allowed[0])
         if len(allowed) != 1 << (w - bin(const_mask).count('1')):
-            raise Unsupported('guard on %s is not a cube' % f)
+            # several cubes: split on the top free bit until each half is
+            # a whole cube; each becomes a constructor with those bits fixed
+            # and the operand left whole
+            alts = []
+            def split(vals, top):
+                free = top
+                if len(vals) == 1 << free:
+                    alts.append({lo + b: (vals[0] >> b) & 1 for b in range(free, w)})
+                    return
+                bit = free - 1
+                for half in ([v for v in vals if not v >> bit & 1], [v for v in vals if v >> bit & 1]):
+                    if half:
+                        split(half, bit)
+            split(sorted(allowed), w)
+            return alts
         top = 0
         while top < w and const_mask >> (w - 1 - top) & 1 and not (allowed[0] >> (w - 1 - top)) & 1:
             top += 1
@@ -1362,6 +1414,22 @@ class Gen:
             else:
                 raise Unsupported('assembly function %s' % f)
         return mnem, ops
+
+def drop_field_terms(e, fields):
+    """The guard with every comparison that mentions an operand field taken as true."""
+    def mentions(x):
+        if isinstance(x, tuple):
+            if x and x[0] == 'id' and x[1] in fields:
+                return True
+            return any(mentions(y) for y in x if isinstance(y, (tuple, list)))
+        if isinstance(x, list):
+            return any(mentions(y) for y in x)
+        return False
+    if e[0] == 'bin' and e[1] in ('&', '|'):
+        return ('bin', e[1], drop_field_terms(e[2], fields), drop_field_terms(e[3], fields))
+    if mentions(e):
+        return ('bool', True)
+    return e
 
 def guard_eval(comp, e, env):
     k = e[0]
@@ -1491,6 +1559,7 @@ def main():
     ap.add_argument('--exts', default='', help='riscv-opcodes files to check (rv_zba,rv64_zba,...)')
     ap.add_argument('--report', help='write a JSON report here')
     ap.add_argument('--source-rev', default='', help='source revisions to record in the header')
+    ap.add_argument('--decode-reserved', default='', help='Sail constructors whose encdec guard is ignored, so reserved operand values decode as LLVM and GNU decode them (AES64KS1I,...)')
     ap.add_argument('--opaque', default='', help='mnemonics or Sail constructors to lift to a user pcodeop named after the mnemonic instead (orc.b,ORCB,...)')
     a = ap.parse_args()
     model = Model()
@@ -1505,11 +1574,13 @@ def main():
     for f in files:
         base = os.path.dirname(os.path.join(a.sail, f))
         for fn in sorted(os.listdir(base)):
-            if fn.endswith('_types.sail'):
-                model.load(os.path.join(base, fn), False)
+            path = os.path.join(base, fn)
+            if fn.endswith('.sail') and os.path.relpath(path, a.sail) not in files:
+                model.load(path, False)
     for f in files:
         model.load(os.path.join(a.sail, f), True)
     gen = Gen(model, load_tokens(a.tokens), a.budget, [x for x in a.opaque.split(',') if x])
+    gen.reserved = {x for x in a.decode_reserved.split(',') if x}
     res = {}
     ops = set()
     for xlen in (32, 64):

@@ -5,7 +5,7 @@
 //! validation core) produce their exact bytes with no program loaded — that is
 //! what these tests pin. The `phase catalog` test compares against the **W4
 //! byte-compatible emitter** directly (`emit_catalog_json` /
-//! `emit_catalog_json_one`), which `tests/stages/kuna-catalog.xml`
+//! `emit_catalog_json_one`), which `tests/stages/kuna-catalog.toml`
 //! string-matches against the C++ binary, so reproducing the emitter output is
 //! the load-bearing contract.
 //!
@@ -409,7 +409,7 @@ fn region_commands_without_function_are_no_function_selected() {
 // `&Architecture`'s option flags; constructing a real `Architecture` requires a
 // loaded `Sleigh` spec (impractical in a console unit test, and no console test
 // builds one). Its `current`-field contribution to `phase catalog` is exercised
-// at the integration level by `tests/stages/kuna-catalog.xml` (which loads a
+// at the integration level by `tests/stages/kuna-catalog.toml` (which loads a
 // real program and string-matches the `current` values); the function itself is
 // a direct field-read transcription of the C++ `kunaLiveValue` switch.
 
@@ -421,7 +421,7 @@ fn region_commands_without_function_are_no_function_selected() {
 // KUNA-CONSOLE #5 contract `stage map force goto`), the `kassert` guard
 // precedence (image check BEFORE tokenizing), and the `phase catalog`
 // single-option live-value join vs the no-program path (exact bytes the
-// `kuna.catalog` parser + `tests/stages/kuna-catalog.xml` depend on).
+// `kuna.catalog` parser + `tests/stages/kuna-catalog.toml` depend on).
 // ===========================================================================
 
 /// `stage map force goto` — the C++ token-join loop

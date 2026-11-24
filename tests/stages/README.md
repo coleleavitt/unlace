@@ -1,5 +1,65 @@
 # Stage-model issue testcases
 
+## Writing a stage test: TOML
+
+A stage test is a `.toml` file here (older ones are Ghidra-style `<decompilertest>` XML; the
+vendored `tests/datatests` corpus stays XML). Both run through the same datatest runner
+(`cargo test -p unlace-harness --test parity stage_tests`, or `decomp_test_dbg`):
+
+```toml
+# What the test checks and why (comments are free).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'gh558' },
+]
+
+[[image.bytes]]                 # one per <bytechunk>; hex is whole bytes, whitespace ignored
+space = 'ram'
+offset = '0x100000'
+readonly = true                 # optional
+hex = '83ff087f06b801000000c331c0c3'
+
+[script]
+commands = [
+    'parse line extern int4 gh558(int4 x);',
+    'lo fu gh558',
+    { com = 'option nosuch on', expect_error = true },   # a command expected to fail
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'GH558 #1: the guard compares against 8'   # the assertion's name, as in the summary
+count = 1                       # or: min = 1 / max = 3
+literal = 'if (8 < x)'          # a substring of one output line
+# regex = 'if \(8 < x\)'        # or a <stringmatch>-dialect regex
+# literal = ['first line', 'next line']   # a list matches consecutive lines
+```
+
+- Exactly one of `literal` and `regex`; `count`, or both `min` and `max`. Unknown keys are
+  errors, so a misspelt key fails the file instead of being ignored.
+- A count may be computed from the compiled option catalog, so registry totals never need
+  hand-bumping: `count = { settables = { change_kind = "opt-in-tool" }, plus = 1 }` is the number
+  of `phases.toml` settables whose fields equal every given value (`option`, `values`,
+  `default`, `subphase`, `issue`, `source_decompiler`, `inspiration`, `change_kind`,
+  `tier`, `destructive`), plus `plus`; `settables = {}` counts every row.
+  `kuna-catalog.toml` uses it for its bucket totals.
+- **A TOML test is its own baseline.** Every assertion in it must pass; its names are not in
+  `docs/baseline-stages.json`, which keeps only the XML files' passing assertions. Adding a TOML
+  stage test therefore touches no baseline (the corpus count in `unlace-base/src/xml.rs` still
+  counts it). An edit to an existing `[[match]]` needs an `Assertion-change:` trailer
+  (`scripts/prepr/difflint.py`).
+- `python3 scripts/stage_toml.py` converts XML stage tests losslessly (comments included), drops
+  their keys from the baseline and rewrites Markdown references; `--list` shows which files stay
+  XML and why (a test, a golden vector or a script names them). After converting, check each
+  TOML file loads exactly like its XML at `HEAD`:
+  `cargo test -p unlace-harness --test parity -- --ignored converted`.
+
+## The tests
+
 `kuna-dex.xml` loads the committed DEX fixture (`fixtures/dex/hello.dex`, built
 from `fixtures/dex/Hello.java` as its header says) and checks the Java output
 with `dexmodel` and `jumpassist` off and on. `kuna-dex-apk.xml` loads
@@ -34,12 +94,12 @@ caller builds in `x8` for a hidden `pacda` is not the next call's first
 argument, with the modifier computed and folded to a constant. A tagged
 address and a result buffer in `x8` are the controls.
 
-`ghangr-go-paniccheck-return.xml` checks that a returning Go panic helper
+`ghangr-go-paniccheck-return.toml` checks that a returning Go panic helper
 falls through to the terminal `runtime.gopanic` call. It also checks the
 helper's conditional throw and shows the caller's sentinel with the known
 no-return analysis disabled.
 
-`ghangr-go-mcall-resumption.xml` checks the continuation after a Go scheduler
+`ghangr-go-mcall-resumption.toml` checks the continuation after a Go scheduler
 switch, independent terminal propagation through a lookalike wrapper, and
 explicit function and call-site overrides.
 
@@ -64,7 +124,7 @@ compare reads a zero-extended byte) and a nested max loop stay loops, and
 including old-value, flag, branch, memory-effect and width refusals. The same
 bytes retain C/Rust rendering and the non-Go source control.
 
-`ghangr-go-abi0-model.xml` checks recovery of a Go stack-input leaf and the
+`ghangr-go-abi0-model.toml` checks recovery of a Go stack-input leaf and the
 arguments passed by both call orders. It also checks the disabled option,
 an ordinary name lookalike, a wrapper with stack results, the signal
 trampoline and two linked runtime functions with private or foreign exits.
@@ -113,11 +173,11 @@ computed call instead of a switch with a `case` label for each value of `x`.
 block becomes straight-line code with the "all go to same destination" warning
 instead of a `switch` with only a `default` arm.
 
-`ghangr-call-argument-extensions.xml` checks explicit and missing parameter
+`ghangr-call-argument-extensions.toml` checks explicit and missing parameter
 contracts. The CLI companion executes complete emitted C, Go and Rust callers
 and callees, covering zero extension, sign extension, signedness and store canaries.
 
-`ghangr-rust-boolean-expressions.xml` checks bitwise expressions over merged
+`ghangr-rust-boolean-expressions.toml` checks bitwise expressions over merged
 Boolean locals. Its CLI companion executes complete emitted C and Rust functions
 against independent result formulas, callback traces and store canaries at O0/O2.
 
@@ -126,7 +186,7 @@ controls for narrowed scalar calls. The CLI probes exercise callee-first recover
 the native companion compiles and executes complete emitted C, Go and Rust callees
 and callers across signed, unsigned, Boolean and full-width results.
 
-`ghangr-rust-boolean-conversions.xml` checks byte-to-Boolean casts, masked values
+`ghangr-rust-boolean-conversions.toml` checks byte-to-Boolean casts, masked values
 and narrowed callback results. Its CLI companion compiles complete C and Rust
 output under the same asserted prototypes and checks every byte value and call
 counts. The original fixture is only decompiled.
@@ -244,11 +304,11 @@ writeup, not here.
 
 | `gh8790-x86-prefetch-regform.xml` | [GH-8790](https://github.com/NationalSecurityAgency/ghidra/issues/8790) | S1 decode-table (x86 spec-fix, no option) | SLEIGH prefetch `0f 0d`/`0f 18` gain a mod=3 register-form variant |
 
-| `gh1627-x86-senduipi-gatherpf.xml` | [Kuna #1627](https://github.com/Noelo-Lab/kuna/issues/1627) | S1 decode-table / S2 p-code lift (x86 spec-fix, no option) | `F3 0F C7 /6` reg-form is `SENDUIPI r64` (was RDRAND), with `UIRET`/`TESTUI`/`CLUI`/`STUI` in `uintr.sinc`; RIP-relative `0F 18 /7`,`/6` are `PREFETCHIT0/1`; `VGATHERPF*` use the VSIB operand tables so the index is a ZMM/YMM register and the user-op takes an address |
+| `gh1627-x86-senduipi-gatherpf.toml` | [Kuna #1627](https://github.com/Noelo-Lab/kuna/issues/1627) | S1 decode-table / S2 p-code lift (x86 spec-fix, no option) | `F3 0F C7 /6` reg-form is `SENDUIPI r64` (was RDRAND), with `UIRET`/`TESTUI`/`CLUI`/`STUI` in `uintr.sinc`; RIP-relative `0F 18 /7`,`/6` are `PREFETCHIT0/1`; `VGATHERPF*` use the VSIB operand tables so the index is a ZMM/YMM register and the user-op takes an address |
 
-| `gh1628-x86-vmx-decode-flags.xml` | [Kuna #1628](https://github.com/Noelo-Lab/kuna/issues/1628) | S1 decode-table / S2 p-code lift (x86 spec-fix, no option) | `VMREAD`/`VMWRITE` decode without REX.W in 64-bit mode; every VMX user-op returns its status (0/1/2) and `vmxflags` sets ZF/CF from it, so `setna` after `vmlaunch` reads the VMX outcome; `VMPTRST` stores the VMCS pointer |
+| `gh1628-x86-vmx-decode-flags.toml` | [Kuna #1628](https://github.com/Noelo-Lab/kuna/issues/1628) | S1 decode-table / S2 p-code lift (x86 spec-fix, no option) | `VMREAD`/`VMWRITE` decode without REX.W in 64-bit mode; every VMX user-op returns its status (0/1/2) and `vmxflags` sets ZF/CF from it, so `setna` after `vmlaunch` reads the VMX outcome; `VMPTRST` stores the VMCS pointer |
 
-| `gh1674-subpiece-shadow-wide-const.xml` | [Kuna #1674](https://github.com/Noelo-Lab/kuna/issues/1674) | P6 merge (cover intersection, partial copy shadow; no option) | a constant truncated by 8 or more bytes reads 0 instead of shifting a 64-bit offset by 64 or more bits, so the function decompiles in a build with overflow checks |
+| `gh1674-subpiece-shadow-wide-const.toml` | [Kuna #1674](https://github.com/Noelo-Lab/kuna/issues/1674) | P6 merge (cover intersection, partial copy shadow; no option) | a constant truncated by 8 or more bytes reads 0 instead of shifting a 64-bit offset by 64 or more bits, so the function decompiles in a build with overflow checks |
 
 | `gh9184-x86-fma-ymm256.xml` | [GH-9184](https://github.com/NationalSecurityAgency/ghidra/issues/9184) | S1/S2 decode + pcode-semantics (x86 spec-fix, no option) | SLEIGH YMM FMA uses 256-bit `local tmp:32` (was `tmp:16`) |
 
@@ -267,7 +327,7 @@ writeup, not here.
 | `gh6389-8085-undoc.xml` | [GH-6389](https://github.com/NationalSecurityAgency/ghidra/issues/6389) | S1 decode-table (8085 spec-fix, no option) | Nine undocumented 8085 instructions (DSUB/ARHL/RDEL/LDSI/SHLX/LHLX/RSTV/JNK/JK) now decode |
 
 | `gh7451-riscvzfaflis.xml` | [GH-7451](https://github.com/NationalSecurityAgency/ghidra/issues/7451) | S1 decode-table (RISCV spec-fix, no option) | SLEIGH adds Zfa `fli.s` (constant table + `fli` pcodeop) |
-| `gh831-riscv-fpmove.xml`, `gh831-riscv32-fpmove.xml` | [Kuna #831](https://github.com/Noelo-Lab/kuna/issues/831) | P2 p-code lift (RISCV spec-fix, no option) | `fmv.x.d`/`fmv.x.w` read the FP register itself, and `fmv.x.w`/`fcvt.w*` write the integer register (sign-extended on RV64) |
+| `gh831-riscv-fpmove.toml`, `gh831-riscv32-fpmove.toml` | [Kuna #831](https://github.com/Noelo-Lab/kuna/issues/831) | P2 p-code lift (RISCV spec-fix, no option) | `fmv.x.d`/`fmv.x.w` read the FP register itself, and `fmv.x.w`/`fcvt.w*` write the integer register (sign-extended on RV64) |
 | `kuna-arcv2-zeroloop.xml` | [Kuna #1632](https://github.com/Noelo-Lab/kuna/issues/1632) | P1 decode / P2 p-code lift (new ARCv2 SLEIGH language, no option) | an `-mcpu=em4 -O2` zero-overhead loop (`lp`) decompiles as a `do .. while` over `lp_count`: `lp` marks its end address in the decode context and the instruction there branches back; a loop that ends on a `bl.d` keeps one callee; long immediates and delay slots |
 | `kuna-fcvtround-a64.xml` | [Kuna #1535](https://github.com/Noelo-Lab/kuna/issues/1535) | P2 p-code lift (AArch64 spec-fix, no option) + P5 typing of its rounding user ops (`p5_types/kuna_roundingops.rs`) | `fcvt{a,m,n,p}{s,u}` and `frint*` round in their own mode (`FLOAT_FLOOR`/`FLOAT_CEIL`/`FLOAT_ROUND`, typed `FLOAT_ROUNDEVEN`/`FLOAT_TRUNC`/`FLOAT_RINT`/`FLOAT_NEARBYINT`), so the issue's floor/ceil interpolation branch survives; `frint32/64*` zero the register bits above the result |
 | `kuna-pacflow-a64.xml` | [Kuna #1621](https://github.com/Noelo-Lab/kuna/issues/1621) | P2 p-code lift (AArch64 spec-fix, no option) | with `ShowPAC=0` a `pac*`/`aut*`/`xpac*` that writes a general register lifts to a pass-through copy (`Rd = Rd`) instead of nothing, so a function whose only write to `x0` is the signing returns its pointer instead of decompiling as `void`; the `x30`/`sp` and branch forms stay empty |
@@ -378,8 +438,8 @@ writeup, not here.
 | `ghdec-elfgotcall.xml` | an ELF `-fno-plt` call `call *slot(%rip)` through a `.got` GLOB_DAT slot no PLT stub fronts kept no name and no no-return flow effect, so `abort()`/`exit()` ran on into the next function (authored C, gcc -O2 -fPIC -pie -fno-plt, fixture `elf_got_noreturn_x86_64`) | P1 program-prep, external-refinement (`loader/elf_plt.rs` names the `.got` slots of undefined function symbols, `loader/kuna_peimportcall.rs` paints them `externref`; the deindirect restart clears the warnings of the pass it replaces) | `option peimportcall on\|off`; a `.data.rel.ro` function-pointer table stays a table in both passes |
 | `ghdec-noreturnnames.xml` | a call to a function a public header or source declares no-return (glibc `_Exit`/`thrd_exit`, libstdc++ `std::rethrow_exception`, any Rust panic helper under v0 mangling) kept its fall-through, because the vendored lists lacked the name or matched only legacy Rust symbols (authored C++ and `no_std` Rust, fixtures `noreturn_names_x86_64` and `rust_noreturn_v0_x86_64`) | P1 program-prep, external-refinement (`loader/noreturn.rs` and the lists under `unlace-analysis/data/`; Rust entries matched by demangled path) | `option noreturn_known on\|off` (pass 1 also sets `noreturn_extern` and `noreturn_externmatch` off) |
 | `ghdec-undefname.xml` | decbench `O2-tar-tar-xstrcat` (filed as `O2-noinline-iproute2-ip`), NOVEL pool (invalid C: an identifier containing `$$`, and one stack Symbol split across two identifiers so the body reads a name nothing writes) | P6 variable & storage model, local naming (the `ActionNameVars` tail wires upstream's `assignDefaultNames` catch-all and re-reads the Symbol names the HighVariable caches froze too early; correctness fix, no option) | default (DIV-58: no `$$undef` placeholder survives the naming pass); pass 2 (`option dedupvardecls off`) pins that neither witness depends on the P9 declaration collapse |
-| `gh180-implied-cover-scarry.xml` | kuna [GH-180](https://github.com/Noelo-Lab/kuna/issues/180) (grep -O2 `nlscan`: `v3 = v3 + v1; if (SCARRY8(v3,v1))` tested the POST-add value; the pre-add SCARRY input and the ADD output merged into one HighVariable) | P6 variable & storage model, explicit/implied marking + merge legality (`ActionMarkImplied` goes through `Merge::mark_implied` so implied-marking dirties the operand Covers and the pre-add/post-add merge is illegal; correctness fix restoring upstream, no option, shipped with DIV-47) | default, single pass: the SCARRY8/CARRY8 guards keep their PRE-add operands and the collapsed self-update-then-test rendering does not appear |
-| `gh181-snipreads-indirect.xml` | kuna [GH-181](https://github.com/Noelo-Lab/kuna/issues/181) (libselinux -O2 `lsetfilecon_raw`: the out-parameter copy `v1 = v4;` printed ABOVE the `lgetfilecon_raw(a0,&v4)` call that fills the slot, so `freecon(v1)` freed the pre-call NULL) | P6 variable & storage model, cover-trim insertion + foldcallret order-safety (`Merge::snip_reads` places an INDIRECT-defined value's trim COPY after the op CAUSING the effect per upstream merge.cc:461, and `foldcallret` refuses to sink a call past a read of its own INDIRECT output; correctness fixes, no option) | default pass proves both fixes; pass 2 (`option foldcallret off`) isolates the p-code-level snipReads fix |
+| `gh180-implied-cover-scarry.toml` | kuna [GH-180](https://github.com/Noelo-Lab/kuna/issues/180) (grep -O2 `nlscan`: `v3 = v3 + v1; if (SCARRY8(v3,v1))` tested the POST-add value; the pre-add SCARRY input and the ADD output merged into one HighVariable) | P6 variable & storage model, explicit/implied marking + merge legality (`ActionMarkImplied` goes through `Merge::mark_implied` so implied-marking dirties the operand Covers and the pre-add/post-add merge is illegal; correctness fix restoring upstream, no option, shipped with DIV-47) | default, single pass: the SCARRY8/CARRY8 guards keep their PRE-add operands and the collapsed self-update-then-test rendering does not appear |
+| `gh181-snipreads-indirect.toml` | kuna [GH-181](https://github.com/Noelo-Lab/kuna/issues/181) (libselinux -O2 `lsetfilecon_raw`: the out-parameter copy `v1 = v4;` printed ABOVE the `lgetfilecon_raw(a0,&v4)` call that fills the slot, so `freecon(v1)` freed the pre-call NULL) | P6 variable & storage model, cover-trim insertion + foldcallret order-safety (`Merge::snip_reads` places an INDIRECT-defined value's trim COPY after the op CAUSING the effect per upstream merge.cc:461, and `foldcallret` refuses to sink a call past a read of its own INDIRECT output; correctness fixes, no option) | default pass proves both fixes; pass 2 (`option foldcallret off`) isolates the p-code-level snipReads fix |
 | `kuna-callretmulti.xml` | RE-friction need `call-result-folding-duplicates` (one call result is narrowed and consumed twice, either in one block or across a loop; the old implied-expression multiplier printed the call at both sinks) | P6 variable & storage model, explicit/implied marking (`foldcallret` keeps a derived fan-out explicit, preserving one evaluation) | pass 1 (`option foldcallret off`) pins the conservative form; pass 2 (`option foldcallret on`) proves the shipped fold also evaluates each call once |
 | `kuna-foldcallret-shortcircuit.xml` | kuna [GH-684](https://github.com/Noelo-Lab/kuna/issues/684) (a call combined with a comparison by a non-short-circuit `&` was folded into the right-hand operand of the `&&`/`||` the printer emits, so the printed C skipped a call the binary always makes) | P6 variable & storage model, explicit/implied marking (`foldcallret` declines a fold whose value reaches input 1 of a `BOOL_AND`/`BOOL_OR` on its way to the print point; correctness fix, no option) | default only: gcc -O0 and clang -O2 keep the spill, clang -O0 (call on the left) still folds |
 | `kuna-msvcstackguard.xml` (long chain extension) | RE-friction pointer-return regression: a 271-call cookie chain lost the factory pointer held in RAX after the checker | P7 cookie provenance -> P0 exact-site restart -> P3 return-storage preservation | `msvcstackguard off/on`; exact preservation keeps the checker, and removal and preservation both keep the factory result |
@@ -388,9 +448,9 @@ writeup, not here.
 | `kuna-stackguard-tailcall.xml` | kuna [GH-866](https://github.com/Noelo-Lab/kuna/issues/866) (gcc `-O2`/`-Os` `-fstack-protector`: a canary checked right before a tail call kept `v1 = *(unsigned long *)(fs_offset + 0x28); ... v4 = v1;`) | P7 regions, stackguard (`ActionStripStackGuard` also resolves the canary slot forward from the `FS_OFFSET + 0x28` LOADs the compare reads) | `option stackguard on\|off`: pass 1 (default) pins t2/t2s/k2/w3 with no canary load and no `fs_offset`, pass 2 (off) keeps every check; t3 (check after a call, GH-183 shape) is the control; h6/h7 (no canary, a struct-field compare at offset 0x28) keep their stack stores and call arguments in both passes |
 | `kuna-declaring-double-score-return.xml` | RE-friction need `declaring-double-score-return` (locking a later `/GS` checker void disconnected an earlier `double` accumulation from XMM0) | P7 exact cookie recognition -> P0 restart seed -> P3 locked-void exact-slice return-storage preservation | always on; loop-carried cookie proof, an XMM0 write before an unresolved nested call, and a real 16-byte XMM overlap whose low output lane survives while its upper scratch lane stays killed |
 | `kuna-declaring-double-score-return.xml` (refined cells) | RE-friction need `explicit-double-score-prototype` (low-dword traffic refined one declared `double` return into two 4-byte cells across the `/GS` checker) | P3 exact-cookie unjustified-cell preservation, gated by the caller's locked declared output | inferred/unlocked caller remains truncated; upper XMM scratch stays killed |
-| `gh182-loadguardrange.xml` | kuna [GH-182](https://github.com/Noelo-Lab/kuna/issues/182) (betaflight `cliServo`: `int16_t arguments[6]` written by one indexed `strh` printed as `int2 v5 [4]` subscripted at [0,5], with elements 4/5 split off as never-assigned scalars that are range-checked and stored into the servo config) | P3 SSA guards + P5 value sets + P6 variable & storage model (the LoadGuard/StoreGuard ValueSet range refinement: `Heritage::analyzeNewLoadGuards` runs `ValueSetSolver` over each new indexed-stack guard pointer, `LoadGuard::establishRange`/`finalizeRange` lock the real `[min,max,step]`, and `MapState::addGuard` turns a locked guard into the open hint bound `highind = ((max-min)+1)/step - 1`) | always on (DIV-77): asserts one in-bounds `int2 v7 [8]` and no split-off never-assigned tail scalars |
-| `gh468-nulterminator.xml` | kuna [GH-468](https://github.com/Noelo-Lab/kuna/issues/468) (MSVC `/Od` `canary_check`: `char buf[64]` terminated by `buf[sizeof(buf) - 1] = 0` after `strncpy(buf, in, 63)` printed as `uint1 v3 [63]` plus a separate never-read `char v8 = 0` at stack - 0x19) | P6 variable & storage model, stack-frame layout (`ScopeLocal::restructure` closes an open integer array exactly one element after an unread zero store at its end; nothing after that element joins it) | `option nulterminator on\|off`: on = `uint1 v [64]` with `v[0x3f] = 0`, off = the `[63]` array beside the split-off char. Hand-assembled neighbours pin the extent: `pad_after` and `wide_str` gain only the terminator (`[34]` not `[40]`, `uint2 [15]`); a second zero two elements past the new end, a byte after alignment padding, a zeroed local read later, a slot read directly, a non-zero store, a zeroed int after an `int4` array, a two-byte zero after a `char` array and an address-taken byte all stay separate in both passes |
-| `gh510-phiopflags.xml` | kuna [GH-510](https://github.com/Noelo-Lab/kuna/issues/510) (an 18 MB Windows PE: six functions produced no output at all, each one a `LOSS-131` record carrying `index out of bounds: the len is N but the index is N`) | P3 SSA construction, the op-property triple heritage caches on the ops it creates (`glb->inst[opc]`): the phi carries `special|marker|nocollapse` as upstream's `TypeOpMulti` does, so the raw-stack-pointer `PTRSUB(sp,#0)` placeholder is not spliced into a block's leading phi run and `ConditionalJoin::cutDownMultiequals` cannot stop short of a phi it has to cut; correctness fix, no option | default, single pass: 0 of 5 assertions pass pre-fix (the error stub `void scan_list(void)`), 5/5 post-fix |
+| `gh182-loadguardrange.toml` | kuna [GH-182](https://github.com/Noelo-Lab/kuna/issues/182) (betaflight `cliServo`: `int16_t arguments[6]` written by one indexed `strh` printed as `int2 v5 [4]` subscripted at [0,5], with elements 4/5 split off as never-assigned scalars that are range-checked and stored into the servo config) | P3 SSA guards + P5 value sets + P6 variable & storage model (the LoadGuard/StoreGuard ValueSet range refinement: `Heritage::analyzeNewLoadGuards` runs `ValueSetSolver` over each new indexed-stack guard pointer, `LoadGuard::establishRange`/`finalizeRange` lock the real `[min,max,step]`, and `MapState::addGuard` turns a locked guard into the open hint bound `highind = ((max-min)+1)/step - 1`) | always on (DIV-77): asserts one in-bounds `int2 v7 [8]` and no split-off never-assigned tail scalars |
+| `gh468-nulterminator.toml` | kuna [GH-468](https://github.com/Noelo-Lab/kuna/issues/468) (MSVC `/Od` `canary_check`: `char buf[64]` terminated by `buf[sizeof(buf) - 1] = 0` after `strncpy(buf, in, 63)` printed as `uint1 v3 [63]` plus a separate never-read `char v8 = 0` at stack - 0x19) | P6 variable & storage model, stack-frame layout (`ScopeLocal::restructure` closes an open integer array exactly one element after an unread zero store at its end; nothing after that element joins it) | `option nulterminator on\|off`: on = `uint1 v [64]` with `v[0x3f] = 0`, off = the `[63]` array beside the split-off char. Hand-assembled neighbours pin the extent: `pad_after` and `wide_str` gain only the terminator (`[34]` not `[40]`, `uint2 [15]`); a second zero two elements past the new end, a byte after alignment padding, a zeroed local read later, a slot read directly, a non-zero store, a zeroed int after an `int4` array, a two-byte zero after a `char` array and an address-taken byte all stay separate in both passes |
+| `gh510-phiopflags.toml` | kuna [GH-510](https://github.com/Noelo-Lab/kuna/issues/510) (an 18 MB Windows PE: six functions produced no output at all, each one a `LOSS-131` record carrying `index out of bounds: the len is N but the index is N`) | P3 SSA construction, the op-property triple heritage caches on the ops it creates (`glb->inst[opc]`): the phi carries `special|marker|nocollapse` as upstream's `TypeOpMulti` does, so the raw-stack-pointer `PTRSUB(sp,#0)` placeholder is not spliced into a block's leading phi run and `ConditionalJoin::cutDownMultiequals` cannot stop short of a phi it has to cut; correctness fix, no option | default, single pass: 0 of 5 assertions pass pre-fix (the error stub `void scan_list(void)`), 5/5 post-fix |
 | `kuna-floatgrouping.xml` | kuna [GH-641](https://github.com/Noelo-Lab/kuna/issues/641) (two x86-64 functions multiplying the same three floats in opposite orders decompiled to the same C, because `CPUI_FLOAT_MULT`/`CPUI_FLOAT_ADD` pushed the associative integer `*`/`+` tokens and the printer dropped the parentheses around a same-token right operand; one of the two renderings computed a different value than the function it came from) | P9 emit, the operator-token table and the `parentheses` binary case: the two float opcodes get their own singletons carrying `left_to_right_only`, which leaves a same-token left operand bare and parenthesises a right one; correctness fix, no option | default, single pass: the right-grouped product and sum keep `a * (b * c)` / `a + (b + c)` and the flat chain matches exactly one function of each pair, where pre-fix it matched both |
 | `kuna-arm-register-shift.xml` | kuna [GH-849](https://github.com/Noelo-Lab/kuna/issues/849) (a variable ARM LSL can emit undefined C shifts for low-eight-bit counts 32 through 255) | P9 C emission, a guarded `CPUI_INT_LEFT` with unsigned shiftee, restricted to repeatable ARM operands; correctness fix, no option | default, single pass: preserves `count & 0xff`, checks `< 32`, emits an unsigned shift plus zero fallback, and avoids compound assignment when the guard applies |
 | `kuna-arm-register-shift-signed.xml` | kuna [GH-849](https://github.com/Noelo-Lab/kuna/issues/849) follow-up (the shift's unsigned C repair must retain the signed value consumed by ARM signed compare and ASR) | P9 C emission, signed true/false conditional arms around the guarded unsigned LSL | default: output retains signed comparison and arithmetic shift behavior |
@@ -624,16 +684,16 @@ overwrites a writable relocation slot, across off/on/off option toggles.
   `kuna-ppc32picimports-driver.xml` exercise explicit `ppc32picimports abi`
   recovery, including ordinary returning callers and compiler start files.
 
-`ghangr-godwarfsig.xml` checks opt-in Go DWARF scalar/pointer signatures,
+`ghangr-godwarfsig.toml` checks opt-in Go DWARF scalar/pointer signatures,
 compressed cross-unit references, result roles, caller propagation and a wrong-register
 control. Its console companion executes hermetic and native recovered Go bodies.
 
-`ghangr-go-dwarf-string-inputs.xml` checks the two physical Go string input
+`ghangr-go-dwarf-string-inputs.toml` checks the two physical Go string input
 words, the ABI slot after an earlier scalar, numeric byte iteration, a retained
 bounds branch, and explicit prototype precedence. The stage also exercises
 malformed pairs and a word-identical scalar signature.
 
-`ghangr-go-pair-results.xml` checks opt-in paired 64-bit Go integer results,
+`ghangr-go-pair-results.toml` checks opt-in paired 64-bit Go integer results,
 ordinary local struct storage, destructuring calls and nested result selection.
 Its console companion covers the option gate, malformed cross-unit DWARF,
 metadata collisions, indirect calls and complete emitted native Go bodies.
@@ -646,15 +706,15 @@ Go bodies also compile and execute against a byte-checking sink.
 ABI-mode reloads of images whose legacy fingerprints collide, plus a TAR helper
 whose skipped assignment must not become a no-return import contract.
 
-`ghangr-joined-callback-return.xml` covers late typed callbacks returning an
+`ghangr-joined-callback-return.toml` covers late typed callbacks returning an
 integer pair: either component, a narrowed high component, both components,
 whole forwarding, and scalar and void callback controls.
 
-`ghangr-integer-field-extract.xml` checks narrow, narrow-then-widen, and shifted
+`ghangr-integer-field-extract.toml` checks narrow, narrow-then-widen, and shifted
 integer fields in C, Go and Rust. Native CLI tests execute the complete emitted
 callers against boundary values and check that each helper is called once.
 
-`ghangr-go-store-value.xml` checks Go integer destination conversions for fields,
+`ghangr-go-store-value.toml` checks Go integer destination conversions for fields,
 plain/indexed pointers and a side-effectful call, with all integer widths and
 complete native bodies covered by the CLI integration fixture.
 `kuna-kernelcache.xml` loads a synthetic arm64 kernel collection three ways: the
@@ -667,7 +727,7 @@ twice: with `kernelcache-boot off` its calls into the kernel go through
 unresolved slots, and by default they are named from the boot collection that
 sits beside it (`linked/` in the same fixture directory).
 
-`ghangr-go-pointer-arithmetic-32.xml` and `ghangr-go-pointer-arithmetic-64.xml`
+`ghangr-go-pointer-arithmetic-32.toml` and `ghangr-go-pointer-arithmetic-64.toml`
 check live pointer bases through constant, negative and signed dynamic byte
 offsets in Go loads, stores and returns. Integer-address reconstruction remains
 a control. The CLI companion builds both authored assembly fixtures and runs

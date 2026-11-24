@@ -66,6 +66,6 @@ and `2.5` are all refused).
 
 `settables` 205 -> 207, tiers `(66, 78, 61)` -> `(66, 80, 61)`, catalog JSON
 records 204 -> 206, `catalog_bytecompat.rs` fixture recaptured,
-`tests/stages/kuna-catalog.xml` bucket #8 (`opt-in-tool`) 18 -> 20, stage corpus
+`tests/stages/kuna-catalog.toml` bucket #8 (`opt-in-tool`) 18 -> 20, stage corpus
 count in `kuna-base/src/xml.rs` 293 -> 294, `docs/baseline-stages.json`
 re-recorded (1007 -> 1013 keys), `docs/options.md` regenerated.

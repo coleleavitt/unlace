@@ -16,8 +16,9 @@ Checks the changes from the merge base of BASE and HEAD to the working tree
 * error `intermediate`: an added `.obj`, `.o` or `.lib` that no test, stage
   test or script names. A compiler intermediate belongs in the build recipe,
   not the tree.
-* error `assertion-edit`: a `<stringmatch>` line removed or changed in a stage
-  test that already exists on BASE. An expectation that moves is a behaviour
+* error `assertion-edit`: a `<stringmatch>` line (in a TOML stage test, a
+  `[[match]]` key line: name, count, min, max, regex, literal) removed or changed
+  in a stage test that already exists on BASE. An expectation that moves is a behaviour
   change to justify, not a test to adjust: add a commit-message trailer
   `Assertion-change: <test name>: <why the new expectation is right>`.
   `kuna-catalog.xml` is exempt: every new option bumps its registry counts.
@@ -37,6 +38,7 @@ LOCAL_PATH = re.compile(rb"/home/[A-Za-z0-9._-]+/|/Users/[A-Za-z0-9._-]+/|[A-Za-
 INTERMEDIATE = {".obj", ".o", ".lib"}
 TRAILER = re.compile(r"^Assertion-change:\s*(.+)$", re.M | re.I)
 COUNTED_REGISTRY = {"kuna-catalog"}
+TOML_MATCH_KEY = re.compile(r"\s*(name|count|min|max|regex|literal)\s*=")
 
 
 @dataclass
@@ -148,8 +150,10 @@ def lint(root: Path, base: str) -> list[Finding]:
                     findings.append(Finding("error", "local-path", path,
                                             f"added line embeds {hit.group().decode(errors='replace')!r}"))
                     break
-        if status == "M" and posix.parent == PurePosixPath("tests/stages") and posix.suffix == ".xml":
-            edited = [line for line in removed_lines(root, base, path) if "<stringmatch" in line]
+        if status == "M" and posix.parent == PurePosixPath("tests/stages") and posix.suffix in (".xml", ".toml"):
+            key = "<stringmatch" if posix.suffix == ".xml" else None
+            edited = [line for line in removed_lines(root, base, path)
+                      if (key in line if key else TOML_MATCH_KEY.match(line))]
             stem = posix.stem
             if edited and stem not in COUNTED_REGISTRY and not any(stem in reason for reason in justified):
                 findings.append(Finding("error", "assertion-edit", path,

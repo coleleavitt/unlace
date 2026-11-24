@@ -1,0 +1,104 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/array_decay_x86_64',
+    'read symbols',
+    'option outlang rust',
+    'option ctypes off',
+    'option realtypes off',
+    'map prototype erased_i32 void*erased_i32(struct DecayFields*p);',
+    'map prototype array_i32 int4(*array_i32(struct DecayFields*p))[9];',
+    'map prototype stored_i32 void stored_i32(int4**out,struct DecayFields*p);',
+    'map prototype field_i64 int8*field_i64(struct DecayFields*p);',
+    'map prototype retyped_i64 uint1*retyped_i64(struct DecayFields*p);',
+    'map prototype end_pointers uint1**end_pointers(uint1*(*p)[9]);',
+    'map prototype whole_flags bool*whole_flags(bool(*p)[9]);',
+    'map prototype passed_counted int4*passed_counted(struct DecayFields*p);',
+    'map prototype pass_value_i32 int4*pass_value_i32(int4*p);',
+    'map prototype counted_base struct DecayFields*counted_base(struct DecayFields*p);',
+    'load function field_i64',
+    'decompile',
+    'print C',
+    'load function whole_flags',
+    'decompile',
+    'print C',
+    'load function end_pointers',
+    'decompile',
+    'print C',
+    'load function erased_i32',
+    'decompile',
+    'print C',
+    'load function retyped_i64',
+    'decompile',
+    'print C',
+    'load function array_i32',
+    'decompile',
+    'print C',
+    'load function stored_i32',
+    'decompile',
+    'print C',
+    'load function passed_counted',
+    'decompile',
+    'print C',
+    'option nocastprinting on',
+    'load function field_i64',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust array decay field_i64 keeps its pointer consumer'
+count = 1
+regex = 'return\ \&raw\ mut\ \(\*p\)\.i64\ as\ \*mut\ i64;'
+
+[[match]]
+name = 'Rust array decay whole_flags keeps its pointer consumer'
+count = 1
+regex = 'return\ \&raw\ mut\ \*p\ as\ \*mut\ bool;'
+
+[[match]]
+name = 'Rust array decay end_pointers keeps its pointer consumer'
+count = 1
+regex = 'return\ \&raw\ mut\ \*p\.wrapping_byte_offset\(\(\(1\ as\ i64\)\ as\ isize\)\.wrapping_mul\(72\)\)\ as\ \*mut\ \*mut\ u8;'
+
+[[match]]
+name = 'Rust array decay erased_i32 keeps its pointer consumer'
+count = 1
+regex = 'return\ \&raw\ mut\ \(\*p\)\.i32\ as\ \*mut\ \(\);'
+
+[[match]]
+name = 'Rust array decay retyped_i64 keeps its pointer consumer'
+count = 1
+regex = 'return\ \&raw\ mut\ \(\*p\)\.i64\ as\ \*mut\ u8;'
+
+[[match]]
+name = 'Rust array decay array_i32 keeps its pointer consumer'
+count = 1
+regex = 'return\ \&raw\ mut\ \(\*p\)\.i32\ as\ \*mut\ \[i32;\ 9\];'
+
+[[match]]
+name = 'Rust array decay stored_i32 keeps its pointer consumer'
+count = 1
+regex = '\*out\ =\ \&raw\ mut\ \(\*p\)\.i32\ as\ \*mut\ i32;'
+
+[[match]]
+name = 'Rust array decay passed_counted keeps its pointer consumer'
+count = 1
+regex = 'return\ pass_value_i32\(\&raw\ mut\ \(\*v1\)\.i32\ as\ \*mut\ i32\);'
+
+[[match]]
+name = 'Rust array decay cast suppression stays diagnostic'
+count = 1
+regex = 'return\ \(\*p\)\.i64;'

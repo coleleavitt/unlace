@@ -1,0 +1,229 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/go-pair-results/go1.22.5-pair',
+    'option godwarfsig off',
+    'read symbols',
+    'option outlang go',
+    'load function main.pair',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-pair-results/go1.22.5-pair',
+    'option godwarfsig on',
+    'read symbols',
+    'option outlang go',
+    'load function main.pair',
+    'decompile',
+    'print C',
+    'load function main.unsignedPair',
+    'decompile',
+    'print C',
+    'load function main.consume',
+    'decompile',
+    'print C',
+    'load function main.first',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-pair-results/go1.27.3-pair',
+    'option godwarfsig on',
+    'read symbols',
+    'option outlang go',
+    'load function main.pair',
+    'decompile',
+    'print C',
+    'load function main.zeroPair',
+    'decompile',
+    'print C',
+    'echo Go result outputs begin',
+    'load function main.highPair',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-int-error-results/contracts',
+    'option godwarfsig off',
+    'read symbols',
+    'option outlang c',
+    'load function main.forward',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-int-error-results/contracts',
+    'option godwarfsig on',
+    'read symbols',
+    'option outlang c',
+    'load function main.check',
+    'decompile',
+    'print C',
+    'load function main.forward',
+    'decompile',
+    'print C',
+    'load function main.modernForward',
+    'decompile',
+    'print C',
+    'load function main.consume',
+    'decompile',
+    'print C',
+    'echo Go result outputs end',
+    'clear architecture',
+    'load file tests/fixtures/go-pair-signedness/linux-amd64',
+    'option godwarfsig on',
+    'read symbols',
+    'option outlang go',
+    'echo Go signedness pairs begin',
+    'load function main.Retype',
+    'decompile',
+    'print C',
+    'load function main.MergeRetype',
+    'decompile',
+    'print C',
+    'echo Go signedness pairs end',
+    'clear architecture',
+    'load file tests/fixtures/go-pair-signedness/linux-amd64',
+    'option godwarfsig off',
+    'read symbols',
+    'option outlang go',
+    'load function main.Retype',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Go DWARF signatures off retain the register byte carrier'
+count = 1
+literal = 'func pair(a0 int64, a1 int64) [16]byte'
+
+[[match]]
+name = 'Go paired signatures preserve both source integer results'
+count = 2
+literal = 'func pair(a int64, b int64) (int64, int64)'
+
+[[match]]
+name = 'Go unsigned pair retains both unsigned result types'
+count = 1
+literal = 'func unsignedPair(a uint64, b uint64) (uint64, uint64)'
+
+[[match]]
+name = 'Go paired callers assign both fields from one invocation'
+count = 1
+regex = 'v1.result0,v1.result1 = pair\(a,b\)'
+
+[[match]]
+name = 'Go paired returns project both fields'
+count = 4
+regex = 'return v1.result0,v1.result1'
+
+[[match]]
+name = 'Go paired nested call evaluates outside adapter parameter scope'
+count = 1
+regex = '\}\(pair\(a,b\)\).result0'
+
+[[match]]
+name = 'Go pair zero carrier becomes two integer fields'
+count = 1
+literal = 'struct { result0 uint64; result1 uint64 }{0x0,0}'
+
+# Check the original high pair and the int/error contract in one marked
+# group. The latter covers the option-off call, three carriers, both
+# forwarders, nil and typed nil, and the caller's separate table/data tests.
+[[match]]
+name = 'Go high pair stores each named result field'
+count = 1
+regex = [
+    '^\s*Go result outputs begin$',
+    '^\s*$',
+    '^// main\.highPair$',
+    '^func highPair\(a uint64\) \(uint64, uint64\) \{$',
+    '^  var v1 struct \{ result0 uint64; result1 uint64 \}(?: // [^()]*)?$',
+    '^\s*$',
+    '^  v1\.result1 = a$',
+    '^  v1\.result0 = 0x0$',
+    '^  return v1\.result0,v1\.result1$',
+    '^\}$',
+    '^\s*$',
+    '^void main\.forward\(void\)$',
+    '^\{$',
+    '^  main\.check\(\);$',
+    '^\}$',
+    '^\s*$',
+    '^__kuna_go_int_error_result main\.check\(int8 n\)$',
+    '^\{$',
+    '^  __kuna_go_int_error_result v1;(?: // [^()]*)?$',
+    '^  __kuna_go_int_error_result v2;(?: // [^()]*)?$',
+    '^\s*$',
+    '^  if \(n == -2\) \{$',
+    '^    v1\.error_tab = &dat_403030;$',
+    '^    v1\.result0 = 0x11;$',
+    '^    v1\.error_data = NULL;$',
+    '^    return v1;$',
+    '^  \}$',
+    '^  if \(0 <= n\)$',
+    '^    return \(__kuna_go_int_error_result\)ZEXT824\(n \+ 1ULL\);$',
+    '^  v2\.error_tab = &dat_403030;$',
+    '^  v2\.result0 = 0x17;$',
+    '^  v2\.error_data = &dat_403050;$',
+    '^  return v2;$',
+    '^\}$',
+    '^\s*$',
+    '^__kuna_go_int_error_result main\.forward\(int8 n\)$',
+    '^\{$',
+    '^  return main\.check\(n\);$',
+    '^\}$',
+    '^\s*$',
+    '^__kuna_go_int_error_result main\.modernForward\(int8 n\)$',
+    '^\{$',
+    '^  return main\.check\(n\);$',
+    '^\}$',
+    '^\s*$',
+    '^int8 main\.consume\(int8 n\)$',
+    '^\{$',
+    '^  int8 v1;(?: // [^()]*)?$',
+    '^  __kuna_go_int_error_result v2;(?: // [^()]*)?$',
+    '^\s*$',
+    '^  v2 = main\.forward\(n\);$',
+    '^  v1 = v2\.result0;$',
+    '^  if \(v2\.error_tab\) \{$',
+    '^    if \(\(v2\.error_tab == &dat_403030\) && \(!v2\.error_data\)\)$',
+    '^      return v1 \+ 100;$',
+    '^    v1 \+= 200;$',
+    '^  \}$',
+    '^  return v1;$',
+    '^\}$',
+    '^\s*Go result outputs end$',
+]
+
+[[match]]
+name = 'Go pair signedness conversion constructs matching field types'
+count = 2
+literal = 'func(v struct { result0 int64; result1 uint64 }) struct { result0 uint64; result1 int64 } { return struct { result0 uint64; result1 int64 }{uint64(v.result0), int64(v.result1)} }'
+
+[[match]]
+name = 'Go pair signedness conversion evaluates each source once'
+count = 2
+literal = 'Mixed(a,b,pick)'
+
+[[match]]
+name = 'Go pair signedness control keeps the correctly typed alternate results'
+count = 1
+literal = 'v1.result0,v1.result1 = Reorder(a,b,pick)'
+
+[[match]]
+name = 'Go pair signedness off keeps the raw call separate'
+count = 1
+regex = [
+    '^func Retype\(\) \{$',
+    '^  Mixed\(\)$',
+]

@@ -133,7 +133,7 @@ impl AnalysisPass for RttiPass {
         let img = ImageBytes::new(ctx.file);
         // The executable-section ranges that bound a vftable's slot walk (R3): a slot
         // is a virtual-method entry only while it points into one of these.
-        let text = TextRanges::new(ctx.file);
+        let text = TextRanges::with_relocations(ctx.file, ctx.bytes);
 
         // 1. Find the common `type_info` vftable: the pointer every RTTI0
         //    TypeDescriptor's leading `pVFTable` field shares. We discover it by

@@ -1,0 +1,51 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/go-dwarf-signatures/compressed',
+    'option godwarfsig off',
+    'read symbols',
+    'option outlang go',
+    'load function main.multiResult',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-dwarf-signatures/uncompressed',
+    'option godwarfsig off',
+    'read symbols',
+    'option outlang go',
+    'load function main.multiResult',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Go register result retains a sixteen-byte carrier'
+count = 2
+literal = 'func multiResult(a0 int64) [16]byte'
+
+[[match]]
+name = 'Go byte-array writes have their eight-byte width'
+count = 4
+regex = '\*\(\*uint64\)\(unsafe.Add\(unsafe.Pointer\(&v1\),'
+
+[[match]]
+name = 'Go whole byte-array result returns the array value'
+count = 2
+regex = 'return v1$'
+
+[[match]]
+name = 'Go byte-array results have no artificial fields'
+count = 0
+regex = '\._[0-9]+_[0-9]+_'

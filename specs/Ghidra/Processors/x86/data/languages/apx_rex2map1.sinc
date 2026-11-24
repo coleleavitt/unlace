@@ -5,7 +5,7 @@
 # 64-bit map-1 constructor is repeated with vexMode=3 & vexMMMMM=1 in place of the escape byte. Rows 0x3*
 # and 0x8* of map 1 #UD under REX2 and are not repeated; maps 2 and 3 have no REX2 form.
 
-# ia.sinc:2689
+# ia.sinc:2740
 :BSF Reg16,rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xbc; rm16 & Reg16 ...
 {
     bitIndex:2 = 0;
@@ -22,7 +22,7 @@
 <done>
     Reg16 = bitIndex;
 }                             
-# ia.sinc:2729
+# ia.sinc:2780
 :BSF Reg32,rm32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xbc; rm32 & Reg32 ... & check_Reg32_dest ...                 
 {
     bitIndex:4 = 0;
@@ -40,7 +40,7 @@
     Reg32 = bitIndex;
     build check_Reg32_dest;
 }                             
-# ia.sinc:2771
+# ia.sinc:2822
 :BSF Reg64,rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xbc; rm64 & Reg64 ...                         
 {
     bitIndex:8 = 0;
@@ -57,7 +57,7 @@
 <done>
     Reg64 = bitIndex;
 }                             
-# ia.sinc:2806
+# ia.sinc:2857
 :BSR Reg16,rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xbd; rm16 & Reg16 ...                   
 {
     bitIndex:2 = 15;
@@ -74,7 +74,7 @@
 <done>
     Reg16 = bitIndex;
 }                             
-# ia.sinc:2846
+# ia.sinc:2897
 :BSR Reg32,rm32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xbd; rm32 & Reg32 ... & check_Reg32_dest ...
 {
     bitIndex:4 = 31;
@@ -92,7 +92,7 @@
     Reg32 = bitIndex;
     build check_Reg32_dest;
 }                             
-# ia.sinc:2889
+# ia.sinc:2940
 :BSR Reg64,rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xbd; rm64 & Reg64 ...                         
 {
     bitIndex:8 = 63;
@@ -109,14 +109,14 @@
 <done>
     Reg64 = bitIndex;
 }                             
-# ia.sinc:2908
+# ia.sinc:2959
 :BSWAP Rmr32 is vexMode=3 & vexMMMMM=1 & row=12 & page=1 & Rmr32 & check_Rmr32_dest
                                             { local tmp =        (Rmr32 & 0xff000000) >> 24 ;
                                               tmp = tmp | ((Rmr32 & 0x00ff0000) >> 8 );
                                               tmp = tmp | ((Rmr32 & 0x0000ff00) << 8 );
                                               Rmr32 = tmp | ((Rmr32 & 0x000000ff) << 24); 
                                               build check_Rmr32_dest; }
-# ia.sinc:2915
+# ia.sinc:2966
 :BSWAP Rmr64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & row=12 & page=1 & Rmr64
                                             { local tmp =          (Rmr64 & 0xff00000000000000) >> 56 ;
                                               tmp = tmp |   ((Rmr64 & 0x00ff000000000000) >> 40 );
@@ -126,88 +126,88 @@
                                               tmp = tmp |   ((Rmr64 & 0x0000000000ff0000) << 24 );
                                               tmp = tmp |   ((Rmr64 & 0x000000000000ff00) << 40 );
                                               Rmr64 = tmp | ((Rmr64 & 0x00000000000000ff) << 56); }
-# ia.sinc:2926
+# ia.sinc:2977
 :BT Rmr16,Reg16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xa3; mod=3 & Rmr16 & Reg16		{ CF = ((Rmr16 >> (Reg16 &  0xf)) & 1) != 0; }
-# ia.sinc:2927
+# ia.sinc:2978
 :BT Mem,Reg16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xa3; Mem & Reg16 ...		{ local ptr = Mem + (sext(Reg16) s>> 3);
 											  CF = ((*:1 ptr >> (Reg16 & 0x7)) & 1) != 0; }
-# ia.sinc:2929
+# ia.sinc:2980
 :BT Rmr32,Reg32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xa3; mod=3 & Rmr32 & Reg32		{ CF = ((Rmr32 >> (Reg32 & 0x1f)) & 1) != 0; }
-# ia.sinc:2930
+# ia.sinc:2981
 :BT Mem,Reg32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xa3; Mem & Reg32 ...		{
     local ptr = Mem + (sext(Reg32) s>> 3);
     CF = ((*:1 ptr >> (Reg32 & 0x7)) & 1) != 0;
 }
-# ia.sinc:2939
+# ia.sinc:2990
 :BT Rmr64,Reg64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xa3; mod=3 & Rmr64 & Reg64		{ CF = ((Rmr64 >> (Reg64 & 0x3f)) & 1) != 0; }
-# ia.sinc:2940
+# ia.sinc:2991
 :BT Mem,Reg64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xa3; Mem & Reg64 ...		{ local ptr = Mem + (Reg64 s>> 3);
 											  CF = ((*:1 ptr >> (Reg64 & 0x7)) & 1) != 0; }
-# ia.sinc:2943
+# ia.sinc:2994
 :BT rm16,imm8 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xba; (rm16 & reg_opcode=4 ...); imm8  { CF = ((rm16 >> (imm8 & 0x0f)) & 1) != 0; } 
-# ia.sinc:2944
+# ia.sinc:2995
 :BT rm32,imm8 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xba; (rm32 & reg_opcode=4 ...); imm8  { CF = ((rm32 >> (imm8 & 0x1f)) & 1) != 0; }
-# ia.sinc:2946
+# ia.sinc:2997
 :BT rm64,imm8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xba; (rm64 & reg_opcode=4 ...); imm8  { CF = ((rm64 >> (imm8 & 0x3f)) & 1) != 0; }
-# ia.sinc:2950
+# ia.sinc:3001
 :BTC Rmr16,Reg16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xbb; mod=3 & Rmr16 & Reg16		{ local bit=Reg16&0xf; local val=(Rmr16>>bit)&1; Rmr16=Rmr16^(1<<bit); CF=(val!=0); }
-# ia.sinc:2951
+# ia.sinc:3002
 :BTC Rmr32,Reg32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xbb; mod=3 & Rmr32 & Reg32 & check_Rmr32_dest 		{ local bit=Reg32&0x1f; local val=(Rmr32>>bit)&1; CF=(val!=0); Rmr32=Rmr32^(1<<bit); build check_Rmr32_dest; }
-# ia.sinc:2953
+# ia.sinc:3004
 :BTC Rmr64,Reg64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xbb; mod=3 & Rmr64 & Reg64		{ local bit=Reg64&0x3f; local val=(Rmr64>>bit)&1; Rmr64=Rmr64^(1<<bit); CF=(val!=0); }
-# ia.sinc:2955
+# ia.sinc:3006
 :BTC Rmr16,imm8 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xba; mod=3 & Rmr16 & reg_opcode=7; imm8   { local bit=imm8&0xf; local val=(Rmr16>>bit)&1; Rmr16=Rmr16^(1<<bit); CF=(val!=0); }
-# ia.sinc:2956
+# ia.sinc:3007
 :BTC Rmr32,imm8 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xba; mod=3 & Rmr32 & check_Rmr32_dest & reg_opcode=7; imm8   { local bit=imm8&0x1f; local val=(Rmr32>>bit)&1; CF=(val!=0); Rmr32=Rmr32^(1<<bit); build check_Rmr32_dest; }
-# ia.sinc:2958
+# ia.sinc:3009
 :BTC Rmr64,imm8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xba; mod=3 & Rmr64 & reg_opcode=7; imm8   { local bit=imm8&0x3f; local val=(Rmr64>>bit)&1; Rmr64=Rmr64^(1<<bit); CF=(val!=0); }
-# ia.sinc:2962
+# ia.sinc:3013
 :BTR Rmr16,Reg16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xb3; mod=3 & Rmr16 & Reg16		{ local bit=Reg16&0xf; local val=(Rmr16>>bit)&1; Rmr16=Rmr16 & ~(1<<bit); CF=(val!=0); }
-# ia.sinc:2963
+# ia.sinc:3014
 :BTR Rmr32,Reg32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xb3; mod=3 & Rmr32 & check_Rmr32_dest & Reg32		{ local bit=Reg32&0x1f; local val=(Rmr32>>bit)&1; CF=(val!=0); Rmr32=Rmr32 & ~(1<<bit); build check_Rmr32_dest;  }
-# ia.sinc:2965
+# ia.sinc:3016
 :BTR Rmr64,Reg64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xb3; mod=3 & Rmr64 & Reg64		{ local bit=Reg64&0x3f; local val=(Rmr64>>bit)&1; Rmr64=Rmr64 & ~(1<<bit); CF=(val!=0); }
-# ia.sinc:2967
+# ia.sinc:3018
 :BTR Rmr16,imm8 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xba; mod=3 & Rmr16 & reg_opcode=6; imm8   { local bit=imm8&0xf; local val=(Rmr16>>bit)&1; Rmr16=Rmr16 & ~(1<<bit); CF=(val!=0); }
-# ia.sinc:2968
+# ia.sinc:3019
 :BTR Rmr32,imm8 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xba; mod=3 & Rmr32 & reg_opcode=6 & check_Rmr32_dest; imm8   { local bit=imm8&0x1f; local val=(Rmr32>>bit)&1; CF=(val!=0); Rmr32=Rmr32 & ~(1<<bit); build check_Rmr32_dest;  }
-# ia.sinc:2970
+# ia.sinc:3021
 :BTR Rmr64,imm8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xba; mod=3 & Rmr64 & reg_opcode=6; imm8   { local bit=imm8&0x3f; local val=(Rmr64>>bit)&1; Rmr64=Rmr64 & ~(1<<bit); CF=(val!=0); }
-# ia.sinc:2974
+# ia.sinc:3025
 :BTS Rmr16,Reg16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xab; mod=3 & Rmr16 & Reg16		{ local bit=Reg16&0xf; local val=(Rmr16>>bit)&1; Rmr16=Rmr16 | (1<<bit); CF=(val!=0); }
-# ia.sinc:2975
+# ia.sinc:3026
 :BTS Rmr32,Reg32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xab; mod=3 & Rmr32 & check_Rmr32_dest & Reg32		{ local bit=Reg32&0x1f; local val=(Rmr32>>bit)&1; CF=(val!=0); Rmr32=Rmr32 | (1<<bit); build check_Rmr32_dest; }
-# ia.sinc:2977
+# ia.sinc:3028
 :BTS Rmr64,Reg64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xab; mod=3 & Rmr64 & Reg64		{ local bit=Reg64&0x3f; local val=(Rmr64>>bit)&1; Rmr64=Rmr64 | (1<<bit); CF=(val!=0); }
-# ia.sinc:2979
+# ia.sinc:3030
 :BTS Rmr16,imm8 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xba; mod=3 & Rmr16 & reg_opcode=5; imm8   { local bit=imm8&0xf; local val=(Rmr16>>bit)&1; Rmr16=Rmr16 | (1<<bit); CF=(val!=0); }
-# ia.sinc:2980
+# ia.sinc:3031
 :BTS Rmr32,imm8 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xba; mod=3 & Rmr32 & reg_opcode=5 & check_Rmr32_dest; imm8   { local bit=imm8&0x1f; local val=(Rmr32>>bit)&1; CF=(val!=0); Rmr32=Rmr32 | (1<<bit); build check_Rmr32_dest;  }
-# ia.sinc:2982
+# ia.sinc:3033
 :BTS Rmr64,imm8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xba; mod=3 & Rmr64 & reg_opcode=5; imm8   { local bit=imm8&0x3f; local val=(Rmr64>>bit)&1; Rmr64=Rmr64 | (1<<bit); CF=(val!=0); }
-# ia.sinc:3057
+# ia.sinc:3108
 :CLFLUSH m8 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0xAE; ( mod != 0b11 & reg_opcode=7 ) ... & m8 {
 	clflush(m8);
 }
-# ia.sinc:3061
+# ia.sinc:3112
 :CLAC is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xCA { AC = 0; }
-# ia.sinc:3068
+# ia.sinc:3119
 :CLGI is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xDD                      { clgi(); }
-# ia.sinc:3071
+# ia.sinc:3122
 :CLTS is vexMode=3 & vexMMMMM=1 & byte=0x06				{ CR0 = CR0 & ~(0x8); }
-# ia.sinc:3075
+# ia.sinc:3126
 :CLZERO is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0x01; byte=0xFC { clzero(AX); }
-# ia.sinc:3076
+# ia.sinc:3127
 :CLZERO is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0x01; byte=0xFC { clzero(EAX); }
-# ia.sinc:3078
-:CLZERO is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0x01; byte=0xFC { clzero(RAX); }
-# ia.sinc:3084
-:CMOV^cc Reg16,rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & row=4 & cc; rm16 & Reg16 ...    { local tmp = rm16; if (!cc) goto inst_next; Reg16 = tmp; }
-# ia.sinc:3085
-:CMOV^cc Reg32,rm32 is vexMode=3 & vexMMMMM=1 & opsize=1 & row=4 & cc; rm32 & Reg32 ... & check_Reg32_dest ...   { local tmp = rm32; build check_Reg32_dest; if (!cc) goto inst_next; Reg32 = tmp; }
-# ia.sinc:3087
-:CMOV^cc Reg64,rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & row=4 & cc; rm64 & Reg64 ...    { local tmp = rm64; if (!cc) goto inst_next; Reg64 = tmp; }
 # ia.sinc:3129
+:CLZERO is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0x01; byte=0xFC { clzero(RAX); }
+# ia.sinc:3135
+:CMOV^cc Reg16,rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & row=4 & cc; rm16 & Reg16 ...    { local tmp = rm16; if (!cc) goto inst_next; Reg16 = tmp; }
+# ia.sinc:3136
+:CMOV^cc Reg32,rm32 is vexMode=3 & vexMMMMM=1 & opsize=1 & row=4 & cc; rm32 & Reg32 ... & check_Reg32_dest ...   { local tmp = rm32; build check_Reg32_dest; if (!cc) goto inst_next; Reg32 = tmp; }
+# ia.sinc:3138
+:CMOV^cc Reg64,rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & row=4 & cc; rm64 & Reg64 ...    { local tmp = rm64; if (!cc) goto inst_next; Reg64 = tmp; }
+# ia.sinc:3180
 :CMPXCHG Rmr8,Reg8 is vexMode=3 & vexMMMMM=1 & byte=0xb0; mod=3 & Rmr8 & Reg8           
 { 
     local dest = Rmr8;
@@ -220,7 +220,7 @@
 <equal>
     Rmr8 = Reg8;
  }
-# ia.sinc:3141
+# ia.sinc:3192
 :CMPXCHG Rmr16,Reg16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xb1; mod=3 & Rmr16 & Reg16  
 { 
     local dest = Rmr16;
@@ -233,7 +233,7 @@
 <equal>
     Rmr16 = Reg16;
  }
-# ia.sinc:3153
+# ia.sinc:3204
 :CMPXCHG Rmr32,Reg32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xb1; mod=3 & Rmr32 & Reg32 & check_EAX_dest & check_Rmr32_dest
 {
 	#this instruction writes to either EAX or Rmr32
@@ -252,7 +252,7 @@
     Rmr32 = Reg32;
     build check_Rmr32_dest;
 }
-# ia.sinc:3172
+# ia.sinc:3223
 :CMPXCHG Rmr64,Reg64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xb1; mod=3 & Rmr64 & Reg64  
 { 
     local dest = Rmr64;
@@ -265,11 +265,11 @@
 <equal>
     Rmr64 = Reg64;
 } 
-# ia.sinc:3192
+# ia.sinc:3243
 :bad_CMPXCHG8B  r32 is vexMode=3 & vexMMMMM=1 & byte=0xc7; ( mod = 0b11 & reg_opcode=0b001 ) & r32 {
   r32 = bad_CMPXCHG8B(r32);
 }
-# ia.sinc:3219
+# ia.sinc:3270
 :CPUID is vexMode=3 & vexMMMMM=1 & byte=0xa2                  {
     tmpptr:$(SIZE) = 0;
     if (EAX == 0) goto <basic_info>;
@@ -344,79 +344,79 @@
 	RDX = zext(*:4 (tmpptr + 8));
 	RCX = zext(*:4 (tmpptr + 12));
 }
-# ia.sinc:3643
+# ia.sinc:3694
 :IMUL      Reg16,rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xaf; rm16 & Reg16 ... { tmp:4 = sext(Reg16) * sext(rm16);
                                           Reg16 = tmp(0); high:2 = tmp(2); imultflags(Reg16,tmp);}
-# ia.sinc:3645
+# ia.sinc:3696
 :IMUL      Reg32,rm32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xaf; rm32 & Reg32 ... & check_Reg32_dest ... { tmp:8 = sext(Reg32) * sext(rm32);
                                           Reg32 = tmp(0); high:4 = tmp(4); imultflags(Reg32,tmp); build check_Reg32_dest; }
-# ia.sinc:3649
+# ia.sinc:3700
 :IMUL      Reg64,rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xaf; rm64 & Reg64 ... { tmp:16 = sext(Reg64) * sext(rm64);
                                           Reg64 = Reg64 * rm64; high:8 = tmp(8); imultflags(Reg64,tmp);}
-# ia.sinc:3718
+# ia.sinc:3769
 :INVD is vexMode=3 & vexMMMMM=1 & byte=0x8                   {}
-# ia.sinc:3719
+# ia.sinc:3770
 :INVLPG Mem is vexMode=3 & vexMMMMM=1 & byte=0x1; ( reg_opcode=7 ) ... & Mem     { invlpg(Mem); }
-# ia.sinc:3721
+# ia.sinc:3772
 :INVLPGA is vexMode=3 & vexMMMMM=1 & addrsize=0 & byte=0x1; byte=0xDF                   { invlpga(AX,ECX); }
-# ia.sinc:3722
+# ia.sinc:3773
 :INVLPGA is vexMode=3 & vexMMMMM=1 & addrsize=1 & byte=0x1; byte=0xDF                   { invlpga(EAX,ECX); }
-# ia.sinc:3724
+# ia.sinc:3775
 :INVLPGA is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & addrsize=2 & byte=0x1; byte=0xDF                   { invlpga(RAX,ECX); }
-# ia.sinc:3790
+# ia.sinc:3841
 :LAR Reg16,rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0x2; rm16 & Reg16 ...  { Reg16 = rm16 & 0xff00; ZF=1; }
-# ia.sinc:3791
+# ia.sinc:3842
 :LAR Reg32,rm32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0x2; rm32 & Reg32 ... & check_Reg32_dest ... { Reg32 = rm32 & 0xffff00; build check_Reg32_dest; ZF=1; }
-# ia.sinc:3793
+# ia.sinc:3844
 :LAR Reg64,rm32 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0x2; rm32 & Reg64 ... { Reg64 = zext( rm32 & 0xffff00 ); ZF=1; }
-# ia.sinc:3796
+# ia.sinc:3847
 :LDMXCSR m32 is vexMode=3 & vexMMMMM=1 & byte=0xae; ( mod != 0b11 & reg_opcode=2 ) ... & m32 { MXCSR = m32; }
-# ia.sinc:3802
+# ia.sinc:3853
 :LSS Reg16,Mem is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xB2; Mem & Reg16 ... { tmp:4 = *Mem; SS = tmp(2); Reg16 = tmp(0); }
-# ia.sinc:3803
+# ia.sinc:3854
 :LSS Reg32,Mem is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xB2; Mem & Reg32 ... & check_Reg32_dest ... { tmp:6 = *Mem; SS = tmp(4); Reg32 = tmp(0); build check_Reg32_dest; }
-# ia.sinc:3805
+# ia.sinc:3856
 :LSS Reg64,Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xB2; Mem & Reg64 ... { tmp:10 = *Mem; SS = tmp(8); Reg64 = tmp(0); }
-# ia.sinc:3812
-:LFS Reg16,Mem is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xB4; Mem & Reg16 ... { tmp:4 = *Mem; FS = tmp(2); Reg16 = tmp(0); }
-# ia.sinc:3813
-:LFS Reg32,Mem is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xB4; Mem & Reg32 ... & check_Reg32_dest ... { tmp:6 = *Mem; FS = tmp(4); Reg32 = tmp(0); build check_Reg32_dest; }
-# ia.sinc:3815
-:LFS Reg64,Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xB4; Mem & Reg64 ... { tmp:10 = *Mem; FS = tmp(8); Reg64 = tmp(0); }
-# ia.sinc:3817
-:LGS Reg16,Mem is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xB5; Mem & Reg16 ... { tmp:4 = *Mem; GS = tmp(2); Reg16 = tmp(0); }
-# ia.sinc:3818
-:LGS Reg32,Mem is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xB5; Mem & Reg32 ... & check_Reg32_dest ... { tmp:6 = *Mem; GS = tmp(4); Reg32 = tmp(0); build check_Reg32_dest; }
-# ia.sinc:3820
-:LGS Reg64,Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xB5; Mem & Reg64 ... { tmp:10 = *Mem; GS = tmp(8); Reg64 = tmp(0); }
 # ia.sinc:3863
+:LFS Reg16,Mem is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xB4; Mem & Reg16 ... { tmp:4 = *Mem; FS = tmp(2); Reg16 = tmp(0); }
+# ia.sinc:3864
+:LFS Reg32,Mem is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xB4; Mem & Reg32 ... & check_Reg32_dest ... { tmp:6 = *Mem; FS = tmp(4); Reg32 = tmp(0); build check_Reg32_dest; }
+# ia.sinc:3866
+:LFS Reg64,Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xB4; Mem & Reg64 ... { tmp:10 = *Mem; FS = tmp(8); Reg64 = tmp(0); }
+# ia.sinc:3868
+:LGS Reg16,Mem is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xB5; Mem & Reg16 ... { tmp:4 = *Mem; GS = tmp(2); Reg16 = tmp(0); }
+# ia.sinc:3869
+:LGS Reg32,Mem is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xB5; Mem & Reg32 ... & check_Reg32_dest ... { tmp:6 = *Mem; GS = tmp(4); Reg32 = tmp(0); build check_Reg32_dest; }
+# ia.sinc:3871
+:LGS Reg64,Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xB5; Mem & Reg64 ... { tmp:10 = *Mem; GS = tmp(8); Reg64 = tmp(0); }
+# ia.sinc:3914
 :LGDT m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0x1; ( mod != 0b11 & reg_opcode=2 ) ... & m64
 {
 	GlobalDescriptorTableRegister(m64);
 }
-# ia.sinc:3880
+# ia.sinc:3931
 :LIDT m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0x1; ( mod != 0b11 & reg_opcode=3 ) ... & m64
 {
 	InterruptDescriptorTableRegister(m64);
 }
-# ia.sinc:3887
+# ia.sinc:3938
 :LLDT rm16 is vexMode=3 & vexMMMMM=1 & byte=0x0; rm16 & reg_opcode=2 ...
 {
 	LocalDescriptorTableRegister(rm16);
 }
-# ia.sinc:3893
+# ia.sinc:3944
 :LMSW rm16 is vexMode=3 & vexMMMMM=1 & byte=0x01; rm16 & reg_opcode=6 ...
 {
   CR0 = (CR0 & 0xFFFFFFFFFFFFFFF0) | zext(rm16 & 0x000F);
 }
-# ia.sinc:3930
+# ia.sinc:3981
 :LSL Reg16,rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0x3; rm16 & Reg16 ...
 {
   tmp:3 = SegmentLimit(rm16);
   Reg16 = tmp:2;
   ZF = tmp[16,1];
 }
-# ia.sinc:3937
+# ia.sinc:3988
 :LSL Reg32,rm32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0x3; rm32 & Reg32 ... & check_Reg32_dest ...
 {
   tmp:3 = SegmentLimit(rm32);
@@ -424,376 +424,376 @@
   ZF = tmp[16,1];
 	build check_Reg32_dest;
 }
-# ia.sinc:3946
+# ia.sinc:3997
 :LSL Reg64,rm32 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0x3; rm32 & Reg64 ...
 {
   tmp:3 = SegmentLimit(rm32);
   Reg64 = zext(tmp:2);
   ZF = tmp[16,1];
 }
-# ia.sinc:3955
+# ia.sinc:4006
 :LTR rm16 is vexMode=3 & vexMMMMM=1 & byte=0x0; rm16 & reg_opcode=3 ... { TaskRegister(rm16); }
-# ia.sinc:4061
+# ia.sinc:4112
 :MOV creg, Rmr32 is vexMode=3 & vexMMMMM=1 &           byte=0x22; Rmr32 & creg      {
     creg=zext(Rmr32);
 }
-# ia.sinc:4069
+# ia.sinc:4120
 :MOV creg, Rmr64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0x22; Rmr64 & creg      { creg=Rmr64; }
-# ia.sinc:4070
+# ia.sinc:4121
 :MOV creg_x, Rmr64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & rexRprefix=1 & byte=0x22; Rmr64 & creg_x     { creg_x=Rmr64; }
-# ia.sinc:4081
+# ia.sinc:4132
 :MOV Rmr64, creg is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0x20; Rmr64 & creg      { Rmr64 = creg; }
-# ia.sinc:4082
+# ia.sinc:4133
 :MOV Rmr64, creg_x is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & rexRprefix=1 & byte=0x20; Rmr64 & creg_x     { Rmr64 = creg_x; }
-# ia.sinc:4093
-:MOV Rmr64, debugreg is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & byte=0x21; Rmr64 & debugreg      { Rmr64 = debugreg; }
-# ia.sinc:4094
-:MOV Rmr64, debugreg_x is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & rexRprefix=1 & byte=0x21; Rmr64 & debugreg_x     { Rmr64 = debugreg_x; }
-# ia.sinc:4105
-:MOV debugreg, Rmr64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & byte=0x23; Rmr64 & debugreg & mod=3      { debugreg = Rmr64; }
-# ia.sinc:4106
-:MOV debugreg_x, Rmr64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & rexRprefix=1 & byte=0x23; Rmr64 & debugreg_x & mod=3     { debugreg_x = Rmr64; }
-# ia.sinc:4126
-:MOVNTI Mem,Reg32 is vexMode=3 & vexMMMMM=1 & opsize = 1; byte=0xc3; Mem & Reg32 ...     { *Mem = Reg32; }
-# ia.sinc:4128
-:MOVNTI Mem,Reg64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize = 2; byte=0xc3; Mem & Reg64 ...     { *Mem = Reg64; }
-# ia.sinc:4138
-:MOVSX Reg16,rm8 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xbe; rm8 & Reg16 ...  { Reg16 = sext(rm8); }
-# ia.sinc:4139
-:MOVSX Reg32,rm8 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xbe; rm8 & Reg32 ... & check_Reg32_dest ... { Reg32 = sext(rm8); build check_Reg32_dest; }
-# ia.sinc:4141
-:MOVSX Reg64,rm8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xbe; rm8 & Reg64 ...  { Reg64 = sext(rm8); }
-# ia.sinc:4143
-:MOVSX Reg16,rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xbf; rm16 & Reg16 ... { Reg16 = rm16; }
 # ia.sinc:4144
-:MOVSX Reg32,rm16 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xbf; rm16 & Reg32 ... & check_Reg32_dest ... { Reg32 = sext(rm16); build check_Reg32_dest; }
-# ia.sinc:4146
-:MOVSX Reg64,rm16 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xbf; rm16 & Reg64 ...     { Reg64 = sext(rm16); }
-# ia.sinc:4154
-:MOVZX Reg16,rm8 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xb6; rm8 & Reg16 ...  { Reg16 = zext(rm8); }
-# ia.sinc:4155
-:MOVZX Reg32,rm8 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xb6; rm8 & Reg32 ... & check_Reg32_dest ... { Reg32 = zext(rm8); build check_Reg32_dest; }
+:MOV Rmr64, debugreg is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & byte=0x21; Rmr64 & debugreg      { Rmr64 = debugreg; }
+# ia.sinc:4145
+:MOV Rmr64, debugreg_x is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & rexRprefix=1 & byte=0x21; Rmr64 & debugreg_x     { Rmr64 = debugreg_x; }
+# ia.sinc:4156
+:MOV debugreg, Rmr64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & byte=0x23; Rmr64 & debugreg & mod=3      { debugreg = Rmr64; }
 # ia.sinc:4157
-:MOVZX Reg64,rm8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xb6; rm8 & Reg64 ...  { Reg64 = zext(rm8); }
-# ia.sinc:4159
-:MOVZX Reg16,rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xb7; rm16 & Reg16 ... { Reg16 = rm16; }
-# ia.sinc:4160
-:MOVZX Reg32,rm16 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xb7; rm16 & Reg32 ... & check_Reg32_dest ...    { Reg32 = zext(rm16); build check_Reg32_dest; }
-# ia.sinc:4162
-:MOVZX Reg64,rm16 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xb7; rm16 & Reg64 ...     { Reg64 = zext(rm16); }
-# ia.sinc:4172
-:MWAIT is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xC9              { mwait(); }
-# ia.sinc:4173
-:MWAITX is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xFB              { mwaitx(); }
-# ia.sinc:4174
-:MONITOR is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xC8              { monitor(); }
-# ia.sinc:4175
-:MONITORX is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xFA              { monitorx(); }
+:MOV debugreg_x, Rmr64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & bit64=1 & rexRprefix=1 & byte=0x23; Rmr64 & debugreg_x & mod=3     { debugreg_x = Rmr64; }
+# ia.sinc:4177
+:MOVNTI Mem,Reg32 is vexMode=3 & vexMMMMM=1 & opsize = 1; byte=0xc3; Mem & Reg32 ...     { *Mem = Reg32; }
+# ia.sinc:4179
+:MOVNTI Mem,Reg64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize = 2; byte=0xc3; Mem & Reg64 ...     { *Mem = Reg64; }
+# ia.sinc:4189
+:MOVSX Reg16,rm8 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xbe; rm8 & Reg16 ...  { Reg16 = sext(rm8); }
 # ia.sinc:4190
-:PREFETCHIT0 m8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & (opsize=0 | opsize=1 | opsize=2) & byte=0x18; ( mod=0 & r_m=5 & reg_opcode=7 ) ... & m8 { }
-# ia.sinc:4191
-:PREFETCHIT1 m8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & (opsize=0 | opsize=1 | opsize=2) & byte=0x18; ( mod=0 & r_m=5 & reg_opcode=6 ) ... & m8 { }
-# ia.sinc:4193
-:NOP rm16 is vexMode=3 & vexMMMMM=1 & mandover & opsize=0 & high5=3; rm16  ...    { }
+:MOVSX Reg32,rm8 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xbe; rm8 & Reg32 ... & check_Reg32_dest ... { Reg32 = sext(rm8); build check_Reg32_dest; }
+# ia.sinc:4192
+:MOVSX Reg64,rm8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xbe; rm8 & Reg64 ...  { Reg64 = sext(rm8); }
 # ia.sinc:4194
-:NOP rm32 is vexMode=3 & vexMMMMM=1 & mandover & opsize=1 & high5=3; rm32  ...    { }
+:MOVSX Reg16,rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xbf; rm16 & Reg16 ... { Reg16 = rm16; }
 # ia.sinc:4195
-:NOP^"/reserved" rm16 is vexMode=3 & vexMMMMM=1 & mandover & opsize=0 & byte=0x18; rm16 & reg_opcode_hb=1 ...    { }
-# ia.sinc:4196
-:NOP^"/reserved" rm32 is vexMode=3 & vexMMMMM=1 & mandover & opsize=1 & byte=0x18; rm32 & reg_opcode_hb=1 ...    { }
+:MOVSX Reg32,rm16 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xbf; rm16 & Reg32 ... & check_Reg32_dest ... { Reg32 = sext(rm16); build check_Reg32_dest; }
 # ia.sinc:4197
+:MOVSX Reg64,rm16 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xbf; rm16 & Reg64 ...     { Reg64 = sext(rm16); }
+# ia.sinc:4205
+:MOVZX Reg16,rm8 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xb6; rm8 & Reg16 ...  { Reg16 = zext(rm8); }
+# ia.sinc:4206
+:MOVZX Reg32,rm8 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xb6; rm8 & Reg32 ... & check_Reg32_dest ... { Reg32 = zext(rm8); build check_Reg32_dest; }
+# ia.sinc:4208
+:MOVZX Reg64,rm8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xb6; rm8 & Reg64 ...  { Reg64 = zext(rm8); }
+# ia.sinc:4210
+:MOVZX Reg16,rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xb7; rm16 & Reg16 ... { Reg16 = rm16; }
+# ia.sinc:4211
+:MOVZX Reg32,rm16 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xb7; rm16 & Reg32 ... & check_Reg32_dest ...    { Reg32 = zext(rm16); build check_Reg32_dest; }
+# ia.sinc:4213
+:MOVZX Reg64,rm16 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xb7; rm16 & Reg64 ...     { Reg64 = zext(rm16); }
+# ia.sinc:4223
+:MWAIT is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xC9              { mwait(); }
+# ia.sinc:4224
+:MWAITX is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xFB              { mwaitx(); }
+# ia.sinc:4225
+:MONITOR is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xC8              { monitor(); }
+# ia.sinc:4226
+:MONITORX is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xFA              { monitorx(); }
+# ia.sinc:4241
+:PREFETCHIT0 m8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & (opsize=0 | opsize=1 | opsize=2) & byte=0x18; ( mod=0 & r_m=5 & reg_opcode=7 ) ... & m8 { }
+# ia.sinc:4242
+:PREFETCHIT1 m8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & (opsize=0 | opsize=1 | opsize=2) & byte=0x18; ( mod=0 & r_m=5 & reg_opcode=6 ) ... & m8 { }
+# ia.sinc:4244
+:NOP rm16 is vexMode=3 & vexMMMMM=1 & mandover & opsize=0 & high5=3; rm16  ...    { }
+# ia.sinc:4245
+:NOP rm32 is vexMode=3 & vexMMMMM=1 & mandover & opsize=1 & high5=3; rm32  ...    { }
+# ia.sinc:4246
+:NOP^"/reserved" rm16 is vexMode=3 & vexMMMMM=1 & mandover & opsize=0 & byte=0x18; rm16 & reg_opcode_hb=1 ...    { }
+# ia.sinc:4247
+:NOP^"/reserved" rm32 is vexMode=3 & vexMMMMM=1 & mandover & opsize=1 & byte=0x18; rm32 & reg_opcode_hb=1 ...    { }
+# ia.sinc:4248
 :NOP rm16 is vexMode=3 & vexMMMMM=1 & mandover & opsize=0 & byte=0x1f; rm16 & reg_opcode=0 ... { }
-# ia.sinc:4198
+# ia.sinc:4249
 :NOP rm32 is vexMode=3 & vexMMMMM=1 & mandover & opsize=1 & byte=0x1f; rm32 & reg_opcode=0 ... { }
-# ia.sinc:4200
+# ia.sinc:4251
 :NOP rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & mandover & opsize=2 & high5=3; rm64  ...    { }
-# ia.sinc:4201
+# ia.sinc:4252
 :NOP^"/reserved" rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & mandover & opsize=2 & byte=0x18; rm64 & reg_opcode_hb=1 ...    { }
-# ia.sinc:4202
+# ia.sinc:4253
 :NOP rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & mandover & opsize=2 & byte=0x1f; rm64 & reg_opcode=0 ... { }
-# ia.sinc:4285
+# ia.sinc:4336
 :POP FS is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & addrsize=2 & byte=0xa1 & FS    { popseg88(FS); }
-# ia.sinc:4287
+# ia.sinc:4338
 :POP GS is vexMode=3 & vexMMMMM=1 & addrsize=0 & byte=0xa9 & GS    { pop22(GS); }
-# ia.sinc:4288
+# ia.sinc:4339
 :POP GS is vexMode=3 & vexMMMMM=1 & addrsize=1 & byte=0xa9 & GS    { popseg44(GS); }
-# ia.sinc:4290
+# ia.sinc:4341
 :POP GS is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & addrsize=2 & byte=0xa9 & GS    { popseg88(GS); }
-# ia.sinc:4306
+# ia.sinc:4357
 :PREFETCH     m8 is vexMode=3 & vexMMMMM=1 & byte=0x0d; m8 & reg_opcode=0 ... { }
-# ia.sinc:4307
+# ia.sinc:4358
 :PREFETCH     m8 is vexMode=3 & vexMMMMM=1 & byte=0x0d; m8 & reg_opcode   ... { }  # rest aliased to /0
-# ia.sinc:4308
+# ia.sinc:4359
 :PREFETCHW    m8 is vexMode=3 & vexMMMMM=1 & byte=0x0d; m8 & reg_opcode=1 ... { }
-# ia.sinc:4309
+# ia.sinc:4360
 :PREFETCHWT1  m8 is vexMode=3 & vexMMMMM=1 & byte=0x0d; m8 & reg_opcode=2 ... { }
-# ia.sinc:4312
+# ia.sinc:4363
 :PREFETCH     Rmr8 is vexMode=3 & vexMMMMM=1 & byte=0x0d; mod=3 & Rmr8 & reg_opcode=0 { }
-# ia.sinc:4314
+# ia.sinc:4365
 :PREFETCHT0 m8 is vexMode=3 & vexMMMMM=1 & byte=0x18; ( mod != 0b11 & reg_opcode=1 ) ... & m8 { }
-# ia.sinc:4315
+# ia.sinc:4366
 :PREFETCHT1 m8 is vexMode=3 & vexMMMMM=1 & byte=0x18; ( mod != 0b11 & reg_opcode=2 ) ... & m8 { }
-# ia.sinc:4316
+# ia.sinc:4367
 :PREFETCHT2 m8 is vexMode=3 & vexMMMMM=1 & byte=0x18; ( mod != 0b11 & reg_opcode=3 ) ... & m8 { }
-# ia.sinc:4317
+# ia.sinc:4368
 :PREFETCHNTA m8 is vexMode=3 & vexMMMMM=1 & byte=0x18; ( mod != 0b11 & reg_opcode=0 ) ... & m8 { }
-# ia.sinc:4322
+# ia.sinc:4373
 :NOP^"/reserved" Rmr8 is vexMode=3 & vexMMMMM=1 & byte=0x18; mod=3 & Rmr8 & reg_opcode_hb=0 { }
-# ia.sinc:4326
+# ia.sinc:4377
 :PTWRITE rm32 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xae; rm32 & reg_opcode=4 ...     { ptwrite(rm32); }
-# ia.sinc:4328
-:PTWRITE rm64 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & opsize=2 & byte=0xae; rm64 & reg_opcode=4 ...     { ptwrite(rm64); }
 # ia.sinc:4379
+:PTWRITE rm64 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & opsize=2 & byte=0xae; rm64 & reg_opcode=4 ...     { ptwrite(rm64); }
+# ia.sinc:4430
 :PUSH FS is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xa0 & FS        { push82(FS); }
-# ia.sinc:4380
+# ia.sinc:4431
 :PUSH FS is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 &            byte=0xa0 & FS        { pushseg88(FS); }
-# ia.sinc:4385
+# ia.sinc:4436
 :PUSH GS is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xa8 & GS        { push82(GS); }
-# ia.sinc:4386
+# ia.sinc:4437
 :PUSH GS is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 &            byte=0xa8 & GS        { pushseg88(GS); }
-# ia.sinc:4483
+# ia.sinc:4534
 :RDFSBASE r32 is vexMode=3 & vexMMMMM=1 & opsize=1 & $(PRE_F3) & byte=0xae; reg_opcode=0 & r32 { r32 = readfsbase(); }
-# ia.sinc:4484
+# ia.sinc:4535
 :RDFSBASE r64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & byte=0xae; reg_opcode=0 & r64 { r64 = readfsbase(); }
-# ia.sinc:4487
+# ia.sinc:4538
 :RDGSBASE r32 is vexMode=3 & vexMMMMM=1 & opsize=1 & $(PRE_F3) & byte=0xae; reg_opcode=1 & r32 { r32 = readgsbase(); }
-# ia.sinc:4488
+# ia.sinc:4539
 :RDGSBASE r64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & byte=0xae; reg_opcode=1 & r64 { r64 = readgsbase(); }
-# ia.sinc:4499
+# ia.sinc:4550
 :RDPID r32 is vexMode=3 & vexMMMMM=1 & opsize=1 & $(PRE_F3) & byte=0xc7; reg_opcode=7 & r32 { r32 = readPID(); }
-# ia.sinc:4501
+# ia.sinc:4552
 :RDPID r64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & byte=0xc7; reg_opcode=7 & r64 { r64 = readPID(); }
-# ia.sinc:4505
+# ia.sinc:4556
 :RDPKRU is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xee { EAX = rdpkru_u32(); }
-# ia.sinc:4590
+# ia.sinc:4641
 :RSM is vexMode=3 & vexMMMMM=1 & byte=0xaa                  { tmp:4 = smm_restore_state(); return [tmp]; }
-# ia.sinc:4665
+# ia.sinc:4716
 :SET^cc rm8 is vexMode=3 & vexMMMMM=1 & row=9 & cc; rm8                { rm8 = cc; }
-# ia.sinc:4679
+# ia.sinc:4730
 :SGDT m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0x1; ( mod != 0b11 & reg_opcode=0 ) ... & m64
 {
 	m64 = GlobalDescriptorTableRegister();
 }
-# ia.sinc:4709
+# ia.sinc:4760
 :SHLD rm16,Reg16,imm8 is vexMode=3 & vexMMMMM=1 & opsize=0; byte=0xA4; rm16 & Reg16 ... ; imm8 { local count = imm8 & 0x1f; local tmp = rm16;
                                            rm16 = (rm16 << count) | (Reg16 >> (16 - count));
                                            shlflags(tmp,rm16,count); shiftresultflags(rm16,count);}
-# ia.sinc:4712
+# ia.sinc:4763
 :SHLD rm16,Reg16,CL is vexMode=3 & vexMMMMM=1 & opsize=0; byte=0xA5; CL & rm16 & Reg16 ...  { local count =   CL & 0x1f; local tmp = rm16;
                                           rm16 = (rm16 << count) | (Reg16 >> (16 - count));
                                           shlflags(tmp,rm16,count); shiftresultflags(rm16,count); }
-# ia.sinc:4715
+# ia.sinc:4766
 :SHLD rm32,Reg32,imm8 is vexMode=3 & vexMMMMM=1 & opsize=1; byte=0xA4; rm32 & check_rm32_dest ... & Reg32 ... ; imm8 { local count = imm8 & 0x1f; local tmp = rm32;
                                            rm32 = (rm32 << count) | (Reg32 >> (32 - count)); build check_rm32_dest;
                                            shlflags(tmp,rm32,count); shiftresultflags(rm32,count); }
-# ia.sinc:4718
+# ia.sinc:4769
 :SHLD rm32,Reg32,CL is vexMode=3 & vexMMMMM=1 & opsize=1; byte=0xA5; CL & rm32 & check_rm32_dest ... & Reg32 ...  { local count =   CL & 0x1f; local tmp = rm32;
                                           rm32 = (rm32 << count) | (Reg32 >> (32 - count)); build check_rm32_dest;
                                           shlflags(tmp,rm32,count); shiftresultflags(rm32,count); }
-# ia.sinc:4722
+# ia.sinc:4773
 :SHLD rm64,Reg64,imm8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2; byte=0xA4; rm64 & Reg64 ... ; imm8 { local count = imm8 & 0x3f; local tmp = rm64;
                                            rm64 = (rm64 << count) | (Reg64 >> (64 - count));
                                            shlflags(tmp,rm64,count); shiftresultflags(rm64,count); }
-# ia.sinc:4725
+# ia.sinc:4776
 :SHLD rm64,Reg64,CL is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2; byte=0xA5; CL & rm64 & Reg64 ...  { local count =   CL & 0x3f; local tmp = rm64;
                                           rm64 = (rm64 << count) | (Reg64 >> (64 - count));
                                           shlflags(tmp,rm64,count); shiftresultflags(rm64,count); }
-# ia.sinc:4730
+# ia.sinc:4781
 :SHRD rm16,Reg16,imm8 is vexMode=3 & vexMMMMM=1 & opsize=0; byte=0xAC; rm16 & Reg16 ... ; imm8 { local count = imm8 & 0x1f; local tmp = rm16;
                                            rm16 = (rm16 >> count) | (Reg16 << (16 - count));
                                            shrdflags(tmp,rm16,count); shiftresultflags(rm16,count); }
-# ia.sinc:4733
+# ia.sinc:4784
 :SHRD rm16,Reg16,CL is vexMode=3 & vexMMMMM=1 & opsize=0; byte=0xAD; CL & rm16 & Reg16 ...  { local count =   CL & 0x1f; local tmp = rm16;
                                           rm16 = (rm16 >> count) | (Reg16 << (16 - count));
                                           shrdflags(tmp,rm16,count); shiftresultflags(rm16,count); }
-# ia.sinc:4736
+# ia.sinc:4787
 :SHRD rm32,Reg32,imm8 is vexMode=3 & vexMMMMM=1 & opsize=1; byte=0xAC; rm32 & check_rm32_dest ... & Reg32 ... ; imm8 { local count = imm8 & 0x1f; local tmp = rm32;
                                            rm32 = (rm32 >> count) | (Reg32 << (32 - count)); build check_rm32_dest;
                                            shrdflags(tmp,rm32,count); shiftresultflags(rm32,count); }
-# ia.sinc:4739
+# ia.sinc:4790
 :SHRD rm32,Reg32,CL is vexMode=3 & vexMMMMM=1 & opsize=1; byte=0xAD; CL & rm32 & check_rm32_dest ... & Reg32 ...  { local count =   CL & 0x1f; local tmp = rm32;
                                           rm32 = (rm32 >> count) | (Reg32 << (32 - count)); build check_rm32_dest;
                                           shrdflags(tmp,rm32,count); shiftresultflags(rm32,count); }
-# ia.sinc:4743
+# ia.sinc:4794
 :SHRD rm64,Reg64,imm8 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2; byte=0xAC; rm64 & Reg64 ... ; imm8 { local count = imm8 & 0x3f; local tmp = rm64;
                                            rm64 = (rm64 >> count) | (Reg64 << (64 - count));
                                            shrdflags(tmp,rm64,count); shiftresultflags(rm64,count); }
-# ia.sinc:4746
+# ia.sinc:4797
 :SHRD rm64,Reg64,CL is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2; byte=0xAD; CL & rm64 & Reg64 ...  { local count =   CL & 0x3f; local tmp = rm64;
                                           rm64 = (rm64 >> count) | (Reg64 << (64 - count));
                                           shrdflags(tmp,rm64,count); shiftresultflags(rm64,count); }
-# ia.sinc:4784
+# ia.sinc:4835
 :SIDT m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 &  byte=0x1; ( mod != 0b11 & reg_opcode=1 ) ... & m64
 {
 	m64 = InterruptDescriptorTableRegister();
 }
-# ia.sinc:4791
+# ia.sinc:4842
 :SKINIT EAX is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xde & EAX { skinit(EAX); }
-# ia.sinc:4793
+# ia.sinc:4844
 :SLDT rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0x0; rm16 & reg_opcode=0 ...
 {
 	rm16 = LocalDescriptorTableRegister();
 }
-# ia.sinc:4797
+# ia.sinc:4848
 :SLDT rm32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0x0; rm32 & reg_opcode=0 ...
 {
 	rm32 = LocalDescriptorTableRegister();
 }
-# ia.sinc:4802
+# ia.sinc:4853
 :SLDT rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0x0; rm64 & reg_opcode=0 ...
 {
 	rm64 = LocalDescriptorTableRegister();
 }
-# ia.sinc:4808
+# ia.sinc:4859
 :SMSW rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0x01; rm16 & reg_opcode=4 ...  { rm16 = CR0:2; }
-# ia.sinc:4809
+# ia.sinc:4860
 :SMSW rm32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0x01; rm32 & reg_opcode=4 ...  { rm32 = zext(CR0:2); }
-# ia.sinc:4811
+# ia.sinc:4862
 :SMSW rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0x01; rm64 & reg_opcode=4 ...  { rm64 = CR0; }
-# ia.sinc:4814
+# ia.sinc:4865
 :STAC is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xcb  { AC = 1; }
-# ia.sinc:4820
+# ia.sinc:4871
 :STGI is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xdc              { stgi(); }
-# ia.sinc:4823
+# ia.sinc:4874
 :STMXCSR m32 is vexMode=3 & vexMMMMM=1 & byte=0xae; ( mod != 0b11 & reg_opcode=3 ) ... & m32 { m32 = MXCSR; }
-# ia.sinc:4832
+# ia.sinc:4883
 :STR rm16 is vexMode=3 & vexMMMMM=1 & byte=0x0; rm16 & reg_opcode=1 ... { rm16 = TaskRegister(); }
-# ia.sinc:4833
+# ia.sinc:4884
 :STR Rmr32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0x0; Rmr32 & mod=3 & reg_opcode=1 & check_Rmr32_dest {
 	local tmp:2 = TaskRegister();
 	Rmr32 = zext(tmp);
 	build check_Rmr32_dest;
 }
-# ia.sinc:4839
+# ia.sinc:4890
 :STR Rmr64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0x0; Rmr64 & mod=3 & reg_opcode=1 {
 	local tmp:2 = TaskRegister();
 	Rmr64 = zext(tmp);
 }
-# ia.sinc:4893
+# ia.sinc:4944
 :SYSCALL is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0x05                     {
                                                                   RCX = inst_next; R11 = rflags;
                                                                   syscall(); }
-# ia.sinc:4901
+# ia.sinc:4952
 :SYSRET is vexMode=3 & vexMMMMM=1 & byte=0x07                     { sysret();
                                                                   RIP=RCX; return [RIP];
                                                                 }
-# ia.sinc:4907
+# ia.sinc:4958
 :SWAPGS is vexMode=3 & vexMMMMM=1 & bit64=1 & byte=0x01; byte=0xf8   { swapgs(); }
-# ia.sinc:4909
+# ia.sinc:4960
 :RDTSCP is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xf9   { rdtscp(); }
-# ia.sinc:4931
+# ia.sinc:4982
 :UD0  Reg32, rm32 is vexMode=3 & vexMMMMM=1 & byte=0xff; rm32 & Reg32 ...           { local target:$(SIZE) = invalidInstructionException(); goto [target]; }
-# ia.sinc:4932
-:UD1  Reg32, rm32 is vexMode=3 & vexMMMMM=1 & byte=0xb9; rm32 & Reg32 ...           { local target:$(SIZE) = invalidInstructionException(); goto [target]; }
-# ia.sinc:4933
-:UD2 is vexMode=3 & vexMMMMM=1 & byte=0xb                               { local target:$(SIZE) = invalidInstructionException(); goto [target]; }
-# ia.sinc:4937
-:VERR rm16 is vexMode=3 & vexMMMMM=1 & byte=0x0; rm16 & reg_opcode=4 ...      { ZF = verr(); }
-# ia.sinc:4938
-:VERW rm16 is vexMode=3 & vexMMMMM=1 & byte=0x0; rm16 & reg_opcode=5 ...      { ZF = verw(); }
-# ia.sinc:4943
-:VMLOAD EAX is vexMode=3 & vexMMMMM=1 & addrsize=1 & byte=0x01; byte=0xda & EAX       { vmload(EAX); }
-# ia.sinc:4945
-:VMLOAD RAX is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & addrsize=2 & byte=0x01; byte=0xda & RAX       { vmload(RAX); }
-# ia.sinc:4947
-:VMMCALL is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xd9          { vmmcall(); }
-# ia.sinc:4949
-:VMRUN EAX is vexMode=3 & vexMMMMM=1 & addrsize=1 & byte=0x01; byte=0xd8 & EAX       { vmrun(EAX); }
-# ia.sinc:4951
-:VMRUN RAX is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & addrsize=2 & byte=0x01; byte=0xd8 & RAX       { vmrun(RAX); }
-# ia.sinc:4954
-:VMSAVE EAX is vexMode=3 & vexMMMMM=1 & addrsize=1 & byte=0x01; byte=0xdb & EAX       { vmsave(EAX); }
-# ia.sinc:4956
-:VMSAVE RAX is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & addrsize=2 & byte=0x01; byte=0xdb & RAX       { vmsave(RAX); }
 # ia.sinc:4983
-:VMCLEAR m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0xc7; ( mod != 0b11 & reg_opcode=6 ) ... & m64 { local status:4 = vmclear(m64); vmxflags(status); }
+:UD1  Reg32, rm32 is vexMode=3 & vexMMMMM=1 & byte=0xb9; rm32 & Reg32 ...           { local target:$(SIZE) = invalidInstructionException(); goto [target]; }
 # ia.sinc:4984
-:VMLAUNCH is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xc2                          { local status:4 = vmlaunch(); vmxflags(status); }
-# ia.sinc:4985
-:VMRESUME is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xc3                          { local status:4 = vmresume(); vmxflags(status); }
-# ia.sinc:4986
-:VMPTRLD m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0xc7; ( mod != 0b11 & reg_opcode=6 ) ... & m64 { local status:4 = vmptrld(m64); vmxflags(status); }
-# ia.sinc:4987
-:VMPTRST m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0xc7; ( mod != 0b11 & reg_opcode=7 ) ... & m64  { m64 = vmptrst(); vmxsucceed(); }
+:UD2 is vexMode=3 & vexMMMMM=1 & byte=0xb                               { local target:$(SIZE) = invalidInstructionException(); goto [target]; }
+# ia.sinc:4988
+:VERR rm16 is vexMode=3 & vexMMMMM=1 & byte=0x0; rm16 & reg_opcode=4 ...      { ZF = verr(); }
 # ia.sinc:4989
-:VMREAD rm64, Reg64 is $(LONGMODE_ON) & $(PRE_NO) & vexMode=3 & vexMMMMM=1 & byte=0x78; rm64 & Reg64 ...     { rm64 = vmread(Reg64); local status:4 = vmx_status(); vmxflags(status); }
-# ia.sinc:4990
-:VMWRITE Reg64, rm64 is $(LONGMODE_ON) & $(PRE_NO) & vexMode=3 & vexMMMMM=1 & byte=0x79; rm64 & Reg64 ...    { local status:4 = vmwrite(rm64,Reg64); vmxflags(status); }
-# ia.sinc:4991
-:VMXOFF is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xc4                           { local status:4 = vmxoff(); vmxflags(status); }
-# ia.sinc:4992
-:VMXON m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xc7; ( mod != 0b11 & reg_opcode=6 ) ... & m64  { local status:4 = vmxon(m64); vmxflags(status); }
+:VERW rm16 is vexMode=3 & vexMMMMM=1 & byte=0x0; rm16 & reg_opcode=5 ...      { ZF = verw(); }
+# ia.sinc:4994
+:VMLOAD EAX is vexMode=3 & vexMMMMM=1 & addrsize=1 & byte=0x01; byte=0xda & EAX       { vmload(EAX); }
+# ia.sinc:4996
+:VMLOAD RAX is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & addrsize=2 & byte=0x01; byte=0xda & RAX       { vmload(RAX); }
+# ia.sinc:4998
+:VMMCALL is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xd9          { vmmcall(); }
+# ia.sinc:5000
+:VMRUN EAX is vexMode=3 & vexMMMMM=1 & addrsize=1 & byte=0x01; byte=0xd8 & EAX       { vmrun(EAX); }
+# ia.sinc:5002
+:VMRUN RAX is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & addrsize=2 & byte=0x01; byte=0xd8 & RAX       { vmrun(RAX); }
+# ia.sinc:5005
+:VMSAVE EAX is vexMode=3 & vexMMMMM=1 & addrsize=1 & byte=0x01; byte=0xdb & EAX       { vmsave(EAX); }
 # ia.sinc:5007
-:VMCALL is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xc1                          { vmcall(); }
-# ia.sinc:5010
-:VMFUNC EAX is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xd4 & EAX                         { vmfunc(EAX); }
-# ia.sinc:5014
-:WBINVD is vexMode=3 & vexMMMMM=1 & byte=0x9                   { }
-# ia.sinc:5018
-:WRFSBASE r32 is vexMode=3 & vexMMMMM=1 & opsize=1 & $(PRE_F3) & byte=0xae; reg_opcode=2 & r32 { tmp:8 = zext(r32); writefsbase(tmp); }
-# ia.sinc:5019
-:WRFSBASE r64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & byte=0xae; reg_opcode=2 & r64 { writefsbase(r64); }
-# ia.sinc:5022
-:WRGSBASE r32 is vexMode=3 & vexMMMMM=1 & opsize=1 & $(PRE_F3) & byte=0xae; reg_opcode=3 & r32 { tmp:8 = zext(r32); writegsbase(tmp); }
-# ia.sinc:5023
-:WRGSBASE r64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & byte=0xae; reg_opcode=3 & r64 { writegsbase(r64); }
-# ia.sinc:5033
-:XADD       Rmr8,Reg8 is vexMode=3 & vexMMMMM=1 & byte=0xC0; mod=3 & Rmr8 & Reg8        { addflags( Rmr8,Reg8 ); local tmp =  Rmr8 +  Reg8;  Reg8 = Rmr8; Rmr8 = tmp;     resultflags(tmp); }
+:VMSAVE RAX is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & addrsize=2 & byte=0x01; byte=0xdb & RAX       { vmsave(RAX); }
 # ia.sinc:5034
-:XADD      Rmr16,Reg16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xC1; mod=3 & Rmr16 & Reg16 { addflags(Rmr16,Reg16); local tmp = Rmr16 + Reg16; Reg16 = Rmr16; Rmr16 = tmp; resultflags(tmp); }
+:VMCLEAR m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0xc7; ( mod != 0b11 & reg_opcode=6 ) ... & m64 { local status:4 = vmclear(m64); vmxflags(status); }
 # ia.sinc:5035
-:XADD      Rmr32,Reg32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xC1; mod=3 & Rmr32 & check_Rmr32_dest & Reg32 & check_Reg32_dest { addflags(Rmr32,Reg32); local tmp = Rmr32 + Reg32; Reg32 = Rmr32; Rmr32 = tmp; build check_Rmr32_dest; build check_Reg32_dest; resultflags(tmp); }
+:VMLAUNCH is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xc2                          { local status:4 = vmlaunch(); vmxflags(status); }
+# ia.sinc:5036
+:VMRESUME is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xc3                          { local status:4 = vmresume(); vmxflags(status); }
 # ia.sinc:5037
+:VMPTRLD m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0xc7; ( mod != 0b11 & reg_opcode=6 ) ... & m64 { local status:4 = vmptrld(m64); vmxflags(status); }
+# ia.sinc:5038
+:VMPTRST m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0xc7; ( mod != 0b11 & reg_opcode=7 ) ... & m64  { m64 = vmptrst(); vmxsucceed(); }
+# ia.sinc:5040
+:VMREAD rm64, Reg64 is $(LONGMODE_ON) & $(PRE_NO) & vexMode=3 & vexMMMMM=1 & byte=0x78; rm64 & Reg64 ...     { rm64 = vmread(Reg64); local status:4 = vmx_status(); vmxflags(status); }
+# ia.sinc:5041
+:VMWRITE Reg64, rm64 is $(LONGMODE_ON) & $(PRE_NO) & vexMode=3 & vexMMMMM=1 & byte=0x79; rm64 & Reg64 ...    { local status:4 = vmwrite(rm64,Reg64); vmxflags(status); }
+# ia.sinc:5042
+:VMXOFF is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xc4                           { local status:4 = vmxoff(); vmxflags(status); }
+# ia.sinc:5043
+:VMXON m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xc7; ( mod != 0b11 & reg_opcode=6 ) ... & m64  { local status:4 = vmxon(m64); vmxflags(status); }
+# ia.sinc:5058
+:VMCALL is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xc1                          { vmcall(); }
+# ia.sinc:5061
+:VMFUNC EAX is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xd4 & EAX                         { vmfunc(EAX); }
+# ia.sinc:5065
+:WBINVD is vexMode=3 & vexMMMMM=1 & byte=0x9                   { }
+# ia.sinc:5069
+:WRFSBASE r32 is vexMode=3 & vexMMMMM=1 & opsize=1 & $(PRE_F3) & byte=0xae; reg_opcode=2 & r32 { tmp:8 = zext(r32); writefsbase(tmp); }
+# ia.sinc:5070
+:WRFSBASE r64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & byte=0xae; reg_opcode=2 & r64 { writefsbase(r64); }
+# ia.sinc:5073
+:WRGSBASE r32 is vexMode=3 & vexMMMMM=1 & opsize=1 & $(PRE_F3) & byte=0xae; reg_opcode=3 & r32 { tmp:8 = zext(r32); writegsbase(tmp); }
+# ia.sinc:5074
+:WRGSBASE r64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & byte=0xae; reg_opcode=3 & r64 { writegsbase(r64); }
+# ia.sinc:5084
+:XADD       Rmr8,Reg8 is vexMode=3 & vexMMMMM=1 & byte=0xC0; mod=3 & Rmr8 & Reg8        { addflags( Rmr8,Reg8 ); local tmp =  Rmr8 +  Reg8;  Reg8 = Rmr8; Rmr8 = tmp;     resultflags(tmp); }
+# ia.sinc:5085
+:XADD      Rmr16,Reg16 is vexMode=3 & vexMMMMM=1 & opsize=0 & byte=0xC1; mod=3 & Rmr16 & Reg16 { addflags(Rmr16,Reg16); local tmp = Rmr16 + Reg16; Reg16 = Rmr16; Rmr16 = tmp; resultflags(tmp); }
+# ia.sinc:5086
+:XADD      Rmr32,Reg32 is vexMode=3 & vexMMMMM=1 & opsize=1 & byte=0xC1; mod=3 & Rmr32 & check_Rmr32_dest & Reg32 & check_Reg32_dest { addflags(Rmr32,Reg32); local tmp = Rmr32 + Reg32; Reg32 = Rmr32; Rmr32 = tmp; build check_Rmr32_dest; build check_Reg32_dest; resultflags(tmp); }
+# ia.sinc:5088
 :XADD      Rmr64,Reg64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & byte=0xC1; mod=3 & Rmr64 & Reg64 { addflags(Rmr64,Reg64); local tmp = Rmr64 + Reg64; Reg64 = Rmr64; Rmr64 = tmp; resultflags(tmp); }
-# ia.sinc:5050
+# ia.sinc:5101
 :XEND is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xd5     { xend(); }
-# ia.sinc:5104
+# ia.sinc:5155
 :XGETBV is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xD0  { local test = (ECX == 1); local xiu:8 = xinuse(test); local tXCR0 = (zext(test) * XCR0) + (zext(!test) * (XCR0 & xiu)); local tmp = tXCR0 >> 32; EDX = tmp:4;  EAX = tXCR0:4; }
-# ia.sinc:5105
-:XSETBV is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xD1  { local sel = ECX; XCR0 = (zext(EDX) << 32) | zext(EAX); }
-# ia.sinc:5129
-:XRSTOR Mem is vexMode=3 & vexMMMMM=1 & byte=0xAE; ( mod != 0b11 & reg_opcode=5 ) ... & Mem { tmp:4 = 512; xrstor(Mem, tmp); xrstor_control(Mem); }
-# ia.sinc:5131
-:XRSTOR64 Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(REX_W) & byte=0xAE; ( mod != 0b11 & reg_opcode=5 ) ... & Mem { tmp:4 = 512; xrstor64(Mem, tmp); xrstor_control(Mem); }
-# ia.sinc:5134
-:XRSTORS Mem is vexMode=3 & vexMMMMM=1 & byte=0xC7; ( mod != 0b11 & reg_opcode=3 ) ... & Mem { tmp:4 = 512; xrstors(Mem, tmp); xrstor_control(Mem); }
-# ia.sinc:5136
-:XRSTORS64 Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(REX_W) & byte=0xC7; ( mod != 0b11 & reg_opcode=3 ) ... & Mem { tmp:4 = 512; xrstors64(Mem, tmp); xrstor_control(Mem); }
-# ia.sinc:5139
-:XSAVE  Mem is vexMode=3 & vexMMMMM=1 & byte=0xAE; ( mod != 0b11 & reg_opcode=4 ) ... & Mem { tmp:4 = 512; xsave(Mem, tmp); }
-# ia.sinc:5141
-:XSAVE64  Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(REX_W) & byte=0xAE; ( mod != 0b11 & reg_opcode=4 ) ... & Mem { tmp:4 = 512; xsave64(Mem, tmp); }
-# ia.sinc:5144
-:XSAVEC  Mem is vexMode=3 & vexMMMMM=1 & byte=0xC7; ( mod != 0b11 & reg_opcode=4 ) ... & Mem { tmp:4 = 512; xsavec(Mem, tmp); }
-# ia.sinc:5146
-:XSAVEC64  Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(REX_W) & byte=0xC7; ( mod != 0b11 & reg_opcode=4 ) ... & Mem { tmp:4 = 512; xsavec64(Mem, tmp); }
-# ia.sinc:5149
-:XSAVEOPT  Mem is vexMode=3 & vexMMMMM=1 & byte=0xAE; ( mod != 0b11 & reg_opcode=6 ) ... & Mem { tmp:4 = 512; xsaveopt(Mem, tmp); }
-# ia.sinc:5151
-:XSAVEOPT64  Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(REX_W) & byte=0xAE; ( mod != 0b11 & reg_opcode=6 ) ... & Mem { tmp:4 = 512; xsaveopt64(Mem, tmp); }
-# ia.sinc:5154
-:XSAVES  Mem is vexMode=3 & vexMMMMM=1 & byte=0xC7; ( mod != 0b11 & reg_opcode=5 ) ... & Mem { tmp:4 = 512; xsaves(Mem, tmp); }
 # ia.sinc:5156
+:XSETBV is vexMode=3 & vexMMMMM=1 & byte=0x01; byte=0xD1  { local sel = ECX; XCR0 = (zext(EDX) << 32) | zext(EAX); }
+# ia.sinc:5180
+:XRSTOR Mem is vexMode=3 & vexMMMMM=1 & byte=0xAE; ( mod != 0b11 & reg_opcode=5 ) ... & Mem { tmp:4 = 512; xrstor(Mem, tmp); xrstor_control(Mem); }
+# ia.sinc:5182
+:XRSTOR64 Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(REX_W) & byte=0xAE; ( mod != 0b11 & reg_opcode=5 ) ... & Mem { tmp:4 = 512; xrstor64(Mem, tmp); xrstor_control(Mem); }
+# ia.sinc:5185
+:XRSTORS Mem is vexMode=3 & vexMMMMM=1 & byte=0xC7; ( mod != 0b11 & reg_opcode=3 ) ... & Mem { tmp:4 = 512; xrstors(Mem, tmp); xrstor_control(Mem); }
+# ia.sinc:5187
+:XRSTORS64 Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(REX_W) & byte=0xC7; ( mod != 0b11 & reg_opcode=3 ) ... & Mem { tmp:4 = 512; xrstors64(Mem, tmp); xrstor_control(Mem); }
+# ia.sinc:5190
+:XSAVE  Mem is vexMode=3 & vexMMMMM=1 & byte=0xAE; ( mod != 0b11 & reg_opcode=4 ) ... & Mem { tmp:4 = 512; xsave(Mem, tmp); }
+# ia.sinc:5192
+:XSAVE64  Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(REX_W) & byte=0xAE; ( mod != 0b11 & reg_opcode=4 ) ... & Mem { tmp:4 = 512; xsave64(Mem, tmp); }
+# ia.sinc:5195
+:XSAVEC  Mem is vexMode=3 & vexMMMMM=1 & byte=0xC7; ( mod != 0b11 & reg_opcode=4 ) ... & Mem { tmp:4 = 512; xsavec(Mem, tmp); }
+# ia.sinc:5197
+:XSAVEC64  Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(REX_W) & byte=0xC7; ( mod != 0b11 & reg_opcode=4 ) ... & Mem { tmp:4 = 512; xsavec64(Mem, tmp); }
+# ia.sinc:5200
+:XSAVEOPT  Mem is vexMode=3 & vexMMMMM=1 & byte=0xAE; ( mod != 0b11 & reg_opcode=6 ) ... & Mem { tmp:4 = 512; xsaveopt(Mem, tmp); }
+# ia.sinc:5202
+:XSAVEOPT64  Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(REX_W) & byte=0xAE; ( mod != 0b11 & reg_opcode=6 ) ... & Mem { tmp:4 = 512; xsaveopt64(Mem, tmp); }
+# ia.sinc:5205
+:XSAVES  Mem is vexMode=3 & vexMMMMM=1 & byte=0xC7; ( mod != 0b11 & reg_opcode=5 ) ... & Mem { tmp:4 = 512; xsaves(Mem, tmp); }
+# ia.sinc:5207
 :XSAVES64  Mem is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & $(REX_W) & byte=0xC7; ( mod != 0b11 & reg_opcode=5 ) ... & Mem { tmp:4 = 512; xsaves64(Mem, tmp); }
-# ia.sinc:5162
+# ia.sinc:5213
 :LFENCE is vexMode=3 & vexMMMMM=1 & $(PRE_NO) & byte=0xAE; mod = 0b11 & reg_opcode=5 & r_m=0 { }
-# ia.sinc:5163
+# ia.sinc:5214
 :MFENCE is vexMode=3 & vexMMMMM=1 & $(PRE_NO) & byte=0xAE; mod = 0b11 & reg_opcode=6 & r_m=0 { }
-# ia.sinc:5164
+# ia.sinc:5215
 :SFENCE is vexMode=3 & vexMMMMM=1 & $(PRE_NO) & byte=0xAE; mod = 0b11 & reg_opcode=7 & r_m=0 { }
-# ia.sinc:6334
+# ia.sinc:6385
 :ADDPD        XmmReg, m128 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x58; XmmReg ... & m128
 {
     XmmReg[0,64]  = XmmReg[0,64]  f+ m128[0,64];
     XmmReg[64,64] = XmmReg[64,64] f+ m128[64,64];
 }
-# ia.sinc:6340
+# ia.sinc:6391
 :ADDPD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x58; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64]  = XmmReg1[0,64]  f+ XmmReg2[0,64];
     XmmReg1[64,64] = XmmReg1[64,64] f+ XmmReg2[64,64];
 }
-# ia.sinc:6346
+# ia.sinc:6397
 :ADDPS        XmmReg, m128 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x58; m128 & XmmReg ...
 {
     local m:16 = m128;	# Guarantee value is in a fixed location
@@ -802,7 +802,7 @@
     XmmReg[64,32] = XmmReg[64,32] f+ m[64,32];
     XmmReg[96,32] = XmmReg[96,32] f+ m[96,32];
 }
-# ia.sinc:6355
+# ia.sinc:6406
 :ADDPS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x58; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg1[0,32] f+ XmmReg2[0,32];
@@ -810,40 +810,40 @@
     XmmReg1[64,32] = XmmReg1[64,32] f+ XmmReg2[64,32];
     XmmReg1[96,32] = XmmReg1[96,32] f+ XmmReg2[96,32];
 }
-# ia.sinc:6363
+# ia.sinc:6414
 :ADDSD        XmmReg, m64 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x58; m64 & XmmReg ...
 {
     XmmReg[0,64] = XmmReg[0,64] f+ m64;
 }
-# ia.sinc:6368
+# ia.sinc:6419
 :ADDSD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x58; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg1[0,64] f+ XmmReg2[0,64];
 }
-# ia.sinc:6373
+# ia.sinc:6424
 :ADDSS        XmmReg, m32 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x58; m32 & XmmReg ...
 {
     XmmReg[0,32] = XmmReg[0,32] f+ m32;
 }
-# ia.sinc:6378
+# ia.sinc:6429
 :ADDSS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x58; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg1[0,32] f+ XmmReg2[0,32];
 }
-# ia.sinc:6383
+# ia.sinc:6434
 :ADDSUBPD     XmmReg, m128 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0xD0; m128 & XmmReg ...
 {
     local m:16 = m128;
     XmmReg[0,64] = XmmReg[0,64] f- m[0,64];
     XmmReg[64,64] = XmmReg[64,64] f+ m[64,64];
 }
-# ia.sinc:6390
+# ia.sinc:6441
 :ADDSUBPD     XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0xD0; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg1[0,64] f- XmmReg2[0,64];
     XmmReg1[64,64] = XmmReg1[64,64] f+ XmmReg2[64,64];
 }
-# ia.sinc:6396
+# ia.sinc:6447
 :ADDSUBPS     XmmReg, m128 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0xD0; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -852,7 +852,7 @@
     XmmReg[64,32] = XmmReg[64,32] f- m[64,32];
     XmmReg[96,32] = XmmReg[96,32] f+ m[96,32];
 }
-# ia.sinc:6405
+# ia.sinc:6456
 :ADDSUBPS     XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0xD0; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg1[0,32] f- XmmReg2[0,32];
@@ -860,20 +860,20 @@
     XmmReg1[64,32] = XmmReg1[64,32] f- XmmReg2[64,32];
     XmmReg1[96,32] = XmmReg1[96,32] f+ XmmReg2[96,32];
 }
-# ia.sinc:6414
+# ia.sinc:6465
 :ANDPD  XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x54; m128 & XmmReg ...
 {
     local m:16 = m128;
     XmmReg[0,64] = XmmReg[0,64] & m[0,64];
     XmmReg[64,64] = XmmReg[64,64] & m[64,64];
 }
-# ia.sinc:6422
+# ia.sinc:6473
 :ANDPD  XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x54; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg1[0,64] & XmmReg2[0,64];
     XmmReg1[64,64] = XmmReg1[64,64] & XmmReg2[64,64];
 }
-# ia.sinc:6429
+# ia.sinc:6480
 :ANDPS        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x54; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -882,7 +882,7 @@
     XmmReg[64,32] = XmmReg[64,32] & m[64,32];
     XmmReg[96,32] = XmmReg[96,32] & m[96,32];
 }
-# ia.sinc:6439
+# ia.sinc:6490
 :ANDPS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x54; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg1[0,32] & XmmReg2[0,32];
@@ -890,20 +890,20 @@
     XmmReg1[64,32] = XmmReg1[64,32] & XmmReg2[64,32];
     XmmReg1[96,32] = XmmReg1[96,32] & XmmReg2[96,32];
 }
-# ia.sinc:6448
+# ia.sinc:6499
 :ANDNPD       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x55; m128 & XmmReg ...
 {
     local m:16 = m128;
     XmmReg[0,64] = ~XmmReg[0,64] & m[0,64];
     XmmReg[64,64] = ~XmmReg[64,64] & m[64,64];
 }
-# ia.sinc:6455
+# ia.sinc:6506
 :ANDNPD       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x55; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = ~XmmReg1[0,64] & XmmReg2[0,64];
     XmmReg1[64,64] = ~XmmReg1[64,64] & XmmReg2[64,64];
 }
-# ia.sinc:6462
+# ia.sinc:6513
 :ANDNPS       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x55; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -912,7 +912,7 @@
     XmmReg[64,32] = ~XmmReg[64,32] & m[64,32];
     XmmReg[96,32] = ~XmmReg[96,32] & m[96,32];
 }
-# ia.sinc:6471
+# ia.sinc:6522
 :ANDNPS       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x55; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = ~XmmReg1[0,32] & XmmReg2[0,32];
@@ -920,7 +920,7 @@
     XmmReg1[64,32] = ~XmmReg1[64,32] & XmmReg2[64,32];
     XmmReg1[96,32] = ~XmmReg1[96,32] & XmmReg2[96,32];
 }
-# ia.sinc:6531
+# ia.sinc:6582
 :CMP^XmmCondPD^"PD"        XmmReg,m128^CMPPD_OPERAND is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xC2; (m128 & XmmReg ...); XmmCondPD & CMPPD_OPERAND
 {
     local m:16 = m128;
@@ -935,7 +935,7 @@
 	XmmReg[0,64] = xmmTmp1_Qa;
 	XmmReg[64,64] = xmmTmp1_Qb;
 }
-# ia.sinc:6546
+# ia.sinc:6597
 :CMP^XmmCondPD^"PD"        XmmReg1,XmmReg2^CMPPD_OPERAND is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xC2; xmmmod=3 & XmmReg1 & XmmReg2; XmmCondPD & CMPPD_OPERAND 
 {
 	xmmTmp1_Qa = XmmReg1[0,64];
@@ -949,7 +949,7 @@
 	XmmReg1[0,64] = xmmTmp1_Qa;
 	XmmReg1[64,64] = xmmTmp1_Qb;
 }
-# ia.sinc:6631
+# ia.sinc:6682
 :CMP^XmmCondPS^"PS"        XmmReg,m128^CMPPS_OPERAND is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xC2; (m128 & XmmReg ...); XmmCondPS & CMPPS_OPERAND
 {
     local m:16 = m128;
@@ -970,7 +970,7 @@
 	XmmReg[64,32] = xmmTmp1_Dc;
 	XmmReg[96,32] = xmmTmp1_Dd;
 }
-# ia.sinc:6652
+# ia.sinc:6703
 :CMP^XmmCondPS^"PS"        XmmReg1,XmmReg2^CMPPS_OPERAND is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xC2; xmmmod=3 & XmmReg1 & XmmReg2; XmmCondPS & CMPPS_OPERAND 
 {
 	xmmTmp1_Da = XmmReg1[0,32];
@@ -990,7 +990,7 @@
 	XmmReg1[64,32] = xmmTmp1_Dc;
 	XmmReg1[96,32] = xmmTmp1_Dd;
 }
-# ia.sinc:6717
+# ia.sinc:6768
 :CMP^XmmCondSD^"SD"  XmmReg, m64^CMPSD_OPERAND is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0xC2; (m64 & XmmReg ...); XmmCondSD & CMPSD_OPERAND
 { 
 	xmmTmp1_Qa = XmmReg[0,64];
@@ -998,7 +998,7 @@
 	build XmmCondSD;
 	XmmReg[0,64] = xmmTmp1_Qa;
 }
-# ia.sinc:6725
+# ia.sinc:6776
 :CMP^XmmCondSD^"SD"  XmmReg1, XmmReg2^CMPSD_OPERAND is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0xC2; xmmmod=3 & XmmReg1 & XmmReg2; XmmCondSD & CMPSD_OPERAND
 { 
 	xmmTmp1_Qa = XmmReg1[0,64];
@@ -1006,7 +1006,7 @@
 	build XmmCondSD;
 	XmmReg1[0,64] = xmmTmp1_Qa;
 }
-# ia.sinc:6778
+# ia.sinc:6829
 :CMP^XmmCondSS^"SS"  XmmReg, m32^CMPSS_OPERAND is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xC2; (m32 & XmmReg ...); XmmCondSS & CMPSS_OPERAND
 { 
 	xmmTmp1_Da = XmmReg[0,32];
@@ -1014,7 +1014,7 @@
 	build XmmCondSS;
 	XmmReg[0,32] = xmmTmp1_Da;
 }
-# ia.sinc:6786
+# ia.sinc:6837
 :CMP^XmmCondSS^"SS"  XmmReg1, XmmReg2^CMPSS_OPERAND is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xC2; xmmmod=3 & XmmReg1 & XmmReg2; XmmCondSS & CMPSS_OPERAND
 { 
 	xmmTmp1_Da = XmmReg1[0,32];
@@ -1022,41 +1022,41 @@
 	build XmmCondSS;
 	XmmReg1[0,32] = xmmTmp1_Da;
 }
-# ia.sinc:6795
+# ia.sinc:6846
 :COMISD       XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x2F; m64 & XmmReg ...
 {
   fucompe(XmmReg[0,64], m64);
 }
-# ia.sinc:6800
+# ia.sinc:6851
 :COMISD       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x2F; xmmmod=3 & XmmReg1 & XmmReg2
 {
   fucompe(XmmReg1[0,64], XmmReg2[0,64]);
 }
-# ia.sinc:6805
+# ia.sinc:6856
 :COMISS       XmmReg, m32 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x2F; m32 & XmmReg ...
 {
   fucompe(XmmReg[0,32], m32);
 }
-# ia.sinc:6810
+# ia.sinc:6861
 :COMISS       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x2F; xmmmod=3 & XmmReg1 & XmmReg2
 {
   fucompe(XmmReg1[0,32], XmmReg2[0,32]);
 }
-# ia.sinc:6815
+# ia.sinc:6866
 :CVTDQ2PD     XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0xE6; m64 & XmmReg ...
 {
     local m:8 = m64;
     XmmReg[0,64] = int2float( m[0,32] );
     XmmReg[64,64] = int2float( m[32,32] );
 }
-# ia.sinc:6822
+# ia.sinc:6873
 :CVTDQ2PD     XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0xE6; xmmmod=3 & XmmReg1 & XmmReg2
 {
     local tmp:8 = XmmReg2[0,64];
     XmmReg1[0,64] = int2float( tmp[0,32] );
     XmmReg1[64,64] = int2float( tmp[32,32] );
 }
-# ia.sinc:6829
+# ia.sinc:6880
 :CVTDQ2PS     XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x5B; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -1065,7 +1065,7 @@
     XmmReg[64,32] = int2float( m[64,32] );
     XmmReg[96,32] = int2float( m[96,32] );
 }
-# ia.sinc:6838
+# ia.sinc:6889
 :CVTDQ2PS     XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x5B; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = int2float( XmmReg2[0,32] );
@@ -1073,7 +1073,7 @@
     XmmReg1[64,32] = int2float( XmmReg2[64,32] );
     XmmReg1[96,32] = int2float( XmmReg2[96,32] );
 }
-# ia.sinc:6846
+# ia.sinc:6897
 :CVTPD2DQ     XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0xE6; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -1082,7 +1082,7 @@
     XmmReg[64,32] = 0;
     XmmReg[96,32] = 0;
 }
-# ia.sinc:6855
+# ia.sinc:6906
 :CVTPD2DQ     XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0xE6; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = trunc( XmmReg2[0,64] );
@@ -1090,20 +1090,20 @@
     XmmReg1[64,32] = 0;
     XmmReg1[96,32] = 0;
 }
-# ia.sinc:6863
+# ia.sinc:6914
 :CVTPD2PI     mmxreg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x2D; mmxreg ... & m128
 {
     local m:16 = m128;
     mmxreg[0,32] = trunc( m[0,64] );
     mmxreg[32,32] = trunc( m[64,64] );
 }
-# ia.sinc:6870
+# ia.sinc:6921
 :CVTPD2PI     mmxreg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x2D; xmmmod=3 & mmxreg1 & XmmReg2
 {
     mmxreg1[0,32] = trunc( XmmReg2[0,64] );
     mmxreg1[32,32] = trunc( XmmReg2[64,64] );
 }
-# ia.sinc:6876
+# ia.sinc:6927
 :CVTPD2PS     XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x5A; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -1112,7 +1112,7 @@
     XmmReg[64,32] = 0;
     XmmReg[96,32] = 0;
 }
-# ia.sinc:6885
+# ia.sinc:6936
 :CVTPD2PS     XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x5A; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = float2float( XmmReg2[0,64] );
@@ -1120,33 +1120,33 @@
     XmmReg1[64,32] = 0;
     XmmReg1[96,32] = 0;
 }
-# ia.sinc:6893
+# ia.sinc:6944
 :CVTPI2PD     XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x2A; m64 & XmmReg ...
 {
   local m:8 = m64;
   XmmReg[0,64] =  int2float(m[0,32]);
   XmmReg[64,64] =  int2float(m[32,32]);
 }
-# ia.sinc:6900
+# ia.sinc:6951
 :CVTPI2PD     XmmReg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x2A; xmmmod=3 & XmmReg1 & mmxreg2
 {
   XmmReg1[0,64] = int2float(mmxreg2[0,32]);
   XmmReg1[64,64] = int2float(mmxreg2[32,32]);
 }
-# ia.sinc:6906
+# ia.sinc:6957
 :CVTPI2PS     XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x2A; m64 & XmmReg ...
 {
   local m:8 = m64;
   XmmReg[0,32] = int2float(m[0,32]);
   XmmReg[32,32] = int2float(m[32,32]);
 }
-# ia.sinc:6913
+# ia.sinc:6964
 :CVTPI2PS     XmmReg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x2A; xmmmod=3 & XmmReg1 & mmxreg2
 {
   XmmReg1[0,32] = int2float(mmxreg2[0,32]);
   XmmReg1[32,32] = int2float(mmxreg2[32,32]);
 }
-# ia.sinc:6919
+# ia.sinc:6970
 :CVTPS2DQ      XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x5B; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -1155,7 +1155,7 @@
     XmmReg[64,32] = trunc( m[64,32] );
     XmmReg[96,32] = trunc( m[96,32] );
 }
-# ia.sinc:6928
+# ia.sinc:6979
 :CVTPS2DQ      XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x5B; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = trunc( XmmReg2[0,32] );
@@ -1163,21 +1163,21 @@
     XmmReg1[64,32] = trunc( XmmReg2[64,32] );
     XmmReg1[96,32] = trunc( XmmReg2[96,32] );
 }
-# ia.sinc:6936
+# ia.sinc:6987
 :CVTPS2PD     XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x5A; m64 & XmmReg ...
 {
     local m:8 = m64;
     XmmReg[0,64] = float2float( m[0,32] );
     XmmReg[64,64] = float2float( m[32,32] );
 }
-# ia.sinc:6943
+# ia.sinc:6994
 :CVTPS2PD     XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x5A; xmmmod=3 & XmmReg1 & XmmReg2
 {
     local tmp:8 = XmmReg2[0,64];
     XmmReg1[0,64] = float2float( tmp[0,32] );
     XmmReg1[64,64] = float2float( tmp[32,32] );
 }
-# ia.sinc:6950
+# ia.sinc:7001
 :CVTPS2PI     mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x2D; mmxreg ... & m64
 {
   local m:8 = m64;
@@ -1185,98 +1185,98 @@
   mmxreg[32,32] = round(m[32,32]);
   FPUTagWord = 0x0000;         
 }
-# ia.sinc:6958
+# ia.sinc:7009
 :CVTPS2PI     mmxreg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x2D; xmmmod=3 & mmxreg1 & XmmReg2
 {
   mmxreg1[0,32] = round(XmmReg2[0,32]);
   mmxreg1[32,32] = round(XmmReg2[32,32]);
   FPUTagWord = 0x0000;         
 }
-# ia.sinc:6965
+# ia.sinc:7016
 :CVTSD2SI     Reg32, m64 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x2D; (Reg32 & check_Reg32_dest) ... & m64
 {
   Reg32 = trunc(round(m64));
   build check_Reg32_dest;
 }
-# ia.sinc:6971
+# ia.sinc:7022
 :CVTSD2SI     Reg32, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x2D; xmmmod=3 & Reg32 & check_Reg32_dest & XmmReg2
 {
   Reg32 = trunc(round(XmmReg2[0,64]));
   build check_Reg32_dest;
 }
-# ia.sinc:6978
+# ia.sinc:7029
 :CVTSD2SI     Reg64, m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F2) & byte=0x2D; Reg64 ... & m64
 {
   Reg64 = trunc(round(m64));
 }
-# ia.sinc:6983
+# ia.sinc:7034
 :CVTSD2SI     Reg64, XmmReg2 is vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F2) & byte=0x2D; xmmmod=3 & Reg64 & XmmReg2
 {
   Reg64 = trunc(round(XmmReg2[0,64]));
 }
-# ia.sinc:6989
+# ia.sinc:7040
 :CVTSD2SS     XmmReg, m64 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x5A; m64 & XmmReg ...
 {
   XmmReg[0,32] = float2float(m64);
 }
-# ia.sinc:6994
+# ia.sinc:7045
 :CVTSD2SS     XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x5A; xmmmod=3 & XmmReg1 & XmmReg2
 {
   XmmReg1[0,32] = float2float(XmmReg2[0,64]);
 }
-# ia.sinc:6999
+# ia.sinc:7050
 :CVTSI2SD     XmmReg, rm32 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x2A; rm32 & XmmReg ...
 {
   XmmReg[0,64] = int2float(rm32);
 }
-# ia.sinc:7005
+# ia.sinc:7056
 :CVTSI2SD     XmmReg, rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F2) & byte=0x2A; rm64 & XmmReg ...
 {
   XmmReg[0,64] = int2float(rm64);
 }
-# ia.sinc:7011
+# ia.sinc:7062
 :CVTSI2SS     XmmReg, rm32 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x2A; rm32 & XmmReg ...
 {
   XmmReg[0,32] = int2float(rm32);
 }
-# ia.sinc:7017
+# ia.sinc:7068
 :CVTSI2SS     XmmReg, rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & byte=0x2A; rm64 & XmmReg ...
 {
   XmmReg[0,32] = int2float(rm64);
 }
-# ia.sinc:7023
+# ia.sinc:7074
 :CVTSS2SD     XmmReg, m32 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x5A; m32 & XmmReg ...
 {
   XmmReg[0,64] = float2float(m32);
 }
-# ia.sinc:7028
+# ia.sinc:7079
 :CVTSS2SD     XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x5A; xmmmod=3 & XmmReg1 & XmmReg2
 {
   XmmReg1[0,64] = float2float(XmmReg2[0,32]);
 }
-# ia.sinc:7033
+# ia.sinc:7084
 :CVTSS2SI     Reg32, m32 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x2D; (Reg32 & check_Reg32_dest) ... & m32
 {
   Reg32 = trunc(round(m32));
   build check_Reg32_dest;
 }
-# ia.sinc:7039
+# ia.sinc:7090
 :CVTSS2SI     Reg32, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x2D; xmmmod=3 & Reg32 & check_Reg32_dest & XmmReg2
 {
   Reg32 = trunc(round(XmmReg2[0,32]));
   build check_Reg32_dest;
 }
-# ia.sinc:7046
+# ia.sinc:7097
 :CVTSS2SI     Reg64, m32 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & byte=0x2D; Reg64 ... & m32
 {
   Reg64 = trunc(round(m32));
 }
-# ia.sinc:7051
+# ia.sinc:7102
 :CVTSS2SI     Reg64, XmmReg2 is vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & byte=0x2D; xmmmod=3 & Reg64 & XmmReg2
 {
   Reg64 = trunc(round(XmmReg2[0,32]));
 }
-# ia.sinc:7057
+# ia.sinc:7108
 :CVTTPD2PI    mmxreg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x2C; mmxreg ... & m128
 {
   local m:16 = m128;
@@ -1284,14 +1284,14 @@
   mmxreg[32,32] = trunc(m[64,64]);
   FPUTagWord = 0x0000;         
 }
-# ia.sinc:7065
+# ia.sinc:7116
 :CVTTPD2PI    mmxreg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x2C; xmmmod=3 & mmxreg1 & XmmReg2
 {
   mmxreg1[0,32] = trunc(XmmReg2[0,64]);
   mmxreg1[32,32] = trunc(XmmReg2[64,64]);
   FPUTagWord = 0x0000;         
 }
-# ia.sinc:7072
+# ia.sinc:7123
 :CVTTPD2DQ    XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE6; m128 & XmmReg ...
 {
   local m:16 = m128;
@@ -1300,7 +1300,7 @@
   XmmReg[64,32] = 0;
   XmmReg[96,32] = 0;
 }
-# ia.sinc:7081
+# ia.sinc:7132
 :CVTTPD2DQ    XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE6; xmmmod=3 & XmmReg1 & XmmReg2
 {
   XmmReg1[0,32] = trunc(XmmReg2[0,64]);
@@ -1308,7 +1308,7 @@
   XmmReg1[64,32] = 0;
   XmmReg1[96,32] = 0;
 }
-# ia.sinc:7089
+# ia.sinc:7140
 :CVTTPS2DQ    XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x5B; m128 & XmmReg ...
 {
   local m:16 = m128;
@@ -1317,7 +1317,7 @@
   XmmReg[64,32] = trunc(m[64,32]);
   XmmReg[96,32] = trunc(m[96,32]);
 }
-# ia.sinc:7098
+# ia.sinc:7149
 :CVTTPS2DQ    XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x5B; xmmmod=3 & XmmReg1 & XmmReg2
 {
   XmmReg1[0,32] = trunc(XmmReg2[0,32]);
@@ -1325,7 +1325,7 @@
   XmmReg1[64,32] = trunc(XmmReg2[64,32]);
   XmmReg1[96,32] = trunc(XmmReg2[96,32]);
 }
-# ia.sinc:7106
+# ia.sinc:7157
 :CVTTPS2PI    mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x2C; mmxreg ... & m64
 {
   local m:8 = m64;
@@ -1333,102 +1333,102 @@
   mmxreg[32,32] = trunc(m[32,32]);
   FPUTagWord = 0x0000;         
 }
-# ia.sinc:7114
+# ia.sinc:7165
 :CVTTPS2PI    mmxreg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x2C; xmmmod=3 & mmxreg1 & XmmReg2
 {
   mmxreg1[0,32] = trunc(XmmReg2[0,32]);
   mmxreg1[32,32] = trunc(XmmReg2[32,32]);
   FPUTagWord = 0x0000;         
 }
-# ia.sinc:7121
+# ia.sinc:7172
 :CVTTSD2SI    Reg32, m64 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x2C; (Reg32 & check_Reg32_dest) ... & m64
 {
   Reg32 = trunc(m64);
   build check_Reg32_dest;
 }
-# ia.sinc:7127
+# ia.sinc:7178
 :CVTTSD2SI    Reg32, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x2C; xmmmod=3 & Reg32 & check_Reg32_dest & XmmReg2
 {
   Reg32 = trunc(XmmReg2[0,64]);
   build check_Reg32_dest;
 }
-# ia.sinc:7134
+# ia.sinc:7185
 :CVTTSD2SI    Reg64, m64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F2) & byte=0x2C; Reg64 ... & m64
 {
   Reg64 = trunc(m64);
 }
-# ia.sinc:7139
+# ia.sinc:7190
 :CVTTSD2SI    Reg64, XmmReg2 is vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F2) & byte=0x2C; xmmmod=3 & Reg64 & XmmReg2
 {
   Reg64 = trunc(XmmReg2[0,64]);
 }
-# ia.sinc:7145
+# ia.sinc:7196
 :CVTTSS2SI    Reg32, m32 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x2C; (Reg32 & check_Reg32_dest) ... & m32
 {
   Reg32 = trunc(m32);
   build check_Reg32_dest;
 }
-# ia.sinc:7151
+# ia.sinc:7202
 :CVTTSS2SI    Reg32, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x2C; xmmmod=3 & Reg32 & check_Reg32_dest & XmmReg2
 {
   Reg32 = trunc(XmmReg2[0,32]);
   build check_Reg32_dest;
 }
-# ia.sinc:7158
+# ia.sinc:7209
 :CVTTSS2SI    Reg64, m32 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & byte=0x2C; Reg64 ... & m32
 {
   Reg64 = trunc(m32);
 }
-# ia.sinc:7163
+# ia.sinc:7214
 :CVTTSS2SI    Reg64, XmmReg2 is vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & byte=0x2C; xmmmod=3 & Reg64 & XmmReg2
 {
   Reg64 = trunc(XmmReg2[0,32]);
 }
-# ia.sinc:7170
+# ia.sinc:7221
 :DIVPD        XmmReg, m128 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x5E; XmmReg ... & m128 { XmmReg = divpd(XmmReg, m128); }
-# ia.sinc:7171
+# ia.sinc:7222
 :DIVPD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x5E; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = divpd(XmmReg1, XmmReg2); }
-# ia.sinc:7174
+# ia.sinc:7225
 :DIVPS        XmmReg, m128 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x5E; XmmReg ... & m128 { XmmReg = divps(XmmReg, m128); }
-# ia.sinc:7175
+# ia.sinc:7226
 :DIVPS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x5E; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = divps(XmmReg1, XmmReg2); }
-# ia.sinc:7177
+# ia.sinc:7228
 :DIVSD        XmmReg, m64 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x5E; m64 & XmmReg ...
 {
     XmmReg[0,64] = XmmReg[0,64] f/ m64;
 }
-# ia.sinc:7182
+# ia.sinc:7233
 :DIVSD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x5E; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg1[0,64] f/ XmmReg2[0,64];
 }
-# ia.sinc:7187
+# ia.sinc:7238
 :DIVSS        XmmReg, m32 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x5E; m32 & XmmReg ...
 {
     XmmReg[0,32] = XmmReg[0,32] f/ m32;
 }
-# ia.sinc:7192
+# ia.sinc:7243
 :DIVSS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x5E; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg1[0,32] f/ XmmReg2[0,32];
 }
-# ia.sinc:7197
+# ia.sinc:7248
 :EMMS is vexMode=3 & vexMMMMM=1 &  byte=0x77 { FPUTagWord = 0xFFFF; }
-# ia.sinc:7199
+# ia.sinc:7250
 :HADDPD        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x7C; m128 & XmmReg ...
 {
     local m:16 = m128;
     XmmReg[0,64] = XmmReg[0,64] f+ XmmReg[64,64];
     XmmReg[64,64] = m[0,64]   f+ m[64,64];
 }
-# ia.sinc:7206
+# ia.sinc:7257
 :HADDPD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x7C; xmmmod=3 & XmmReg1 & XmmReg2
 {
     local tmp:16 = XmmReg2;
     XmmReg1[0,64] = XmmReg1[0,64] f+ XmmReg1[64,64];
     XmmReg1[64,64] = tmp[0,64] f+ tmp[64,64];
 }
-# ia.sinc:7213
+# ia.sinc:7264
 :HADDPS        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x7C; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -1437,7 +1437,7 @@
     XmmReg[64,32] = m[0,32]   f+ m[32,32];
     XmmReg[96,32] = m[64,32]   f+ m[96,32];
 }
-# ia.sinc:7222
+# ia.sinc:7273
 :HADDPS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x7C; xmmmod=3 & XmmReg1 & XmmReg2
 {
     local tmp:16 = XmmReg2;
@@ -1446,21 +1446,21 @@
     XmmReg1[64,32] = tmp[0,32] f+ tmp[32,32];
     XmmReg1[96,32] = tmp[64,32] f+ tmp[96,32];
 }
-# ia.sinc:7231
+# ia.sinc:7282
 :HSUBPD        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x7D; m128 & XmmReg ...
 {
     local m:16 = m128;
     XmmReg[0,64] = XmmReg[0,64] f- XmmReg[64,64];
     XmmReg[64,64] = m[0,64]   f- m[64,64];
 }
-# ia.sinc:7238
+# ia.sinc:7289
 :HSUBPD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x7D; xmmmod=3 & XmmReg1 & XmmReg2
 {
     local tmp:16 = XmmReg2;
     XmmReg1[0,64] = XmmReg1[0,64] f- XmmReg1[64,64];
     XmmReg1[64,64] = tmp[0,64] f- tmp[64,64];
 }
-# ia.sinc:7245
+# ia.sinc:7296
 :HSUBPS        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x7D; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -1469,7 +1469,7 @@
     XmmReg[64,32] = m[0,32]   f- m[32,32];
     XmmReg[96,32] = m[64,32]   f- m[96,32];
 }
-# ia.sinc:7254
+# ia.sinc:7305
 :HSUBPS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x7D; xmmmod=3 & XmmReg1 & XmmReg2
 {
     local tmp:16 = XmmReg2;
@@ -1478,103 +1478,103 @@
     XmmReg1[64,32] = tmp[0,32] f- tmp[32,32];
     XmmReg1[96,32] = tmp[64,32] f- tmp[96,32];
 }
-# ia.sinc:7268
+# ia.sinc:7319
 :LDDQU        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0xF0; XmmReg ... & m128 { XmmReg = lddqu(XmmReg, m128); }
-# ia.sinc:7278
+# ia.sinc:7329
 :MASKMOVDQU        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0xF7 & maskMovDI; XmmReg1 & XmmReg2		{ maskmovdqu(XmmReg1, XmmReg2, maskMovDI); }
-# ia.sinc:7281
+# ia.sinc:7332
 :MAXPD        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x5F; XmmReg ... & m128 { XmmReg = maxpd(XmmReg, m128); }
-# ia.sinc:7282
+# ia.sinc:7333
 :MAXPD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x5F; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = maxpd(XmmReg1, XmmReg2); }
-# ia.sinc:7285
+# ia.sinc:7336
 :MAXPS        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x5F; XmmReg ... & m128 { XmmReg = maxps(XmmReg, m128); }
-# ia.sinc:7286
+# ia.sinc:7337
 :MAXPS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x5F; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = maxps(XmmReg1, XmmReg2); }
-# ia.sinc:7288
+# ia.sinc:7339
 :MAXSD        XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x5F; XmmReg ... & m64
 {
     local tmp:8 = m64;
     if (tmp f< XmmReg[0,64]) goto inst_next;
     XmmReg[0,64] = tmp;
 }
-# ia.sinc:7295
+# ia.sinc:7346
 :MAXSD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x5F; xmmmod=3 & XmmReg1 & XmmReg2
 {
     if (XmmReg2[0,64] f< XmmReg1[0,64]) goto inst_next;
     XmmReg1[0,64] = XmmReg2[0,64];
 }
-# ia.sinc:7301
+# ia.sinc:7352
 :MAXSS        XmmReg, m32 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x5F; XmmReg ... & m32
 {
     local tmp:4 = m32;
     if (tmp f< XmmReg[0,32]) goto inst_next;
     XmmReg[0,32] = tmp;
 }
-# ia.sinc:7308
+# ia.sinc:7359
 :MAXSS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x5F; xmmmod=3 & XmmReg1 & XmmReg2
 {
     if (XmmReg2[0,32] f< XmmReg1[0,32]) goto inst_next;
     XmmReg1[0,32] = XmmReg2[0,32];
 }
-# ia.sinc:7315
+# ia.sinc:7366
 :MINPD        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x5D; XmmReg ... & m128 { XmmReg = minpd(XmmReg, m128); }
-# ia.sinc:7316
+# ia.sinc:7367
 :MINPD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x5D; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = minpd(XmmReg1, XmmReg2); }
-# ia.sinc:7319
+# ia.sinc:7370
 :MINPS        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x5D; XmmReg ... & m128 { XmmReg = minps(XmmReg, m128); }
-# ia.sinc:7320
+# ia.sinc:7371
 :MINPS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x5D; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = minps(XmmReg1, XmmReg2); }
-# ia.sinc:7322
+# ia.sinc:7373
 :MINSD        XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x5D; XmmReg ... & m64
 {
     local tmp:8 = m64;
     if (XmmReg[0,64] f< tmp) goto inst_next;
     XmmReg[0,64] = tmp;
 }
-# ia.sinc:7329
+# ia.sinc:7380
 :MINSD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x5D; xmmmod=3 & XmmReg1 & XmmReg2
 {
     if (XmmReg1[0,64] f< XmmReg2[0,64]) goto inst_next;
     XmmReg1[0,64] = XmmReg2[0,64];
 }
-# ia.sinc:7335
+# ia.sinc:7386
 :MINSS        XmmReg, m32 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x5D; XmmReg ... & m32
 {
     local tmp:4 = m32;
     if (XmmReg[0,32] f< tmp) goto inst_next;
     XmmReg[0,32] = tmp;
 }
-# ia.sinc:7342
+# ia.sinc:7393
 :MINSS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x5D; xmmmod=3 & XmmReg1 & XmmReg2
 {
     if (XmmReg1[0,32] f< XmmReg2[0,32]) goto inst_next;
     XmmReg1[0,32] = XmmReg2[0,32];
 }
-# ia.sinc:7348
+# ia.sinc:7399
 :MOVAPD       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x28; m128 & XmmReg ...
 {
     local m:16 = m128;
     XmmReg[0,64] = m[0,64];
     XmmReg[64,64] = m[64,64];
 }
-# ia.sinc:7355
+# ia.sinc:7406
 :MOVAPD       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x28; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg2[0,64];
     XmmReg1[64,64] = XmmReg2[64,64];
 }
-# ia.sinc:7361
+# ia.sinc:7412
 :MOVAPD       m128, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x29; m128 & XmmReg ...
 {
     m128 = XmmReg;
 }
-# ia.sinc:7366
+# ia.sinc:7417
 :MOVAPD       XmmReg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x29; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg2[0,64] = XmmReg1[0,64];
     XmmReg2[64,64] = XmmReg1[64,64];
 }
-# ia.sinc:7372
+# ia.sinc:7423
 :MOVAPS       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x28; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -1583,7 +1583,7 @@
     XmmReg[64,32] = m[64,32];
     XmmReg[96,32] = m[96,32];
 }
-# ia.sinc:7381
+# ia.sinc:7432
 :MOVAPS       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x28; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg2[0,32];
@@ -1591,12 +1591,12 @@
     XmmReg1[64,32] = XmmReg2[64,32];
     XmmReg1[96,32] = XmmReg2[96,32];
 }
-# ia.sinc:7389
+# ia.sinc:7440
 :MOVAPS       m128, XmmReg is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x29; m128 & XmmReg ...
 {
     m128 = XmmReg;
 }
-# ia.sinc:7394
+# ia.sinc:7445
 :MOVAPS       XmmReg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x29; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg2[0,32] = XmmReg1[0,32];
@@ -1604,35 +1604,35 @@
     XmmReg2[64,32] = XmmReg1[64,32];
     XmmReg2[96,32] = XmmReg1[96,32];
 }
-# ia.sinc:7402
+# ia.sinc:7453
 :MOVD         mmxreg, rm32 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x6E; rm32 & mmxreg ...                    { mmxreg = zext(rm32); }
-# ia.sinc:7403
+# ia.sinc:7454
 :MOVD         rm32, mmxreg is vexMode=3 & vexMMMMM=1 &  rexWprefix=0 & mandover=0 & byte=0x7E; rm32 & check_rm32_dest ... & mmxreg ...                    { rm32 = mmxreg(0); build check_rm32_dest; }
-# ia.sinc:7404
+# ia.sinc:7455
 :MOVD         XmmReg, rm32 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6E; rm32 & XmmReg ...         { XmmReg = zext(rm32); }
-# ia.sinc:7405
+# ia.sinc:7456
 :MOVD         rm32, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & rexWprefix=0 & byte=0x7E; rm32 & check_rm32_dest ... & XmmReg ...         { rm32 = XmmReg(0); build check_rm32_dest; }
-# ia.sinc:7407
+# ia.sinc:7458
 :MOVQ         mmxreg, rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 &  opsize=2 & mandover=0 & byte=0x6E; rm64 & mmxreg ...         { mmxreg = rm64; }
-# ia.sinc:7408
+# ia.sinc:7459
 :MOVQ         rm64, mmxreg is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 &  opsize=2 & mandover=0 & byte=0x7E; rm64 & mmxreg ...         { rm64 = mmxreg; }
-# ia.sinc:7409
-:MOVQ         XmmReg, rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 &  opsize=2 & $(PRE_66) & byte=0x6E; rm64 & XmmReg ...         { XmmReg = zext(rm64); }
-# ia.sinc:7410
-:MOVQ         rm64, XmmReg is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 &  opsize=2 & $(PRE_66) & byte=0x7E; rm64 & XmmReg ...         { rm64 = XmmReg(0); }
 # ia.sinc:7460
+:MOVQ         XmmReg, rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 &  opsize=2 & $(PRE_66) & byte=0x6E; rm64 & XmmReg ...         { XmmReg = zext(rm64); }
+# ia.sinc:7461
+:MOVQ         rm64, XmmReg is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 &  opsize=2 & $(PRE_66) & byte=0x7E; rm64 & XmmReg ...         { rm64 = XmmReg(0); }
+# ia.sinc:7511
 :MOVDDUP      XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x12; m64 & XmmReg ...
 {
     XmmReg[0,64] = m64;
     XmmReg[64,64] = m64;
 }
-# ia.sinc:7466
+# ia.sinc:7517
 :MOVDDUP      XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x12; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg2[0,64];
     XmmReg1[64,64] = XmmReg2[0,64];
 }
-# ia.sinc:7472
+# ia.sinc:7523
 :MOVSHDUP     XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x16; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -1641,7 +1641,7 @@
     XmmReg[64,32] = m[96,32];
     XmmReg[96,32] = m[96,32];
 }
-# ia.sinc:7481
+# ia.sinc:7532
 :MOVSHDUP     XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x16; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg2[32,32];
@@ -1649,7 +1649,7 @@
     XmmReg1[64,32] = XmmReg2[96,32];
     XmmReg1[96,32] = XmmReg2[96,32];
 }
-# ia.sinc:7489
+# ia.sinc:7540
 :MOVSLDUP     XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x12; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -1658,7 +1658,7 @@
     XmmReg[64,32] = m[64,32];
     XmmReg[96,32] = m[64,32];
 }
-# ia.sinc:7498
+# ia.sinc:7549
 :MOVSLDUP     XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x12; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg2[0,32];
@@ -1666,112 +1666,112 @@
     XmmReg1[64,32] = XmmReg2[64,32];
     XmmReg1[96,32] = XmmReg2[64,32];
 }
-# ia.sinc:7506
-:MOVDQA       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6F; XmmReg ... & m128            { XmmReg = m128; }  
-# ia.sinc:7507
-:MOVDQA       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6F; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = XmmReg2; }
-# ia.sinc:7508
-:MOVDQA       m128, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x7F; XmmReg ... & m128            { m128 = XmmReg; }
-# ia.sinc:7509
-:MOVDQA       XmmReg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x7F; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg2 = XmmReg1; }
-# ia.sinc:7511
-:MOVDQU       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x6F; XmmReg ... & m128            { XmmReg = m128; }
-# ia.sinc:7512
-:MOVDQU       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x6F; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = XmmReg2; }
-# ia.sinc:7513
-:MOVDQU       m128, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x7F; XmmReg ... & m128            { m128 = XmmReg; }  
-# ia.sinc:7514
-:MOVDQU       XmmReg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x7F; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg2 = XmmReg1; }
-# ia.sinc:7519
-:MOVDQ2Q      mmxreg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0xD6; XmmReg1 & mmxreg2 { mmxreg2 = movdq2q(mmxreg2, XmmReg1); }
-# ia.sinc:7521
-:MOVHLPS      XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x12; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1[0,64] = XmmReg2[64,64]; }
-# ia.sinc:7523
-:MOVHPD       XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x16; XmmReg ... & m64 { XmmReg[64,64] = m64; }
-# ia.sinc:7525
-:MOVHPD       m64, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x17; XmmReg ... & m64 { m64 = XmmReg[64,64]; }
-# ia.sinc:7527
-:MOVHPS       XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x16; XmmReg ... & m64 { XmmReg[64,64] = m64; }
-# ia.sinc:7529
-:MOVHPS       m64, XmmReg is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x17; XmmReg ... & m64 { m64 = XmmReg[64,64]; }
-# ia.sinc:7531
-:MOVLHPS      XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x16; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1[64,64] = XmmReg2[0,64]; }
-# ia.sinc:7533
-:MOVLPD       XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x12; XmmReg ... & m64 { XmmReg[0,64] = m64; }
-# ia.sinc:7535
-:MOVLPD       m64, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x13; XmmReg ... & m64 { m64 = XmmReg[0,64]; }
-# ia.sinc:7537
-:MOVLPS       XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x12; XmmReg ... & m64 { XmmReg[0,64] = m64; }
-# ia.sinc:7539
-:MOVLPS       m64, XmmReg is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x13; XmmReg ... & m64 { m64 = XmmReg[0,64]; }
-# ia.sinc:7542
-:MOVMSKPD     Reg32, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x50; XmmReg2 & Reg32 & check_Reg32_dest { Reg32 = movmskpd(Reg32, XmmReg2); build check_Reg32_dest; }
-# ia.sinc:7545
-:MOVMSKPS     Reg32, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x50; XmmReg2 & Reg32 & check_Reg32_dest { Reg32 = movmskps(Reg32, XmmReg2); build check_Reg32_dest; }
-# ia.sinc:7547
-:MOVNTQ       m64, mmxreg is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0xE7; mmxreg ... & m64   { m64 = mmxreg; }
-# ia.sinc:7549
-:MOVNTDQ      m128, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE7; XmmReg ... & m128  { m128 = XmmReg; }
-# ia.sinc:7551
-:MOVNTPD      m128, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x2B; XmmReg ... & m128  { m128 = XmmReg; }
-# ia.sinc:7553
-:MOVNTPS      m128, XmmReg is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x2B; XmmReg ... & m128 { m128 = XmmReg; }
-# ia.sinc:7555
-:MOVQ         mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x6F; mmxreg ... & m64                   { mmxreg = m64; }
-# ia.sinc:7556
-:MOVQ         mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x6F; mmxmod = 3 & mmxreg1 & mmxreg2     { mmxreg1 = mmxreg2; }
 # ia.sinc:7557
-:MOVQ         m64, mmxreg is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x7F; mmxreg ... & m64                   { m64 = mmxreg; }
+:MOVDQA       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6F; XmmReg ... & m128            { XmmReg = m128; }  
 # ia.sinc:7558
-:MOVQ         mmxreg2, mmxreg1 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x7F; mmxmod = 3 & mmxreg1 & mmxreg2     { mmxreg2 = mmxreg1; }
+:MOVDQA       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6F; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = XmmReg2; }
+# ia.sinc:7559
+:MOVDQA       m128, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x7F; XmmReg ... & m128            { m128 = XmmReg; }
 # ia.sinc:7560
+:MOVDQA       XmmReg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x7F; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg2 = XmmReg1; }
+# ia.sinc:7562
+:MOVDQU       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x6F; XmmReg ... & m128            { XmmReg = m128; }
+# ia.sinc:7563
+:MOVDQU       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x6F; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = XmmReg2; }
+# ia.sinc:7564
+:MOVDQU       m128, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x7F; XmmReg ... & m128            { m128 = XmmReg; }  
+# ia.sinc:7565
+:MOVDQU       XmmReg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x7F; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg2 = XmmReg1; }
+# ia.sinc:7570
+:MOVDQ2Q      mmxreg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0xD6; XmmReg1 & mmxreg2 { mmxreg2 = movdq2q(mmxreg2, XmmReg1); }
+# ia.sinc:7572
+:MOVHLPS      XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x12; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1[0,64] = XmmReg2[64,64]; }
+# ia.sinc:7574
+:MOVHPD       XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x16; XmmReg ... & m64 { XmmReg[64,64] = m64; }
+# ia.sinc:7576
+:MOVHPD       m64, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x17; XmmReg ... & m64 { m64 = XmmReg[64,64]; }
+# ia.sinc:7578
+:MOVHPS       XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x16; XmmReg ... & m64 { XmmReg[64,64] = m64; }
+# ia.sinc:7580
+:MOVHPS       m64, XmmReg is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x17; XmmReg ... & m64 { m64 = XmmReg[64,64]; }
+# ia.sinc:7582
+:MOVLHPS      XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x16; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1[64,64] = XmmReg2[0,64]; }
+# ia.sinc:7584
+:MOVLPD       XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x12; XmmReg ... & m64 { XmmReg[0,64] = m64; }
+# ia.sinc:7586
+:MOVLPD       m64, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x13; XmmReg ... & m64 { m64 = XmmReg[0,64]; }
+# ia.sinc:7588
+:MOVLPS       XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x12; XmmReg ... & m64 { XmmReg[0,64] = m64; }
+# ia.sinc:7590
+:MOVLPS       m64, XmmReg is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x13; XmmReg ... & m64 { m64 = XmmReg[0,64]; }
+# ia.sinc:7593
+:MOVMSKPD     Reg32, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x50; XmmReg2 & Reg32 & check_Reg32_dest { Reg32 = movmskpd(Reg32, XmmReg2); build check_Reg32_dest; }
+# ia.sinc:7596
+:MOVMSKPS     Reg32, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x50; XmmReg2 & Reg32 & check_Reg32_dest { Reg32 = movmskps(Reg32, XmmReg2); build check_Reg32_dest; }
+# ia.sinc:7598
+:MOVNTQ       m64, mmxreg is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0xE7; mmxreg ... & m64   { m64 = mmxreg; }
+# ia.sinc:7600
+:MOVNTDQ      m128, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE7; XmmReg ... & m128  { m128 = XmmReg; }
+# ia.sinc:7602
+:MOVNTPD      m128, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x2B; XmmReg ... & m128  { m128 = XmmReg; }
+# ia.sinc:7604
+:MOVNTPS      m128, XmmReg is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x2B; XmmReg ... & m128 { m128 = XmmReg; }
+# ia.sinc:7606
+:MOVQ         mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x6F; mmxreg ... & m64                   { mmxreg = m64; }
+# ia.sinc:7607
+:MOVQ         mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x6F; mmxmod = 3 & mmxreg1 & mmxreg2     { mmxreg1 = mmxreg2; }
+# ia.sinc:7608
+:MOVQ         m64, mmxreg is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x7F; mmxreg ... & m64                   { m64 = mmxreg; }
+# ia.sinc:7609
+:MOVQ         mmxreg2, mmxreg1 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x7F; mmxmod = 3 & mmxreg1 & mmxreg2     { mmxreg2 = mmxreg1; }
+# ia.sinc:7611
 :MOVQ         XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x7E; XmmReg ... & m64
 {
 	XmmReg = zext(m64);
 }
-# ia.sinc:7565
+# ia.sinc:7616
 :MOVQ         XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x7E; xmmmod = 3 & XmmReg1 & XmmReg2
 {
 	XmmReg1 = zext(XmmReg2[0,64]);
 }
-# ia.sinc:7570
+# ia.sinc:7621
 :MOVQ         m64, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD6; m64 & XmmReg ...
 {
     m64 = XmmReg[0,64];
 }
-# ia.sinc:7575
+# ia.sinc:7626
 :MOVQ         XmmReg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD6; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg2 = zext(XmmReg1[0,64]);
 }
-# ia.sinc:7580
+# ia.sinc:7631
 :MOVQ2DQ      XmmReg, mmxreg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0xD6; XmmReg & mmxreg2
 {
     XmmReg = zext(mmxreg2);
 # may need to model x87 FPU state changes too ?????
 }
-# ia.sinc:7586
+# ia.sinc:7637
 :MOVSD        XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x10; m64 & XmmReg ...
 {
     XmmReg[0,64] = m64;
     XmmReg[64,64] = 0;
 }
-# ia.sinc:7592
+# ia.sinc:7643
 :MOVSD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x10; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg2[0,64];
 }
-# ia.sinc:7597
+# ia.sinc:7648
 :MOVSD        m64, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x11; m64 & XmmReg ...
 {
     m64 = XmmReg[0,64];
 }
-# ia.sinc:7602
+# ia.sinc:7653
 :MOVSD        XmmReg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x11; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg2[0,64] = XmmReg1[0,64];
 }
-# ia.sinc:7607
+# ia.sinc:7658
 :MOVSS        XmmReg, m32 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x10; m32 & XmmReg ...
 {
     XmmReg[0,32] = m32;
@@ -1779,46 +1779,46 @@
     XmmReg[64,32] = 0;
     XmmReg[96,32] = 0;
 }
-# ia.sinc:7615
+# ia.sinc:7666
 :MOVSS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x10; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg2[0,32];
 }
-# ia.sinc:7620
+# ia.sinc:7671
 :MOVSS        m32, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x11; m32 & XmmReg ...
 {
     m32 = XmmReg[0,32];
 }
-# ia.sinc:7625
+# ia.sinc:7676
 :MOVSS        XmmReg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x11; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg2[0,32] = XmmReg1[0,32];
 }
-# ia.sinc:7630
+# ia.sinc:7681
 :MOVUPD       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x10; m128 & XmmReg ...
 {
     local m:16 = m128;
     XmmReg[0,64] = m[0,64];
     XmmReg[64,64] = m[64,64];
 }
-# ia.sinc:7637
+# ia.sinc:7688
 :MOVUPD       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x10; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg2[0,64];
     XmmReg1[64,64] = XmmReg2[64,64];
 }
-# ia.sinc:7643
+# ia.sinc:7694
 :MOVUPD       m128, XmmReg is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x11; m128 & XmmReg ...
 {
     m128 = XmmReg;
 }
-# ia.sinc:7648
+# ia.sinc:7699
 :MOVUPD       XmmReg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x11; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg2[0,64] = XmmReg1[0,64];
     XmmReg2[64,64] = XmmReg1[64,64];
 }
-# ia.sinc:7664
+# ia.sinc:7715
 :MOVUPS       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  byte=0x10; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -1827,7 +1827,7 @@
     XmmReg[64,32] = m[64,32];
     XmmReg[96,32] = m[96,32];
 }
-# ia.sinc:7673
+# ia.sinc:7724
 :MOVUPS       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  byte=0x10; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg2[0,32];
@@ -1835,12 +1835,12 @@
     XmmReg1[64,32] = XmmReg2[64,32];
     XmmReg1[96,32] = XmmReg2[96,32];
 }
-# ia.sinc:7681
+# ia.sinc:7732
 :MOVUPS       m128, XmmReg is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x11; m128 & XmmReg ...
 {
     m128 = XmmReg;
 }
-# ia.sinc:7686
+# ia.sinc:7737
 :MOVUPS       XmmReg2, XmmReg1 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x11; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg2[0,32] = XmmReg1[0,32];
@@ -1848,20 +1848,20 @@
     XmmReg2[64,32] = XmmReg1[64,32];
     XmmReg2[96,32] = XmmReg1[96,32];
 }
-# ia.sinc:7694
+# ia.sinc:7745
 :MULPD        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x59; m128 & XmmReg ...
 {
     local m:16 = m128;
     XmmReg[0,64] = XmmReg[0,64] f* m[0,64];
     XmmReg[64,64] = XmmReg[64,64] f* m[64,64];
 }
-# ia.sinc:7701
+# ia.sinc:7752
 :MULPD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x59; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg1[0,64] f* XmmReg2[0,64];
     XmmReg1[64,64] = XmmReg1[64,64] f* XmmReg2[64,64];
 }
-# ia.sinc:7707
+# ia.sinc:7758
 :MULPS        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x59; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -1870,7 +1870,7 @@
     XmmReg[64,32] = XmmReg[64,32] f* m[64,32];
     XmmReg[96,32] = XmmReg[96,32] f* m[96,32];
 }
-# ia.sinc:7716
+# ia.sinc:7767
 :MULPS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x59; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg1[0,32] f* XmmReg2[0,32];
@@ -1878,51 +1878,51 @@
     XmmReg1[64,32] = XmmReg1[64,32] f* XmmReg2[64,32];
     XmmReg1[96,32] = XmmReg1[96,32] f* XmmReg2[96,32];
 }
-# ia.sinc:7724
+# ia.sinc:7775
 :MULSD        XmmReg, m64 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x59;  m64 & XmmReg ...
 {
     XmmReg[0,64] = XmmReg[0,64] f* m64;
 }
-# ia.sinc:7729
+# ia.sinc:7780
 :MULSD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F2) & byte=0x59; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg1[0,64] f* XmmReg2[0,64];
 }
-# ia.sinc:7734
+# ia.sinc:7785
 :MULSS        XmmReg, m32 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x59; m32 & XmmReg ...
 {
     XmmReg[0,32] = XmmReg[0,32] f* m32;
 }
-# ia.sinc:7739
+# ia.sinc:7790
 :MULSS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x59; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg1[0,32] f* XmmReg2[0,32];
 }
-# ia.sinc:7744
+# ia.sinc:7795
 :ORPD          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x56; XmmReg ... & m128 { XmmReg = XmmReg | m128; }
-# ia.sinc:7745
+# ia.sinc:7796
 :ORPD          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x56; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = XmmReg1 | XmmReg2; }
-# ia.sinc:7747
+# ia.sinc:7798
 :ORPS          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x56; XmmReg ... & m128 { XmmReg = XmmReg | m128; }
-# ia.sinc:7748
+# ia.sinc:7799
 :ORPS          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x56; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = XmmReg1 | XmmReg2; }
-# ia.sinc:7752
+# ia.sinc:7803
 :PACKSSWB      mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x63; mmxreg ... & m64 { mmxreg = packsswb(mmxreg, m64); }
-# ia.sinc:7753
+# ia.sinc:7804
 :PACKSSWB      mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x63; mmxmod = 3 & mmxreg1 & mmxreg2 { mmxreg1 = packsswb(mmxreg1, mmxreg2); }
-# ia.sinc:7756
+# ia.sinc:7807
 :PACKSSDW      mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x6B; mmxreg ... & m64 { mmxreg = packssdw(mmxreg, m64); }
-# ia.sinc:7757
+# ia.sinc:7808
 :PACKSSDW      mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x6B; mmxmod = 3 & mmxreg1 & mmxreg2 { mmxreg1 = packssdw(mmxreg1, mmxreg2); }
-# ia.sinc:7759
+# ia.sinc:7810
 :PACKSSWB      XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x63; XmmReg ... & m128 { XmmReg = packsswb(XmmReg, m128); }
-# ia.sinc:7760
+# ia.sinc:7811
 :PACKSSWB      XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x63; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = packsswb(XmmReg1, XmmReg2); }
-# ia.sinc:7761
+# ia.sinc:7812
 :PACKSSDW      XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6B; XmmReg ... & m128 { XmmReg = packssdw(XmmReg, m128); }
-# ia.sinc:7762
+# ia.sinc:7813
 :PACKSSDW      XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6B; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = packssdw(XmmReg1, XmmReg2); }
-# ia.sinc:7772
+# ia.sinc:7823
 :PACKUSWB      mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x67; mmxreg ... & m64
 {
     local dest_copy:8 = mmxreg;
@@ -1945,7 +1945,7 @@
     sswub(src_copy[48,16],ubyte);
     mmxreg[56,8] = ubyte;
 }
-# ia.sinc:7795
+# ia.sinc:7846
 :PACKUSWB      mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x67; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     local dest_copy:8 = mmxreg1;
@@ -1968,7 +1968,7 @@
     sswub(src_copy[48,16],ubyte);
     mmxreg1[56,8] = ubyte;
 }
-# ia.sinc:7818
+# ia.sinc:7869
 :PACKUSWB      XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x67; XmmReg ... & m128
 {
     local dest_copy:16 = XmmReg;
@@ -2008,7 +2008,7 @@
     sswub(src_copy[112,16],ubyte);
     XmmReg[120,8] = ubyte;
 }
-# ia.sinc:7858
+# ia.sinc:7909
 :PACKUSWB      XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x67; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     local dest_copy:16 = XmmReg1;
@@ -2048,7 +2048,7 @@
     sswub(src_copy[112,16],ubyte);
     XmmReg1[120,8] = ubyte;
 }
-# ia.sinc:7916
+# ia.sinc:7967
 :PADDB          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xFC; mmxreg ... & m64
 {
     local m:8 = m64;
@@ -2061,7 +2061,7 @@
     mmxreg[48,8] = mmxreg[48,8] + m[48,8];
     mmxreg[56,8] = mmxreg[56,8] + m[56,8];
 }
-# ia.sinc:7929
+# ia.sinc:7980
 :PADDB          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xFC; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,8] = mmxreg1[0,8] + mmxreg2[0,8];
@@ -2073,7 +2073,7 @@
     mmxreg1[48,8] = mmxreg1[48,8] + mmxreg2[48,8];
     mmxreg1[56,8] = mmxreg1[56,8] + mmxreg2[56,8];
 }
-# ia.sinc:7941
+# ia.sinc:7992
 :PADDW          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xFD; mmxreg ... & m64
 {
     local m:8 = m64;
@@ -2082,7 +2082,7 @@
     mmxreg[32,16] = mmxreg[32,16] + m[32,16];
     mmxreg[48,16] = mmxreg[48,16] + m[48,16];
 }
-# ia.sinc:7950
+# ia.sinc:8001
 :PADDW          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xFD; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,16] = mmxreg1[0,16] + mmxreg2[0,16];
@@ -2090,20 +2090,20 @@
     mmxreg1[32,16] = mmxreg1[32,16] + mmxreg2[32,16];
     mmxreg1[48,16] = mmxreg1[48,16] + mmxreg2[48,16];
 }
-# ia.sinc:7958
+# ia.sinc:8009
 :PADDD          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xFE; mmxreg ... & m64
 {
     local m:8 = m64;
     mmxreg[0,32] = mmxreg[0,32] + m[0,32];
     mmxreg[32,32] = mmxreg[32,32] + m[32,32];
 }
-# ia.sinc:7965
+# ia.sinc:8016
 :PADDD          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xFE; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,32] = mmxreg1[0,32] + mmxreg2[0,32];
     mmxreg1[32,32] = mmxreg1[32,32] + mmxreg2[32,32];
 }
-# ia.sinc:7971
+# ia.sinc:8022
 :PADDB          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xFC; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -2124,7 +2124,7 @@
     XmmReg[112,8] = XmmReg[112,8] + m[112,8];
     XmmReg[120,8] = XmmReg[120,8] + m[120,8];
 }
-# ia.sinc:8014
+# ia.sinc:8065
 :PADDB  XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0xFC; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,8] = XmmReg1[0,8] + XmmReg2[0,8];
@@ -2144,7 +2144,7 @@
     XmmReg1[112,8] = XmmReg1[112,8] + XmmReg2[112,8];
     XmmReg1[120,8] = XmmReg1[120,8] + XmmReg2[120,8];
 }
-# ia.sinc:8034
+# ia.sinc:8085
 :PADDW          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xFD; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -2157,7 +2157,7 @@
     XmmReg[96,16] = XmmReg[96,16] + m[96,16];
     XmmReg[112,16] = XmmReg[112,16] + m[112,16];
 }
-# ia.sinc:8047
+# ia.sinc:8098
 :PADDW          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xFD; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,16] = XmmReg1[0,16] + XmmReg2[0,16];
@@ -2169,7 +2169,7 @@
     XmmReg1[96,16] = XmmReg1[96,16] + XmmReg2[96,16];
     XmmReg1[112,16] = XmmReg1[112,16] + XmmReg2[112,16];
 }
-# ia.sinc:8059
+# ia.sinc:8110
 :PADDD          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xFE; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -2178,7 +2178,7 @@
     XmmReg[64,32] = XmmReg[64,32] + m[64,32];
     XmmReg[96,32] = XmmReg[96,32] + m[96,32];
 }
-# ia.sinc:8068
+# ia.sinc:8119
 :PADDD          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xFE; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg1[0,32] + XmmReg2[0,32];
@@ -2186,62 +2186,62 @@
     XmmReg1[64,32] = XmmReg1[64,32] + XmmReg2[64,32];
     XmmReg1[96,32] = XmmReg1[96,32] + XmmReg2[96,32];
 }
-# ia.sinc:8076
+# ia.sinc:8127
 :PADDQ          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xD4; mmxreg ... & m64
 {
     mmxreg = mmxreg + m64;
 }
-# ia.sinc:8081
+# ia.sinc:8132
 :PADDQ          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xD4; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1 = mmxreg1 + mmxreg2;
 }
-# ia.sinc:8086
+# ia.sinc:8137
 :PADDQ          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD4; m128 & XmmReg ...
 {
     local m:16 = m128;
     XmmReg[0,64] = XmmReg[0,64] + m[0,64];
     XmmReg[64,64] = XmmReg[64,64] + m[64,64];
 }
-# ia.sinc:8093
+# ia.sinc:8144
 :PADDQ          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD4; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg1[0,64] + XmmReg2[0,64];
     XmmReg1[64,64] = XmmReg1[64,64] + XmmReg2[64,64];
 }
-# ia.sinc:8100
+# ia.sinc:8151
 :PADDSB         mmxreg1, mmxreg2_m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xEC; mmxreg1 ... & mmxreg2_m64 { mmxreg1 = paddsb(mmxreg1, mmxreg2_m64); }
-# ia.sinc:8103
+# ia.sinc:8154
 :PADDSW         mmxreg1, mmxreg2_m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xED; mmxreg1 ... & mmxreg2_m64 { mmxreg1 = paddsw(mmxreg1, mmxreg2_m64); }
-# ia.sinc:8105
+# ia.sinc:8156
 :PADDSB         XmmReg1, XmmReg2_m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xEC; XmmReg1 ... & XmmReg2_m128 { XmmReg1 = paddsb(XmmReg1, XmmReg2_m128); }
-# ia.sinc:8106
+# ia.sinc:8157
 :PADDSW         XmmReg1, XmmReg2_m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xED; XmmReg1 ... & XmmReg2_m128 { XmmReg1 = paddsw(XmmReg1, XmmReg2_m128); }
-# ia.sinc:8109
+# ia.sinc:8160
 :PADDUSB        mmxreg1, mmxreg2_m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xDC; mmxreg1 ... & mmxreg2_m64 { mmxreg1 = paddusb(mmxreg1, mmxreg2_m64); }
-# ia.sinc:8112
+# ia.sinc:8163
 :PADDUSW        mmxreg1, mmxreg2_m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xDD; mmxreg1 ... & mmxreg2_m64 { mmxreg1 = paddusw(mmxreg1, mmxreg2_m64); }
-# ia.sinc:8114
+# ia.sinc:8165
 :PADDUSB        XmmReg1, XmmReg2_m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xDC; XmmReg1 ... & XmmReg2_m128 { XmmReg1 = paddusb(XmmReg1, XmmReg2_m128); }
-# ia.sinc:8115
+# ia.sinc:8166
 :PADDUSW        XmmReg1, XmmReg2_m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xDD; XmmReg1 ... & XmmReg2_m128 { XmmReg1 = paddusw(XmmReg1, XmmReg2_m128); }
-# ia.sinc:8141
+# ia.sinc:8192
 :PAND           mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xDB; mmxreg ... & m64	{ mmxreg = mmxreg & m64; }
-# ia.sinc:8142
+# ia.sinc:8193
 :PAND           mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xDB; mmxmod = 3 & mmxreg1 & mmxreg2	{ mmxreg1 = mmxreg1 & mmxreg2; }
-# ia.sinc:8143
+# ia.sinc:8194
 :PAND           XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xDB; XmmReg ... & m128	{ XmmReg = XmmReg & m128; }
-# ia.sinc:8144
+# ia.sinc:8195
 :PAND           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xDB; xmmmod = 3 & XmmReg1 & XmmReg2	{ XmmReg1 = XmmReg1 & XmmReg2; }
-# ia.sinc:8146
+# ia.sinc:8197
 :PANDN          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xDF; mmxreg ... & m64				{ mmxreg = ~mmxreg & m64; }
-# ia.sinc:8147
+# ia.sinc:8198
 :PANDN          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xDF; mmxmod = 3 & mmxreg1 & mmxreg2	{ mmxreg1 = ~mmxreg1 & mmxreg2; }
-# ia.sinc:8148
+# ia.sinc:8199
 :PANDN          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xDF; XmmReg ... & m128			    { XmmReg = ~XmmReg & m128; }
-# ia.sinc:8149
+# ia.sinc:8200
 :PANDN          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xDF; xmmmod = 3 & XmmReg1 & XmmReg2	{ XmmReg1 = ~XmmReg1 & XmmReg2; }
-# ia.sinc:8152
+# ia.sinc:8203
 :PAVGB          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE0; mmxreg ... & m64
 {
     local m:8 = m64;
@@ -2254,7 +2254,7 @@
     mmxreg[48,8] = pavgb(mmxreg[48,8], m[48,8]);
     mmxreg[56,8] = pavgb(mmxreg[56,8], m[56,8]);
 }
-# ia.sinc:8165
+# ia.sinc:8216
 :PAVGB          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE0; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,8] = pavgb(mmxreg1[0,8], mmxreg2[0,8]);
@@ -2266,7 +2266,7 @@
     mmxreg1[48,8] = pavgb(mmxreg1[48,8], mmxreg2[48,8]);
     mmxreg1[56,8] = pavgb(mmxreg1[56,8], mmxreg2[56,8]);
 }
-# ia.sinc:8178
+# ia.sinc:8229
 :PAVGW          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE3; mmxreg ... & m64
 {
     local m:8 = m64;
@@ -2275,7 +2275,7 @@
     mmxreg[32,16] = pavgw(mmxreg[32,16], m[32,16]);
     mmxreg[48,16] = pavgw(mmxreg[48,16], m[48,16]);
 }
-# ia.sinc:8187
+# ia.sinc:8238
 :PAVGW          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE3; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,16] = pavgw(mmxreg1[0,16], mmxreg2[0,16]);
@@ -2283,7 +2283,7 @@
     mmxreg1[32,16] = pavgw(mmxreg1[32,16], mmxreg2[32,16]);
     mmxreg1[48,16] = pavgw(mmxreg1[48,16], mmxreg2[48,16]);
 }
-# ia.sinc:8195
+# ia.sinc:8246
 :PAVGB          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE0; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -2304,7 +2304,7 @@
     XmmReg[112,8] = pavgb(XmmReg[112,8], m[112,8]);
     XmmReg[120,8] = pavgb(XmmReg[120,8], m[120,8]);
 }
-# ia.sinc:8217
+# ia.sinc:8268
 :PAVGB  XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE0; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,8] = pavgb(XmmReg1[0,8], XmmReg2[0,8]);
@@ -2324,7 +2324,7 @@
     XmmReg1[112,8] = pavgb(XmmReg1[112,8], XmmReg2[112,8]);
     XmmReg1[120,8] = pavgb(XmmReg1[120,8], XmmReg2[120,8]);
 }
-# ia.sinc:8237
+# ia.sinc:8288
 :PAVGW          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE3; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -2337,7 +2337,7 @@
     XmmReg[96,16] = pavgw(XmmReg[96,16], m[96,16]);
     XmmReg[112,16] = pavgw(XmmReg[112,16], m[112,16]);
 }
-# ia.sinc:8250
+# ia.sinc:8301
 :PAVGW          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE3; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,16] = pavgw(XmmReg1[0,16], XmmReg2[0,16]);
@@ -2349,7 +2349,7 @@
     XmmReg1[96,16] = pavgw(XmmReg1[96,16], XmmReg2[96,16]);
     XmmReg1[112,16] = pavgw(XmmReg1[112,16], XmmReg2[112,16]);
 }
-# ia.sinc:8262
+# ia.sinc:8313
 :PCMPEQB       mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x74; mmxreg ... & m64
 {
     local m:8 = m64;
@@ -2362,7 +2362,7 @@
     mmxreg[48,8] = (mmxreg[48,8] == m[48,8]) * 0xFF;
     mmxreg[56,8] = (mmxreg[56,8] == m[56,8]) * 0xFF;
 }
-# ia.sinc:8275
+# ia.sinc:8326
 :PCMPEQB       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x74; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,8] = (mmxreg1[0,8] == mmxreg2[0,8]) * 0xFF;
@@ -2374,7 +2374,7 @@
     mmxreg1[48,8] = (mmxreg1[48,8] == mmxreg2[48,8]) * 0xFF;
     mmxreg1[56,8] = (mmxreg1[56,8] == mmxreg2[56,8]) * 0xFF;
 }
-# ia.sinc:8287
+# ia.sinc:8338
 :PCMPEQW       mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x75; mmxreg ... & m64
 {
     local m:8 = m64;
@@ -2383,7 +2383,7 @@
     mmxreg[32,16] = zext(mmxreg[32,16] == m[32,16]) * 0xFFFF;
     mmxreg[48,16] = zext(mmxreg[48,16] == m[48,16]) * 0xFFFF;
 }
-# ia.sinc:8296
+# ia.sinc:8347
 :PCMPEQW       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x75; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,16] = zext(mmxreg1[0,16] == mmxreg2[0,16]) * 0xFFFF;
@@ -2391,20 +2391,20 @@
     mmxreg1[32,16] = zext(mmxreg1[32,16] == mmxreg2[32,16]) * 0xFFFF;
     mmxreg1[48,16] = zext(mmxreg1[48,16] == mmxreg2[48,16]) * 0xFFFF;
 }
-# ia.sinc:8304
+# ia.sinc:8355
 :PCMPEQD       mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x76; mmxreg ... & m64
 {
     local m:8 = m64;
     mmxreg[0,32] = zext(mmxreg[0,32] == m[0,32]) * 0xFFFFFFFF;
     mmxreg[32,32] = zext(mmxreg[32,32] == m[32,32]) * 0xFFFFFFFF;
 }
-# ia.sinc:8311
+# ia.sinc:8362
 :PCMPEQD       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x76; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,32] = zext(mmxreg1[0,32] == mmxreg2[0,32]) * 0xFFFFFFFF;
     mmxreg1[32,32] = zext(mmxreg1[32,32] == mmxreg2[32,32]) * 0xFFFFFFFF;
 }
-# ia.sinc:8317
+# ia.sinc:8368
 :PCMPEQB       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x74; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -2425,7 +2425,7 @@
     XmmReg[112,8] = (XmmReg[112,8] == m[112,8]) * 0xFF;
     XmmReg[120,8] = (XmmReg[120,8] == m[120,8]) * 0xFF;
 }
-# ia.sinc:8339
+# ia.sinc:8390
 :PCMPEQB       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x74; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,8] = (XmmReg1[0,8] == XmmReg2[0,8]) * 0xFF;
@@ -2445,7 +2445,7 @@
     XmmReg1[112,8] = (XmmReg1[112,8] == XmmReg2[112,8]) * 0xFF;
     XmmReg1[120,8] = (XmmReg1[120,8] == XmmReg2[120,8]) * 0xFF;
 }
-# ia.sinc:8359
+# ia.sinc:8410
 :PCMPEQW       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x75; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -2458,7 +2458,7 @@
     XmmReg[96,16] = zext(XmmReg[96,16] == m[96,16]) * 0xFFFF;
     XmmReg[112,16] = zext(XmmReg[112,16] == m[112,16]) * 0xFFFF;
 }
-# ia.sinc:8372
+# ia.sinc:8423
 :PCMPEQW       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x75; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,16] = zext(XmmReg1[0,16] == XmmReg2[0,16]) * 0xFFFF;
@@ -2470,7 +2470,7 @@
     XmmReg1[96,16] = zext(XmmReg1[96,16] == XmmReg2[96,16]) * 0xFFFF;
     XmmReg1[112,16] = zext(XmmReg1[112,16] == XmmReg2[112,16]) * 0xFFFF;
 }
-# ia.sinc:8384
+# ia.sinc:8435
 :PCMPEQD       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x76; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -2479,7 +2479,7 @@
     XmmReg[64,32] = zext(XmmReg[64,32] == m[64,32]) * 0xFFFFFFFF;
     XmmReg[96,32] = zext(XmmReg[96,32] == m[96,32]) * 0xFFFFFFFF;
 }
-# ia.sinc:8393
+# ia.sinc:8444
 :PCMPEQD       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x76; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = zext(XmmReg1[0,32] == XmmReg2[0,32]) * 0xFFFFFFFF;
@@ -2487,7 +2487,7 @@
     XmmReg1[64,32] = zext(XmmReg1[64,32] == XmmReg2[64,32]) * 0xFFFFFFFF;
     XmmReg1[96,32] = zext(XmmReg1[96,32] == XmmReg2[96,32]) * 0xFFFFFFFF;
 }
-# ia.sinc:8401
+# ia.sinc:8452
 :PCMPGTB       mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x64; mmxreg ... & m64
 {
     local m:8 = m64;
@@ -2500,7 +2500,7 @@
     mmxreg[48,8] = (mmxreg[48,8] s> m[48,8]) * 0xFF;
     mmxreg[56,8] = (mmxreg[56,8] s> m[56,8]) * 0xFF;
 }
-# ia.sinc:8414
+# ia.sinc:8465
 :PCMPGTB       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x64; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,8] = (mmxreg1[0,8] s> mmxreg2[0,8]) * 0xFF;
@@ -2512,7 +2512,7 @@
     mmxreg1[48,8] = (mmxreg1[48,8] s> mmxreg2[48,8]) * 0xFF;
     mmxreg1[56,8] = (mmxreg1[56,8] s> mmxreg2[56,8]) * 0xFF;
 }
-# ia.sinc:8426
+# ia.sinc:8477
 :PCMPGTW       mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x65; mmxreg ... & m64
 {
     local m:8 = m64;
@@ -2521,7 +2521,7 @@
     mmxreg[32,16] = zext(mmxreg[32,16] s> m[32,16]) * 0xFFFF;
     mmxreg[48,16] = zext(mmxreg[48,16] s> m[48,16]) * 0xFFFF;
 }
-# ia.sinc:8435
+# ia.sinc:8486
 :PCMPGTW       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x65; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,16] = zext(mmxreg1[0,16] s> mmxreg2[0,16]) * 0xFFFF;
@@ -2529,20 +2529,20 @@
     mmxreg1[32,16] = zext(mmxreg1[32,16] s> mmxreg2[32,16]) * 0xFFFF;
     mmxreg1[48,16] = zext(mmxreg1[48,16] s> mmxreg2[48,16]) * 0xFFFF;
 }
-# ia.sinc:8443
+# ia.sinc:8494
 :PCMPGTD       mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x66; mmxreg ... & m64
 {
     local m:8 = m64;
     mmxreg[0,32] = zext(mmxreg[0,32] s> m[0,32]) * 0xFFFFFFFF;
     mmxreg[32,32] = zext(mmxreg[32,32] s> m[32,32]) * 0xFFFFFFFF;
 }
-# ia.sinc:8450
+# ia.sinc:8501
 :PCMPGTD       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x66; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,32] = zext(mmxreg1[0,32] s> mmxreg2[0,32]) * 0xFFFFFFFF;
     mmxreg1[32,32] = zext(mmxreg1[32,32] s> mmxreg2[32,32]) * 0xFFFFFFFF;
 }
-# ia.sinc:8456
+# ia.sinc:8507
 :PCMPGTB       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x64; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -2563,7 +2563,7 @@
     XmmReg[112,8] = (XmmReg[112,8] s> m[112,8]) * 0xFF;
     XmmReg[120,8] = (XmmReg[120,8] s> m[120,8]) * 0xFF;
 }
-# ia.sinc:8478
+# ia.sinc:8529
 :PCMPGTB       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x64; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,8] = (XmmReg1[0,8] s> XmmReg2[0,8]) * 0xFF;
@@ -2583,7 +2583,7 @@
     XmmReg1[112,8] = (XmmReg1[112,8] s> XmmReg2[112,8]) * 0xFF;
     XmmReg1[120,8] = (XmmReg1[120,8] s> XmmReg2[120,8]) * 0xFF;
 }
-# ia.sinc:8498
+# ia.sinc:8549
 :PCMPGTW       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x65; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -2596,7 +2596,7 @@
     XmmReg[96,16] = zext(XmmReg[96,16] s> m[96,16]) * 0xFFFF;
     XmmReg[112,16] = zext(XmmReg[112,16] s> m[112,16]) * 0xFFFF;
 }
-# ia.sinc:8511
+# ia.sinc:8562
 :PCMPGTW       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x65; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,16] = zext(XmmReg1[0,16] s> XmmReg2[0,16]) * 0xFFFF;
@@ -2608,7 +2608,7 @@
     XmmReg1[96,16] = zext(XmmReg1[96,16] s> XmmReg2[96,16]) * 0xFFFF;
     XmmReg1[112,16] = zext(XmmReg1[112,16] s> XmmReg2[112,16]) * 0xFFFF;
 }
-# ia.sinc:8523
+# ia.sinc:8574
 :PCMPGTD       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x66; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -2617,7 +2617,7 @@
     XmmReg[64,32] = zext(XmmReg[64,32] s> m[64,32]) * 0xFFFFFFFF;
     XmmReg[96,32] = zext(XmmReg[96,32] s> m[96,32]) * 0xFFFFFFFF;
 }
-# ia.sinc:8532
+# ia.sinc:8583
 :PCMPGTD       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x66; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = zext(XmmReg1[0,32] s> XmmReg2[0,32]) * 0xFFFFFFFF;
@@ -2625,14 +2625,14 @@
     XmmReg1[64,32] = zext(XmmReg1[64,32] s> XmmReg2[64,32]) * 0xFFFFFFFF;
     XmmReg1[96,32] = zext(XmmReg1[96,32] s> XmmReg2[96,32]) * 0xFFFFFFFF;
 }
-# ia.sinc:8540
+# ia.sinc:8591
 :PEXTRW        Reg32, mmxreg2, imm8 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xC5; Reg32 & check_Reg32_dest & mmxreg2; imm8
 {
     temp:8 = mmxreg2 >> ( (imm8 & 0x03) * 16 );
     Reg32 = zext(temp:2);
 	build check_Reg32_dest;
 }
-# ia.sinc:8547
+# ia.sinc:8598
 :PEXTRW        Reg32, XmmReg2, imm8 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xC5; Reg32 & XmmReg2 & check_Reg32_dest; imm8
 {
     local shift:1 = (imm8 & 0x7) * 16:1;
@@ -2642,7 +2642,7 @@
     Reg32 = zext(temp:2);
     build check_Reg32_dest;
 }
-# ia.sinc:8613
+# ia.sinc:8664
 :PINSRW        mmxreg, Rmr32, imm8 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xC4; mmxmod=3 & Rmr32 & mmxreg; imm8 
 { 
     local destIndex:1 = (imm8 & 0x7) * 16:1;
@@ -2650,7 +2650,7 @@
     local newVal:8 = zext(Rmr32[0,16]);
     mmxreg = mmxreg | (newVal << destIndex);
 }
-# ia.sinc:8621
+# ia.sinc:8672
 :PINSRW        mmxreg, m16, imm8 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xC4; m16 & mmxreg ... ; imm8 
 { 
     local destIndex:1 = (imm8 & 0x7) * 16:1;
@@ -2658,7 +2658,7 @@
     local newVal:8 = zext(m16);
     mmxreg = mmxreg | (newVal << destIndex);
 }
-# ia.sinc:8629
+# ia.sinc:8680
 :PINSRW        XmmReg, Rmr32, imm8 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xC4; xmmmod=3 & Rmr32 & XmmReg; imm8 
 { 
     local destIndex:1 = (imm8 & 0x7) * 16:1;
@@ -2670,7 +2670,7 @@
     conditionalAssign(XmmReg[0,64],useLow,newLow,XmmReg[0,64]);
     conditionalAssign(XmmReg[64,64],!useLow,newHigh,XmmReg[64,64]);
 }
-# ia.sinc:8641
+# ia.sinc:8692
 :PINSRW        XmmReg, m16, imm8 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xC4; m16 & XmmReg ...; imm8 
 { 
     local destIndex:1 = (imm8 & 0x7) * 16:1;
@@ -2682,15 +2682,15 @@
     conditionalAssign(XmmReg[0,64],useLow,newLow,XmmReg[0,64]);
     conditionalAssign(XmmReg[64,64],!useLow,newHigh,XmmReg[64,64]);
 }
-# ia.sinc:8660
+# ia.sinc:8711
 :PMADDWD       mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF5; mmxreg ... & m64 { mmxreg = pmaddwd(mmxreg, m64); }
-# ia.sinc:8661
+# ia.sinc:8712
 :PMADDWD       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF5; mmxmod = 3 & mmxreg1 & mmxreg2 { mmxreg1 = pmaddwd(mmxreg1, mmxreg2); }
-# ia.sinc:8662
+# ia.sinc:8713
 :PMADDWD       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF5; XmmReg ... & m128 { XmmReg = pmaddwd(XmmReg, m128); }
-# ia.sinc:8663
+# ia.sinc:8714
 :PMADDWD       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF5; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = pmaddwd(XmmReg1, XmmReg2); }
-# ia.sinc:8665
+# ia.sinc:8716
 :PMAXSW        mmxreg1, mmxreg2_m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xEE; mmxreg1 ... & mmxreg2_m64 
 { 
     local srcCopy:8 = mmxreg2_m64;
@@ -2699,7 +2699,7 @@
     conditionalAssign(mmxreg1[32,16],srcCopy[32,16] s> mmxreg1[32,16],srcCopy[32,16],mmxreg1[32,16]); 
     conditionalAssign(mmxreg1[48,16],srcCopy[48,16] s> mmxreg1[48,16],srcCopy[48,16],mmxreg1[48,16]); 
 }
-# ia.sinc:8674
+# ia.sinc:8725
 :PMAXSW        XmmReg1, XmmReg2_m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xEE; XmmReg1 ... & XmmReg2_m128 
 { 
     local srcCopy:16 = XmmReg2_m128; 
@@ -2712,7 +2712,7 @@
     conditionalAssign(XmmReg1[96,16],srcCopy[96,16] s> XmmReg1[96,16],srcCopy[96,16],XmmReg1[96,16]);
     conditionalAssign(XmmReg1[112,16],srcCopy[112,16] s> XmmReg1[112,16],srcCopy[112,16],XmmReg1[112,16]);
 }
-# ia.sinc:8687
+# ia.sinc:8738
 :PMAXUB        mmxreg1, mmxreg2_m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xDE; mmxreg1 ... & mmxreg2_m64 
 { 
     local srcCopy:8 = mmxreg2_m64;
@@ -2725,7 +2725,7 @@
     conditionalAssign(mmxreg1[48,8],srcCopy[48,8] > mmxreg1[48,8],srcCopy[48,8],mmxreg1[48,8]); 
     conditionalAssign(mmxreg1[56,8],srcCopy[56,8] > mmxreg1[56,8],srcCopy[56,8],mmxreg1[56,8]); 
 }
-# ia.sinc:8700
+# ia.sinc:8751
 :PMAXUB        XmmReg1, XmmReg2_m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xDE; XmmReg1 ... & XmmReg2_m128 
 { 
     local srcCopy:16 = XmmReg2_m128;
@@ -2746,7 +2746,7 @@
     conditionalAssign(XmmReg1[112,8],srcCopy[112,8] > XmmReg1[112,8],srcCopy[112,8],XmmReg1[112,8]); 
     conditionalAssign(XmmReg1[120,8],srcCopy[120,8] > XmmReg1[120,8],srcCopy[120,8],XmmReg1[120,8]); 
 }
-# ia.sinc:8721
+# ia.sinc:8772
 :PMINSW        mmxreg1, mmxreg2_m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xEA; mmxreg1 ... & mmxreg2_m64 
 { 
     local srcCopy:8 = mmxreg2_m64;
@@ -2755,7 +2755,7 @@
     conditionalAssign(mmxreg1[32,16],srcCopy[32,16] s< mmxreg1[32,16],srcCopy[32,16],mmxreg1[32,16]); 
     conditionalAssign(mmxreg1[48,16],srcCopy[48,16] s< mmxreg1[48,16],srcCopy[48,16],mmxreg1[48,16]); 
 }
-# ia.sinc:8730
+# ia.sinc:8781
 :PMINSW        XmmReg1, XmmReg2_m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xEA; XmmReg1 ... & XmmReg2_m128 
 { 
     local srcCopy:16 = XmmReg2_m128; 
@@ -2768,7 +2768,7 @@
     conditionalAssign(XmmReg1[96,16],srcCopy[96,16] s< XmmReg1[96,16],srcCopy[96,16],XmmReg1[96,16]);
     conditionalAssign(XmmReg1[112,16],srcCopy[112,16] s< XmmReg1[112,16],srcCopy[112,16],XmmReg1[112,16]);
 }
-# ia.sinc:8743
+# ia.sinc:8794
 :PMINUB        mmxreg1, mmxreg2_m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xDA; mmxreg1 ... & mmxreg2_m64 
 { 
     local srcCopy:8 = mmxreg2_m64;
@@ -2781,7 +2781,7 @@
     conditionalAssign(mmxreg1[48,8],srcCopy[48,8] < mmxreg1[48,8],srcCopy[48,8],mmxreg1[48,8]); 
     conditionalAssign(mmxreg1[56,8],srcCopy[56,8] < mmxreg1[56,8],srcCopy[56,8],mmxreg1[56,8]); 
 }
-# ia.sinc:8756
+# ia.sinc:8807
 :PMINUB        XmmReg1, XmmReg2_m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xDA; XmmReg1 ... & XmmReg2_m128 
 { 
     local srcCopy:16 = XmmReg2_m128;
@@ -2802,7 +2802,7 @@
     conditionalAssign(XmmReg1[112,8],srcCopy[112,8] < XmmReg1[112,8],srcCopy[112,8],XmmReg1[112,8]); 
     conditionalAssign(XmmReg1[120,8],srcCopy[120,8] < XmmReg1[120,8],srcCopy[120,8],XmmReg1[120,8]); 
 }
-# ia.sinc:8779
+# ia.sinc:8830
 :PMOVMSKB       Reg32, mmxreg2 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0xD7; mod = 3 & Reg32 & mmxreg2 & check_Reg32_dest
 { 
 	local byte_mask:1 = 0:1;
@@ -2817,7 +2817,7 @@
 	Reg32 = zext(byte_mask);
 	build check_Reg32_dest;
 }
-# ia.sinc:8796
+# ia.sinc:8847
 :PMOVMSKB       Reg32, XmmReg2 is vexMode=3 & vexMMMMM=1 &   $(PRE_66) & byte=0xD7; mod = 3 & Reg32 & XmmReg2 & check_Reg32_dest
 { 
 	local byte_mask:2 = 0:2;
@@ -2840,23 +2840,23 @@
 	Reg32 = zext(byte_mask);
 	build check_Reg32_dest;
 }
-# ia.sinc:8826
+# ia.sinc:8877
 :PMULHUW        mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE4; mmxreg ... & m64 { mmxreg = pmulhuw(mmxreg, m64); }
-# ia.sinc:8827
+# ia.sinc:8878
 :PMULHUW        mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE4; mmxmod = 3 & mmxreg1 & mmxreg2 { mmxreg1 = pmulhuw(mmxreg1, mmxreg2); }
-# ia.sinc:8828
+# ia.sinc:8879
 :PMULHUW        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE4; XmmReg ... & m128 { XmmReg = pmulhuw(XmmReg, m128); }
-# ia.sinc:8829
+# ia.sinc:8880
 :PMULHUW        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE4; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = pmulhuw(XmmReg1, XmmReg2); }
-# ia.sinc:8832
+# ia.sinc:8883
 :PMULHW         mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE5; mmxreg ... & m64 { mmxreg = pmulhw(mmxreg, m64); }
-# ia.sinc:8833
+# ia.sinc:8884
 :PMULHW         mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE5; mmxmod = 3 & mmxreg1 & mmxreg2 { mmxreg1 = pmulhw(mmxreg1, mmxreg2); }
-# ia.sinc:8834
+# ia.sinc:8885
 :PMULHW         XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE5; XmmReg ... & m128 { XmmReg = pmulhw(XmmReg, m128); }
-# ia.sinc:8835
+# ia.sinc:8886
 :PMULHW         XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE5; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = pmulhw(XmmReg1, XmmReg2); }
-# ia.sinc:8837
+# ia.sinc:8888
 :PMULLW         mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xD5; mmxreg ... & m64 {
   local m:8 = m64;
   mmxreg[0,16] = mmxreg[0,16] * m[0,16];
@@ -2864,14 +2864,14 @@
   mmxreg[32,16] = mmxreg[32,16] * m[32,16];
   mmxreg[48,16] = mmxreg[48,16] * m[48,16];
 }
-# ia.sinc:8845
+# ia.sinc:8896
 :PMULLW         mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xD5; mmxmod = 3 & mmxreg1 & mmxreg2 {
   mmxreg1[0,16] = mmxreg1[0,16] * mmxreg2[0,16];
   mmxreg1[16,16] = mmxreg1[16,16] * mmxreg2[16,16];
   mmxreg1[32,16] = mmxreg1[32,16] * mmxreg2[32,16];
   mmxreg1[48,16] = mmxreg1[48,16] * mmxreg2[48,16];
 }
-# ia.sinc:8852
+# ia.sinc:8903
 :PMULLW         XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD5; XmmReg ... & m128 {
   local m:16 = m128;
   XmmReg[0,16] = XmmReg[0,16] * m[0,16];
@@ -2883,7 +2883,7 @@
   XmmReg[96,16] = XmmReg[96,16] * m[96,16];
   XmmReg[112,16] = XmmReg[112,16] * m[112,16];
 }
-# ia.sinc:8864
+# ia.sinc:8915
 :PMULLW         XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD5; xmmmod = 3 & XmmReg1 & XmmReg2 {
   XmmReg1[0,16] = XmmReg1[0,16] * XmmReg2[0,16];
   XmmReg1[16,16] = XmmReg1[16,16] * XmmReg2[16,16];
@@ -2894,21 +2894,21 @@
   XmmReg1[96,16] = XmmReg1[96,16] * XmmReg2[96,16];
   XmmReg1[112,16] = XmmReg1[112,16] * XmmReg2[112,16];
  }
-# ia.sinc:8875
+# ia.sinc:8926
 :PMULUDQ        mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF4; mmxreg ... & m64
 {
     local a:8 = zext(mmxreg[0,32]);
     local b:8 = zext(m64[0,32]);
     mmxreg = a * b;
 }
-# ia.sinc:8882
+# ia.sinc:8933
 :PMULUDQ        mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF4; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     local a:8 = zext(mmxreg1[0,32]);
     local b:8 = zext(mmxreg2[0,32]);
     mmxreg1 = a * b;
 }
-# ia.sinc:8889
+# ia.sinc:8940
 :PMULUDQ        XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF4; XmmReg ... & m128
 {
     local a:8 = zext(XmmReg[0,32]);
@@ -2918,7 +2918,7 @@
     local d:8 = zext(m128[64,32]);
     XmmReg[64,64] = c * d;
 }
-# ia.sinc:8899
+# ia.sinc:8950
 :PMULUDQ        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF4; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     local a:8 = zext(XmmReg1[0,32]);
@@ -2928,23 +2928,23 @@
     local d:8 = zext(XmmReg2[64,32]);
     XmmReg1[64,64] = c * d;
 }
-# ia.sinc:8909
+# ia.sinc:8960
 :POR            mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xEB; mmxreg ... & m64				{ mmxreg = mmxreg | m64; }
-# ia.sinc:8910
+# ia.sinc:8961
 :POR            mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xEB; mmxmod = 3 & mmxreg1 & mmxreg2	{ mmxreg1 = mmxreg1 | mmxreg2; }
-# ia.sinc:8911
+# ia.sinc:8962
 :POR            XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xEB; XmmReg ... & m128			    { XmmReg = XmmReg | m128; }
-# ia.sinc:8912
+# ia.sinc:8963
 :POR            XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xEB; xmmmod = 3 & XmmReg1 & XmmReg2	{ XmmReg1 = XmmReg1 | XmmReg2; }
-# ia.sinc:8915
+# ia.sinc:8966
 :PSADBW         mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF6; mmxreg ... & m64 { mmxreg = psadbw(mmxreg, m64); }
-# ia.sinc:8916
+# ia.sinc:8967
 :PSADBW         mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF6; mmxmod = 3 & mmxreg1 & mmxreg2 { mmxreg1 = psadbw(mmxreg1, mmxreg2); }
-# ia.sinc:8917
+# ia.sinc:8968
 :PSADBW         XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF6; XmmReg ... & m128 { XmmReg = psadbw(XmmReg, m128); }
-# ia.sinc:8918
+# ia.sinc:8969
 :PSADBW         XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF6; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = psadbw(XmmReg1, XmmReg2); }
-# ia.sinc:8935
+# ia.sinc:8986
 :PSHUFD         XmmReg1, XmmReg2_m128, imm8 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x70; (XmmReg2_m128 & XmmReg1 ...); imm8 & Order0 & Order1 & Order2 & Order3
 {
     local c0 = XmmReg2_m128[0,32];
@@ -2957,13 +2957,13 @@
     shuffle_4(XmmReg1[64,32],Order2,c0,c1,c2,c3);
     shuffle_4(XmmReg1[96,32],Order3,c0,c1,c2,c3);
 }
-# ia.sinc:8949
+# ia.sinc:9000
 :PSHUFHW        XmmReg1, XmmReg2_m128, imm8 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x70; XmmReg2_m128 & XmmReg1 ...; imm8 { XmmReg1 = pshufhw(XmmReg1, XmmReg2_m128, imm8:8); }
-# ia.sinc:8952
+# ia.sinc:9003
 :PSHUFLW        XmmReg1, XmmReg2_m128, imm8 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x70; XmmReg2_m128 & XmmReg1 ...; imm8 { XmmReg1 = pshuflw(XmmReg1, XmmReg2_m128, imm8:8); }
-# ia.sinc:8955
+# ia.sinc:9006
 :PSHUFW         mmxreg1, mmxreg2_m64, imm8 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x70; mmxreg2_m64 & mmxreg1 ...; imm8 { mmxreg1 = pshufw(mmxreg1, mmxreg2_m64, imm8:8); }
-# ia.sinc:8976
+# ia.sinc:9027
 :PSLLDQ         XmmReg2, imm8 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x73; xmmmod = 3 & reg_opcode=7 & XmmReg2; imm8 
 { 
 	if (imm8:1 > 15:1) goto <zero>;
@@ -2980,41 +2980,41 @@
     XmmReg2[64,64] = 0:8;
 <end>
 }
-# ia.sinc:8994
+# ia.sinc:9045
 :PSLLW          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF1; mmxreg ... & m64 ... { mmxreg = psllw(mmxreg, m64); }
-# ia.sinc:8995
+# ia.sinc:9046
 :PSLLW          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF1; mmxmod = 3 & mmxreg1 & mmxreg2 { mmxreg1 = psllw(mmxreg1, mmxreg2); }
-# ia.sinc:8996
+# ia.sinc:9047
 :PSLLW          mmxreg2, imm8 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x71; mod = 0b11 & reg_opcode=6 & mmxreg2; imm8 { mmxreg2 = psllw(mmxreg2, imm8:8); }
-# ia.sinc:8998
+# ia.sinc:9049
 :PSLLD          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF2; mmxreg ... & m64 ... {
   local m:8 = m64;
   mmxreg[0,32] = mmxreg[0,32] << m[0,32];
   mmxreg[32,32] = mmxreg[32,32] << m[32,32];
 }
-# ia.sinc:9004
+# ia.sinc:9055
 :PSLLD          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF2; mmxmod = 3 & mmxreg1 & mmxreg2 {
   mmxreg1[0,32] = mmxreg1[0,32] << mmxreg2[0,32];
   mmxreg1[32,32] = mmxreg1[32,32] << mmxreg2[32,32];
 }
-# ia.sinc:9009
+# ia.sinc:9060
 :PSLLD          mmxreg2, imm8 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x72; mod = 0b11 & reg_opcode=6 & mmxreg2; imm8 {
   mmxreg2[0,32] = mmxreg2[0,32] << imm8;
   mmxreg2[32,32] = mmxreg2[32,32] << imm8;
 }
-# ia.sinc:9014
+# ia.sinc:9065
 :PSLLQ          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF3; mmxreg ... & m64 ... { mmxreg = mmxreg << m64; }
-# ia.sinc:9015
+# ia.sinc:9066
 :PSLLQ          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF3; mmxmod = 3 & mmxreg1 & mmxreg2 { mmxreg1 = mmxreg1 << mmxreg2; }
-# ia.sinc:9016
+# ia.sinc:9067
 :PSLLQ          mmxreg2, imm8 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x73; mod = 0b11 & reg_opcode=6 & mmxreg2; imm8 { mmxreg2 = mmxreg2 << imm8:8; }
-# ia.sinc:9018
+# ia.sinc:9069
 :PSLLW          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF1; XmmReg ... & m128 ... { XmmReg = psllw(XmmReg, m128); }
-# ia.sinc:9019
+# ia.sinc:9070
 :PSLLW          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF1; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = psllw(XmmReg1, XmmReg2); }
-# ia.sinc:9020
+# ia.sinc:9071
 :PSLLW          XmmReg2, imm8 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x71; mod = 0b11 & reg_opcode=6 & XmmReg2; imm8 { XmmReg2 = psllw(XmmReg2, imm8:8); }
-# ia.sinc:9022
+# ia.sinc:9073
 :PSLLD          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF2; XmmReg ... & m128 ... {
   local m:16 = m128;
   local count:4 = m[0,32];
@@ -3023,7 +3023,7 @@
   XmmReg[64,32] = XmmReg[64,32] << count;
   XmmReg[96,32] = XmmReg[96,32] << count;
 }
-# ia.sinc:9031
+# ia.sinc:9082
 :PSLLD          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF2; xmmmod = 3 & XmmReg1 & XmmReg2 {
   local count:4 = XmmReg2[0,32];
   XmmReg1[0,32] = XmmReg1[0,32] << count;
@@ -3031,65 +3031,65 @@
   XmmReg1[64,32] = XmmReg1[64,32] << count;
   XmmReg1[96,32] = XmmReg1[96,32] << count;
 }
-# ia.sinc:9039
+# ia.sinc:9090
 :PSLLD          XmmReg2, imm8 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x72; mod = 0b11 & reg_opcode=6 & XmmReg2; imm8 {
   XmmReg2[0,32] = XmmReg2[0,32] << imm8;
   XmmReg2[32,32] = XmmReg2[32,32] << imm8;
   XmmReg2[64,32] = XmmReg2[64,32] << imm8;
   XmmReg2[96,32] = XmmReg2[96,32] << imm8;
 }
-# ia.sinc:9046
+# ia.sinc:9097
 :PSLLQ          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF3; XmmReg ... & m128 ... {
   local m:16 = m128;
   local count:8 = m[0,64];
   XmmReg[0,64] = XmmReg[0,64] << count;
   XmmReg[64,64] = XmmReg[64,64] << count;
 }
-# ia.sinc:9053
+# ia.sinc:9104
 :PSLLQ          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF3; xmmmod = 3 & XmmReg1 & XmmReg2 {
   local count:8 = XmmReg2[0,64];
   XmmReg1[0,64] = XmmReg1[0,64] << count;
   XmmReg1[64,64] = XmmReg1[64,64] << count;
 }
-# ia.sinc:9059
+# ia.sinc:9110
 :PSLLQ          XmmReg2, imm8 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x73; mod = 0b11 & reg_opcode=6 & XmmReg2; imm8 {
   XmmReg2[0,64] = XmmReg2[0,64] << imm8;
   XmmReg2[64,64] = XmmReg2[64,64] << imm8;
 }
-# ia.sinc:9065
+# ia.sinc:9116
 :PSRAW          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE1; mmxreg ... & m64 ... { mmxreg = psraw(mmxreg, m64); }
-# ia.sinc:9066
+# ia.sinc:9117
 :PSRAW          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE1; mmxmod = 3 & mmxreg1 & mmxreg2 { mmxreg1 = psraw(mmxreg1, mmxreg2); }
-# ia.sinc:9067
+# ia.sinc:9118
 :PSRAW          mmxreg2, imm8 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x71; mod = 0b11 & reg_opcode=4 & mmxreg2; imm8 { mmxreg2 = psraw(mmxreg2, imm8:8); }
-# ia.sinc:9069
+# ia.sinc:9120
 :PSRAD          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE2; mmxreg ... & m64
 {
 # a count greater than 31 just clears all the bits
     mmxreg[0,32] = mmxreg[0,32] s>> m64;
     mmxreg[32,32] = mmxreg[32,32] s>> m64;
 }
-# ia.sinc:9076
+# ia.sinc:9127
 :PSRAD          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE2; mmxmod = 3 & mmxreg1 & mmxreg2
 {
 # a count greater than 31 just clears all the bits
     mmxreg1[0,32] = mmxreg1[0,32] s>> mmxreg2;
     mmxreg1[32,32] = mmxreg1[32,32] s>> mmxreg2;
 }
-# ia.sinc:9083
+# ia.sinc:9134
 :PSRAD          mmxreg2, imm8 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x72; mod = 0b11 & reg_opcode=4 & mmxreg2; imm8
 {
 # a count greater than 31 just clears all the bits
     mmxreg2[0,32] = mmxreg2[0,32] s>> imm8;
     mmxreg2[32,32] = mmxreg2[32,32] s>> imm8;
 }
-# ia.sinc:9090
+# ia.sinc:9141
 :PSRAW          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE1; XmmReg ... & m128 ... { XmmReg = psraw(XmmReg, m128); }
-# ia.sinc:9091
+# ia.sinc:9142
 :PSRAW          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE1; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = psraw(XmmReg1, XmmReg2); }
-# ia.sinc:9092
+# ia.sinc:9143
 :PSRAW          XmmReg2, imm8 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x71; mod = 0b11 & reg_opcode=4 & XmmReg2; imm8 { XmmReg2 = psraw(XmmReg2, imm8:8); }
-# ia.sinc:9094
+# ia.sinc:9145
 :PSRAD          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE2; m128 & XmmReg ...
 {
 # a count greater than 31 just clears all the bits
@@ -3100,7 +3100,7 @@
     XmmReg[64,32] = XmmReg[64,32] s>> count;
     XmmReg[96,32] = XmmReg[96,32] s>> count;
 }
-# ia.sinc:9105
+# ia.sinc:9156
 :PSRAD          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xE2; xmmmod = 3 & XmmReg1 & XmmReg2
 {
 # a count greater than 31 just clears all the bits
@@ -3110,7 +3110,7 @@
     XmmReg1[64,32] = XmmReg1[64,32] s>> count;
     XmmReg1[96,32] = XmmReg1[96,32] s>> count;
 }
-# ia.sinc:9115
+# ia.sinc:9166
 :PSRAD          XmmReg2, imm8 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x72; mod = 0b11 & reg_opcode=4 & XmmReg2; imm8
 {
 # a count greater than 31 just clears all the bits
@@ -3119,13 +3119,13 @@
     XmmReg2[64,32] = XmmReg2[64,32] s>> imm8;
     XmmReg2[96,32] = XmmReg2[96,32] s>> imm8;
 }
-# ia.sinc:9124
+# ia.sinc:9175
 :PSRLDQ         XmmReg2, imm8 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x73; xmmmod=3 & reg_opcode=3 & XmmReg2; imm8
 {
 # a count greater than 15 just clears all the bits
     XmmReg2 = XmmReg2 >> (imm8 * 8);
 }
-# ia.sinc:9130
+# ia.sinc:9181
 :PSRLW          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xD1; mmxreg ... & m64 ...
 {
     mmxreg[0,16]  = mmxreg[0,16]  >> m64;
@@ -3133,7 +3133,7 @@
     mmxreg[32,16] = mmxreg[32,16] >> m64;
     mmxreg[48,16] = mmxreg[48,16] >> m64;
 }
-# ia.sinc:9138
+# ia.sinc:9189
 :PSRLW          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xD1; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,16]  = mmxreg1[0,16]  >> mmxreg2;
@@ -3141,7 +3141,7 @@
     mmxreg1[32,16] = mmxreg1[32,16] >> mmxreg2;
     mmxreg1[48,16] = mmxreg1[48,16] >> mmxreg2;
 }
-# ia.sinc:9146
+# ia.sinc:9197
 :PSRLW          mmxreg2, imm8 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x71; mod = 0b11 & reg_opcode=2 & mmxreg2; imm8
 {
     mmxreg2[0,16]  = mmxreg2[0,16]  >> imm8;
@@ -3149,40 +3149,40 @@
     mmxreg2[32,16] = mmxreg2[32,16] >> imm8;
     mmxreg2[48,16] = mmxreg2[48,16] >> imm8;
 }
-# ia.sinc:9154
+# ia.sinc:9205
 :PSRLD          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xD2; mmxreg ... & m64 ...
 {
     mmxreg[0,32]  = mmxreg[0,32]  >> m64;
     mmxreg[32,32] = mmxreg[32,32] >> m64;
 }
-# ia.sinc:9160
+# ia.sinc:9211
 :PSRLD          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xD2; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,32]  = mmxreg1[0,32]  >> mmxreg2;
     mmxreg1[32,32] = mmxreg1[32,32] >> mmxreg2;
 }
-# ia.sinc:9166
+# ia.sinc:9217
 :PSRLD          mmxreg2, imm8 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x72; mod = 0b11 & reg_opcode=2 & mmxreg2; imm8
 {
     mmxreg2[0,32]  = mmxreg2[0,32]  >> imm8;
     mmxreg2[32,32] = mmxreg2[32,32] >> imm8;
 }
-# ia.sinc:9172
+# ia.sinc:9223
 :PSRLQ          mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xD3; mmxreg ... & m64 ...
 {
     mmxreg = mmxreg >> m64;
  }
-# ia.sinc:9177
+# ia.sinc:9228
 :PSRLQ          mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xD3; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1 = mmxreg1 >> mmxreg2;
 }
-# ia.sinc:9182
+# ia.sinc:9233
 :PSRLQ          mmxreg2, imm8 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x73; mod = 0b11 & reg_opcode=2 & mmxreg2; imm8
 {
     mmxreg2 = mmxreg2 >> imm8;
 }
-# ia.sinc:9187
+# ia.sinc:9238
 :PSRLW          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD1; XmmReg ... & m128 ...
 {
     XmmReg[0,16]   = XmmReg[0,16]   >> m128[0,64];
@@ -3194,7 +3194,7 @@
     XmmReg[96,16]  = XmmReg[96,16]  >> m128[0,64];
     XmmReg[112,16] = XmmReg[112,16] >> m128[0,64];
 }
-# ia.sinc:9199
+# ia.sinc:9250
 :PSRLW          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD1; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     #save this off in case XmmReg1 and XmmReg2 are the same register
@@ -3209,7 +3209,7 @@
     XmmReg1[96,16]  = XmmReg1[96,16]  >> count;
     XmmReg1[112,16] = XmmReg1[112,16] >> count;
 }
-# ia.sinc:9214
+# ia.sinc:9265
 :PSRLW          XmmReg2, imm8 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x71; mod = 0b11 & reg_opcode=2 & XmmReg2; imm8
 {
     XmmReg2[0,16]   = XmmReg2[0,16]   >> imm8;
@@ -3221,7 +3221,7 @@
     XmmReg2[96,16]  = XmmReg2[96,16]  >> imm8;
     XmmReg2[112,16] = XmmReg2[112,16] >> imm8;
 }
-# ia.sinc:9226
+# ia.sinc:9277
 :PSRLD          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD2; XmmReg ... & m128 ...
 {
     XmmReg[0,32]  = XmmReg[0,32]  >> m128[0,64];
@@ -3229,7 +3229,7 @@
     XmmReg[64,32] = XmmReg[64,32] >> m128[0,64];
     XmmReg[96,32] = XmmReg[96,32] >> m128[0,64];
 }
-# ia.sinc:9234
+# ia.sinc:9285
 :PSRLD          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD2; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     #save this off in case XmmReg1 and XmmReg2 are the same register
@@ -3240,7 +3240,7 @@
     XmmReg1[64,32] = XmmReg1[64,32] >> count;
     XmmReg1[96,32] = XmmReg1[96,32] >> count;
 }
-# ia.sinc:9245
+# ia.sinc:9296
 :PSRLD          XmmReg2, imm8 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x72; mod = 0b11 & reg_opcode=2 & XmmReg2; imm8
 {
     XmmReg2[0,32]  = XmmReg2[0,32]  >> imm8;
@@ -3248,13 +3248,13 @@
     XmmReg2[64,32] = XmmReg2[64,32] >> imm8;
     XmmReg2[96,32] = XmmReg2[96,32] >> imm8;
 }
-# ia.sinc:9253
+# ia.sinc:9304
 :PSRLQ          XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD3; XmmReg ... & m128 ...
 {
     XmmReg[0,64]  = XmmReg[0,64]  >> m128[0,64];
     XmmReg[64,64] = XmmReg[64,64] >> m128[0,64];
 }
-# ia.sinc:9259
+# ia.sinc:9310
 :PSRLQ          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD3; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     #save this off in case XmmReg1 and XmmReg2 are the same register
@@ -3263,13 +3263,13 @@
     XmmReg1[0,64]  = XmmReg1[0,64]  >> count;
     XmmReg1[64,64] = XmmReg1[64,64] >> count;
 }
-# ia.sinc:9268
+# ia.sinc:9319
 :PSRLQ          XmmReg2, imm8 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x73; mod = 0b11 & reg_opcode=2 & XmmReg2; imm8
 {
     XmmReg2[0,64]  = XmmReg2[0,64]  >> imm8;
     XmmReg2[64,64] = XmmReg2[64,64] >> imm8;
 }
-# ia.sinc:9274
+# ia.sinc:9325
 :PSUBB           mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF8; mmxreg ... & m64 ...
 {
     local m:8 = m64;
@@ -3282,7 +3282,7 @@
     mmxreg[48,8] = mmxreg[48,8] - m[48,8];
     mmxreg[56,8] = mmxreg[56,8] - m[56,8];
 }
-# ia.sinc:9287
+# ia.sinc:9338
 :PSUBB           mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF8; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,8] =  mmxreg1[0,8] -  mmxreg2[0,8];
@@ -3294,7 +3294,7 @@
     mmxreg1[48,8] = mmxreg1[48,8] - mmxreg2[48,8];
     mmxreg1[56,8] = mmxreg1[56,8] - mmxreg2[56,8];
 }
-# ia.sinc:9299
+# ia.sinc:9350
 :PSUBW           mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF9; mmxreg ... & m64
 {
     local m:8 = m64;
@@ -3303,7 +3303,7 @@
     mmxreg[32,16] = mmxreg[32,16] - m[32,16];
     mmxreg[48,16] = mmxreg[48,16] - m[48,16];
 }
-# ia.sinc:9308
+# ia.sinc:9359
 :PSUBW           mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF9; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,16] = mmxreg1[0,16] - mmxreg2[0,16];
@@ -3311,37 +3311,37 @@
     mmxreg1[32,16] = mmxreg1[32,16] - mmxreg2[32,16];
     mmxreg1[48,16] = mmxreg1[48,16] - mmxreg2[48,16];
 }
-# ia.sinc:9316
+# ia.sinc:9367
 :PSUBD           mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xFA; mmxreg ... & m64 ...
 {
 	local m:8 = m64;
 	mmxreg[0,32] = mmxreg[0,32] - m[0,32];
 	mmxreg[32,32] = mmxreg[32,32] - m[32,32];
 }
-# ia.sinc:9323
+# ia.sinc:9374
 :PSUBD           mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xFA; mmxmod = 3 & mmxreg1 & mmxreg2
 {
 	mmxreg1[0,32] = mmxreg1[0,32] - mmxreg2[0,32];
 	mmxreg1[32,32] = mmxreg1[32,32] - mmxreg2[32,32];
 }
-# ia.sinc:9329
+# ia.sinc:9380
 :PSUBQ           mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xFB; mmxreg ... & m64 ...			{ mmxreg = mmxreg - m64; }
-# ia.sinc:9330
+# ia.sinc:9381
 :PSUBQ           mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xFB; mmxmod = 3 & mmxreg1 & mmxreg2		{ mmxreg1 = mmxreg1 - mmxreg2; }
-# ia.sinc:9331
+# ia.sinc:9382
 :PSUBQ           XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xFB; XmmReg ... & m128 ...
 {
 	local m:16 = m128;
 	XmmReg[0,64] = XmmReg[0,64] - m[0,64];
 	XmmReg[64,64] = XmmReg[64,64] - m[64,64];
 }
-# ia.sinc:9338
+# ia.sinc:9389
 :PSUBQ           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xFB; xmmmod = 3 & XmmReg1 & XmmReg2
 {
 	XmmReg1[0,64] = XmmReg1[0,64] - XmmReg2[0,64];
 	XmmReg1[64,64] = XmmReg1[64,64] - XmmReg2[64,64];
 }
-# ia.sinc:9344
+# ia.sinc:9395
 :PSUBB           XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF8; XmmReg ... & m128 ...
 {
     local m:16 = m128;
@@ -3362,7 +3362,7 @@
     XmmReg[112,8] = XmmReg[112,8] - m[112,8];
     XmmReg[120,8] = XmmReg[120,8] - m[120,8];
 }
-# ia.sinc:9365
+# ia.sinc:9416
 :PSUBB           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF8; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,8]   = XmmReg1[0,8]   - XmmReg2[0,8];
@@ -3382,7 +3382,7 @@
     XmmReg1[112,8] = XmmReg1[112,8] - XmmReg2[112,8];
     XmmReg1[120,8] = XmmReg1[120,8] - XmmReg2[120,8];
 }
-# ia.sinc:9385
+# ia.sinc:9436
 :PSUBW           XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF9; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -3395,7 +3395,7 @@
     XmmReg[96,16] = XmmReg[96,16] - m[96,16];
     XmmReg[112,16] = XmmReg[112,16] - m[112,16];
 }
-# ia.sinc:9398
+# ia.sinc:9449
 :PSUBW           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xF9; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,16] = XmmReg1[0,16] - XmmReg2[0,16];
@@ -3407,7 +3407,7 @@
     XmmReg1[96,16] = XmmReg1[96,16] - XmmReg2[96,16];
     XmmReg1[112,16] = XmmReg1[112,16] - XmmReg2[112,16];
 }
-# ia.sinc:9410
+# ia.sinc:9461
 :PSUBD           XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xFA; XmmReg ... & m128 ...
 {
   local m:16 = m128;
@@ -3416,7 +3416,7 @@
   XmmReg[64,32] = XmmReg[64,32] - m[64,32];
   XmmReg[96,32] = XmmReg[96,32] - m[96,32];
 }
-# ia.sinc:9419
+# ia.sinc:9470
 :PSUBD           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xFA; xmmmod = 3 & XmmReg1 & XmmReg2
 {
   XmmReg1[0,32] = XmmReg1[0,32] - XmmReg2[0,32];
@@ -3424,23 +3424,23 @@
   XmmReg1[64,32] = XmmReg1[64,32] - XmmReg2[64,32];
   XmmReg1[96,32] = XmmReg1[96,32] - XmmReg2[96,32];
 }
-# ia.sinc:9428
+# ia.sinc:9479
 :PSUBSB          mmxreg1, mmxreg2_m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE8; mmxreg1 ... & mmxreg2_m64 ... { mmxreg1 = psubsb(mmxreg1, mmxreg2_m64); }
-# ia.sinc:9431
+# ia.sinc:9482
 :PSUBSW          mmxreg1, mmxreg2_m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xE9; mmxreg1 ... & mmxreg2_m64 ... { mmxreg1 = psubsw(mmxreg1, mmxreg2_m64); }
-# ia.sinc:9433
+# ia.sinc:9484
 :PSUBSB          XmmReg1, XmmReg2_m128 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0xE8; XmmReg1 ... & XmmReg2_m128 ... { XmmReg1 = psubsb(XmmReg1, XmmReg2_m128); }
-# ia.sinc:9435
+# ia.sinc:9486
 :PSUBSW          XmmReg1, XmmReg2_m128 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0xE9; XmmReg1 ... & XmmReg2_m128 ... { XmmReg1 = psubsw(XmmReg1, XmmReg2_m128); }
-# ia.sinc:9438
+# ia.sinc:9489
 :PSUBUSB         mmxreg1, mmxreg2_m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xD8; mmxreg1 ... & mmxreg2_m64 ... { mmxreg1 = psubusb(mmxreg1, mmxreg2_m64); }
-# ia.sinc:9441
+# ia.sinc:9492
 :PSUBUSW         mmxreg1, mmxreg2_m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xD9; mmxreg1 ... & mmxreg2_m64 ... { mmxreg1 = psubusw(mmxreg1, mmxreg2_m64); }
-# ia.sinc:9443
+# ia.sinc:9494
 :PSUBUSB         XmmReg1, XmmReg2_m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD8; XmmReg1 ... & XmmReg2_m128 { XmmReg1 = psubusb(XmmReg1, XmmReg2_m128); }
-# ia.sinc:9445
+# ia.sinc:9496
 :PSUBUSW         XmmReg1, XmmReg2_m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xD9; XmmReg1 ... & XmmReg2_m128 { XmmReg1 = psubusw(XmmReg1, XmmReg2_m128); }
-# ia.sinc:9447
+# ia.sinc:9498
 :PUNPCKHBW       mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x68; mmxreg ... & m64
 {
     local m:8 = m64;
@@ -3453,7 +3453,7 @@
     mmxreg[48,8] = mmxreg[56,8];
     mmxreg[56,8] =    m[56,8];
 }
-# ia.sinc:9460
+# ia.sinc:9511
 :PUNPCKHBW       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x68; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,8] = mmxreg1[32,8];
@@ -3465,7 +3465,7 @@
     mmxreg1[48,8] = mmxreg1[56,8];
     mmxreg1[56,8] = mmxreg2[56,8];
 }
-# ia.sinc:9472
+# ia.sinc:9523
 :PUNPCKHWD       mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x69; mmxreg ... & m64
 {
     local m:8 = m64;
@@ -3474,7 +3474,7 @@
     mmxreg[32,16] = mmxreg[48,16];
     mmxreg[48,16] =    m[48,16];
 }
-# ia.sinc:9481
+# ia.sinc:9532
 :PUNPCKHWD       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x69; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,16] = mmxreg1[32,16];
@@ -3482,19 +3482,19 @@
     mmxreg1[32,16] = mmxreg1[48,16];
     mmxreg1[48,16] = mmxreg2[48,16];
 }
-# ia.sinc:9489
+# ia.sinc:9540
 :PUNPCKHDQ       mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x6A; mmxreg ... & m64
 {
     mmxreg[0,32] = mmxreg[32,32];
     mmxreg[32,32] =    m64[32,32];
 }
-# ia.sinc:9495
+# ia.sinc:9546
 :PUNPCKHDQ       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x6A; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[0,32] = mmxreg1[32,32];
     mmxreg1[32,32] = mmxreg2[32,32];
 }
-# ia.sinc:9501
+# ia.sinc:9552
 :PUNPCKHBW       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x68; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -3515,7 +3515,7 @@
     XmmReg[112,8] = XmmReg[120,8];
     XmmReg[120,8] =   m[120,8];
 }
-# ia.sinc:9523
+# ia.sinc:9574
 :PUNPCKHBW  XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x68; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,8] = XmmReg1[64,8];
@@ -3535,7 +3535,7 @@
     XmmReg1[112,8] = XmmReg1[120,8];
     XmmReg1[120,8] = XmmReg2[120,8];
 }
-# ia.sinc:9543
+# ia.sinc:9594
 :PUNPCKHWD       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x69; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -3548,7 +3548,7 @@
     XmmReg[96,16] = XmmReg[112,16];
     XmmReg[112,16] =   m[112,16];
 }
-# ia.sinc:9556
+# ia.sinc:9607
 :PUNPCKHWD       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x69; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,16] = XmmReg1[64,16];
@@ -3560,7 +3560,7 @@
     XmmReg1[96,16] = XmmReg1[112,16];
     XmmReg1[112,16] = XmmReg2[112,16];
 }
-# ia.sinc:9568
+# ia.sinc:9619
 :PUNPCKHDQ       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6A; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -3569,7 +3569,7 @@
     XmmReg[64,32] = XmmReg[96,32];
     XmmReg[96,32] =   m[96,32];
 }
-# ia.sinc:9577
+# ia.sinc:9628
 :PUNPCKHDQ       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6A; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg1[64,32];
@@ -3577,19 +3577,19 @@
     XmmReg1[64,32] = XmmReg1[96,32];
     XmmReg1[96,32] = XmmReg2[96,32];
 }
-# ia.sinc:9585
+# ia.sinc:9636
 :PUNPCKHQDQ      XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6D; m128 & XmmReg ...
 {
     XmmReg[0,64] = XmmReg[64,64];
     XmmReg[64,64] =   m128[64,64];
 }
-# ia.sinc:9591
+# ia.sinc:9642
 :PUNPCKHQDQ      XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6D; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg1[64,64];
     XmmReg1[64,64] = XmmReg2[64,64];
 }
-# ia.sinc:9597
+# ia.sinc:9648
 :PUNPCKLBW       mmxreg, m32 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x60; mmxreg ... & m32
 {
     local m:4 = m32;
@@ -3602,7 +3602,7 @@
     mmxreg[8,8] =    m[0,8];
 #   mmxreg[0,8] = mmxreg[0,8]; superfluous
 }
-# ia.sinc:9610
+# ia.sinc:9661
 :PUNPCKLBW       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x60; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[56,8] = mmxreg2[24,8];
@@ -3614,7 +3614,7 @@
     mmxreg1[8,8] = mmxreg2[0,8];
 #   mmxreg1[0,8] = mmxreg1[0,8]; superfluous
 }
-# ia.sinc:9622
+# ia.sinc:9673
 :PUNPCKLWD       mmxreg, m32 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x61; mmxreg ... & m32
 {
     local m:4 = m32;
@@ -3623,7 +3623,7 @@
     mmxreg[16,16] =    m[0,16];
 #   mmxreg[0,16] = mmxreg[0,16]; superfluous
 }
-# ia.sinc:9631
+# ia.sinc:9682
 :PUNPCKLWD       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x61; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[48,16] = mmxreg2[16,16];
@@ -3631,19 +3631,19 @@
     mmxreg1[16,16] = mmxreg2[0,16];
 #   mmxreg1[0,16] = mmxreg1[0,16]; superfluous
 }
-# ia.sinc:9639
+# ia.sinc:9690
 :PUNPCKLDQ       mmxreg, m32 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x62; mmxreg ... & m32
 {
     mmxreg[32,32] =    m32;
 #   mmxreg[0,32] = mmxreg[0,32]; superfluous
 }
-# ia.sinc:9645
+# ia.sinc:9696
 :PUNPCKLDQ       mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x62; mmxmod = 3 & mmxreg1 & mmxreg2
 {
     mmxreg1[32,32] = mmxreg2[0,32];
 #   mmxreg1[0,32] = mmxreg1[0,32]; superfluous
 }
-# ia.sinc:9651
+# ia.sinc:9702
 :PUNPCKLBW       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x60; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -3664,7 +3664,7 @@
     XmmReg[8,8] =   m[0,8];
 #   XmmReg[0,8] = XmmReg[0,8]; superfluous
 }
-# ia.sinc:9672
+# ia.sinc:9723
 :PUNPCKLBW       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x60; xmmmod = 3 &
 XmmReg1 & XmmReg2
 {
@@ -3685,7 +3685,7 @@ XmmReg1 & XmmReg2
     XmmReg1[8,8] = XmmReg2[0,8];
 #   XmmReg1[0,8] = XmmReg1[0,8]; superfluous
 }
-# ia.sinc:9693
+# ia.sinc:9744
 :PUNPCKLWD       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x61; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -3698,7 +3698,7 @@ XmmReg1 & XmmReg2
     XmmReg[16,16] =   m[0,16];
 #   XmmReg[0,16] = XmmReg[0,16]; superfluous
 }
-# ia.sinc:9706
+# ia.sinc:9757
 :PUNPCKLWD       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x61; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[112,16] = XmmReg2[48,16];
@@ -3710,7 +3710,7 @@ XmmReg1 & XmmReg2
     XmmReg1[16,16] = XmmReg2[0,16];
 #   XmmReg1[0,16] = XmmReg1[0,16]; superfluous
 }
-# ia.sinc:9718
+# ia.sinc:9769
 :PUNPCKLDQ       XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x62; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -3719,7 +3719,7 @@ XmmReg1 & XmmReg2
     XmmReg[32,32] =   m[0,32];
 #   XmmReg[0,32] = XmmReg[0,32]; superfluous
 }
-# ia.sinc:9727
+# ia.sinc:9778
 :PUNPCKLDQ       XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x62; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[96,32] = XmmReg2[32,32];
@@ -3727,43 +3727,43 @@ XmmReg1 & XmmReg2
     XmmReg1[32,32] = XmmReg2[0,32];
 #   XmmReg1[0,32] = XmmReg1[0,32]; superfluous
 }
-# ia.sinc:9736
+# ia.sinc:9787
 :PUNPCKLQDQ      XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6C; m128 & XmmReg ...
 {
     XmmReg[64,64] =   m128[0,64];
 #   XmmReg[0,64] = XmmReg[0,64]; superfluous
 }
-# ia.sinc:9742
+# ia.sinc:9793
 :PUNPCKLQDQ      XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0x6C; xmmmod = 3 & XmmReg1 & XmmReg2
 {
     XmmReg1[64,64] = XmmReg2[0,64];
 #   XmmReg1[0,64] = XmmReg1[0,64]; superfluous
 }
-# ia.sinc:9748
+# ia.sinc:9799
 :PXOR            mmxreg, m64 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xEF; mmxreg ... & m64 { mmxreg = mmxreg ^ m64; }
-# ia.sinc:9749
+# ia.sinc:9800
 :PXOR            mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xEF; mmxmod = 3 & mmxreg1 & mmxreg2		{ mmxreg1 = mmxreg1 ^ mmxreg2; }
-# ia.sinc:9750
+# ia.sinc:9801
 :PXOR            XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xEF; XmmReg ... & m128 { XmmReg = XmmReg ^ m128; }
-# ia.sinc:9751
+# ia.sinc:9802
 :PXOR            XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_66) & byte=0xEF; xmmmod = 3 & XmmReg1 & XmmReg2	{ XmmReg1 = XmmReg1 ^ XmmReg2; }
-# ia.sinc:9754
+# ia.sinc:9805
 :RCPPS           XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x53; XmmReg ... & m128 { XmmReg = rcpps(XmmReg, m128); }
-# ia.sinc:9755
+# ia.sinc:9806
 :RCPPS           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x53; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = rcpps(XmmReg1, XmmReg2); }
-# ia.sinc:9758
+# ia.sinc:9809
 :RCPSS           XmmReg, m32 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x53; XmmReg ... & m32 { XmmReg = rcpss(XmmReg, m32); }
-# ia.sinc:9759
+# ia.sinc:9810
 :RCPSS           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x53; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = rcpss(XmmReg1, XmmReg2); }
-# ia.sinc:9762
+# ia.sinc:9813
 :RSQRTPS         XmmReg, m128 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x52; XmmReg ... & m128 { XmmReg = rsqrtps(XmmReg, m128); }
-# ia.sinc:9763
+# ia.sinc:9814
 :RSQRTPS         XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0x52; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = rsqrtps(XmmReg1, XmmReg2); }
-# ia.sinc:9766
+# ia.sinc:9817
 :RSQRTSS         XmmReg, m32 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x52; XmmReg ... & m32 { XmmReg = rsqrtss(XmmReg, m32); }
-# ia.sinc:9767
+# ia.sinc:9818
 :RSQRTSS         XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 &  $(PRE_F3) & byte=0x52; xmmmod = 3 & XmmReg1 & XmmReg2 { XmmReg1 = rsqrtss(XmmReg1, XmmReg2); }
-# ia.sinc:9769
+# ia.sinc:9820
 :SHUFPD          XmmReg1, XmmReg2_m128, imm8 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0xC6; XmmReg1 ... & XmmReg2_m128; imm8 
 { 
     local srcLow:8 = XmmReg2_m128[0,64];
@@ -3775,7 +3775,7 @@ XmmReg1 & XmmReg2
     control = (imm8 & 0x2) == 0:1;
     conditionalAssign(XmmReg1[64,64],control,srcLow,srcHigh); 
 }
-# ia.sinc:9781
+# ia.sinc:9832
 :SHUFPS  XmmReg1, XmmReg2_m128, imm8 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0xC6; (XmmReg2_m128 & XmmReg1 ...); imm8 & Order0 & Order1 & Order2 & Order3
 {
     local xmmreg2_m128_c0 = XmmReg2_m128[0,32];
@@ -3793,36 +3793,36 @@ XmmReg1 & XmmReg2
     shuffle_4(XmmReg1[64,32],Order2,xmmreg2_m128_c0,xmmreg2_m128_c1,xmmreg2_m128_c2,xmmreg2_m128_c3);
     shuffle_4(XmmReg1[96,32],Order3,xmmreg2_m128_c0,xmmreg2_m128_c1,xmmreg2_m128_c2,xmmreg2_m128_c3);
 }
-# ia.sinc:9800
+# ia.sinc:9851
 :SQRTPD          XmmReg, m128 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x51; XmmReg ... & m128 { XmmReg = sqrtpd(XmmReg, m128); }
-# ia.sinc:9801
+# ia.sinc:9852
 :SQRTPD          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x51; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = sqrtpd(XmmReg1, XmmReg2); }
-# ia.sinc:9804
+# ia.sinc:9855
 :SQRTPS          XmmReg, m128 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x51; XmmReg ... & m128 { XmmReg = sqrtps(XmmReg, m128); }
-# ia.sinc:9805
+# ia.sinc:9856
 :SQRTPS          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x51; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1 = sqrtps(XmmReg1, XmmReg2); }
-# ia.sinc:9807
+# ia.sinc:9858
 :SQRTSD          XmmReg, m64 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x51; XmmReg ... & m64 { XmmReg[0,64] = sqrt(m64); }
-# ia.sinc:9808
+# ia.sinc:9859
 :SQRTSD          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x51; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1[0,64] = sqrt(XmmReg2[0,64]); }
-# ia.sinc:9810
+# ia.sinc:9861
 :SQRTSS          XmmReg, m32 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x51; XmmReg ... & m32 { XmmReg[0,32] = sqrt(m32); }
-# ia.sinc:9811
+# ia.sinc:9862
 :SQRTSS          XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x51; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1[0,32] = sqrt(XmmReg2[0,32]); }
-# ia.sinc:9813
+# ia.sinc:9864
 :SUBPD           XmmReg, m128 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x5C;XmmReg ... & m128
 {
     local m:16 = m128;
     XmmReg[0,64] = XmmReg[0,64] f- m[0,64];
     XmmReg[64,64] = XmmReg[64,64] f- m[64,64];
 }
-# ia.sinc:9820
+# ia.sinc:9871
 :SUBPD           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x5C; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg1[0,64] f- XmmReg2[0,64];
     XmmReg1[64,64] = XmmReg1[64,64] f- XmmReg2[64,64];
 }
-# ia.sinc:9826
+# ia.sinc:9877
 :SUBPS           XmmReg, m128 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x5C; XmmReg ... & m128
 {
     local m:16 = m128;
@@ -3831,7 +3831,7 @@ XmmReg1 & XmmReg2
     XmmReg[64,32] = XmmReg[64,32] f- m[64,32];
     XmmReg[96,32] = XmmReg[96,32] f- m[96,32];
 }
-# ia.sinc:9835
+# ia.sinc:9886
 :SUBPS           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x5C; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg1[0,32] f- XmmReg2[0,32];
@@ -3839,47 +3839,47 @@ XmmReg1 & XmmReg2
     XmmReg1[64,32] = XmmReg1[64,32] f- XmmReg2[64,32];
     XmmReg1[96,32] = XmmReg1[96,32] f- XmmReg2[96,32];
 }
-# ia.sinc:9843
+# ia.sinc:9894
 :SUBSD           XmmReg, m64 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x5C; XmmReg ... & m64 { XmmReg[0,64] = XmmReg[0,64] f- m64; }
-# ia.sinc:9844
+# ia.sinc:9895
 :SUBSD           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x5C; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1[0,64] = XmmReg1[0,64] f- XmmReg2[0,64]; }
-# ia.sinc:9846
+# ia.sinc:9897
 :SUBSS           XmmReg, m32 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x5C; XmmReg ...& m32 { XmmReg[0,32] = XmmReg[0,32] f- m32; }
-# ia.sinc:9847
+# ia.sinc:9898
 :SUBSS           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x5C; xmmmod=3 & XmmReg1 & XmmReg2 { XmmReg1[0,32] = XmmReg1[0,32] f- XmmReg2[0,32]; }
-# ia.sinc:9859
+# ia.sinc:9910
 :UCOMISD         XmmReg, m64 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x2E; m64 & XmmReg ...
 {
 	fucompe(XmmReg[0,64], m64);
 }
-# ia.sinc:9864
+# ia.sinc:9915
 :UCOMISD         XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x2E; xmmmod=3 & XmmReg1 & XmmReg2
 {
 	fucompe(XmmReg1[0,64], XmmReg2[0,64]);
 }
-# ia.sinc:9879
+# ia.sinc:9930
 :UCOMISS         XmmReg, m32 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x2E; m32 & XmmReg ...
 {
     fucompe(XmmReg[0,32], m32);
 }
-# ia.sinc:9884
+# ia.sinc:9935
 :UCOMISS         XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x2E; xmmmod=3 & XmmReg1 & XmmReg2
 {
     fucompe(XmmReg1[0,32], XmmReg2[0,32]);
 }
-# ia.sinc:9889
+# ia.sinc:9940
 :UNPCKHPD        XmmReg, m128 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x15; m128 & XmmReg ...
 {
     XmmReg[0,64] = XmmReg[64,64];
     XmmReg[64,64] = m128[64,64];
 }
-# ia.sinc:9895
+# ia.sinc:9946
 :UNPCKHPD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x15; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = XmmReg1[64,64];
     XmmReg1[64,64] = XmmReg2[64,64];
 }
-# ia.sinc:9901
+# ia.sinc:9952
 :UNPCKHPS        XmmReg, m128 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x15; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -3888,7 +3888,7 @@ XmmReg1 & XmmReg2
     XmmReg[32,32] = m[64,32];
     XmmReg[96,32] = m[96,32];
 }
-# ia.sinc:9910
+# ia.sinc:9961
 :UNPCKHPS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x15; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = XmmReg1[64,32];
@@ -3896,19 +3896,19 @@ XmmReg1 & XmmReg2
     XmmReg1[64,32] = XmmReg1[96,32];  # XmmReg1 and XmmReg2 could be the same register, preserve XmmReg1[64,32] till later
     XmmReg1[96,32] = XmmReg2[96,32];
 }
-# ia.sinc:9918
+# ia.sinc:9969
 :UNPCKLPD        XmmReg, m128 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x14; m128 & XmmReg ...
 {
 #   XmmReg[0,64] = XmmReg[0,64]; superfluous
     XmmReg[64,64] = m128[0,64];
 }
-# ia.sinc:9924
+# ia.sinc:9975
 :UNPCKLPD        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x14; xmmmod=3 & XmmReg1 & XmmReg2
 {
 #   XmmReg1[0,64] = XmmReg1[0,64]; superfluous
     XmmReg1[64,64] = XmmReg2[0,64];
 }
-# ia.sinc:9930
+# ia.sinc:9981
 :UNPCKLPS        XmmReg, m128 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x14; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -3917,7 +3917,7 @@ XmmReg1 & XmmReg2
     XmmReg[32,32] = m[0,32];
     XmmReg[96,32] = m[32,32];
 }
-# ia.sinc:9939
+# ia.sinc:9990
 :UNPCKLPS        XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x14; xmmmod=3 & XmmReg1 & XmmReg2
 {
 #   XmmReg1[0,32] = XmmReg1[0,32]; superfluous
@@ -3925,20 +3925,20 @@ XmmReg1 & XmmReg2
     XmmReg1[96,32] = XmmReg2[32,32];
     XmmReg1[32,32] = XmmReg2[0,32]; # XmmReg1 and XmmReg2 could be the same register, preserve Db till last
 }
-# ia.sinc:9947
+# ia.sinc:9998
 :XORPD           XmmReg, m128 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x57; m128 & XmmReg ...
 {
     local m:16 = m128;
     XmmReg[0,64] = ( XmmReg[0,64] ^ m[0,64] );
     XmmReg[64,64] = ( XmmReg[64,64] ^ m[64,64] );
 }
-# ia.sinc:9954
+# ia.sinc:10005
 :XORPD           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x57; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,64] = ( XmmReg1[0,64] ^ XmmReg2[0,64] );
     XmmReg1[64,64] = ( XmmReg1[64,64] ^ XmmReg2[64,64] );
 }
-# ia.sinc:9960
+# ia.sinc:10011
 :XORPS           XmmReg, m128 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x57; m128 & XmmReg ...
 {
     local m:16 = m128;
@@ -3947,7 +3947,7 @@ XmmReg1 & XmmReg2
     XmmReg[64,32] = ( XmmReg[64,32] ^ m[64,32] );
     XmmReg[96,32] = ( XmmReg[96,32] ^ m[96,32] );
 }
-# ia.sinc:9969
+# ia.sinc:10020
 :XORPS           XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0x57; xmmmod=3 & XmmReg1 & XmmReg2
 {
     XmmReg1[0,32] = ( XmmReg1[0,32] ^ XmmReg2[0,32] );
@@ -3955,69 +3955,69 @@ XmmReg1 & XmmReg2
     XmmReg1[64,32] = ( XmmReg1[64,32] ^ XmmReg2[64,32] );
     XmmReg1[96,32] = ( XmmReg1[96,32] ^ XmmReg2[96,32] );
 }
-# ia.sinc:9992
+# ia.sinc:10043
 :XSTORE is vexMode=3 & vexMMMMM=1 & mandover=0 & byte=0xA7; byte=0xC0 {  
 	EAX = xstore_available(EDX,EDI); 
 }
-# ia.sinc:9996
+# ia.sinc:10047
 :XSTORE.REP is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xA7; byte=0xC0 {  
 	EAX = xstore(ECX,EDX,EDI);
 	ECX = 0;
 }
-# ia.sinc:10001
+# ia.sinc:10052
 :XCRYPTECB.REP is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xA7; byte=0xC8 { 
 	xcrypt_ecb(ECX,EDX,EBX,ESI,EDI); 
 }
-# ia.sinc:10005
+# ia.sinc:10056
 :XCRYPTCBC.REP is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xA7; byte=0xD0 { 
 	xcrypt_cbc(ECX,EAX,EDX,EBX,ESI,EDI); 
 }
-# ia.sinc:10009
+# ia.sinc:10060
 :XCRYPTCTR.REP is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xA7; byte=0xD8 {  
 	xcrypt_ctr(ECX,EAX,EDX,EBX,ESI,EDI); 
 }
-# ia.sinc:10013
+# ia.sinc:10064
 :XCRYPTCFB.REP is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xA7; byte=0xE0 { 
 	xcrypt_cfb(ECX,EAX,EDX,EBX,ESI,EDI); 
 }
-# ia.sinc:10017
+# ia.sinc:10068
 :XCRYPTOFB.REP is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xA7; byte=0xE8 { 
 	xcrypt_ofb(ECX,EAX,EDX,EBX,ESI,EDI); 
 }
-# ia.sinc:10021
+# ia.sinc:10072
 :MONTMUL.REP is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xA6; byte=0xC0 { 
 	montmul(EAX,ECX,ESI); 
 	ECX=0; 
 	EDX=0; 
 }
-# ia.sinc:10027
+# ia.sinc:10078
 :XSHA1.REP is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xA6; byte=0xC8 {
 	xsha1(ECX,ESI,EDI); 
 	EAX = ECX;
 }
-# ia.sinc:10032
+# ia.sinc:10083
 :XSHA256.REP is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0xA6; byte=0xD0 {  
 	xsha256(ECX,ESI,EDI); 
 	EAX = ECX; 
 }
-# ia.sinc:10449
+# ia.sinc:10500
 :POPCNT Reg16, rm16 is vexMode=3 & vexMMMMM=1 & opsize=0 & $(PRE_F3) &            byte=0xB8; Reg16 ... & rm16 { popcountflags(rm16); Reg16 = popcount(rm16); }
-# ia.sinc:10450
+# ia.sinc:10501
 :POPCNT Reg32, rm32 is vexMode=3 & vexMMMMM=1 & opsize=1 & $(PRE_F3) &            byte=0xB8; Reg32 ... & check_Reg32_dest ... & rm32 { popcountflags(rm32); Reg32 = popcount(rm32); build check_Reg32_dest; }
-# ia.sinc:10452
+# ia.sinc:10503
 :POPCNT Reg64, rm64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & opsize=2 & $(PRE_F3) & $(REX_W) & byte=0xB8; Reg64 ... & rm64 { popcountflags(rm64); Reg64 = popcount(rm64); }
-# ia.sinc:10596
+# ia.sinc:10647
 :FEMMS is vexMode=3 & vexMMMMM=1 & byte=0x0E    { FastExitMediaState(); }
-# ia.sinc:10627
+# ia.sinc:10678
 :MASKMOVQ            mmxreg1, mmxreg2 is vexMode=3 & vexMMMMM=1 &  mandover=0 & byte=0xF7 & maskMovDI; mmxmod = 3 & mmxreg1 & mmxreg2		{ MaskedMoveQWord(mmxreg1, mmxreg2, maskMovDI); }
-# ia.sinc:10636
+# ia.sinc:10687
 :EXTRQ XmmReg2, bitLen, lsbOffset is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x78; reg_opcode=0 & XmmReg2; bitLen; lsbOffset {
 	local len:8 = zext(bitLen);
 	local mask:8 = 0xffffffffffffffff >> ((64 - len) & 63);
 	local val:8 = (XmmReg2[0,64] >> lsbOffset) & mask;
 	XmmReg2 = zext(val);
 }
-# ia.sinc:10643
+# ia.sinc:10694
 :EXTRQ XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_66) & byte=0x79; XmmReg1 & XmmReg2 {
 	local len:8 = zext(XmmReg2[0,6]);
 	local offs:8 = zext(XmmReg2[8,6]);
@@ -4025,7 +4025,7 @@ XmmReg1 & XmmReg2
 	local val:8 = (XmmReg1[0,64] >> offs) & mask;
 	XmmReg1 = zext(val);
 }
-# ia.sinc:10651
+# ia.sinc:10702
 :INSERTQ XmmReg1, XmmReg2, bitLen, lsbOffset is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x78; XmmReg1 & XmmReg2; bitLen; lsbOffset {
 	local len:8 = zext(bitLen);
 	local field:8 = 0xffffffffffffffff >> ((64 - len) & 63);
@@ -4034,7 +4034,7 @@ XmmReg1 & XmmReg2
 	local hi:8 = XmmReg1[64,64];
 	XmmReg1 = (zext(hi) << 64) | zext(lo);
 }
-# ia.sinc:10660
+# ia.sinc:10711
 :INSERTQ XmmReg1, XmmReg2 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x79; XmmReg1 & XmmReg2 {
 	local len:8 = zext(XmmReg2[64,6]);
 	local offs:8 = zext(XmmReg2[72,6]);
@@ -4044,11 +4044,11 @@ XmmReg1 & XmmReg2
 	local hi:8 = XmmReg1[64,64];
 	XmmReg1 = (zext(hi) << 64) | zext(lo);
 }
-# ia.sinc:10670
+# ia.sinc:10721
 :MOVNTSD m64, XmmReg1 is vexMode=3 & vexMMMMM=1 & $(PRE_F2) & byte=0x2B; XmmReg1 ... & m64 {
 	m64 = XmmReg1[0,64];
 }
-# ia.sinc:10674
+# ia.sinc:10725
 :MOVNTSS m32, XmmReg1 is vexMode=3 & vexMMMMM=1 & $(PRE_F3) & byte=0x2B; XmmReg1 ... & m32 {
 	m32 = XmmReg1[0,32];
 }
@@ -4390,10 +4390,10 @@ XmmReg1 & XmmReg2
     addflags(m32,Reg32);
     local tmp = m32 + Reg32;
     Reg32 = m32;
+    build check_Reg32_dest;
     m32 = tmp;
     resultflags(tmp);
     build unlock; 
-	build check_Reg32_dest;
 }
 # lockable.sinc:1213
 :XADD^lockx m64,Reg64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & lockx & unlock & opsize=2 & byte=0xC1; m64 & Reg64 ... 

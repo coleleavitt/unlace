@@ -1,0 +1,75 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_integer_conversions_x86_64',
+    'read symbols',
+    'map prototype as_unsigned8 bool as_unsigned8(uint1 value);',
+    'map prototype as_signed8 bool as_signed8(int1 value);',
+    'map prototype masked8 bool masked8(int1 value);',
+    'map prototype call_unsigned bool call_unsigned(uint8 value);',
+    'map prototype counted_unsigned uint8 counted_unsigned(uint8 value);',
+    'map prototype call_signed bool call_signed(int8 value);',
+    'map prototype counted_signed int8 counted_signed(int8 value);',
+    'option outlang rust',
+    'load function as_unsigned8',
+    'decompile',
+    'print C',
+    'load function as_signed8',
+    'decompile',
+    'print C',
+    'load function masked8',
+    'decompile',
+    'print C',
+    'load function call_unsigned',
+    'decompile',
+    'print C',
+    'load function call_signed',
+    'decompile',
+    'print C',
+    'option outlang c',
+    'load function as_unsigned8',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust signed and unsigned Boolean consumers compare once'
+count = 2
+literal = 'return value != 0;'
+
+[[match]]
+name = 'Rust masked byte keeps bitwise precedence'
+count = 1
+literal = 'return (value as u8 & 0x55) != 0;'
+
+[[match]]
+name = 'Rust unsigned callback result narrows before Boolean conversion'
+count = 1
+literal = 'return counted_unsigned(value) as u8 != 0;'
+
+[[match]]
+name = 'Rust signed callback result narrows before Boolean conversion'
+count = 1
+literal = 'return counted_signed(value) as u8 != 0;'
+
+[[match]]
+name = 'Rust never uses an integer as bool cast'
+count = 0
+literal = 'as bool'
+
+[[match]]
+name = 'C keeps its ordinary Boolean cast'
+count = 1
+literal = 'return (bool)value;'

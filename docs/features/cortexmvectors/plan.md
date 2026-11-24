@@ -58,7 +58,7 @@ tail-call absorption).
 * Hard-coded catalog counts: `kuna_phases/tests.rs` (settable 83->84, analysis tier 25->26,
   the `PASS_GATES` list, the JSON row count 82->83) and `catalog_bytecompat.rs`
   (83->84 plus the recaptured `tests/fixtures/phase_catalog.json`).
-  `tests/stages/kuna-catalog.xml` needs no edit: its exact-count asserts key on
+  `tests/stages/kuna-catalog.toml` needs no edit: its exact-count asserts key on
   `source_decompiler = "angr"` and the `structure-recovery` / `opt-in-tool` change_kinds,
   none of which this row joins; the `use_when` / `change_kind` asserts are ranges.
 

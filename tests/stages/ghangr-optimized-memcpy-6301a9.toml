@@ -1,0 +1,119 @@
+# angr test_decompiling_optimized_memcpy (memcpy/memmove @ 0x42cca0, an MSVC
+# CRT optimized Duff's-device copy): seven image-base-relative jump tables
+# drive the small-count tail dispatch.  angr recovers all 7 switches; kuna
+# recovers ONE and degrades the other SIX indirect jumps to
+# "Treating indirect jump as call" (an invalid / misleading computed call).
+#
+# Root cause (per docs/features/optimized-memcpy-6301a9, REVISED): the six
+# failing tables do NOT fail in JumpBasic guard analysis.  They fail earlier,
+# in the per-table partial-flow rebuild.  kuna recovers one table first
+# (switch over a 4-entry table whose case-0 body sits at 0x42ce24); then every
+# OTHER indirect jump spins up its own fresh partial clone that re-clones the
+# now-recovered table into the partial's jumpvec, and the partial's
+# `collect_edges` iterates that table's case targets and calls `target(addr)`.
+# The case body at 0x42ce24 (reachable only as that table's case-0 target) was
+# never decoded into the partial's `visited` snapshot (it is decoded into the
+# PARENT flow only after the whole recover_jump_tables pass returns), so
+# `target(0x42ce24)` throws "Could not find op at target address", the partial
+# pipeline errors, the table fails FailNormal, and flow.rs truncates the
+# indirect jump to a call.
+#
+# Upstream Ghidra avoids this: it builds ONE shared partial per
+# recoverJumpTables call and runs generateBlocks/collectEdges only once, while
+# the sibling tables are still EMPTY (addresstable filled later, in
+# recoverAddresses), so collectEdges iterates 0 case targets and never calls
+# target() on an undecoded body.
+#
+# Fix surface = a default-off ArchOption (unrolledguard): inside a
+# jump-table-recovery partial clone, when collect_edges cannot resolve a
+# recovered sibling table's case-target op (the address was not decoded into
+# this partial), SKIP that edge instead of propagating the error: exactly
+# reproducing upstream's partial CFG (the partial BRANCHIND has no
+# case-target out-edges for the undecoded targets, the same "assume no
+# branches out" shape the findJumpTable==0 path already uses).
+#
+# Pass 1 (default, option off): assertion #1 proves the bug reproduces. Six
+# indirect jumps render as computed (code *)() calls.
+# Pass 2 (option unrolledguard on): assertions #2/#3 prove the partial-flow
+# skip recovers the tables. The computed calls are gone and switch
+# dispatches appear.
+
+[image]
+arch = 'x86:LE:32:default:windows'
+symbols = [
+    { space = 'ram', offset = '0x42cca0', name = 'memcpy_opt' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x42cca0'
+hex = '558bec57568b750c8b4d108b7d088bc18bd103c63bfe76083bf80f82a401000081f900010000721f833dd0ac4500007416575683e70f83e60f3bfe5e5f75085e5f5de98dc90000f7c7030000007515c1e90283e20383f908722af3a5ff249514ce4200908bc7ba0300000083e904720c83e00303c8ff248528cd4200ff248d24ce420090ff248da8cd42009038cd420064cd420088cd420023d18a0688078a46018847018a4602c1e90288470283c60383c70383f90872ccf3a5ff249514ce42008d490023d18a0688078a4601c1e90288470183c60283c70283f90872a6f3a5ff249514ce42009023d18a06880783c601c1e90283c70183f9087288f3a5ff249514ce42008d49000bce4200f8cd4200f0cd4200e8cd4200e0cd4200d8cd4200d0cd4200c8cd42008b448ee489448fe48b448ee889448fe88b448eec89448fec8b448ef089448ff08b448ef489448ff48b448ef889448ff88b448efc89448ffc8d048d0000000003f003f8ff249514ce42008bff24ce42002cce420038ce42004cce42008b45085e5fc9c3908a0688078b45085e5fc9c3908a0688078a46018847018b45085e5fc9c38d49008a0688078a46018847018a46028847028b45085e5fc9c3908d7431fc8d7c39fcf7c7030000007524c1e90283e20383f908720dfdf3a5fcff2495b0cf42008bfff7d9ff248d60cf42008d49008bc7ba0300000083f904720c83e0032bc8ff2485b4ce4200ff248db0cf420090c4ce4200e8ce420010cf42008a460323d188470383ee01c1e90283ef0183f90872b2fdf3a5fcff2495b0cf42008d49008a460323d18847038a4602c1e90288470283ee0283ef0283f9087288fdf3a5fcff2495b0cf4200908a460323d18847038a46028847028a4601c1e90288470183ee0383ef0383f9080f8256fffffffdf3a5fcff2495b0cf42008d490064cf42006ccf420074cf42007ccf420084cf42008ccf420094cf4200a7cf42008b448e1c89448f1c8b448e1889448f188b448e1489448f148b448e1089448f108b448e0c89448f0c8b448e0889448f088b448e0489448f048d048d0000000003f003f8ff2495b0cf42008bffc0cf4200c8cf4200d8cf4200eccf42008b45085e5fc9c3908a46038847038b45085e5fc9c38d49008a46038847038a46028847028b45085e5fc9c3908a46038847038a46028847028a46018847018b45085e5fc9c3'
+
+# Stub the lone external tail-call target (jmp 0x439674 at 0x42cce2) with a
+# bare ret so the bytechunk is self-contained.
+[[image.bytes]]
+space = 'ram'
+offset = '0x439674'
+hex = 'c3'
+
+[script]
+commands = [
+    # kuna: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
+    'option gotoreduce off',
+    'option crossjumprevert off',
+    'option dedupitetail off',
+    'option regionlooprefine off',
+    'option ifelseflatten off',
+    'option switchmultipred off',
+    'option tailcalljump off',
+    'option foldcallret off',
+    'option branchflip off',
+    # kuna DIV: `jtsharepartial` is default ON and by itself removes the shape
+    # this testcase is about (one shared partial per recoverJumpTables batch is
+    # built while every sibling table is still empty, so collect_edges never
+    # calls target() on an undecoded case body).  Pass 1 turns it OFF to
+    # reproduce the original per-table-clone bug; pass 3 turns it back on to
+    # assert the shipped default fixes it without unrolledguard.
+    'option jtsharepartial off',
+    'lo fu memcpy_opt',
+    'decompile',
+    'print C',
+    'option unrolledguard on',
+    'decompile',
+    'print C',
+    'option unrolledguard off',
+    'option jtsharepartial on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+# The three passes' `print C` outputs are concatenated into one stream the
+# stringmatches scan.  Pass 1 (both gates off, the pre-fix behaviour): the
+# seven jump tables yield exactly ONE recovered switch and SEVEN computed
+# `**(code **)()` calls (the six interleaved tables that fail the per-table
+# partial-flow rebuild, plus one more).  Pass 2 (option unrolledguard on,
+# still one clone per table): every table recovers, so the computed calls
+# drop to ZERO and the switch count rises to 16.  Pass 3 (unrolledguard back
+# off, jtsharepartial on, the SHIPPED DEFAULT): the one shared partial is
+# built while the sibling tables are still empty, so the same 16 switches
+# recover with no tolerance rule at all.  We assert on the `code **`
+# computed-call rendering (the load-bearing CFG effect) and the `switch(`
+# count; the stale "Treating indirect jump as call" WARNING comment is left
+# behind by the re-decompile's warning store and is NOT a reliable post-fix
+# signal (the same reason the switchmultipred test asserts on the call
+# rendering, not the warning text).
+[[match]]
+name = 'unrolledguard #1: both gates off, the interleaved dispatches degrade to computed calls (bug reproduced); neither fix adds any (7 pass1 + 0 pass2 + 0 pass3)'
+count = 7
+literal = 'code **'
+
+[[match]]
+name = 'unrolledguard #2 / jtsharepartial #1: both fixes recover every interleaved table as a switch, independently (1 pass1 + 16 pass2 unrolledguard + 16 pass3 shipped default = 33)'
+count = 33
+literal = 'switch('
+
+[[match]]
+name = 'jtsharepartial #2: all three passes are in the scanned stream (one memcpy_opt definition each), so the counts above are not one dropped pass'
+count = 3
+literal = 'memcpy_opt('

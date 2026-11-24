@@ -1,0 +1,70 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_fmt_flags_real_x86_64',
+    'read symbols',
+    'option setlanguage rust-language',
+    'option rustfmt off',
+    'load function traits',
+    'decompile',
+    'print C',
+    'option rustfmt on',
+    'print C',
+    'load function signed',
+    'decompile',
+    'print C',
+    'load function align',
+    'decompile',
+    'print C',
+    'load function debug_hex',
+    'decompile',
+    'print C',
+    'load function reorder',
+    'decompile',
+    'print C',
+    'load function dynamic',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'static format off and dynamic counts preserve runtime sinks'
+count = 2
+regex = '\b_print\('
+
+[[match]]
+name = 'integer trait identities select eight format suffixes'
+count = 1
+literal = 'println!("{} {:?} {:x} {:X} {:o} {:b} {:e} {:E}"'
+
+[[match]]
+name = 'signed narrow formats retain flags and type'
+count = 1
+regex = 'eprintln!\("\{:\+07\} \{:-5\} \{:#08x\} \{:#010b\}".*\*const i16'
+
+[[match]]
+name = 'static unicode fill alignment width precision'
+count = 1
+literal = 'println!("|{:·<8}|{:🦀^10}|{:>7.3}|"'
+
+[[match]]
+name = 'debug hexadecimal modes preserve traits'
+count = 1
+literal = 'println!("{:#x?} {:#X?}"'
+
+[[match]]
+name = 'static formats retain repeated indices'
+count = 1
+literal = 'println!("{0:#08x} {1:+06} {2:>5o} {1:+06}"'

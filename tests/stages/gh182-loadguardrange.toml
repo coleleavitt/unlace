@@ -1,0 +1,150 @@
+# GH-182: indexed stack arrays get no real bounds.
+#
+# Witness: betaflight_STM32F405 (gcc -O2, stripped Cortex-M4 firmware),
+# cliServo @ 0x801b4a4 (the firmware is stripped; the names here are the
+# test's own, read off the p-code).  The source declares
+# `int16_t arguments[6]` at sp+28 and fills it with ONE indexed store,
+# `strh.w r0,[r6,#-12]` with r6 = sp + 40 + 2*i, i in [0,5] (the loop guard
+# is `cmp r6,#5; bgt error`).  Elements 0..3 are then read at [sp+28..34]
+# and elements 4 and 5 at [sp+36]/[sp+38] - all twelve bytes are one object.
+#
+# The real array extent can only come from the STORE guard: heritage records
+# a LoadGuard for the indexed store, the value-set refinement (always on)
+# runs the ValueSet solver over the guard's pointer
+# (Heritage::analyzeNewLoadGuards, heritage.cc:834) and locks the guard to
+# [sp+28, sp+38] step 2, and MapState::addGuard (varmap.cc:1033) turns that
+# into an open RangeHint with highind = ((max-min)+1)/step - 1 = 5.  The
+# open range then fills to the next mapped local, so the array prints with
+# 8 elements (same as stock Ghidra's `short local_24 [8]`) and every access
+# goes through it in bounds.
+#
+# Without the refinement the guard keeps the whole-space range with step 0,
+# addGuard bails, and the only bound is the min_items = 3 fallback:
+# RangeHint::attempt_join rejects the stack-0x1c hint on diffsz(4) >
+# highind(3), so the array caps at `int2 v7 [4]` written at v7[v3] with v3
+# provably reaching 5 (an out-of-bounds subscript on the printed
+# declaration), and elements 4 and 5 split off as `int2 v8`/`int2 v9` -
+# stack scalars that are range-checked and stored into the servo config but
+# never assigned anywhere in the function.
+#
+# The test asserts the fix: one array, all subscripts in bounds, elements 4
+# and 5 read as v7[4]/v7[5], no split-off scalars.  The seven callees are
+# stubbed `bx lr` at their real addresses.
+
+[image]
+arch = 'ARM:LE:32:Cortex'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x801b4a4'
+hex = '''
+f0b58bb005460c460846fef755fb08b9002619e000231a463d490120fff740ff
+0bb0f0bd052e1cdc2046fcf733fc721c0aab03eb460626f80c0c14f8013f303b
+dbb2092bf9d91646237893b12d2be9d0a3f13002d2b2092ae4d9202b05d10134
+f2e72846fef70efcdae72846fef712fcd6e7bdf91c30062e2ed1002b2cdb072b
+2adcbdf91e10a1f5fa7292b2b2f5fa6f1bd8bdf92020b2f5fa7f16db40f6c410
+824212dcbdf92270b9420edcba420cdb91420adcbdf9244014f1640f05db642c
+03dcbdf92660112e0add00231a4619462846fef7c1fba3e72846fef7d3fb9fe7
+03eb43050a4800eb85008180c280078164b2847276b2c6720496039402970192
+0091044a00210846fef7dbff88e700bf0cf80020402b0708
+'''
+
+# The seven callees, stubbed `bx lr` at their real addresses.
+[[image.bytes]]
+space = 'ram'
+offset = '0x8017d38'
+readonly = true
+hex = '7047'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x8019b5c'
+readonly = true
+hex = '7047'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x8019cfc'
+readonly = true
+hex = '7047'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x8019d28'
+readonly = true
+hex = '7047'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x8019d38'
+readonly = true
+hex = '7047'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x801a566'
+readonly = true
+hex = '7047'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x801b344'
+readonly = true
+hex = '7047'
+
+[script]
+commands = [
+    'set context TMode 1 [ram,0x8017d38] [ram,0x801b5bc]',
+    'map function r0x8017d38 cli_atoi',
+    'map function r0x8019b5c cli_isempty',
+    'map function r0x8019cfc cli_printf',
+    'map function r0x8019d28 cli_show_parse_error',
+    'map function r0x8019d38 cli_show_invalid_error',
+    'map function r0x801a566 cli_print_servo',
+    'map function r0x801b344 cli_servo_dump',
+    'map function r0x801b4a4 cliServo',
+    'lo fu cliServo',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'LOADGUARDRANGE #1: the guard bound sizes the array over all six real elements (filled to the next mapped local, like Ghidra)'
+count = 1
+regex = 'int2 v7 \[8\]; // ([^\n]+ \| )?stack - 0x24( \| [^\n]+)?$'
+
+[[match]]
+name = 'LOADGUARDRANGE #2: the array is never capped at the min_items fallback, two short of the real extent'
+count = 0
+literal = 'int2 v7 [4]; // stack - 0x24'
+
+[[match]]
+name = 'LOADGUARDRANGE #3: element 4 is never split off as a separate never-assigned scalar'
+count = 0
+regex = 'int2 v8; // ([^\n]+ \| )?stack - 0x1c( \| [^\n]+)?$'
+
+[[match]]
+name = 'LOADGUARDRANGE #4: element 5 is never split off as a separate never-assigned scalar'
+count = 0
+regex = 'int2 v9; // ([^\n]+ \| )?stack - 0x1a( \| [^\n]+)?$'
+
+[[match]]
+name = 'LOADGUARDRANGE #5: the single indexed store writes the array in bounds'
+count = 1
+literal = 'v7[v3] = cli_atoi(a1);'
+
+[[match]]
+name = 'LOADGUARDRANGE #6: element 4 is read through the array, in bounds'
+count = 1
+literal = '-100 <= v7[4]'
+
+[[match]]
+name = 'LOADGUARDRANGE #7: element 5 is read through the array, in bounds'
+count = 1
+literal = 'v7[5] <= 0x11'
+
+[[match]]
+name = 'LOADGUARDRANGE #8: the config bytes are never stored from unassigned scalars'
+count = 0
+literal = '*(char *)(v2 + 10) = v8;'

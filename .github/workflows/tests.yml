@@ -276,6 +276,73 @@ jobs:
           node integrations/web/test/decompile-worker.mjs
           node integrations/web/test/decompile-replay.mjs
 
+  # The T4 semantic suite (tools/semantic/README.md), per PR: the x86_64-gcc rows only, about 4 s
+  # of runs, against tools/semantic/baseline.toml. run.py exits 1 only when a row that passes in
+  # the baseline no longer passes, so the job fails on a regression and nothing else. The full
+  # three-configuration run stays in nightly.yml's semantic job. Set up like that job; the gcc
+  # rows link and run natively, so gcc and binutils are all it needs beyond the Rust build.
+  semantic-gcc:
+    name: semantic compile-and-run (x86_64-gcc)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    env:
+      CARGO_INCREMENTAL: "0"
+      UNLACE_SLA_CACHE: ${{ github.workspace }}/.sla-cache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Install gcc and binutils
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q gcc binutils
+
+      - name: Record the compiler
+        run: gcc --version | head -1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: semantic-gcc
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+
+      # Restored only, as in the nightly job: the parity job saves this cache on main.
+      - name: Restore the .sla cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .sla-cache
+          key: sla-v2-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
+
+      - name: Build unlace
+        run: cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
+
+      - name: Run the x86_64-gcc semantic rows against the baseline
+        run: |
+          mkdir -p out
+          python3 tools/semantic/run.py --unlace target/release/unlace --sleighpath specs \
+            --config x86_64-gcc --opt O0,O2 --jobs "$(nproc)" \
+            --baseline tools/semantic/baseline.toml --json out/semantic.json --markdown out/semantic.md
+
+      - name: Table for the run summary
+        if: always()
+        run: |
+          if [ -f out/semantic.md ]; then
+            { echo "## Semantic suite, x86_64-gcc (T4)"; echo; cat out/semantic.md; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('out/semantic.json') != ''
+        with:
+          name: semantic-gcc
+          path: out/semantic.*
+          retention-days: 14
+
   # The workspace suite, under cargo-nextest: one job builds every test binary into an
   # archive, three run a third of the tests each from it. Coverage (cargo-llvm-cov) and
   # the slow tests the `ci` profile leaves out run on the Coverage workflow's schedule:

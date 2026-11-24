@@ -80,9 +80,9 @@ new rows, and re-save the baseline in the same change.
 meaning; today its only members are crate tests that each compile one fixture. This suite is T4
 as a corpus:
 
-- **Where:** the `semantic` job in `nightly.yml` (added 2026-11-24, not yet run on CI), not the per-PR `gates` job. It needs gcc,
-  clang, zig and qemu-user-static on the runner (all apt or a release tarball), and one built
-  `unlace` plus the compiled specs, which the nightly already produces.
+- **Where:** the `semantic` job in `nightly.yml` (all three configurations, O0 and O2), and the
+  `semantic-gcc` job in `tests.yml` on every PR (the x86_64-gcc rows, same baseline). The nightly
+  needs gcc, clang, zig and qemu-user-static, and one built `unlace` plus the compiled specs.
 - **What fails it:** `run.py --baseline tools/semantic/baseline.toml`: a row that passed and stops
   passing fails the job; a newly passing row is reported and blessed by a commit that re-saves
   the baseline (the same rule as the datatest baseline: never re-save to hide a regression).
@@ -90,8 +90,7 @@ as a corpus:
   compiler versions (zig ships its own clang; gcc and clang come from a pinned image) and records
   them in `notes/semantic-results.md` with the baseline. A compiler bump re-saves the baseline in
   its own commit.
-- **Per PR later:** once the remaining failures are fixed or recorded, the x86_64-gcc subset
-  (about 4 s) can join `gates` with the same baseline rule, so a PR that breaks the meaning of
-  emitted C fails where it is made.
+- **Per PR:** the x86_64-gcc subset (about 4 s) runs as `semantic-gcc` in `tests.yml`, with the same
+  baseline rule, so a PR that breaks the meaning of emitted C fails where it is made.
 - **Option A/B:** `--option NAME VALUE` against the same baseline answers "does this default flip
   change what any emitted function computes", which a text diff cannot.

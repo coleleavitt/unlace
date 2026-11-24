@@ -128,6 +128,11 @@ from it, and binaries land in `target/<profile>/`. There is no Makefile. The ful
 (jobserver, sccache, worktree `CARGO_TARGET_DIR`, dev binaries) and the local gate script
 `tools/hooks/unlace-ci-gates.sh` are in **`docs/dev-setup.md`** — it overrides generic advice.
 
+While editing, use the focused loop first: `cargo check -p <crate>`, `cargo test -p <crate> --lib <filter>`, the one
+corpus file you changed with `UNLACE_PARITY_FILES=<file> cargo test -p unlace-harness --test parity`, then the
+x86_64-gcc semantic rows if emitted C may change. The exact commands are in
+[`docs/dev-setup.md` § Focused loop](docs/dev-setup.md#focused-loop).
+
 **The gates — run all before every commit:** the command list, what the parity target checks,
 `UNLACE_BLESS=1` re-records and the layering check are in
 [`docs/dev-setup.md` § Gates](docs/dev-setup.md#gates); it is the one owner of that list.

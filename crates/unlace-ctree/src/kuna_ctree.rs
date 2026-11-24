@@ -22,7 +22,7 @@ crate::kuna_flag!(
     "boolreturn",
     "boolean results returned directly",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 pub use crate::kuna_coreoptions::Noretfirst;

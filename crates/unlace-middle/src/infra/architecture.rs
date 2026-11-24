@@ -6132,8 +6132,10 @@ impl crate::userop::UseropTypeArchitecture for BuiltinTypeArch {
             .expect("builtin: getBase(INT)")
     }
     fn get_type_char(&self) -> Rc<crate::dtype::Datatype> {
+        let size = self.types.get_size_of_char();
         self.types
-            .get_type_char(self.types.get_size_of_char())
+            .get_type_char(size)
+            .or_else(|_| self.types.get_base(size, type_metatype::TYPE_INT))
             .expect("builtin: getTypeChar")
     }
     fn get_type_wchar(&self) -> Rc<crate::dtype::Datatype> {

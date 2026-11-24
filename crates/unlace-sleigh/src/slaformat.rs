@@ -52,22 +52,6 @@ pub fn is_sla_format(s: &[u8]) -> (bool, &[u8]) {
     (true, rest)
 }
 
-/// (kuna) Length of the header of an uncompressed image: `slu`, the format version byte, then
-/// the payload length as 8 little-endian bytes.
-pub const RAW_HEADER_LEN: usize = 12;
-
-/// (kuna) The payload of an uncompressed image ([`raw_sla_image`]), or `None` when `s` is not
-/// one: a wrong magic or version, or a payload whose length is not the recorded one.
-pub fn is_sla_raw_format(s: &[u8]) -> Option<&[u8]> {
-    if s.len() < RAW_HEADER_LEN || &s[..3] != b"slu" || i32::from(s[3]) != FORMAT_VERSION {
-        return None;
-    }
-    let mut len = [0u8; 8];
-    len.copy_from_slice(&s[4..RAW_HEADER_LEN]);
-    let payload = &s[RAW_HEADER_LEN..];
-    (u64::from_le_bytes(len) == payload.len() as u64).then_some(payload)
-}
-
 /// (kuna) Verify the header of a compressed `.sla` image and inflate its whole stream, checking
 /// the zlib checksum.
 pub fn inflate_sla(s: &[u8]) -> KunaResult<Vec<u8>> {
@@ -100,19 +84,6 @@ pub fn inflate_sla(s: &[u8]) -> KunaResult<Vec<u8>> {
             return Err(KunaError::lowlevel("Truncated SLA compressed stream"));
         }
     }
-    Ok(out)
-}
-
-/// (kuna) The uncompressed image of a compressed `.sla`: the same packed payload behind a
-/// [`RAW_HEADER_LEN`]-byte `slu` header, which [`FormatDecode::ingest_stream`] takes without
-/// inflating. Fails as [`inflate_sla`] does.
-pub fn raw_sla_image(s: &[u8]) -> KunaResult<Vec<u8>> {
-    let payload = inflate_sla(s)?;
-    let mut out = Vec::with_capacity(RAW_HEADER_LEN + payload.len());
-    out.extend_from_slice(b"slu");
-    out.push(FORMAT_VERSION as u8);
-    out.extend_from_slice(&(payload.len() as u64).to_le_bytes());
-    out.extend_from_slice(&payload);
     Ok(out)
 }
 
@@ -201,13 +172,7 @@ impl<'a> FormatDecode<'a> {
     /// and transfers it with `ingest_owned`, which copies only the trailing
     /// partial chunk so `endIngest` has one to pad — every packed byte has its
     /// high bit set, so the NUL-terminator scan never trips.
-    ///
-    /// (kuna) An uncompressed image ([`raw_sla_image`]) carries the same payload
-    /// and skips the inflate.
     pub fn ingest_stream(&mut self, s: &[u8]) -> KunaResult<()> {
-        if let Some(payload) = is_sla_raw_format(s) {
-            return self.inner.ingest_owned(payload.to_vec());
-        }
         let out = inflate_sla(s)?;
         self.inner.ingest_owned(out)
     }
@@ -367,41 +332,6 @@ mod tests {
         assert!(
             FormatDecode::new(&manager)
                 .ingest_stream(&compressed(&[]))
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn raw_image_decodes_like_the_compressed_one_and_rejects_truncation() {
-        let manager = AddrSpaceManager::new();
-        let payload: Vec<_> = (0..5000).map(|i| (i % 255 + 1) as u8).collect();
-        let mut packed = Vec::new();
-        let mut enc = PackedEncode::new(&mut packed);
-        enc.open_element(&ELEM_DATA);
-        enc.write_string(&ATTRIB_CONTENT, &payload);
-        enc.close_element(&ELEM_DATA);
-        let raw = raw_sla_image(&compressed(&packed)).unwrap();
-        assert_eq!(&raw[..3], b"slu");
-        assert_eq!(is_sla_raw_format(&raw), Some(&packed[..]));
-        let mut dec = FormatDecode::new(&manager);
-        dec.ingest_stream(&raw).unwrap();
-        let el = dec.open_element_id(&ELEM_DATA).unwrap();
-        assert_eq!(dec.read_string_id(&ATTRIB_CONTENT).unwrap(), payload);
-        dec.close_element(el).unwrap();
-        assert_eq!(dec.peek_element().unwrap(), 0);
-        for end in 0..raw.len() {
-            assert!(
-                FormatDecode::new(&manager)
-                    .ingest_stream(&raw[..end])
-                    .is_err(),
-                "truncation at {end}"
-            );
-        }
-        let mut wrong_version = raw;
-        wrong_version[3] = 0;
-        assert!(
-            FormatDecode::new(&manager)
-                .ingest_stream(&wrong_version)
                 .is_err()
         );
     }

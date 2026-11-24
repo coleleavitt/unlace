@@ -132,7 +132,6 @@ sources, or with no `.slaspec` at all (a release tree), is used as is.
 | `KUNA_DECOMP_DBG` | A separate `decomp_dbg` binary to run instead of the built-in console; a non-empty value also makes `catalog` query that build. `--decomp-dbg PATH` does the same for one `decompile` or `catalog` run, and wins over the variable. |
 | `UNLACE_SLA_CACHE` | Where compiled `.sla` images are cached (default `$XDG_CACHE_HOME/unlace/sla`, else `~/.cache/unlace/sla`). Content-addressed by the sources and the compiler; safe to delete. |
 | `UNLACE_SLA_LAZY` | `0` decodes every constructor's p-code template when the `.sla` loads, instead of on its first use. For A/B timing; the output is the same either way. |
-| `UNLACE_SLA_RAW` | `0` loads the compressed `.sla` itself instead of its uncompressed copy (`.slr`, kept in the `.sla` cache so only the first process inflates an image). For A/B timing; the output is the same either way. |
 | `KUNA_SLACOMP` | A separate `slacomp` binary for `unlace specs` to run instead of the built-in compiler. |
 | `KUNA_ROOT` | The repo root, when the binaries are not in-tree: `specs/` is read from it. |
 | `KUNA_DECODE_JOBS` | Decode lanes for the discovery walk, without `--jobs` — what `--jobs N` exports for the duration of the load (capped at 32, forced to `1` in pool workers). |

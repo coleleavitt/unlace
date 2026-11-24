@@ -34,6 +34,7 @@ define token instr(32)
   k20    = (0,19) signed
   k16    = (0,15)
   k15    = (0,14) signed
+  k15u   = (0,14)
   b25    = (25,25)
   low15  = (0,14)
   low27  = (0,26)
@@ -61,6 +62,10 @@ define pcodeop bit_insert;
 RIMM: R2 is rimmf=0 & R2 { export R2; }
 RIMM: rimm10 is rimmf=1 & rimm10 { export *[const]:4 rimm10; }
 
+# The 15-bit offset of LDI/STI/EXI/LPMI is stored with bits 14:8 inverted when bit 7 is set (gas's
+# tc-ft32.c encodes it so and sim/ft32 decodes it so; objdump prints the raw field)
+K15: off is k15u [ off = ((k15u $xor ((k15u >> 7) & 1) * 0x7f00) $xor 0x4000) - 0x4000; ] { export *[const]:4 off; }
+
 SZ: ".b" is dw=0 {}
 SZ: ".s" is dw=1 {}
 SZ: ".l" is dw=2 {}
@@ -87,8 +92,8 @@ macro setlogic(r) {
   cc = zext(fz) | (zext(fs) << 3) | (zext(fge) << 4) | (zext(fgt) << 5) | (zext(fa) << 6);
 }
 
-macro push4(v) { sp = sp - 4; *[ram]:4 sp = v; }
-macro pop4(v) { v = *[ram]:4 sp; sp = sp + 4; }
+macro push4(v) { local val = v; sp = sp - 4; *[ram]:4 sp = val; }
+macro pop4(v) { local val = *[ram]:4 sp; sp = sp + 4; v = val; }
 
 # ALU: Rd = R1 op rimm
 :add^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0x0 { Rd = R1 + RIMM; }
@@ -107,7 +112,9 @@ macro pop4(v) { v = *[ram]:4 sp; sp = sp + 4; }
   local w = (RIMM >> 5) & 0xf;
   w = w + 16 * zext(w == 0);
   local p = RIMM & 31;
-  Rd = (R1 << (32 - w - p)) s>> (32 - w);
+  # the field reads zeros past bit 31 when p + w > 32
+  local v = (R1 >> p) & ((1 << w) - 1);
+  Rd = (v << (32 - w)) s>> (32 - w);
 }
 :bextu^SZ Rd, R1, RIMM is pat=0x08 & SZ & Rd & R1 & RIMM & al=0xd {
   local w = (RIMM >> 5) & 0xf;
@@ -127,10 +134,24 @@ macro pop4(v) { v = *[ram]:4 sp; sp = sp + 4; }
   fge = (fs == fo); fgt = (fs == fo) && !fz; fa = fc == 0 && !fz;
   cc = zext(fz) | (zext(fc) << 1) | (zext(fo) << 2) | (zext(fs) << 3) | (zext(fge) << 4) | (zext(fgt) << 5) | (zext(fa) << 6);
 }
+:addcc^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x0 & dw=1 {
+  local a = R1:2; local bv = RIMM; local b = bv:2; local r = a + b;
+  fz = (r == 0); fc = carry(a, b); fo = scarry(a, b); fs = (r s< 0);
+  fge = (fs == fo); fgt = (fs == fo) && !fz; fa = fc == 0 && !fz;
+  cc = zext(fz) | (zext(fc) << 1) | (zext(fo) << 2) | (zext(fs) << 3) | (zext(fge) << 4) | (zext(fgt) << 5) | (zext(fa) << 6);
+}
+:addcc^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x0 & dw=0 {
+  local a = R1:1; local bv = RIMM; local b = bv:1; local r = a + b;
+  fz = (r == 0); fc = carry(a, b); fo = scarry(a, b); fs = (r s< 0);
+  fge = (fs == fo); fgt = (fs == fo) && !fz; fa = fc == 0 && !fz;
+  cc = zext(fz) | (zext(fc) << 1) | (zext(fo) << 2) | (zext(fs) << 3) | (zext(fge) << 4) | (zext(fgt) << 5) | (zext(fa) << 6);
+}
 :cmp^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x2 & dw=2 { local a = R1; local b = RIMM; local r = a - b; setflags(a, b, r); }
 :cmp^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x2 & dw=1 { local a = R1:2; local b = RIMM; local bb = b:2; local r = a - bb; setflags(a, bb, r); }
 :cmp^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x2 & dw=0 { local a = R1:1; local b = RIMM; local bb = b:1; local r = a - bb; setflags(a, bb, r); }
-:tst^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x4 { local r = R1 & RIMM; setlogic(r); }
+:tst^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x4 & dw=2 { local r = R1 & RIMM; setlogic(r); }
+:tst^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x4 & dw=1 { local b = RIMM; local r = R1:2 & b:2; setlogic(r); }
+:tst^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0x4 & dw=0 { local b = RIMM; local r = R1:1 & b:1; setlogic(r); }
 :btst^SZ R1, RIMM is pat=0x0b & SZ & Rd=30 & R1 & RIMM & al=0xc {
   local w = (RIMM >> 5) & 0xf;
   w = w + 16 * zext(w == 0);
@@ -170,23 +191,23 @@ DADDR: aa is aa { export *[const]:4 aa; }
 :exa^".s" Rd, DADDR is pat=0x07 & dw=1 & Rd & DADDR { local t = *[ram]:2 DADDR; *[ram]:2 DADDR = Rd:2; Rd = zext(t); }
 :exa^".b" Rd, DADDR is pat=0x07 & dw=0 & Rd & DADDR { local t = *[ram]:1 DADDR; *[ram]:1 DADDR = Rd:1; Rd = zext(t); }
 
-:ldi^".b" Rd, R1, k15 is pat=0x15 & dw=0 & Rd & R1 & k15 { Rd = zext(*[ram]:1 (R1 + k15)); }
-:ldi^".s" Rd, R1, k15 is pat=0x15 & dw=1 & Rd & R1 & k15 { Rd = zext(*[ram]:2 (R1 + k15)); }
-:ldi^".l" Rd, R1, k15 is pat=0x15 & dw=2 & Rd & R1 & k15 { Rd = *[ram]:4 (R1 + k15); }
-:sti^".b" Rd, k15, R1 is pat=0x16 & dw=0 & Rd & R1 & k15 { *[ram]:1 (Rd + k15) = R1:1; }
-:sti^".s" Rd, k15, R1 is pat=0x16 & dw=1 & Rd & R1 & k15 { *[ram]:2 (Rd + k15) = R1:2; }
-:sti^".l" Rd, k15, R1 is pat=0x16 & dw=2 & Rd & R1 & k15 { *[ram]:4 (Rd + k15) = R1; }
-:exi^".l" Rd, R1, k15 is pat=0x1d & dw=2 & Rd & R1 & k15 { local a = R1 + k15; local t = *[ram]:4 a; *[ram]:4 a = Rd; Rd = t; }
-:exi^".s" Rd, R1, k15 is pat=0x1d & dw=1 & Rd & R1 & k15 { local a = R1 + k15; local t = *[ram]:2 a; *[ram]:2 a = Rd:2; Rd = zext(t); }
-:exi^".b" Rd, R1, k15 is pat=0x1d & dw=0 & Rd & R1 & k15 { local a = R1 + k15; local t = *[ram]:1 a; *[ram]:1 a = Rd:1; Rd = zext(t); }
+:ldi^".b" Rd, R1, K15 is pat=0x15 & dw=0 & Rd & R1 & K15 { Rd = zext(*[ram]:1 (R1 + K15)); }
+:ldi^".s" Rd, R1, K15 is pat=0x15 & dw=1 & Rd & R1 & K15 { Rd = zext(*[ram]:2 (R1 + K15)); }
+:ldi^".l" Rd, R1, K15 is pat=0x15 & dw=2 & Rd & R1 & K15 { Rd = *[ram]:4 (R1 + K15); }
+:sti^".b" Rd, K15, R1 is pat=0x16 & dw=0 & Rd & R1 & K15 { *[ram]:1 (Rd + K15) = R1:1; }
+:sti^".s" Rd, K15, R1 is pat=0x16 & dw=1 & Rd & R1 & K15 { *[ram]:2 (Rd + K15) = R1:2; }
+:sti^".l" Rd, K15, R1 is pat=0x16 & dw=2 & Rd & R1 & K15 { *[ram]:4 (Rd + K15) = R1; }
+:exi^".l" Rd, R1, K15 is pat=0x1d & dw=2 & Rd & R1 & K15 { local a = R1 + K15; local t = *[ram]:4 a; *[ram]:4 a = Rd; Rd = t; }
+:exi^".s" Rd, R1, K15 is pat=0x1d & dw=1 & Rd & R1 & K15 { local a = R1 + K15; local t = *[ram]:2 a; *[ram]:2 a = Rd:2; Rd = zext(t); }
+:exi^".b" Rd, R1, K15 is pat=0x1d & dw=0 & Rd & R1 & K15 { local a = R1 + K15; local t = *[ram]:1 a; *[ram]:1 a = Rd:1; Rd = zext(t); }
 
 PADDR: addr is pa [ addr = pa << 2; ] { export *[const]:4 addr; }
 :lpm^".b" Rd, PADDR is pat=0x0d & dw=0 & Rd & PADDR { Rd = zext(*[code]:1 PADDR); }
 :lpm^".s" Rd, PADDR is pat=0x0d & dw=1 & Rd & PADDR { Rd = zext(*[code]:2 PADDR); }
 :lpm^".l" Rd, PADDR is pat=0x0d & dw=2 & Rd & PADDR { Rd = *[code]:4 PADDR; }
-:lpmi^".b" Rd, R1, k15 is pat=0x19 & dw=0 & Rd & R1 & k15 { Rd = zext(*[code]:1 (R1 + k15)); }
-:lpmi^".s" Rd, R1, k15 is pat=0x19 & dw=1 & Rd & R1 & k15 { Rd = zext(*[code]:2 (R1 + k15)); }
-:lpmi^".l" Rd, R1, k15 is pat=0x19 & dw=2 & Rd & R1 & k15 { Rd = *[code]:4 (R1 + k15); }
+:lpmi^".b" Rd, R1, K15 is pat=0x19 & dw=0 & Rd & R1 & K15 { Rd = zext(*[code]:1 (R1 + K15)); }
+:lpmi^".s" Rd, R1, K15 is pat=0x19 & dw=1 & Rd & R1 & K15 { Rd = zext(*[code]:2 (R1 + K15)); }
+:lpmi^".l" Rd, R1, K15 is pat=0x19 & dw=2 & Rd & R1 & K15 { Rd = *[code]:4 (R1 + K15); }
 
 :push^".l" R1 is pat=0x10 & R1 { push4(R1); }
 :pop^".l" Rd is pat=0x11 & Rd { pop4(Rd); }

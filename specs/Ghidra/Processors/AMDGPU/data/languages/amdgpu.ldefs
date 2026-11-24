@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="AMDGPU"
+            endian="little"
+            size="64"
+            variant="GFX9"
+            version="1.0"
+            slafile="amdgcn_gfx9.sla"
+            processorspec="amdgcn.pspec"
+            id="AMDGPU:LE:64:GFX9">
+    <description>AMD GCN5 (Vega, gfx900-gfx90a) shader ISA, one-lane lift</description>
+    <compiler name="default" spec="amdgcn.cspec" id="default"/>
+    <external_name tool="gnu" name="amdgcn"/>
+  </language>
+</language_definitions>

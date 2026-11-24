@@ -1,4 +1,6 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
+#[path = "amdgpu_raw.rs"]
+mod amdgpu_raw;
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
 #[path = "chip8.rs"]
@@ -23,10 +25,6 @@ mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 
-#[path = "v60.rs"]
-mod v60;
-#[path = "vax.rs"]
-mod vax;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;

@@ -1,0 +1,75 @@
+# The receiver of an Objective-C direct method.
+#
+# Issue: a method declared `__attribute__((objc_direct))` is called as a C
+# function. No `method_list_t` lists it, it takes no `_cmd` and it has no
+# type encoding; only its symbol says it is a method. The `objc` pass typed
+# `self` from the method lists alone, so in a direct method the receiver
+# was whatever inference made of the first argument and an ivar read
+# printed `((int4 *)a0)[2]` (in a framework, where the folded offset
+# variable is all that names the ivar, `((objc_object **)a0)[0x56]`).
+#
+# Fix (`analyzers/objc/kuna_objcdirect.rs`): every method symbol whose
+# address no method list gave hints its first argument register as `self`,
+# typed `<Class> *` for an instance method under `objcivars`. The hint is
+# unlocked, so the other parameters are recovered as before.
+#
+# `macho_objc_direct.m`: `Label { isa; int flags; Label *next; }` with the
+# direct `-[Label bump:]` and `+[Label scale:]` and the listed
+# `-[Label flags]`. The class method's receiver is passed to the generic
+# `objc_msgSend(void *, void *, ...)`, so it may read `void *self`; it must
+# never read `Label *` or `objc_object *`.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_direct_arm64',
+    'option objc on',
+    'read symbols',
+    'load addr 0x1000006e0',
+    'decompile',
+    'print C',
+    'load addr 0x1000006fc',
+    'decompile',
+    'print C',
+    'load addr 0x100000728',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'OBJCDIRECT #1: a direct instance method takes self as its class and no _cmd'
+count = 1
+literal = '-[Label bump:](Label *self,int4 a1)'
+
+[[match]]
+name = 'OBJCDIRECT #2: its ivar accesses are fields'
+count = 1
+literal = 'self->flags = self->flags + a1;'
+
+[[match]]
+name = 'OBJCDIRECT #3: a field read through an ivar of the class'
+count = 1
+literal = 'return self->next->flags;'
+
+[[match]]
+name = "OBJCDIRECT #4: a direct class method's receiver is named, not typed as an instance"
+count = 1
+regex = '\+\[Label scale:\]\((void \*|[a-z0-9 ]+ )self,int4 a1\)'
+
+[[match]]
+name = "OBJCDIRECT #5: a listed method keeps its encoding's prototype"
+count = 1
+literal = 'int4 -[Label flags](Label *self,objc_selector *_cmd)'

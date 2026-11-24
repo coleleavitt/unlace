@@ -23,4 +23,26 @@
     <description>Rabbit 3000A (Rabbit 2000 set plus the 3000A system, block-copy and multiply-accumulate instructions)</description>
     <compiler name="default" spec="rabbit.cspec" id="default"/>
   </language>
+  <language processor="Rabbit4000"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="rabbit4000.sla"
+            processorspec="rabbit.pspec"
+            id="Rabbit4000:LE:16:default">
+    <description>Rabbit 4000 / 5000 (3000A set with the 7F-prefixed register ALU, 32-bit BCDE/JKHL and PW-PZ pointer registers)</description>
+    <compiler name="default" spec="rabbit.cspec" id="default"/>
+  </language>
+  <language processor="Rabbit6000"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="rabbit6000.sla"
+            processorspec="rabbit.pspec"
+            id="Rabbit6000:LE:16:default">
+    <description>Rabbit 6000 (Rabbit 4000 set plus the 49-page pointer ALU, block, crypto and ALTS/ALTSD additions)</description>
+    <compiler name="default" spec="rabbit.cspec" id="default"/>
+  </language>
 </language_definitions>

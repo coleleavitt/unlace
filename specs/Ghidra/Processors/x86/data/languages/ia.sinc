@@ -487,6 +487,10 @@ define context contextreg
   apxNDD32=(24,28)
   apxNDD16=(24,28)
   apxNDD8=(24,28)
+@else
+@ifndef IA16
+  rexX4=(49,49)         # EVEX.U inverted (P1 bit 2): 1 selects the 256-bit AVX10.2 {sae} forms
+@endif
 @endif
 
 ;
@@ -2460,6 +2464,57 @@ macro fucompe(val1, val2) {
 :^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0 & rexr & rexx & rexb;  instruction [ instrPhase=1; rexprefix=1; opsize=0; rexWprefix=0; rexRprefix=rexr; rexXprefix=rexx; rexBprefix=rexb; ] {}
 :^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1 & rexr & rexx & rexb;  instruction [ instrPhase=1; rexprefix=1; opsize=2; rexWprefix=1; rexRprefix=rexr; rexXprefix=rexx; rexBprefix=rexb; ] {}
 
+# A REX prefix followed by another prefix (legacy or REX) is ignored; only a REX right before the opcode counts.
+# (One constructor per REX.W and opsize case, so each is more specific than the REX constructor above it.)
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=0; over=0x26 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=1; over=0x26 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0; over=0x26 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1; over=0x26 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=0; over=0x2e & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=1; over=0x2e & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0; over=0x2e & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1; over=0x2e & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=0; over=0x36 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=1; over=0x36 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0; over=0x36 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1; over=0x36 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=0; over=0x3e & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=1; over=0x3e & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0; over=0x3e & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1; over=0x3e & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=0; over=0x64 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=1; over=0x64 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0; over=0x64 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1; over=0x64 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=0; over=0x65 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=1; over=0x65 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0; over=0x65 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1; over=0x65 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=0; over=0x66 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=1; over=0x66 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0; over=0x66 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1; over=0x66 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=0; over=0x67 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=1; over=0x67 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0; over=0x67 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1; over=0x67 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=0; over=0xf0 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=1; over=0xf0 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0; over=0xf0 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1; over=0xf0 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=0; over=0xf2 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=1; over=0xf2 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0; over=0xf2 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1; over=0xf2 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=0; over=0xf3 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=1; over=0xf3 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0; over=0xf3 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1; over=0xf3 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=0; row=0x4 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & row=0x4 & rexw=1; row=0x4 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=0; row=0x4 & instruction [ ] {}
+:^instruction is $(LONGMODE_ON) & instrPhase=0 & opsize=0 & row=0x4 & rexw=1; row=0x4 & instruction [ ] {}
+
  # if longmode is off (on 64-bit processor in 32-bit compatibility mode), there is no 64-bit addressing, make sure is off before parsing
  #
 :^instruction is $(LONGMODE_OFF) & instrPhase=0 & addrsize=2 & instruction [ addrsize=1; ] {}
@@ -2572,6 +2627,7 @@ macro fucompe(val1, val2) {
 :^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover=0 & byte=0xC5; vex_r=1 & vex_x=1 & vex_vvvv & vex_l & vex_pp=3; instruction
                        [ instrPhase=1; vexMode=1; vexVVVV=~vex_vvvv; vexL=vex_l; vexMMMMM=0x1; prefix_f2=1; ] {}
 
+@ifdef IA16
 :^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r=1 & vex_x=1 & vex_b & evex_rp & evex_res=0 & evex_mmm;
                  vex_w & vex_vvvv & evex_res2=1 & vex_pp=0; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
                        [ instrPhase=1; vexMode=2; vexVVVV=~vex_vvvv; rexBprefix=~vex_b; rexWprefix=vex_w; evexRp=~evex_rp; evexVp=~evex_vp;  evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; vexMMMMM=evex_mmm; ] {}
@@ -2584,6 +2640,20 @@ macro fucompe(val1, val2) {
 :^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r=1 & vex_x=1 & vex_b & evex_rp & evex_res=0 & evex_mmm;
                  vex_w & vex_vvvv & evex_res2=1 & vex_pp=3; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
                        [ instrPhase=1; vexMode=2; vexVVVV=~vex_vvvv; rexBprefix=~vex_b; rexWprefix=vex_w; evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; vexMMMMM=evex_mmm; prefix_f2=1; ] {}
+@else
+:^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r=1 & vex_x=1 & vex_b & evex_rp & evex_res=0 & evex_mmm;
+                 vex_w & vex_vvvv & evex_res2 & vex_pp=0; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
+                       [ instrPhase=1; vexMode=2; vexVVVV=~vex_vvvv; rexBprefix=~vex_b; rexWprefix=vex_w; evexRp=~evex_rp; evexVp=~evex_vp;  evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; vexMMMMM=evex_mmm; rexX4=~evex_res2; ] {}
+:^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r=1 & vex_x=1 & vex_b & evex_rp & evex_res=0 & evex_mmm;
+                 vex_w & vex_vvvv & evex_res2 & vex_pp=1; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
+                       [ instrPhase=1; vexMode=2; vexVVVV=~vex_vvvv; rexBprefix=~vex_b; rexWprefix=vex_w; evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; vexMMMMM=evex_mmm; rexX4=~evex_res2; prefix_66=1; ] {}
+:^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r=1 & vex_x=1 & vex_b & evex_rp & evex_res=0 & evex_mmm;
+                 vex_w & vex_vvvv & evex_res2 & vex_pp=2; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
+                       [ instrPhase=1; vexMode=2; vexVVVV=~vex_vvvv; rexBprefix=~vex_b; rexWprefix=vex_w; evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; vexMMMMM=evex_mmm; rexX4=~evex_res2; prefix_f3=1; ] {}
+:^instruction is $(LONGMODE_OFF) & instrPhase=0 & vexMode=0 & rexprefix=0 & mandover & byte=0x62; vex_r=1 & vex_x=1 & vex_b & evex_rp & evex_res=0 & evex_mmm;
+                 vex_w & vex_vvvv & evex_res2 & vex_pp=3; evex_z & evex_lp & evex_l & evex_b & evex_vp & evex_aaa; instruction
+                       [ instrPhase=1; vexMode=2; vexVVVV=~vex_vvvv; rexBprefix=~vex_b; rexWprefix=vex_w; evexRp=~evex_rp; evexVp=~evex_vp; evexLp=evex_lp; vexL=evex_l; evexZ=evex_z; evexB=evex_b; evexAAA=evex_aaa; vexMMMMM=evex_mmm; rexX4=~evex_res2; prefix_f2=1; ] {}
+@endif
 
 # Many of the multimedia instructions have a "mandatory" prefix, either 0x66, 0xf2 or 0xf3
 # where the prefix really becomes part of the encoding.  We collect the three possible prefixes of this
@@ -2598,6 +2668,11 @@ Suffix3D: imm8        is imm8 [ suffix3D=imm8; ] { }
 
 :^instruction is instrPhase=0 & (byte=0x0f; byte=0x0f; XmmReg ... & m64; Suffix3D) ... & instruction ... [ instrPhase=1; ] { }
 :^instruction is instrPhase=0 & (byte=0x0f; byte=0x0f; mmxmod=3; Suffix3D) ... & instruction ...         [ instrPhase=1; ] { }
+@ifdef IA64
+# After a REX prefix (which 3DNow! ignores): suffix3D=0 until the pre-parse has run, so it runs once.
+:^instruction is instrPhase=1 & rexprefix=1 & vexMode=0 & suffix3D=0 & (byte=0x0f; byte=0x0f; XmmReg ... & m64; Suffix3D) ... & instruction ... [ ] { }
+:^instruction is instrPhase=1 & rexprefix=1 & vexMode=0 & suffix3D=0 & (byte=0x0f; byte=0x0f; mmxmod=3; Suffix3D) ... & instruction ...         [ ] { }
+@endif
 
 
 # Instructions in alphabetical order
@@ -2743,7 +2818,7 @@ with : lockprefx=0 {
 
     ZF = ( rm16 == 0 );
     
-    if ( ZF == 1 ) goto <done>;
+    if ( ZF == 1 ) goto inst_next;
      
 <start>
     if ( ((rm16 >> bitIndex) & 0x0001) != 0 ) goto <done>;
@@ -2783,7 +2858,7 @@ with : lockprefx=0 {
 
     ZF = ( rm32 == 0 );
     
-    if ( ZF == 1 ) goto <done>;
+    if ( ZF == 1 ) goto inst_next;
      
 <start>
     if ( ((rm32 >> bitIndex) & 0x00000001) != 0 ) goto <done>;
@@ -2825,7 +2900,7 @@ with : lockprefx=0 {
 
     ZF = ( rm64 == 0 );
     
-    if ( ZF == 1 ) goto <done>;
+    if ( ZF == 1 ) goto inst_next;
      
 <start>
     if ( ((rm64 >> bitIndex) & 0x0000000000000001) != 0 ) goto <done>;
@@ -2860,7 +2935,7 @@ with : lockprefx=0 {
 
     ZF = ( rm16 == 0 );
     
-    if ( ZF == 1 ) goto <done>;
+    if ( ZF == 1 ) goto inst_next;
      
 <start>
     if ( (rm16 >> bitIndex) != 0 ) goto <done>;
@@ -2900,7 +2975,7 @@ with : lockprefx=0 {
 
     ZF = ( rm32 == 0 );
     
-    if ( ZF == 1 ) goto <done>;
+    if ( ZF == 1 ) goto inst_next;
      
 <start>
     if ( (rm32 >> bitIndex) != 0 ) goto <done>;
@@ -2943,7 +3018,7 @@ with : lockprefx=0 {
 
     ZF = ( rm64 == 0 );
     
-    if ( ZF == 1 ) goto <done>;
+    if ( ZF == 1 ) goto inst_next;
      
 <start>
     if ( (rm64 >> bitIndex) != 0 ) goto <done>;
@@ -4200,6 +4275,7 @@ define pcodeop swap_bytes;
 :MOVSXD Reg32,rm32  is vexMode=0 & bit64=1 & opsize=1 & byte=0x63; rm32 & Reg32 ... & check_Reg32_dest ... { Reg32 = rm32; build check_Reg32_dest; }
 @ifdef IA64
 :MOVSXD Reg64,rm32  is $(LONGMODE_ON) & vexMode=0 & bit64=1 & opsize=2 & byte=0x63; rm32 & Reg64 ... { Reg64 = sext(rm32); }
+:MOVSXD Reg16,rm32  is $(LONGMODE_ON) & vexMode=0 & bit64=1 & opsize=0 & byte=0x63; rm32 & Reg16 ... { Reg16 = rm32:2; }
 @endif
 
 :MOVZX Reg16,rm8    is vexMode=0 & opsize=0 & byte=0xf; byte=0xb6; rm8 & Reg16 ...  { Reg16 = zext(rm8); }

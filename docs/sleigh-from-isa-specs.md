@@ -119,6 +119,19 @@ constructor. The compare tool's `--mem` points `rs1` at a doubleword in the test
 slot and compares `rd` and that doubleword after the word runs. On RV64 all 74
 sampled Zabha/Zacas words agree with QEMU over 64 vectors each.
 
+`riscv.fd.sinc` comes from `extensions/FD/fext_insts.sail,extensions/FD/dext_insts.sail` with
+`--exts rv_f,rv64_f,rv_d,rv64_d --opaque-fallback --unbox truncate --dyn-rounding rne
+--field-table LOAD_FP.imm=immI,STORE_FP.imm=immS --only '^(?!f[ls]h\b)'
+--drop-display '^fcvt\.d\.(s|w|wu)$=rne'
+--idiom fmv.s=copy,fneg.s=neg,fabs.s=abs,fmv.d=copy,fneg.d=neg,fabs.d=abs`. The generator
+lowers the softfloat wrappers to p-code float operations where the rounding mode makes them
+exact. `--field-table` lets an existing subtable (`immI`, `immS`) decode, display and export a
+sign-extended immediate, including one split across the encoding. `--drop-display` follows
+LLVM in leaving out `rne` on the exact conversions. `--idiom` lifts the `rs2 = rs1` aliases as a
+copy, `f-` or `abs()`. `--unbox truncate` reads single-precision sources as their low bits;
+`exact` would add a NaN-unbox check to every read (0 words wrong against QEMU instead of 13 on
+unboxed inputs, but about 13% more decompiled lines on a musl subset).
+
 To compare another variant, copy `specs/Ghidra/Processors/RISCV/data/languages` into
 `<dir>/Ghidra/Processors/RISCV/data/languages`, replace `riscv.zb.sinc`, compile with
 `slacomp`, and pass `--sleighpath <dir>` to `unlace`.
@@ -206,8 +219,13 @@ generation time, not something the model can settle.
   clauses use record fields and tuple-valued mappings the parser does not read. Loads, stores, branches, F/D/Q, V
   and the privileged instructions are therefore out of reach until the
   compiler learns Sail's memory and control-flow primitives.
-- **Vectors.** The V files need register groups, `vtype`/`vl` state and element
-  loops over runtime lengths, so `riscv.rvv.sinc` stays hand-written.
+- **Vectors (decided: stays hand-written).** Sail's V execute clauses loop over
+  `num_elem = VLEN*LMUL/SEW`, which comes from the runtime `vtype`/`vl` CSRs, and index
+  register groups at run time. Even the encdec guards read `get_sew()`. Nothing can be
+  unrolled into p-code, and `riscv.rvv.sinc` already lifts every instruction to a user
+  operation (`vd = vadd_vv(vs2, vs1)`). A generated file could only move the decoding's
+  provenance to Sail while churning the 672 user-operation names and arguments, so V
+  stays hand-written. Its decoding is checked against LLVM by `riscv_vector.rs`.
 - **Readability is not in the model.** Sail states what an instruction does,
   not how a decompiler should show it. The `--budget` and `--opaque` knobs
   stand in for the choices a spec author makes by hand.
@@ -226,6 +244,19 @@ generation time, not something the model can settle.
   BSD-licensed AARCHMRS JSON and LLVM TableGen are usable for decoding only,
   which `tools/gen_aarch64_ext.py` already does. XED gives x86 decoding but no
   semantics.
+
+## AArch64 reference semantics
+
+The Sail Arm-A model ([rems-project/sail-arm](https://github.com/rems-project/sail-arm),
+BSD-3-Clause-Clear) is an exact reference for AArch64, but running it means building the
+Sail toolchain (OCaml/opam) and its C emulator, then driving a full-system model. For
+the difffuzz cases in #546 (rounding, saturation, unsigned FP converts,
+`BFDOT`/`USDOT`/`SUDOT`, FEAT_MOPS) a cheaper exact oracle exists. QEMU 10.2 user mode
+(`qemu-aarch64 -cpu max`) executes every one of them, including the BF16, I8MM and MOPS
+encodings that Unicorn's older QEMU core rejects. A static ELF with the word between
+register loads and stores is enough, as the RISC-V harness in `tools/sail_sleigh_compare.py`
+does. Sail-arm is therefore not used as an oracle. It remains the source to try if
+AArch64 SLEIGH is ever generated, the way the RISC-V files are.
 
 ## Files
 

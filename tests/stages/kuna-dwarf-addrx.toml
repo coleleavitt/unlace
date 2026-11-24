@@ -1,0 +1,56 @@
+# DWARF 5 global locations: DW_OP_addrx.
+#
+# A DWARF 4 producer locates a static global with `DW_OP_addr <address>`.
+# DWARF 5 (clang's default) writes `DW_OP_addrx <index>` instead, an index
+# into the unit's .debug_addr table.  The DWARF pass decoded only the first
+# form, so a clang -g binary whose statics have no ELF symbol named none of
+# them: `bump` printed `dat_202250 + dat_202240[k & 3]`.  The index is now
+# resolved through .debug_addr, in the file's byte order.
+#
+# The two images are crates/unlace-analysis/tests/fixtures/dwarf_addrx.c
+# built for x86-64 and for big-endian AArch64 (the command is in the source).
+# A strict fix with no option: one pass pins the names.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwarf_addrx_x86_64',
+    'read symbols',
+    'load function bump',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwarf_addrx_aarch64_be',
+    'read symbols',
+    'load function bump',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'dwarf addrx #1: the scalar global takes its DWARF name on both byte orders'
+count = 2
+regex = '^  counter = v1;$'
+
+[[match]]
+name = 'dwarf addrx #2: the array global takes its DWARF name on both byte orders'
+count = 2
+regex = '^  v1 = counter \+ .*table\['
+
+[[match]]
+name = 'dwarf addrx #3: no global is left with an address name'
+count = 0
+regex = 'dat_[0-9a-f]+'

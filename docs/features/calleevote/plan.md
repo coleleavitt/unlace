@@ -67,7 +67,7 @@ inert wherever that pass is (single-function `kuna decompile`, narrowed runs,
   also called directly, keeps `void *`); and
   `calleevote-reads-a-table-in-code-at-address-zero.json` over
   `calleevote_zero_x86_64` (a const ops table in a `.text` loaded at 0).
-* Stage: `tests/stages/kuna-calleevote.xml`, the negative control (one function
+* Stage: `tests/stages/kuna-calleevote.toml`, the negative control (one function
   from bytes, no caller set: both passes print the raw offset), following
   `kuna-argclobber.xml`'s precedent for a whole-binary option.
 

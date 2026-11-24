@@ -95,11 +95,14 @@ fn floats_match_exactly_then_widen_to_long_double() {
     assert_eq!(LLP64.float_spelling(10), Some("long double"));
 }
 
-/// A width below `float` names nothing (there is no `_Float16` in the emitted
-/// dialect), so it keeps its Ghidra name rather than being rounded up.
+/// A 2-byte float is IEEE binary16 and spells `_Float16`; other widths below
+/// `float` name nothing, so they keep their Ghidra name rather than being
+/// rounded up.
 #[test]
-fn sub_float_widths_have_no_spelling() {
-    assert_eq!(LP64.float_spelling(2), None);
+fn sub_float_widths_spell_only_binary16() {
+    assert_eq!(LP64.float_spelling(2), Some("_Float16"));
+    assert_eq!(LP64.float_spelling(1), None);
+    assert_eq!(LP64.float_spelling(3), None);
 }
 
 /// The metatype dispatch: signedness comes from INT vs UINT, `code` becomes

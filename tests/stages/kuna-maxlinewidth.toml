@@ -1,0 +1,59 @@
+# maxlinewidth and commentindent: the console line-size options.
+#
+# Ported from decompiler/cpp/options.cc (OptionMaxLineWidth,
+# OptionCommentIndent), printlanguage.cc (setLineCommentIndent) and
+# prettyprint.cc (EmitPrettyPrint). Upstream prints through EmitPrettyPrint,
+# which breaks lines longer than maxlinewidth. kuna printed through the
+# plain emitter only, so `option maxlinewidth` was accepted and did nothing.
+#
+# Stage P9 (emit). The default stays one line per statement; setting
+# maxlinewidth routes the plain text through the pretty printer.
+#
+# Authored x86-64 (nasm): f returns the sum of five products of its six
+# arguments.
+#
+# Pass 1 (default): the prototype and the return are each one line.
+# Pass 2 (`option maxlinewidth 40`): both break at 40 columns.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'f' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '89f80fafc64189d2440fafd14401d04589c2450fafd14401d04189fa440fafd24401d04189f2440fafd14401d0c3'
+
+[script]
+commands = [
+    'parse line extern int4 f(int4 alpha,int4 beta,int4 gamma,int4 delta,int4 epsilon,int4 zeta);',
+    'lo fu f',
+    'decompile',
+    'print C',
+    'option maxlinewidth 40',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'MAXLINEWIDTH #1: by default the return is one line'
+count = 1
+regex = '^  return alpha \* beta \+ gamma \* delta \+ epsilon \* zeta \+ alpha \* gamma \+ beta \* delta;$'
+
+[[match]]
+name = 'MAXLINEWIDTH #2: at 40 columns the prototype breaks after its third parameter'
+count = 1
+regex = '^int4 f\(int4 alpha,int4 beta,int4 gamma,$'
+
+[[match]]
+name = 'MAXLINEWIDTH #3: at 40 columns the return breaks into three lines'
+count = 1
+regex = '^  return alpha \* beta \+ gamma \* delta \+$'
+
+[[match]]
+name = 'MAXLINEWIDTH #4: the last term continues under the expression'
+count = 1
+regex = '^         \+ beta \* delta;$'

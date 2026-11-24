@@ -1,0 +1,238 @@
+# Independent AArch64 controls compiled from indexed loads/stores.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x400000', name = 'negative' },
+    { space = 'ram', offset = '0x400014', name = 'negative_load' },
+    { space = 'ram', offset = '0x400028', name = 'two_indices' },
+    { space = 'ram', offset = '0x400074', name = 'byte_index' },
+    { space = 'ram', offset = '0x40008c', name = 'word_index' },
+    { space = 'ram', offset = '0x410000', name = 'wide_byte' },
+    { space = 'ram', offset = '0x410014', name = 'wide_short' },
+    { space = 'ram', offset = '0x410028', name = 'float_bits' },
+    { space = 'ram', offset = '0x420000', name = 'wide_index_u32' },
+    { space = 'ram', offset = '0x420014', name = 'wrapped_index_u32' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x400000'
+readonly = true
+hex = '0800009008d1039108a5208b1fe11f78c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x400014'
+readonly = true
+hex = '0800009008d1039108a5208b00e15f78c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x400028'
+readonly = true
+hex = '0800009008d103916900805208a5208b08a5218b09e11f78c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x400074'
+readonly = true
+hex = '08000090085104916901805208a1208b09f11f38c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x40008c'
+readonly = true
+hex = '0800009008910491a901805208a9208b09c11fb8c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x4000f4'
+readonly = false
+hex = '0000000000000000000000000000000000000000000000000000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x400114'
+readonly = false
+hex = '00000000000000000000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x400124'
+readonly = false
+hex = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x400164'
+readonly = false
+hex = '0000000000000000000000000000000000000000000000000000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x410000'
+readonly = true
+hex = '0800009008f1009108a1208b00f15f38c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x410014'
+readonly = true
+hex = '080000900831019108a5208b00e15f78c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x410028'
+readonly = true
+hex = '0800009008b1019108a9208b00c15fb8c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x41003c'
+readonly = false
+hex = '00000000000000000000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x41004c'
+readonly = false
+hex = '0000000000000000000000000000000000000000000000000000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x41006c'
+readonly = false
+hex = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x420000'
+readonly = true
+hex = '0800009008a100910845208b00e15f78c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x420014'
+readonly = true
+hex = '080400510900009029a1009120596878c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x420028'
+readonly = false
+hex = '0000000000000000000000000000000000000000000000000000000000000000'
+
+[script]
+commands = [
+    'option ctypes on',
+    'map address 0x4000f4 unsigned short flags[16]',
+    'map address 0x400114 unsigned char bytes[16]',
+    'map address 0x400124 unsigned int words[16]',
+    'map address 0x400164 unsigned short other[16]',
+    'parse line extern void negative(short slot);',
+    'parse line extern unsigned short negative_load(short slot);',
+    'parse line extern void two_indices(short slot, short delta);',
+    'parse line extern void byte_index(short slot);',
+    'parse line extern void word_index(short slot);',
+    'map address 0x41003c char signed_bytes[16]',
+    'map address 0x41004c short signed_flags[16]',
+    'map address 0x41006c float floats[16]',
+    'parse line extern unsigned int wide_byte(short slot);',
+    'parse line extern unsigned int wide_short(short slot);',
+    'parse line extern unsigned int float_bits(short slot);',
+    'map address 0x420028 unsigned short index_flags[16]',
+    'parse line extern unsigned short wide_index_u32(unsigned int slot);',
+    'parse line extern unsigned short wrapped_index_u32(unsigned int slot);',
+    'option globalarrayanchor off',
+    'lo fu negative',
+    'decompile',
+    'print C',
+    'option globalarrayanchor on',
+    'lo fu negative',
+    'decompile',
+    'print C',
+    'lo fu negative_load',
+    'decompile',
+    'print C',
+    'lo fu two_indices',
+    'decompile',
+    'print C',
+    'lo fu byte_index',
+    'decompile',
+    'print C',
+    'lo fu word_index',
+    'decompile',
+    'print C',
+    'lo fu wide_byte',
+    'decompile',
+    'print C',
+    'lo fu wide_short',
+    'decompile',
+    'print C',
+    'lo fu float_bits',
+    'decompile',
+    'print C',
+    'lo fu wide_index_u32',
+    'decompile',
+    'print C',
+    'lo fu wrapped_index_u32',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'disabled retains biased literal'
+count = 1
+literal = 'slot * 2L + 0x4000f2'
+
+[[match]]
+name = 'enabled short store retains base'
+count = 1
+literal = 'flags[slot + -1L] = 0;'
+
+[[match]]
+name = 'enabled short load retains base'
+count = 1
+literal = 'return flags[slot + -1L];'
+
+[[match]]
+name = 'two signed indices retain base'
+count = 1
+regex = 'flags\[.*slot.*delta.*-1L\] = 3;'
+
+[[match]]
+name = 'byte array retains base'
+count = 1
+literal = 'bytes[slot + -1L] = 0xb;'
+
+[[match]]
+name = 'word array retains base and store width'
+count = 1
+literal = 'words[slot + -1L] = 0xd;'
+
+[[match]]
+name = 'byte load stays zero extended'
+count = 1
+literal = 'return (unsigned char)signed_bytes[slot + -1L];'
+
+[[match]]
+name = 'halfword load stays zero extended'
+count = 1
+literal = 'return (unsigned short)signed_flags[slot + -1L];'
+
+[[match]]
+name = 'float load retains its raw bits'
+count = 1
+regex = 'return.*union.*float.*unsigned int.*\.from = floats\[slot \+ -1L\].*\.to;'
+
+[[match]]
+name = 'unsigned index extends before wide bias'
+count = 1
+literal = 'return index_flags[slot - 1UL];'
+
+[[match]]
+name = 'unsigned index wraps before extension'
+count = 1
+literal = 'return index_flags[slot - 1];'

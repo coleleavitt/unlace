@@ -4,7 +4,7 @@
 //! These pin the predicate on hand-built summaries: which bodies count as
 //! bodies, and every way the clause must fail closed. The end-to-end witness --
 //! MSVC's out-of-line stack probe eating the frame size the caller loaded --
-//! lives in `tests/stages/kuna-calleescratchbody.xml`.
+//! lives in `tests/stages/kuna-calleescratchbody.toml`.
 
 use super::*;
 use crate::kuna_rustabi::FuncdataRustabiExt;

@@ -7461,7 +7461,7 @@ every other binary's pass list is byte-identical to before the pass existed):
   come from replaying the bind opcodes
   (`loader/format/macho/dyldinfo.rs (resolve_dyld_info_binds)`), which keeps
   no addend, so the anchor is accepted on the name alone. Pinned by
-  `tests/stages/kuna-itaniumrtti-macho.xml` and its `-classic` twin.
+  `tests/stages/kuna-itaniumrtti-macho.toml` and its `-classic` twin.
 - **Objective-C** (`objc`, Mach-O-only, on by default and inert elsewhere;
   `crates/unlace-analysis/src/analyzers/objc/mod.rs`): walk
   `__objc_classlist` → `class_t` → `class_ro_t` → method lists (both absolute and
@@ -8010,7 +8010,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     through a slot or a jump out of `__text` may be another function's: a block
     built past one has no known creator, is named
     `block_<invoke>_block_invoke`, and types no frame; its invoke is typed all
-    the same. `tests/stages/kuna-objcblocksx86.xml` runs
+    the same. `tests/stages/kuna-objcblocksx86.toml` runs
     `macho_objc_blocks_x86_64` and `macho_objc_blocks2_x86_64` with `objc` off
     and on.
 
@@ -8054,7 +8054,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     Foundation out of an iOS 16.4 arm64e cache: 3,979 `objc_msgSend$<sel>` stubs
     named (none before), every selector, class, super and protocol reference
     slot named (6,050, 566, 481 and 33), `self` and `_cmd` typed on its methods.
-    `tests/stages/kuna-dyldcacheobjc.xml` runs the two synthetic caches of
+    `tests/stages/kuna-dyldcacheobjc.toml` runs the two synthetic caches of
     `dyld_cache_objc.py`, one with the header and one with only the
     `objc_opt_t`.
   - **SDK C prototypes** (`objcsdk`, kuna, the C half of the same directory,
@@ -8630,7 +8630,7 @@ both
   (`kuna_arm64evcall.rs (object_at)`): when it is a metaclass object, the
   commit resolves the call to the one method that metaclass's own vtable
   holds in the slot, so `X::gMetaClass.alloc()` is a direct call.
-  Stage test: `tests/stages/kuna-iokitcxx.xml` (the typed classes, `names`
+  Stage test: `tests/stages/kuna-iokitcxx.toml` (the typed classes, `names`
   against `on`).
 - **XNU data tables** (kuna, `xnutables`, the same XNU images, default-on;
   `crates/unlace-analysis/src/analyzers/iokit/tables.rs`): three kinds

@@ -1,0 +1,53 @@
+# GH-1034, P3 rule pools, option deadcascade. churn (the prunedssa
+# fixture) reads 256 read-only table words between 256 calls; its rule
+# pools remove dead INDIRECT and MULTIEQUAL chains whose links each sit
+# before the op reading them. Pass 1 removes one link per pool pass
+# (deadcascade off). Pass 2 cascades from the first pass of every pool run
+# (on): removing a link also removes the dead links behind it. Pass 3 is the
+# default, which cascades from pass 32 of a run. All three print the same
+# body, leave the same live IR and create the same ops.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/prunedssa_x86_64',
+    'read symbols',
+    'option deadcascade off',
+    'load function churn',
+    'decompile',
+    'print C',
+    'count pcode',
+    'option deadcascade on',
+    'load function churn',
+    'decompile',
+    'print C',
+    'count pcode',
+    'option deadcascade 32',
+    'load function churn',
+    'decompile',
+    'print C',
+    'count pcode',
+]
+
+[[match]]
+name = 'deadcascade #1: every pass prints churn'
+count = 3
+regex = '^uint8 churn\(int8 a0,char \*a1\)$'
+
+[[match]]
+name = "deadcascade #2: every pass keeps churn's 256 calls"
+count = 768
+literal = 'sink('
+
+[[match]]
+name = 'deadcascade #3: every pass leaves the same live IR'
+count = 3
+literal = 'Count - pcode = 8135'
+
+[[match]]
+name = 'deadcascade #4: every pass creates the same ops'
+count = 3
+literal = 'Count - created = 35936'

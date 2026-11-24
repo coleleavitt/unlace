@@ -126,10 +126,14 @@ impl CDataModel {
     /// `long double` — the widest floating type C can name — which is how the x87
     /// 80-bit `float10` and the 16-byte `float16` are reached. That is an
     /// approximation of storage, never of value: no target has a 10-byte
-    /// `sizeof`. A width below `float` names nothing.
+    /// `sizeof`. A 2-byte value is IEEE binary16, `_Float16` (C23 / ISO TS
+    /// 18661-3, GCC and Clang); any other width below `float` names nothing.
     pub fn float_spelling(&self, size: int4) -> Option<&'static str> {
         if size == self.float_size {
             return Some("float");
+        }
+        if size == 2 {
+            return Some("_Float16");
         }
         if size == self.double_size {
             return Some("double");

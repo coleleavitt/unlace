@@ -1,0 +1,291 @@
+# Seiko Epson S1C6200 / E0C6200 and E0C6200A 4-bit core (S1C62 family).
+# Written for unlace (#98) from the Epson E0C6200/6200A Core CPU Manual (MF297-06a).
+# Program memory holds 12-bit instructions, one per 16-bit big-endian word (word
+# addressed, 13-bit addresses). Data memory is 4,096 4-bit words, one per byte of the
+# "data" space. PSET commits the noflow context bits pset/nbp/npp to the next
+# instruction, which takes its jump bank and page from them.
+
+define endian=big;
+define alignment=1;
+
+define space code     type=ram_space      size=2 wordsize=2 default;
+define space data     type=ram_space      size=2;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=1 [ A B XP XHL YP YHL ];
+define register offset=0x10 size=2 [ SP PC ];
+define register offset=0x20 size=1 [ I D Z C ];
+define register offset=0x30 size=4 [ contextreg ];
+
+@define XH "XHL[4,4]"
+@define XL "XHL[0,4]"
+@define YH "YHL[4,4]"
+@define YL "YHL[0,4]"
+
+define context contextreg
+  pset = (0,0) noflow
+  nbp  = (1,1) noflow
+  npp  = (2,5) noflow
+  dmode = (6,6)
+;
+
+define token instr(16)
+  op4  = (8,11)
+  op6  = (6,11)
+  op7  = (5,11)
+  op8  = (4,11)
+  op10 = (2,11)
+  op12 = (0,11)
+  s8   = (0,7)
+  e8   = (0,7)
+  e_lo = (0,3)
+  e_hi = (4,7)
+  rr   = (2,3)
+  qq   = (0,1)
+  rl   = (0,1)
+  rp   = (4,5)
+  i4   = (0,3)
+  i4_d = (2,2)
+  n4   = (0,3)
+  p5   = (0,4)
+  p_b  = (4,4)
+  p_p  = (0,3)
+;
+
+define pcodeop halt;
+define pcodeop sleep;
+
+macro ixaddr(a) { a = (zext(XP) << 8) | zext(XHL); }
+macro iyaddr(a) { a = (zext(YP) << 8) | zext(YHL); }
+
+# r and q operands: A, B, MX (data at IX), MY (data at IY)
+R: A  is rr=0 & A { export A; }
+R: B  is rr=1 & B { export B; }
+R: "MX" is rr=2 { a:2 = 0; ixaddr(a); export *[data]:1 a; }
+R: "MY" is rr=3 { a:2 = 0; iyaddr(a); export *[data]:1 a; }
+Q: A  is qq=0 & A { export A; }
+Q: B  is qq=1 & B { export B; }
+Q: "MX" is qq=2 { a:2 = 0; ixaddr(a); export *[data]:1 a; }
+Q: "MY" is qq=3 { a:2 = 0; iyaddr(a); export *[data]:1 a; }
+RL: A  is rl=0 & A { export A; }
+RL: B  is rl=1 & B { export B; }
+RL: "MX" is rl=2 { a:2 = 0; ixaddr(a); export *[data]:1 a; }
+RL: "MY" is rl=3 { a:2 = 0; iyaddr(a); export *[data]:1 a; }
+RP: A  is rp=0 & A { export A; }
+RP: B  is rp=1 & B { export B; }
+RP: "MX" is rp=2 { a:2 = 0; ixaddr(a); export *[data]:1 a; }
+RP: "MY" is rp=3 { a:2 = 0; iyaddr(a); export *[data]:1 a; }
+
+Mn: "M"^n4 is n4 { export *[data]:1 n4; }
+
+# Results are 4-bit. Decimal adjustment follows the decode-time context bit dmode, which SDF,
+# RDF, SET F and RST F commit along the flow (reset value 0, as on the E0C6200A); the D flag
+# register itself is still written for code that reads F.
+macro addDec(a, b, cin, res) {
+  t:1 = (a & 0xf) + (b & 0xf) + cin;
+  dc:1 = t > 9;
+  res = (t + dc * 6) & 0xf;
+  C = dc;
+  Z = (res == 0);
+}
+macro subDec(a, b, cin, res) {
+  u:1 = (b & 0xf) + cin;
+  br:1 = (a & 0xf) < u;
+  t:1 = (a & 0xf) - u;
+  res = (t - br * 6) & 0xf;
+  C = br;
+  Z = (res == 0);
+}
+macro addBin(a, b, cin, res) {
+  t:1 = (a & 0xf) + (b & 0xf) + cin;
+  res = t & 0xf;
+  C = (t > 15);
+  Z = (res == 0);
+}
+macro subBin(a, b, cin, res) {
+  u:1 = (b & 0xf) + cin;
+  C = (a & 0xf) < u;
+  res = ((a & 0xf) - u) & 0xf;
+  Z = (res == 0);
+}
+macro cmp4(a, b) {
+  C = (a & 0xf) < (b & 0xf);
+  Z = (a & 0xf) == (b & 0xf);
+}
+
+# Jump targets: the same page as the jump (or PSET's bank and page), step s.
+JDest: dest is pset=0 & s8 [ dest = (inst_start & 0x1f00) | s8; ] { export *[code]:2 dest; }
+JDest: dest is pset=1 & nbp & npp & s8 [ dest = (nbp << 12) | (npp << 8) | s8; ] { export *[code]:2 dest; }
+CDest: dest is pset=0 & s8 [ dest = (inst_start & 0x1f00) | s8; ] { export *[code]:2 dest; }
+CDest: dest is pset=1 & npp & s8 [ dest = (inst_start & 0x1000) | (npp << 8) | s8; ] { export *[code]:2 dest; }
+ZDest: dest is s8 [ dest = (inst_start & 0x1000) | s8; ] { export *[code]:2 dest; }
+
+macro pushRet(ra) {
+  SP = SP - 1; *[data]:1 SP = ra[8,4];
+  SP = SP - 1; *[data]:1 SP = ra[4,4];
+  SP = SP - 1; *[data]:1 SP = ra[0,4];
+}
+macro popRet(ra) {
+  lo:1 = *[data]:1 SP; SP = SP + 1;
+  mid:1 = *[data]:1 SP; SP = SP + 1;
+  hi:1 = *[data]:1 SP; SP = SP + 1;
+  ra = (inst_start & 0x1000) | (zext(hi & 0xf) << 8) | (zext(mid & 0xf) << 4) | zext(lo & 0xf);
+}
+
+# ---- branches ----------------------------------------------------------------
+
+:JP JDest     is op4=0x0 & JDest { goto JDest; }
+:JP "C", JDest  is op4=0x2 & JDest { if (C) goto JDest; }
+:JP "NC", JDest is op4=0x3 & JDest { if (!C) goto JDest; }
+:JP "Z", JDest  is op4=0x6 & JDest { if (Z) goto JDest; }
+:JP "NZ", JDest is op4=0x7 & JDest { if (!Z) goto JDest; }
+:CALL CDest   is op4=0x4 & CDest { ra:2 = inst_next; pushRet(ra); call CDest; }
+:CALZ ZDest   is op4=0x5 & ZDest { ra:2 = inst_next; pushRet(ra); call ZDest; }
+:RET          is op12=0xfdf { ra:2 = 0; popRet(ra); return [ra]; }
+:RETS         is op12=0xfde { ra:2 = 0; popRet(ra); ra = ra + 1; return [ra]; }
+:RETD e8      is op4=0x1 & e8 & e_lo & e_hi {
+  ra:2 = 0; popRet(ra);
+  a:2 = 0; ixaddr(a);
+  *[data]:1 a = e_lo;
+  XHL = XHL + 1; ixaddr(a);
+  *[data]:1 a = e_hi;
+  XHL = XHL + 1;
+  return [ra];
+}
+:PSET p5      is op7=0x072 & p5 & p_b & p_p [ pset = 1; nbp = p_b; npp = p_p; globalset(inst_next, pset); globalset(inst_next, nbp); globalset(inst_next, npp); ] { }
+:JPBA         is op12=0xfe8 & pset=0 { t:2 = (inst_start & 0x1f00) | (zext(B & 0xf) << 4) | zext(A & 0xf); goto [t]; }
+:JPBA         is op12=0xfe8 & pset=1 & nbp & npp { t:2 = (nbp << 12) | (npp << 8) | (zext(B & 0xf) << 4) | zext(A & 0xf); goto [t]; }
+
+# ---- loads --------------------------------------------------------------------
+
+:LD "Y", e8   is op4=0x8 & e8 { YHL = e8; }
+:LD "X", e8   is op4=0xb & e8 { XHL = e8; }
+:LBPX "MX", e8 is op4=0x9 & e8 & e_lo & e_hi { a:2 = 0; ixaddr(a); *[data]:1 a = e_lo; XHL = XHL + 1; ixaddr(a); *[data]:1 a = e_hi; XHL = XHL + 1; }
+:LD RP, i4    is op6=0x38 & RP & i4 { RP = i4; }
+:LDPX "MX", i4 is op8=0xe6 & i4 { a:2 = 0; ixaddr(a); *[data]:1 a = i4; XHL = XHL + 1; }
+:LDPY "MY", i4 is op8=0xe7 & i4 { a:2 = 0; iyaddr(a); *[data]:1 a = i4; YHL = YHL + 1; }
+:LD "XP", RL  is op10=0x3a0 & RL { XP = RL & 0xf; }
+:LD "XH", RL  is op10=0x3a1 & RL { $(XH) = RL[0,4]; }
+:LD "XL", RL  is op10=0x3a2 & RL { $(XL) = RL[0,4]; }
+:LD "YP", RL  is op10=0x3a4 & RL { YP = RL & 0xf; }
+:LD "YH", RL  is op10=0x3a5 & RL { $(YH) = RL[0,4]; }
+:LD "YL", RL  is op10=0x3a6 & RL { $(YL) = RL[0,4]; }
+:LD RL, "XP"  is op10=0x3a8 & RL { RL = XP; }
+:LD RL, "XH"  is op10=0x3a9 & RL { RL = XHL >> 4; }
+:LD RL, "XL"  is op10=0x3aa & RL { RL = XHL & 0xf; }
+:LD RL, "YP"  is op10=0x3ac & RL { RL = YP; }
+:LD RL, "YH"  is op10=0x3ad & RL { RL = YHL >> 4; }
+:LD RL, "YL"  is op10=0x3ae & RL { RL = YHL & 0xf; }
+:LD R, Q      is op8=0xec & R & Q { R = Q & 0xf; }
+:INC "X"      is op12=0xee0 { XHL = XHL + 1; }
+:LDPX R, Q    is op8=0xee & R & Q { R = Q & 0xf; XHL = XHL + 1; }
+:INC "Y"      is op12=0xef0 { YHL = YHL + 1; }
+:LDPY R, Q    is op8=0xef & R & Q { R = Q & 0xf; YHL = YHL + 1; }
+:LD Mn, A     is op8=0xf8 & Mn & A { Mn = A; }
+:LD Mn, B     is op8=0xf9 & Mn & B { Mn = B; }
+:LD A, Mn     is op8=0xfa & Mn & A { A = Mn & 0xf; }
+:LD B, Mn     is op8=0xfb & Mn & B { B = Mn & 0xf; }
+:LD "SPH", RL is op10=0x3f8 & RL { SP = (SP & 0x0f) | (zext(RL & 0xf) << 4); }
+:LD RL, "SPH" is op10=0x3f9 & RL { RL = SP[4,4]; }
+:LD "SPL", RL is op10=0x3fc & RL { SP = (SP & 0xf0) | zext(RL & 0xf); }
+:LD RL, "SPL" is op10=0x3fd & RL { RL = SP[0,4]; }
+
+# ---- index-register arithmetic (never decimal-adjusted) ------------------------
+
+:ADC "XH", i4 is op8=0xa0 & i4 { t:1 = (XHL >> 4) + i4 + C; C = t > 15; r:1 = t & 0xf; Z = r == 0; $(XH) = r[0,4]; }
+:ADC "XL", i4 is op8=0xa1 & i4 { t:1 = (XHL & 0xf) + i4 + C; C = t > 15; r:1 = t & 0xf; Z = r == 0; $(XL) = r[0,4]; }
+:ADC "YH", i4 is op8=0xa2 & i4 { t:1 = (YHL >> 4) + i4 + C; C = t > 15; r:1 = t & 0xf; Z = r == 0; $(YH) = r[0,4]; }
+:ADC "YL", i4 is op8=0xa3 & i4 { t:1 = (YHL & 0xf) + i4 + C; C = t > 15; r:1 = t & 0xf; Z = r == 0; $(YL) = r[0,4]; }
+:CP "XH", i4  is op8=0xa4 & i4 { v:1 = XHL >> 4; cmp4(v, i4); }
+:CP "XL", i4  is op8=0xa5 & i4 { v:1 = XHL & 0xf; cmp4(v, i4); }
+:CP "YH", i4  is op8=0xa6 & i4 { v:1 = YHL >> 4; cmp4(v, i4); }
+:CP "YL", i4  is op8=0xa7 & i4 { v:1 = YHL & 0xf; cmp4(v, i4); }
+
+# ---- 4-bit ALU --------------------------------------------------------------
+
+:ADD R, Q is dmode=0 & op8=0xa8 & R & Q { r:1 = 0; addBin(R, Q, 0, r); R = r; }
+:ADD R, Q is dmode=1 & op8=0xa8 & R & Q { r:1 = 0; addDec(R, Q, 0, r); R = r; }
+:ADC R, Q is dmode=0 & op8=0xa9 & R & Q { r:1 = 0; addBin(R, Q, C, r); R = r; }
+:ADC R, Q is dmode=1 & op8=0xa9 & R & Q { r:1 = 0; addDec(R, Q, C, r); R = r; }
+:SUB R, Q is dmode=0 & op8=0xaa & R & Q { r:1 = 0; subBin(R, Q, 0, r); R = r; }
+:SUB R, Q is dmode=1 & op8=0xaa & R & Q { r:1 = 0; subDec(R, Q, 0, r); R = r; }
+:SBC R, Q is dmode=0 & op8=0xab & R & Q { r:1 = 0; subBin(R, Q, C, r); R = r; }
+:SBC R, Q is dmode=1 & op8=0xab & R & Q { r:1 = 0; subDec(R, Q, C, r); R = r; }
+:AND R, Q is op8=0xac & R & Q { r:1 = R & Q & 0xf; Z = r == 0; R = r; }
+:OR R, Q  is op8=0xad & R & Q { r:1 = (R | Q) & 0xf; Z = r == 0; R = r; }
+:XOR R, Q is op8=0xae & R & Q { r:1 = (R ^ Q) & 0xf; Z = r == 0; R = r; }
+:RLC R    is op8=0xaf & ((rr=0 & qq=0) | (rr=1 & qq=1) | (rr=2 & qq=2) | (rr=3 & qq=3)) & R { v:1 = R & 0xf; r:1 = ((v << 1) | C) & 0xf; C = (v >> 3) & 1; Z = r == 0; R = r; }
+:CP R, Q  is op8=0xf0 & R & Q { cmp4(R, Q); }
+:FAN R, Q is op8=0xf1 & R & Q { Z = (R & Q & 0xf) == 0; }
+
+:ADD RP, i4 is dmode=0 & op6=0x30 & RP & i4 { r:1 = 0; addBin(RP, i4, 0, r); RP = r; }
+:ADD RP, i4 is dmode=1 & op6=0x30 & RP & i4 { r:1 = 0; addDec(RP, i4, 0, r); RP = r; }
+:ADC RP, i4 is dmode=0 & op6=0x31 & RP & i4 { r:1 = 0; addBin(RP, i4, C, r); RP = r; }
+:ADC RP, i4 is dmode=1 & op6=0x31 & RP & i4 { r:1 = 0; addDec(RP, i4, C, r); RP = r; }
+:AND RP, i4 is op6=0x32 & RP & i4 { r:1 = RP & i4; Z = r == 0; RP = r; }
+:OR RP, i4  is op6=0x33 & RP & i4 { r:1 = (RP | i4) & 0xf; Z = r == 0; RP = r; }
+:NOT RP     is op6=0x34 & RP & i4=0xf { r:1 = ~RP & 0xf; Z = r == 0; RP = r; }
+:XOR RP, i4 is op6=0x34 & RP & i4 { r:1 = (RP ^ i4) & 0xf; Z = r == 0; RP = r; }
+:SBC RP, i4 is dmode=0 & op6=0x35 & RP & i4 { r:1 = 0; subBin(RP, i4, C, r); RP = r; }
+:SBC RP, i4 is dmode=1 & op6=0x35 & RP & i4 { r:1 = 0; subDec(RP, i4, C, r); RP = r; }
+:FAN RP, i4 is op6=0x36 & RP & i4 { Z = (RP & i4) == 0; }
+:CP RP, i4  is op6=0x37 & RP & i4 { cmp4(RP, i4); }
+:RRC RL     is op10=0x3a3 & RL { v:1 = RL & 0xf; r:1 = (v >> 1) | (C << 3); C = v & 1; Z = r == 0; RL = r; }
+
+:ACPX "MX", RL is dmode=0 & op10=0x3ca & RL { a:2 = 0; ixaddr(a); m:1 = *[data]:1 a; r:1 = 0; addBin(m, RL, C, r); *[data]:1 a = r; XHL = XHL + 1; }
+:ACPX "MX", RL is dmode=1 & op10=0x3ca & RL { a:2 = 0; ixaddr(a); m:1 = *[data]:1 a; r:1 = 0; addDec(m, RL, C, r); *[data]:1 a = r; XHL = XHL + 1; }
+:ACPY "MY", RL is dmode=0 & op10=0x3cb & RL { a:2 = 0; iyaddr(a); m:1 = *[data]:1 a; r:1 = 0; addBin(m, RL, C, r); *[data]:1 a = r; YHL = YHL + 1; }
+:ACPY "MY", RL is dmode=1 & op10=0x3cb & RL { a:2 = 0; iyaddr(a); m:1 = *[data]:1 a; r:1 = 0; addDec(m, RL, C, r); *[data]:1 a = r; YHL = YHL + 1; }
+:SCPX "MX", RL is dmode=0 & op10=0x3ce & RL { a:2 = 0; ixaddr(a); m:1 = *[data]:1 a; r:1 = 0; subBin(m, RL, C, r); *[data]:1 a = r; XHL = XHL + 1; }
+:SCPX "MX", RL is dmode=1 & op10=0x3ce & RL { a:2 = 0; ixaddr(a); m:1 = *[data]:1 a; r:1 = 0; subDec(m, RL, C, r); *[data]:1 a = r; XHL = XHL + 1; }
+:SCPY "MY", RL is dmode=0 & op10=0x3cf & RL { a:2 = 0; iyaddr(a); m:1 = *[data]:1 a; r:1 = 0; subBin(m, RL, C, r); *[data]:1 a = r; YHL = YHL + 1; }
+:SCPY "MY", RL is dmode=1 & op10=0x3cf & RL { a:2 = 0; iyaddr(a); m:1 = *[data]:1 a; r:1 = 0; subDec(m, RL, C, r); *[data]:1 a = r; YHL = YHL + 1; }
+
+:INC Mn is op8=0xf6 & Mn { t:1 = (Mn & 0xf) + 1; C = t > 15; r:1 = t & 0xf; Z = r == 0; Mn = r; }
+:DEC Mn is op8=0xf7 & Mn { v:1 = Mn & 0xf; C = v == 0; r:1 = (v - 1) & 0xf; Z = r == 0; Mn = r; }
+
+# ---- flags ----------------------------------------------------------------
+
+macro packF(f) { f = (I << 3) | (D << 2) | (Z << 1) | C; }
+macro unpackF(f) { I = (f >> 3) & 1; D = (f >> 2) & 1; Z = (f >> 1) & 1; C = f & 1; }
+
+:SCF  is op12=0xf41 { C = 1; }
+:SZF  is op12=0xf42 { Z = 1; }
+:SDF  is op12=0xf44 [ dmode = 1; globalset(inst_next, dmode); ] { D = 1; }
+:EI   is op12=0xf48 { I = 1; }
+:SET "F", i4 is op8=0xf4 & i4 & i4_d=1 [ dmode = 1; globalset(inst_next, dmode); ] { f:1 = 0; packF(f); f = f | i4; unpackF(f); }
+:SET "F", i4 is op8=0xf4 & i4 { f:1 = 0; packF(f); f = f | i4; unpackF(f); }
+:RCF  is op12=0xf5e { C = 0; }
+:RZF  is op12=0xf5d { Z = 0; }
+:RDF  is op12=0xf5b [ dmode = 0; globalset(inst_next, dmode); ] { D = 0; }
+:DI   is op12=0xf57 { I = 0; }
+:RST "F", i4 is op8=0xf5 & i4 & i4_d=0 [ dmode = 0; globalset(inst_next, dmode); ] { f:1 = 0; packF(f); f = f & i4; unpackF(f); }
+:RST "F", i4 is op8=0xf5 & i4 { f:1 = 0; packF(f); f = f & i4; unpackF(f); }
+
+# ---- stack ----------------------------------------------------------------
+
+:PUSH RL   is op10=0x3f0 & RL { SP = SP - 1; *[data]:1 SP = RL & 0xf; }
+:PUSH "XP" is op12=0xfc4 { SP = SP - 1; *[data]:1 SP = XP; }
+:PUSH "XH" is op12=0xfc5 { SP = SP - 1; *[data]:1 SP = XHL >> 4; }
+:PUSH "XL" is op12=0xfc6 { SP = SP - 1; *[data]:1 SP = XHL & 0xf; }
+:PUSH "YP" is op12=0xfc7 { SP = SP - 1; *[data]:1 SP = YP; }
+:PUSH "YH" is op12=0xfc8 { SP = SP - 1; *[data]:1 SP = YHL >> 4; }
+:PUSH "YL" is op12=0xfc9 { SP = SP - 1; *[data]:1 SP = YHL & 0xf; }
+:PUSH "F"  is op12=0xfca { f:1 = 0; packF(f); SP = SP - 1; *[data]:1 SP = f; }
+:DEC "SP"  is op12=0xfcb { SP = SP - 1; }
+:POP RL    is op10=0x3f4 & RL { RL = *[data]:1 SP & 0xf; SP = SP + 1; }
+:POP "XP"  is op12=0xfd4 { XP = *[data]:1 SP & 0xf; SP = SP + 1; }
+:POP "XH"  is op12=0xfd5 { v:1 = *[data]:1 SP; $(XH) = v[0,4]; SP = SP + 1; }
+:POP "XL"  is op12=0xfd6 { v:1 = *[data]:1 SP; $(XL) = v[0,4]; SP = SP + 1; }
+:POP "YP"  is op12=0xfd7 { YP = *[data]:1 SP & 0xf; SP = SP + 1; }
+:POP "YH"  is op12=0xfd8 { v:1 = *[data]:1 SP; $(YH) = v[0,4]; SP = SP + 1; }
+:POP "YL"  is op12=0xfd9 { v:1 = *[data]:1 SP; $(YL) = v[0,4]; SP = SP + 1; }
+:POP "F"   is op12=0xfda { f:1 = *[data]:1 SP; unpackF(f); SP = SP + 1; }
+:INC "SP"  is op12=0xfdb { SP = SP + 1; }
+
+# ---- system ---------------------------------------------------------------
+
+:HALT is op12=0xff8 { halt(); }
+:SLP  is op12=0xff9 { sleep(); }
+:NOP5 is op12=0xffb { }
+:NOP7 is op12=0xfff { }

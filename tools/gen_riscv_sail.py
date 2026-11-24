@@ -24,7 +24,7 @@ register operands use the rd/rs1/rs2 subtables of riscv.table.sinc.
 With --opcodes the generated mask/match of every constructor is checked
 against riscv-opcodes (a second, independent machine-readable source).
 """
-import argparse, json, os, re, sys
+import argparse, json, os, re, struct, sys
 
 # ---------------------------------------------------------------- lexer
 TOK = re.compile(r'''
@@ -247,6 +247,14 @@ class P:
             return e
         if v == '{':
             return self.block_body()
+        if v == '[':
+            items = []
+            if not self.accept(']'):
+                items.append(self.expr())
+                while self.accept(','):
+                    items.append(self.expr())
+                self.expect(']')
+            return ('list', items)
         if k in ('id', 'tyvar'):
             if v in ('true', 'false'):
                 return ('bool', v == 'true')
@@ -320,7 +328,8 @@ class Model:
             return
         m = re.match(r'enum\s+(\w+)\s*=\s*\{(.*)\}', it, re.S)
         if m:
-            self.enums[m.group(1)] = [x.strip() for x in m.group(2).split(',') if x.strip()]
+            body = re.sub(r'//[^\n]*', '', m.group(2))
+            self.enums[m.group(1)] = [x.strip() for x in body.split(',') if x.strip()]
             return
         m = re.match(r'type\s+(\w+)\s*=\s*(.*)$', it, re.S)
         if m:
@@ -337,7 +346,7 @@ class Model:
             return
         m = re.match(r'mapping clause assembly\s*=\s*(\w+)\s*\((.*?)\)\s*<->\s*(.*)$', it, re.S)
         if m and insts:
-            self.asms[m.group(1)] = ([a.strip() for a in m.group(2).split(',')], m.group(3))
+            self.asms.setdefault(m.group(1), []).append(([a.strip() for a in m.group(2).split(',')], m.group(3)))
             return
         m = re.match(r'mapping\s+(\w+)\s*:\s*[^=]*=\s*\{(.*)\}', it, re.S)
         if m:
@@ -350,7 +359,7 @@ class Model:
             return
         m = re.match(r'function clause execute\s+(\w+)\s*\((.*?)\)\s*=\s*(.*)$', it, re.S)
         if m and insts:
-            self.execs[m.group(1)] = ([a.strip() for a in m.group(2).split(',')], P(m.group(3)).expr())
+            self.execs.setdefault(m.group(1), []).append(([a.strip() for a in m.group(2).split(',')], P(m.group(3)).expr()))
             return
         m = re.match(r'val\s+(\w+)\s*:\s*(.*)$', it, re.S)
         if m:
@@ -412,7 +421,7 @@ INT_W = 64
 # Names of the Sail model's privilege, trigger and access-type state; the
 # abstract memory model below never needs their values.
 OPAQUE_NAMES = {'Data', 'cur_privilege', 'TriggerAddress_AMO', 'TriggerAddress_Load', 'TriggerAddress_Store', 'mstatus'}
-OPAQUE_CALLS = {'Atomic', 'Read', 'Write', 'ReadWrite', 'Execute', 'default_access_info', 'effectivePrivilege',
+OPAQUE_CALLS = {'Load', 'Store', 'Atomic', 'Read', 'Write', 'ReadWrite', 'Execute', 'default_access_info', 'effectivePrivilege',
                 'access_is_gva', 'TriggerAddress', 'TriggerAMOData', 'TriggerLoadData', 'TriggerStoreData', 'exception_vaddr'}
 
 CANON_NAN = {16: 0x7e00, 32: 0x7fc00000, 64: 0x7ff8000000000000}
@@ -436,6 +445,8 @@ class Compiler:
         self.m = model
         self.xlen = xlen
         self.flen = flen
+        self.dyn_rne = False
+        self.unbox = 'exact'
         self.budget = budget
         self.pcodeops = set()
         self.begin()
@@ -738,6 +749,13 @@ class Compiler:
             env[name] = val
 
     def assign(self, lhs, rhs, env):
+        if lhs[0] == 'call' and lhs[1] == 'F':
+            reg = self.expr(lhs[2][0], env, None)
+            v = self.coerce(self.expr(rhs, env, self.flen), self.flen)
+            self.emit('%s = %s;' % (reg.name, self.fit(v, self.flen // 8)))
+            return C(0, None, 'int')
+        if lhs[0] == 'call' and lhs[1] in ('F_or_X_H', 'F_or_X_S', 'F_or_X_D'):
+            lhs = ('call', 'F_' + lhs[1][-1], lhs[2])
         if lhs[0] == 'call' and lhs[1] in ('F_H', 'F_S', 'F_D'):
             reg = self.expr(lhs[2][0], env, None)
             w = self.fwidth(lhs[1])
@@ -1093,6 +1111,8 @@ class Compiler:
         full = V(reg.name, self.flen, 'bits', True)
         if w == self.flen:
             return full
+        if self.unbox == 'truncate':
+            return self.coerce_zext(full, w)
         hi = self.coerce_zext(self.shr(full, C(w, None, 'int'), self.flen), self.flen - w)
         boxed = self.tmp(1, '%s == 0x%x:%d' % (self.fit(hi, nbytes(self.flen - w)), mask(self.flen - w), nbytes(self.flen - w)), 'bool')
         r = self.mutable(C(CANON_NAN[w], w), 'unbox')
@@ -1109,6 +1129,145 @@ class Compiler:
     def fcmp(self, op, a, b):
         s = self.size(a)
         return self.tmp(1, '%s %s %s' % (self.fit(a, s), op, self.fit(b, s)), 'bool')
+
+    def softfloat(self, f, args, env, want):
+        """The softfloat wrappers of the Sail model, as p-code float operations where the
+        rounding mode makes them exact (round-to-nearest-even for the inexact ones)."""
+        m = re.match(r'^riscv_f(16|32|64)(Add|Sub|Mul|Div|Sqrt)$', f)
+        if m:
+            rm = self.expr(args[0], env, None)
+            xs = [self.expr(a, env, None) for a in args[1:]]
+            if not isinstance(rm, C) or rm.v != 0:
+                raise Unsupported('%s with rounding mode %r' % (f, getattr(rm, 'v', rm)))
+            w = int(m.group(1))
+            ops = [self.fit(x, w // 8) for x in xs]
+            if m.group(2) == 'Sqrt':
+                r = self.tmp(w, 'sqrt(%s)' % ops[0])
+            else:
+                r = self.tmp(w, '%s %s %s' % (ops[0], {'Add': 'f+', 'Sub': 'f-', 'Mul': 'f*', 'Div': 'f/'}[m.group(2)], ops[1]))
+            return T([C(0, 5), r])
+        m = re.match(r'^riscv_f(16|32|64)ToF(16|32|64)$', f)
+        if m:
+            rm = self.expr(args[0], env, None)
+            x = self.expr(args[1], env, None)
+            a, b = int(m.group(1)), int(m.group(2))
+            if b < a and (not isinstance(rm, C) or rm.v != 0):
+                raise Unsupported('%s with rounding mode %r' % (f, getattr(rm, 'v', rm)))
+            return T([C(0, 5), self.tmp(b, 'float2float(%s)' % self.fit(x, a // 8))])
+        m = re.match(r'^riscv_(i|ui)(32|64)ToF(16|32|64)$', f)
+        if m:
+            rm = self.expr(args[0], env, None)
+            x = self.expr(args[1], env, None)
+            signed, iw, fw = m.group(1) == 'i', int(m.group(2)), int(m.group(3))
+            exact = (fw == 64 and iw == 32)
+            if not exact and (not isinstance(rm, C) or rm.v != 0):
+                raise Unsupported('%s with rounding mode %r' % (f, getattr(rm, 'v', rm)))
+            xv = self.fit(x, iw // 8)
+            if signed:
+                return T([C(0, 5), self.tmp(fw, 'int2float(%s)' % xv)])
+            if iw == 32:
+                z = self.tmp(64, 'zext(%s)' % xv)
+                return T([C(0, 5), self.tmp(fw, 'int2float(%s)' % z.name)])
+            # unsigned 64-bit: halve with a sticky bit when the top bit is set
+            r = self.mutable(self.tmp(fw, 'int2float(%s)' % xv), 'u64')
+            neg = self.tmp(1, '%s s< 0' % xv, 'bool')
+            self.nlab += 1
+            lab = 'sgu64%d' % self.nlab
+            self.emit('if (!%s) goto <%s>;' % (neg.name, lab))
+            self.depth += 1
+            half = self.tmp(64, '(%s >> 1) | (%s & 1)' % (xv, xv))
+            hf = self.tmp(fw, 'int2float(%s)' % half.name)
+            self.emit('%s = %s f+ %s;' % (r.name, hf.name, hf.name))
+            self.depth -= 1
+            self.emit('<%s>' % lab)
+            return T([C(0, 5), r])
+        m = re.match(r'^riscv_f(16|32|64)To(I|Ui)(32|64)$', f)
+        if m:
+            rm = self.expr(args[0], env, None)
+            x = self.expr(args[1], env, None)
+            if not isinstance(rm, C) or rm.v != 1:
+                raise Unsupported('%s with rounding mode %r' % (f, getattr(rm, 'v', rm)))
+            return T([C(0, 5), self.trunc_sat(x, int(m.group(1)), m.group(2) == 'I', int(m.group(3)))])
+        if f == 'float_class_onehot_bits' and args and args[0][0] == 'call' and args[0][1] == 'float_classify':
+            x = self.expr(args[0][2][0], env, None)
+            return self.fclass(x)
+        if re.match(r'^riscv_f(16|32|64)MulAdd$', f):
+            raise Unsupported('fused multiply-add has no p-code operation')
+        return None
+
+    def fclass(self, x):
+        """The fclass one-hot mask: bit 0 -inf, 1 negative normal, 2 negative subnormal, 3 -0,
+        4 +0, 5 positive subnormal, 6 positive normal, 7 +inf, 8 signalling NaN, 9 quiet NaN."""
+        w = x.w
+        e = {16: 5, 32: 8, 64: 11}[w]
+        m = w - 1 - e
+        b = nbytes(w)
+        xs = self.fit(x, b)
+        sign = self.tmp(1, '%s s< 0' % xs, 'bool')
+        ex = self.tmp(w, '(%s >> %d) & 0x%x' % (xs, m, mask(e)))
+        man = self.tmp(w, '%s & 0x%x' % (xs, mask(m)))
+        ez = self.tmp(1, '%s == 0' % ex.name, 'bool')
+        emax = self.tmp(1, '%s == 0x%x' % (ex.name, mask(e)), 'bool')
+        mz = self.tmp(1, '%s == 0' % man.name, 'bool')
+        quiet = self.tmp(1, '((%s >> %d) & 1) == 1' % (man.name, m - 1), 'bool')
+        conds = [
+            '%s && %s && %s' % (sign.name, emax.name, mz.name),
+            '%s && !%s && !%s' % (sign.name, ez.name, emax.name),
+            '%s && %s && !%s' % (sign.name, ez.name, mz.name),
+            '%s && %s && %s' % (sign.name, ez.name, mz.name),
+            '!%s && %s && %s' % (sign.name, ez.name, mz.name),
+            '!%s && %s && !%s' % (sign.name, ez.name, mz.name),
+            '!%s && !%s && !%s' % (sign.name, ez.name, emax.name),
+            '!%s && %s && %s' % (sign.name, emax.name, mz.name),
+            '%s && !%s && !%s' % (emax.name, mz.name, quiet.name),
+            '%s && !%s && %s' % (emax.name, mz.name, quiet.name),
+        ]
+        acc = None
+        for i, cnd in enumerate(conds):
+            cb = self.tmp(1, cnd, 'bool')
+            z = self.tmp(16, 'zext(%s) << %d' % (cb.name, i))
+            acc = z if acc is None else self.tmp(16, '%s | %s' % (acc.name, z.name))
+        return V(acc.name, 10, 'bits')
+
+    def fconst(self, value, fw):
+        return '0x%x:%d' % (struct.unpack('<Q' if fw == 64 else '<I', struct.pack('<d' if fw == 64 else '<f', value))[0], fw // 8)
+
+    def trunc_sat(self, x, fw, signed, iw):
+        """Round toward zero to an iw-bit integer, saturating as RISC-V does: NaN and values
+        above the range give the maximum, values below it the minimum."""
+        xs = self.fit(x, fw // 8)
+        hi = 2.0 ** (iw - 1 if signed else iw)
+        lo = -2.0 ** (iw - 1) if signed else -1.0
+        imax = mask(iw - 1) if signed else mask(iw)
+        imin = (1 << (iw - 1)) if signed else 0
+        size = iw // 8
+        if signed or iw == 32:
+            wide = self.tmp(64, 'trunc(%s)' % xs)
+            r = self.mutable(self.coerce_zext(wide, iw), 'cvt')
+        else:
+            r = self.mutable(self.tmp(64, 'trunc(%s)' % xs), 'cvt')
+            big = self.tmp(1, '%s f>= %s' % (xs, self.fconst(2.0 ** 63, fw)), 'bool')
+            self.nlab += 1
+            lab = 'sgbig%d' % self.nlab
+            self.emit('if (!%s) goto <%s>;' % (big.name, lab))
+            self.depth += 1
+            d = self.tmp(fw, '%s f- %s' % (xs, self.fconst(2.0 ** 63, fw)))
+            t = self.tmp(64, 'trunc(%s)' % d.name)
+            self.emit('%s = %s + 0x8000000000000000:8;' % (r.name, t.name))
+            self.depth -= 1
+            self.emit('<%s>' % lab)
+        for cond, val in (('%s f<= %s' % (xs, self.fconst(lo, fw)) if not signed else '%s f< %s' % (xs, self.fconst(lo, fw)), imin),
+                          ('%s f>= %s' % (xs, self.fconst(hi, fw)), imax),
+                          ('nan(%s)' % xs, imax)):
+            c = self.tmp(1, cond, 'bool')
+            self.nlab += 1
+            lab = 'sgsat%d' % self.nlab
+            self.emit('if (!%s) goto <%s>;' % (c.name, lab))
+            self.depth += 1
+            self.emit('%s = 0x%x:%d;' % (r.name, val, size))
+            self.depth -= 1
+            self.emit('<%s>' % lab)
+        return r
 
     def float_intrinsic(self, f, args, env, want):
         m = re.match(r'^riscv_f(16|32|64)(Le|Lt|Eq)_quiet$', f) or re.match(r'^riscv_f(16|32|64)(Le|Lt|Eq)$', f)
@@ -1164,9 +1323,14 @@ class Compiler:
             return T([C(0, 5), r])
         if f == 'select_instr_or_fcsr_rm':
             rm = self.expr(args[0], env, None)
+            if isinstance(rm, C) and rm.v == 'RM_DYN' and self.dyn_rne:
+                return C(C('RM_RNE', None, 'enum'), None, 'option')
             if not isinstance(rm, C) or rm.v == 'RM_DYN':
                 raise Unsupported('dynamic rounding mode')
             return C(rm, None, 'option')
+        r = self.softfloat(f, args, env, want)
+        if r is not None:
+            return r
         if f in ('accrue_fflags', 'Illegal_Instruction'):
             if f == 'Illegal_Instruction':
                 raise Unsupported('illegal instruction path')
@@ -1179,7 +1343,7 @@ class Compiler:
         a RAM store of the access width."""
         if f in OPAQUE_CALLS:
             return C(f, None, 'opaque')
-        if f in ('currentlyEnabled', 'hartSupports'):
+        if f in ('currentlyEnabled', 'hartSupports', 'validDoubleRegs', 'validDoubleRegs_src', 'haveSingleFPU', 'haveDoubleFPU', 'haveHalfFPU'):
             return C(True, None, 'bool')
         if f == 'bits_of':
             return self.expr(args[0], env, want)
@@ -1202,6 +1366,17 @@ class Compiler:
             width = self.static_int(args[4], env)
             r = self.tmp(8 * width, '*[ram]:%d %s' % (width, self.fit(addr, self.xlen // 8)))
             return C(('Ok', [r]), None, 'variant')
+        if f in ('vmem_read', 'vmem_write'):
+            base = V(self.expr(args[0], env, None).name, self.xlen, 'bits', True)
+            off = self.coerce(self.expr(args[1], env, self.xlen), self.xlen)
+            addr = base if isinstance(off, C) and off.v == 0 else self.masked(self.tmp(self.xlen, '%s + %s' % (base.name, self.fit(off, self.xlen // 8))), self.xlen)
+            width = self.static_int(args[2], env)
+            if f == 'vmem_read':
+                r = self.tmp(8 * width, '*[ram]:%d %s' % (width, self.fit(addr, self.xlen // 8)))
+                return C(('Ok', [r]), None, 'variant')
+            v = self.coerce(self.expr(args[3], env, 8 * width), 8 * width)
+            self.emit('*[ram]:%d %s = %s;' % (width, self.fit(addr, self.xlen // 8), self.fit(v, width)))
+            return C(('Ok', [C(True, None, 'bool')]), None, 'variant')
         if f == 'mem_write_value':
             addr = self.expr(args[0], env, None)
             width = self.static_int(args[1], env)
@@ -1217,12 +1392,28 @@ class Compiler:
 
     def call(self, e, env, want):
         _, f, args = e
+        if f in ('#abs', '#neg', '#copy'):
+            v = self.expr(args[0], env, want)
+            if f == '#copy':
+                return v
+            return self.tmp(v.w, '%s(%s)' % ('abs' if f == '#abs' else 'f-', self.fit(v, nbytes(v.w)))) if f == '#abs' else self.tmp(v.w, 'f- %s' % self.fit(v, nbytes(v.w)))
         r = self.mem_intrinsic(f, args, env, want)
         if r is not None:
             return r
         r = self.float_intrinsic(f, args, env, want)
         if r is not None:
             return r
+        if f == 'F' and len(args) == 1:
+            reg = self.expr(args[0], env, None)
+            return V(reg.name, self.flen, 'bits', True)
+        if f == 'nan_box':
+            v = self.expr(args[-1], env, None)
+            w = want or self.flen
+            if v.w == w:
+                return v
+            return self.bor(C(mask(w) & ~mask(v.w), w), self.coerce_zext(v, w), w)
+        if f in ('F_or_X_H', 'F_or_X_S', 'F_or_X_D'):
+            f = 'F_' + f[-1]
         if f in ('F_H', 'F_S', 'F_D') and len(args) == 1:
             reg = self.expr(args[0], env, None)
             return self.freg_read(reg, self.fwidth(f))
@@ -1238,6 +1429,10 @@ class Compiler:
                 raise Unsupported('extension width unknown')
             if v.kind == 'bool':
                 raise Unsupported('extend a bool')
+            if getattr(v, 'sext_table', False):
+                if f in ('sign_extend', 'EXTS') and want == self.xlen:
+                    return V(v.name, self.xlen, 'bits', True)
+                raise Unsupported('a subtable immediate used other than sign-extended to XLEN')
             if f in ('sign_extend', 'EXTS'):
                 return self.sext_to(v, v.w, want)
             return self.coerce_zext(v, want)
@@ -1426,9 +1621,15 @@ class Gen:
         self.parts = {}
         self.reserved = set()
         self.display_tables = {}
+        self.field_tables = {}
+        self.drop_display = []
+        self.idioms = {}
         self.only = None
         self.fallback = False
         self.flen = 64
+        self.dyn_rne = False
+        self.unbox = 'exact'
+        self.unbox = 'exact'
         self.report = {'constructors': [], 'skipped': [], 'pcodeops': []}
 
     def arg_types(self, ctor):
@@ -1436,6 +1637,8 @@ class Gen:
 
     def run(self, xlen):
         comp = Compiler(self.m, xlen, self.budget, self.flen)
+        comp.dyn_rne = self.dyn_rne
+        comp.unbox = self.unbox
         out = []
         for name, why in self.m.unparsed:
             self.report['skipped'].append({'xlen': xlen, 'ctor': name, 'why': 'Sail the parser does not handle: ' + why})
@@ -1452,6 +1655,29 @@ class Gen:
                 self.report['skipped'].append({'xlen': xlen, 'ctor': ctor, 'why': str(ex)})
         return out, comp.pcodeops
 
+    def pick_assembly(self, ctor, largs, members):
+        return self.pick_clause(self.m.asms.get(ctor, []), largs, members)
+
+    def pick_clause(self, cands, largs, members):
+        """The assembly or execute clause whose constant arguments are this encoding's."""
+        if not cands:
+            raise Unsupported('no assembly clause')
+        general = None
+        for args, text in cands:
+            ok = True
+            for i, a in enumerate(args):
+                if a in members or re.match(r"^0b[01_]+$", a):
+                    lv = largs[i] if i < len(largs) else None
+                    if lv is None or (lv[0] == 'id' and lv[1] != a) or (lv[0] == 'bits' and a.startswith('0b') and int(a[2:].replace('_', ''), 2) != lv[1]):
+                        ok = False
+            if ok:
+                if any(a in members for a in args):
+                    return args, text
+                general = general or (args, text)
+        if general:
+            return general
+        raise Unsupported('no matching assembly clause')
+
     def pieces(self, rhs):
         if rhs[0] == 'bin' and rhs[1] == '@':
             return self.pieces(rhs[2]) + self.pieces(rhs[3])
@@ -1464,8 +1690,9 @@ class Gen:
             raise Unsupported('arity')
         names = {}
         consts = {}
+        members = {v for vals in self.m.enums.values() for v in vals}
         for i, (a, t) in enumerate(zip(largs, types)):
-            if a[0] == 'id' and a[1] not in self.m.enums.get(t, []):
+            if a[0] == 'id' and a[1] not in self.m.enums.get(t, []) and a[1] not in members:
                 names[a[1]] = t
             else:
                 consts[i] = a
@@ -1487,6 +1714,12 @@ class Gen:
                     raise Unsupported('encoding mapping %s' % p[1])
                 w = rbits[2]
                 layout.append(('map', pos - w, pos - 1, (p[1], p[2][0][1])))
+            elif p[0] == 'id' and (ctor + '.' + p[1]) in self.field_tables:
+                w = comp.width_of_type(names[p[1]], {})
+                layout.append(('ftable', pos - w, pos - 1, p[1]))
+            elif p[0] == 'slice' and p[1][0] == 'id' and (ctor + '.' + p[1][1]) in self.field_tables:
+                w = comp.static_int(p[2], {}) - comp.static_int(p[3], {}) + 1
+                layout.append(('ftable', pos - w, pos - 1, p[1][1]))
             elif p[0] == 'id':
                 t = names[p[1]]
                 w = comp.width_of_type(t, {})
@@ -1498,14 +1731,14 @@ class Gen:
             raise Unsupported('not a 32-bit encoding')
         # enumerate: enum-typed fields, fields named by a mnemonic mapping, and
         # fields a guard restricts in a way a cube of fixed bits cannot express
-        asm_args, asm = self.m.asms[ctor]
+        asm_args, asm = self.pick_assembly(ctor, largs, members)
         asm_pieces = split_caret(asm)
         enum_fields = {}
         for kind, lo, hi, x in layout:
             if kind == 'map':
                 enum_fields[x[1]] = [l for l, r in self.m.maps[x[0]]]
         mn_field = None
-        for pc in asm_pieces:
+        for pc in asm_pieces[:next((i for i, p in enumerate(asm_pieces) if p.strip() == 'spc()'), len(asm_pieces))]:
             mm = re.match(r'^(\w+)\((\w+)\)$', pc)
             if mm and mm.group(1) in self.m.maps:
                 argname = asm_args[largs.index(('id', mm.group(2)))] if False else mm.group(2)
@@ -1514,8 +1747,8 @@ class Gen:
         for i, a in enumerate(largs):
             lname[asm_args[i] if i < len(asm_args) else None] = a
         # the assembly/execute clauses name the arguments positionally
-        exec_args, body = self.m.execs[ctor]
-        pos_of = {n: i for i, n in enumerate(exec_args)}
+        exec_args, body = self.pick_clause(self.m.execs[ctor], largs, members)
+        pos_of = {n: i for i, n in enumerate(asm_args)}
         combos = [dict()]
         for i, a in consts.items():
             combos = [{**c, i: a} for c in combos]
@@ -1623,6 +1856,14 @@ class Gen:
             env[f] = V(n, 5, 'reg')
         for f, n in fregs.items():
             env[f] = V(n, 5, 'freg')
+        tables = []
+        for kind, lo, hi, x in layout:
+            if kind == 'ftable' and x not in env:
+                tname = self.field_tables[ctor + '.' + x]
+                v = V(tname, comp.width_of_type(names[x], {}), 'bits', True)
+                v.sext_table = True
+                env[x] = v
+                tables.append(tname)
         for f, (n, w, tw) in imm.items():
             env[f] = V(n, tw, 'bits', imm=True)
         for f, v in genv.items():
@@ -1640,9 +1881,19 @@ class Gen:
                 ex_env[n] = genv['#%d' % i]
             elif i in combo and combo[i][0] == 'bits':
                 ex_env[n] = C(combo[i][1], combo[i][2])
-        mnem, ops, disp = self.assembly(asm_args, asm_pieces, ex_env, largs, env, regs, imm)
+        asm_env = dict(ex_env)
+        for i, n in enumerate(asm_args):
+            if i < len(exec_args) and exec_args[i] in ex_env:
+                asm_env[n] = ex_env[exec_args[i]]
+        mnem, ops, disp = self.assembly(asm_args, asm_pieces, asm_env, largs, env, regs, imm)
         if self.only and not re.search(self.only, mnem):
             return
+        for pat, text in self.drop_display:
+            if re.search(pat, mnem) and '"%s"' % text in disp:
+                i = disp.index('"%s"' % text)
+                del disp[i]
+                if i > 0 and disp[i - 1] == ',':
+                    del disp[i - 1]
         def opaque():
             comp.begin()
             op = mnem.replace('.', '_')
@@ -1668,7 +1919,7 @@ class Gen:
                 opaque()
         lines = comp.lines
         cons = []
-        for f in sorted(set(regs.values()) | set(fregs.values()) | {v[0] for v in imm.values()} | {o for o in ops if o in self.display_tables.values()}, key=lambda s: ops.index(s) if s in ops else 99):
+        for f in sorted(set(regs.values()) | set(fregs.values()) | {v[0] for v in imm.values()} | {o for o in ops if o in self.display_tables.values()} | set(tables), key=lambda s: ops.index(s) if s in ops else 99):
             cons.append(f)
         cons += cover(self.fields, fixed)
         m_ = sum(1 << b for b in fixed)
@@ -1749,7 +2000,10 @@ class Gen:
         disp = []
         in_mnem = True
         def text_of(f, a):
-            vals = [ex_env[x.strip()] for x in split_top(a)]
+            try:
+                vals = [ex_env[x.strip()] for x in split_top(a)]
+            except KeyError as ex:
+                raise Unsupported('assembly argument %s' % ex)
             key = vals[0] if len(vals) == 1 else None
             for l, r in self.m.maps[f]:
                 if len(vals) == 1:
@@ -1780,7 +2034,9 @@ class Gen:
             if f == 'sep':
                 disp.append(',')
                 continue
-            if f in ('reg_name', 'freg_name'):
+            if f == 'opt_spc':
+                continue
+            if f in ('reg_name', 'freg_name', 'freg_or_reg_name'):
                 v = ex_env[a]
                 ops.append(v.name)
                 disp.append(v.name)
@@ -1790,7 +2046,7 @@ class Gen:
                     ops.append(table)
                     disp.append(table)
                     continue
-                v = ex_env[a]
+                v = ex_env.get(a)
                 if not isinstance(v, V):
                     raise Unsupported('constant immediate')
                 ops.append(v.name)
@@ -1823,7 +2079,7 @@ def drop_field_terms(e, fields):
 
 def guard_eval(comp, e, env):
     k = e[0]
-    if k == 'call' and e[1] in ('currentlyEnabled', 'hartSupports'):
+    if k == 'call' and e[1] in ('currentlyEnabled', 'hartSupports', 'validDoubleRegs', 'haveSingleFPU', 'haveDoubleFPU', 'haveHalfFPU'):
         return True
     if k == 'call' and e[1] == 'in32BitMode':
         return comp.xlen == 32
@@ -1862,8 +2118,26 @@ def aliases(gen, xlen, pseudo):
     display and constrained to 0."""
     out = []
     have = {p['mnem'] for p in gen.parts.get(xlen, [])}
-    for name, base, ext, m_p, v_p in pseudo:
+    for name, base, ext, m_p, v_p, same in pseudo:
         if name in have or not ext_applies(ext, xlen):
+            continue
+        if same:
+            for p in gen.parts.get(xlen, []):
+                if p['mnem'] != base or p['mask'] != m_p or p['match'] != v_p or 'frs2' not in p['ops'] or name not in gen.idioms:
+                    continue
+                w = 32 if base.endswith('.s') else 64
+                comp = Compiler(gen.m, xlen, gen.budget, gen.flen)
+                comp.unbox = gen.unbox
+                reg = 'F_S' if w == 32 else 'F_D'
+                body = ('assign', ('call', reg, [('id', 'rd')]), ('call', '#' + gen.idioms[name], [('call', reg, [('id', 'rs1')])]))
+                comp.expr(('block', [body]), {'rd': V('frd', 5, 'freg'), 'rs1': V('frs1', 5, 'freg')}, None)
+                disp = list(p['disp'])
+                i = disp.index('frs2')
+                del disp[i - 1:i + 1]
+                cons = [c for c in p['cons'] if c != 'frs2'] + ['op1519=op2024']
+                out.append((name, m_p, v_p, ':%s %s is %s\n{\n%s\n}\n' % (name, ''.join(disp), ' & '.join(cons), '\n'.join(comp.lines))))
+                have.add(name)
+                break
             continue
         for p in gen.parts.get(xlen, []):
             if p['mnem'] != base or (m_p & p['mask']) != p['mask'] or (v_p & p['mask']) != p['match']:
@@ -1907,6 +2181,7 @@ def pseudo_ops(path, exts):
                 name = toks[2]
                 if name.endswith('.rv32'):
                     continue
+                same = 'rs2=rs1' in toks
                 m_ = v_ = 0
                 for t in toks[3:]:
                     mm = re.match(r'^(\d+)(?:\.\.(\d+))?=(\S+)$', t)
@@ -1918,7 +2193,7 @@ def pseudo_ops(path, exts):
                     for b in range(lo, hi + 1):
                         m_ |= 1 << b
                         v_ |= ((val >> (b - lo)) & 1) << b
-                out.append((name, base, e, m_, v_))
+                out.append((name, base, e, m_, v_, same))
     return out
 
 # ---------------------------------------------------------------- riscv-opcodes
@@ -1959,7 +2234,12 @@ def main():
     ap.add_argument('--report', help='write a JSON report here')
     ap.add_argument('--source-rev', default='', help='source revisions to record in the header')
     ap.add_argument('--display-table', default='', help='field=subtable: display a Sail immediate through an existing SLEIGH subtable and split the constructor per value (constantidx=fliConstS)')
+    ap.add_argument('--field-table', default='', help='CTOR.field=subtable: an immediate (whole or split across the encoding) that an existing SLEIGH subtable decodes, displays and exports sign-extended (LOAD_FP.imm=immI,STORE_FP.imm=immS)')
+    ap.add_argument('--idiom', default='', help='ALIAS=abs|neg|copy: a riscv-opcodes rs2=rs1 alias (fabs.s, fneg.s, fmv.s) lifted as that p-code operation on its NaN-unboxed source, written back like its base instruction')
+    ap.add_argument('--drop-display', action='append', default=[], help='REGEX=TEXT: leave the literal TEXT out of the display of mnemonics matching REGEX (LLVM omits rne on the exact conversions)')
     ap.add_argument('--opaque-fallback', action='store_true', help='lift a clause whose semantics the compiler cannot handle to a user pcodeop named after the mnemonic instead of skipping it')
+    ap.add_argument('--unbox', choices=('exact', 'truncate'), default='exact', help='S/H register reads: NaN-unbox as the ISA requires (exact), or take the low bits as if every value were boxed (truncate)')
+    ap.add_argument('--dyn-rounding', choices=('opaque', 'rne'), default='opaque', help='rm=dyn: a user pcodeop (the default), or the frm a program starts with, round-to-nearest-even')
     ap.add_argument('--only', help='keep only constructors whose mnemonic matches this regular expression')
     ap.add_argument('--flen', type=int, default=64, help='FP register width the F_H/F_S/F_D NaN-boxing assumes')
     ap.add_argument('--decode-reserved', default='', help='Sail constructors whose encdec guard is ignored, so reserved operand values decode as LLVM and GNU decode them (AES64KS1I,...)')
@@ -1985,8 +2265,13 @@ def main():
     gen = Gen(model, load_tokens(a.tokens), a.budget, [x for x in a.opaque.split(',') if x])
     gen.reserved = {x for x in a.decode_reserved.split(',') if x}
     gen.display_tables = dict(x.split('=', 1) for x in a.display_table.split(',') if x)
+    gen.field_tables = dict(x.split('=', 1) for x in a.field_table.split(',') if x)
+    gen.drop_display = [tuple(x.rsplit('=', 1)) for x in a.drop_display]
+    gen.idioms = dict(x.split('=', 1) for x in a.idiom.split(',') if x)
     gen.fallback = a.opaque_fallback
     gen.flen = a.flen
+    gen.dyn_rne = a.dyn_rounding == 'rne'
+    gen.unbox = a.unbox
     gen.only = a.only
     res = {}
     ops = set()

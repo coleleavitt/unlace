@@ -1,0 +1,46 @@
+[image]
+arch = 'sparc:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'store_parts' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = 'da2a2011d82a2012d83a0000d832201081c3e00801000000'
+
+[script]
+commands = [
+    'parse line typedef struct Record { uint8 wide; uint8 untouched; uint2 half; uint1 byte; } Record;',
+    'parse line extern void store_parts(Record *dst,uint4 b,uint4 c,uint4 d,uint4 e,uint4 f);',
+    'load function store_parts',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'mixed argument reads: complete six-argument prototype'
+count = 1
+literal = 'void store_parts(Record *dst,uint4 b,uint4 c,uint4 d,uint4 e,uint4 f)'
+
+[[match]]
+name = 'mixed argument reads: full-width value uses both arguments'
+count = 1
+literal = 'dst->wide = CONCAT44(e,f);'
+
+[[match]]
+name = 'mixed argument reads: halfword uses fifth argument'
+count = 1
+literal = 'dst->half = e;'
+
+[[match]]
+name = 'mixed argument reads: byte uses fifth argument'
+count = 1
+literal = 'dst->byte = e;'
+
+[[match]]
+name = 'mixed argument reads: no synthetic register fragments'
+count = 0
+regex = 'in_register|unaff_|CONCAT31|halt_baddata'

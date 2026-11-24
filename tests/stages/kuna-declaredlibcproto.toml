@@ -1,0 +1,79 @@
+# RE-friction round 10, need `both-argument-recovery-options` (challenge
+# 5ab77f5c33c5d40ad448c615): a stripped, statically linked i386 crackme whose
+# anti-debug state machine calls glibc's `ptrace`.  With both call-argument
+# recovery options on and the callee named by hand
+# (the console `function bounds ... as ptrace` that the CLI's own
+# define-function flag lowers to), 13 call sites still rendered
+#
+#     *(unsigned int *)((int)v14 + -4) = v12[v7];
+#     *(int *)((int)v14 + -8) = v5;
+#     *(int *)((int)v14 + -0xc) = dat_804a4ac;
+#     *(unsigned int *)((int)v14 + -0x10) = 6;
+#     v16 += ptrace();
+#
+# - the four arguments visible as raw stores on the lines above an argumentless
+# call.
+#
+# Cause (P1, external refinement).  The two library-prototype passes match a
+# name the IMAGE carries: `libproto` over its FUNC symbols and imports,
+# `libcsigs` over the imports alone.  A stripped, statically linked target
+# carries neither, so the name exists only because the operator supplied it, and
+# naming the entry bought the call sites a spelling and nothing more.  The arity
+# has to come from somewhere and it cannot come from the body: glibc DECLARES
+# `long ptrace(enum __ptrace_request, ...)` and fetches the rest with `va_arg`.
+#
+# Stage / sub-stage: P1 "external-refinement".  A DECLARED function name is
+# answered out of the built-in libc signature tables and the signature parked on
+# the declared entry address.
+#
+# The fixture is the same construct: `caller` pushes four `ptrace` arguments per
+# iteration of a loop and calls `wrapper`, a varargs wrapper in the shape glibc's
+# own has - `va_start` takes the address of the first argument and every later
+# read goes through that pointer.  `function bounds 0x8049027 0x804903c as
+# ptrace` is the operator's declaration; the callee is named (`sub_8049027`
+# never appears) and carries the parked signature.
+#
+# Source: crates/unlace-analysis/tests/fixtures/declaredlibcproto_i386.s
+
+[image]
+arch = 'x86:LE:32:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x8049000', name = 'caller' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x8049000'
+hex = '''
+31db31f66804a004086a00536a02e81400000083c41001c64383fb0376e689f3
+b801000000cd805589e58d4508a300a004088b1500a004088b025dc300000000
+'''
+
+[script]
+commands = [
+    'function bounds 0x8049027 0x804903c as ptrace',
+    'lo fu caller',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'KUNA-DECLAREDLIBCPROTO #1: the declared name renders'
+count = 1
+literal = 'ptrace(2,'
+
+[[match]]
+name = 'KUNA-DECLAREDLIBCPROTO #2: the callee never falls back to its anonymous name'
+count = 0
+literal = 'sub_8049027'
+
+[[match]]
+name = 'KUNA-DECLAREDLIBCPROTO #3: the arguments never go untyped'
+count = 0
+regex = 'ptrace\(2,[a-z0-9]*,0,0x804a004\)'
+
+[[match]]
+name = 'KUNA-DECLAREDLIBCPROTO #4: the parked signature types them'
+count = 1
+regex = 'ptrace\(2,[a-z0-9]*,NULL,\(void \*\)0x804a004\)'

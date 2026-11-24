@@ -1,0 +1,65 @@
+# Authored SSE MINSS NaN probe: minss %xmm1,%xmm0; ret, followed by
+# a ratio clamped with MINSS and an ordered UCOMISS lower bound.
+# P3 condition normalization and P9 comparison negation must preserve
+# !(a &lt; b), which selects b for equal or unordered operands.
+# Strict correctness fix, no new option. Passes 1 and 2 pin scalar MINSS
+# with defaults and nanignore none; pass 3 pins the ratio's unordered
+# behavior. The compiled-C oracle is in unlace-cli/tests/sse_minss_cli.rs.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'scalar_min' },
+    { space = 'ram', offset = '0x401005', name = 'ratio_clamp' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '''
+f30f5dc1c3f30f5cc1f30f5cd1f30f5ec2f30f100de70f0000f30f5dc80f
+57d20f2ed177040f28c1c30f28c2c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+hex = '0000803f'
+
+[script]
+commands = [
+    'parse line extern float scalar_min(float a,float b);',
+    'parse line extern float ratio_clamp(float value,float lo,float hi);',
+    'map address r0x402000 float clamp_one',
+    'lo fu scalar_min',
+    'decompile',
+    'print C',
+    'option nanignore none',
+    'lo fu scalar_min',
+    'decompile',
+    'print C',
+    'lo fu ratio_clamp',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'MINSS #1: scalar selection includes unordered and equal operands'
+count = 2
+literal = 'if (!(a < b))'
+
+[[match]]
+name = 'MINSS #2: upper ratio clamp includes unordered operands'
+count = 1
+literal = 'if (!(clamp_one < v1))'
+
+[[match]]
+name = 'MINSS #3: lower ratio clamp retains unordered operands'
+count = 1
+regex = 'NAN\(v2\)|!\(v2 < 0\.0\)|if \(v2 < 0\.0\)'
+
+[[match]]
+name = 'MINSS #4: unsafe ordered complements never appear'
+count = 0
+regex = 'b <= a|v1 <= clamp_one'

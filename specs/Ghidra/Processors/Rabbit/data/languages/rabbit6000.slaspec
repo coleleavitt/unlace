@@ -1,0 +1,5 @@
+# Rabbit 6000: the Rabbit 4000 set plus the 6000 additions.
+@define R3000A ""
+@define R4000 ""
+@define R6000 ""
+@include "rabbit.sinc"

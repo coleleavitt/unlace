@@ -1,0 +1,47 @@
+# GH-1034, P3 call-guard, global call access ranges.
+# initialize writes 64 distinct globals and invokes a two-word constructor
+# after each write. The constructor only touches its explicit destination.
+# Upstream built 4096 unnecessary global INDIRECTs; none are built, and
+# the 64 stores and calls are retained. The ELF fixture's
+# source and native checksum oracle are beside it; rebuild with:
+# cc -O2 -fno-pie -no-pie -fno-inline globalcallranges_x86_64.c -o globalcallranges_x86_64
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/globalcallranges_x86_64',
+    'read symbols',
+    'option protoorder off',
+    'load function initialize',
+    'decompile',
+    'print C',
+    'print raw',
+]
+
+[[match]]
+name = 'globalcallranges preserves the function body'
+count = 1
+literal = 'void initialize(void)'
+
+[[match]]
+name = 'globalcallranges preserves the first global store'
+count = 1
+literal = 'g0 = 1;'
+
+[[match]]
+name = 'globalcallranges preserves the last global store'
+count = 1
+literal = 'g63 = 0x40;'
+
+[[match]]
+name = 'globalcallranges preserves all constructor calls'
+count = 64
+regex = '^  construct\('
+
+[[match]]
+name = 'globalcallranges builds no quadratic guard cross product'
+count = 0
+literal = '[] '

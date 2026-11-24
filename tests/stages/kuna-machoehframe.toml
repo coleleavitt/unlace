@@ -1,0 +1,79 @@
+# Mach-O __eh_frame function starts (`option machoehframe on|off`, default on).
+#
+# A Mach-O falls back to a DWARF FDE in __TEXT,__eh_frame for a function its
+# compact unwind encoding cannot describe. Every FDE pcBegin is a function
+# start, as on ELF, where kuna reads .eh_frame in its always-on entry
+# discovery; until this option, the Mach-O __eh_frame was never read.
+#
+# Stage / sub-stage: P1 code-data-partition, the Mach-O entry-discovery
+# oracles (`unlace-analysis/src/analyzers/entry/kuna_machoehframe.rs`),
+# committed at `read symbols`.
+#
+# P0 assertion: `option machoehframe on|off`, set after `load file` and
+# before the `read symbols` that commits the discovered entries.
+#
+# The XML wrapper only supplies the harness architecture. Both passes load
+# the arm64 Mach-O fixture `macho_ehframe_only_arm64` (built from
+# `macho_ehframe_only_arm64.s`): LC_FUNCTION_STARTS and the local symbols are
+# stripped, and three uncalled eh_* functions are recorded only by their
+# __eh_frame FDEs (and by __unwind_info, which `unwindstarts` reads and
+# leaves off by default).
+#
+# Pass 1 (`option machoehframe off`, the BUG): `functions` lists only _main.
+# Pass 2 (the default, the FIX): the three FDE starts are listed, and one of
+# them decompiles as a function.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_ehframe_only_arm64',
+    'option machoehframe off',
+    'option unwindstarts off',
+    'read symbols',
+    'functions',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_ehframe_only_arm64',
+    'read symbols',
+    'functions',
+    'load function sub_100000378',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'machoehframe: both passes discover the LC_MAIN entry'
+count = 2
+literal = '0x10000040c _main'
+
+[[match]]
+name = 'machoehframe: the first FDE start joins the inventory (off: absent)'
+count = 1
+literal = '0x100000330 sub_100000330'
+
+[[match]]
+name = 'machoehframe: the second FDE start joins the inventory (off: absent)'
+count = 1
+literal = '0x100000378 sub_100000378'
+
+[[match]]
+name = 'machoehframe: the third FDE start joins the inventory (off: absent)'
+count = 1
+literal = '0x1000003c0 sub_1000003c0'
+
+[[match]]
+name = 'machoehframe: a recovered start decompiles as a function'
+count = 1
+literal = 'sub_100000378('

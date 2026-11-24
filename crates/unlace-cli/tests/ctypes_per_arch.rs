@@ -46,6 +46,7 @@ const GHIDRA_TYPE_NAMES: &[&str] = &[
     "int2",
     "int4",
     "int8",
+    "float2",
     "float4",
     "float8",
     "float10",

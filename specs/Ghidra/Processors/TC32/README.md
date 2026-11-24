@@ -1,4 +1,4 @@
-# TC32
+# Telink TC32 (TLSR82xx/8x5x BLE SoCs)
 
 Vendored from aleph-void/Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare),
 module `TC32`, commit 87cc554e33eb02b95dad6fe8fd945606d10bc301, MIT License (`LICENSE` is the repository's).

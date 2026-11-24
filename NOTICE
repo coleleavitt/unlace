@@ -305,11 +305,11 @@ specs/Ghidra/Processors/SH4ALDSP vendors the Renesas SH4AL-DSP SLEIGH module SH4
 Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
 License (its license files are in that directory).
 
-specs/Ghidra/Processors/TC32 vendors the TC32 SLEIGH module TC32 of
+specs/Ghidra/Processors/TC32 vendors the Telink TC32 (TLSR82xx/8x5x BLE SoCs) SLEIGH module TC32 of
 Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
 License (its license files are in that directory).
 
-specs/Ghidra/Processors/PXF vendors the PXF SLEIGH module PXF of
+specs/Ghidra/Processors/PXF vendors the Cisco PXF "Toaster" microcode (NSE-100) SLEIGH module PXF of
 Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
 License (its license files are in that directory).
 

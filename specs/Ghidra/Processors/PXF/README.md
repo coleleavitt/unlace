@@ -1,4 +1,4 @@
-# PXF
+# Cisco PXF "Toaster" microcode (NSE-100)
 
 Vendored from aleph-void/Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare),
 module `PXF`, commit 87cc554e33eb02b95dad6fe8fd945606d10bc301, MIT License (`LICENSE` is the repository's).

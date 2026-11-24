@@ -28,7 +28,7 @@
 //! Rust token match the C++ token.  It is a GENERIC cast-strategy rule — NO function /
 //! address / type-name / value special-casing.
 //!
-//! These tests drive the built `decomp_test_dbg` (rust harness) with `KUNA_DUMP=1`
+//! These tests drive the built `decomp_test_dbg` (rust harness) with `UNLACE_DUMP=1`
 //! and assert on the sliced `print C` body; they SKIP cleanly if the binary / `.sla`
 //! is unavailable.
 
@@ -66,7 +66,7 @@ fn rust_harness() -> PathBuf {
         .join("decomp_test_dbg")
 }
 
-/// Drive `bin` on `stem`.xml with `KUNA_DUMP=1`, returning the sliced bulk
+/// Drive `bin` on `stem`.xml with `UNLACE_DUMP=1`, returning the sliced bulk
 /// `print C` body (between `===KUNA_DUMP_BEGIN===` and `===KUNA_DUMP_MID===`),
 /// or `None` if the binary / `.sla` is unavailable (the test SKIPs).
 fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
@@ -81,7 +81,7 @@ fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
         .arg(datatests_dir())
         .arg("datatests")
         .arg(format!("{stem}.xml"))
-        .env("KUNA_DUMP", "1")
+        .env("UNLACE_DUMP", "1")
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);

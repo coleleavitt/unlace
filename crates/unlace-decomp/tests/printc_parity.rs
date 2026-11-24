@@ -5,7 +5,7 @@
 //!      ([`decompile_func`] -> [`print_c`]) and captures the `print C` text, and
 //!   2. captures the **C++ oracle** `print C` for the same function by driving
 //!      the committed C++ `decomp_test_dbg` (under `decompiler/cpp/`) with
-//!      `KUNA_DUMP=1`, slicing the `===KUNA_DUMP_BEGIN===..===KUNA_DUMP_MID===`
+//!      `UNLACE_DUMP=1`, slicing the `===KUNA_DUMP_BEGIN===..===KUNA_DUMP_MID===`
 //!      block,
 //! then **byte-compares** the two and reports how many match.
 //!
@@ -263,11 +263,11 @@ fn rust_print_c(stem: &str, sym_name: &str) -> Result<String, String> {
 }
 
 // ===========================================================================
-// C++ oracle capture (drive the committed decomp_test_dbg with KUNA_DUMP).
+// C++ oracle capture (drive the committed decomp_test_dbg with UNLACE_DUMP).
 // ===========================================================================
 
 /// Path to the committed C++ `decomp_test_dbg` oracle binary.  Honors the
-/// `KUNA_DECOMP_TEST` override (so a worktree without a built C++ tree can point
+/// `UNLACE_DECOMP_TEST` override (so a worktree without a built C++ tree can point
 /// at the main checkout's binary, exactly like `kuna/paths.py`), else
 /// `<repo>/decompiler/cpp/decomp_test_dbg`.
 fn cpp_oracle() -> PathBuf {
@@ -278,8 +278,8 @@ fn cpp_oracle() -> PathBuf {
     }
 }
 
-/// The datatests dir to drive the oracle against (honors `KUNA_DATATESTS`, else
-/// `<repo>/tests/datatests`).  Pairs with `KUNA_DECOMP_TEST` so the oracle
+/// The datatests dir to drive the oracle against (honors `UNLACE_DATATESTS`, else
+/// `<repo>/tests/datatests`).  Pairs with `UNLACE_DECOMP_TEST` so the oracle
 /// reads the same corpus the main checkout built its `.sla` against.
 fn oracle_datatests() -> PathBuf {
     if let Some(p) = unlace_base::env::var_os("UNLACE_DATATESTS") {
@@ -289,7 +289,7 @@ fn oracle_datatests() -> PathBuf {
     }
 }
 
-/// Capture the C++ oracle `print C` for `stem` (the first KUNA_DUMP block).
+/// Capture the C++ oracle `print C` for `stem` (the first UNLACE_DUMP block).
 /// Returns `None` when the oracle binary or `.sla` is unavailable (the gate
 /// then measures the Rust path RUNS without a byte-compare for that fixture).
 fn cpp_print_c(stem: &str) -> Option<String> {
@@ -305,7 +305,7 @@ fn cpp_print_c(stem: &str) -> Option<String> {
         .arg(&datatests)
         .arg("datatests")
         .arg(format!("{stem}.xml"))
-        .env("KUNA_DUMP", "1")
+        .env("UNLACE_DUMP", "1")
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
@@ -357,7 +357,7 @@ fn corpus_functions_byte_compare_against_cpp_oracle() {
             Some(cpp) => {
                 oracle_available = true;
                 // Byte-compare the two captures.  Normalize only the trailing
-                // whitespace the two stream framings differ in (both KUNA_DUMP
+                // whitespace the two stream framings differ in (both UNLACE_DUMP
                 // bodies are leading-blank-line + the function + trailing
                 // newline); compare the trimmed forms byte-for-byte.
                 let matched = rust.trim_end() == cpp.trim_end();

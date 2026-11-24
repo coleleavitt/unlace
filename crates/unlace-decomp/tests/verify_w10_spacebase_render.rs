@@ -11,7 +11,7 @@
 //! landed, the for-loop files are RSP-clean, so the held for-loop reroll's
 //! overflow-syntax guard no longer declines and for-loops form" — is
 //! CONTRADICTED by the running engine.  Diagnosed against the FAITHFUL datatest
-//! harness (`decomp_test_dbg` + `KUNA_DUMP=1`, the exact path the parity runner
+//! harness (`decomp_test_dbg` + `UNLACE_DUMP=1`, the exact path the parity runner
 //! drives), every for-loop datatest (`forloop1`, `forloop_thruspecial`,
 //! `forloop_varused`, `loopcomment`) still renders:
 //!
@@ -101,7 +101,7 @@ fn cpp_oracle() -> PathBuf {
     repo_root().join("decompiler/cpp/decomp_test_dbg")
 }
 
-/// Drive `bin` on `stem`.xml with `KUNA_DUMP=1`, returning the sliced bulk
+/// Drive `bin` on `stem`.xml with `UNLACE_DUMP=1`, returning the sliced bulk
 /// `print C` body (between `===KUNA_DUMP_BEGIN===` and `===KUNA_DUMP_MID===`),
 /// or `None` if the binary / `.sla` is unavailable (the test SKIPs).
 fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
@@ -116,7 +116,7 @@ fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
         .arg(datatests_dir())
         .arg("datatests")
         .arg(format!("{stem}.xml"))
-        .env("KUNA_DUMP", "1")
+        .env("UNLACE_DUMP", "1")
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);

@@ -69,7 +69,7 @@ fn cpp_oracle_bin() -> PathBuf {
         .unwrap_or_else(|| repo_root().join("decompiler/cpp/decomp_test_dbg"))
 }
 
-/// Drive a `decomp_test_dbg` binary on one datatest with `KUNA_DUMP=1` and
+/// Drive a `decomp_test_dbg` binary on one datatest with `UNLACE_DUMP=1` and
 /// return the dumped `print C` block.  `None` if the binary is missing or
 /// produced no dump (no spec/`.sla`).
 fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
@@ -83,7 +83,7 @@ fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
         .arg(datatests_dir())
         .arg("datatests")
         .arg(format!("{stem}.xml"))
-        .env("KUNA_DUMP", "1")
+        .env("UNLACE_DUMP", "1")
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout).into_owned();

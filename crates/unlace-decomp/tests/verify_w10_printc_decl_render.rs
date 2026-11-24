@@ -28,7 +28,7 @@
 //!
 //! All three are GENERIC over the declaration / scope / type geometry — NO struct /
 //! field / symbol / function-name / address / value special-casing.  These tests
-//! drive the built `decomp_test_dbg` (rust harness) with `KUNA_DUMP=1` and assert on
+//! drive the built `decomp_test_dbg` (rust harness) with `UNLACE_DUMP=1` and assert on
 //! the sliced `print C` body; they SKIP cleanly if the binary / `.sla` is missing.
 
 use std::path::PathBuf;
@@ -65,7 +65,7 @@ fn rust_harness() -> PathBuf {
         .join("decomp_test_dbg")
 }
 
-/// Drive `bin` on `stem`.xml with `KUNA_DUMP=1`, returning the full concatenated
+/// Drive `bin` on `stem`.xml with `UNLACE_DUMP=1`, returning the full concatenated
 /// bulk `print C` output (between the `===KUNA_DUMP_BEGIN===`/`===KUNA_DUMP_MID===`
 /// markers), or `None` if the binary / `.sla` is unavailable (the test SKIPs).
 fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
@@ -80,7 +80,7 @@ fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
         .arg(datatests_dir())
         .arg("datatests")
         .arg(format!("{stem}.xml"))
-        .env("KUNA_DUMP", "1")
+        .env("UNLACE_DUMP", "1")
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);

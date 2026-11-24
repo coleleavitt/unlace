@@ -13,7 +13,7 @@
 //! false for those registers, and the recovery dropped them.
 //!
 //! These tests drive the *real* gate path: the committed Rust `decomp_test_dbg`
-//! on a datatest, slicing the `KUNA_DUMP` `print C` block, and (where a built
+//! on a datatest, slicing the `UNLACE_DUMP` `print C` block, and (where a built
 //! C++/spec tree is present) the C++ oracle on the same datatest for a faithful
 //! direction check.  They are SKIPPED (not failed) when a binary or `.sla` is
 //! unavailable so the suite stays green in a bare worktree.
@@ -64,7 +64,7 @@ fn cpp_oracle_bin() -> PathBuf {
         .unwrap_or_else(|| repo_root().join("decompiler/cpp/decomp_test_dbg"))
 }
 
-/// Drive a `decomp_test_dbg` binary on one datatest with `KUNA_DUMP=1` and
+/// Drive a `decomp_test_dbg` binary on one datatest with `UNLACE_DUMP=1` and
 /// return the first dumped `print C` block (the bulk output), header line
 /// stripped (the header echoes the `-path` argument, which differs per
 /// invocation and is not part of the decompiled body).  `None` if the binary
@@ -80,7 +80,7 @@ fn dump_body(bin: &PathBuf, stem: &str) -> Option<String> {
         .arg(datatests_dir())
         .arg("datatests")
         .arg(format!("{stem}.xml"))
-        .env("KUNA_DUMP", "1")
+        .env("UNLACE_DUMP", "1")
         .output()
         .ok()?;
     let text = String::from_utf8_lossy(&out.stdout).into_owned();

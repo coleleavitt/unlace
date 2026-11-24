@@ -12,6 +12,10 @@
 //! assertion no longer passes (REGRESSED), when any assertion fails, or when a test file cannot be
 //! parsed or run; assertions that pass but are not in the baseline are reported, not failed.
 //!
+//! `UNLACE_PARITY_FILES=<paths or globs>` (comma-separated) runs only the matching files of each
+//! corpus ([`parity_selection`]); the baseline's other keys are then not checked, and a corpus
+//! none of whose files match is skipped.
+//!
 //! `cargo test -p unlace-harness --test parity` runs both, each corpus across up to eight
 //! `decomp_test_dbg -worker` processes (`UNLACE_PARITY_JOBS=N`; `1` runs it in this process). `UNLACE_BLESS=1` re-records the
 //! baselines from the run (a deliberate default change, a new stage test) instead of comparing;
@@ -174,13 +178,80 @@ fn parity_jobs() -> usize {
         .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get().min(8)))
 }
 
-fn run_corpus(root: &Path, corpus: &Path) -> DataResult {
+/// The `UNLACE_PARITY_FILES` selection: comma-separated paths or globs (`*` any run of
+/// characters, `/` included; `?` one character), each matched against a corpus file's absolute
+/// path, its repository-relative path, its file name and its name without the extension.
+/// `None` (unset or empty) runs every file.
+fn parity_selection() -> Option<Vec<String>> {
+    let value = std::env::var("UNLACE_PARITY_FILES").ok()?;
+    let patterns: Vec<String> = value
+        .split(',')
+        .map(|p| p.trim().trim_start_matches("./"))
+        .filter(|p| !p.is_empty())
+        .map(str::to_string)
+        .collect();
+    (!patterns.is_empty()).then_some(patterns)
+}
+
+/// Does `pattern` (`*`, `?`, else literal bytes) match all of `text`.
+fn glob_match(pattern: &str, text: &str) -> bool {
+    let (p, t) = (pattern.as_bytes(), text.as_bytes());
+    let (mut pi, mut ti) = (0, 0);
+    let mut star: Option<(usize, usize)> = None;
+    while ti < t.len() {
+        if pi < p.len() && (p[pi] == b'?' || p[pi] == t[ti]) {
+            pi += 1;
+            ti += 1;
+        } else if pi < p.len() && p[pi] == b'*' {
+            star = Some((pi, ti));
+            pi += 1;
+        } else if let Some((sp, st)) = star {
+            pi = sp + 1;
+            ti = st + 1;
+            star = Some((sp, st + 1));
+        } else {
+            return false;
+        }
+    }
+    p[pi..].iter().all(|&c| c == b'*')
+}
+
+/// Is corpus file `file` (absolute) one of `patterns`.
+fn selected(root: &Path, file: &str, patterns: &[String]) -> bool {
+    let path = Path::new(file);
+    let rel = path
+        .strip_prefix(root)
+        .map(|r| r.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| file.to_string());
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let stem = path
+        .file_stem()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    patterns.iter().any(|p| {
+        [file, rel.as_str(), name.as_str(), stem.as_str()]
+            .iter()
+            .any(|t| glob_match(p, t))
+    })
+}
+
+/// The corpus run, or `None` when a selection matches none of its files.
+fn run_corpus(root: &Path, corpus: &Path, select: Option<&[String]>) -> Option<DataResult> {
     assert!(
         has_slaspec(&root.join("specs")),
         "specs/ holds no SLEIGH sources (.slaspec)"
     );
-    let files = corpus_files(corpus);
+    let mut files = corpus_files(corpus);
     assert!(!files.is_empty(), "{} holds no tests", corpus.display());
+    if let Some(patterns) = select {
+        files.retain(|f| selected(root, f, patterns));
+        if files.is_empty() {
+            return None;
+        }
+    }
     let mut specs = vec![root.join("specs").to_string_lossy().into_owned()];
     if let Ok(home) = std::env::var("SLEIGHHOME")
         && !home.is_empty()
@@ -222,7 +293,74 @@ fn run_corpus(root: &Path, corpus: &Path) -> DataResult {
         r.applied += i64::from(run.applied);
         r.succeeded += i64::from(run.succeeded);
     }
-    r
+    Some(r)
+}
+
+/// A baseline key's assertion name: `data:<name>` without its ` @dupN` suffix.
+fn key_name(key: &str) -> &str {
+    let name = key.strip_prefix("data:").unwrap_or(key);
+    match name.rsplit_once(" @dup") {
+        Some((n, dup)) if !dup.is_empty() && dup.bytes().all(|b| b.is_ascii_digit()) => n,
+        _ => name,
+    }
+}
+
+/// The report of a selected run (`UNLACE_PARITY_FILES`): the selected files' assertions are
+/// compared with the baseline by name, as the corpus-wide `@dupN` numbering does not apply to a
+/// subset. Every assertion must pass; a failing one the baseline holds is REGRESSED.
+fn selected_report(corpus: &str, base_text: &str, r: &DataResult, files: &[String]) {
+    let base: BTreeSet<String> = baseline_passing(base_text)
+        .unwrap_or_else(|e| panic!("{corpus}: the baseline is not a baseline record: {e}"))
+        .iter()
+        .filter(|k| k.starts_with("data:"))
+        .map(|k| key_name(k).to_string())
+        .collect();
+    let mut report = format!(
+        "{corpus}: {}/{} assertions passed in {} selected files (UNLACE_PARITY_FILES; the \
+         baseline's other keys are not checked)\n",
+        r.succeeded,
+        r.applied,
+        files.len()
+    );
+    for f in files {
+        report += &format!("  file {f}\n");
+    }
+    let regressed: Vec<&String> = r
+        .failing
+        .iter()
+        .filter(|n| base.contains(n.as_str()))
+        .collect();
+    for n in &r.failing {
+        report += &format!("  [data] {n}\n");
+    }
+    for f in &r.errors {
+        report += &format!("  [data] ERROR in {f}\n");
+    }
+    if !regressed.is_empty() {
+        report += &format!("REGRESSED ({}):\n", regressed.len());
+        for n in &regressed {
+            report += &format!("  {n}\n");
+        }
+    }
+    let newly: Vec<(usize, &String)> = r
+        .passing
+        .iter()
+        .enumerate()
+        .filter(|(i, n)| !r.in_toml.contains(i) && !base.contains(n.as_str()))
+        .collect();
+    if !newly.is_empty() {
+        report += &format!(
+            "newly passing ({}), re-record with UNLACE_BLESS=1 on a full run:\n",
+            newly.len()
+        );
+        for (_, n) in &newly {
+            report += &format!("  {n}\n");
+        }
+    }
+    let ok = r.failing.is_empty() && r.errors.is_empty();
+    report += if ok { "PARITY OK" } else { "PARITY FAIL" };
+    assert!(ok, "{report}");
+    println!("{report}");
 }
 
 /// The re-recorded baseline: this run's `data:` keys and footer, every other key kept.
@@ -261,7 +399,11 @@ fn parity(corpus: &str, baseline: &str) {
     let root = repo_root();
     // Test scripts load their fixtures by repository-relative path.
     std::env::set_current_dir(&root).expect("enter the repository root");
-    let r = run_corpus(&root, &root.join(corpus));
+    let select = parity_selection();
+    let Some(r) = run_corpus(&root, &root.join(corpus), select.as_deref()) else {
+        println!("{corpus}: UNLACE_PARITY_FILES selects none of its files, skipped");
+        return;
+    };
     let (in_toml, now): (Vec<_>, Vec<_>) = dedup_list("data:", &r.passing)
         .into_iter()
         .enumerate()
@@ -273,6 +415,10 @@ fn parity(corpus: &str, baseline: &str) {
     let broken = r.errors.len() + r.failing.len();
 
     if std::env::var_os("UNLACE_BLESS").is_some_and(|v| !v.is_empty() && v != "0") {
+        assert!(
+            select.is_none(),
+            "not re-recording {baseline} from a selected run: unset UNLACE_PARITY_FILES"
+        );
         assert!(
             broken == 0,
             "not re-recording {baseline}: {} failing assertions, {} file errors\n{}",
@@ -291,6 +437,14 @@ fn parity(corpus: &str, baseline: &str) {
     }
 
     let text = text.unwrap_or_else(|| panic!("read {}", baseline_path.display()));
+    if let Some(patterns) = &select {
+        let files: Vec<String> = corpus_files(&root.join(corpus))
+            .into_iter()
+            .filter(|f| selected(&root, f, patterns))
+            .collect();
+        selected_report(corpus, &text, &r, &files);
+        return;
+    }
     let base: BTreeSet<String> = baseline_passing(&text)
         .unwrap_or_else(|e| panic!("{baseline} is not a baseline record: {e}"))
         .into_iter()
@@ -441,6 +595,38 @@ fn the_datatest_stream_parses() {
         Some("g.toml")
     );
     assert_eq!(parse_data_error("Success -- a thing"), None);
+}
+
+#[test]
+fn the_file_selection_matches_paths_names_and_globs() {
+    assert!(glob_match("kuna-*.toml", "kuna-wideslice.toml"));
+    assert!(glob_match(
+        "tests/stages/*wide*",
+        "tests/stages/kuna-wideslice.toml"
+    ));
+    assert!(glob_match("gh55?-*", "gh558-compareform"));
+    assert!(glob_match("*", ""));
+    assert!(!glob_match("kuna-*.xml", "kuna-wideslice.toml"));
+    assert!(!glob_match("a?c", "ac"));
+    let root = Path::new("/repo");
+    let file = "/repo/tests/stages/kuna-wideslice.toml";
+    for p in [
+        "kuna-wideslice",
+        "kuna-wideslice.toml",
+        "tests/stages/kuna-wideslice.toml",
+        "/repo/tests/stages/kuna-wideslice.toml",
+        "tests/stages/kuna-wide*",
+    ] {
+        assert!(selected(root, file, &[p.to_string()]), "{p}");
+    }
+    assert!(!selected(root, file, &["tests/datatests/*".to_string()]));
+}
+
+#[test]
+fn baseline_keys_name_their_assertion() {
+    assert_eq!(key_name("data:Test #1"), "Test #1");
+    assert_eq!(key_name("data:Test #1 @dup2"), "Test #1");
+    assert_eq!(key_name("data:a @dupe"), "a @dupe");
 }
 
 #[test]

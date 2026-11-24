@@ -7272,7 +7272,10 @@ every other binary's pass list is byte-identical to before the pass existed):
   to 64 hops, and the call site is the source position at that instruction.
   With `lines`, a second pass (`gopcln_lines`) also comments `<file>:<line>`
   at each PC where the position changes, the Go counterpart of `dwarf_lines`.
-  Both passes read the option themselves, so a default run decodes nothing;
+  Both passes run at the commit point, only when the option is on
+  (`crates/unlace-analysis/src/passes.rs (run_gopcln)`): a load-time pass sees
+  the option's constructor default, so registered at load they never wrote a
+  comment. A default run decodes nothing;
   a function is read only when its entry lies in executable bytes, and at most
   2,000,000 comments are written per image. The comments go through the same
   comment database as `dwarf_lines`, so they appear in the C text and in the
@@ -12545,6 +12548,16 @@ AIF-only entry whose first word a literal load reads is dropped too (the
 `poolentry` fixture's `F`, the split shape its corpus measurement disclosed). On the stripped
 Lua (x86-64, AArch64), ld.so, llvm-nm and llvm-objdump images it removes
 nothing; on the fixture it removes the function-shaped table the code reads.
+The veto also drops a discovered or AIF entry whose bytes are a string
+(`crates/unlace-analysis/src/analyzers/aif/kuna_aifstringveto.rs (is_string)`):
+at least six printable characters, ASCII or UTF-16LE, and then the NUL that ends
+them, followed by `int3` padding or another string of at least four characters
+(printable code up to a zero byte, `push ebx; push 0xa; push 0x2b67`, goes on
+with more code). A Windows driver keeps its `DbgPrint` formats in the code
+sections it pages with the code and pushes their addresses as immediates, which
+read as function pointers. In the Silicon Labs CP210x bus enumerator (x86) 109 of
+its 227 functions were such strings. Over 85,000 functions of /usr/bin,
+/usr/lib64 and the Holley PEs the test holds for 111 entries, each a string.
 **Incremental walk** (`incrementalwalk`, default-on): the x86 callback rounds
 resume the Listing from the accepted roots instead of rebuilding it, the
 `addrtakenentry` way; on a 300-callback i386 fixture the function set is
@@ -14596,7 +14609,12 @@ What counts as "no valid fall-through" is the positive-evidence predicate of
 (DIV-92; formerly the `noreturn_discstrict` option, now simply how
 `noreturn_disc` reads a call site). A call with no fall-through address at all —
 a tail jump lowered to a call — is evidence: that is a property of the call
-instruction. For its *successor* only **positive** evidence counts: the successor
+instruction. A call whose p-code ends in a RETURN behind a CBRANCH to the next
+instruction has a fall-through there (`listing/classify.rs`; unlace#756): SPARC
+lifts `call` as `didrestore = 0; CALL f; if (didrestore == 0) goto next; RETURN`,
+the RETURN only for a callee that ran `restore` in its delay slot, and reading
+the last op alone made every SPARC call a terminal one, so any function with
+three callers in a linked image was concluded no-return. For its *successor* only **positive** evidence counts: the successor
 is data (outside every executable range, so the compiler emitted nothing there to
 fall into), or the successor is another function's entry (the compiler left the
 caller no tail at all). The legacy tally had a third arm ahead of those two — the

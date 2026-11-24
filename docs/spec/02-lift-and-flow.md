@@ -2602,6 +2602,17 @@ table reached once the deadline has passed is not attempted — its BRANCHIND is
 truncated like any unrecovered one, so the loop drains instead of staging more
 sub-decompilations — and the budget error names the step and the indirect
 jump's address. Without a budget each probe is one thread-local read.
+(kuna `jumptablework`, default 250000) The loop is also bounded in work.
+Each recovery costs the number of instructions flowed when it starts, because
+its partial decompile covers all of them, and
+`flow.rs (FlowInfo::jt_work_exhausted)` adds that to the function's sum
+before each table. Once the sum passes the bound, that table and every later one
+are not attempted. They are truncated like an unrecovered table, and one warning
+at the first of them names the option. This is what stops a function whose
+recovered tables lead into more and more code: an obfuscated arm64e image that
+dispatches every branch through a shared table of signed pointers grows a
+972-byte function past 20,000 flowed instructions, one recovery at a time.
+`off` removes the bound.
 Two pre-checks bound the attempt:
 `funcdata_block.rs (Funcdata::early_jump_table_fail)` backtracks up to 8 ops
 through value-preserving arithmetic looking for a computation the recovery can
@@ -2922,7 +2933,8 @@ the case targets.
    or a dispatch retried after an earlier recovery, is not re-run, so a
    recovery that fails for its own reasons costs one extent scan and no
    second pipeline. A function's last table has
-   no such bound and is left as it was: an object the function merely reads
+   no such bound here (an unguarded one ends at the next function's table
+   below): an object the function merely reads
    may sit anywhere in the section, and a bound taken from one could run the
    table on into another function's, whose entries are plausible code
    addresses measured from the wrong base. The discovery Listing applies the
@@ -2958,12 +2970,18 @@ the case targets.
    functions' tables measured from the wrong base: they land all over the
    next functions and back inside this one, so the run-on cut, which keeps
    every row until the first that leaves the function, keeps them all and
-   the 45-case switch printed 1,200 lines of phantom cases. When the run-on
-   cut leaves an unguarded table whose rows leave the function,
-   `jumptable.rs (JumpBasicModel::kuna_next_table_rows)` reads its table and
-   stride as above and ends it at the lowest jump table above it in the same
-   section, of this function or of the next ones, when that leaves at least
-   two rows. The next functions' tables come from the flow: the sanity check
+   the 45-case switch printed 1,200 lines of phantom cases. A byte selector
+   with no range check is the same shape on x86-64 when the rows past the
+   table stay inside the function: gnulib's regcomp (csplit `sub_13330`)
+   reads its `unsigned char` token type straight into a 37-entry table and
+   OCaml compiles an exhaustive match the same way, so the next table's
+   offsets, measured from the wrong base, became cases that land mid-instruction.
+   For every unguarded table (no guard, or guards that leave its
+   selector's top open), `jumptable.rs (JumpBasicModel::kuna_next_table_rows)`
+   reads its table and stride as above and ends it at the lowest jump table
+   above it in the same section, of this function or of the next ones, when
+   that leaves at least two rows and fewer than the rows kept so far; the
+   run-on cut applies when no table ends it sooner. The next functions' tables come from the flow: the sanity check
    inside the recovery partial records the table it wants
    (`Funcdata::kuna_later_wanted`) and fails, and
    `flow.rs (FlowInfo::recover_jump_tables)` decodes the extents after this
@@ -2976,9 +2994,8 @@ the case targets.
    request can also come from the retry the function's own tables bound
    (a row of the bounded table lies in the next known function); the flow
    then answers it in a second round. Either way the request never leaves
-   a table unrecovered. A table whose rows all stay
-   inside the function costs nothing, and the decode runs only for a table
-   already unguarded and leaving the function.
+   a table unrecovered. A guarded table costs nothing; an unguarded one
+   costs the extent decodes and one more recovery, once per function.
 
    **Guards that leave the top open (always on).**
    `jumptable.rs (JumpBasicModel::analyze_guards)` records the
@@ -4345,9 +4362,13 @@ do the element-wise groups: `addv`/`subv`/`mulv` (and `addvi`/`subvi`), the bitw
 element's low bits), the compares `ceq`/`clt`/`cle` (and immediates; all-ones or zero elements),
 `min`/`max` (signed, unsigned, immediates), the saturating `adds_s`/`adds_u`/`subs_s`/`subs_u`,
 `div`/`mod` (a zero divisor gives what QEMU gives: the architecture leaves it UNPREDICTABLE),
-`pcnt`/`nlzc`/`nloc`, `fill`/`ldi`/`splat`/`splati`, and the `ilv*`/`pck*` permutations. Every
-other instruction (floating point, dot products, fixed-point `q` forms, `shf`, `vshf`, `sld`, ...)
-is a user operation named after its mnemonic (`msa_addv_w`) with the
+`pcnt`/`nlzc`/`nloc`, `fill`/`ldi`/`splat`/`splati`, the `ilv*`/`pck*` permutations, `shf`, `vshf`,
+`sld`/`sldi` (byte windows of the element count, as QEMU slides them), `binsl`/`binsr`, the rounding
+shifts `srar`/`srlr`, `ave`/`aver`, `sat_s`/`sat_u`, `max_a`/`min_a`, `hadd`/`hsub`, `asub`,
+`subsus_u`/`subsuu_s`, `bclr`/`bset`/`bneg` (each with its immediate form), `add_a`/`adds_a`,
+`bmnzi`/`bmzi`/`bseli`, `maddv`/`msubv`, `insert`/`insve` and the dot products `dotp`/`dpadd`/`dpsub`; the `bz`/`bnz` branches test the
+register directly (`.v`: all bits zero or not; `.df`: some element zero, or every element nonzero).
+The floating-point and fixed-point `q` instructions are user operations named after its mnemonic (`msa_addv_w`) with the
 destination as output and the read operands (and the destination, for the accumulating forms)
 as inputs.
 
@@ -4567,8 +4588,11 @@ mark that ends an iteration later than its own set passes noflow context forward
 loop, reaches the last set, and `LPMARKA` on the last set (or on a one-set short loop) acts
 there. The root constructor adds the manual's test after that set: while `LCn > 1`, count
 down and branch directly to the start; otherwise clear `LCn`. The loop end clears the loop's
-enable bit for the code after it, so an enclosing loop becomes active again. A set carrying
-both marks (an inner and an outer loop ending together) and `CONT`/`CONTD` are not modelled.
+enable bit for the code after it, so an enclosing loop becomes active again. `CONT`/`CONTD`
+end an iteration early in the same way: when its set's condition holds, the root constructor
+branches to the label once `LCn` is down to one (clearing it and the loop's enable bit there)
+and back to the start otherwise. A set carrying both marks (an inner and an outer loop ending
+together) is not modelled.
 
 ### Vendored community processor modules (#98)
 
@@ -4987,7 +5011,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Xtensa` (ESP32-S3 PIE) | Xtensa LX7 with the ESP32-S3 Processor Instruction Extensions (`EE.*`) | `Xtensa:LE:32:esp32s3` | Espressif LLVM `XtensaS3DSPInstrInfo.td` (encodings, generated), ESP32-S3 TRM PIE chapter | `unlace-cli/tests/processors.toml` (`xtensa_esp32s3_pie_*`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/processors.toml` (`ez80`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/ez80_raw.rs` |
-| `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a), RDNA 1/2 (gfx10) and RDNA 3 (gfx11) shader ISAs, one-lane lift (RDNA wave32, and wave64 with 64-bit lane masks) | `AMDGPU:LE:64:GFX9`, `AMDGPU:LE:64:GFX10`, `AMDGPU:LE:64:GFX11`, `AMDGPU:LE:64:GFX10-W64`, `AMDGPU:LE:64:GFX11-W64` | LLVM AMDGPU encodings (`llvm-mc -show-encoding` / `--disassemble`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/processors.toml` (`amdgpu*`) |
+| `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a), RDNA 1/2 (gfx10) and RDNA 3 (gfx11) shader ISAs, one-lane lift (RDNA wave32, and wave64 with 64-bit lane masks; gfx11 true16 halves, VOP3P/WMMA and MIMG from generated includes) | `AMDGPU:LE:64:GFX9`, `AMDGPU:LE:64:GFX10`, `AMDGPU:LE:64:GFX11`, `AMDGPU:LE:64:GFX10-W64`, `AMDGPU:LE:64:GFX11-W64` | LLVM AMDGPU encodings (`llvm-mc -show-encoding` / `--disassemble`, `llvm-objdump` tables read by `tools/amdgpu_gfx11_probe.py`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/processors.toml` (`amdgpu*`) |
 | `KVX` | Kalray KVX kv3-1 (Coolidge v1) and kv3-2 (Coolidge v2), 64-bit mode; bundles of up to eight syllables with tail immediate extensions | `KVX:LE:64:kv3-1`, `KVX:LE:64:kv3-2` | encodings generated from the binutils `kvx` opcode table and disassembler register classes by `tools/gen_kvx_sleigh.py`; checked against `kvx-elf-objdump` | `unlace-cli/tests/processors.toml` (`kvx`, `kvx_wide`) |
 | `CPython` | CPython 3.12 bytecode (one code object's co_code) | `CPython:LE:32:3.12` | CPython 3.12 `dis`/`opcode` tables, `Python/bytecodes.c` semantics; oracle `dis` | `unlace-cli/tests/cpython_raw.rs` |
 | `H8500` | Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) | `H8500:BE:16:minimum`, `H8500:BE:24:maximum` | H8/500 Programming Manual; MAME h8500dasm.cpp (BSD-3) | `unlace-cli/tests/processors.toml` (`h8500`) |
@@ -5322,6 +5346,36 @@ register group: the overlapping registers `v0m2`..`v30m2`, `v0m4`..`v28m4` and
 `v0m8`..`v24m8` (64, 128 and 256 bytes, operand subtables `vdm<n>` and `vs2m<n>`), and
 `vmv<n>r.v` lifts as a copy of the group (`vmv1r.v` as a register copy). A register number not
 a multiple of `n` is reserved and, as in LLVM, not decoded.
+
+The other operands are register groups too, of a size `vtype` decides, so `vtype` is tracked
+as context (`tools/gen_rvv_groups.py` generates the tables and the constructors).
+- **Context.** `vsetvli` and `vsetivli` set context fields from their immediate for the
+  instructions after them (`globalset(inst_next, ...)`, subtable `vtctx`): `vknown`, and
+  log2 of the group size of each operand class. The classes are `gk` for LMUL, `wk` for 2*LMUL,
+  and `e8k`..`e64k` for EEW/SEW*LMUL; the field is 0 for one register and when the vtype makes
+  the encoding reserved. `vsetvl`, whose vtype is a register, clears `vknown`. The context holds
+  from the `vsetvli` to the next one in address order. Compiled code sets vtype before each
+  strip-mined loop and after each call, so that matches execution there.
+- **Groups.** After each constructor there is one constructor per group shape, under a pattern
+  over those fields, whose operands are fixed-size subtables (`vd_k4a4` is a 4-register group at
+  a 4-aligned vd). The register file has an overlapping register for every run of 2..8
+  registers (`v8m2`, `v9_11`); a run past v31, which only a reserved segment encoding names,
+  reaches into unused register space.
+  - Data, index and destination groups are LMUL for most operands, 2*LMUL for widening results
+    and `.w` sources, and 2*LMUL for narrowing sources.
+  - Loads and stores use EEW/SEW*LMUL for their data, and indexed ones for their index.
+  - A segment access covers nf groups; with no known vtype it still writes its nf registers.
+  - Reduction, mask and scalar-move operands stay one register.
+  - A misaligned group at a known vtype is reserved and falls back to the single-register form.
+- **Old destination.** Every user operation that writes a vector register takes the old
+  destination (group) as its first input. Tail- or mask-undisturbed elements, and every element
+  when vl = 0, keep their old values.
+- **`vset*`.** `vsetvli`, `vsetivli` and `vsetvl` write `vl` (the user operation's result, also
+  in `rd`) and `vtype`. `vtype` is the immediate, or `rs2`, unless the vtype is reserved: then
+  `vill` is set. Reserved here means bits above 7 set, LMUL encoding 4, or SEW above 64. A
+  fractional LMUL with SEW > LMUL*ELEN is implementation-defined; QEMU accepts it, and so does
+  the lift. `vsetvli x0, x0` keeps `vl`.
+- **Not written.** The accrued flags (fflags, vxsat) are not written, as in the scalar F/D lift.
 Exercised by `unlace-cli/tests/riscv_vector.rs`: all 1258 encoding shapes
 against LLVM's names (`fixtures/riscv_vector/probe64.txt`) and LLVM-lowered
 vector functions (load/add/store, a reduction into a scalar, an FMA with a
@@ -5625,9 +5679,8 @@ before optimization can create indistinguishable same-address reconstructions.
 IBM z/Architecture, language id `s390x:BE:64:default`. It is the first slice of
 s390x support: the general instructions through the z15 facilities, the
 binary-floating-point instructions on `f0`-`f15` (short, long, and extended in
-register pairs), and the s390x ELF ABI. The vector facility (opcode `E7`) is
-not decoded yet, so a function that reaches a vector instruction ends there in
-`halt_baddata()`. The four `s390x_*.sinc` files are written by
+register pairs), the vector facility (`s390x_vector.sinc`, below), and the s390x
+ELF ABI. The four `s390x_*.sinc` files are written by
 `specs/Ghidra/Processors/s390x/gen_sinc.py` from its opcode tables.
 
 Instructions are 2, 4 or 6 bytes long, fixed by the top two bits of the first
@@ -5698,6 +5751,26 @@ z13+ build halted on the high-word instructions and every `isnan` halted on `tcd
 `tools/difffuzz --arch s390x --oracle qemu`, which also found that `risbhg` and `risblg` took their
 start and end positions from six bits of I3/I4 instead of bits 3-7 (a position within the word),
 so `risblg r11,r1,0xdf,0xe4,11` cleared the register instead of inserting a wrapped field.
+
+### s390x vector facility (#98)
+
+`specs/Ghidra/Processors/s390x/gen_vector.py` writes `s390x_vector.sinc` from
+`vector_insts.json`, the 798 `E6`/`E7` instructions of LLVM's SystemZ TableGen records
+(mnemonics, operands and encoding bits). `v0`-`v31` are 16-byte registers and `f16`-`f31`
+(and `f16s`-`f31s`) extend the existing `f0`-`f15` views of their leftmost doubleword (word),
+so a scalar W instruction (`wfadb %f0,%f2,%f4`) reads and writes a `double` like the BFP
+instructions do. A register operand is a subtable over its four-bit field and its RXB bit.
+The generator gives exact p-code to the families LLVM emits at `-march=z13` and later
+(lane arithmetic, logic, compares, shifts, permutes, loads and stores, scalar and vector
+binary floating point including compares, data-class tests, conversions and `vfi`/`wfi` for
+explicit rounding modes) and a user operation `vec_<mnemonic>` (plus `vec_<mnemonic>_cc`)
+to the rest. `vsl`/`vsrl`/`vsra` shift each byte by its own count from the matching byte
+of the shift operand, as the vector-enhancements 2 facility defines. `lde`/`lder` (HFP load
+lengthened, which keeps the bits and clears the right half) are decoded because LLVM loads a
+`float` with them. Checked with `tools/difffuzz --arch s390x-vec --oracle qemu` (every
+encoding of the exact families, three per instruction): no mismatch outside the fused
+multiply-adds. A static musl image built for `-mcpu=z15` went from 49 of 113 functions
+halting to 7, all on the `0x0000` crash word.
 
 ### x86-64 lifter fixes from differential fuzzing
 

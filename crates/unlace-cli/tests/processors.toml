@@ -2027,6 +2027,55 @@ expect = [
     "v6 = v5 + 1.0f;",
 ]
 
+# `fixtures/amdgpu/gfx1100_true16.cl` at -O2 (real true16): 16-bit values live in VGPR
+# halves (`v0.l`/`v0.h`), chosen by op_sel in VOP3 and by bit 7 of the register in e32 forms.
+[[family]]
+name = "amdgpu_gfx11_true16"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_true16.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+# `hfma`: v_cmp_lt_f16_e32 on two halves of v0, v_fma_f16 with op_sel, v_sub_f16 with |src|.
+[[family.function]]
+test = "amdgpu_gfx11_true16_half_math_decompiles"
+address = "0x0"
+expect = ["if (v2 < v3)", "- ABS(v3);"]
+
+# `hpk`: v_pk_fma_f16 multiplies and adds both lanes.
+[[family.function]]
+test = "amdgpu_gfx11_packed_fma_decompiles"
+address = "0x300"
+expect = ["CONCAT22(v2 *"]
+
+# `umax`: v_max_u16 and v_mad_u16 on halves.
+[[family.function]]
+test = "amdgpu_gfx11_true16_u16_decompiles"
+address = "0x600"
+expect = ["v3 * 3 + (v1 >> 2);"]
+
+# `mm`: v_wmma_f32_16x16x16_f16 reads two 8-VGPR tiles and the accumulator.
+[[family.function]]
+test = "amdgpu_gfx11_wmma_decompiles"
+address = "0x900"
+expect = ["= wmma("]
+
+# `fixtures/amdgpu/gfx1100_image.ll`: MIMG load, sample, an NSA sample_d with five address
+# operands, store and a returning atomic.
+[[family]]
+name = "amdgpu_gfx11_image"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_image.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx11_image_ops_decompile"
+address = "0x0"
+expect = ["image_sample_d(a0,a4,a5)", "image_store(", "image_atomic_add("]
+
 # Wave64 RDNA code (clang -mwavefrontsize64): lane masks are SGPR pairs. `vote` passes a
 # ballot (v_cmp into VCC, then vcc_lo and vcc_hi as a 64-bit argument); under the wave64
 # language the high half is the compare's zero, not a stale vcc_hi.
@@ -2080,6 +2129,21 @@ forbid = ["vcc_hi"]
 test = "amdgpu_gfx11_w64_uniform_branch_decompiles"
 address = "0x400"
 expect = ["<= -1)"]
+
+# `fixtures/amdgpu/gfx1100_true16.cl` built with -mwavefrontsize64 -DW64: the true16 compare
+# writes the VCC pair.
+[[family]]
+name = "amdgpu_gfx11_w64_true16"
+language = "AMDGPU:LE:64:GFX11-W64"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_w64_true16.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx11_w64_true16_half_math_decompiles"
+address = "0x0"
+expect = ["if (v2 < v3)", "- ABS(v3);"]
 
 # The CPython 3.12 bytecode language decompiles a function's co_code from a raw image:
 # fast locals become parameters and variables, the value stack folds away, and objects,
@@ -2341,6 +2405,15 @@ expect = [
 test = "starcore_short_loop_lpmarka_back_edge"
 address = "0x40"
 expect = ["while( true ) {", "if (a3 <= 1) break;"]
+
+[[family.function]]
+test = "starcore_cont_ends_the_iteration_early"
+address = "0x70"
+expect = [
+    "while( true ) {",
+    "if (a0 <= *a2) {",  # IFT CONT skips the rest when D1 > D0
+    "a0 += *a2 * 3LL;",
+]
 
 [[family.function]]
 test = "starcore_two_set_short_loop_back_edge"
@@ -3148,6 +3221,26 @@ test = "elfroute_msp430_elf_pick"
 address = "pick"
 expect = ["0x2c", "scale7("]
 
+# switchextent: a byte selector with no range check reads its table up to the next jump table,
+# of the function (csplit's regcomp) or of the next function (an OCaml match's last table).
+[[family]]
+name = "switchextent_x86_byte"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/switchextent_x86/tables.elf"
+forbid = ["halt_baddata", "jump-as-call"]
+
+[[family.function]]
+test = "switchextent_x86_byte_selector_ends_at_own_next_table"
+address = "bytesel"
+expect = ["case 2:", "0x15"]
+forbid = ["case 3:"]
+
+[[family.function]]
+test = "switchextent_x86_last_table_ends_at_next_functions_table"
+address = "lastsel"
+expect = ["case 3:", "return 0x21;"]
+forbid = ["case 4:"]
+
 # Hexagon ET_REL (EM_HEXAGON) routes to Hexagon:LE:32:default (#706); B22_PCREL calls, 32_6_X/16_X/6_X globals (#737).
 [[family]]
 name = "elfroute_hexagon_o"
@@ -3379,7 +3472,6 @@ forbid = ["halt_baddata", "halt_missing"]
 test = "elfroute_sparc64_elf_chain"
 address = "chain"
 expect = ["scale7(", "+ 1"]
-xfail = "#756: the linked image marks the leaf scale7 no-return"
 
 [[family.function]]
 test = "elfroute_sparc64_elf_lookup"
@@ -3629,3 +3721,28 @@ expect = ["return v * (double)n;"]
 test = "elfroute_sparc64_float_two_args"
 address = "f2"
 expect = ["return v * w;"]
+
+# CUDA cubin ET_REL (EM_CUDA, ELF ABI 8, sm_80) routes to SASS:LE:64:SM80 (#776); CALL.ABS targets
+# take R_CUDA_ABS47_34 (#783).
+[[family]]
+name = "elfroute_sm80_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/sm80.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_sm80_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_sm80_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+xfail = "the .nv.global data symbols are not named: g_tab prints as 0x400880"
+
+[[family.function]]
+test = "elfroute_sm80_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+xfail = "the BRX jump table is the opaque sass_BRX op"

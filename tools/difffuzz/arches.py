@@ -843,7 +843,7 @@ class S390x(Arch):
     pc = "PC"
     max_len = 6
     gprs = [(f"r{i}", getattr(sz, f"UC_S390X_REG_R{i}")) for i in range(16)]
-    vecs = [(f"f{i}", getattr(sz, f"UC_S390X_REG_F{i}")) for i in range(16)]
+    vecs = [(f"v{i}", getattr(sz, f"UC_S390X_REG_V{i}", None)) for i in range(32)]
     pc_const = sz.UC_S390X_REG_PC
     deny = S390X_DENY
     qemu_bits = ("CC0", "CC1", "CC2", "CC3", "CCA", "CCB")
@@ -866,6 +866,43 @@ class S390x(Arch):
     def skip(self, cand):
         # QEMU 10.2 stores the low word shifted left by 32 (zero) for STMH, not bits 0-31
         return cand["mnemonic"] == "stmh"
+
+    def ignored(self, mnemonic, operands, state):
+        dst = "v" + operands.split(",")[0].strip()[2:]
+        if re.match(r"^[vw]fn?m[as](sb|db|xb)$", mnemonic):
+            return {dst}  # fused: p-code rounds twice
+        if re.match(r"^[vw]c(dg|dlg|ef|elf)b?$", mnemonic):
+            mode = operands.split(",")[-1].strip()
+            if mode not in ("0", "4"):
+                return {dst}  # an int-to-float conversion rounds to nearest in p-code, whatever M5 says
+        return set()
+
+    partial_uses_sleigh = True
+
+    def partial(self, mnemonic, operands, sleigh=None):
+        """A scalar (W) vector instruction defines element 0 of its target; the rest of the
+        register is unpredictable. The SLEIGH mnemonic is used when there is one (Capstone 5
+        prints the newer W forms as their generic V form)."""
+        if sleigh is not None:
+            mnemonic = sleigh["mnemonic"]
+            dst = sleigh["operands"].split(",")[0].strip()
+            dst = "%" + dst.rstrip("s") if dst.startswith(("f", "v")) else dst
+        else:
+            dst = operands.split(",")[0].strip()
+        if not mnemonic.startswith("w") or not dst.startswith(("%f", "%v")) or mnemonic.endswith("xb") and not mnemonic.startswith("wflrx"):
+            return {}
+        sb = re.search(r"sbs?$", mnemonic) is not None or \
+            mnemonic in ("wledb", "wcefb", "wcelfb", "wcfeb", "wclfeb")
+        return {"v" + dst[2:]: ((1 << 32) - 1) << 96 if sb else ((1 << 64) - 1) << 64}
+
+
+class S390xVec(S390x):
+    """s390x with the generator drawing vector-facility (E7, E6) encodings."""
+    name = "s390x-vec"
+    deny = re.compile(r"$^")
+
+    def gen(self, rng):
+        return bytes([0xE6 if rng.random() < 0.1 else 0xE7]) + rng.getrandbits(40).to_bytes(5, "big")
 
 
 class _ObjdumpIns:
@@ -1278,4 +1315,86 @@ class M68k(Arch32):
         return cand["mnemonic"] == "link.w" and cand["op_str"].startswith("a7,")
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k())}
+SPARC_DENY = re.compile(
+    r"^(b.*|fb.*|cb.*|call|jmpl?|ret|retl|rett|return|save|restore|saved|restored|flushw|done|retry|"
+    r"t(a|n|ne|e|g|le|ge|l|gu|leu|cc|cs|pos|neg|vc|vs)|taddcctv|tsubcctv|rd.*|wr.*|flush|membar|stbar|"
+    r"prefetch.*|f.*|impdep.*|illtrap|unimp|sir|iprefetch|(ld|st)[a-z]*a|swapa|casx?a|ldq.*|stq.*|"
+    r"shutdown|sleep|nop)$"
+)
+
+
+class Sparc64(Arch):
+    """SPARC V9 integer instructions, against QEMU user mode (--oracle qemu). Branches, calls,
+    register-window, trap, privileged, ASI and floating-point instructions are not generated."""
+    name = "sparc64"
+    lang = "sparc:BE:64:default"
+    elf_machine = 43
+    big = True
+    pc = "PC"
+    gprs = [(n, None) for n in ["g1", "g2", "g3", "g4", "g5", "g6", "g7", "o0", "o1", "o2", "o3", "o4", "o5",
+                                "sp", "o7", "l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7", "i0", "i1", "i2",
+                                "i3", "i4", "i5", "fp", "i7"]] + [("Y", None)]
+    pc_const = None
+    flags_reg = "ccr"
+    flag_bits = {"i_cf": 0, "i_vf": 1, "i_zf": 2, "i_nf": 3, "x_cf": 4, "x_vf": 5, "x_zf": 6, "x_nf": 7}
+    deny = SPARC_DENY
+
+    def unicorn(self):
+        raise NotImplementedError("sparc runs with --oracle qemu")
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_SPARC, cs.CS_MODE_BIG_ENDIAN | cs.CS_MODE_V9)
+
+    def gen(self, rng):
+        k = rng.random()
+        w = rng.getrandbits(32)
+        if k < 0.05:
+            w = (w & 0x3E3FFFFF) | 0x01000000                         # sethi
+        else:
+            w = (w & 0x3FFFFFFF) | (0x80000000 if k < 0.65 else 0xC0000000)
+        return w.to_bytes(4, "big")
+
+    def canonical(self, cand):
+        w = int.from_bytes(cand["bytes"][:4], "big")
+        op, op3, i = w >> 30, (w >> 19) & 0x3F, (w >> 13) & 1
+        if op == 2 and op3 in (0x25, 0x26, 0x27):
+            # shift encodings: bits 11:5 (11:6 with x = 1) are reserved
+            res = 0xFC0 if (i and (w >> 12) & 1) else 0xFE0
+            if w & res:
+                return False
+        elif op == 2 and op3 < 0x25 and not i and (w >> 5) & 0xFF:
+            return False                                     # the unused asi field of a register form
+        elif op == 2 and op3 == 0x2C:
+            # MOVcc: cc2 = 0 is fcc, cc1:cc0 = 01/11 are reserved, bits 10:5 of the register form too
+            if not (w >> 18) & 1 or (w >> 11) & 1 or (not i and (w >> 5) & 0x3F):
+                return False
+        elif op == 2 and op3 in (0x36, 0x37):
+            return False                                     # VIS / IMPDEP
+        return not re.search(r"%f|%c\d|%fsr|%fcc|%asi|%q", cand["op_str"])
+
+    def skip(self, cand):
+        # QEMU 8.2 zero-extends a 32-bit SLL; V9 shifts all 64 bits
+        return self.elf64 and cand["mnemonic"] == "sll"
+
+    def fix_inputs(self, init, rng):
+        init["Y"] &= 0xFFFFFFFF
+
+
+class Sparc32(Sparc64):
+    """The 32-bit SPARC V9 language (32-bit registers) on qemu-sparc32plus. Instructions that only
+    exist for 64-bit registers or read xcc are not generated, and xcc is not compared."""
+    name = "sparc"
+    lang = "sparc:BE:32:default"
+    elf_machine = 18
+    elf64 = False
+
+    def canonical(self, cand):
+        if re.match(r"(ldx|stx|sllx|srlx|srax|mulx|sdivx|udivx|casx|movr.*|popc|ldsw)$", cand["mnemonic"]):
+            return False
+        return "%xcc" not in cand["op_str"] and Sparc64.canonical(self, cand)
+
+    def ignored(self, mnemonic, operands, state):
+        return {"x_cf", "x_vf", "x_zf", "x_nf"}
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32())}

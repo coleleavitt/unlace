@@ -42,6 +42,10 @@ EXTRA = {
           "c_i3t=(31,31)", "c_i3v=(24,29)", "c_i4z=(23,23)", "c_i4v=(16,21)", "c_i5v=(8,13)"],
 }
 TOKSZ = {"a": 16, "b": 32, "c": 48}
+# Fields of the 48-bit token that the vector instructions (gen_vector.py) use.
+_VF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vector_fields.txt")
+if os.path.exists(_VF):
+    EXTRA["c"] += [l.strip() for l in open(_VF) if l.strip()]
 
 main = []
 def M(s=""): main.append(s)
@@ -803,6 +807,9 @@ Q("ste b_fsA,XBD4", "b_op8=0x70 & b_fsA & XBD4", "*:4 XBD4 = b_fsA;")
 Q("stey c_fsA,XBD6", "c_op8=0xed & c_opl=0x66 & c_fsA & XBD6", "*:4 XBD6 = c_fsA;")
 Q("ldgr b_fE,b_rF", "b_op16=0xb3c1 & b_fE & b_rF", "b_fE = b_rF;")
 Q("lgdr b_rE,b_fF", "b_op16=0xb3cd & b_rE & b_fF", "b_rE = b_fF;")
+# LOAD LENGTHENED (HFP) leaves the bits and clears the right half; LLVM loads a float this way.
+Q("lder b_fE,b_fsF", "b_op16=0xb324 & b_fE & b_fsF", "b_fE = zext(b_fsF) << 32;")
+Q("lde c_fA,XBDE6", "c_op8=0xed & c_opl=0x24 & c_fA & XBDE6", "local v:4 = *:4 XBDE6; c_fA = zext(v) << 32;")
 Q("ldebr b_fE,b_fsF", "b_op16=0xb304 & b_fE & b_fsF", "b_fE = float2float(b_fsF);")
 Q("ldeb c_fA,XBDE6", "c_op8=0xed & c_opl=0x04 & c_fA & XBDE6", "local v:4 = *:4 XBDE6; c_fA = float2float(v);")
 Q("ledbr b_fsE,b_fF", "b_op16=0xb344 & b_fsE & b_fF", "b_fsE = float2float(b_fF);")

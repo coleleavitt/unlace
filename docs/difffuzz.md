@@ -19,7 +19,7 @@ python3 -m venv ~/.local/share/difffuzz-venv
 `--arch` is `x86-64`, `aarch64`, `riscv64`, `arm` (A32), `thumb` (T32), `mips` (MIPS32 big-endian),
 `mips64`, `mips64r6`, `mipsr6` (MIPS64, MIPS64 Release 6 and MIPS32 Release 6, big-endian; use
 `--oracle qemu`), `ppc` (PowerPC 32 big-endian), `tricore`, or (QEMU oracle only) `ppc64`, `ppc64le`, `ppc64-isa`,
-`ppc64le-isa`, `s390x` and `loongarch64`. `--sleighpath DIR` lifts with the `.sla`
+`ppc64le-isa`, `s390x`, `s390x-vec` and `loongarch64`. `--sleighpath DIR` lifts with the `.sla`
 files under `DIR` instead of the built-in ones, so a spec edit can be checked right after
 `slacomp` without rebuilding unlace. The summary on stdout counts each outcome and lists the
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
@@ -105,6 +105,18 @@ afterwards. The register file is unchanged.
   second operand counts from its own extension word; bit-field width 0 = 32, register fields wrap,
   memory fields reach a fifth byte, BFFFO adds the offset, BFCHG/BFCLR/BFSET write the operand
   back. Seed 13, 4000 encodings: 8152 matches, no mismatches.
+- SPARC V9 (`--arch sparc64`, `sparc:BE:64:default`, `qemu-sparc64`; `--arch sparc`,
+  `sparc:BE:32:default`, on `qemu-sparc32plus`, which runs the V8+ ABI on a V9 CPU; both
+  `--oracle qemu`, QEMU 8.2): the table register is restored in the BA's delay slot; Y and CCR
+  go through `wr`/`rd`. SPARC64 QEMU maps 8 KiB pages, so its segments are widened to 8 KiB
+  (`seg_align`). Not generated: branches, calls, register windows, traps, `rd`/`wr`,
+  ASI, floating-point and VIS instructions, and reserved encodings QEMU refuses (shift bits
+  11:5, the unused asi field of a register-form ALU op, MOVcc's reserved cc values). The 32-bit
+  language skips the 64-bit-only instructions and does not compare xcc. QEMU 8.2 zero-extends
+  a 32-bit SLL, so `sll` is skipped on sparc64 (V9 shifts all 64 bits). Fixed in `SparcV9.sinc`
+  after the first run: UDIV/SDIV(cc) clamp an overflowing quotient (2^32-1, 2^31-1 or -2^31)
+  and set icc.v; xcc of UMULcc/SMULcc/UDIVcc/SDIVcc comes from the 64-bit result. Seed 5,
+  4000 encodings on sparc64: 10650 matches; seed 6, 3000 on sparc: 8251; no mismatches.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.
@@ -128,12 +140,17 @@ afterwards. The register file is unchanged.
   in an FPR is compared in its low word only (bits 63:32 are undefined; QEMU NaN-boxes them),
   and a fused multiply-add's result is not compared. LSX/LASX, LBT, CSR, FCSR moves, timer,
   `ll`/`sc` and privileged instructions are left out.
-- s390x: r0..r15 and f0..f15 are seeded and compared; the condition code is set with `spm` and
-  read back with `ipm`, and is seeded one-hot into `CC0`..`CC3` with `CCA`/`CCB` to match. The
-  table address is kept in a register the instruction does not write. Vector, decimal, hexadecimal
-  FP and privileged instructions are left out, as are `ex`/`exrl` and the interruptible
-  storage-to-storage instructions. `stmh` is skipped: QEMU 10.2 stores the low word shifted
-  left by 32 (that is, zero) instead of bits 0-31 of each register.
+- s390x: r0..r15 and v0..v31 (`vl`/`vst`; `f0`..`f15` are their leftmost doublewords) are seeded and
+  compared; the condition code is set with `spm` and read back with `ipm`, and is seeded one-hot
+  into `CC0`..`CC3` with `CCA`/`CCB` to match. The table address is kept in a register the
+  instruction does not write. `s390x-vec` draws `E7`/`E6` (vector) encodings. A scalar (W) vector
+  instruction is compared in element 0 of its target only (the rest is unpredictable; the SLEIGH
+  mnemonic decides, since Capstone 5 prints newer W forms as their generic V form); fused
+  multiply-adds are not compared, nor an integer-to-float conversion with a rounding mode other
+  than 0 or 4. Decimal, hexadecimal FP and privileged instructions are left out of `s390x`, as
+  are `ex`/`exrl` and the interruptible storage-to-storage instructions. `stmh` is skipped: QEMU
+  10.2 stores the low word shifted left by 32 (that is, zero) instead of bits 0-31 of each register.
+- `CEIL`, `FLOOR` and `ROUND` keep the sign of their operand (`ceil(-0.3)` is `-0.0`).
 - A `LOAD` from the constant space (a dynamic export such as `export *[const]:8 tmp`) reads
   its pointer as the value.
 
@@ -151,6 +168,9 @@ mnemonics). Capstone 5 does not decode them. QEMU runs with
   vtype, vxsat, vxrm, fcsr and vstart. Half of the x registers point into a 64 KiB data
   region, which is always mapped and compared. When QEMU raises SIGILL (a register group, SEW
   or EEW the instruction does not allow) the case is retried at LMUL 1 with each SEW.
+- **vtype as context.** Each encoding is lifted after a `vsetvli x0, x0` of each vtype it is run
+  at (`lift_variants`), so the decoder sees the vtype the harness sets, and the case is run with
+  the first of those vtypes QEMU accepts.
 - **What is compared.** `riscv.rvv.sinc` lifts every vector instruction to a user operation,
   so element values cannot be compared. The p-code runs twice, each time with different
   random user-operation results. A byte written the same way in both runs must equal QEMU's
@@ -159,6 +179,9 @@ mnemonics). Capstone 5 does not decode them. QEMU runs with
   gives every register the p-code does not read new contents, keeping vl, vtype, vxrm and
   fcsr. If a byte the p-code writes through a user operation changes, the result is
   `missing-input`, tagged with the case's tail/mask policy (`tu/mu` etc.).
+- **After vtype context (`tools/gen_rvv_groups.py`)** (pinned `unlace-92c033f5ca`, 400
+  encodings, seeds 5/6): VLEN 128 247 match, 17 with findings; VLEN 256 239 match, 29 with
+  findings. Every remaining finding is fflags or vxsat, which the lift leaves out.
 - **First run** (pinned `unlace-cc4eab698b`, 400 encodings each):
   - VLEN 128: 146 match, 111 with findings, 143 reference exceptions. The exceptions are
     SIGSEGV on indexed and strided addresses outside the region, and SIGILL on encodings
@@ -202,7 +225,8 @@ The exit status is 1 when a configuration has a finding of a failing kind (`mism
 accept, 2 when a configuration errored, and 0 otherwise. `sweep_known.json` maps
 `arch/oracle` to the difference keys (a register, `missing-output`, `missing-input`) and the
 fnmatch patterns over their values that are documented open classes. Today that is only the RISC-V
-vector classes below. A value mismatch is never accepted.
+vector accrued flags (fflags, vxsat), which the lift leaves out as the scalar F/D lift does. A value
+mismatch is never accepted.
 
 First run (unlace-2feb8da847, seed 1, 200 per configuration): every available configuration is
 `ok`. Unavailable were `ppc`, `ppc64le`, `ppc64le-isa` and `s390x` on QEMU (no

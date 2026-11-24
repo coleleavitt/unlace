@@ -60,7 +60,8 @@ define context contextreg
   cr_v2 = (136,143) noflow
   c_v3 = (144,151) noflow
   cr_v3 = (144,151) noflow
-;
+
+  mi_vdn = (240,242) noflow;
 
 define token I(32)
   i17_v7 = (17,23)
@@ -2369,3 +2370,8 @@ T16S: S32_i0 is i0_v=0 ... & S32_i0 ... { t:2 = S32_i0:2; export t; }
 :v_cmp_class_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=126 ... & V32_i0 ... & i9_vg ... { c:1 = cmp_class(V32_i0, i9_vg); vcc_lo = zext(c); }
 :v_cmp_class_f32_e64 i0_lo7d, F32_j0, V32_j9 is e6=0x35 ... & vop3op=126 ... & i0_h=0 ... & i0_lo7d ... & F32_j0 ... & (e6 ; V32_j9 ...) ... { c:1 = cmp_class(F32_j0, V32_j9); i0_lo7d = zext(c); }
 :s_sendmsg_rtn_b32 i16_lo7, i0_x is e9=0x17d & sop1op=0x4c & i16_lo7 & i0_x { m:1 = i0_x; i16_lo7 = sendmsg_rtn(m); }
+
+# Generated: true16 and other VALU forms, VOP3P, MIMG.
+@include "amdgcn_gfx11_valu.sinc"
+@include "amdgcn_gfx11_vop3p.sinc"
+@include "amdgcn_gfx11_mimg.sinc"

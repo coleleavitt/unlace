@@ -21,6 +21,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use slotmap::SecondaryMap;
+
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
@@ -134,7 +136,9 @@ fn find_loop(data: &Funcdata, header: BlockId) -> Option<Loop> {
             continue;
         }
         // The loop: the header and everything that reaches the tail without it.
-        let mut blocks: BTreeSet<BlockId> = [header, tail].into_iter().collect();
+        let mut inside: SecondaryMap<BlockId, ()> = SecondaryMap::new();
+        inside.insert(header, ());
+        inside.insert(tail, ());
         let mut work = vec![tail];
         while let Some(b) = work.pop() {
             if b == header {
@@ -143,22 +147,23 @@ fn find_loop(data: &Funcdata, header: BlockId) -> Option<Loop> {
             let bb = data.bblocks_ref().block(b);
             for i in 0..bb.size_in() {
                 let p = bb.get_in(i);
-                if blocks.len() > 512 {
+                if inside.len() > 512 {
                     return None;
                 }
-                if blocks.insert(p) {
+                if inside.insert(p, ()).is_none() {
                     work.push(p);
                 }
             }
         }
-        if blocks.contains(&entry) || blocks.contains(&exit) {
+        if inside.contains_key(entry) || inside.contains_key(exit) {
             continue;
         }
         // Only the tail leaves the loop, and only to the exit.
-        let leaves = blocks.iter().any(|&b| {
+        let leaves = inside.keys().any(|b| {
             let bb = data.bblocks_ref().block(b);
-            (0..bb.size_out())
-                .any(|i| !blocks.contains(&bb.get_out(i)) && !(b == tail && bb.get_out(i) == exit))
+            (0..bb.size_out()).any(|i| {
+                !inside.contains_key(bb.get_out(i)) && !(b == tail && bb.get_out(i) == exit)
+            })
         });
         if leaves {
             continue;
@@ -182,7 +187,7 @@ fn find_loop(data: &Funcdata, header: BlockId) -> Option<Loop> {
         } else {
             continue;
         };
-        if guard_exit == entry_side || blocks.contains(&guard_exit) {
+        if guard_exit == entry_side || inside.contains_key(guard_exit) {
             continue;
         }
         let mut phis = Vec::new();
@@ -193,6 +198,7 @@ fn find_loop(data: &Funcdata, header: BlockId) -> Option<Loop> {
             }
             phis.push((op, o.get_in(1 - back as int4)?, o.get_in(back as int4)?));
         }
+        let blocks: BTreeSet<BlockId> = inside.keys().collect();
         return Some(Loop {
             guard,
             entry,

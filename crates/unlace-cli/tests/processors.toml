@@ -13,6 +13,10 @@
 # (docs/processor-tests.md).
 
 [images]
+xtensa_hifi4_rt700 = """
+3641001f3270166d006c04c777391f3270167d006c04c77739142030042301ff2270163d006c44c477392d031df00000
+3641000fa2700d0a2050002a8f000f22700d4a0010062c8f001df0
+"""
 arcv2_list_sum = """
 0a220080e120c1070c704c4344424b7ae120c10778604c434442f30a31807860e07ee078
 """
@@ -3725,3 +3729,24 @@ test = "elfroute_sm80_o_pick"
 address = "pick"
 expect = ["0x2c", "scale7("]
 xfail = "the BRX jump table is the opaque sass_BRX op"
+
+# The Xtensa HiFi 4 (NXP i.MX RT700) language decodes FLIX bundles and AE_* operations: two
+# post-incremented ae_l64.ip loads in 88-bit bundles, ae_add32 and an ae_s64.i store; and a
+# beqz.w15 branch over an l32i in a bundle. Built with the overlay's xtensa-elf-as.
+[[family]]
+name = "xtensa_hifi4_rt700"
+language = "Xtensa:LE:32:hifi4_rt700"
+base = "0x0"
+image = "xtensa_hifi4_rt700"
+args = ["--addr"]
+forbid = ["halt_baddata", "hifi_nop"]
+
+[[family.function]]
+test = "xtensa_hifi4_flix_loads_feed_the_store"
+address = "0x0"
+expect = ["*a1 = hifi_ae_s64_i(hifi_ae_add32(", "hifi_ae_l64_ip(a0->field_0x8)"]
+
+[[family.function]]
+test = "xtensa_hifi4_flix_branch_guards_the_load"
+address = "0x30"
+expect = ["if (!a0)", "return ((unsigned int *)a0)[1];"]

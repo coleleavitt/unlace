@@ -590,6 +590,10 @@ Three tiers:
 | a chain of tests on one pointer prints as nested ifs with no else | [`nestedand`](#nestedand----on--off-default-off) |
 | if (c) { return a; } else { return b; } where the source returned c ? a : b | [`retternary`](#retternary----on--off-default-off) |
 | a function ends in two returns of a variable and a constant | [`retternary`](#retternary----on--off-default-off) |
+| if (a) goto L; if (b) goto L; where the source wrote one if (a  | [`orexit`](#orexit----on--off-default-off) |
+|  | [`orexit`](#orexit----on--off-default-off) |
+|  b) | [`orexit`](#orexit----on--off-default-off) |
+| several adjacent ifs each return the same constant | [`orexit`](#orexit----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -2543,6 +2547,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on when the source likely returned one expression (`return ok ? a : b;`, `return !c || flag;`), which compilers lower to two returns. Leave off to keep the if/else of returns the binary literally has; both are the same object code.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-retternary
 - **Example:** `option retternary on`
+
+### `orexit` -- on | off, default `off`
+
+- **Symptoms:** if (a) goto L; if (b) goto L; where the source wrote one if (a ; ;  b); several adjacent ifs each return the same constant.
+- **What it does:** C output only: fold a run of adjacent ifs without else that leave the same way into the first, over the conditions joined by ||: `if (a) goto L; if (b) goto L;` becomes `if ((a) || (b)) goto L;`, and the same for a break or continue to one target or a return of one constant or one variable. Because each body leaves, the second test only runs when the first is false, so the fold keeps the behaviour. Every if after the first must print nothing before its test (no statement, no comment, no label), its condition must be a single leaf, and no if may print as a switch or an exception form or sit inside a condition. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function.
+- **When to flip:** Turn on when consecutive tests share one exit (argument validation, early-out chains) and read better as one condition. Leave off to keep one if per test, as Ghidra prints it.
+- **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-orexit
+- **Example:** `option orexit on`
 
 ## Analysis & loader passes
 

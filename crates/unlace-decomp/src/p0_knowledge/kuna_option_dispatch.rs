@@ -642,6 +642,7 @@ kuna_options! { self, p1;
     "noretfirst" => registered!(crate::kuna_ctree::Noretfirst),
     "nestedand" => registered!(crate::kuna_ctree::Nestedand),
     "retternary" => registered!(crate::kuna_ctree::Retternary),
+    "orexit" => registered!(crate::kuna_ctree::Orexit),
     "macho-arm64e" => {
         let (val, msg) = <crate::kuna_macho_arm64e::MachoArm64e as crate::kuna_optionset::KunaOption>::parse(p1)?;
         self.load_options_mut().macho_arm64e = val.0;

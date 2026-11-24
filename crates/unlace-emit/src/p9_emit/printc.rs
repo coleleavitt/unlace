@@ -4867,7 +4867,8 @@ impl PrintC {
             || arch.kuna_options.get::<crate::kuna_ctree::Boolreturn>().0
             || arch.kuna_options.get::<crate::kuna_ctree::Noretfirst>().0
             || arch.kuna_options.get::<crate::kuna_ctree::Nestedand>().0
-            || arch.kuna_options.get::<crate::kuna_ctree::Retternary>().0;
+            || arch.kuna_options.get::<crate::kuna_ctree::Retternary>().0
+            || arch.kuna_options.get::<crate::kuna_ctree::Orexit>().0;
         self.ctree = if tree_on && !self.is_flat() {
             crate::kuna_ctreebuild::build(fd)
         } else {
@@ -5135,9 +5136,10 @@ impl PrintC {
             Some(tree) => tree.expr(expr).kind.clone(),
             None => return,
         };
+        let is_or = matches!(kind, ExprKind::Or(..));
         match kind {
             ExprKind::Branch(block) => self.emit_block(fd, arch, block),
-            ExprKind::And(left, right) => {
+            ExprKind::And(left, right) | ExprKind::Or(left, right) => {
                 let right_block = match self
                     .ctree
                     .as_ref()
@@ -5152,7 +5154,11 @@ impl PrintC {
                 self.context.unset_mod(modifiers::ONLY_BRANCH);
                 self.context.set_mod(modifiers::COMMA_SEPARATE);
                 let pol = ReversePolish {
-                    tok: &tokens::BOOLEAN_AND,
+                    tok: if is_or {
+                        &tokens::BOOLEAN_OR
+                    } else {
+                        &tokens::BOOLEAN_AND
+                    },
                     visited: 1,
                     paren: false,
                     op: None,

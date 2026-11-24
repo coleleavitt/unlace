@@ -10,7 +10,8 @@ crate for now because their tests read printer state (output language, stack vie
 new rewrite, `option boolreturn` (backlog #9, the `return c` part), runs in the same pass, and so
 does `option noretfirst` (backlog #8: the arm that never falls through first, the other after)
 and `option nestedand` (backlog #10, the under-fold part: nested ifs without else as one `&&`)
-and `option retternary` (backlog #9, the rest: `return c ? A : B`, `return !c || x`).
+and `option retternary` (backlog #9, the rest: `return c ? A : B`, `return !c || x`) and
+`option orexit` (backlog #10, equal exits: `if (a) goto L; if (b) goto L;` as one `||`).
 Spec: `docs/spec/09-emission.md`, "Printing through the C syntax tree".
 
 Today the printer walks the structured block graph and the p-code ops directly and writes text as it

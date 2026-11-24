@@ -1835,10 +1835,28 @@ test = "cpython_loops_decompile"
 address = "0x0"
 expect = [
     "v1 = py_iter(py_call(0,py_global(0),a0));",
-    "while (!(bool)py_iter_done(v1)) {",
-    "v4 = py_inplace_add(v4,v3);",
-    "v4 = py_inplace_subtract(v4,py_const(4));",
-    "return v4;",
+    "v3 = (bool)py_iter_done(v1);",
+    "if (v3) break;",
+    "v5 = py_inplace_add(v5,v4);",
+    "v5 = py_inplace_subtract(v5,py_const(4));",
+    "return v5;",
+]
+
+[[family]]
+name = "cpython_enum_new"
+language = "CPython:LE:32:3.12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/cpython/enum_new.bin"
+
+# `enum.EnumType.__new__` from the python3.12 stdlib (2428 bytes, several for loops). FOR_ITER
+# used to branch inside its own p-code, and this function then failed with "Could not find
+# op at target address" (real-code sweep).
+[[family.function]]
+test = "cpython_enum_new_decompiles"
+address = "0x0"
+expect = [
+    "py_iter_next(",
+    "py_getattr(a3,5)",
 ]
 
 [[family]]

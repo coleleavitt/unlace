@@ -245,6 +245,10 @@ specs/Ghidra/Processors/AdrenoQRISC vendors the Qualcomm Adreno SQE / QRISC SLEI
 aleph-void/ida-adreno-qrisc (https://github.com/aleph-void/ida-adreno-qrisc), a fork of locus-x64/ida-adreno-qrisc, released under the
 MIT License (its license file is in that directory).
 
+specs/Ghidra/Processors/PRU vendors the TI PRU / PRU-ICSS SLEIGH module PRU of
+Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
+License (its license files are in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

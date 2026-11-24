@@ -2376,6 +2376,21 @@ expect = [
 ]
 
 [[family]]
+name = "cpython_tailcallframe"
+language = "CPython:LE:32:3.12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/cpython/ipaddress_format.bin"
+
+# `co_code` of python3.12's `ipaddress._BaseAddress.__format__`. Its `JUMP_FORWARD` to the
+# shared padding block (0x160) leaves the operand stack as the entry block found it, which
+# tailcallframe read as a frame teardown and printed `return sub_160();` (#690).
+[[family.function]]
+test = "cpython_tailcallframe_no_tail_call"
+address = "0x0"
+forbid = ["tailcallframe", "sub_160"]
+expect = ["py_floor_divide("]
+
+[[family]]
 name = "lua54_allones_and"
 language = "Lua:LE:32:5.4"
 base = "0"

@@ -3185,8 +3185,8 @@ When the model is not admitted the branch is truncated to a `CALLIND` carrying
 **Model 4 — the table matched from its instructions** (`rawswitch.rs
 (JumpModelRaw)`, unlace, `option rawswitch`, default off; x86-64 only). When
 `jumptable.rs (JumpTable::recover_addresses)` fails with every model above, the
-bytes before the BRANCHIND are matched backward against gcc's and clang's PIC
-dispatch: `cmp $N,%idx; ja default`, `lea table(%rip),%base` (before or after
+bytes before the BRANCHIND (up to 40, fewer where the image starts closer to
+the jump) are matched backward against gcc's and clang's PIC dispatch: `cmp $N,%idx; ja default`, `lea table(%rip),%base` (before or after
 the pair), `movslq (%base,%idx,4),%dst`, `add %base,%dst`, `jmp *%dst` (with
 `notrack` or a REX prefix). The table's `N + 1` rows are offsets from its start;
 each target must lie within `0xffff` of the jump and there must be two distinct

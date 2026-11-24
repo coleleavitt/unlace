@@ -7053,6 +7053,12 @@ impl TypeFactoryImpl {
                 ao = st;
             }
         }
+        if as_.checked_mul(ao.get_align_size()).is_none() {
+            return Err(UnlaceError::lowlevel(format!(
+                "array of {as_} elements of {} bytes overflows the size field",
+                ao.get_align_size()
+            )));
+        }
         self.find_add(self.build_array(as_, ao))
     }
 

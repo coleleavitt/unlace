@@ -5708,9 +5708,15 @@ branch (`add a2,a10,a8; bgeu a2,a8,1f; addi a3,a3,1`), so the low word of a retu
 `crates/unlace-middle/src/p4_calls/carryuse.rs (carry_test)` skips, for a
 RETURN trial only, an `INT_LESS` or `INT_LESSEQUAL` that compares the walked value,
 when an `INT_ADD` defines it, with one of that add's inputs (the same Varnode, or a
-constant of equal size and value). That compare is the sum's carry test, not a use
-that competes with the return, and the walk does not follow its boolean. Every other
-use, and every use on an argument trial, is scored as before.
+constant of equal size and value), when only CBRANCHes read its boolean (through at
+most three `BOOL_NEGATE`s or `COPY`s). That compare is the sum's carry test, not a
+use that competes with the return, and the walk does not follow its boolean. A carry
+the code adds into another register instead (MIPS `addu $3,$7,$5; sltu $2,$3,$7`
+into the high word) is not skipped: that pair is a return only when `bejoin` proves
+it one value and joins it high word first, and skipping the compare made `bejoin
+evidence` return it joined first register low, its halves swapped
+(`tests/stages/callwide.toml`, `bejoin-mipsclang.toml`). Every other use, and every
+use on an argument trial, is scored as before.
 
 ### (unlace) `returnpair` — the register-pair return split
 

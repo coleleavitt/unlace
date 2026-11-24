@@ -331,16 +331,30 @@ fn raw_destinations(fd: &Funcdata, indop: OpId) -> Option<Vec<uintb>> {
     }
     let jmp = at.get_offset();
     const BACK: uintb = 40;
-    let mut bytes = Vec::with_capacity(BACK as usize + 4);
-    let start = jmp.checked_sub(BACK)?;
-    for off in start..jmp + 4 {
-        bytes.push(
-            arch.get_load_image_value(&Address::new(Rc::clone(&spc), off), 1)
-                .ok()? as u8,
-        );
+    let byte = |off: uintb| {
+        arch.get_load_image_value(&Address::new(Rc::clone(&spc), off), 1)
+            .ok()
+            .map(|b| b as u8)
+    };
+    // as many bytes before the jump as the image holds, up to BACK: a dispatch at the
+    // start of a section or a raw image has nothing mapped in front of it
+    let mut back: uintb = 0;
+    while back < BACK && jmp.checked_sub(back + 1).and_then(|o| byte(o)).is_some() {
+        back += 1;
     }
+    let mut bytes = Vec::with_capacity(back as usize + 4);
+    for off in jmp - back..jmp {
+        bytes.push(byte(off)?);
+    }
+    for off in jmp..jmp.checked_add(4)? {
+        match byte(off) {
+            Some(b) => bytes.push(b),
+            None => break,
+        }
+    }
+    let back = back as usize;
     let found = (2..=4).find_map(|len| {
-        let slice = &bytes[..(BACK as usize + len)];
+        let slice = bytes.get(..back + len)?;
         match_dispatch(slice, jmp, len)
     })?;
     let mut dests = Vec::with_capacity(found.rows as usize);

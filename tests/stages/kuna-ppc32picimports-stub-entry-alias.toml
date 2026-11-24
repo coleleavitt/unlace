@@ -1,0 +1,54 @@
+[image]
+arch = 'PowerPC:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '4e800020'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-unproved-stub.elf',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function check2',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-dynamic-init.elf',
+    'option voidtailreturn off',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function 0x1004',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-lr-alias-returning.elf',
+    'option voidtailreturn off',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function 0x1004',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'unproved PIC-shaped load retains its returning continuation'
+count = 1
+literal = 'return 7;'
+
+[[match]]
+name = 'dynamic interior entries and escaped saved LR retain returning transfers'
+count = 2
+literal = 'return;'
+
+[[match]]
+name = 'stub slots loader entries and stack aliases grant no false terminal identity'
+count = 0
+regex = '__stack_chk_fail|no-return'

@@ -1,0 +1,64 @@
+# Module 5 game-server port conversion; P9 kuna_partialconcat.rs (always
+# on) preserves both halves with masked C arithmetic instead of the undefined
+# CONCAT helper.  The second case checks a 64-bit partial write; the third joins unrelated
+# operands and must keep the existing rendering.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401487', name = 'swap_port' },
+    { space = 'ram', offset = '0x401500', name = 'swap_low_word' },
+    { space = 'ram', offset = '0x401600', name = 'join_words' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401487'
+readonly = true
+hex = '89f866c1c008c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401500'
+readonly = true
+hex = '4889f866c1c008c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401600'
+readonly = true
+hex = '89f889f248c1e0204809d0c3'
+
+[script]
+commands = [
+    'lo fu swap_port',
+    'decompile',
+    'print C',
+    'lo fu swap_low_word',
+    'decompile',
+    'print C',
+    'lo fu join_words',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'KUNA-PARTIALCONCAT #1: the undefined CONCAT22 helper never prints for the 32-bit result'
+count = 0
+literal = 'return CONCAT22'
+
+[[match]]
+name = 'KUNA-PARTIALCONCAT #2: both halves of the 32-bit result are masked'
+count = 1
+regex = 'return .*0xffff0000.*0xffff;'
+
+[[match]]
+name = 'KUNA-PARTIALCONCAT #3: 64-bit upper bits are preserved'
+count = 1
+regex = 'return .*0xffffffffffff0000.*0xffff;'
+
+[[match]]
+name = 'KUNA-PARTIALCONCAT #4: an unrelated register join stays unchanged'
+count = 1
+literal = 'return CONCAT44(a0,a1);'

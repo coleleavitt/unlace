@@ -3060,7 +3060,7 @@ type_match the declared width is what moves: a
 `uint8_t` counter or a byte read from a `uint8_t` field matches `char`, and an
 x86-64 `int` matches `int`; a local the source declares `int` or an enum but
 only ever loads from a byte field narrows too, and the binary cannot tell the
-two apart (`tests/stages/kuna-regnarrow.xml`, `kuna-regnarrow-x86.xml`).
+two apart (`tests/stages/kuna-regnarrow.toml`, `kuna-regnarrow-x86.xml`).
 
 ### (kuna) `regsigned` — a register local at the width its values are sign extended from
 
@@ -3126,7 +3126,7 @@ holds a sign-extended byte in a register is declared `char`, which the binary
 cannot tell apart. The net is small (a few perfect functions on ARM firmware,
 none on x86-64), and a narrowed value that a wider reader takes back gains a
 cast (`(long)(int)v` on AArch64), which is why the option stays off by default
-(`tests/stages/kuna-regsigned.xml`).
+(`tests/stages/kuna-regsigned.toml`).
 
 ## 3.4 Conditional execution
 

@@ -5709,7 +5709,7 @@ the access is not a stack byte copy, and the statement holding the access is
 the one printed right before the step in the same block. `v = *p; p = &p[1];`
 prints `v = *p++;`, `*d = c; d = &d[1];` prints `*d++ = c;`. A step that goes
 through a copy the loop also compares (`v2 = &a0[1]; v1 += *a0; a0 = v2;`) is
-left as it is (`tests/stages/kuna-postinc.xml`).
+left as it is (`tests/stages/kuna-postinc.toml`).
 
 ### MSVC throws (`msvceh`)
 

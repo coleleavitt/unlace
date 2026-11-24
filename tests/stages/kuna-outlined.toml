@@ -1,0 +1,99 @@
+# The Darwin stack probe and MachineOutliner fragments
+# (`option chkstkdarwin on|off`, `option outlinedinline on|off`).
+#
+# Issue: an Apple function with a large frame calls `___chkstk_darwin`
+# (size in x9; it preserves every register), but the default call model has
+# the call clobber x0-x18, so a value kept in x8 across it printed as an
+# undefined local beside a `__chkstk_darwin()` call. And clang's
+# MachineOutliner splits functions into shared `OUTLINED_FUNCTION_<n>`
+# fragments, which printed as opaque calls with nonsense arguments.
+#
+# Stage / sub-stage: P2. `p2_lift/kuna_chkstkdarwin.rs` deletes the probe
+# CALL pre-SSA; `p2_lift/kuna_outlinedinline.rs` flags each fragment inline
+# so flow splices it into the caller, and the inliner keeps a fragment's own
+# RETURN when the caller tail-calls it.
+#
+# P0 assertions: `option chkstkdarwin on|off`, `option outlinedinline on|off`.
+#
+# The XML wrapper only supplies the harness architecture; every pass loads
+# the plain arm64 `macho_arm64_outlined` fixture (see the fixtures README).
+#
+# Pass 1 (both options off) reproduces the BUGs: `_probe` calls
+# `__chkstk_darwin` and returns an undefined `v1 + 1`, `_sum2` returns
+# `_OUTLINED_FUNCTION_0() + 3`, `_bail` tail-calls `_OUTLINED_FUNCTION_1`.
+# Pass 2 (both on, the shipped defaults) is the FIX: `_probe` returns
+# `a0 + 1` (its `sub sp,sp,x9` with `x9 = x0 << 4` prints as
+# `alloca(a0 << 4)` under `option alloca`, which reads x0 at 64 bits), `_sum2` returns `(a0 + a1) * 2 + 3`, `_bail` calls `exit(7)`.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_arm64_outlined',
+    'option chkstkdarwin off',
+    'option outlinedinline off',
+    'read symbols',
+    'load function _probe',
+    'decompile',
+    'print C',
+    'load function _sum2',
+    'decompile',
+    'print C',
+    'load function _bail',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_arm64_outlined',
+    'read symbols',
+    'load function _probe',
+    'decompile',
+    'print C',
+    'load function _sum2',
+    'decompile',
+    'print C',
+    'load function _bail',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'OUTLINED #1: off keeps the stack probe call'
+count = 1
+literal = '__chkstk_darwin('
+
+[[match]]
+name = 'OUTLINED #2: on returns the argument kept across the probe'
+count = 1
+regex = 'return (\(int4\))?a0 \+ 1;'
+
+[[match]]
+name = 'OUTLINED #3: off calls the fragment'
+count = 1
+regex = 'return _OUTLINED_FUNCTION_0\(.*\) \+ 3;'
+
+[[match]]
+name = "OUTLINED #4: on inlines the fragment's arithmetic"
+count = 1
+literal = 'return (a0 + a1) * 2 + 3;'
+
+[[match]]
+name = 'OUTLINED #5: off tail-calls the fragment'
+count = 1
+literal = '_OUTLINED_FUNCTION_1('
+
+[[match]]
+name = 'OUTLINED #6: on inlines the tail-called fragment'
+count = 1
+literal = 'exit(7);'

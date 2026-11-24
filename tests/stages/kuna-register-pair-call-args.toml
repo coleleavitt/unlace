@@ -1,0 +1,397 @@
+# Independent register-pair argument regression: a declared wide return is overwritten before an undeclared call.
+
+[image]
+arch = 'sparc:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x1100', name = 'producer' },
+    { space = 'ram', offset = '0x1200', name = 'sink' },
+    { space = 'ram', offset = '0x2000', name = 'both' },
+    { space = 'ram', offset = '0x2100', name = 'nonzero' },
+    { space = 'ram', offset = '0x2200', name = 'reversed' },
+    { space = 'ram', offset = '0x2300', name = 'delay' },
+    { space = 'ram', offset = '0x2400', name = 'high_only' },
+    { space = 'ram', offset = '0x2500', name = 'low_only' },
+    { space = 'ram', offset = '0x2600', name = 'unchanged_pair' },
+    { space = 'ram', offset = '0x2800', name = 'one_argument' },
+    { space = 'ram', offset = '0x1400', name = 'unknown_one' },
+    { space = 'ram', offset = '0x2900', name = 'one_variadic' },
+    { space = 'ram', offset = '0x2a00', name = 'declared_wide' },
+    { space = 'ram', offset = '0x2b00', name = 'unknown_wide_output' },
+    { space = 'ram', offset = '0x1280', name = 'variadic' },
+    { space = 'ram', offset = '0x1300', name = 'wide_sink' },
+    { space = 'ram', offset = '0x1380', name = 'unknown_producer' },
+    { space = 'ram', offset = '0x2c00', name = 'convert_argument' },
+    { space = 'ram', offset = '0x2d00', name = 'interval_argument' },
+    { space = 'ram', offset = '0x2e00', name = 'single_without_wide' },
+    { space = 'ram', offset = '0x4000', name = 'math_wrapper' },
+    { space = 'ram', offset = '0x1600', name = 'number' },
+    { space = 'ram', offset = '0x1700', name = 'numeric' },
+    { space = 'ram', offset = '0x1800', name = 'push' },
+    { space = 'ram', offset = '0x1480', name = 'pair_take' },
+    { space = 'ram', offset = '0x2f00', name = 'pair_then_single' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1100'
+readonly = true
+hex = '81c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1200'
+readonly = true
+hex = '81c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2000'
+readonly = true
+hex = '9de3bf0090100018921000197ffffc3d01000000d03fbff8a407bf3092102000941020a8901000127ffffc7601000000f03fbff881c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2100'
+readonly = true
+hex = '9de3bf0090100018921000197ffffbfd01000000d03fbff8a407bf3092102007941020a8901000127ffffc3601000000f03fbff881c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2200'
+readonly = true
+hex = '9de3bf0090100018921000197ffffbbd01000000d03fbff8a407bf3090100012941020a8921020007ffffbf601000000f03fbff881c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2300'
+readonly = true
+hex = '9de3bf0090100018921000197ffffb7d01000000d03fbff8a407bf3001000000941020a8901000127ffffbb692102000f03fbff881c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2400'
+readonly = true
+hex = '9de3bf0090100018921000197ffffb3d01000000d03fbff8a407bf3001000000941020a8901000127ffffb7601000000f03fbff881c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2500'
+readonly = true
+hex = '9de3bf0090100018921000197ffffafd01000000d03fbff8a407bf3092102000941020a8010000007ffffb3601000000f03fbff881c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2600'
+readonly = true
+hex = '9de3bf0090100018921000197ffffabd01000000d03fbff8a407bf3001000000941020a8010000007ffffaf601000000f03fbff881c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2800'
+readonly = true
+hex = '9de3bf0090100018921000197ffffa3d01000000d03fbff8a407bf300100000001000000901020017ffffaf601000000f03fbff881c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1400'
+readonly = true
+hex = '81c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2900'
+readonly = true
+hex = '9de3bf0090100018921000197ffff9fd01000000d03fbff8a407bf300100000001000000901020017ffffa5601000000f03fbff881c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2a00'
+readonly = true
+hex = '9de3bf0090100018921000197ffff9bd01000000d03fbff8a407bf3001000000941020a8010000007ffffa3601000000f03fbff881c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2b00'
+readonly = true
+hex = '9de3bf0090102005921020077ffffa1d01000000d03fbff8010000000100000001000000010000000100000001000000f03fbff881c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1280'
+readonly = true
+hex = '81c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1300'
+readonly = true
+hex = '81c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1380'
+readonly = true
+hex = '81c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2c00'
+readonly = true
+hex = '9de3bf0090100018921000197ffff93d01000000d03fbff8f027bff0c107bff085a01a20c527bff0d207bff09007bf30941020a87ffff97301000000f01fbff881c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2d00'
+readonly = true
+hex = '9de3bf0090100018921000197ffff8fd01000000d03fbff8f037bff0d217bff080a260001280000301000000921023e89007bf30941020a87ffff93201000000f01fbff881c7e00881e8000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2e00'
+readonly = true
+hex = '9de3bf00901020017ffff97e0100000081c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x4000'
+readonly = true
+hex = '9de3bf90b2102001901000187ffff57d92100019c13fbff07ffff5bad01fbff0c13fbff8f41fbff8901000189210001a7ffff5f49410001b81c7e00891e80019'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1600'
+readonly = true
+hex = '81c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1700'
+readonly = true
+hex = '81c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1800'
+readonly = true
+hex = '81c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1480'
+readonly = true
+hex = '81c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2f00'
+readonly = true
+hex = '9de3bf98d01e00007ffff95e01000000901020037ffff93b0100000081c7e00881e80000'
+
+[script]
+commands = [
+    'parse line extern uint8 producer(uint4 a,uint4 b);',
+    'parse line extern uint4 both(uint4 a,uint4 b);',
+    'parse line extern uint4 nonzero(uint4 a,uint4 b);',
+    'parse line extern uint4 reversed(uint4 a,uint4 b);',
+    'parse line extern uint4 delay(uint4 a,uint4 b);',
+    'parse line extern uint4 high_only(uint4 a,uint4 b);',
+    'parse line extern uint4 low_only(uint4 a,uint4 b);',
+    'parse line extern uint4 unchanged_pair(uint4 a,uint4 b);',
+    'load function both',
+    'decompile',
+    'print C',
+    'load function nonzero',
+    'decompile',
+    'print C',
+    'load function reversed',
+    'decompile',
+    'print C',
+    'load function delay',
+    'decompile',
+    'print C',
+    'load function high_only',
+    'decompile',
+    'print C',
+    'load function low_only',
+    'decompile',
+    'print C',
+    'load function unchanged_pair',
+    'decompile',
+    'print C',
+    'parse line extern void single_without_wide(void);',
+    'load function single_without_wide',
+    'decompile',
+    'print C',
+    'parse line extern void variadic(int4 first,...);',
+    'parse line extern void wide_sink(uint8 value,uint4 size);',
+    'parse line extern uint4 one_argument(uint4 a,uint4 b);',
+    'load function one_argument',
+    'decompile',
+    'print C',
+    'parse line extern uint4 one_variadic(uint4 a,uint4 b);',
+    'load function one_variadic',
+    'decompile',
+    'print C',
+    'parse line extern uint4 declared_wide(uint4 a,uint4 b);',
+    'load function declared_wide',
+    'decompile',
+    'print C',
+    'parse line extern uint4 unknown_wide_output(uint4 a,uint4 b);',
+    'load function unknown_wide_output',
+    'decompile',
+    'print C',
+    'parse line extern uint4 convert_argument(uint4 a,uint4 b);',
+    'load function convert_argument',
+    'decompile',
+    'print C',
+    'parse line extern uint4 interval_argument(uint4 a,uint4 b);',
+    'load function interval_argument',
+    'decompile',
+    'print C',
+    'option calloverlap full',
+    'load function both',
+    'decompile',
+    'print C',
+    'parse line extern void sink(void *dest,int value,uint4 size);',
+    'decompile',
+    'print C',
+    'parse line extern float8 number(void *context,int4 index);',
+    'parse line extern float8 numeric(float8 value);',
+    'parse line extern void push(void *context,float8 value);',
+    'option calloverlap off',
+    'load function math_wrapper',
+    'decompile',
+    'print C',
+    'option calloverlap in',
+    'load function math_wrapper',
+    'decompile',
+    'print C',
+    'option calloverlap full',
+    'load function math_wrapper',
+    'decompile',
+    'print C',
+    'option calloverlap off',
+    'load function pair_then_single',
+    'decompile',
+    'print C',
+    'option calloverlap full',
+    'load function pair_then_single',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'zero input survives all write orders'
+count = 5
+regex = 'sink\(v[0-9]+,0,0xa8\);'
+
+[[match]]
+name = 'nonzero overwrite survives'
+count = 1
+regex = 'sink\(v[0-9]+,7,0xa8\);'
+
+[[match]]
+name = 'untouched low return half remains an input'
+count = 1
+regex = 'sink\(v[0-9]+,\(int4\)v[0-9]+,0xa8\);'
+
+[[match]]
+name = 'untouched high return half remains an input'
+count = 1
+literal = 'sink((int4)(producer(a,b) >> 0x20),0,0xa8);'
+
+[[match]]
+name = 'untouched complete pair remains an input'
+count = 1
+regex = 'sink\(\(int4\)\(v[0-9]+ >> 0x20\),\(int4\)v[0-9]+,0xa8\);'
+
+[[match]]
+name = 'unknown single-slot call does not acquire a stale argument'
+count = 0
+regex = 'unknown_one\([^)]*v[0-9]+'
+
+[[match]]
+name = 'stale high slot does not invent a variadic argument'
+count = 1
+literal = 'variadic(1);'
+
+[[match]]
+name = 'declared wide input keeps its complete value'
+count = 1
+literal = 'wide_sink(producer(a,b),0xa8);'
+
+[[match]]
+name = 'coalesced unknown output retains input constants'
+count = 1
+literal = 'unknown_producer(5,7);'
+
+[[match]]
+name = 'converted floating argument survives the wide range'
+count = 1
+regex = 'v[0-9]+ = \(int4\).*\.to;'
+
+[[match]]
+name = 'saved narrow interval keeps its zero fallback'
+count = 1
+regex = '(v[0-9]+|a) = 1000;'
+
+[[match]]
+name = 'saved narrow interval is passed to the call'
+count = 1
+regex = 'sink\(v[0-9]+,(\(uint2\)v[0-9]+|a),0xa8\);'
+
+[[match]]
+name = 'the converted call uses variable-valued arguments'
+count = 1
+regex = 'sink\(v[0-9]+,v[0-9]+,0xa8\);'
+
+[[match]]
+name = 'single argument without a wide return remains visible'
+count = 1
+literal = 'unknown_one(1);'
+
+[[match]]
+name = 'the entry partition never loses the input'
+count = 0
+literal = 'math_wrapper(void)'
+
+[[match]]
+name = 'unlocked entry input survives every overlap level'
+count = 3
+literal = 'math_wrapper(void *a0)'
+
+[[match]]
+name = 'entry value reaches the number call at every overlap level'
+count = 3
+literal = 'number(a0,1)'
+
+[[match]]
+name = 'entry value reaches the push call at every overlap level'
+count = 3
+literal = 'push(a0,numeric('
+
+[[match]]
+name = 'no call retains the old high return half'
+count = 0
+regex = 'v[0-9]+ = \(unsigned int\)\(v[0-9]+ >> 0x20\);'
+
+[[match]]
+name = 'no call retains the old low return half'
+count = 0
+regex = 'v[0-9]+ = \(unsigned int\)v[0-9]+;'
+
+[[match]]
+name = 'the loaded pair is never dropped at the first call'
+count = 0
+literal = 'pair_take();'
+
+[[match]]
+name = "a stale pair half does not hide the next call's single argument"
+count = 2
+literal = 'unknown_one(3);'
+
+[[match]]
+name = 'the loaded pair reaches the first call as two slots'
+count = 2
+literal = 'pair_take((int4)((uint8)*a0 >> 0x20),(int4)*a0);'

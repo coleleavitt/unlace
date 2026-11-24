@@ -1,0 +1,38 @@
+# Synthetic mr r3,r5; mr r4,r6; blr skips r4 to align the integer pair.
+
+[image]
+arch = 'PowerPC:BE:32:e500:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'pick' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '7ca32b787cc433784e800020'
+
+[script]
+commands = [
+    'option ctypes on',
+    'parse line extern long long pick(int pad,long long x);',
+    'lo fu pick',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'SPE integer pair: declared arguments'
+count = 1
+literal = 'long long pick(int pad,long long x)'
+
+[[match]]
+name = 'SPE integer pair: value survives alignment'
+count = 1
+literal = 'return x;'
+
+[[match]]
+name = 'SPE integer pair: no undefined pieces'
+count = 0
+regex = 'CONCAT|unaff_|halt_baddata'

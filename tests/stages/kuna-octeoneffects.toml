@@ -1,0 +1,401 @@
+# kuna octeoneffects: an Octeon atomic or load-linked accesses memory through
+# its address operand, but a user operation has no memory effect of its own,
+# so a store before it was forwarded past it or dropped. Upstream's MIPS spec
+# lifts ll/sc as a plain load/store and sync as SYNC(n); `off` restores that.
+#
+# update  (0x1000): ori a0,zero,0x2000; daddiu a1,zero,7; sd a1,0(a0);
+#                   laad zero,(a0),a1; ld v0,0(a0); jr ra; nop
+# barrier (0x1100): the same with syncw in place of laad
+# spill   (0x1200): daddiu sp,sp,-16; sd a0,8(sp); syncw; ld v0,8(sp);
+#                   jr ra; daddiu sp,sp,16
+# reserve (0x1300): the same as update with sc a2,0(a0) in place of laad
+# linked  (0x1400): ori a0,zero,0x2000; sd a1,0(a0); lld t0,0(a0);
+#                   sd zero,0(a0); jr ra; or v0,t0,zero
+# snapshot (0x1500): ld v0,0(a0); saad a1,(a0); jr ra; nop
+# zero_neighbor (0x1600): daddiu sp,sp,-32; sd a1,8(sp);
+#                   daddiu a0,sp,16; zcb (a0); ld v0,8(sp);
+#                   jr ra; daddiu sp,sp,32
+# ordered_snapshot (0x1700): ld v0,0(a0); syncw; jr ra; nop
+# zero_neighbor_transient (0x1800): as zero_neighbor, but offset 24 and zcbt
+# zero_elsewhere (0x1900): daddiu sp,sp,-32; sd a1,8(sp); zcb (a0);
+#                   ld v0,8(sp); jr ra; daddiu sp,sp,32
+# zero_deep (0x1a00): the same with a 256-byte frame, so the slot is 248
+#                   bytes below the entry stack pointer
+# zero_incoming_negative (0x1d00): zero_deep with a0 adjusted by -256;
+#                   the pointer can now reach the previously private slot
+# zero_incoming_negative_transient (0x1e00): the same with zcbt
+# persist_atomic (0x1b40): calls persist_first or persist_second, reads the
+#                   globals at 0x2100/0x2104, then either calls
+#                   persist_second, runs saad s0,(s1) and calls
+#                   persist_first, or stores 0x2108 between two calls
+#                   (persist_first 0x1b00 and persist_second 0x1b20 write
+#                   0x2100 and 0x2108)
+# Source/build provenance: tests/fixtures/octeon-atomics/memory.S,
+# build.py and provenance.json (GNU as -EB -64 -march=octeon2).
+#
+# Stage: P2 lift (callother fixups) and P3 dataflow (heritage guards,
+# including persistcalls' sparse call guards).
+# Three passes: off (update returns the stored 7; barrier and reserve lift
+# as upstream does), atomic (the default: update rereads, the store linked
+# reads stays, a barrier writes nothing so barrier returns 7 and the spill
+# stays a value), ordered (barrier rereads too).
+#
+# Assert #1: `return 7;` for update and barrier under off, barrier under atomic.
+# Assert #2: the spill across syncw stays the incoming value under atomic.
+# Assert #3: atomic and ordered keep the barrier as octeon_syncw.
+# Assert #4: off lifts syncw as upstream's SYNC(4).
+# Assert #5: off lifts sc as upstream's plain store into the reloaded word.
+# Assert #6: atomic keeps the store the load-linked reads.
+# Assert #7: atomic and ordered capture the pointer load before the atomic.
+# Assert #8: ordered captures a pointer load before the barrier too.
+# Assert #9: off retains opaque-operation load motion as a control.
+# Assert #10: only off forwards a neighboring stack value past ZCB/ZCBT.
+# Assert #11: full-block guards keep the neighboring stores before zeroing.
+# Assert #12: zeroing through an incoming pointer keeps a spill in the top
+#             128 bytes of the frame: the block may start below the pointer.
+# Assert #13: a spill more than a block below the entry stack pointer stays
+#             a value.
+# Assert #14: with persistcalls on, the saad guard on 0x2108 still reads the
+#             guard of the call before it, as with every guard built.
+# Assert #15: it once read the value from function entry, skipping three
+#             calls.
+# Assert #16: only off forwards the deep value through transformed pointers.
+# Assert #17: both guarded modes retain the deep store at ZCB and ZCBT.
+
+[image]
+arch = 'MIPS:BE:64:octeon2:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'update' },
+    { space = 'ram', offset = '0x1100', name = 'barrier' },
+    { space = 'ram', offset = '0x1200', name = 'spill' },
+    { space = 'ram', offset = '0x1300', name = 'reserve' },
+    { space = 'ram', offset = '0x1400', name = 'linked' },
+    { space = 'ram', offset = '0x1500', name = 'snapshot' },
+    { space = 'ram', offset = '0x1600', name = 'zero_neighbor' },
+    { space = 'ram', offset = '0x1700', name = 'ordered_snapshot' },
+    { space = 'ram', offset = '0x1800', name = 'zero_neighbor_transient' },
+    { space = 'ram', offset = '0x1900', name = 'zero_elsewhere' },
+    { space = 'ram', offset = '0x1a00', name = 'zero_deep' },
+    { space = 'ram', offset = '0x1d00', name = 'zero_incoming_negative' },
+    { space = 'ram', offset = '0x1e00', name = 'zero_incoming_negative_transient' },
+    { space = 'ram', offset = '0x1b00', name = 'persist_first' },
+    { space = 'ram', offset = '0x1b20', name = 'persist_second' },
+    { space = 'ram', offset = '0x1b40', name = 'persist_atomic' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '3404200064050007fc850000708504dfdc82000003e0000800000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1100'
+readonly = true
+hex = '3404200064050007fc8500000000010fdc82000003e0000800000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1200'
+readonly = true
+hex = '67bdfff0ffa400080000010fdfa2000803e0000867bd0010'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1300'
+readonly = true
+hex = '3404200064050007fc850000e0860000dc82000003e0000800000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1400'
+readonly = true
+hex = '34042000fc850000d08c0000fc80000003e0000801801025'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1500'
+readonly = true
+hex = 'dc8200007085001903e0000800000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1600'
+readonly = true
+hex = '67bdffe0ffa5000867a400107080071fdfa2000803e0000867bd0020'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1700'
+readonly = true
+hex = 'dc8200000000010f03e0000800000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1800'
+readonly = true
+hex = '67bdffe0ffa5001867a400107080075fdfa2001803e0000867bd0020'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1900'
+readonly = true
+hex = '67bdffe0ffa500087080071fdfa2000803e0000867bd0020'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1a00'
+readonly = true
+hex = '67bdff00ffa500087080071fdfa2000803e0000867bd0100'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1d00'
+readonly = true
+hex = '67bdff00ffa500086484ff007080071fdfa2000803e0000867bd0100'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1e00'
+readonly = true
+hex = '67bdff00ffa500086484ff007080075fdfa2000803e0000867bd0100'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1b00'
+readonly = true
+hex = '340921008d2300002463000103e00008ad230000000000000000000000000000340921088d2300002463000103e00008ad23000000000000000000000000000067bdffe0ffbf0018ffb00010ffb1000800a088253088000111000005000000000411ffe70000000010000003000000000411ffeb00000000340921008d3000008d2300042863001214600008000000000411ffe300000000723000190411ffd80000000010000008000000000411ffd4000000002604000834092108ad2400000411ffcf02002025dfbf0018dfb00010dfb1000803e0000867bd0020'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2100'
+hex = '00000000000000000000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2000'
+hex = '0000000000000000'
+
+[script]
+commands = [
+    'parse line extern unsigned long long update(void);',
+    'parse line extern unsigned long long barrier(void);',
+    'parse line extern unsigned long long spill(unsigned long long value);',
+    'parse line extern unsigned long long reserve(unsigned long long unused0,unsigned long long unused1,unsigned int value);',
+    'parse line extern unsigned long long linked(unsigned long long unused,unsigned long long value);',
+    'parse line extern unsigned long long snapshot(unsigned long long *pointer,unsigned long long increment);',
+    'parse line extern unsigned long long ordered_snapshot(unsigned long long *pointer);',
+    'parse line extern unsigned long long zero_neighbor(unsigned long long unused,unsigned long long neighbor_value);',
+    'parse line extern unsigned long long zero_neighbor_transient(unsigned long long unused,unsigned long long neighbor_value);',
+    'parse line extern unsigned long long zero_elsewhere(unsigned long long *block,unsigned long long kept);',
+    'parse line extern unsigned long long zero_deep(unsigned long long *block,unsigned long long kept);',
+    'parse line extern unsigned long long zero_incoming_negative(unsigned long long *block,unsigned long long moved);',
+    'parse line extern unsigned long long zero_incoming_negative_transient(unsigned long long *block,unsigned long long moved);',
+    'parse line extern void persist_first(void);',
+    'parse line extern void persist_second(void);',
+    'parse line extern void persist_atomic(unsigned long long flag,unsigned long long *counter);',
+    'option octeoneffects off',
+    'lo fu update',
+    'decompile',
+    'print C',
+    'lo fu barrier',
+    'decompile',
+    'print C',
+    'lo fu reserve',
+    'decompile',
+    'print C',
+    'lo fu snapshot',
+    'decompile',
+    'print C',
+    'lo fu zero_neighbor',
+    'decompile',
+    'print C',
+    'lo fu zero_neighbor_transient',
+    'decompile',
+    'print C',
+    'lo fu zero_incoming_negative',
+    'decompile',
+    'print C',
+    'lo fu zero_incoming_negative_transient',
+    'decompile',
+    'print C',
+    'option octeoneffects atomic',
+    'lo fu update',
+    'decompile',
+    'print C',
+    'lo fu barrier',
+    'decompile',
+    'print C',
+    'lo fu spill',
+    'decompile',
+    'print C',
+    'lo fu linked',
+    'decompile',
+    'print C',
+    'lo fu snapshot',
+    'decompile',
+    'print C',
+    'lo fu zero_neighbor',
+    'decompile',
+    'print C',
+    'lo fu zero_neighbor_transient',
+    'decompile',
+    'print C',
+    'lo fu ordered_snapshot',
+    'decompile',
+    'print C',
+    'lo fu zero_elsewhere',
+    'decompile',
+    'print C',
+    'lo fu zero_deep',
+    'decompile',
+    'print C',
+    'lo fu zero_incoming_negative',
+    'decompile',
+    'print C',
+    'lo fu zero_incoming_negative_transient',
+    'decompile',
+    'print C',
+    'option octeoneffects ordered',
+    'lo fu barrier',
+    'decompile',
+    'print C',
+    'lo fu snapshot',
+    'decompile',
+    'print C',
+    'lo fu zero_neighbor',
+    'decompile',
+    'print C',
+    'lo fu zero_neighbor_transient',
+    'decompile',
+    'print C',
+    'lo fu ordered_snapshot',
+    'decompile',
+    'print C',
+    'lo fu zero_elsewhere',
+    'decompile',
+    'print C',
+    'lo fu zero_deep',
+    'decompile',
+    'print C',
+    'lo fu zero_incoming_negative',
+    'decompile',
+    'print C',
+    'lo fu zero_incoming_negative_transient',
+    'decompile',
+    'print C',
+    'option octeoneffects atomic',
+    'option persistcalls off',
+    'lo fu persist_atomic',
+    'decompile',
+    'print raw',
+    'option persistcalls on',
+    'lo fu persist_atomic',
+    'decompile',
+    'print raw',
+    'quit',
+]
+
+[[match]]
+name = 'octeoneffects #1: off forwards past the atomic and barrier; atomic past a barrier only'
+count = 3
+literal = 'return 7;'
+
+[[match]]
+name = 'octeoneffects #2: a stack spill across syncw stays the value'
+count = 1
+literal = 'return value;'
+
+[[match]]
+name = 'octeoneffects #3: atomic and ordered keep the barrier as an Octeon operation'
+count = 5
+literal = 'octeon_syncw();'
+
+[[match]]
+name = 'octeoneffects #4: off lifts syncw as upstream SYNC(4)'
+count = 1
+literal = 'SYNC(4);'
+
+[[match]]
+name = "octeoneffects #5: off lifts sc as upstream's plain store"
+count = 1
+literal = 'CONCAT44(value,7)'
+
+[[match]]
+name = 'octeoneffects #6: atomic keeps the store a load-linked reads'
+count = 1
+literal = '= value;'
+
+[[match]]
+name = 'octeoneffects #7: pointer snapshots stay before atomic updates'
+count = 2
+literal = [
+    '= *pointer;',
+    'octeon_fetch_add64(pointer,increment);',
+]
+
+[[match]]
+name = 'octeoneffects #8: ordered preserves pointer load ordering at a barrier'
+count = 1
+literal = [
+    '= *pointer;',
+    'octeon_syncw();',
+]
+
+[[match]]
+name = 'octeoneffects #9: opaque atomic and unordered barrier controls still inline the load'
+count = 2
+literal = 'return *pointer;'
+
+[[match]]
+name = 'octeoneffects #10: only off forwards a neighboring stack value across zeroing'
+count = 2
+literal = 'return neighbor_value;'
+
+[[match]]
+name = 'octeoneffects #11: both zero operations retain neighboring stores in both guarded modes'
+count = 4
+literal = [
+    '= neighbor_value;',
+    'octeon_zero_cache_block',
+]
+
+[[match]]
+name = "octeoneffects #12: zeroing through an incoming pointer keeps a spill in the frame's top cache block"
+count = 2
+literal = [
+    '= kept;',
+    'octeon_zero_cache_block(block);',
+]
+
+[[match]]
+name = 'octeoneffects #13: a spill more than a cache block below the entry stack pointer stays a value'
+count = 2
+literal = [
+    'octeon_zero_cache_block(block);',
+    'return kept;',
+]
+
+[[match]]
+name = "octeoneffects #14: sparse call guards keep the call guard an atomic's guard reads"
+count = 2
+regex = '^0x00001b98:[0-9a-f]+:\s+r0x00002108:4\(0x00001b98:[0-9a-f]+\) = r0x00002108:4\(0x00001b90:[0-9a-f]+\) \[\] i0x00001b98:'
+
+[[match]]
+name = "octeoneffects #15: no atomic guard reads a global's value from entry past calls"
+count = 0
+regex = '= r0x0000210[0-8]:4\(i\) \[\] i0x00001b98:'
+
+[[match]]
+name = 'octeoneffects #16: only off forwards deep values through transformed zero addresses'
+count = 2
+literal = 'return moved;'
+
+[[match]]
+name = 'octeoneffects #17: transformed zero addresses retain deep stores in both guarded modes'
+count = 4
+literal = [
+    '= moved;',
+    'octeon_zero_cache_block',
+]

@@ -1,0 +1,109 @@
+# Original GNU-assembled memory.S fixtures; public regeneration and hashes
+# are in tests/fixtures/octeon-atomics. Explicit Octeon target selection
+# enables the instruction set. Ordinary MIPS retains its own semantics.
+
+[image]
+arch = 'MIPS:BE:64:octeon2:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'atomic_global' },
+    { space = 'ram', offset = '0x1020', name = 'atomic_local' },
+    { space = 'ram', offset = '0x1040', name = 'conditional' },
+    { space = 'ram', offset = '0x1060', name = 'barriers' },
+    { space = 'ram', offset = '0x1080', name = 'wide_integer' },
+    { space = 'ram', offset = '0x10a0', name = 'partial_global' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '3404200064050007fc850000708504dfdc82000003e00008000000000000000067bdffe0ffa5001067a40010708614df67bd002003e000080000000000000000c0880000e085000000a0102d03e0000800000000000000000000000000000000fc8500000000010f0000010fdc82000003e00008000000000000000000000000708544df0080102d03e00008000000000000000000000000000000000000000034042004fc80fffc640500017085049fdc82fffc03e000080000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2000'
+hex = '1122334455667788'
+
+[script]
+commands = [
+    'parse line extern unsigned long long atomic_global(void);',
+    'parse line extern unsigned long long atomic_local(unsigned long long unused,unsigned long long value,unsigned long long increment);',
+    'parse line extern unsigned long long conditional(unsigned int *pointer,unsigned int value);',
+    'parse line extern unsigned long long barriers(unsigned long long *pointer,unsigned long long value);',
+    'parse line extern unsigned long long wide_integer(unsigned long long raw,unsigned long long increment);',
+    'parse line extern unsigned long long partial_global(void);',
+    'lo fu atomic_global',
+    'decompile',
+    'print C',
+    'lo fu atomic_local',
+    'decompile',
+    'print C',
+    'lo fu conditional',
+    'decompile',
+    'print C',
+    'lo fu barriers',
+    'decompile',
+    'print C',
+    'lo fu wide_integer',
+    'decompile',
+    'print C',
+    'lo fu partial_global',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'Octeon n64 atomics: indivisible doubleword operations'
+count = 3
+literal = 'octeon_fetch_add64('
+
+[[match]]
+name = 'Octeon n64 atomics: indivisible word operation'
+count = 1
+literal = 'octeon_fetch_add32('
+
+[[match]]
+name = 'Octeon n64 atomics: linked load retained'
+count = 1
+literal = 'octeon_load_linked32('
+
+[[match]]
+name = 'Octeon n64 atomics: conditional store retained'
+count = 1
+literal = 'octeon_store_conditional32('
+
+[[match]]
+name = 'Octeon n64 atomics: repeated write barriers retained'
+count = 2
+literal = 'octeon_syncw('
+
+[[match]]
+name = 'Octeon n64 atomics: global input store retained'
+count = 1
+literal = '= 7;'
+
+[[match]]
+name = 'Octeon n64 atomics: stack and pointer input stores retained'
+count = 2
+literal = '= value;'
+
+[[match]]
+name = 'Octeon n64 atomics: later memory read does not reuse input'
+count = 0
+literal = 'return value;'
+
+[[match]]
+name = 'Octeon n64 atomics: full-width integer return survives'
+count = 1
+literal = 'return raw;'
+
+[[match]]
+name = 'Octeon n64 atomics: no false constant return'
+count = 0
+regex = 'return [01];'
+
+[[match]]
+name = 'Octeon n64 atomics: no save or restore collision'
+count = 0
+regex = '(save|restore)\('

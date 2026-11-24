@@ -1,0 +1,52 @@
+[image]
+arch = 'PowerPC:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '4e800020'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-indirect-branch.elf',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function check2',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-local-fallthrough.elf',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function check',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-unwind.elf',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function check',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'computed branches and callee fallthrough retain their return'
+count = 3
+literal = 'return 7;'
+
+[[match]]
+name = 'returning unwind caller remains unnamed'
+count = 0
+literal = 'extra('
+
+[[match]]
+name = 'ambiguous control flow acquires no terminal contract'
+count = 0
+regex = '__stack_chk_fail|no-return'

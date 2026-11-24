@@ -1863,7 +1863,7 @@ decompiled C plus the disassembly, chose a region, and applied the option — ou
 **0 of 15**, on cases selected so that a DWARF-confirmed inlined callee spanning at
 least two whole basic blocks existed in every one. Two of those failures were the
 pass emitting wrong C (both fixed, and pinned by
-`tests/stages/kuna-outline-proto.xml`); the rest were correct declines against two
+`tests/stages/kuna-outline-proto.toml`); the rest were correct declines against two
 classes v1 cannot take at all:
 
 * **Multi-exit inlines.** The compiler routinely fuses a callee's return-value

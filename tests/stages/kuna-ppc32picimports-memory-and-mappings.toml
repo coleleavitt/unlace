@@ -1,0 +1,54 @@
+[image]
+arch = 'PowerPC:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '4e800020'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-shift-spill.elf',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function check2',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-stack-bytes.elf',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function check2',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-nonexec-section.elf',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function check2',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-init-array.elf',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function check2',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'constructed reloads and omitted mapped callers retain their returns'
+count = 4
+literal = 'return 7;'
+
+[[match]]
+name = 'reloads mappings and initializer arrays grant no false terminal contract'
+count = 0
+regex = '__stack_chk_fail|no-return'

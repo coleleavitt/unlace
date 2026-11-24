@@ -2639,7 +2639,13 @@ sub-decompilation on a clone**
 (`crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::stage_jump_table)`, C++ `stageJumpTable`): the raw ops and existing
 tables are cloned into a partial `Funcdata` (`"@@jumprecovery"`), its blocks are
-built against the parent flow's `visited` snapshot, and the reduced
+built against the parent flow's `visited` snapshot (the partial gets the
+architecture's default prototype model and then, as the C++ `Funcdata` ctor's
+`resetLocalWindow` after `setScope`, its local scope's stack window; without
+the window no stack location is in scope, `syncVarnodesWithSymbols` marks every
+one unmapped and unaliased, and `RuleIndirectCollapse` drops the guard a call
+puts on the fields of a struct whose address it receives, so a switch index
+read from such a field folds to the value stored before the call, #871), and the reduced
 `"jumptable"` action set — heritage plus the simplification core, no
 structuring — is run over it (`decompile_drive.rs (run_jumptable_pipeline)`).
 The model is then recovered against the *partial*'s BRANCHIND and the finished

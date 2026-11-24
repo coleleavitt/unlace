@@ -430,8 +430,18 @@ prints with none. The override fires only on an I386 PE that holds the
 (`crates/unlace-analysis/src/analyzers/delphi/mod.rs (is_delphi_image)`, the
 `delphi` pass's own detection); every other image composes the same id as
 before, and `elf_language_ids` enumerates the Delphi id so the
-resolves-in-the-DB gate proves it vendored. The whole image takes the model,
-so a `stdcall` callback or `cdecl` helper is read with register arguments.
+resolves-in-the-DB gate proves it vendored. A Windows API entry point is
+`__stdcall` whatever its caller's compiler, so under the same gate the pass
+`crates/unlace-analysis/src/analyzers/delphi/kuna_delphiabiimports.rs`
+binds every resolved import, at its IAT slot and its jump thunk, to the
+`__stdcall` model (a model-only fact; a parked Win32 signature keeps its
+pieces and takes the model). A Borland-mangled `@` name is a Delphi package
+export and keeps the register default; a C runtime import keeps `__cdecl`.
+Without this a call such as `SetFilePointer(h, lo, &hi, 0)` read its first
+three arguments from EAX, EDX and ECX and its fourth from the first pushed
+word (`SetFilePointer(hFile,a1,a2,(unsigned int)hFile)`). The image's own
+routines all take the register model, so a `stdcall` callback or `cdecl`
+helper is read with register arguments.
 Measured with `--option delphi on` on two Inno Setup stubs (344 and 919
 decompiled functions): functions with parameters 207 → 272 and 619 → 801,
 functions reading a never-assigned register 166 → 147 and 575 → 441, calls

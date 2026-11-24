@@ -68,3 +68,24 @@ OPR modes: (u4,xys), (s9,xysp), [s9,xysp], (s24,xysp), [s24,xysp], (Dn,xys),
 auto increment/decrement and stack push/pop OPR forms, the register (10111ddd)
 and short-immediate (0111nnnn) OPR operands, PC-relative OPR base is taken as
 the instruction start.
+
+## Coverage update
+
+The module now decodes the whole of page 1 and most of page 2 (prefix 0x1B), checked
+against the opcode tables of the binutils S12Z disassembler (read for the encodings
+only): ADD/SUB/CMP/LD/ST/ADC/SBC/AND/OR/EOR/BIT in their immediate, OPR and extended forms;
+every OPR postbyte form (short immediate, register, indexed, pre/post increment and
+decrement on X, Y and S, indirect, extended); INC/DEC/CLR/COM/NEG by size; X/Y loads,
+stores, compares and the 18-bit immediate load; LEA; MOV.B/W/P/L; TFR/EXG/SEX/ZEX;
+PSH/PUL register masks; DBcc/TBcc loop branches; BCLR/BSET/BTGL/BRCLR/BRSET; ANDCC/ORCC;
+TRAP; JMP/JSR/BSR/Bcc/BRA/RTS/RTI. PC-relative targets are relative to the address of the
+opcode byte (the 0x1B prefix for page 2).
+
+Gaps: the shift and rotate group (page 1 0x10-0x17, LSL/LSR/ASL/ASR/ROL/ROR), the
+MUL/MAC/QMUL family (page 2 0x48-0x4F), DIV/MOD, BFEXT/BFINS and CLB are not decoded yet
+and show as bad instructions.
+
+Spot checks (decompiled with the pinned unlace build): `58 00 FF 68 E3 61 74 64 B9 9E 45
+AE 48 1B 50 00 01 1B 78 12 34 9A 05` (AND imm, AND (+X), ADD short imm, ADD reg, TFR, SEX,
+ADC, EOR, CLR X, RTS) and `1B 58 00 01 1B 70 00 02 BD FA 00 80 00 9B 05` (BIT, SBC,
+CLR.W ext24, CLR Y, RTS) decode without a bad instruction and give the expected C.

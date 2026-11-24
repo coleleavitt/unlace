@@ -17,7 +17,8 @@ define register offset=0x20 size=3 [ X ];
 define register offset=0x24 size=3 [ Y ];
 define register offset=0x28 size=3 [ SP ];
 define register offset=0x2c size=3 [ PC ];
-define register offset=0x30 size=2 [ CCR ];
+define register offset=0x30 size=2 [ CCW ];
+define register offset=0x30 size=1 [ CCH CCL ];
 define register offset=0x40 size=1 [ fC fV fZ fN fI fH fX fU fS ];
 
 define token opbyte(8)
@@ -42,6 +43,8 @@ define token oprtok(8)
   oprb1 = (1,1)
   oprb0 = (0,0)
   oprd = (0,2)
+  opr4 = (4,7)
+  oprb4 = (4,4)
 ;
 define token rel7tok(8)
   r7flag = (7,7)
@@ -51,13 +54,36 @@ define token rel15tok(16)
   r15flag = (15,15)
   r15 = (0,14) signed
 ;
-define token imm8tok(8) imm8 = (0,7);
-define token imm16tok(16) imm16 = (0,15);
+define token imm8tok(8) imm8 = (0,7) simm8 = (0,7) signed;
+define token pbtok(8)
+  pb = (0,7)
+  pb7 = (7,7)
+  pb6 = (6,6)
+  pb64 = (4,6)
+  pb53 = (3,5)
+  pb54 = (4,5)
+  pb3 = (3,3)
+  pb2 = (2,2)
+  pb32 = (2,3)
+  pb10 = (0,1)
+  pb20 = (0,2)
+  pb73 = (3,7)
+  pbhi = (4,7)
+  pblo = (0,3)
+  pb50 = (0,5)
+  pb0 = (0,0)
+  pbb0 = (0,0)
+  pbb1 = (1,1)
+  pbb2 = (2,2)
+  pbb3 = (3,3)
+  pbb4 = (4,4)
+  pbb5 = (5,5)
+;
+define token p2tok(8) p2 = (0,7);
+define token imm16tok(16) imm16 = (0,15) simm16 = (0,15) signed;
 define token imm24tok(24) imm24 = (0,23) simm24 = (0,23) signed;
-define token imm32tok(32) imm32 = (0,31);
+define token imm32tok(32) imm32 = (0,31) simm32 = (0,31) signed;
 
-attach variables rW [ D2 D3 D4 D5 ];
-attach variables rBL [ D0 D1 ];
 
 define pcodeop bgnd;
 define pcodeop swi;
@@ -81,14 +107,27 @@ DB: rBL is rhi=1 & rmid=0 & rBL { export rBL; }
 DL: D6 is rhi=1 & rmid=1 & rBL=0 & D6 { export D6; }
 DL: D7 is rhi=1 & rmid=1 & rBL=1 & D7 { export D7; }
 
-# OPR postbyte, memory modes. Base register field bits 5:4 = X, Y, S, PC; the
-# index register field bits 2:0 uses the data-register numbering above. Auto
-# increment/decrement, the register operand (10111ddd) and the short immediate
-# (0111nnnn) are not modelled yet.
+
+define pcodeop stop;
+define pcodeop wai;
+define pcodeop sys;
+define pcodeop trap;
+define pcodeop rti;
+define pcodeop saturate;
+define pcodeop count_leading_bits;
+define pcodeop fractional_multiply;
+define pcodeop bitfield_extract;
+define pcodeop bitfield_insert;
+
+macro packccr() { CCL = zext(fC) | (zext(fV) << 1) | (zext(fZ) << 2) | (zext(fN) << 3) | (zext(fI) << 4) | (zext(fH) << 5) | (zext(fX) << 6) | (zext(fS) << 7); }
+macro unpackccr() { fC = (CCL & 1) != 0; fV = (CCL & 2) != 0; fZ = (CCL & 4) != 0; fN = (CCL & 8) != 0; fI = (CCL & 0x10) != 0; fH = (CCL & 0x20) != 0; fX = (CCL & 0x40) != 0; fS = (CCL & 0x80) != 0; }
+
 XYSP: X is oprr=0 & X { export X; }
 XYSP: Y is oprr=1 & Y { export Y; }
 XYSP: SP is oprr=2 & SP { export SP; }
-XYSP: PC is oprr=3 & PC { local p:3 = inst_start; export p; }
+XYSP: "PC" is oprr=3 { local p:3 = inst_start; export p; }
+XY4: X is oprb4=0 & X { export X; }
+XY4: Y is oprb4=1 & Y { export Y; }
 
 ODn: D2 is oprd=0 & D2 { local v:3 = zext(D2); export v; }
 ODn: D3 is oprd=1 & D3 { local v:3 = zext(D3); export v; }
@@ -99,32 +138,149 @@ ODn: D1 is oprd=5 & D1 { local v:3 = zext(D1); export v; }
 ODn: D6 is oprd=6 & D6 { local v:3 = D6:3; export v; }
 ODn: D7 is oprd=7 & D7 { local v:3 = D7:3; export v; }
 
-# 01rrnnnn: (u4, xys)
-OPRA: oprlo, XYSP is opr2=1 & oprr!=3 & oprlo & XYSP { local ea:3 = XYSP + oprlo; export ea; }
-# 00aaaaaa aaaaaaaa: 14-bit direct
-OPRA: addr is opr2=0 & opr6; imm8 [ addr = (opr6 << 8) | imm8; ] { export *[const]:3 addr; }
-# 11111010 + 24 bits: direct
-OPRA: imm24 is opr=0xfa; imm24 { export *[const]:3 imm24; }
-# 11111110 + 24 bits: [ext24]
-OPRA: [imm24] is opr=0xfe; imm24 { local ea:3 = *:3 imm24:3; export ea; }
-# 11111a0b + 16 bits: 18-bit direct
-OPRA: addr is opr2=3 & oprr=3 & oprb3=1 & oprb1=0 & oprb2 & oprb0; imm16 [ addr = (oprb2 << 17) | (oprb0 << 16) | imm16; ] { export *[const]:3 addr; }
-# 11rr000s + 8 bits: (s9, xysp)
-OPRA: off, XYSP is opr2=3 & oprb3=0 & oprb2=0 & oprb1=0 & oprb0 & XYSP; imm8 [ off = imm8 - (oprb0 << 8); ] { local ea:3 = XYSP + off; export ea; }
-# 11rr010s + 8 bits: [s9, xysp]
-OPRA: [off, XYSP] is opr2=3 & oprb3=0 & oprb2=1 & oprb1=0 & oprb0 & XYSP; imm8 [ off = imm8 - (oprb0 << 8); ] { local p:3 = XYSP + off; local ea:3 = *:3 p; export ea; }
-# 11rr0010 + 24 bits: (s24, xysp)
-OPRA: simm24, XYSP is opr2=3 & oprlo=2 & XYSP; simm24 { local ea:3 = XYSP + simm24; export ea; }
-# 11rr0110 + 24 bits: [s24, xysp]
-OPRA: [simm24, XYSP] is opr2=3 & oprlo=6 & XYSP; simm24 { local p:3 = XYSP + simm24; local ea:3 = *:3 p; export ea; }
-# 10rr1ddd: (Dn, xys)
-OPRA: ODn, XYSP is opr2=2 & oprb3=1 & oprr!=3 & ODn & XYSP { local ea:3 = XYSP + ODn; export ea; }
-# 110r1ddd: [Dn, xy]
-OPRA: [ODn, XYSP] is opr2=3 & oprb5=0 & oprb3=1 & ODn & XYSP { local p:3 = XYSP + ODn; local ea:3 = *:3 p; export ea; }
-# 10hh0ddd + 16 bits: (u18, Dn)
-OPRA: off, ODn is opr2=2 & oprb3=0 & oprr & ODn; imm16 [ off = (oprr << 16) | imm16; ] { local ea:3 = off + ODn; export ea; }
-# 11101ddd + 24 bits: (u24, Dn)
-OPRA: imm24, ODn is opr2=3 & oprr=2 & oprb3=1 & ODn; imm24 { local ea:3 = imm24 + ODn; export ea; }
+# OPR postbyte, operand size 1: exports the effective address.
+OPR1: oprlo, XYSP is opr2=1 & oprr!=3 & oprlo & XYSP { local ea:3 = XYSP + oprlo; export ea; }
+OPR1: addr is opr2=0 & opr6; imm8 [ addr = (opr6 << 8) | imm8; ] { export *[const]:3 addr; }
+OPR1: imm24 is opr=0xfa; imm24 { export *[const]:3 imm24; }
+OPR1: [imm24] is opr=0xfe; imm24 { local ea:3 = *:3 imm24:3; export ea; }
+OPR1: addr is opr2=3 & oprr=3 & oprb3=1 & oprb1=0 & oprb2 & oprb0; imm16 [ addr = (oprb2 << 17) | (oprb0 << 16) | imm16; ] { export *[const]:3 addr; }
+OPR1: off, XYSP is opr2=3 & oprb3=0 & oprb2=0 & oprb1=0 & oprb0 & XYSP; imm8 [ off = imm8 - (oprb0 << 8); ] { local ea:3 = XYSP + off; export ea; }
+OPR1: [off, XYSP] is opr2=3 & oprb3=0 & oprb2=1 & oprb1=0 & oprb0 & XYSP; imm8 [ off = imm8 - (oprb0 << 8); ] { local p:3 = XYSP + off; local ea:3 = *:3 p; export ea; }
+OPR1: simm24, XYSP is opr2=3 & oprlo=2 & XYSP; simm24 { local ea:3 = XYSP + simm24; export ea; }
+OPR1: [simm24, XYSP] is opr2=3 & oprlo=6 & XYSP; simm24 { local p:3 = XYSP + simm24; local ea:3 = *:3 p; export ea; }
+OPR1: ODn, XYSP is opr2=2 & oprb3=1 & oprr!=3 & ODn & XYSP { local ea:3 = XYSP + ODn; export ea; }
+OPR1: [ODn, XYSP] is opr2=3 & oprb5=0 & oprb3=1 & ODn & XYSP { local p:3 = XYSP + ODn; local ea:3 = *:3 p; export ea; }
+OPR1: off, ODn is opr2=2 & oprb3=0 & oprr & ODn; imm16 [ off = (oprr << 16) | imm16; ] { local ea:3 = off + ODn; export ea; }
+OPR1: imm24, ODn is opr2=3 & oprr=2 & oprb3=1 & ODn; imm24 { local ea:3 = imm24 + ODn; export ea; }
+OPR1: "+"XY4 is opr2=3 & oprb5=1 & oprlo=3 & XY4 { XY4 = XY4 + 1; local ea:3 = XY4; export ea; }
+OPR1: XY4"+" is opr2=3 & oprb5=1 & oprlo=7 & XY4 { local ea:3 = XY4; XY4 = XY4 + 1; export ea; }
+OPR1: "-"XY4 is opr2=3 & oprb5=0 & oprlo=3 & XY4 { XY4 = XY4 - 1; local ea:3 = XY4; export ea; }
+OPR1: XY4"-" is opr2=3 & oprb5=0 & oprlo=7 & XY4 { local ea:3 = XY4; XY4 = XY4 - 1; export ea; }
+OPR1: "-SP" is opr=0xfb { SP = SP - 1; local ea:3 = SP; export ea; }
+OPR1: "SP+" is opr=0xff { local ea:3 = SP; SP = SP + 1; export ea; }
+
+OPV1: OPR1 is OPR1 { export *:1 OPR1; }
+OPV1: "#-1" is opr=0x70 { local v:1 = -1; export v; }
+OPV1: "#"oprlo is opr4=7 & oprlo { export *[const]:1 oprlo; }
+OPV1: D2 is opr=0xb8 & D2 { local v:1 = D2:1; export v; }
+OPV1: D3 is opr=0xb9 & D3 { local v:1 = D3:1; export v; }
+OPV1: D4 is opr=0xba & D4 { local v:1 = D4:1; export v; }
+OPV1: D5 is opr=0xbb & D5 { local v:1 = D5:1; export v; }
+OPV1: D0 is opr=0xbc & D0 { local v:1 = D0; export v; }
+OPV1: D1 is opr=0xbd & D1 { local v:1 = D1; export v; }
+OPV1: D6 is opr=0xbe & D6 { local v:1 = D6:1; export v; }
+OPV1: D7 is opr=0xbf & D7 { local v:1 = D7:1; export v; }
+OPW1: OPR1 is OPR1 { export *:1 OPR1; }
+OPW1: D0 is opr=0xbc & D0 { export D0; }
+OPW1: D1 is opr=0xbd & D1 { export D1; }
+
+# OPR postbyte, operand size 2: exports the effective address.
+OPR2: oprlo, XYSP is opr2=1 & oprr!=3 & oprlo & XYSP { local ea:3 = XYSP + oprlo; export ea; }
+OPR2: addr is opr2=0 & opr6; imm8 [ addr = (opr6 << 8) | imm8; ] { export *[const]:3 addr; }
+OPR2: imm24 is opr=0xfa; imm24 { export *[const]:3 imm24; }
+OPR2: [imm24] is opr=0xfe; imm24 { local ea:3 = *:3 imm24:3; export ea; }
+OPR2: addr is opr2=3 & oprr=3 & oprb3=1 & oprb1=0 & oprb2 & oprb0; imm16 [ addr = (oprb2 << 17) | (oprb0 << 16) | imm16; ] { export *[const]:3 addr; }
+OPR2: off, XYSP is opr2=3 & oprb3=0 & oprb2=0 & oprb1=0 & oprb0 & XYSP; imm8 [ off = imm8 - (oprb0 << 8); ] { local ea:3 = XYSP + off; export ea; }
+OPR2: [off, XYSP] is opr2=3 & oprb3=0 & oprb2=1 & oprb1=0 & oprb0 & XYSP; imm8 [ off = imm8 - (oprb0 << 8); ] { local p:3 = XYSP + off; local ea:3 = *:3 p; export ea; }
+OPR2: simm24, XYSP is opr2=3 & oprlo=2 & XYSP; simm24 { local ea:3 = XYSP + simm24; export ea; }
+OPR2: [simm24, XYSP] is opr2=3 & oprlo=6 & XYSP; simm24 { local p:3 = XYSP + simm24; local ea:3 = *:3 p; export ea; }
+OPR2: ODn, XYSP is opr2=2 & oprb3=1 & oprr!=3 & ODn & XYSP { local ea:3 = XYSP + ODn; export ea; }
+OPR2: [ODn, XYSP] is opr2=3 & oprb5=0 & oprb3=1 & ODn & XYSP { local p:3 = XYSP + ODn; local ea:3 = *:3 p; export ea; }
+OPR2: off, ODn is opr2=2 & oprb3=0 & oprr & ODn; imm16 [ off = (oprr << 16) | imm16; ] { local ea:3 = off + ODn; export ea; }
+OPR2: imm24, ODn is opr2=3 & oprr=2 & oprb3=1 & ODn; imm24 { local ea:3 = imm24 + ODn; export ea; }
+OPR2: "+"XY4 is opr2=3 & oprb5=1 & oprlo=3 & XY4 { XY4 = XY4 + 2; local ea:3 = XY4; export ea; }
+OPR2: XY4"+" is opr2=3 & oprb5=1 & oprlo=7 & XY4 { local ea:3 = XY4; XY4 = XY4 + 2; export ea; }
+OPR2: "-"XY4 is opr2=3 & oprb5=0 & oprlo=3 & XY4 { XY4 = XY4 - 2; local ea:3 = XY4; export ea; }
+OPR2: XY4"-" is opr2=3 & oprb5=0 & oprlo=7 & XY4 { local ea:3 = XY4; XY4 = XY4 - 2; export ea; }
+OPR2: "-SP" is opr=0xfb { SP = SP - 2; local ea:3 = SP; export ea; }
+OPR2: "SP+" is opr=0xff { local ea:3 = SP; SP = SP + 2; export ea; }
+
+OPV2: OPR2 is OPR2 { export *:2 OPR2; }
+OPV2: "#-1" is opr=0x70 { local v:2 = -1; export v; }
+OPV2: "#"oprlo is opr4=7 & oprlo { export *[const]:2 oprlo; }
+OPV2: D2 is opr=0xb8 & D2 { local v:2 = D2; export v; }
+OPV2: D3 is opr=0xb9 & D3 { local v:2 = D3; export v; }
+OPV2: D4 is opr=0xba & D4 { local v:2 = D4; export v; }
+OPV2: D5 is opr=0xbb & D5 { local v:2 = D5; export v; }
+OPV2: D0 is opr=0xbc & D0 { local v:2 = zext(D0); export v; }
+OPV2: D1 is opr=0xbd & D1 { local v:2 = zext(D1); export v; }
+OPV2: D6 is opr=0xbe & D6 { local v:2 = D6:2; export v; }
+OPV2: D7 is opr=0xbf & D7 { local v:2 = D7:2; export v; }
+OPW2: OPR2 is OPR2 { export *:2 OPR2; }
+OPW2: D2 is opr=0xb8 & D2 { export D2; }
+OPW2: D3 is opr=0xb9 & D3 { export D3; }
+OPW2: D4 is opr=0xba & D4 { export D4; }
+OPW2: D5 is opr=0xbb & D5 { export D5; }
+
+# OPR postbyte, operand size 3: exports the effective address.
+OPR3: oprlo, XYSP is opr2=1 & oprr!=3 & oprlo & XYSP { local ea:3 = XYSP + oprlo; export ea; }
+OPR3: addr is opr2=0 & opr6; imm8 [ addr = (opr6 << 8) | imm8; ] { export *[const]:3 addr; }
+OPR3: imm24 is opr=0xfa; imm24 { export *[const]:3 imm24; }
+OPR3: [imm24] is opr=0xfe; imm24 { local ea:3 = *:3 imm24:3; export ea; }
+OPR3: addr is opr2=3 & oprr=3 & oprb3=1 & oprb1=0 & oprb2 & oprb0; imm16 [ addr = (oprb2 << 17) | (oprb0 << 16) | imm16; ] { export *[const]:3 addr; }
+OPR3: off, XYSP is opr2=3 & oprb3=0 & oprb2=0 & oprb1=0 & oprb0 & XYSP; imm8 [ off = imm8 - (oprb0 << 8); ] { local ea:3 = XYSP + off; export ea; }
+OPR3: [off, XYSP] is opr2=3 & oprb3=0 & oprb2=1 & oprb1=0 & oprb0 & XYSP; imm8 [ off = imm8 - (oprb0 << 8); ] { local p:3 = XYSP + off; local ea:3 = *:3 p; export ea; }
+OPR3: simm24, XYSP is opr2=3 & oprlo=2 & XYSP; simm24 { local ea:3 = XYSP + simm24; export ea; }
+OPR3: [simm24, XYSP] is opr2=3 & oprlo=6 & XYSP; simm24 { local p:3 = XYSP + simm24; local ea:3 = *:3 p; export ea; }
+OPR3: ODn, XYSP is opr2=2 & oprb3=1 & oprr!=3 & ODn & XYSP { local ea:3 = XYSP + ODn; export ea; }
+OPR3: [ODn, XYSP] is opr2=3 & oprb5=0 & oprb3=1 & ODn & XYSP { local p:3 = XYSP + ODn; local ea:3 = *:3 p; export ea; }
+OPR3: off, ODn is opr2=2 & oprb3=0 & oprr & ODn; imm16 [ off = (oprr << 16) | imm16; ] { local ea:3 = off + ODn; export ea; }
+OPR3: imm24, ODn is opr2=3 & oprr=2 & oprb3=1 & ODn; imm24 { local ea:3 = imm24 + ODn; export ea; }
+OPR3: "+"XY4 is opr2=3 & oprb5=1 & oprlo=3 & XY4 { XY4 = XY4 + 3; local ea:3 = XY4; export ea; }
+OPR3: XY4"+" is opr2=3 & oprb5=1 & oprlo=7 & XY4 { local ea:3 = XY4; XY4 = XY4 + 3; export ea; }
+OPR3: "-"XY4 is opr2=3 & oprb5=0 & oprlo=3 & XY4 { XY4 = XY4 - 3; local ea:3 = XY4; export ea; }
+OPR3: XY4"-" is opr2=3 & oprb5=0 & oprlo=7 & XY4 { local ea:3 = XY4; XY4 = XY4 - 3; export ea; }
+OPR3: "-SP" is opr=0xfb { SP = SP - 3; local ea:3 = SP; export ea; }
+OPR3: "SP+" is opr=0xff { local ea:3 = SP; SP = SP + 3; export ea; }
+
+OPV3: OPR3 is OPR3 { export *:3 OPR3; }
+OPV3: "#-1" is opr=0x70 { local v:3 = -1; export v; }
+OPV3: "#"oprlo is opr4=7 & oprlo { export *[const]:3 oprlo; }
+OPV3: D2 is opr=0xb8 & D2 { local v:3 = zext(D2); export v; }
+OPV3: D3 is opr=0xb9 & D3 { local v:3 = zext(D3); export v; }
+OPV3: D4 is opr=0xba & D4 { local v:3 = zext(D4); export v; }
+OPV3: D5 is opr=0xbb & D5 { local v:3 = zext(D5); export v; }
+OPV3: D0 is opr=0xbc & D0 { local v:3 = zext(D0); export v; }
+OPV3: D1 is opr=0xbd & D1 { local v:3 = zext(D1); export v; }
+OPV3: D6 is opr=0xbe & D6 { local v:3 = D6:3; export v; }
+OPV3: D7 is opr=0xbf & D7 { local v:3 = D7:3; export v; }
+OPW3: OPR3 is OPR3 { export *:3 OPR3; }
+
+# OPR postbyte, operand size 4: exports the effective address.
+OPR4: oprlo, XYSP is opr2=1 & oprr!=3 & oprlo & XYSP { local ea:3 = XYSP + oprlo; export ea; }
+OPR4: addr is opr2=0 & opr6; imm8 [ addr = (opr6 << 8) | imm8; ] { export *[const]:3 addr; }
+OPR4: imm24 is opr=0xfa; imm24 { export *[const]:3 imm24; }
+OPR4: [imm24] is opr=0xfe; imm24 { local ea:3 = *:3 imm24:3; export ea; }
+OPR4: addr is opr2=3 & oprr=3 & oprb3=1 & oprb1=0 & oprb2 & oprb0; imm16 [ addr = (oprb2 << 17) | (oprb0 << 16) | imm16; ] { export *[const]:3 addr; }
+OPR4: off, XYSP is opr2=3 & oprb3=0 & oprb2=0 & oprb1=0 & oprb0 & XYSP; imm8 [ off = imm8 - (oprb0 << 8); ] { local ea:3 = XYSP + off; export ea; }
+OPR4: [off, XYSP] is opr2=3 & oprb3=0 & oprb2=1 & oprb1=0 & oprb0 & XYSP; imm8 [ off = imm8 - (oprb0 << 8); ] { local p:3 = XYSP + off; local ea:3 = *:3 p; export ea; }
+OPR4: simm24, XYSP is opr2=3 & oprlo=2 & XYSP; simm24 { local ea:3 = XYSP + simm24; export ea; }
+OPR4: [simm24, XYSP] is opr2=3 & oprlo=6 & XYSP; simm24 { local p:3 = XYSP + simm24; local ea:3 = *:3 p; export ea; }
+OPR4: ODn, XYSP is opr2=2 & oprb3=1 & oprr!=3 & ODn & XYSP { local ea:3 = XYSP + ODn; export ea; }
+OPR4: [ODn, XYSP] is opr2=3 & oprb5=0 & oprb3=1 & ODn & XYSP { local p:3 = XYSP + ODn; local ea:3 = *:3 p; export ea; }
+OPR4: off, ODn is opr2=2 & oprb3=0 & oprr & ODn; imm16 [ off = (oprr << 16) | imm16; ] { local ea:3 = off + ODn; export ea; }
+OPR4: imm24, ODn is opr2=3 & oprr=2 & oprb3=1 & ODn; imm24 { local ea:3 = imm24 + ODn; export ea; }
+OPR4: "+"XY4 is opr2=3 & oprb5=1 & oprlo=3 & XY4 { XY4 = XY4 + 4; local ea:3 = XY4; export ea; }
+OPR4: XY4"+" is opr2=3 & oprb5=1 & oprlo=7 & XY4 { local ea:3 = XY4; XY4 = XY4 + 4; export ea; }
+OPR4: "-"XY4 is opr2=3 & oprb5=0 & oprlo=3 & XY4 { XY4 = XY4 - 4; local ea:3 = XY4; export ea; }
+OPR4: XY4"-" is opr2=3 & oprb5=0 & oprlo=7 & XY4 { local ea:3 = XY4; XY4 = XY4 - 4; export ea; }
+OPR4: "-SP" is opr=0xfb { SP = SP - 4; local ea:3 = SP; export ea; }
+OPR4: "SP+" is opr=0xff { local ea:3 = SP; SP = SP + 4; export ea; }
+
+OPV4: OPR4 is OPR4 { export *:4 OPR4; }
+OPV4: "#-1" is opr=0x70 { local v:4 = -1; export v; }
+OPV4: "#"oprlo is opr4=7 & oprlo { export *[const]:4 oprlo; }
+OPV4: D2 is opr=0xb8 & D2 { local v:4 = zext(D2); export v; }
+OPV4: D3 is opr=0xb9 & D3 { local v:4 = zext(D3); export v; }
+OPV4: D4 is opr=0xba & D4 { local v:4 = zext(D4); export v; }
+OPV4: D5 is opr=0xbb & D5 { local v:4 = zext(D5); export v; }
+OPV4: D0 is opr=0xbc & D0 { local v:4 = zext(D0); export v; }
+OPV4: D1 is opr=0xbd & D1 { local v:4 = zext(D1); export v; }
+OPV4: D6 is opr=0xbe & D6 { local v:4 = D6; export v; }
+OPV4: D7 is opr=0xbf & D7 { local v:4 = D7; export v; }
+OPW4: OPR4 is OPR4 { export *:4 OPR4; }
+OPW4: D6 is opr=0xbe & D6 { export D6; }
+OPW4: D7 is opr=0xbf & D7 { export D7; }
 
 rel: dest is r7flag=0 & r7 [ dest = inst_start + r7; ] { export *:3 dest; }
 rel: dest is r15flag=1 & r15 [ dest = inst_start + r15; ] { export *:3 dest; }
@@ -133,7 +289,6 @@ rel: dest is r15flag=1 & r15 [ dest = inst_start + r15; ] { export *:3 dest; }
 :BGND is op=0x00 { bgnd(); }
 :SWI is op=0xff { swi(); }
 :RTS is op=0x05 { local ra:3 = *:3 SP; SP = SP + 3; return [ra]; }
-
 :BRA rel is op=0x20; rel { goto rel; }
 :BSR rel is op=0x21; rel { SP = SP - 3; local ra:3 = inst_next; *:3 SP = ra; call rel; }
 :BHI rel is op=0x22; rel { if ((fC | fZ) == 0) goto rel; }
@@ -150,43 +305,1058 @@ rel: dest is r15flag=1 & r15 [ dest = inst_start + r15; ] { export *:3 dest; }
 :BLT rel is op=0x2d; rel { if (fN != fV) goto rel; }
 :BGT rel is op=0x2e; rel { if (fZ == 0 && fN == fV) goto rel; }
 :BLE rel is op=0x2f; rel { if (fZ != 0 || fN != fV) goto rel; }
-
 :JMP imm24 is op=0xba; imm24 { goto [imm24:3]; }
 :JSR imm24 is op=0xbb; imm24 { SP = SP - 3; local ra:3 = inst_next; *:3 SP = ra; call [imm24:3]; }
-
-# ADD/SUB/CMP/LD with an immediate whose width is the register width.
-:ADD DW, "#"imm16 is op5=0x0a & DW; imm16 { local a = DW; local b:2 = imm16; DW = a + b; addflags(a, b, DW); }
-:ADD DB, "#"imm8 is op5=0x0a & DB; imm8 { local a = DB; local b:1 = imm8; DB = a + b; addflags(a, b, DB); }
-:ADD DL, "#"imm32 is op5=0x0a & DL; imm32 { local a = DL; local b:4 = imm32; DL = a + b; addflags(a, b, DL); }
-:SUB DW, "#"imm16 is op5=0x0e & DW; imm16 { local a = DW; local b:2 = imm16; DW = a - b; subflags(a, b, DW); }
-:SUB DB, "#"imm8 is op5=0x0e & DB; imm8 { local a = DB; local b:1 = imm8; DB = a - b; subflags(a, b, DB); }
-:SUB DL, "#"imm32 is op5=0x0e & DL; imm32 { local a = DL; local b:4 = imm32; DL = a - b; subflags(a, b, DL); }
-:CMP DW, "#"imm16 is op5=0x1c & DW; imm16 { local a = DW; local b:2 = imm16; local r = a - b; subflags(a, b, r); }
-:CMP DB, "#"imm8 is op5=0x1c & DB; imm8 { local a = DB; local b:1 = imm8; local r = a - b; subflags(a, b, r); }
-:CMP DL, "#"imm32 is op5=0x1c & DL; imm32 { local a = DL; local b:4 = imm32; local r = a - b; subflags(a, b, r); }
-:LD DW, "#"imm16 is op5=0x12 & DW; imm16 { DW = imm16; nzflags(DW); fV = 0; }
-:LD DB, "#"imm8 is op5=0x12 & DB; imm8 { DB = imm8; nzflags(DB); fV = 0; }
-:LD DL, "#"imm32 is op5=0x12 & DL; imm32 { DL = imm32; nzflags(DL); fV = 0; }
-
-# ADD/SUB/CMP/LD/ST with a memory operand (OPR subset) and LD/ST with a 24-bit address.
-:ADD DW, OPRA is op5=0x0c & DW; OPRA { local a = DW; local b:2 = *:2 OPRA; DW = a + b; addflags(a, b, DW); }
-:ADD DB, OPRA is op5=0x0c & DB; OPRA { local a = DB; local b:1 = *:1 OPRA; DB = a + b; addflags(a, b, DB); }
-:ADD DL, OPRA is op5=0x0c & DL; OPRA { local a = DL; local b:4 = *:4 OPRA; DL = a + b; addflags(a, b, DL); }
-:SUB DW, OPRA is op5=0x10 & DW; OPRA { local a = DW; local b:2 = *:2 OPRA; DW = a - b; subflags(a, b, DW); }
-:SUB DB, OPRA is op5=0x10 & DB; OPRA { local a = DB; local b:1 = *:1 OPRA; DB = a - b; subflags(a, b, DB); }
-:SUB DL, OPRA is op5=0x10 & DL; OPRA { local a = DL; local b:4 = *:4 OPRA; DL = a - b; subflags(a, b, DL); }
-:CMP DW, OPRA is op5=0x1e & DW; OPRA { local a = DW; local b:2 = *:2 OPRA; local r = a - b; subflags(a, b, r); }
-:CMP DB, OPRA is op5=0x1e & DB; OPRA { local a = DB; local b:1 = *:1 OPRA; local r = a - b; subflags(a, b, r); }
-:CMP DL, OPRA is op5=0x1e & DL; OPRA { local a = DL; local b:4 = *:4 OPRA; local r = a - b; subflags(a, b, r); }
-:LD DW, OPRA is op5=0x14 & DW; OPRA { DW = *:2 OPRA; nzflags(DW); fV = 0; }
-:LD DB, OPRA is op5=0x14 & DB; OPRA { DB = *:1 OPRA; nzflags(DB); fV = 0; }
-:LD DL, OPRA is op5=0x14 & DL; OPRA { DL = *:4 OPRA; nzflags(DL); fV = 0; }
-:ST DW, OPRA is op5=0x18 & DW; OPRA { *:2 OPRA = DW; nzflags(DW); fV = 0; }
-:ST DB, OPRA is op5=0x18 & DB; OPRA { *:1 OPRA = DB; nzflags(DB); fV = 0; }
-:ST DL, OPRA is op5=0x18 & DL; OPRA { *:4 OPRA = DL; nzflags(DL); fV = 0; }
-:LD DW, imm24 is op5=0x16 & DW; imm24 { DW = *:2 imm24:3; nzflags(DW); fV = 0; }
-:LD DB, imm24 is op5=0x16 & DB; imm24 { DB = *:1 imm24:3; nzflags(DB); fV = 0; }
-:LD DL, imm24 is op5=0x16 & DL; imm24 { DL = *:4 imm24:3; nzflags(DL); fV = 0; }
-:ST DW, imm24 is op5=0x1a & DW; imm24 { *:2 imm24:3 = DW; nzflags(DW); fV = 0; }
-:ST DB, imm24 is op5=0x1a & DB; imm24 { *:1 imm24:3 = DB; nzflags(DB); fV = 0; }
-:ST DL, imm24 is op5=0x1a & DL; imm24 { *:4 imm24:3 = DL; nzflags(DL); fV = 0; }
+:JMP OPR3 is op=0xaa; OPR3 { goto [OPR3]; }
+:JSR OPR3 is op=0xab; OPR3 { local t:3 = OPR3; SP = SP - 3; local ra:3 = inst_next; *:3 SP = ra; call [t]; }
+:ADD D2, "#"imm16 is op=0x50 & D2; imm16 { local b:2 = imm16; local a = D2; D2 = a + b; addflags(a, b, D2); }
+:ADD D2, OPV2 is op=0x60 & D2; OPV2 { local b:2 = OPV2; local a = D2; D2 = a + b; addflags(a, b, D2); }
+:ADD D3, "#"imm16 is op=0x51 & D3; imm16 { local b:2 = imm16; local a = D3; D3 = a + b; addflags(a, b, D3); }
+:ADD D3, OPV2 is op=0x61 & D3; OPV2 { local b:2 = OPV2; local a = D3; D3 = a + b; addflags(a, b, D3); }
+:ADD D4, "#"imm16 is op=0x52 & D4; imm16 { local b:2 = imm16; local a = D4; D4 = a + b; addflags(a, b, D4); }
+:ADD D4, OPV2 is op=0x62 & D4; OPV2 { local b:2 = OPV2; local a = D4; D4 = a + b; addflags(a, b, D4); }
+:ADD D5, "#"imm16 is op=0x53 & D5; imm16 { local b:2 = imm16; local a = D5; D5 = a + b; addflags(a, b, D5); }
+:ADD D5, OPV2 is op=0x63 & D5; OPV2 { local b:2 = OPV2; local a = D5; D5 = a + b; addflags(a, b, D5); }
+:ADD D0, "#"imm8 is op=0x54 & D0; imm8 { local b:1 = imm8; local a = D0; D0 = a + b; addflags(a, b, D0); }
+:ADD D0, OPV1 is op=0x64 & D0; OPV1 { local b:1 = OPV1; local a = D0; D0 = a + b; addflags(a, b, D0); }
+:ADD D1, "#"imm8 is op=0x55 & D1; imm8 { local b:1 = imm8; local a = D1; D1 = a + b; addflags(a, b, D1); }
+:ADD D1, OPV1 is op=0x65 & D1; OPV1 { local b:1 = OPV1; local a = D1; D1 = a + b; addflags(a, b, D1); }
+:ADD D6, "#"imm32 is op=0x56 & D6; imm32 { local b:4 = imm32; local a = D6; D6 = a + b; addflags(a, b, D6); }
+:ADD D6, OPV4 is op=0x66 & D6; OPV4 { local b:4 = OPV4; local a = D6; D6 = a + b; addflags(a, b, D6); }
+:ADD D7, "#"imm32 is op=0x57 & D7; imm32 { local b:4 = imm32; local a = D7; D7 = a + b; addflags(a, b, D7); }
+:ADD D7, OPV4 is op=0x67 & D7; OPV4 { local b:4 = OPV4; local a = D7; D7 = a + b; addflags(a, b, D7); }
+:AND D2, "#"imm16 is op=0x58 & D2; imm16 { local b:2 = imm16; D2 = D2 & b; nzflags(D2); fV = 0; }
+:AND D2, OPV2 is op=0x68 & D2; OPV2 { local b:2 = OPV2; D2 = D2 & b; nzflags(D2); fV = 0; }
+:AND D3, "#"imm16 is op=0x59 & D3; imm16 { local b:2 = imm16; D3 = D3 & b; nzflags(D3); fV = 0; }
+:AND D3, OPV2 is op=0x69 & D3; OPV2 { local b:2 = OPV2; D3 = D3 & b; nzflags(D3); fV = 0; }
+:AND D4, "#"imm16 is op=0x5a & D4; imm16 { local b:2 = imm16; D4 = D4 & b; nzflags(D4); fV = 0; }
+:AND D4, OPV2 is op=0x6a & D4; OPV2 { local b:2 = OPV2; D4 = D4 & b; nzflags(D4); fV = 0; }
+:AND D5, "#"imm16 is op=0x5b & D5; imm16 { local b:2 = imm16; D5 = D5 & b; nzflags(D5); fV = 0; }
+:AND D5, OPV2 is op=0x6b & D5; OPV2 { local b:2 = OPV2; D5 = D5 & b; nzflags(D5); fV = 0; }
+:AND D0, "#"imm8 is op=0x5c & D0; imm8 { local b:1 = imm8; D0 = D0 & b; nzflags(D0); fV = 0; }
+:AND D0, OPV1 is op=0x6c & D0; OPV1 { local b:1 = OPV1; D0 = D0 & b; nzflags(D0); fV = 0; }
+:AND D1, "#"imm8 is op=0x5d & D1; imm8 { local b:1 = imm8; D1 = D1 & b; nzflags(D1); fV = 0; }
+:AND D1, OPV1 is op=0x6d & D1; OPV1 { local b:1 = OPV1; D1 = D1 & b; nzflags(D1); fV = 0; }
+:AND D6, "#"imm32 is op=0x5e & D6; imm32 { local b:4 = imm32; D6 = D6 & b; nzflags(D6); fV = 0; }
+:AND D6, OPV4 is op=0x6e & D6; OPV4 { local b:4 = OPV4; D6 = D6 & b; nzflags(D6); fV = 0; }
+:AND D7, "#"imm32 is op=0x5f & D7; imm32 { local b:4 = imm32; D7 = D7 & b; nzflags(D7); fV = 0; }
+:AND D7, OPV4 is op=0x6f & D7; OPV4 { local b:4 = OPV4; D7 = D7 & b; nzflags(D7); fV = 0; }
+:SUB D2, "#"imm16 is op=0x70 & D2; imm16 { local b:2 = imm16; local a = D2; D2 = a - b; subflags(a, b, D2); }
+:SUB D2, OPV2 is op=0x80 & D2; OPV2 { local b:2 = OPV2; local a = D2; D2 = a - b; subflags(a, b, D2); }
+:SUB D3, "#"imm16 is op=0x71 & D3; imm16 { local b:2 = imm16; local a = D3; D3 = a - b; subflags(a, b, D3); }
+:SUB D3, OPV2 is op=0x81 & D3; OPV2 { local b:2 = OPV2; local a = D3; D3 = a - b; subflags(a, b, D3); }
+:SUB D4, "#"imm16 is op=0x72 & D4; imm16 { local b:2 = imm16; local a = D4; D4 = a - b; subflags(a, b, D4); }
+:SUB D4, OPV2 is op=0x82 & D4; OPV2 { local b:2 = OPV2; local a = D4; D4 = a - b; subflags(a, b, D4); }
+:SUB D5, "#"imm16 is op=0x73 & D5; imm16 { local b:2 = imm16; local a = D5; D5 = a - b; subflags(a, b, D5); }
+:SUB D5, OPV2 is op=0x83 & D5; OPV2 { local b:2 = OPV2; local a = D5; D5 = a - b; subflags(a, b, D5); }
+:SUB D0, "#"imm8 is op=0x74 & D0; imm8 { local b:1 = imm8; local a = D0; D0 = a - b; subflags(a, b, D0); }
+:SUB D0, OPV1 is op=0x84 & D0; OPV1 { local b:1 = OPV1; local a = D0; D0 = a - b; subflags(a, b, D0); }
+:SUB D1, "#"imm8 is op=0x75 & D1; imm8 { local b:1 = imm8; local a = D1; D1 = a - b; subflags(a, b, D1); }
+:SUB D1, OPV1 is op=0x85 & D1; OPV1 { local b:1 = OPV1; local a = D1; D1 = a - b; subflags(a, b, D1); }
+:SUB D6, "#"imm32 is op=0x76 & D6; imm32 { local b:4 = imm32; local a = D6; D6 = a - b; subflags(a, b, D6); }
+:SUB D6, OPV4 is op=0x86 & D6; OPV4 { local b:4 = OPV4; local a = D6; D6 = a - b; subflags(a, b, D6); }
+:SUB D7, "#"imm32 is op=0x77 & D7; imm32 { local b:4 = imm32; local a = D7; D7 = a - b; subflags(a, b, D7); }
+:SUB D7, OPV4 is op=0x87 & D7; OPV4 { local b:4 = OPV4; local a = D7; D7 = a - b; subflags(a, b, D7); }
+:OR D2, "#"imm16 is op=0x78 & D2; imm16 { local b:2 = imm16; D2 = D2 | b; nzflags(D2); fV = 0; }
+:OR D2, OPV2 is op=0x88 & D2; OPV2 { local b:2 = OPV2; D2 = D2 | b; nzflags(D2); fV = 0; }
+:OR D3, "#"imm16 is op=0x79 & D3; imm16 { local b:2 = imm16; D3 = D3 | b; nzflags(D3); fV = 0; }
+:OR D3, OPV2 is op=0x89 & D3; OPV2 { local b:2 = OPV2; D3 = D3 | b; nzflags(D3); fV = 0; }
+:OR D4, "#"imm16 is op=0x7a & D4; imm16 { local b:2 = imm16; D4 = D4 | b; nzflags(D4); fV = 0; }
+:OR D4, OPV2 is op=0x8a & D4; OPV2 { local b:2 = OPV2; D4 = D4 | b; nzflags(D4); fV = 0; }
+:OR D5, "#"imm16 is op=0x7b & D5; imm16 { local b:2 = imm16; D5 = D5 | b; nzflags(D5); fV = 0; }
+:OR D5, OPV2 is op=0x8b & D5; OPV2 { local b:2 = OPV2; D5 = D5 | b; nzflags(D5); fV = 0; }
+:OR D0, "#"imm8 is op=0x7c & D0; imm8 { local b:1 = imm8; D0 = D0 | b; nzflags(D0); fV = 0; }
+:OR D0, OPV1 is op=0x8c & D0; OPV1 { local b:1 = OPV1; D0 = D0 | b; nzflags(D0); fV = 0; }
+:OR D1, "#"imm8 is op=0x7d & D1; imm8 { local b:1 = imm8; D1 = D1 | b; nzflags(D1); fV = 0; }
+:OR D1, OPV1 is op=0x8d & D1; OPV1 { local b:1 = OPV1; D1 = D1 | b; nzflags(D1); fV = 0; }
+:OR D6, "#"imm32 is op=0x7e & D6; imm32 { local b:4 = imm32; D6 = D6 | b; nzflags(D6); fV = 0; }
+:OR D6, OPV4 is op=0x8e & D6; OPV4 { local b:4 = OPV4; D6 = D6 | b; nzflags(D6); fV = 0; }
+:OR D7, "#"imm32 is op=0x7f & D7; imm32 { local b:4 = imm32; D7 = D7 | b; nzflags(D7); fV = 0; }
+:OR D7, OPV4 is op=0x8f & D7; OPV4 { local b:4 = OPV4; D7 = D7 | b; nzflags(D7); fV = 0; }
+:LD D2, "#"imm16 is op=0x90 & D2; imm16 { local b:2 = imm16; D2 = b; nzflags(D2); fV = 0; }
+:LD D2, OPV2 is op=0xa0 & D2; OPV2 { local b:2 = OPV2; D2 = b; nzflags(D2); fV = 0; }
+:LD D3, "#"imm16 is op=0x91 & D3; imm16 { local b:2 = imm16; D3 = b; nzflags(D3); fV = 0; }
+:LD D3, OPV2 is op=0xa1 & D3; OPV2 { local b:2 = OPV2; D3 = b; nzflags(D3); fV = 0; }
+:LD D4, "#"imm16 is op=0x92 & D4; imm16 { local b:2 = imm16; D4 = b; nzflags(D4); fV = 0; }
+:LD D4, OPV2 is op=0xa2 & D4; OPV2 { local b:2 = OPV2; D4 = b; nzflags(D4); fV = 0; }
+:LD D5, "#"imm16 is op=0x93 & D5; imm16 { local b:2 = imm16; D5 = b; nzflags(D5); fV = 0; }
+:LD D5, OPV2 is op=0xa3 & D5; OPV2 { local b:2 = OPV2; D5 = b; nzflags(D5); fV = 0; }
+:LD D0, "#"imm8 is op=0x94 & D0; imm8 { local b:1 = imm8; D0 = b; nzflags(D0); fV = 0; }
+:LD D0, OPV1 is op=0xa4 & D0; OPV1 { local b:1 = OPV1; D0 = b; nzflags(D0); fV = 0; }
+:LD D1, "#"imm8 is op=0x95 & D1; imm8 { local b:1 = imm8; D1 = b; nzflags(D1); fV = 0; }
+:LD D1, OPV1 is op=0xa5 & D1; OPV1 { local b:1 = OPV1; D1 = b; nzflags(D1); fV = 0; }
+:LD D6, "#"imm32 is op=0x96 & D6; imm32 { local b:4 = imm32; D6 = b; nzflags(D6); fV = 0; }
+:LD D6, OPV4 is op=0xa6 & D6; OPV4 { local b:4 = OPV4; D6 = b; nzflags(D6); fV = 0; }
+:LD D7, "#"imm32 is op=0x97 & D7; imm32 { local b:4 = imm32; D7 = b; nzflags(D7); fV = 0; }
+:LD D7, OPV4 is op=0xa7 & D7; OPV4 { local b:4 = OPV4; D7 = b; nzflags(D7); fV = 0; }
+:CMP D2, "#"imm16 is op=0xe0 & D2; imm16 { local b:2 = imm16; local a = D2; local r = a - b; subflags(a, b, r); }
+:CMP D2, OPV2 is op=0xf0 & D2; OPV2 { local b:2 = OPV2; local a = D2; local r = a - b; subflags(a, b, r); }
+:CMP D3, "#"imm16 is op=0xe1 & D3; imm16 { local b:2 = imm16; local a = D3; local r = a - b; subflags(a, b, r); }
+:CMP D3, OPV2 is op=0xf1 & D3; OPV2 { local b:2 = OPV2; local a = D3; local r = a - b; subflags(a, b, r); }
+:CMP D4, "#"imm16 is op=0xe2 & D4; imm16 { local b:2 = imm16; local a = D4; local r = a - b; subflags(a, b, r); }
+:CMP D4, OPV2 is op=0xf2 & D4; OPV2 { local b:2 = OPV2; local a = D4; local r = a - b; subflags(a, b, r); }
+:CMP D5, "#"imm16 is op=0xe3 & D5; imm16 { local b:2 = imm16; local a = D5; local r = a - b; subflags(a, b, r); }
+:CMP D5, OPV2 is op=0xf3 & D5; OPV2 { local b:2 = OPV2; local a = D5; local r = a - b; subflags(a, b, r); }
+:CMP D0, "#"imm8 is op=0xe4 & D0; imm8 { local b:1 = imm8; local a = D0; local r = a - b; subflags(a, b, r); }
+:CMP D0, OPV1 is op=0xf4 & D0; OPV1 { local b:1 = OPV1; local a = D0; local r = a - b; subflags(a, b, r); }
+:CMP D1, "#"imm8 is op=0xe5 & D1; imm8 { local b:1 = imm8; local a = D1; local r = a - b; subflags(a, b, r); }
+:CMP D1, OPV1 is op=0xf5 & D1; OPV1 { local b:1 = OPV1; local a = D1; local r = a - b; subflags(a, b, r); }
+:CMP D6, "#"imm32 is op=0xe6 & D6; imm32 { local b:4 = imm32; local a = D6; local r = a - b; subflags(a, b, r); }
+:CMP D6, OPV4 is op=0xf6 & D6; OPV4 { local b:4 = OPV4; local a = D6; local r = a - b; subflags(a, b, r); }
+:CMP D7, "#"imm32 is op=0xe7 & D7; imm32 { local b:4 = imm32; local a = D7; local r = a - b; subflags(a, b, r); }
+:CMP D7, OPV4 is op=0xf7 & D7; OPV4 { local b:4 = OPV4; local a = D7; local r = a - b; subflags(a, b, r); }
+:MINU D2, OPV2 is op=0x1b; p2=0x10 & D2; OPV2 { local b:2 = OPV2; local a = D2; local r = a - b; subflags(a, b, r); local m:2 = zext(b < a); D2 = a ^ ((a ^ b) & (-m)); }
+:MINU D3, OPV2 is op=0x1b; p2=0x11 & D3; OPV2 { local b:2 = OPV2; local a = D3; local r = a - b; subflags(a, b, r); local m:2 = zext(b < a); D3 = a ^ ((a ^ b) & (-m)); }
+:MINU D4, OPV2 is op=0x1b; p2=0x12 & D4; OPV2 { local b:2 = OPV2; local a = D4; local r = a - b; subflags(a, b, r); local m:2 = zext(b < a); D4 = a ^ ((a ^ b) & (-m)); }
+:MINU D5, OPV2 is op=0x1b; p2=0x13 & D5; OPV2 { local b:2 = OPV2; local a = D5; local r = a - b; subflags(a, b, r); local m:2 = zext(b < a); D5 = a ^ ((a ^ b) & (-m)); }
+:MINU D0, OPV1 is op=0x1b; p2=0x14 & D0; OPV1 { local b:1 = OPV1; local a = D0; local r = a - b; subflags(a, b, r); local m:1 = zext(b < a); D0 = a ^ ((a ^ b) & (-m)); }
+:MINU D1, OPV1 is op=0x1b; p2=0x15 & D1; OPV1 { local b:1 = OPV1; local a = D1; local r = a - b; subflags(a, b, r); local m:1 = zext(b < a); D1 = a ^ ((a ^ b) & (-m)); }
+:MINU D6, OPV4 is op=0x1b; p2=0x16 & D6; OPV4 { local b:4 = OPV4; local a = D6; local r = a - b; subflags(a, b, r); local m:4 = zext(b < a); D6 = a ^ ((a ^ b) & (-m)); }
+:MINU D7, OPV4 is op=0x1b; p2=0x17 & D7; OPV4 { local b:4 = OPV4; local a = D7; local r = a - b; subflags(a, b, r); local m:4 = zext(b < a); D7 = a ^ ((a ^ b) & (-m)); }
+:MAXU D2, OPV2 is op=0x1b; p2=0x18 & D2; OPV2 { local b:2 = OPV2; local a = D2; local r = a - b; subflags(a, b, r); local m:2 = zext(b > a); D2 = a ^ ((a ^ b) & (-m)); }
+:MAXU D3, OPV2 is op=0x1b; p2=0x19 & D3; OPV2 { local b:2 = OPV2; local a = D3; local r = a - b; subflags(a, b, r); local m:2 = zext(b > a); D3 = a ^ ((a ^ b) & (-m)); }
+:MAXU D4, OPV2 is op=0x1b; p2=0x1a & D4; OPV2 { local b:2 = OPV2; local a = D4; local r = a - b; subflags(a, b, r); local m:2 = zext(b > a); D4 = a ^ ((a ^ b) & (-m)); }
+:MAXU D5, OPV2 is op=0x1b; p2=0x1b & D5; OPV2 { local b:2 = OPV2; local a = D5; local r = a - b; subflags(a, b, r); local m:2 = zext(b > a); D5 = a ^ ((a ^ b) & (-m)); }
+:MAXU D0, OPV1 is op=0x1b; p2=0x1c & D0; OPV1 { local b:1 = OPV1; local a = D0; local r = a - b; subflags(a, b, r); local m:1 = zext(b > a); D0 = a ^ ((a ^ b) & (-m)); }
+:MAXU D1, OPV1 is op=0x1b; p2=0x1d & D1; OPV1 { local b:1 = OPV1; local a = D1; local r = a - b; subflags(a, b, r); local m:1 = zext(b > a); D1 = a ^ ((a ^ b) & (-m)); }
+:MAXU D6, OPV4 is op=0x1b; p2=0x1e & D6; OPV4 { local b:4 = OPV4; local a = D6; local r = a - b; subflags(a, b, r); local m:4 = zext(b > a); D6 = a ^ ((a ^ b) & (-m)); }
+:MAXU D7, OPV4 is op=0x1b; p2=0x1f & D7; OPV4 { local b:4 = OPV4; local a = D7; local r = a - b; subflags(a, b, r); local m:4 = zext(b > a); D7 = a ^ ((a ^ b) & (-m)); }
+:MINS D2, OPV2 is op=0x1b; p2=0x20 & D2; OPV2 { local b:2 = OPV2; local a = D2; local r = a - b; subflags(a, b, r); local m:2 = zext(b s< a); D2 = a ^ ((a ^ b) & (-m)); }
+:MINS D3, OPV2 is op=0x1b; p2=0x21 & D3; OPV2 { local b:2 = OPV2; local a = D3; local r = a - b; subflags(a, b, r); local m:2 = zext(b s< a); D3 = a ^ ((a ^ b) & (-m)); }
+:MINS D4, OPV2 is op=0x1b; p2=0x22 & D4; OPV2 { local b:2 = OPV2; local a = D4; local r = a - b; subflags(a, b, r); local m:2 = zext(b s< a); D4 = a ^ ((a ^ b) & (-m)); }
+:MINS D5, OPV2 is op=0x1b; p2=0x23 & D5; OPV2 { local b:2 = OPV2; local a = D5; local r = a - b; subflags(a, b, r); local m:2 = zext(b s< a); D5 = a ^ ((a ^ b) & (-m)); }
+:MINS D0, OPV1 is op=0x1b; p2=0x24 & D0; OPV1 { local b:1 = OPV1; local a = D0; local r = a - b; subflags(a, b, r); local m:1 = zext(b s< a); D0 = a ^ ((a ^ b) & (-m)); }
+:MINS D1, OPV1 is op=0x1b; p2=0x25 & D1; OPV1 { local b:1 = OPV1; local a = D1; local r = a - b; subflags(a, b, r); local m:1 = zext(b s< a); D1 = a ^ ((a ^ b) & (-m)); }
+:MINS D6, OPV4 is op=0x1b; p2=0x26 & D6; OPV4 { local b:4 = OPV4; local a = D6; local r = a - b; subflags(a, b, r); local m:4 = zext(b s< a); D6 = a ^ ((a ^ b) & (-m)); }
+:MINS D7, OPV4 is op=0x1b; p2=0x27 & D7; OPV4 { local b:4 = OPV4; local a = D7; local r = a - b; subflags(a, b, r); local m:4 = zext(b s< a); D7 = a ^ ((a ^ b) & (-m)); }
+:MAXS D2, OPV2 is op=0x1b; p2=0x28 & D2; OPV2 { local b:2 = OPV2; local a = D2; local r = a - b; subflags(a, b, r); local m:2 = zext(b s> a); D2 = a ^ ((a ^ b) & (-m)); }
+:MAXS D3, OPV2 is op=0x1b; p2=0x29 & D3; OPV2 { local b:2 = OPV2; local a = D3; local r = a - b; subflags(a, b, r); local m:2 = zext(b s> a); D3 = a ^ ((a ^ b) & (-m)); }
+:MAXS D4, OPV2 is op=0x1b; p2=0x2a & D4; OPV2 { local b:2 = OPV2; local a = D4; local r = a - b; subflags(a, b, r); local m:2 = zext(b s> a); D4 = a ^ ((a ^ b) & (-m)); }
+:MAXS D5, OPV2 is op=0x1b; p2=0x2b & D5; OPV2 { local b:2 = OPV2; local a = D5; local r = a - b; subflags(a, b, r); local m:2 = zext(b s> a); D5 = a ^ ((a ^ b) & (-m)); }
+:MAXS D0, OPV1 is op=0x1b; p2=0x2c & D0; OPV1 { local b:1 = OPV1; local a = D0; local r = a - b; subflags(a, b, r); local m:1 = zext(b s> a); D0 = a ^ ((a ^ b) & (-m)); }
+:MAXS D1, OPV1 is op=0x1b; p2=0x2d & D1; OPV1 { local b:1 = OPV1; local a = D1; local r = a - b; subflags(a, b, r); local m:1 = zext(b s> a); D1 = a ^ ((a ^ b) & (-m)); }
+:MAXS D6, OPV4 is op=0x1b; p2=0x2e & D6; OPV4 { local b:4 = OPV4; local a = D6; local r = a - b; subflags(a, b, r); local m:4 = zext(b s> a); D6 = a ^ ((a ^ b) & (-m)); }
+:MAXS D7, OPV4 is op=0x1b; p2=0x2f & D7; OPV4 { local b:4 = OPV4; local a = D7; local r = a - b; subflags(a, b, r); local m:4 = zext(b s> a); D7 = a ^ ((a ^ b) & (-m)); }
+:ADC D2, "#"imm16 is op=0x1b; p2=0x50 & D2; imm16 { local b:2 = imm16; local a = D2; local c:2 = zext(fC); local t = a + b; D2 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D2); }
+:ADC D2, OPV2 is op=0x1b; p2=0x60 & D2; OPV2 { local b:2 = OPV2; local a = D2; local c:2 = zext(fC); local t = a + b; D2 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D2); }
+:ADC D3, "#"imm16 is op=0x1b; p2=0x51 & D3; imm16 { local b:2 = imm16; local a = D3; local c:2 = zext(fC); local t = a + b; D3 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D3); }
+:ADC D3, OPV2 is op=0x1b; p2=0x61 & D3; OPV2 { local b:2 = OPV2; local a = D3; local c:2 = zext(fC); local t = a + b; D3 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D3); }
+:ADC D4, "#"imm16 is op=0x1b; p2=0x52 & D4; imm16 { local b:2 = imm16; local a = D4; local c:2 = zext(fC); local t = a + b; D4 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D4); }
+:ADC D4, OPV2 is op=0x1b; p2=0x62 & D4; OPV2 { local b:2 = OPV2; local a = D4; local c:2 = zext(fC); local t = a + b; D4 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D4); }
+:ADC D5, "#"imm16 is op=0x1b; p2=0x53 & D5; imm16 { local b:2 = imm16; local a = D5; local c:2 = zext(fC); local t = a + b; D5 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D5); }
+:ADC D5, OPV2 is op=0x1b; p2=0x63 & D5; OPV2 { local b:2 = OPV2; local a = D5; local c:2 = zext(fC); local t = a + b; D5 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D5); }
+:ADC D0, "#"imm8 is op=0x1b; p2=0x54 & D0; imm8 { local b:1 = imm8; local a = D0; local c:1 = zext(fC); local t = a + b; D0 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D0); }
+:ADC D0, OPV1 is op=0x1b; p2=0x64 & D0; OPV1 { local b:1 = OPV1; local a = D0; local c:1 = zext(fC); local t = a + b; D0 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D0); }
+:ADC D1, "#"imm8 is op=0x1b; p2=0x55 & D1; imm8 { local b:1 = imm8; local a = D1; local c:1 = zext(fC); local t = a + b; D1 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D1); }
+:ADC D1, OPV1 is op=0x1b; p2=0x65 & D1; OPV1 { local b:1 = OPV1; local a = D1; local c:1 = zext(fC); local t = a + b; D1 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D1); }
+:ADC D6, "#"imm32 is op=0x1b; p2=0x56 & D6; imm32 { local b:4 = imm32; local a = D6; local c:4 = zext(fC); local t = a + b; D6 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D6); }
+:ADC D6, OPV4 is op=0x1b; p2=0x66 & D6; OPV4 { local b:4 = OPV4; local a = D6; local c:4 = zext(fC); local t = a + b; D6 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D6); }
+:ADC D7, "#"imm32 is op=0x1b; p2=0x57 & D7; imm32 { local b:4 = imm32; local a = D7; local c:4 = zext(fC); local t = a + b; D7 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D7); }
+:ADC D7, OPV4 is op=0x1b; p2=0x67 & D7; OPV4 { local b:4 = OPV4; local a = D7; local c:4 = zext(fC); local t = a + b; D7 = t + c; fC = carry(a, b) || carry(t, c); fV = scarry(a, b) ^^ scarry(t, c); nzflags(D7); }
+:BIT D2, "#"imm16 is op=0x1b; p2=0x58 & D2; imm16 { local b:2 = imm16; local r = D2 & b; nzflags(r); fV = 0; }
+:BIT D2, OPV2 is op=0x1b; p2=0x68 & D2; OPV2 { local b:2 = OPV2; local r = D2 & b; nzflags(r); fV = 0; }
+:BIT D3, "#"imm16 is op=0x1b; p2=0x59 & D3; imm16 { local b:2 = imm16; local r = D3 & b; nzflags(r); fV = 0; }
+:BIT D3, OPV2 is op=0x1b; p2=0x69 & D3; OPV2 { local b:2 = OPV2; local r = D3 & b; nzflags(r); fV = 0; }
+:BIT D4, "#"imm16 is op=0x1b; p2=0x5a & D4; imm16 { local b:2 = imm16; local r = D4 & b; nzflags(r); fV = 0; }
+:BIT D4, OPV2 is op=0x1b; p2=0x6a & D4; OPV2 { local b:2 = OPV2; local r = D4 & b; nzflags(r); fV = 0; }
+:BIT D5, "#"imm16 is op=0x1b; p2=0x5b & D5; imm16 { local b:2 = imm16; local r = D5 & b; nzflags(r); fV = 0; }
+:BIT D5, OPV2 is op=0x1b; p2=0x6b & D5; OPV2 { local b:2 = OPV2; local r = D5 & b; nzflags(r); fV = 0; }
+:BIT D0, "#"imm8 is op=0x1b; p2=0x5c & D0; imm8 { local b:1 = imm8; local r = D0 & b; nzflags(r); fV = 0; }
+:BIT D0, OPV1 is op=0x1b; p2=0x6c & D0; OPV1 { local b:1 = OPV1; local r = D0 & b; nzflags(r); fV = 0; }
+:BIT D1, "#"imm8 is op=0x1b; p2=0x5d & D1; imm8 { local b:1 = imm8; local r = D1 & b; nzflags(r); fV = 0; }
+:BIT D1, OPV1 is op=0x1b; p2=0x6d & D1; OPV1 { local b:1 = OPV1; local r = D1 & b; nzflags(r); fV = 0; }
+:BIT D6, "#"imm32 is op=0x1b; p2=0x5e & D6; imm32 { local b:4 = imm32; local r = D6 & b; nzflags(r); fV = 0; }
+:BIT D6, OPV4 is op=0x1b; p2=0x6e & D6; OPV4 { local b:4 = OPV4; local r = D6 & b; nzflags(r); fV = 0; }
+:BIT D7, "#"imm32 is op=0x1b; p2=0x5f & D7; imm32 { local b:4 = imm32; local r = D7 & b; nzflags(r); fV = 0; }
+:BIT D7, OPV4 is op=0x1b; p2=0x6f & D7; OPV4 { local b:4 = OPV4; local r = D7 & b; nzflags(r); fV = 0; }
+:SBC D2, "#"imm16 is op=0x1b; p2=0x70 & D2; imm16 { local b:2 = imm16; local a = D2; local c:2 = zext(fC); local t = a - b; D2 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D2); }
+:SBC D2, OPV2 is op=0x1b; p2=0x80 & D2; OPV2 { local b:2 = OPV2; local a = D2; local c:2 = zext(fC); local t = a - b; D2 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D2); }
+:SBC D3, "#"imm16 is op=0x1b; p2=0x71 & D3; imm16 { local b:2 = imm16; local a = D3; local c:2 = zext(fC); local t = a - b; D3 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D3); }
+:SBC D3, OPV2 is op=0x1b; p2=0x81 & D3; OPV2 { local b:2 = OPV2; local a = D3; local c:2 = zext(fC); local t = a - b; D3 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D3); }
+:SBC D4, "#"imm16 is op=0x1b; p2=0x72 & D4; imm16 { local b:2 = imm16; local a = D4; local c:2 = zext(fC); local t = a - b; D4 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D4); }
+:SBC D4, OPV2 is op=0x1b; p2=0x82 & D4; OPV2 { local b:2 = OPV2; local a = D4; local c:2 = zext(fC); local t = a - b; D4 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D4); }
+:SBC D5, "#"imm16 is op=0x1b; p2=0x73 & D5; imm16 { local b:2 = imm16; local a = D5; local c:2 = zext(fC); local t = a - b; D5 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D5); }
+:SBC D5, OPV2 is op=0x1b; p2=0x83 & D5; OPV2 { local b:2 = OPV2; local a = D5; local c:2 = zext(fC); local t = a - b; D5 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D5); }
+:SBC D0, "#"imm8 is op=0x1b; p2=0x74 & D0; imm8 { local b:1 = imm8; local a = D0; local c:1 = zext(fC); local t = a - b; D0 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D0); }
+:SBC D0, OPV1 is op=0x1b; p2=0x84 & D0; OPV1 { local b:1 = OPV1; local a = D0; local c:1 = zext(fC); local t = a - b; D0 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D0); }
+:SBC D1, "#"imm8 is op=0x1b; p2=0x75 & D1; imm8 { local b:1 = imm8; local a = D1; local c:1 = zext(fC); local t = a - b; D1 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D1); }
+:SBC D1, OPV1 is op=0x1b; p2=0x85 & D1; OPV1 { local b:1 = OPV1; local a = D1; local c:1 = zext(fC); local t = a - b; D1 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D1); }
+:SBC D6, "#"imm32 is op=0x1b; p2=0x76 & D6; imm32 { local b:4 = imm32; local a = D6; local c:4 = zext(fC); local t = a - b; D6 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D6); }
+:SBC D6, OPV4 is op=0x1b; p2=0x86 & D6; OPV4 { local b:4 = OPV4; local a = D6; local c:4 = zext(fC); local t = a - b; D6 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D6); }
+:SBC D7, "#"imm32 is op=0x1b; p2=0x77 & D7; imm32 { local b:4 = imm32; local a = D7; local c:4 = zext(fC); local t = a - b; D7 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D7); }
+:SBC D7, OPV4 is op=0x1b; p2=0x87 & D7; OPV4 { local b:4 = OPV4; local a = D7; local c:4 = zext(fC); local t = a - b; D7 = t - c; fC = (a < b) || (t < c); fV = sborrow(a, b) ^^ sborrow(t, c); nzflags(D7); }
+:EOR D2, "#"imm16 is op=0x1b; p2=0x78 & D2; imm16 { local b:2 = imm16; D2 = D2 ^ b; nzflags(D2); fV = 0; }
+:EOR D2, OPV2 is op=0x1b; p2=0x88 & D2; OPV2 { local b:2 = OPV2; D2 = D2 ^ b; nzflags(D2); fV = 0; }
+:EOR D3, "#"imm16 is op=0x1b; p2=0x79 & D3; imm16 { local b:2 = imm16; D3 = D3 ^ b; nzflags(D3); fV = 0; }
+:EOR D3, OPV2 is op=0x1b; p2=0x89 & D3; OPV2 { local b:2 = OPV2; D3 = D3 ^ b; nzflags(D3); fV = 0; }
+:EOR D4, "#"imm16 is op=0x1b; p2=0x7a & D4; imm16 { local b:2 = imm16; D4 = D4 ^ b; nzflags(D4); fV = 0; }
+:EOR D4, OPV2 is op=0x1b; p2=0x8a & D4; OPV2 { local b:2 = OPV2; D4 = D4 ^ b; nzflags(D4); fV = 0; }
+:EOR D5, "#"imm16 is op=0x1b; p2=0x7b & D5; imm16 { local b:2 = imm16; D5 = D5 ^ b; nzflags(D5); fV = 0; }
+:EOR D5, OPV2 is op=0x1b; p2=0x8b & D5; OPV2 { local b:2 = OPV2; D5 = D5 ^ b; nzflags(D5); fV = 0; }
+:EOR D0, "#"imm8 is op=0x1b; p2=0x7c & D0; imm8 { local b:1 = imm8; D0 = D0 ^ b; nzflags(D0); fV = 0; }
+:EOR D0, OPV1 is op=0x1b; p2=0x8c & D0; OPV1 { local b:1 = OPV1; D0 = D0 ^ b; nzflags(D0); fV = 0; }
+:EOR D1, "#"imm8 is op=0x1b; p2=0x7d & D1; imm8 { local b:1 = imm8; D1 = D1 ^ b; nzflags(D1); fV = 0; }
+:EOR D1, OPV1 is op=0x1b; p2=0x8d & D1; OPV1 { local b:1 = OPV1; D1 = D1 ^ b; nzflags(D1); fV = 0; }
+:EOR D6, "#"imm32 is op=0x1b; p2=0x7e & D6; imm32 { local b:4 = imm32; D6 = D6 ^ b; nzflags(D6); fV = 0; }
+:EOR D6, OPV4 is op=0x1b; p2=0x8e & D6; OPV4 { local b:4 = OPV4; D6 = D6 ^ b; nzflags(D6); fV = 0; }
+:EOR D7, "#"imm32 is op=0x1b; p2=0x7f & D7; imm32 { local b:4 = imm32; D7 = D7 ^ b; nzflags(D7); fV = 0; }
+:EOR D7, OPV4 is op=0x1b; p2=0x8f & D7; OPV4 { local b:4 = OPV4; D7 = D7 ^ b; nzflags(D7); fV = 0; }
+:ST D2, OPW2 is op=0xc0 & D2; OPW2 { OPW2 = D2; nzflags(D2); fV = 0; }
+:LD D2, imm24 is op=0xb0 & D2; imm24 { D2 = *:2 imm24:3; nzflags(D2); fV = 0; }
+:ST D2, imm24 is op=0xd0 & D2; imm24 { *:2 imm24:3 = D2; nzflags(D2); fV = 0; }
+:INC D2 is op=0x30 & D2 { local a = D2; D2 = a + 1; fV = scarry(a, 1); nzflags(D2); }
+:CLR D2 is op=0x38 & D2 { D2 = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:DEC D2 is op=0x40 & D2 { local a = D2; D2 = a - 1; fV = sborrow(a, 1); nzflags(D2); }
+:ABS D2 is op=0x1b; p2=0x40 & D2 { local a = D2; local m:2 = zext(a s< 0); D2 = (a ^ (-m)) + m; fV = (a == 0x8000); nzflags(D2); }
+:SAT D2 is op=0x1b; p2=0xa0 & D2 { D2 = saturate(D2, fV); fV = 0; nzflags(D2); }
+:ST D3, OPW2 is op=0xc1 & D3; OPW2 { OPW2 = D3; nzflags(D3); fV = 0; }
+:LD D3, imm24 is op=0xb1 & D3; imm24 { D3 = *:2 imm24:3; nzflags(D3); fV = 0; }
+:ST D3, imm24 is op=0xd1 & D3; imm24 { *:2 imm24:3 = D3; nzflags(D3); fV = 0; }
+:INC D3 is op=0x31 & D3 { local a = D3; D3 = a + 1; fV = scarry(a, 1); nzflags(D3); }
+:CLR D3 is op=0x39 & D3 { D3 = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:DEC D3 is op=0x41 & D3 { local a = D3; D3 = a - 1; fV = sborrow(a, 1); nzflags(D3); }
+:ABS D3 is op=0x1b; p2=0x41 & D3 { local a = D3; local m:2 = zext(a s< 0); D3 = (a ^ (-m)) + m; fV = (a == 0x8000); nzflags(D3); }
+:SAT D3 is op=0x1b; p2=0xa1 & D3 { D3 = saturate(D3, fV); fV = 0; nzflags(D3); }
+:ST D4, OPW2 is op=0xc2 & D4; OPW2 { OPW2 = D4; nzflags(D4); fV = 0; }
+:LD D4, imm24 is op=0xb2 & D4; imm24 { D4 = *:2 imm24:3; nzflags(D4); fV = 0; }
+:ST D4, imm24 is op=0xd2 & D4; imm24 { *:2 imm24:3 = D4; nzflags(D4); fV = 0; }
+:INC D4 is op=0x32 & D4 { local a = D4; D4 = a + 1; fV = scarry(a, 1); nzflags(D4); }
+:CLR D4 is op=0x3a & D4 { D4 = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:DEC D4 is op=0x42 & D4 { local a = D4; D4 = a - 1; fV = sborrow(a, 1); nzflags(D4); }
+:ABS D4 is op=0x1b; p2=0x42 & D4 { local a = D4; local m:2 = zext(a s< 0); D4 = (a ^ (-m)) + m; fV = (a == 0x8000); nzflags(D4); }
+:SAT D4 is op=0x1b; p2=0xa2 & D4 { D4 = saturate(D4, fV); fV = 0; nzflags(D4); }
+:ST D5, OPW2 is op=0xc3 & D5; OPW2 { OPW2 = D5; nzflags(D5); fV = 0; }
+:LD D5, imm24 is op=0xb3 & D5; imm24 { D5 = *:2 imm24:3; nzflags(D5); fV = 0; }
+:ST D5, imm24 is op=0xd3 & D5; imm24 { *:2 imm24:3 = D5; nzflags(D5); fV = 0; }
+:INC D5 is op=0x33 & D5 { local a = D5; D5 = a + 1; fV = scarry(a, 1); nzflags(D5); }
+:CLR D5 is op=0x3b & D5 { D5 = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:DEC D5 is op=0x43 & D5 { local a = D5; D5 = a - 1; fV = sborrow(a, 1); nzflags(D5); }
+:ABS D5 is op=0x1b; p2=0x43 & D5 { local a = D5; local m:2 = zext(a s< 0); D5 = (a ^ (-m)) + m; fV = (a == 0x8000); nzflags(D5); }
+:SAT D5 is op=0x1b; p2=0xa3 & D5 { D5 = saturate(D5, fV); fV = 0; nzflags(D5); }
+:ST D0, OPW1 is op=0xc4 & D0; OPW1 { OPW1 = D0; nzflags(D0); fV = 0; }
+:LD D0, imm24 is op=0xb4 & D0; imm24 { D0 = *:1 imm24:3; nzflags(D0); fV = 0; }
+:ST D0, imm24 is op=0xd4 & D0; imm24 { *:1 imm24:3 = D0; nzflags(D0); fV = 0; }
+:INC D0 is op=0x34 & D0 { local a = D0; D0 = a + 1; fV = scarry(a, 1); nzflags(D0); }
+:CLR D0 is op=0x3c & D0 { D0 = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:DEC D0 is op=0x44 & D0 { local a = D0; D0 = a - 1; fV = sborrow(a, 1); nzflags(D0); }
+:ABS D0 is op=0x1b; p2=0x44 & D0 { local a = D0; local m:1 = zext(a s< 0); D0 = (a ^ (-m)) + m; fV = (a == 0x80); nzflags(D0); }
+:SAT D0 is op=0x1b; p2=0xa4 & D0 { D0 = saturate(D0, fV); fV = 0; nzflags(D0); }
+:ST D1, OPW1 is op=0xc5 & D1; OPW1 { OPW1 = D1; nzflags(D1); fV = 0; }
+:LD D1, imm24 is op=0xb5 & D1; imm24 { D1 = *:1 imm24:3; nzflags(D1); fV = 0; }
+:ST D1, imm24 is op=0xd5 & D1; imm24 { *:1 imm24:3 = D1; nzflags(D1); fV = 0; }
+:INC D1 is op=0x35 & D1 { local a = D1; D1 = a + 1; fV = scarry(a, 1); nzflags(D1); }
+:CLR D1 is op=0x3d & D1 { D1 = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:DEC D1 is op=0x45 & D1 { local a = D1; D1 = a - 1; fV = sborrow(a, 1); nzflags(D1); }
+:ABS D1 is op=0x1b; p2=0x45 & D1 { local a = D1; local m:1 = zext(a s< 0); D1 = (a ^ (-m)) + m; fV = (a == 0x80); nzflags(D1); }
+:SAT D1 is op=0x1b; p2=0xa5 & D1 { D1 = saturate(D1, fV); fV = 0; nzflags(D1); }
+:ST D6, OPW4 is op=0xc6 & D6; OPW4 { OPW4 = D6; nzflags(D6); fV = 0; }
+:LD D6, imm24 is op=0xb6 & D6; imm24 { D6 = *:4 imm24:3; nzflags(D6); fV = 0; }
+:ST D6, imm24 is op=0xd6 & D6; imm24 { *:4 imm24:3 = D6; nzflags(D6); fV = 0; }
+:INC D6 is op=0x36 & D6 { local a = D6; D6 = a + 1; fV = scarry(a, 1); nzflags(D6); }
+:CLR D6 is op=0x3e & D6 { D6 = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:DEC D6 is op=0x46 & D6 { local a = D6; D6 = a - 1; fV = sborrow(a, 1); nzflags(D6); }
+:ABS D6 is op=0x1b; p2=0x46 & D6 { local a = D6; local m:4 = zext(a s< 0); D6 = (a ^ (-m)) + m; fV = (a == 0x80000000); nzflags(D6); }
+:SAT D6 is op=0x1b; p2=0xa6 & D6 { D6 = saturate(D6, fV); fV = 0; nzflags(D6); }
+:ST D7, OPW4 is op=0xc7 & D7; OPW4 { OPW4 = D7; nzflags(D7); fV = 0; }
+:LD D7, imm24 is op=0xb7 & D7; imm24 { D7 = *:4 imm24:3; nzflags(D7); fV = 0; }
+:ST D7, imm24 is op=0xd7 & D7; imm24 { *:4 imm24:3 = D7; nzflags(D7); fV = 0; }
+:INC D7 is op=0x37 & D7 { local a = D7; D7 = a + 1; fV = scarry(a, 1); nzflags(D7); }
+:CLR D7 is op=0x3f & D7 { D7 = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:DEC D7 is op=0x47 & D7 { local a = D7; D7 = a - 1; fV = sborrow(a, 1); nzflags(D7); }
+:ABS D7 is op=0x1b; p2=0x47 & D7 { local a = D7; local m:4 = zext(a s< 0); D7 = (a ^ (-m)) + m; fV = (a == 0x80000000); nzflags(D7); }
+:SAT D7 is op=0x1b; p2=0xa7 & D7 { D7 = saturate(D7, fV); fV = 0; nzflags(D7); }
+:LD X, "#"imm24 is op=0x98 & X; imm24 { X = imm24; nzflags(X); fV = 0; }
+:CLR X is op=0x9a & X { X = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:LD X, OPV3 is op=0xa8 & X; OPV3 { X = OPV3; nzflags(X); fV = 0; }
+:LD X, imm24 is op=0xb8 & X; imm24 { X = *:3 imm24:3; nzflags(X); fV = 0; }
+:ST X, OPW3 is op=0xc8 & X; OPW3 { OPW3 = X; nzflags(X); fV = 0; }
+:ST X, imm24 is op=0xd8 & X; imm24 { *:3 imm24:3 = X; nzflags(X); fV = 0; }
+:CMP X, "#"imm24 is op=0xe8 & X; imm24 { local a = X; local b:3 = imm24; local r = a - b; subflags(a, b, r); }
+:CMP X, OPV3 is op=0xf8 & X; OPV3 { local a = X; local b:3 = OPV3; local r = a - b; subflags(a, b, r); }
+:LD X, "#"v is op=0xca & X; imm16 [ v = 0 << 16 | imm16; ] { X = v; nzflags(X); fV = 0; }
+:LD X, "#"v is op=0xda & X; imm16 [ v = 1 << 16 | imm16; ] { X = v; nzflags(X); fV = 0; }
+:LD X, "#"v is op=0xea & X; imm16 [ v = 2 << 16 | imm16; ] { X = v; nzflags(X); fV = 0; }
+:LD X, "#"v is op=0xfa & X; imm16 [ v = 3 << 16 | imm16; ] { X = v; nzflags(X); fV = 0; }
+:LEA X, OPR1 is op=0x8 & X; OPR1 { X = OPR1; }
+:LEA X, (simm8, "X") is op=0x18 & X; simm8 { X = X + simm8; }
+:LD Y, "#"imm24 is op=0x99 & Y; imm24 { Y = imm24; nzflags(Y); fV = 0; }
+:CLR Y is op=0x9b & Y { Y = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:LD Y, OPV3 is op=0xa9 & Y; OPV3 { Y = OPV3; nzflags(Y); fV = 0; }
+:LD Y, imm24 is op=0xb9 & Y; imm24 { Y = *:3 imm24:3; nzflags(Y); fV = 0; }
+:ST Y, OPW3 is op=0xc9 & Y; OPW3 { OPW3 = Y; nzflags(Y); fV = 0; }
+:ST Y, imm24 is op=0xd9 & Y; imm24 { *:3 imm24:3 = Y; nzflags(Y); fV = 0; }
+:CMP Y, "#"imm24 is op=0xe9 & Y; imm24 { local a = Y; local b:3 = imm24; local r = a - b; subflags(a, b, r); }
+:CMP Y, OPV3 is op=0xf9 & Y; OPV3 { local a = Y; local b:3 = OPV3; local r = a - b; subflags(a, b, r); }
+:LD Y, "#"v is op=0xcb & Y; imm16 [ v = 0 << 16 | imm16; ] { Y = v; nzflags(Y); fV = 0; }
+:LD Y, "#"v is op=0xdb & Y; imm16 [ v = 1 << 16 | imm16; ] { Y = v; nzflags(Y); fV = 0; }
+:LD Y, "#"v is op=0xeb & Y; imm16 [ v = 2 << 16 | imm16; ] { Y = v; nzflags(Y); fV = 0; }
+:LD Y, "#"v is op=0xfb & Y; imm16 [ v = 3 << 16 | imm16; ] { Y = v; nzflags(Y); fV = 0; }
+:LEA Y, OPR1 is op=0x9 & Y; OPR1 { Y = OPR1; }
+:LEA Y, (simm8, "Y") is op=0x19 & Y; simm8 { Y = Y + simm8; }
+:LEA "SP", OPR1 is op=0x0a; OPR1 { SP = OPR1; }
+:LEA "SP", (simm8, "SP") is op=0x1a; simm8 { SP = SP + simm8; }
+:LEA "D6", OPR1 is op=0x06; OPR1 { D6 = zext(OPR1); }
+:LEA "D7", OPR1 is op=0x07; OPR1 { D7 = zext(OPR1); }
+:CMP "X", "Y" is op=0xfc { local r = X - Y; subflags(X, Y, r); }
+:SUB "D6", "X", "Y" is op=0xfd { local r:3 = X - Y; D6 = sext(r); subflags(X, Y, r); }
+:SUB "D6", "Y", "X" is op=0xfe { local r:3 = Y - X; D6 = sext(r); subflags(Y, X, r); }
+:ANDCC "#"imm8 is op=0xce; imm8 { packccr(); CCL = CCL & imm8; unpackccr(); }
+:ORCC "#"imm8 is op=0xde; imm8 { packccr(); CCL = CCL | imm8; unpackccr(); }
+:LD "SP", OPV3 is op=0x1b; p2=0x00; OPV3 { SP = OPV3; nzflags(SP); fV = 0; }
+:ST "SP", OPW3 is op=0x1b; p2=0x01; OPW3 { OPW3 = SP; nzflags(SP); fV = 0; }
+:CMP "SP", OPV3 is op=0x1b; p2=0x02; OPV3 { local a = SP; local b:3 = OPV3; local r = a - b; subflags(a, b, r); }
+:LD "SP", "#"imm24 is op=0x1b; p2=0x03; imm24 { SP = imm24; nzflags(SP); fV = 0; }
+:CMP "SP", "#"imm24 is op=0x1b; p2=0x04; imm24 { local a = SP; local b:3 = imm24; local r = a - b; subflags(a, b, r); }
+:STOP is op=0x1b; p2=0x05 { stop(); }
+:WAI is op=0x1b; p2=0x06 { wai(); }
+:SYS is op=0x1b; p2=0x07 { sys(); }
+:RTI is op=0x1b; p2=0x90 { packccr(); CCW = *:2 SP; unpackccr(); SP = SP + 2; local ra:3 = *:3 SP; SP = SP + 3; rti(); return [ra]; }
+:TRAP "#0x92" is op=0x1b; p2=0x92 { trap(0x92:1); }
+:TRAP "#0x93" is op=0x1b; p2=0x93 { trap(0x93:1); }
+:TRAP "#0x94" is op=0x1b; p2=0x94 { trap(0x94:1); }
+:TRAP "#0x95" is op=0x1b; p2=0x95 { trap(0x95:1); }
+:TRAP "#0x96" is op=0x1b; p2=0x96 { trap(0x96:1); }
+:TRAP "#0x97" is op=0x1b; p2=0x97 { trap(0x97:1); }
+:TRAP "#0x98" is op=0x1b; p2=0x98 { trap(0x98:1); }
+:TRAP "#0x99" is op=0x1b; p2=0x99 { trap(0x99:1); }
+:TRAP "#0x9a" is op=0x1b; p2=0x9a { trap(0x9a:1); }
+:TRAP "#0x9b" is op=0x1b; p2=0x9b { trap(0x9b:1); }
+:TRAP "#0x9c" is op=0x1b; p2=0x9c { trap(0x9c:1); }
+:TRAP "#0x9d" is op=0x1b; p2=0x9d { trap(0x9d:1); }
+:TRAP "#0x9e" is op=0x1b; p2=0x9e { trap(0x9e:1); }
+:TRAP "#0x9f" is op=0x1b; p2=0x9f { trap(0x9f:1); }
+:TRAP "#0xa8" is op=0x1b; p2=0xa8 { trap(0xa8:1); }
+:TRAP "#0xa9" is op=0x1b; p2=0xa9 { trap(0xa9:1); }
+:TRAP "#0xaa" is op=0x1b; p2=0xaa { trap(0xaa:1); }
+:TRAP "#0xab" is op=0x1b; p2=0xab { trap(0xab:1); }
+:TRAP "#0xac" is op=0x1b; p2=0xac { trap(0xac:1); }
+:TRAP "#0xad" is op=0x1b; p2=0xad { trap(0xad:1); }
+:TRAP "#0xae" is op=0x1b; p2=0xae { trap(0xae:1); }
+:TRAP "#0xaf" is op=0x1b; p2=0xaf { trap(0xaf:1); }
+:TRAP "#0xb8" is op=0x1b; p2=0xb8 { trap(0xb8:1); }
+:TRAP "#0xb9" is op=0x1b; p2=0xb9 { trap(0xb9:1); }
+:TRAP "#0xba" is op=0x1b; p2=0xba { trap(0xba:1); }
+:TRAP "#0xbb" is op=0x1b; p2=0xbb { trap(0xbb:1); }
+:TRAP "#0xbc" is op=0x1b; p2=0xbc { trap(0xbc:1); }
+:TRAP "#0xbd" is op=0x1b; p2=0xbd { trap(0xbd:1); }
+:TRAP "#0xbe" is op=0x1b; p2=0xbe { trap(0xbe:1); }
+:TRAP "#0xbf" is op=0x1b; p2=0xbf { trap(0xbf:1); }
+:TRAP "#0xc0" is op=0x1b; p2=0xc0 { trap(0xc0:1); }
+:TRAP "#0xc1" is op=0x1b; p2=0xc1 { trap(0xc1:1); }
+:TRAP "#0xc2" is op=0x1b; p2=0xc2 { trap(0xc2:1); }
+:TRAP "#0xc3" is op=0x1b; p2=0xc3 { trap(0xc3:1); }
+:TRAP "#0xc4" is op=0x1b; p2=0xc4 { trap(0xc4:1); }
+:TRAP "#0xc5" is op=0x1b; p2=0xc5 { trap(0xc5:1); }
+:TRAP "#0xc6" is op=0x1b; p2=0xc6 { trap(0xc6:1); }
+:TRAP "#0xc7" is op=0x1b; p2=0xc7 { trap(0xc7:1); }
+:TRAP "#0xc8" is op=0x1b; p2=0xc8 { trap(0xc8:1); }
+:TRAP "#0xc9" is op=0x1b; p2=0xc9 { trap(0xc9:1); }
+:TRAP "#0xca" is op=0x1b; p2=0xca { trap(0xca:1); }
+:TRAP "#0xcb" is op=0x1b; p2=0xcb { trap(0xcb:1); }
+:TRAP "#0xcc" is op=0x1b; p2=0xcc { trap(0xcc:1); }
+:TRAP "#0xcd" is op=0x1b; p2=0xcd { trap(0xcd:1); }
+:TRAP "#0xce" is op=0x1b; p2=0xce { trap(0xce:1); }
+:TRAP "#0xcf" is op=0x1b; p2=0xcf { trap(0xcf:1); }
+:TRAP "#0xd0" is op=0x1b; p2=0xd0 { trap(0xd0:1); }
+:TRAP "#0xd1" is op=0x1b; p2=0xd1 { trap(0xd1:1); }
+:TRAP "#0xd2" is op=0x1b; p2=0xd2 { trap(0xd2:1); }
+:TRAP "#0xd3" is op=0x1b; p2=0xd3 { trap(0xd3:1); }
+:TRAP "#0xd4" is op=0x1b; p2=0xd4 { trap(0xd4:1); }
+:TRAP "#0xd5" is op=0x1b; p2=0xd5 { trap(0xd5:1); }
+:TRAP "#0xd6" is op=0x1b; p2=0xd6 { trap(0xd6:1); }
+:TRAP "#0xd7" is op=0x1b; p2=0xd7 { trap(0xd7:1); }
+:TRAP "#0xd8" is op=0x1b; p2=0xd8 { trap(0xd8:1); }
+:TRAP "#0xd9" is op=0x1b; p2=0xd9 { trap(0xd9:1); }
+:TRAP "#0xda" is op=0x1b; p2=0xda { trap(0xda:1); }
+:TRAP "#0xdb" is op=0x1b; p2=0xdb { trap(0xdb:1); }
+:TRAP "#0xdc" is op=0x1b; p2=0xdc { trap(0xdc:1); }
+:TRAP "#0xdd" is op=0x1b; p2=0xdd { trap(0xdd:1); }
+:TRAP "#0xde" is op=0x1b; p2=0xde { trap(0xde:1); }
+:TRAP "#0xdf" is op=0x1b; p2=0xdf { trap(0xdf:1); }
+:TRAP "#0xe0" is op=0x1b; p2=0xe0 { trap(0xe0:1); }
+:TRAP "#0xe1" is op=0x1b; p2=0xe1 { trap(0xe1:1); }
+:TRAP "#0xe2" is op=0x1b; p2=0xe2 { trap(0xe2:1); }
+:TRAP "#0xe3" is op=0x1b; p2=0xe3 { trap(0xe3:1); }
+:TRAP "#0xe4" is op=0x1b; p2=0xe4 { trap(0xe4:1); }
+:TRAP "#0xe5" is op=0x1b; p2=0xe5 { trap(0xe5:1); }
+:TRAP "#0xe6" is op=0x1b; p2=0xe6 { trap(0xe6:1); }
+:TRAP "#0xe7" is op=0x1b; p2=0xe7 { trap(0xe7:1); }
+:TRAP "#0xe8" is op=0x1b; p2=0xe8 { trap(0xe8:1); }
+:TRAP "#0xe9" is op=0x1b; p2=0xe9 { trap(0xe9:1); }
+:TRAP "#0xea" is op=0x1b; p2=0xea { trap(0xea:1); }
+:TRAP "#0xeb" is op=0x1b; p2=0xeb { trap(0xeb:1); }
+:TRAP "#0xec" is op=0x1b; p2=0xec { trap(0xec:1); }
+:TRAP "#0xed" is op=0x1b; p2=0xed { trap(0xed:1); }
+:TRAP "#0xee" is op=0x1b; p2=0xee { trap(0xee:1); }
+:TRAP "#0xef" is op=0x1b; p2=0xef { trap(0xef:1); }
+:TRAP "#0xf0" is op=0x1b; p2=0xf0 { trap(0xf0:1); }
+:TRAP "#0xf1" is op=0x1b; p2=0xf1 { trap(0xf1:1); }
+:TRAP "#0xf2" is op=0x1b; p2=0xf2 { trap(0xf2:1); }
+:TRAP "#0xf3" is op=0x1b; p2=0xf3 { trap(0xf3:1); }
+:TRAP "#0xf4" is op=0x1b; p2=0xf4 { trap(0xf4:1); }
+:TRAP "#0xf5" is op=0x1b; p2=0xf5 { trap(0xf5:1); }
+:TRAP "#0xf6" is op=0x1b; p2=0xf6 { trap(0xf6:1); }
+:TRAP "#0xf7" is op=0x1b; p2=0xf7 { trap(0xf7:1); }
+:TRAP "#0xf8" is op=0x1b; p2=0xf8 { trap(0xf8:1); }
+:TRAP "#0xf9" is op=0x1b; p2=0xf9 { trap(0xf9:1); }
+:TRAP "#0xfa" is op=0x1b; p2=0xfa { trap(0xfa:1); }
+:TRAP "#0xfb" is op=0x1b; p2=0xfb { trap(0xfb:1); }
+:TRAP "#0xfc" is op=0x1b; p2=0xfc { trap(0xfc:1); }
+:TRAP "#0xfd" is op=0x1b; p2=0xfd { trap(0xfd:1); }
+:TRAP "#0xfe" is op=0x1b; p2=0xfe { trap(0xfe:1); }
+:TRAP "#0xff" is op=0x1b; p2=0xff { trap(0xff:1); }
+:INC.B OPW1 is op=0x9c; OPW1 { local a:1 = OPW1; local r = a + 1; OPW1 = r; fV = scarry(a, 1); nzflags(r); }
+:INC.W OPW2 is op=0x9d; OPW2 { local a:2 = OPW2; local r = a + 1; OPW2 = r; fV = scarry(a, 1); nzflags(r); }
+:INC.L OPW4 is op=0x9f; OPW4 { local a:4 = OPW4; local r = a + 1; OPW4 = r; fV = scarry(a, 1); nzflags(r); }
+:DEC.B OPW1 is op=0xac; OPW1 { local a:1 = OPW1; local r = a - 1; OPW1 = r; fV = sborrow(a, 1); nzflags(r); }
+:DEC.W OPW2 is op=0xad; OPW2 { local a:2 = OPW2; local r = a - 1; OPW2 = r; fV = sborrow(a, 1); nzflags(r); }
+:DEC.L OPW4 is op=0xaf; OPW4 { local a:4 = OPW4; local r = a - 1; OPW4 = r; fV = sborrow(a, 1); nzflags(r); }
+:CLR.B OPW1 is op=0xbc; OPW1 { OPW1 = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:CLR.W OPW2 is op=0xbd; OPW2 { OPW2 = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:CLR.P OPW3 is op=0xbe; OPW3 { OPW3 = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:CLR.L OPW4 is op=0xbf; OPW4 { OPW4 = 0; fN = 0; fZ = 1; fV = 0; fC = 0; }
+:COM.B OPW1 is op=0xcc; OPW1 { local r:1 = ~OPW1; OPW1 = r; nzflags(r); fV = 0; fC = 1; }
+:COM.W OPW2 is op=0xcd; OPW2 { local r:2 = ~OPW2; OPW2 = r; nzflags(r); fV = 0; fC = 1; }
+:COM.L OPW4 is op=0xcf; OPW4 { local r:4 = ~OPW4; OPW4 = r; nzflags(r); fV = 0; fC = 1; }
+:NEG.B OPW1 is op=0xdc; OPW1 { local a:1 = OPW1; local r = -a; OPW1 = r; subflags(0:1, a, r); }
+:NEG.W OPW2 is op=0xdd; OPW2 { local a:2 = OPW2; local r = -a; OPW2 = r; subflags(0:2, a, r); }
+:NEG.L OPW4 is op=0xdf; OPW4 { local a:4 = OPW4; local r = -a; OPW4 = r; subflags(0:4, a, r); }
+:MOV.B "#"simm8, OPW1 is op=0xc; simm8; OPW1 { OPW1 = simm8; }
+:MOV.B OPV1, OPW1 is op=0x1c; OPV1; OPW1 { OPW1 = OPV1; }
+:MOV.W "#"simm16, OPW2 is op=0xd; simm16; OPW2 { OPW2 = simm16; }
+:MOV.W OPV2, OPW2 is op=0x1d; OPV2; OPW2 { OPW2 = OPV2; }
+:MOV.P "#"simm24, OPW3 is op=0xe; simm24; OPW3 { OPW3 = simm24; }
+:MOV.P OPV3, OPW3 is op=0x1e; OPV3; OPW3 { OPW3 = OPV3; }
+:MOV.L "#"simm32, OPW4 is op=0xf; simm32; OPW4 { OPW4 = simm32; }
+:MOV.L OPV4, OPW4 is op=0x1f; OPV4; OPW4 { OPW4 = OPV4; }
+:TFR "D2", "D3" is op=0x9e; pbhi=0 & pblo=1 { D3 = D2; }
+:EXG "D2", "D3" is op=0xae; pbhi=0 & pblo=1 { local ta:2 = D2; local tb:2 = D3; D3 = ta; D2 = tb; }
+:TFR "D2", "D4" is op=0x9e; pbhi=0 & pblo=2 { D4 = D2; }
+:EXG "D2", "D4" is op=0xae; pbhi=0 & pblo=2 { local ta:2 = D2; local tb:2 = D4; D4 = ta; D2 = tb; }
+:TFR "D2", "D5" is op=0x9e; pbhi=0 & pblo=3 { D5 = D2; }
+:EXG "D2", "D5" is op=0xae; pbhi=0 & pblo=3 { local ta:2 = D2; local tb:2 = D5; D5 = ta; D2 = tb; }
+:TFR "D2", "D0" is op=0x9e; pbhi=0 & pblo=4 { local ta = D2; D0 = ta:1; }
+:EXG "D2", "D0" is op=0xae; pbhi=0 & pblo=4 { local ta:2 = D2; local tb:1 = D0; D0 = ta:1; D2 = sext(tb); }
+:TFR "D2", "D1" is op=0x9e; pbhi=0 & pblo=5 { local ta = D2; D1 = ta:1; }
+:EXG "D2", "D1" is op=0xae; pbhi=0 & pblo=5 { local ta:2 = D2; local tb:1 = D1; D1 = ta:1; D2 = sext(tb); }
+:ZEX "D2", "D6" is op=0x9e; pbhi=0 & pblo=6 { D6 = zext(D2); }
+:SEX "D2", "D6" is op=0xae; pbhi=0 & pblo=6 { D6 = sext(D2); }
+:ZEX "D2", "D7" is op=0x9e; pbhi=0 & pblo=7 { D7 = zext(D2); }
+:SEX "D2", "D7" is op=0xae; pbhi=0 & pblo=7 { D7 = sext(D2); }
+:ZEX "D2", "X" is op=0x9e; pbhi=0 & pblo=8 { X = zext(D2); }
+:SEX "D2", "X" is op=0xae; pbhi=0 & pblo=8 { X = sext(D2); }
+:ZEX "D2", "Y" is op=0x9e; pbhi=0 & pblo=9 { Y = zext(D2); }
+:SEX "D2", "Y" is op=0xae; pbhi=0 & pblo=9 { Y = sext(D2); }
+:ZEX "D2", "SP" is op=0x9e; pbhi=0 & pblo=10 { SP = zext(D2); }
+:SEX "D2", "SP" is op=0xae; pbhi=0 & pblo=10 { SP = sext(D2); }
+:TFR "D2", "CCH" is op=0x9e; pbhi=0 & pblo=12 { packccr(); local ta = D2; CCH = ta:1; unpackccr(); }
+:EXG "D2", "CCH" is op=0xae; pbhi=0 & pblo=12 { packccr(); local ta:2 = D2; local tb:1 = CCH; CCH = ta:1; D2 = sext(tb); unpackccr(); }
+:TFR "D2", "CCL" is op=0x9e; pbhi=0 & pblo=13 { packccr(); local ta = D2; CCL = ta:1; unpackccr(); }
+:EXG "D2", "CCL" is op=0xae; pbhi=0 & pblo=13 { packccr(); local ta:2 = D2; local tb:1 = CCL; CCL = ta:1; D2 = sext(tb); unpackccr(); }
+:TFR "D2", "CCW" is op=0x9e; pbhi=0 & pblo=14 { packccr(); CCW = D2; unpackccr(); }
+:EXG "D2", "CCW" is op=0xae; pbhi=0 & pblo=14 { packccr(); local ta:2 = D2; local tb:2 = CCW; CCW = ta; D2 = tb; unpackccr(); }
+:TFR "D3", "D2" is op=0x9e; pbhi=1 & pblo=0 { D2 = D3; }
+:EXG "D3", "D2" is op=0xae; pbhi=1 & pblo=0 { local ta:2 = D3; local tb:2 = D2; D2 = ta; D3 = tb; }
+:TFR "D3", "D4" is op=0x9e; pbhi=1 & pblo=2 { D4 = D3; }
+:EXG "D3", "D4" is op=0xae; pbhi=1 & pblo=2 { local ta:2 = D3; local tb:2 = D4; D4 = ta; D3 = tb; }
+:TFR "D3", "D5" is op=0x9e; pbhi=1 & pblo=3 { D5 = D3; }
+:EXG "D3", "D5" is op=0xae; pbhi=1 & pblo=3 { local ta:2 = D3; local tb:2 = D5; D5 = ta; D3 = tb; }
+:TFR "D3", "D0" is op=0x9e; pbhi=1 & pblo=4 { local ta = D3; D0 = ta:1; }
+:EXG "D3", "D0" is op=0xae; pbhi=1 & pblo=4 { local ta:2 = D3; local tb:1 = D0; D0 = ta:1; D3 = sext(tb); }
+:TFR "D3", "D1" is op=0x9e; pbhi=1 & pblo=5 { local ta = D3; D1 = ta:1; }
+:EXG "D3", "D1" is op=0xae; pbhi=1 & pblo=5 { local ta:2 = D3; local tb:1 = D1; D1 = ta:1; D3 = sext(tb); }
+:ZEX "D3", "D6" is op=0x9e; pbhi=1 & pblo=6 { D6 = zext(D3); }
+:SEX "D3", "D6" is op=0xae; pbhi=1 & pblo=6 { D6 = sext(D3); }
+:ZEX "D3", "D7" is op=0x9e; pbhi=1 & pblo=7 { D7 = zext(D3); }
+:SEX "D3", "D7" is op=0xae; pbhi=1 & pblo=7 { D7 = sext(D3); }
+:ZEX "D3", "X" is op=0x9e; pbhi=1 & pblo=8 { X = zext(D3); }
+:SEX "D3", "X" is op=0xae; pbhi=1 & pblo=8 { X = sext(D3); }
+:ZEX "D3", "Y" is op=0x9e; pbhi=1 & pblo=9 { Y = zext(D3); }
+:SEX "D3", "Y" is op=0xae; pbhi=1 & pblo=9 { Y = sext(D3); }
+:ZEX "D3", "SP" is op=0x9e; pbhi=1 & pblo=10 { SP = zext(D3); }
+:SEX "D3", "SP" is op=0xae; pbhi=1 & pblo=10 { SP = sext(D3); }
+:TFR "D3", "CCH" is op=0x9e; pbhi=1 & pblo=12 { packccr(); local ta = D3; CCH = ta:1; unpackccr(); }
+:EXG "D3", "CCH" is op=0xae; pbhi=1 & pblo=12 { packccr(); local ta:2 = D3; local tb:1 = CCH; CCH = ta:1; D3 = sext(tb); unpackccr(); }
+:TFR "D3", "CCL" is op=0x9e; pbhi=1 & pblo=13 { packccr(); local ta = D3; CCL = ta:1; unpackccr(); }
+:EXG "D3", "CCL" is op=0xae; pbhi=1 & pblo=13 { packccr(); local ta:2 = D3; local tb:1 = CCL; CCL = ta:1; D3 = sext(tb); unpackccr(); }
+:TFR "D3", "CCW" is op=0x9e; pbhi=1 & pblo=14 { packccr(); CCW = D3; unpackccr(); }
+:EXG "D3", "CCW" is op=0xae; pbhi=1 & pblo=14 { packccr(); local ta:2 = D3; local tb:2 = CCW; CCW = ta; D3 = tb; unpackccr(); }
+:TFR "D4", "D2" is op=0x9e; pbhi=2 & pblo=0 { D2 = D4; }
+:EXG "D4", "D2" is op=0xae; pbhi=2 & pblo=0 { local ta:2 = D4; local tb:2 = D2; D2 = ta; D4 = tb; }
+:TFR "D4", "D3" is op=0x9e; pbhi=2 & pblo=1 { D3 = D4; }
+:EXG "D4", "D3" is op=0xae; pbhi=2 & pblo=1 { local ta:2 = D4; local tb:2 = D3; D3 = ta; D4 = tb; }
+:TFR "D4", "D5" is op=0x9e; pbhi=2 & pblo=3 { D5 = D4; }
+:EXG "D4", "D5" is op=0xae; pbhi=2 & pblo=3 { local ta:2 = D4; local tb:2 = D5; D5 = ta; D4 = tb; }
+:TFR "D4", "D0" is op=0x9e; pbhi=2 & pblo=4 { local ta = D4; D0 = ta:1; }
+:EXG "D4", "D0" is op=0xae; pbhi=2 & pblo=4 { local ta:2 = D4; local tb:1 = D0; D0 = ta:1; D4 = sext(tb); }
+:TFR "D4", "D1" is op=0x9e; pbhi=2 & pblo=5 { local ta = D4; D1 = ta:1; }
+:EXG "D4", "D1" is op=0xae; pbhi=2 & pblo=5 { local ta:2 = D4; local tb:1 = D1; D1 = ta:1; D4 = sext(tb); }
+:ZEX "D4", "D6" is op=0x9e; pbhi=2 & pblo=6 { D6 = zext(D4); }
+:SEX "D4", "D6" is op=0xae; pbhi=2 & pblo=6 { D6 = sext(D4); }
+:ZEX "D4", "D7" is op=0x9e; pbhi=2 & pblo=7 { D7 = zext(D4); }
+:SEX "D4", "D7" is op=0xae; pbhi=2 & pblo=7 { D7 = sext(D4); }
+:ZEX "D4", "X" is op=0x9e; pbhi=2 & pblo=8 { X = zext(D4); }
+:SEX "D4", "X" is op=0xae; pbhi=2 & pblo=8 { X = sext(D4); }
+:ZEX "D4", "Y" is op=0x9e; pbhi=2 & pblo=9 { Y = zext(D4); }
+:SEX "D4", "Y" is op=0xae; pbhi=2 & pblo=9 { Y = sext(D4); }
+:ZEX "D4", "SP" is op=0x9e; pbhi=2 & pblo=10 { SP = zext(D4); }
+:SEX "D4", "SP" is op=0xae; pbhi=2 & pblo=10 { SP = sext(D4); }
+:TFR "D4", "CCH" is op=0x9e; pbhi=2 & pblo=12 { packccr(); local ta = D4; CCH = ta:1; unpackccr(); }
+:EXG "D4", "CCH" is op=0xae; pbhi=2 & pblo=12 { packccr(); local ta:2 = D4; local tb:1 = CCH; CCH = ta:1; D4 = sext(tb); unpackccr(); }
+:TFR "D4", "CCL" is op=0x9e; pbhi=2 & pblo=13 { packccr(); local ta = D4; CCL = ta:1; unpackccr(); }
+:EXG "D4", "CCL" is op=0xae; pbhi=2 & pblo=13 { packccr(); local ta:2 = D4; local tb:1 = CCL; CCL = ta:1; D4 = sext(tb); unpackccr(); }
+:TFR "D4", "CCW" is op=0x9e; pbhi=2 & pblo=14 { packccr(); CCW = D4; unpackccr(); }
+:EXG "D4", "CCW" is op=0xae; pbhi=2 & pblo=14 { packccr(); local ta:2 = D4; local tb:2 = CCW; CCW = ta; D4 = tb; unpackccr(); }
+:TFR "D5", "D2" is op=0x9e; pbhi=3 & pblo=0 { D2 = D5; }
+:EXG "D5", "D2" is op=0xae; pbhi=3 & pblo=0 { local ta:2 = D5; local tb:2 = D2; D2 = ta; D5 = tb; }
+:TFR "D5", "D3" is op=0x9e; pbhi=3 & pblo=1 { D3 = D5; }
+:EXG "D5", "D3" is op=0xae; pbhi=3 & pblo=1 { local ta:2 = D5; local tb:2 = D3; D3 = ta; D5 = tb; }
+:TFR "D5", "D4" is op=0x9e; pbhi=3 & pblo=2 { D4 = D5; }
+:EXG "D5", "D4" is op=0xae; pbhi=3 & pblo=2 { local ta:2 = D5; local tb:2 = D4; D4 = ta; D5 = tb; }
+:TFR "D5", "D0" is op=0x9e; pbhi=3 & pblo=4 { local ta = D5; D0 = ta:1; }
+:EXG "D5", "D0" is op=0xae; pbhi=3 & pblo=4 { local ta:2 = D5; local tb:1 = D0; D0 = ta:1; D5 = sext(tb); }
+:TFR "D5", "D1" is op=0x9e; pbhi=3 & pblo=5 { local ta = D5; D1 = ta:1; }
+:EXG "D5", "D1" is op=0xae; pbhi=3 & pblo=5 { local ta:2 = D5; local tb:1 = D1; D1 = ta:1; D5 = sext(tb); }
+:ZEX "D5", "D6" is op=0x9e; pbhi=3 & pblo=6 { D6 = zext(D5); }
+:SEX "D5", "D6" is op=0xae; pbhi=3 & pblo=6 { D6 = sext(D5); }
+:ZEX "D5", "D7" is op=0x9e; pbhi=3 & pblo=7 { D7 = zext(D5); }
+:SEX "D5", "D7" is op=0xae; pbhi=3 & pblo=7 { D7 = sext(D5); }
+:ZEX "D5", "X" is op=0x9e; pbhi=3 & pblo=8 { X = zext(D5); }
+:SEX "D5", "X" is op=0xae; pbhi=3 & pblo=8 { X = sext(D5); }
+:ZEX "D5", "Y" is op=0x9e; pbhi=3 & pblo=9 { Y = zext(D5); }
+:SEX "D5", "Y" is op=0xae; pbhi=3 & pblo=9 { Y = sext(D5); }
+:ZEX "D5", "SP" is op=0x9e; pbhi=3 & pblo=10 { SP = zext(D5); }
+:SEX "D5", "SP" is op=0xae; pbhi=3 & pblo=10 { SP = sext(D5); }
+:TFR "D5", "CCH" is op=0x9e; pbhi=3 & pblo=12 { packccr(); local ta = D5; CCH = ta:1; unpackccr(); }
+:EXG "D5", "CCH" is op=0xae; pbhi=3 & pblo=12 { packccr(); local ta:2 = D5; local tb:1 = CCH; CCH = ta:1; D5 = sext(tb); unpackccr(); }
+:TFR "D5", "CCL" is op=0x9e; pbhi=3 & pblo=13 { packccr(); local ta = D5; CCL = ta:1; unpackccr(); }
+:EXG "D5", "CCL" is op=0xae; pbhi=3 & pblo=13 { packccr(); local ta:2 = D5; local tb:1 = CCL; CCL = ta:1; D5 = sext(tb); unpackccr(); }
+:TFR "D5", "CCW" is op=0x9e; pbhi=3 & pblo=14 { packccr(); CCW = D5; unpackccr(); }
+:EXG "D5", "CCW" is op=0xae; pbhi=3 & pblo=14 { packccr(); local ta:2 = D5; local tb:2 = CCW; CCW = ta; D5 = tb; unpackccr(); }
+:ZEX "D0", "D2" is op=0x9e; pbhi=4 & pblo=0 { D2 = zext(D0); }
+:SEX "D0", "D2" is op=0xae; pbhi=4 & pblo=0 { D2 = sext(D0); }
+:ZEX "D0", "D3" is op=0x9e; pbhi=4 & pblo=1 { D3 = zext(D0); }
+:SEX "D0", "D3" is op=0xae; pbhi=4 & pblo=1 { D3 = sext(D0); }
+:ZEX "D0", "D4" is op=0x9e; pbhi=4 & pblo=2 { D4 = zext(D0); }
+:SEX "D0", "D4" is op=0xae; pbhi=4 & pblo=2 { D4 = sext(D0); }
+:ZEX "D0", "D5" is op=0x9e; pbhi=4 & pblo=3 { D5 = zext(D0); }
+:SEX "D0", "D5" is op=0xae; pbhi=4 & pblo=3 { D5 = sext(D0); }
+:TFR "D0", "D1" is op=0x9e; pbhi=4 & pblo=5 { D1 = D0; }
+:EXG "D0", "D1" is op=0xae; pbhi=4 & pblo=5 { local ta:1 = D0; local tb:1 = D1; D1 = ta; D0 = tb; }
+:ZEX "D0", "D6" is op=0x9e; pbhi=4 & pblo=6 { D6 = zext(D0); }
+:SEX "D0", "D6" is op=0xae; pbhi=4 & pblo=6 { D6 = sext(D0); }
+:ZEX "D0", "D7" is op=0x9e; pbhi=4 & pblo=7 { D7 = zext(D0); }
+:SEX "D0", "D7" is op=0xae; pbhi=4 & pblo=7 { D7 = sext(D0); }
+:ZEX "D0", "X" is op=0x9e; pbhi=4 & pblo=8 { X = zext(D0); }
+:SEX "D0", "X" is op=0xae; pbhi=4 & pblo=8 { X = sext(D0); }
+:ZEX "D0", "Y" is op=0x9e; pbhi=4 & pblo=9 { Y = zext(D0); }
+:SEX "D0", "Y" is op=0xae; pbhi=4 & pblo=9 { Y = sext(D0); }
+:ZEX "D0", "SP" is op=0x9e; pbhi=4 & pblo=10 { SP = zext(D0); }
+:SEX "D0", "SP" is op=0xae; pbhi=4 & pblo=10 { SP = sext(D0); }
+:TFR "D0", "CCH" is op=0x9e; pbhi=4 & pblo=12 { packccr(); CCH = D0; unpackccr(); }
+:EXG "D0", "CCH" is op=0xae; pbhi=4 & pblo=12 { packccr(); local ta:1 = D0; local tb:1 = CCH; CCH = ta; D0 = tb; unpackccr(); }
+:TFR "D0", "CCL" is op=0x9e; pbhi=4 & pblo=13 { packccr(); CCL = D0; unpackccr(); }
+:EXG "D0", "CCL" is op=0xae; pbhi=4 & pblo=13 { packccr(); local ta:1 = D0; local tb:1 = CCL; CCL = ta; D0 = tb; unpackccr(); }
+:ZEX "D0", "CCW" is op=0x9e; pbhi=4 & pblo=14 { packccr(); CCW = zext(D0); unpackccr(); }
+:SEX "D0", "CCW" is op=0xae; pbhi=4 & pblo=14 { packccr(); CCW = sext(D0); unpackccr(); }
+:ZEX "D1", "D2" is op=0x9e; pbhi=5 & pblo=0 { D2 = zext(D1); }
+:SEX "D1", "D2" is op=0xae; pbhi=5 & pblo=0 { D2 = sext(D1); }
+:ZEX "D1", "D3" is op=0x9e; pbhi=5 & pblo=1 { D3 = zext(D1); }
+:SEX "D1", "D3" is op=0xae; pbhi=5 & pblo=1 { D3 = sext(D1); }
+:ZEX "D1", "D4" is op=0x9e; pbhi=5 & pblo=2 { D4 = zext(D1); }
+:SEX "D1", "D4" is op=0xae; pbhi=5 & pblo=2 { D4 = sext(D1); }
+:ZEX "D1", "D5" is op=0x9e; pbhi=5 & pblo=3 { D5 = zext(D1); }
+:SEX "D1", "D5" is op=0xae; pbhi=5 & pblo=3 { D5 = sext(D1); }
+:TFR "D1", "D0" is op=0x9e; pbhi=5 & pblo=4 { D0 = D1; }
+:EXG "D1", "D0" is op=0xae; pbhi=5 & pblo=4 { local ta:1 = D1; local tb:1 = D0; D0 = ta; D1 = tb; }
+:ZEX "D1", "D6" is op=0x9e; pbhi=5 & pblo=6 { D6 = zext(D1); }
+:SEX "D1", "D6" is op=0xae; pbhi=5 & pblo=6 { D6 = sext(D1); }
+:ZEX "D1", "D7" is op=0x9e; pbhi=5 & pblo=7 { D7 = zext(D1); }
+:SEX "D1", "D7" is op=0xae; pbhi=5 & pblo=7 { D7 = sext(D1); }
+:ZEX "D1", "X" is op=0x9e; pbhi=5 & pblo=8 { X = zext(D1); }
+:SEX "D1", "X" is op=0xae; pbhi=5 & pblo=8 { X = sext(D1); }
+:ZEX "D1", "Y" is op=0x9e; pbhi=5 & pblo=9 { Y = zext(D1); }
+:SEX "D1", "Y" is op=0xae; pbhi=5 & pblo=9 { Y = sext(D1); }
+:ZEX "D1", "SP" is op=0x9e; pbhi=5 & pblo=10 { SP = zext(D1); }
+:SEX "D1", "SP" is op=0xae; pbhi=5 & pblo=10 { SP = sext(D1); }
+:TFR "D1", "CCH" is op=0x9e; pbhi=5 & pblo=12 { packccr(); CCH = D1; unpackccr(); }
+:EXG "D1", "CCH" is op=0xae; pbhi=5 & pblo=12 { packccr(); local ta:1 = D1; local tb:1 = CCH; CCH = ta; D1 = tb; unpackccr(); }
+:TFR "D1", "CCL" is op=0x9e; pbhi=5 & pblo=13 { packccr(); CCL = D1; unpackccr(); }
+:EXG "D1", "CCL" is op=0xae; pbhi=5 & pblo=13 { packccr(); local ta:1 = D1; local tb:1 = CCL; CCL = ta; D1 = tb; unpackccr(); }
+:ZEX "D1", "CCW" is op=0x9e; pbhi=5 & pblo=14 { packccr(); CCW = zext(D1); unpackccr(); }
+:SEX "D1", "CCW" is op=0xae; pbhi=5 & pblo=14 { packccr(); CCW = sext(D1); unpackccr(); }
+:TFR "D6", "D2" is op=0x9e; pbhi=6 & pblo=0 { local ta = D6; D2 = ta:2; }
+:EXG "D6", "D2" is op=0xae; pbhi=6 & pblo=0 { local ta:4 = D6; local tb:2 = D2; D2 = ta:2; D6 = sext(tb); }
+:TFR "D6", "D3" is op=0x9e; pbhi=6 & pblo=1 { local ta = D6; D3 = ta:2; }
+:EXG "D6", "D3" is op=0xae; pbhi=6 & pblo=1 { local ta:4 = D6; local tb:2 = D3; D3 = ta:2; D6 = sext(tb); }
+:TFR "D6", "D4" is op=0x9e; pbhi=6 & pblo=2 { local ta = D6; D4 = ta:2; }
+:EXG "D6", "D4" is op=0xae; pbhi=6 & pblo=2 { local ta:4 = D6; local tb:2 = D4; D4 = ta:2; D6 = sext(tb); }
+:TFR "D6", "D5" is op=0x9e; pbhi=6 & pblo=3 { local ta = D6; D5 = ta:2; }
+:EXG "D6", "D5" is op=0xae; pbhi=6 & pblo=3 { local ta:4 = D6; local tb:2 = D5; D5 = ta:2; D6 = sext(tb); }
+:TFR "D6", "D0" is op=0x9e; pbhi=6 & pblo=4 { local ta = D6; D0 = ta:1; }
+:EXG "D6", "D0" is op=0xae; pbhi=6 & pblo=4 { local ta:4 = D6; local tb:1 = D0; D0 = ta:1; D6 = sext(tb); }
+:TFR "D6", "D1" is op=0x9e; pbhi=6 & pblo=5 { local ta = D6; D1 = ta:1; }
+:EXG "D6", "D1" is op=0xae; pbhi=6 & pblo=5 { local ta:4 = D6; local tb:1 = D1; D1 = ta:1; D6 = sext(tb); }
+:TFR "D6", "D7" is op=0x9e; pbhi=6 & pblo=7 { D7 = D6; }
+:EXG "D6", "D7" is op=0xae; pbhi=6 & pblo=7 { local ta:4 = D6; local tb:4 = D7; D7 = ta; D6 = tb; }
+:TFR "D6", "X" is op=0x9e; pbhi=6 & pblo=8 { local ta = D6; X = ta:3; }
+:EXG "D6", "X" is op=0xae; pbhi=6 & pblo=8 { local ta:4 = D6; local tb:3 = X; X = ta:3; D6 = sext(tb); }
+:TFR "D6", "Y" is op=0x9e; pbhi=6 & pblo=9 { local ta = D6; Y = ta:3; }
+:EXG "D6", "Y" is op=0xae; pbhi=6 & pblo=9 { local ta:4 = D6; local tb:3 = Y; Y = ta:3; D6 = sext(tb); }
+:TFR "D6", "SP" is op=0x9e; pbhi=6 & pblo=10 { local ta = D6; SP = ta:3; }
+:EXG "D6", "SP" is op=0xae; pbhi=6 & pblo=10 { local ta:4 = D6; local tb:3 = SP; SP = ta:3; D6 = sext(tb); }
+:TFR "D6", "CCH" is op=0x9e; pbhi=6 & pblo=12 { packccr(); local ta = D6; CCH = ta:1; unpackccr(); }
+:EXG "D6", "CCH" is op=0xae; pbhi=6 & pblo=12 { packccr(); local ta:4 = D6; local tb:1 = CCH; CCH = ta:1; D6 = sext(tb); unpackccr(); }
+:TFR "D6", "CCL" is op=0x9e; pbhi=6 & pblo=13 { packccr(); local ta = D6; CCL = ta:1; unpackccr(); }
+:EXG "D6", "CCL" is op=0xae; pbhi=6 & pblo=13 { packccr(); local ta:4 = D6; local tb:1 = CCL; CCL = ta:1; D6 = sext(tb); unpackccr(); }
+:TFR "D6", "CCW" is op=0x9e; pbhi=6 & pblo=14 { packccr(); local ta = D6; CCW = ta:2; unpackccr(); }
+:EXG "D6", "CCW" is op=0xae; pbhi=6 & pblo=14 { packccr(); local ta:4 = D6; local tb:2 = CCW; CCW = ta:2; D6 = sext(tb); unpackccr(); }
+:TFR "D7", "D2" is op=0x9e; pbhi=7 & pblo=0 { local ta = D7; D2 = ta:2; }
+:EXG "D7", "D2" is op=0xae; pbhi=7 & pblo=0 { local ta:4 = D7; local tb:2 = D2; D2 = ta:2; D7 = sext(tb); }
+:TFR "D7", "D3" is op=0x9e; pbhi=7 & pblo=1 { local ta = D7; D3 = ta:2; }
+:EXG "D7", "D3" is op=0xae; pbhi=7 & pblo=1 { local ta:4 = D7; local tb:2 = D3; D3 = ta:2; D7 = sext(tb); }
+:TFR "D7", "D4" is op=0x9e; pbhi=7 & pblo=2 { local ta = D7; D4 = ta:2; }
+:EXG "D7", "D4" is op=0xae; pbhi=7 & pblo=2 { local ta:4 = D7; local tb:2 = D4; D4 = ta:2; D7 = sext(tb); }
+:TFR "D7", "D5" is op=0x9e; pbhi=7 & pblo=3 { local ta = D7; D5 = ta:2; }
+:EXG "D7", "D5" is op=0xae; pbhi=7 & pblo=3 { local ta:4 = D7; local tb:2 = D5; D5 = ta:2; D7 = sext(tb); }
+:TFR "D7", "D0" is op=0x9e; pbhi=7 & pblo=4 { local ta = D7; D0 = ta:1; }
+:EXG "D7", "D0" is op=0xae; pbhi=7 & pblo=4 { local ta:4 = D7; local tb:1 = D0; D0 = ta:1; D7 = sext(tb); }
+:TFR "D7", "D1" is op=0x9e; pbhi=7 & pblo=5 { local ta = D7; D1 = ta:1; }
+:EXG "D7", "D1" is op=0xae; pbhi=7 & pblo=5 { local ta:4 = D7; local tb:1 = D1; D1 = ta:1; D7 = sext(tb); }
+:TFR "D7", "D6" is op=0x9e; pbhi=7 & pblo=6 { D6 = D7; }
+:EXG "D7", "D6" is op=0xae; pbhi=7 & pblo=6 { local ta:4 = D7; local tb:4 = D6; D6 = ta; D7 = tb; }
+:TFR "D7", "X" is op=0x9e; pbhi=7 & pblo=8 { local ta = D7; X = ta:3; }
+:EXG "D7", "X" is op=0xae; pbhi=7 & pblo=8 { local ta:4 = D7; local tb:3 = X; X = ta:3; D7 = sext(tb); }
+:TFR "D7", "Y" is op=0x9e; pbhi=7 & pblo=9 { local ta = D7; Y = ta:3; }
+:EXG "D7", "Y" is op=0xae; pbhi=7 & pblo=9 { local ta:4 = D7; local tb:3 = Y; Y = ta:3; D7 = sext(tb); }
+:TFR "D7", "SP" is op=0x9e; pbhi=7 & pblo=10 { local ta = D7; SP = ta:3; }
+:EXG "D7", "SP" is op=0xae; pbhi=7 & pblo=10 { local ta:4 = D7; local tb:3 = SP; SP = ta:3; D7 = sext(tb); }
+:TFR "D7", "CCH" is op=0x9e; pbhi=7 & pblo=12 { packccr(); local ta = D7; CCH = ta:1; unpackccr(); }
+:EXG "D7", "CCH" is op=0xae; pbhi=7 & pblo=12 { packccr(); local ta:4 = D7; local tb:1 = CCH; CCH = ta:1; D7 = sext(tb); unpackccr(); }
+:TFR "D7", "CCL" is op=0x9e; pbhi=7 & pblo=13 { packccr(); local ta = D7; CCL = ta:1; unpackccr(); }
+:EXG "D7", "CCL" is op=0xae; pbhi=7 & pblo=13 { packccr(); local ta:4 = D7; local tb:1 = CCL; CCL = ta:1; D7 = sext(tb); unpackccr(); }
+:TFR "D7", "CCW" is op=0x9e; pbhi=7 & pblo=14 { packccr(); local ta = D7; CCW = ta:2; unpackccr(); }
+:EXG "D7", "CCW" is op=0xae; pbhi=7 & pblo=14 { packccr(); local ta:4 = D7; local tb:2 = CCW; CCW = ta:2; D7 = sext(tb); unpackccr(); }
+:TFR "X", "D2" is op=0x9e; pbhi=8 & pblo=0 { local ta = X; D2 = ta:2; }
+:EXG "X", "D2" is op=0xae; pbhi=8 & pblo=0 { local ta:3 = X; local tb:2 = D2; D2 = ta:2; X = sext(tb); }
+:TFR "X", "D3" is op=0x9e; pbhi=8 & pblo=1 { local ta = X; D3 = ta:2; }
+:EXG "X", "D3" is op=0xae; pbhi=8 & pblo=1 { local ta:3 = X; local tb:2 = D3; D3 = ta:2; X = sext(tb); }
+:TFR "X", "D4" is op=0x9e; pbhi=8 & pblo=2 { local ta = X; D4 = ta:2; }
+:EXG "X", "D4" is op=0xae; pbhi=8 & pblo=2 { local ta:3 = X; local tb:2 = D4; D4 = ta:2; X = sext(tb); }
+:TFR "X", "D5" is op=0x9e; pbhi=8 & pblo=3 { local ta = X; D5 = ta:2; }
+:EXG "X", "D5" is op=0xae; pbhi=8 & pblo=3 { local ta:3 = X; local tb:2 = D5; D5 = ta:2; X = sext(tb); }
+:TFR "X", "D0" is op=0x9e; pbhi=8 & pblo=4 { local ta = X; D0 = ta:1; }
+:EXG "X", "D0" is op=0xae; pbhi=8 & pblo=4 { local ta:3 = X; local tb:1 = D0; D0 = ta:1; X = sext(tb); }
+:TFR "X", "D1" is op=0x9e; pbhi=8 & pblo=5 { local ta = X; D1 = ta:1; }
+:EXG "X", "D1" is op=0xae; pbhi=8 & pblo=5 { local ta:3 = X; local tb:1 = D1; D1 = ta:1; X = sext(tb); }
+:ZEX "X", "D6" is op=0x9e; pbhi=8 & pblo=6 { D6 = zext(X); }
+:SEX "X", "D6" is op=0xae; pbhi=8 & pblo=6 { D6 = sext(X); }
+:ZEX "X", "D7" is op=0x9e; pbhi=8 & pblo=7 { D7 = zext(X); }
+:SEX "X", "D7" is op=0xae; pbhi=8 & pblo=7 { D7 = sext(X); }
+:TFR "X", "Y" is op=0x9e; pbhi=8 & pblo=9 { Y = X; }
+:EXG "X", "Y" is op=0xae; pbhi=8 & pblo=9 { local ta:3 = X; local tb:3 = Y; Y = ta; X = tb; }
+:TFR "X", "SP" is op=0x9e; pbhi=8 & pblo=10 { SP = X; }
+:EXG "X", "SP" is op=0xae; pbhi=8 & pblo=10 { local ta:3 = X; local tb:3 = SP; SP = ta; X = tb; }
+:TFR "X", "CCH" is op=0x9e; pbhi=8 & pblo=12 { packccr(); local ta = X; CCH = ta:1; unpackccr(); }
+:EXG "X", "CCH" is op=0xae; pbhi=8 & pblo=12 { packccr(); local ta:3 = X; local tb:1 = CCH; CCH = ta:1; X = sext(tb); unpackccr(); }
+:TFR "X", "CCL" is op=0x9e; pbhi=8 & pblo=13 { packccr(); local ta = X; CCL = ta:1; unpackccr(); }
+:EXG "X", "CCL" is op=0xae; pbhi=8 & pblo=13 { packccr(); local ta:3 = X; local tb:1 = CCL; CCL = ta:1; X = sext(tb); unpackccr(); }
+:TFR "X", "CCW" is op=0x9e; pbhi=8 & pblo=14 { packccr(); local ta = X; CCW = ta:2; unpackccr(); }
+:EXG "X", "CCW" is op=0xae; pbhi=8 & pblo=14 { packccr(); local ta:3 = X; local tb:2 = CCW; CCW = ta:2; X = sext(tb); unpackccr(); }
+:TFR "Y", "D2" is op=0x9e; pbhi=9 & pblo=0 { local ta = Y; D2 = ta:2; }
+:EXG "Y", "D2" is op=0xae; pbhi=9 & pblo=0 { local ta:3 = Y; local tb:2 = D2; D2 = ta:2; Y = sext(tb); }
+:TFR "Y", "D3" is op=0x9e; pbhi=9 & pblo=1 { local ta = Y; D3 = ta:2; }
+:EXG "Y", "D3" is op=0xae; pbhi=9 & pblo=1 { local ta:3 = Y; local tb:2 = D3; D3 = ta:2; Y = sext(tb); }
+:TFR "Y", "D4" is op=0x9e; pbhi=9 & pblo=2 { local ta = Y; D4 = ta:2; }
+:EXG "Y", "D4" is op=0xae; pbhi=9 & pblo=2 { local ta:3 = Y; local tb:2 = D4; D4 = ta:2; Y = sext(tb); }
+:TFR "Y", "D5" is op=0x9e; pbhi=9 & pblo=3 { local ta = Y; D5 = ta:2; }
+:EXG "Y", "D5" is op=0xae; pbhi=9 & pblo=3 { local ta:3 = Y; local tb:2 = D5; D5 = ta:2; Y = sext(tb); }
+:TFR "Y", "D0" is op=0x9e; pbhi=9 & pblo=4 { local ta = Y; D0 = ta:1; }
+:EXG "Y", "D0" is op=0xae; pbhi=9 & pblo=4 { local ta:3 = Y; local tb:1 = D0; D0 = ta:1; Y = sext(tb); }
+:TFR "Y", "D1" is op=0x9e; pbhi=9 & pblo=5 { local ta = Y; D1 = ta:1; }
+:EXG "Y", "D1" is op=0xae; pbhi=9 & pblo=5 { local ta:3 = Y; local tb:1 = D1; D1 = ta:1; Y = sext(tb); }
+:ZEX "Y", "D6" is op=0x9e; pbhi=9 & pblo=6 { D6 = zext(Y); }
+:SEX "Y", "D6" is op=0xae; pbhi=9 & pblo=6 { D6 = sext(Y); }
+:ZEX "Y", "D7" is op=0x9e; pbhi=9 & pblo=7 { D7 = zext(Y); }
+:SEX "Y", "D7" is op=0xae; pbhi=9 & pblo=7 { D7 = sext(Y); }
+:TFR "Y", "X" is op=0x9e; pbhi=9 & pblo=8 { X = Y; }
+:EXG "Y", "X" is op=0xae; pbhi=9 & pblo=8 { local ta:3 = Y; local tb:3 = X; X = ta; Y = tb; }
+:TFR "Y", "SP" is op=0x9e; pbhi=9 & pblo=10 { SP = Y; }
+:EXG "Y", "SP" is op=0xae; pbhi=9 & pblo=10 { local ta:3 = Y; local tb:3 = SP; SP = ta; Y = tb; }
+:TFR "Y", "CCH" is op=0x9e; pbhi=9 & pblo=12 { packccr(); local ta = Y; CCH = ta:1; unpackccr(); }
+:EXG "Y", "CCH" is op=0xae; pbhi=9 & pblo=12 { packccr(); local ta:3 = Y; local tb:1 = CCH; CCH = ta:1; Y = sext(tb); unpackccr(); }
+:TFR "Y", "CCL" is op=0x9e; pbhi=9 & pblo=13 { packccr(); local ta = Y; CCL = ta:1; unpackccr(); }
+:EXG "Y", "CCL" is op=0xae; pbhi=9 & pblo=13 { packccr(); local ta:3 = Y; local tb:1 = CCL; CCL = ta:1; Y = sext(tb); unpackccr(); }
+:TFR "Y", "CCW" is op=0x9e; pbhi=9 & pblo=14 { packccr(); local ta = Y; CCW = ta:2; unpackccr(); }
+:EXG "Y", "CCW" is op=0xae; pbhi=9 & pblo=14 { packccr(); local ta:3 = Y; local tb:2 = CCW; CCW = ta:2; Y = sext(tb); unpackccr(); }
+:TFR "SP", "D2" is op=0x9e; pbhi=10 & pblo=0 { local ta = SP; D2 = ta:2; }
+:EXG "SP", "D2" is op=0xae; pbhi=10 & pblo=0 { local ta:3 = SP; local tb:2 = D2; D2 = ta:2; SP = sext(tb); }
+:TFR "SP", "D3" is op=0x9e; pbhi=10 & pblo=1 { local ta = SP; D3 = ta:2; }
+:EXG "SP", "D3" is op=0xae; pbhi=10 & pblo=1 { local ta:3 = SP; local tb:2 = D3; D3 = ta:2; SP = sext(tb); }
+:TFR "SP", "D4" is op=0x9e; pbhi=10 & pblo=2 { local ta = SP; D4 = ta:2; }
+:EXG "SP", "D4" is op=0xae; pbhi=10 & pblo=2 { local ta:3 = SP; local tb:2 = D4; D4 = ta:2; SP = sext(tb); }
+:TFR "SP", "D5" is op=0x9e; pbhi=10 & pblo=3 { local ta = SP; D5 = ta:2; }
+:EXG "SP", "D5" is op=0xae; pbhi=10 & pblo=3 { local ta:3 = SP; local tb:2 = D5; D5 = ta:2; SP = sext(tb); }
+:TFR "SP", "D0" is op=0x9e; pbhi=10 & pblo=4 { local ta = SP; D0 = ta:1; }
+:EXG "SP", "D0" is op=0xae; pbhi=10 & pblo=4 { local ta:3 = SP; local tb:1 = D0; D0 = ta:1; SP = sext(tb); }
+:TFR "SP", "D1" is op=0x9e; pbhi=10 & pblo=5 { local ta = SP; D1 = ta:1; }
+:EXG "SP", "D1" is op=0xae; pbhi=10 & pblo=5 { local ta:3 = SP; local tb:1 = D1; D1 = ta:1; SP = sext(tb); }
+:ZEX "SP", "D6" is op=0x9e; pbhi=10 & pblo=6 { D6 = zext(SP); }
+:SEX "SP", "D6" is op=0xae; pbhi=10 & pblo=6 { D6 = sext(SP); }
+:ZEX "SP", "D7" is op=0x9e; pbhi=10 & pblo=7 { D7 = zext(SP); }
+:SEX "SP", "D7" is op=0xae; pbhi=10 & pblo=7 { D7 = sext(SP); }
+:TFR "SP", "X" is op=0x9e; pbhi=10 & pblo=8 { X = SP; }
+:EXG "SP", "X" is op=0xae; pbhi=10 & pblo=8 { local ta:3 = SP; local tb:3 = X; X = ta; SP = tb; }
+:TFR "SP", "Y" is op=0x9e; pbhi=10 & pblo=9 { Y = SP; }
+:EXG "SP", "Y" is op=0xae; pbhi=10 & pblo=9 { local ta:3 = SP; local tb:3 = Y; Y = ta; SP = tb; }
+:TFR "SP", "CCH" is op=0x9e; pbhi=10 & pblo=12 { packccr(); local ta = SP; CCH = ta:1; unpackccr(); }
+:EXG "SP", "CCH" is op=0xae; pbhi=10 & pblo=12 { packccr(); local ta:3 = SP; local tb:1 = CCH; CCH = ta:1; SP = sext(tb); unpackccr(); }
+:TFR "SP", "CCL" is op=0x9e; pbhi=10 & pblo=13 { packccr(); local ta = SP; CCL = ta:1; unpackccr(); }
+:EXG "SP", "CCL" is op=0xae; pbhi=10 & pblo=13 { packccr(); local ta:3 = SP; local tb:1 = CCL; CCL = ta:1; SP = sext(tb); unpackccr(); }
+:TFR "SP", "CCW" is op=0x9e; pbhi=10 & pblo=14 { packccr(); local ta = SP; CCW = ta:2; unpackccr(); }
+:EXG "SP", "CCW" is op=0xae; pbhi=10 & pblo=14 { packccr(); local ta:3 = SP; local tb:2 = CCW; CCW = ta:2; SP = sext(tb); unpackccr(); }
+:ZEX "CCH", "D2" is op=0x9e; pbhi=12 & pblo=0 { packccr(); D2 = zext(CCH); unpackccr(); }
+:SEX "CCH", "D2" is op=0xae; pbhi=12 & pblo=0 { packccr(); D2 = sext(CCH); unpackccr(); }
+:ZEX "CCH", "D3" is op=0x9e; pbhi=12 & pblo=1 { packccr(); D3 = zext(CCH); unpackccr(); }
+:SEX "CCH", "D3" is op=0xae; pbhi=12 & pblo=1 { packccr(); D3 = sext(CCH); unpackccr(); }
+:ZEX "CCH", "D4" is op=0x9e; pbhi=12 & pblo=2 { packccr(); D4 = zext(CCH); unpackccr(); }
+:SEX "CCH", "D4" is op=0xae; pbhi=12 & pblo=2 { packccr(); D4 = sext(CCH); unpackccr(); }
+:ZEX "CCH", "D5" is op=0x9e; pbhi=12 & pblo=3 { packccr(); D5 = zext(CCH); unpackccr(); }
+:SEX "CCH", "D5" is op=0xae; pbhi=12 & pblo=3 { packccr(); D5 = sext(CCH); unpackccr(); }
+:TFR "CCH", "D0" is op=0x9e; pbhi=12 & pblo=4 { packccr(); D0 = CCH; unpackccr(); }
+:EXG "CCH", "D0" is op=0xae; pbhi=12 & pblo=4 { packccr(); local ta:1 = CCH; local tb:1 = D0; D0 = ta; CCH = tb; unpackccr(); }
+:TFR "CCH", "D1" is op=0x9e; pbhi=12 & pblo=5 { packccr(); D1 = CCH; unpackccr(); }
+:EXG "CCH", "D1" is op=0xae; pbhi=12 & pblo=5 { packccr(); local ta:1 = CCH; local tb:1 = D1; D1 = ta; CCH = tb; unpackccr(); }
+:ZEX "CCH", "D6" is op=0x9e; pbhi=12 & pblo=6 { packccr(); D6 = zext(CCH); unpackccr(); }
+:SEX "CCH", "D6" is op=0xae; pbhi=12 & pblo=6 { packccr(); D6 = sext(CCH); unpackccr(); }
+:ZEX "CCH", "D7" is op=0x9e; pbhi=12 & pblo=7 { packccr(); D7 = zext(CCH); unpackccr(); }
+:SEX "CCH", "D7" is op=0xae; pbhi=12 & pblo=7 { packccr(); D7 = sext(CCH); unpackccr(); }
+:ZEX "CCH", "X" is op=0x9e; pbhi=12 & pblo=8 { packccr(); X = zext(CCH); unpackccr(); }
+:SEX "CCH", "X" is op=0xae; pbhi=12 & pblo=8 { packccr(); X = sext(CCH); unpackccr(); }
+:ZEX "CCH", "Y" is op=0x9e; pbhi=12 & pblo=9 { packccr(); Y = zext(CCH); unpackccr(); }
+:SEX "CCH", "Y" is op=0xae; pbhi=12 & pblo=9 { packccr(); Y = sext(CCH); unpackccr(); }
+:ZEX "CCH", "SP" is op=0x9e; pbhi=12 & pblo=10 { packccr(); SP = zext(CCH); unpackccr(); }
+:SEX "CCH", "SP" is op=0xae; pbhi=12 & pblo=10 { packccr(); SP = sext(CCH); unpackccr(); }
+:TFR "CCH", "CCL" is op=0x9e; pbhi=12 & pblo=13 { packccr(); CCL = CCH; unpackccr(); }
+:EXG "CCH", "CCL" is op=0xae; pbhi=12 & pblo=13 { packccr(); local ta:1 = CCH; local tb:1 = CCL; CCL = ta; CCH = tb; unpackccr(); }
+:ZEX "CCH", "CCW" is op=0x9e; pbhi=12 & pblo=14 { packccr(); CCW = zext(CCH); unpackccr(); }
+:SEX "CCH", "CCW" is op=0xae; pbhi=12 & pblo=14 { packccr(); CCW = sext(CCH); unpackccr(); }
+:ZEX "CCL", "D2" is op=0x9e; pbhi=13 & pblo=0 { packccr(); D2 = zext(CCL); unpackccr(); }
+:SEX "CCL", "D2" is op=0xae; pbhi=13 & pblo=0 { packccr(); D2 = sext(CCL); unpackccr(); }
+:ZEX "CCL", "D3" is op=0x9e; pbhi=13 & pblo=1 { packccr(); D3 = zext(CCL); unpackccr(); }
+:SEX "CCL", "D3" is op=0xae; pbhi=13 & pblo=1 { packccr(); D3 = sext(CCL); unpackccr(); }
+:ZEX "CCL", "D4" is op=0x9e; pbhi=13 & pblo=2 { packccr(); D4 = zext(CCL); unpackccr(); }
+:SEX "CCL", "D4" is op=0xae; pbhi=13 & pblo=2 { packccr(); D4 = sext(CCL); unpackccr(); }
+:ZEX "CCL", "D5" is op=0x9e; pbhi=13 & pblo=3 { packccr(); D5 = zext(CCL); unpackccr(); }
+:SEX "CCL", "D5" is op=0xae; pbhi=13 & pblo=3 { packccr(); D5 = sext(CCL); unpackccr(); }
+:TFR "CCL", "D0" is op=0x9e; pbhi=13 & pblo=4 { packccr(); D0 = CCL; unpackccr(); }
+:EXG "CCL", "D0" is op=0xae; pbhi=13 & pblo=4 { packccr(); local ta:1 = CCL; local tb:1 = D0; D0 = ta; CCL = tb; unpackccr(); }
+:TFR "CCL", "D1" is op=0x9e; pbhi=13 & pblo=5 { packccr(); D1 = CCL; unpackccr(); }
+:EXG "CCL", "D1" is op=0xae; pbhi=13 & pblo=5 { packccr(); local ta:1 = CCL; local tb:1 = D1; D1 = ta; CCL = tb; unpackccr(); }
+:ZEX "CCL", "D6" is op=0x9e; pbhi=13 & pblo=6 { packccr(); D6 = zext(CCL); unpackccr(); }
+:SEX "CCL", "D6" is op=0xae; pbhi=13 & pblo=6 { packccr(); D6 = sext(CCL); unpackccr(); }
+:ZEX "CCL", "D7" is op=0x9e; pbhi=13 & pblo=7 { packccr(); D7 = zext(CCL); unpackccr(); }
+:SEX "CCL", "D7" is op=0xae; pbhi=13 & pblo=7 { packccr(); D7 = sext(CCL); unpackccr(); }
+:ZEX "CCL", "X" is op=0x9e; pbhi=13 & pblo=8 { packccr(); X = zext(CCL); unpackccr(); }
+:SEX "CCL", "X" is op=0xae; pbhi=13 & pblo=8 { packccr(); X = sext(CCL); unpackccr(); }
+:ZEX "CCL", "Y" is op=0x9e; pbhi=13 & pblo=9 { packccr(); Y = zext(CCL); unpackccr(); }
+:SEX "CCL", "Y" is op=0xae; pbhi=13 & pblo=9 { packccr(); Y = sext(CCL); unpackccr(); }
+:ZEX "CCL", "SP" is op=0x9e; pbhi=13 & pblo=10 { packccr(); SP = zext(CCL); unpackccr(); }
+:SEX "CCL", "SP" is op=0xae; pbhi=13 & pblo=10 { packccr(); SP = sext(CCL); unpackccr(); }
+:TFR "CCL", "CCH" is op=0x9e; pbhi=13 & pblo=12 { packccr(); CCH = CCL; unpackccr(); }
+:EXG "CCL", "CCH" is op=0xae; pbhi=13 & pblo=12 { packccr(); local ta:1 = CCL; local tb:1 = CCH; CCH = ta; CCL = tb; unpackccr(); }
+:ZEX "CCL", "CCW" is op=0x9e; pbhi=13 & pblo=14 { packccr(); CCW = zext(CCL); unpackccr(); }
+:SEX "CCL", "CCW" is op=0xae; pbhi=13 & pblo=14 { packccr(); CCW = sext(CCL); unpackccr(); }
+:TFR "CCW", "D2" is op=0x9e; pbhi=14 & pblo=0 { packccr(); D2 = CCW; unpackccr(); }
+:EXG "CCW", "D2" is op=0xae; pbhi=14 & pblo=0 { packccr(); local ta:2 = CCW; local tb:2 = D2; D2 = ta; CCW = tb; unpackccr(); }
+:TFR "CCW", "D3" is op=0x9e; pbhi=14 & pblo=1 { packccr(); D3 = CCW; unpackccr(); }
+:EXG "CCW", "D3" is op=0xae; pbhi=14 & pblo=1 { packccr(); local ta:2 = CCW; local tb:2 = D3; D3 = ta; CCW = tb; unpackccr(); }
+:TFR "CCW", "D4" is op=0x9e; pbhi=14 & pblo=2 { packccr(); D4 = CCW; unpackccr(); }
+:EXG "CCW", "D4" is op=0xae; pbhi=14 & pblo=2 { packccr(); local ta:2 = CCW; local tb:2 = D4; D4 = ta; CCW = tb; unpackccr(); }
+:TFR "CCW", "D5" is op=0x9e; pbhi=14 & pblo=3 { packccr(); D5 = CCW; unpackccr(); }
+:EXG "CCW", "D5" is op=0xae; pbhi=14 & pblo=3 { packccr(); local ta:2 = CCW; local tb:2 = D5; D5 = ta; CCW = tb; unpackccr(); }
+:TFR "CCW", "D0" is op=0x9e; pbhi=14 & pblo=4 { packccr(); local ta = CCW; D0 = ta:1; unpackccr(); }
+:EXG "CCW", "D0" is op=0xae; pbhi=14 & pblo=4 { packccr(); local ta:2 = CCW; local tb:1 = D0; D0 = ta:1; CCW = sext(tb); unpackccr(); }
+:TFR "CCW", "D1" is op=0x9e; pbhi=14 & pblo=5 { packccr(); local ta = CCW; D1 = ta:1; unpackccr(); }
+:EXG "CCW", "D1" is op=0xae; pbhi=14 & pblo=5 { packccr(); local ta:2 = CCW; local tb:1 = D1; D1 = ta:1; CCW = sext(tb); unpackccr(); }
+:ZEX "CCW", "D6" is op=0x9e; pbhi=14 & pblo=6 { packccr(); D6 = zext(CCW); unpackccr(); }
+:SEX "CCW", "D6" is op=0xae; pbhi=14 & pblo=6 { packccr(); D6 = sext(CCW); unpackccr(); }
+:ZEX "CCW", "D7" is op=0x9e; pbhi=14 & pblo=7 { packccr(); D7 = zext(CCW); unpackccr(); }
+:SEX "CCW", "D7" is op=0xae; pbhi=14 & pblo=7 { packccr(); D7 = sext(CCW); unpackccr(); }
+:ZEX "CCW", "X" is op=0x9e; pbhi=14 & pblo=8 { packccr(); X = zext(CCW); unpackccr(); }
+:SEX "CCW", "X" is op=0xae; pbhi=14 & pblo=8 { packccr(); X = sext(CCW); unpackccr(); }
+:ZEX "CCW", "Y" is op=0x9e; pbhi=14 & pblo=9 { packccr(); Y = zext(CCW); unpackccr(); }
+:SEX "CCW", "Y" is op=0xae; pbhi=14 & pblo=9 { packccr(); Y = sext(CCW); unpackccr(); }
+:ZEX "CCW", "SP" is op=0x9e; pbhi=14 & pblo=10 { packccr(); SP = zext(CCW); unpackccr(); }
+:SEX "CCW", "SP" is op=0xae; pbhi=14 & pblo=10 { packccr(); SP = sext(CCW); unpackccr(); }
+:TFR "CCW", "CCH" is op=0x9e; pbhi=14 & pblo=12 { packccr(); local ta = CCW; CCH = ta:1; unpackccr(); }
+:EXG "CCW", "CCH" is op=0xae; pbhi=14 & pblo=12 { packccr(); local ta:2 = CCW; local tb:1 = CCH; CCH = ta:1; CCW = sext(tb); unpackccr(); }
+:TFR "CCW", "CCL" is op=0x9e; pbhi=14 & pblo=13 { packccr(); local ta = CCW; CCL = ta:1; unpackccr(); }
+:EXG "CCW", "CCL" is op=0xae; pbhi=14 & pblo=13 { packccr(); local ta:2 = CCW; local tb:1 = CCL; CCL = ta:1; CCW = sext(tb); unpackccr(); }
+PS0b0: is pbb0=0 { }
+PS0b0: "D3" is pbb0=1 { SP = SP - 2; *:2 SP = D3; }
+PL0b0: is pbb0=0 { }
+PL0b0: "D3" is pbb0=1 { D3 = *:2 SP; SP = SP + 2; }
+PS0b1: is pbb1=0 { }
+PS0b1: "D2" is pbb1=1 { SP = SP - 2; *:2 SP = D2; }
+PL0b1: is pbb1=0 { }
+PL0b1: "D2" is pbb1=1 { D2 = *:2 SP; SP = SP + 2; }
+PS0b2: is pbb2=0 { }
+PS0b2: "D1" is pbb2=1 { SP = SP - 1; *:1 SP = D1; }
+PL0b2: is pbb2=0 { }
+PL0b2: "D1" is pbb2=1 { D1 = *:1 SP; SP = SP + 1; }
+PS0b3: is pbb3=0 { }
+PS0b3: "D0" is pbb3=1 { SP = SP - 1; *:1 SP = D0; }
+PL0b3: is pbb3=0 { }
+PL0b3: "D0" is pbb3=1 { D0 = *:1 SP; SP = SP + 1; }
+PS0b4: is pbb4=0 { }
+PS0b4: "CCL" is pbb4=1 { packccr(); SP = SP - 1; *:1 SP = CCL; }
+PL0b4: is pbb4=0 { }
+PL0b4: "CCL" is pbb4=1 { CCL = *:1 SP; SP = SP + 1; unpackccr(); }
+PS0b5: is pbb5=0 { }
+PS0b5: "CCH" is pbb5=1 { packccr(); SP = SP - 1; *:1 SP = CCH; }
+PL0b5: is pbb5=0 { }
+PL0b5: "CCH" is pbb5=1 { CCH = *:1 SP; SP = SP + 1; unpackccr(); }
+PS1b0: is pbb0=0 { }
+PS1b0: "Y" is pbb0=1 { SP = SP - 3; *:3 SP = Y; }
+PL1b0: is pbb0=0 { }
+PL1b0: "Y" is pbb0=1 { Y = *:3 SP; SP = SP + 3; }
+PS1b1: is pbb1=0 { }
+PS1b1: "X" is pbb1=1 { SP = SP - 3; *:3 SP = X; }
+PL1b1: is pbb1=0 { }
+PL1b1: "X" is pbb1=1 { X = *:3 SP; SP = SP + 3; }
+PS1b2: is pbb2=0 { }
+PS1b2: "D7" is pbb2=1 { SP = SP - 4; *:4 SP = D7; }
+PL1b2: is pbb2=0 { }
+PL1b2: "D7" is pbb2=1 { D7 = *:4 SP; SP = SP + 4; }
+PS1b3: is pbb3=0 { }
+PS1b3: "D6" is pbb3=1 { SP = SP - 4; *:4 SP = D6; }
+PL1b3: is pbb3=0 { }
+PL1b3: "D6" is pbb3=1 { D6 = *:4 SP; SP = SP + 4; }
+PS1b4: is pbb4=0 { }
+PS1b4: "D5" is pbb4=1 { SP = SP - 2; *:2 SP = D5; }
+PL1b4: is pbb4=0 { }
+PL1b4: "D5" is pbb4=1 { D5 = *:2 SP; SP = SP + 2; }
+PS1b5: is pbb5=0 { }
+PS1b5: "D4" is pbb5=1 { SP = SP - 2; *:2 SP = D4; }
+PL1b5: is pbb5=0 { }
+PL1b5: "D4" is pbb5=1 { D4 = *:2 SP; SP = SP + 2; }
+:PSH "ALL" is op=0x04; pb7=0 & pb6=0 & pb50=0 { packccr(); SP = SP - 1; *:1 SP = CCH; packccr(); SP = SP - 1; *:1 SP = CCL; SP = SP - 1; *:1 SP = D0; SP = SP - 1; *:1 SP = D1; SP = SP - 2; *:2 SP = D2; SP = SP - 2; *:2 SP = D3; }
+:PUL "ALL" is op=0x04; pb7=1 & pb6=0 & pb50=0 { D3 = *:2 SP; SP = SP + 2; D2 = *:2 SP; SP = SP + 2; D1 = *:1 SP; SP = SP + 1; D0 = *:1 SP; SP = SP + 1; CCL = *:1 SP; SP = SP + 1; unpackccr(); CCH = *:1 SP; SP = SP + 1; unpackccr(); }
+:PSH PS0b5 PS0b4 PS0b3 PS0b2 PS0b1 PS0b0 is op=0x04; pb7=0 & pb6=0 & PS0b5 & PS0b4 & PS0b3 & PS0b2 & PS0b1 & PS0b0 { build PS0b5; build PS0b4; build PS0b3; build PS0b2; build PS0b1; build PS0b0; }
+:PUL PL0b0 PL0b1 PL0b2 PL0b3 PL0b4 PL0b5 is op=0x04; pb7=1 & pb6=0 & PL0b0 & PL0b1 & PL0b2 & PL0b3 & PL0b4 & PL0b5 { build PL0b0; build PL0b1; build PL0b2; build PL0b3; build PL0b4; build PL0b5; }
+:PSH "ALL16b" is op=0x04; pb7=0 & pb6=1 & pb50=0 { SP = SP - 2; *:2 SP = D4; SP = SP - 2; *:2 SP = D5; SP = SP - 4; *:4 SP = D6; SP = SP - 4; *:4 SP = D7; SP = SP - 3; *:3 SP = X; SP = SP - 3; *:3 SP = Y; }
+:PUL "ALL16b" is op=0x04; pb7=1 & pb6=1 & pb50=0 { Y = *:3 SP; SP = SP + 3; X = *:3 SP; SP = SP + 3; D7 = *:4 SP; SP = SP + 4; D6 = *:4 SP; SP = SP + 4; D5 = *:2 SP; SP = SP + 2; D4 = *:2 SP; SP = SP + 2; }
+:PSH PS1b5 PS1b4 PS1b3 PS1b2 PS1b1 PS1b0 is op=0x04; pb7=0 & pb6=1 & PS1b5 & PS1b4 & PS1b3 & PS1b2 & PS1b1 & PS1b0 { build PS1b5; build PS1b4; build PS1b3; build PS1b2; build PS1b1; build PS1b0; }
+:PUL PL1b0 PL1b1 PL1b2 PL1b3 PL1b4 PL1b5 is op=0x04; pb7=1 & pb6=1 & PL1b0 & PL1b1 & PL1b2 & PL1b3 & PL1b4 & PL1b5 { build PL1b0; build PL1b1; build PL1b2; build PL1b3; build PL1b4; build PL1b5; }
+:DBNE "D2", rel is op=0x0b; pb7=1 & pb64=0 & pb3=0 & pb20=0; rel { D2 = D2 - 1; if (D2 != 0) goto rel; }
+:TBNE "D2", rel is op=0x0b; pb7=0 & pb64=0 & pb3=0 & pb20=0; rel { if (D2 != 0) goto rel; }
+:DBNE "D3", rel is op=0x0b; pb7=1 & pb64=0 & pb3=0 & pb20=1; rel { D3 = D3 - 1; if (D3 != 0) goto rel; }
+:TBNE "D3", rel is op=0x0b; pb7=0 & pb64=0 & pb3=0 & pb20=1; rel { if (D3 != 0) goto rel; }
+:DBNE "D4", rel is op=0x0b; pb7=1 & pb64=0 & pb3=0 & pb20=2; rel { D4 = D4 - 1; if (D4 != 0) goto rel; }
+:TBNE "D4", rel is op=0x0b; pb7=0 & pb64=0 & pb3=0 & pb20=2; rel { if (D4 != 0) goto rel; }
+:DBNE "D5", rel is op=0x0b; pb7=1 & pb64=0 & pb3=0 & pb20=3; rel { D5 = D5 - 1; if (D5 != 0) goto rel; }
+:TBNE "D5", rel is op=0x0b; pb7=0 & pb64=0 & pb3=0 & pb20=3; rel { if (D5 != 0) goto rel; }
+:DBNE "D0", rel is op=0x0b; pb7=1 & pb64=0 & pb3=0 & pb20=4; rel { D0 = D0 - 1; if (D0 != 0) goto rel; }
+:TBNE "D0", rel is op=0x0b; pb7=0 & pb64=0 & pb3=0 & pb20=4; rel { if (D0 != 0) goto rel; }
+:DBNE "D1", rel is op=0x0b; pb7=1 & pb64=0 & pb3=0 & pb20=5; rel { D1 = D1 - 1; if (D1 != 0) goto rel; }
+:TBNE "D1", rel is op=0x0b; pb7=0 & pb64=0 & pb3=0 & pb20=5; rel { if (D1 != 0) goto rel; }
+:DBNE "D6", rel is op=0x0b; pb7=1 & pb64=0 & pb3=0 & pb20=6; rel { D6 = D6 - 1; if (D6 != 0) goto rel; }
+:TBNE "D6", rel is op=0x0b; pb7=0 & pb64=0 & pb3=0 & pb20=6; rel { if (D6 != 0) goto rel; }
+:DBNE "D7", rel is op=0x0b; pb7=1 & pb64=0 & pb3=0 & pb20=7; rel { D7 = D7 - 1; if (D7 != 0) goto rel; }
+:TBNE "D7", rel is op=0x0b; pb7=0 & pb64=0 & pb3=0 & pb20=7; rel { if (D7 != 0) goto rel; }
+:DBNE "X", rel is op=0x0b; pb7=1 & pb64=0 & pb32=2 & pb10=0; rel { X = X - 1; if (X != 0) goto rel; }
+:TBNE "X", rel is op=0x0b; pb7=0 & pb64=0 & pb32=2 & pb10=0; rel { if (X != 0) goto rel; }
+:DBNE "Y", rel is op=0x0b; pb7=1 & pb64=0 & pb32=2 & pb10=1; rel { Y = Y - 1; if (Y != 0) goto rel; }
+:TBNE "Y", rel is op=0x0b; pb7=0 & pb64=0 & pb32=2 & pb10=1; rel { if (Y != 0) goto rel; }
+:DBNE.B OPW1, rel is op=0x0b; pb7=1 & pb64=0 & pb32=3 & pb10=0; OPW1; rel { local v:1 = OPW1 - 1; OPW1 = v; if (v != 0) goto rel; }
+:TBNE.B OPV1, rel is op=0x0b; pb7=0 & pb64=0 & pb32=3 & pb10=0; OPV1; rel { local v:1 = OPV1; if (v != 0) goto rel; }
+:DBNE.W OPW2, rel is op=0x0b; pb7=1 & pb64=0 & pb32=3 & pb10=1; OPW2; rel { local v:2 = OPW2 - 1; OPW2 = v; if (v != 0) goto rel; }
+:TBNE.W OPV2, rel is op=0x0b; pb7=0 & pb64=0 & pb32=3 & pb10=1; OPV2; rel { local v:2 = OPV2; if (v != 0) goto rel; }
+:DBNE.L OPW4, rel is op=0x0b; pb7=1 & pb64=0 & pb32=3 & pb10=3; OPW4; rel { local v:4 = OPW4 - 1; OPW4 = v; if (v != 0) goto rel; }
+:TBNE.L OPV4, rel is op=0x0b; pb7=0 & pb64=0 & pb32=3 & pb10=3; OPV4; rel { local v:4 = OPV4; if (v != 0) goto rel; }
+:DBEQ "D2", rel is op=0x0b; pb7=1 & pb64=1 & pb3=0 & pb20=0; rel { D2 = D2 - 1; if (D2 == 0) goto rel; }
+:TBEQ "D2", rel is op=0x0b; pb7=0 & pb64=1 & pb3=0 & pb20=0; rel { if (D2 == 0) goto rel; }
+:DBEQ "D3", rel is op=0x0b; pb7=1 & pb64=1 & pb3=0 & pb20=1; rel { D3 = D3 - 1; if (D3 == 0) goto rel; }
+:TBEQ "D3", rel is op=0x0b; pb7=0 & pb64=1 & pb3=0 & pb20=1; rel { if (D3 == 0) goto rel; }
+:DBEQ "D4", rel is op=0x0b; pb7=1 & pb64=1 & pb3=0 & pb20=2; rel { D4 = D4 - 1; if (D4 == 0) goto rel; }
+:TBEQ "D4", rel is op=0x0b; pb7=0 & pb64=1 & pb3=0 & pb20=2; rel { if (D4 == 0) goto rel; }
+:DBEQ "D5", rel is op=0x0b; pb7=1 & pb64=1 & pb3=0 & pb20=3; rel { D5 = D5 - 1; if (D5 == 0) goto rel; }
+:TBEQ "D5", rel is op=0x0b; pb7=0 & pb64=1 & pb3=0 & pb20=3; rel { if (D5 == 0) goto rel; }
+:DBEQ "D0", rel is op=0x0b; pb7=1 & pb64=1 & pb3=0 & pb20=4; rel { D0 = D0 - 1; if (D0 == 0) goto rel; }
+:TBEQ "D0", rel is op=0x0b; pb7=0 & pb64=1 & pb3=0 & pb20=4; rel { if (D0 == 0) goto rel; }
+:DBEQ "D1", rel is op=0x0b; pb7=1 & pb64=1 & pb3=0 & pb20=5; rel { D1 = D1 - 1; if (D1 == 0) goto rel; }
+:TBEQ "D1", rel is op=0x0b; pb7=0 & pb64=1 & pb3=0 & pb20=5; rel { if (D1 == 0) goto rel; }
+:DBEQ "D6", rel is op=0x0b; pb7=1 & pb64=1 & pb3=0 & pb20=6; rel { D6 = D6 - 1; if (D6 == 0) goto rel; }
+:TBEQ "D6", rel is op=0x0b; pb7=0 & pb64=1 & pb3=0 & pb20=6; rel { if (D6 == 0) goto rel; }
+:DBEQ "D7", rel is op=0x0b; pb7=1 & pb64=1 & pb3=0 & pb20=7; rel { D7 = D7 - 1; if (D7 == 0) goto rel; }
+:TBEQ "D7", rel is op=0x0b; pb7=0 & pb64=1 & pb3=0 & pb20=7; rel { if (D7 == 0) goto rel; }
+:DBEQ "X", rel is op=0x0b; pb7=1 & pb64=1 & pb32=2 & pb10=0; rel { X = X - 1; if (X == 0) goto rel; }
+:TBEQ "X", rel is op=0x0b; pb7=0 & pb64=1 & pb32=2 & pb10=0; rel { if (X == 0) goto rel; }
+:DBEQ "Y", rel is op=0x0b; pb7=1 & pb64=1 & pb32=2 & pb10=1; rel { Y = Y - 1; if (Y == 0) goto rel; }
+:TBEQ "Y", rel is op=0x0b; pb7=0 & pb64=1 & pb32=2 & pb10=1; rel { if (Y == 0) goto rel; }
+:DBEQ.B OPW1, rel is op=0x0b; pb7=1 & pb64=1 & pb32=3 & pb10=0; OPW1; rel { local v:1 = OPW1 - 1; OPW1 = v; if (v == 0) goto rel; }
+:TBEQ.B OPV1, rel is op=0x0b; pb7=0 & pb64=1 & pb32=3 & pb10=0; OPV1; rel { local v:1 = OPV1; if (v == 0) goto rel; }
+:DBEQ.W OPW2, rel is op=0x0b; pb7=1 & pb64=1 & pb32=3 & pb10=1; OPW2; rel { local v:2 = OPW2 - 1; OPW2 = v; if (v == 0) goto rel; }
+:TBEQ.W OPV2, rel is op=0x0b; pb7=0 & pb64=1 & pb32=3 & pb10=1; OPV2; rel { local v:2 = OPV2; if (v == 0) goto rel; }
+:DBEQ.L OPW4, rel is op=0x0b; pb7=1 & pb64=1 & pb32=3 & pb10=3; OPW4; rel { local v:4 = OPW4 - 1; OPW4 = v; if (v == 0) goto rel; }
+:TBEQ.L OPV4, rel is op=0x0b; pb7=0 & pb64=1 & pb32=3 & pb10=3; OPV4; rel { local v:4 = OPV4; if (v == 0) goto rel; }
+:DBPL "D2", rel is op=0x0b; pb7=1 & pb64=2 & pb3=0 & pb20=0; rel { D2 = D2 - 1; if (D2 s>= 0) goto rel; }
+:TBPL "D2", rel is op=0x0b; pb7=0 & pb64=2 & pb3=0 & pb20=0; rel { if (D2 s>= 0) goto rel; }
+:DBPL "D3", rel is op=0x0b; pb7=1 & pb64=2 & pb3=0 & pb20=1; rel { D3 = D3 - 1; if (D3 s>= 0) goto rel; }
+:TBPL "D3", rel is op=0x0b; pb7=0 & pb64=2 & pb3=0 & pb20=1; rel { if (D3 s>= 0) goto rel; }
+:DBPL "D4", rel is op=0x0b; pb7=1 & pb64=2 & pb3=0 & pb20=2; rel { D4 = D4 - 1; if (D4 s>= 0) goto rel; }
+:TBPL "D4", rel is op=0x0b; pb7=0 & pb64=2 & pb3=0 & pb20=2; rel { if (D4 s>= 0) goto rel; }
+:DBPL "D5", rel is op=0x0b; pb7=1 & pb64=2 & pb3=0 & pb20=3; rel { D5 = D5 - 1; if (D5 s>= 0) goto rel; }
+:TBPL "D5", rel is op=0x0b; pb7=0 & pb64=2 & pb3=0 & pb20=3; rel { if (D5 s>= 0) goto rel; }
+:DBPL "D0", rel is op=0x0b; pb7=1 & pb64=2 & pb3=0 & pb20=4; rel { D0 = D0 - 1; if (D0 s>= 0) goto rel; }
+:TBPL "D0", rel is op=0x0b; pb7=0 & pb64=2 & pb3=0 & pb20=4; rel { if (D0 s>= 0) goto rel; }
+:DBPL "D1", rel is op=0x0b; pb7=1 & pb64=2 & pb3=0 & pb20=5; rel { D1 = D1 - 1; if (D1 s>= 0) goto rel; }
+:TBPL "D1", rel is op=0x0b; pb7=0 & pb64=2 & pb3=0 & pb20=5; rel { if (D1 s>= 0) goto rel; }
+:DBPL "D6", rel is op=0x0b; pb7=1 & pb64=2 & pb3=0 & pb20=6; rel { D6 = D6 - 1; if (D6 s>= 0) goto rel; }
+:TBPL "D6", rel is op=0x0b; pb7=0 & pb64=2 & pb3=0 & pb20=6; rel { if (D6 s>= 0) goto rel; }
+:DBPL "D7", rel is op=0x0b; pb7=1 & pb64=2 & pb3=0 & pb20=7; rel { D7 = D7 - 1; if (D7 s>= 0) goto rel; }
+:TBPL "D7", rel is op=0x0b; pb7=0 & pb64=2 & pb3=0 & pb20=7; rel { if (D7 s>= 0) goto rel; }
+:DBPL "X", rel is op=0x0b; pb7=1 & pb64=2 & pb32=2 & pb10=0; rel { X = X - 1; if (X s>= 0) goto rel; }
+:TBPL "X", rel is op=0x0b; pb7=0 & pb64=2 & pb32=2 & pb10=0; rel { if (X s>= 0) goto rel; }
+:DBPL "Y", rel is op=0x0b; pb7=1 & pb64=2 & pb32=2 & pb10=1; rel { Y = Y - 1; if (Y s>= 0) goto rel; }
+:TBPL "Y", rel is op=0x0b; pb7=0 & pb64=2 & pb32=2 & pb10=1; rel { if (Y s>= 0) goto rel; }
+:DBPL.B OPW1, rel is op=0x0b; pb7=1 & pb64=2 & pb32=3 & pb10=0; OPW1; rel { local v:1 = OPW1 - 1; OPW1 = v; if (v s>= 0) goto rel; }
+:TBPL.B OPV1, rel is op=0x0b; pb7=0 & pb64=2 & pb32=3 & pb10=0; OPV1; rel { local v:1 = OPV1; if (v s>= 0) goto rel; }
+:DBPL.W OPW2, rel is op=0x0b; pb7=1 & pb64=2 & pb32=3 & pb10=1; OPW2; rel { local v:2 = OPW2 - 1; OPW2 = v; if (v s>= 0) goto rel; }
+:TBPL.W OPV2, rel is op=0x0b; pb7=0 & pb64=2 & pb32=3 & pb10=1; OPV2; rel { local v:2 = OPV2; if (v s>= 0) goto rel; }
+:DBPL.L OPW4, rel is op=0x0b; pb7=1 & pb64=2 & pb32=3 & pb10=3; OPW4; rel { local v:4 = OPW4 - 1; OPW4 = v; if (v s>= 0) goto rel; }
+:TBPL.L OPV4, rel is op=0x0b; pb7=0 & pb64=2 & pb32=3 & pb10=3; OPV4; rel { local v:4 = OPV4; if (v s>= 0) goto rel; }
+:DBMI "D2", rel is op=0x0b; pb7=1 & pb64=3 & pb3=0 & pb20=0; rel { D2 = D2 - 1; if (D2 s< 0) goto rel; }
+:TBMI "D2", rel is op=0x0b; pb7=0 & pb64=3 & pb3=0 & pb20=0; rel { if (D2 s< 0) goto rel; }
+:DBMI "D3", rel is op=0x0b; pb7=1 & pb64=3 & pb3=0 & pb20=1; rel { D3 = D3 - 1; if (D3 s< 0) goto rel; }
+:TBMI "D3", rel is op=0x0b; pb7=0 & pb64=3 & pb3=0 & pb20=1; rel { if (D3 s< 0) goto rel; }
+:DBMI "D4", rel is op=0x0b; pb7=1 & pb64=3 & pb3=0 & pb20=2; rel { D4 = D4 - 1; if (D4 s< 0) goto rel; }
+:TBMI "D4", rel is op=0x0b; pb7=0 & pb64=3 & pb3=0 & pb20=2; rel { if (D4 s< 0) goto rel; }
+:DBMI "D5", rel is op=0x0b; pb7=1 & pb64=3 & pb3=0 & pb20=3; rel { D5 = D5 - 1; if (D5 s< 0) goto rel; }
+:TBMI "D5", rel is op=0x0b; pb7=0 & pb64=3 & pb3=0 & pb20=3; rel { if (D5 s< 0) goto rel; }
+:DBMI "D0", rel is op=0x0b; pb7=1 & pb64=3 & pb3=0 & pb20=4; rel { D0 = D0 - 1; if (D0 s< 0) goto rel; }
+:TBMI "D0", rel is op=0x0b; pb7=0 & pb64=3 & pb3=0 & pb20=4; rel { if (D0 s< 0) goto rel; }
+:DBMI "D1", rel is op=0x0b; pb7=1 & pb64=3 & pb3=0 & pb20=5; rel { D1 = D1 - 1; if (D1 s< 0) goto rel; }
+:TBMI "D1", rel is op=0x0b; pb7=0 & pb64=3 & pb3=0 & pb20=5; rel { if (D1 s< 0) goto rel; }
+:DBMI "D6", rel is op=0x0b; pb7=1 & pb64=3 & pb3=0 & pb20=6; rel { D6 = D6 - 1; if (D6 s< 0) goto rel; }
+:TBMI "D6", rel is op=0x0b; pb7=0 & pb64=3 & pb3=0 & pb20=6; rel { if (D6 s< 0) goto rel; }
+:DBMI "D7", rel is op=0x0b; pb7=1 & pb64=3 & pb3=0 & pb20=7; rel { D7 = D7 - 1; if (D7 s< 0) goto rel; }
+:TBMI "D7", rel is op=0x0b; pb7=0 & pb64=3 & pb3=0 & pb20=7; rel { if (D7 s< 0) goto rel; }
+:DBMI "X", rel is op=0x0b; pb7=1 & pb64=3 & pb32=2 & pb10=0; rel { X = X - 1; if (X s< 0) goto rel; }
+:TBMI "X", rel is op=0x0b; pb7=0 & pb64=3 & pb32=2 & pb10=0; rel { if (X s< 0) goto rel; }
+:DBMI "Y", rel is op=0x0b; pb7=1 & pb64=3 & pb32=2 & pb10=1; rel { Y = Y - 1; if (Y s< 0) goto rel; }
+:TBMI "Y", rel is op=0x0b; pb7=0 & pb64=3 & pb32=2 & pb10=1; rel { if (Y s< 0) goto rel; }
+:DBMI.B OPW1, rel is op=0x0b; pb7=1 & pb64=3 & pb32=3 & pb10=0; OPW1; rel { local v:1 = OPW1 - 1; OPW1 = v; if (v s< 0) goto rel; }
+:TBMI.B OPV1, rel is op=0x0b; pb7=0 & pb64=3 & pb32=3 & pb10=0; OPV1; rel { local v:1 = OPV1; if (v s< 0) goto rel; }
+:DBMI.W OPW2, rel is op=0x0b; pb7=1 & pb64=3 & pb32=3 & pb10=1; OPW2; rel { local v:2 = OPW2 - 1; OPW2 = v; if (v s< 0) goto rel; }
+:TBMI.W OPV2, rel is op=0x0b; pb7=0 & pb64=3 & pb32=3 & pb10=1; OPV2; rel { local v:2 = OPV2; if (v s< 0) goto rel; }
+:DBMI.L OPW4, rel is op=0x0b; pb7=1 & pb64=3 & pb32=3 & pb10=3; OPW4; rel { local v:4 = OPW4 - 1; OPW4 = v; if (v s< 0) goto rel; }
+:TBMI.L OPV4, rel is op=0x0b; pb7=0 & pb64=3 & pb32=3 & pb10=3; OPV4; rel { local v:4 = OPV4; if (v s< 0) goto rel; }
+:DBGT "D2", rel is op=0x0b; pb7=1 & pb64=4 & pb3=0 & pb20=0; rel { D2 = D2 - 1; if (D2 s> 0) goto rel; }
+:TBGT "D2", rel is op=0x0b; pb7=0 & pb64=4 & pb3=0 & pb20=0; rel { if (D2 s> 0) goto rel; }
+:DBGT "D3", rel is op=0x0b; pb7=1 & pb64=4 & pb3=0 & pb20=1; rel { D3 = D3 - 1; if (D3 s> 0) goto rel; }
+:TBGT "D3", rel is op=0x0b; pb7=0 & pb64=4 & pb3=0 & pb20=1; rel { if (D3 s> 0) goto rel; }
+:DBGT "D4", rel is op=0x0b; pb7=1 & pb64=4 & pb3=0 & pb20=2; rel { D4 = D4 - 1; if (D4 s> 0) goto rel; }
+:TBGT "D4", rel is op=0x0b; pb7=0 & pb64=4 & pb3=0 & pb20=2; rel { if (D4 s> 0) goto rel; }
+:DBGT "D5", rel is op=0x0b; pb7=1 & pb64=4 & pb3=0 & pb20=3; rel { D5 = D5 - 1; if (D5 s> 0) goto rel; }
+:TBGT "D5", rel is op=0x0b; pb7=0 & pb64=4 & pb3=0 & pb20=3; rel { if (D5 s> 0) goto rel; }
+:DBGT "D0", rel is op=0x0b; pb7=1 & pb64=4 & pb3=0 & pb20=4; rel { D0 = D0 - 1; if (D0 s> 0) goto rel; }
+:TBGT "D0", rel is op=0x0b; pb7=0 & pb64=4 & pb3=0 & pb20=4; rel { if (D0 s> 0) goto rel; }
+:DBGT "D1", rel is op=0x0b; pb7=1 & pb64=4 & pb3=0 & pb20=5; rel { D1 = D1 - 1; if (D1 s> 0) goto rel; }
+:TBGT "D1", rel is op=0x0b; pb7=0 & pb64=4 & pb3=0 & pb20=5; rel { if (D1 s> 0) goto rel; }
+:DBGT "D6", rel is op=0x0b; pb7=1 & pb64=4 & pb3=0 & pb20=6; rel { D6 = D6 - 1; if (D6 s> 0) goto rel; }
+:TBGT "D6", rel is op=0x0b; pb7=0 & pb64=4 & pb3=0 & pb20=6; rel { if (D6 s> 0) goto rel; }
+:DBGT "D7", rel is op=0x0b; pb7=1 & pb64=4 & pb3=0 & pb20=7; rel { D7 = D7 - 1; if (D7 s> 0) goto rel; }
+:TBGT "D7", rel is op=0x0b; pb7=0 & pb64=4 & pb3=0 & pb20=7; rel { if (D7 s> 0) goto rel; }
+:DBGT "X", rel is op=0x0b; pb7=1 & pb64=4 & pb32=2 & pb10=0; rel { X = X - 1; if (X s> 0) goto rel; }
+:TBGT "X", rel is op=0x0b; pb7=0 & pb64=4 & pb32=2 & pb10=0; rel { if (X s> 0) goto rel; }
+:DBGT "Y", rel is op=0x0b; pb7=1 & pb64=4 & pb32=2 & pb10=1; rel { Y = Y - 1; if (Y s> 0) goto rel; }
+:TBGT "Y", rel is op=0x0b; pb7=0 & pb64=4 & pb32=2 & pb10=1; rel { if (Y s> 0) goto rel; }
+:DBGT.B OPW1, rel is op=0x0b; pb7=1 & pb64=4 & pb32=3 & pb10=0; OPW1; rel { local v:1 = OPW1 - 1; OPW1 = v; if (v s> 0) goto rel; }
+:TBGT.B OPV1, rel is op=0x0b; pb7=0 & pb64=4 & pb32=3 & pb10=0; OPV1; rel { local v:1 = OPV1; if (v s> 0) goto rel; }
+:DBGT.W OPW2, rel is op=0x0b; pb7=1 & pb64=4 & pb32=3 & pb10=1; OPW2; rel { local v:2 = OPW2 - 1; OPW2 = v; if (v s> 0) goto rel; }
+:TBGT.W OPV2, rel is op=0x0b; pb7=0 & pb64=4 & pb32=3 & pb10=1; OPV2; rel { local v:2 = OPV2; if (v s> 0) goto rel; }
+:DBGT.L OPW4, rel is op=0x0b; pb7=1 & pb64=4 & pb32=3 & pb10=3; OPW4; rel { local v:4 = OPW4 - 1; OPW4 = v; if (v s> 0) goto rel; }
+:TBGT.L OPV4, rel is op=0x0b; pb7=0 & pb64=4 & pb32=3 & pb10=3; OPV4; rel { local v:4 = OPV4; if (v s> 0) goto rel; }
+:DBLE "D2", rel is op=0x0b; pb7=1 & pb64=5 & pb3=0 & pb20=0; rel { D2 = D2 - 1; if (D2 s<= 0) goto rel; }
+:TBLE "D2", rel is op=0x0b; pb7=0 & pb64=5 & pb3=0 & pb20=0; rel { if (D2 s<= 0) goto rel; }
+:DBLE "D3", rel is op=0x0b; pb7=1 & pb64=5 & pb3=0 & pb20=1; rel { D3 = D3 - 1; if (D3 s<= 0) goto rel; }
+:TBLE "D3", rel is op=0x0b; pb7=0 & pb64=5 & pb3=0 & pb20=1; rel { if (D3 s<= 0) goto rel; }
+:DBLE "D4", rel is op=0x0b; pb7=1 & pb64=5 & pb3=0 & pb20=2; rel { D4 = D4 - 1; if (D4 s<= 0) goto rel; }
+:TBLE "D4", rel is op=0x0b; pb7=0 & pb64=5 & pb3=0 & pb20=2; rel { if (D4 s<= 0) goto rel; }
+:DBLE "D5", rel is op=0x0b; pb7=1 & pb64=5 & pb3=0 & pb20=3; rel { D5 = D5 - 1; if (D5 s<= 0) goto rel; }
+:TBLE "D5", rel is op=0x0b; pb7=0 & pb64=5 & pb3=0 & pb20=3; rel { if (D5 s<= 0) goto rel; }
+:DBLE "D0", rel is op=0x0b; pb7=1 & pb64=5 & pb3=0 & pb20=4; rel { D0 = D0 - 1; if (D0 s<= 0) goto rel; }
+:TBLE "D0", rel is op=0x0b; pb7=0 & pb64=5 & pb3=0 & pb20=4; rel { if (D0 s<= 0) goto rel; }
+:DBLE "D1", rel is op=0x0b; pb7=1 & pb64=5 & pb3=0 & pb20=5; rel { D1 = D1 - 1; if (D1 s<= 0) goto rel; }
+:TBLE "D1", rel is op=0x0b; pb7=0 & pb64=5 & pb3=0 & pb20=5; rel { if (D1 s<= 0) goto rel; }
+:DBLE "D6", rel is op=0x0b; pb7=1 & pb64=5 & pb3=0 & pb20=6; rel { D6 = D6 - 1; if (D6 s<= 0) goto rel; }
+:TBLE "D6", rel is op=0x0b; pb7=0 & pb64=5 & pb3=0 & pb20=6; rel { if (D6 s<= 0) goto rel; }
+:DBLE "D7", rel is op=0x0b; pb7=1 & pb64=5 & pb3=0 & pb20=7; rel { D7 = D7 - 1; if (D7 s<= 0) goto rel; }
+:TBLE "D7", rel is op=0x0b; pb7=0 & pb64=5 & pb3=0 & pb20=7; rel { if (D7 s<= 0) goto rel; }
+:DBLE "X", rel is op=0x0b; pb7=1 & pb64=5 & pb32=2 & pb10=0; rel { X = X - 1; if (X s<= 0) goto rel; }
+:TBLE "X", rel is op=0x0b; pb7=0 & pb64=5 & pb32=2 & pb10=0; rel { if (X s<= 0) goto rel; }
+:DBLE "Y", rel is op=0x0b; pb7=1 & pb64=5 & pb32=2 & pb10=1; rel { Y = Y - 1; if (Y s<= 0) goto rel; }
+:TBLE "Y", rel is op=0x0b; pb7=0 & pb64=5 & pb32=2 & pb10=1; rel { if (Y s<= 0) goto rel; }
+:DBLE.B OPW1, rel is op=0x0b; pb7=1 & pb64=5 & pb32=3 & pb10=0; OPW1; rel { local v:1 = OPW1 - 1; OPW1 = v; if (v s<= 0) goto rel; }
+:TBLE.B OPV1, rel is op=0x0b; pb7=0 & pb64=5 & pb32=3 & pb10=0; OPV1; rel { local v:1 = OPV1; if (v s<= 0) goto rel; }
+:DBLE.W OPW2, rel is op=0x0b; pb7=1 & pb64=5 & pb32=3 & pb10=1; OPW2; rel { local v:2 = OPW2 - 1; OPW2 = v; if (v s<= 0) goto rel; }
+:TBLE.W OPV2, rel is op=0x0b; pb7=0 & pb64=5 & pb32=3 & pb10=1; OPV2; rel { local v:2 = OPV2; if (v s<= 0) goto rel; }
+:DBLE.L OPW4, rel is op=0x0b; pb7=1 & pb64=5 & pb32=3 & pb10=3; OPW4; rel { local v:4 = OPW4 - 1; OPW4 = v; if (v s<= 0) goto rel; }
+:TBLE.L OPV4, rel is op=0x0b; pb7=0 & pb64=5 & pb32=3 & pb10=3; OPV4; rel { local v:4 = OPV4; if (v s<= 0) goto rel; }
+:BCLR "D2", "#"pb73 is op=0xec; pb73 & pb20=0 & pb7=0 { local v:2 = D2; local m:2 = 1 << pb73; D2 = v & ~m; }
+:BCLR "D3", "#"pb73 is op=0xec; pb73 & pb20=1 & pb7=0 { local v:2 = D3; local m:2 = 1 << pb73; D3 = v & ~m; }
+:BCLR "D4", "#"pb73 is op=0xec; pb73 & pb20=2 & pb7=0 { local v:2 = D4; local m:2 = 1 << pb73; D4 = v & ~m; }
+:BCLR "D5", "#"pb73 is op=0xec; pb73 & pb20=3 & pb7=0 { local v:2 = D5; local m:2 = 1 << pb73; D5 = v & ~m; }
+:BCLR "D0", "#"pb73 is op=0xec; pb73 & pb20=4 & pb7=0 & pb6=0 { local v:1 = D0; local m:1 = 1 << pb73; D0 = v & ~m; }
+:BCLR "D1", "#"pb73 is op=0xec; pb73 & pb20=5 & pb7=0 & pb6=0 { local v:1 = D1; local m:1 = 1 << pb73; D1 = v & ~m; }
+:BCLR "D6", "#"pb73 is op=0xec; pb73 & pb20=6 { local v:4 = D6; local m:4 = 1 << pb73; D6 = v & ~m; }
+:BCLR "D7", "#"pb73 is op=0xec; pb73 & pb20=7 { local v:4 = D7; local m:4 = 1 << pb73; D7 = v & ~m; }
+:BCLR OPW1, "#"pb64 is op=0xec; pb7=1 & pb3=0 & pb2=0 & pb10=0 & pb64; OPW1 { local v:1 = OPW1; local m:1 = 1 << pb64; OPW1 = v & ~m; }
+:BCLR OPW2, "#"bn is op=0xec; pb7=1 & pb3=0 & pb2=0 & pb10=2 & pb64 & pb0; OPW2 [ bn = pb64 | (pb0 << 3); ] { local v:2 = OPW2; local m:2 = 1 << bn; OPW2 = v & ~m; }
+:BCLR OPW4, "#"bn is op=0xec; pb7=1 & pb32=2 & pb64 & pb10; OPW4 [ bn = pb64 | (pb10 << 3); ] { local v:4 = OPW4; local m:4 = 1 << bn; OPW4 = v & ~m; }
+:BSET "D2", "#"pb73 is op=0xed; pb73 & pb20=0 & pb7=0 { local v:2 = D2; local m:2 = 1 << pb73; D2 = v | m; }
+:BSET "D3", "#"pb73 is op=0xed; pb73 & pb20=1 & pb7=0 { local v:2 = D3; local m:2 = 1 << pb73; D3 = v | m; }
+:BSET "D4", "#"pb73 is op=0xed; pb73 & pb20=2 & pb7=0 { local v:2 = D4; local m:2 = 1 << pb73; D4 = v | m; }
+:BSET "D5", "#"pb73 is op=0xed; pb73 & pb20=3 & pb7=0 { local v:2 = D5; local m:2 = 1 << pb73; D5 = v | m; }
+:BSET "D0", "#"pb73 is op=0xed; pb73 & pb20=4 & pb7=0 & pb6=0 { local v:1 = D0; local m:1 = 1 << pb73; D0 = v | m; }
+:BSET "D1", "#"pb73 is op=0xed; pb73 & pb20=5 & pb7=0 & pb6=0 { local v:1 = D1; local m:1 = 1 << pb73; D1 = v | m; }
+:BSET "D6", "#"pb73 is op=0xed; pb73 & pb20=6 { local v:4 = D6; local m:4 = 1 << pb73; D6 = v | m; }
+:BSET "D7", "#"pb73 is op=0xed; pb73 & pb20=7 { local v:4 = D7; local m:4 = 1 << pb73; D7 = v | m; }
+:BSET OPW1, "#"pb64 is op=0xed; pb7=1 & pb3=0 & pb2=0 & pb10=0 & pb64; OPW1 { local v:1 = OPW1; local m:1 = 1 << pb64; OPW1 = v | m; }
+:BSET OPW2, "#"bn is op=0xed; pb7=1 & pb3=0 & pb2=0 & pb10=2 & pb64 & pb0; OPW2 [ bn = pb64 | (pb0 << 3); ] { local v:2 = OPW2; local m:2 = 1 << bn; OPW2 = v | m; }
+:BSET OPW4, "#"bn is op=0xed; pb7=1 & pb32=2 & pb64 & pb10; OPW4 [ bn = pb64 | (pb10 << 3); ] { local v:4 = OPW4; local m:4 = 1 << bn; OPW4 = v | m; }
+:BTGL "D2", "#"pb73 is op=0xee; pb73 & pb20=0 & pb7=0 { local v:2 = D2; local m:2 = 1 << pb73; D2 = v ^ m; }
+:BTGL "D3", "#"pb73 is op=0xee; pb73 & pb20=1 & pb7=0 { local v:2 = D3; local m:2 = 1 << pb73; D3 = v ^ m; }
+:BTGL "D4", "#"pb73 is op=0xee; pb73 & pb20=2 & pb7=0 { local v:2 = D4; local m:2 = 1 << pb73; D4 = v ^ m; }
+:BTGL "D5", "#"pb73 is op=0xee; pb73 & pb20=3 & pb7=0 { local v:2 = D5; local m:2 = 1 << pb73; D5 = v ^ m; }
+:BTGL "D0", "#"pb73 is op=0xee; pb73 & pb20=4 & pb7=0 & pb6=0 { local v:1 = D0; local m:1 = 1 << pb73; D0 = v ^ m; }
+:BTGL "D1", "#"pb73 is op=0xee; pb73 & pb20=5 & pb7=0 & pb6=0 { local v:1 = D1; local m:1 = 1 << pb73; D1 = v ^ m; }
+:BTGL "D6", "#"pb73 is op=0xee; pb73 & pb20=6 { local v:4 = D6; local m:4 = 1 << pb73; D6 = v ^ m; }
+:BTGL "D7", "#"pb73 is op=0xee; pb73 & pb20=7 { local v:4 = D7; local m:4 = 1 << pb73; D7 = v ^ m; }
+:BTGL OPW1, "#"pb64 is op=0xee; pb7=1 & pb3=0 & pb2=0 & pb10=0 & pb64; OPW1 { local v:1 = OPW1; local m:1 = 1 << pb64; OPW1 = v ^ m; }
+:BTGL OPW2, "#"bn is op=0xee; pb7=1 & pb3=0 & pb2=0 & pb10=2 & pb64 & pb0; OPW2 [ bn = pb64 | (pb0 << 3); ] { local v:2 = OPW2; local m:2 = 1 << bn; OPW2 = v ^ m; }
+:BTGL OPW4, "#"bn is op=0xee; pb7=1 & pb32=2 & pb64 & pb10; OPW4 [ bn = pb64 | (pb10 << 3); ] { local v:4 = OPW4; local m:4 = 1 << bn; OPW4 = v ^ m; }
+:BRCLR "D2", "#"pb73, rel is op=0x2; pb73 & pb20=0 & pb7=0; rel { local v:2 = D2; local m:2 = 1 << pb73; if ((v & m) == 0) goto rel; }
+:BRCLR "D3", "#"pb73, rel is op=0x2; pb73 & pb20=1 & pb7=0; rel { local v:2 = D3; local m:2 = 1 << pb73; if ((v & m) == 0) goto rel; }
+:BRCLR "D4", "#"pb73, rel is op=0x2; pb73 & pb20=2 & pb7=0; rel { local v:2 = D4; local m:2 = 1 << pb73; if ((v & m) == 0) goto rel; }
+:BRCLR "D5", "#"pb73, rel is op=0x2; pb73 & pb20=3 & pb7=0; rel { local v:2 = D5; local m:2 = 1 << pb73; if ((v & m) == 0) goto rel; }
+:BRCLR "D0", "#"pb73, rel is op=0x2; pb73 & pb20=4 & pb7=0 & pb6=0; rel { local v:1 = D0; local m:1 = 1 << pb73; if ((v & m) == 0) goto rel; }
+:BRCLR "D1", "#"pb73, rel is op=0x2; pb73 & pb20=5 & pb7=0 & pb6=0; rel { local v:1 = D1; local m:1 = 1 << pb73; if ((v & m) == 0) goto rel; }
+:BRCLR "D6", "#"pb73, rel is op=0x2; pb73 & pb20=6; rel { local v:4 = D6; local m:4 = 1 << pb73; if ((v & m) == 0) goto rel; }
+:BRCLR "D7", "#"pb73, rel is op=0x2; pb73 & pb20=7; rel { local v:4 = D7; local m:4 = 1 << pb73; if ((v & m) == 0) goto rel; }
+:BRCLR OPW1, "#"pb64, rel is op=0x2; pb7=1 & pb3=0 & pb2=0 & pb10=0 & pb64; OPW1; rel { local v:1 = OPW1; local m:1 = 1 << pb64; if ((v & m) == 0) goto rel; }
+:BRCLR OPW2, "#"bn, rel is op=0x2; pb7=1 & pb3=0 & pb2=0 & pb10=2 & pb64 & pb0; OPW2; rel [ bn = pb64 | (pb0 << 3); ] { local v:2 = OPW2; local m:2 = 1 << bn; if ((v & m) == 0) goto rel; }
+:BRCLR OPW4, "#"bn, rel is op=0x2; pb7=1 & pb32=2 & pb64 & pb10; OPW4; rel [ bn = pb64 | (pb10 << 3); ] { local v:4 = OPW4; local m:4 = 1 << bn; if ((v & m) == 0) goto rel; }
+:BRSET "D2", "#"pb73, rel is op=0x3; pb73 & pb20=0 & pb7=0; rel { local v:2 = D2; local m:2 = 1 << pb73; if ((v & m) != 0) goto rel; }
+:BRSET "D3", "#"pb73, rel is op=0x3; pb73 & pb20=1 & pb7=0; rel { local v:2 = D3; local m:2 = 1 << pb73; if ((v & m) != 0) goto rel; }
+:BRSET "D4", "#"pb73, rel is op=0x3; pb73 & pb20=2 & pb7=0; rel { local v:2 = D4; local m:2 = 1 << pb73; if ((v & m) != 0) goto rel; }
+:BRSET "D5", "#"pb73, rel is op=0x3; pb73 & pb20=3 & pb7=0; rel { local v:2 = D5; local m:2 = 1 << pb73; if ((v & m) != 0) goto rel; }
+:BRSET "D0", "#"pb73, rel is op=0x3; pb73 & pb20=4 & pb7=0 & pb6=0; rel { local v:1 = D0; local m:1 = 1 << pb73; if ((v & m) != 0) goto rel; }
+:BRSET "D1", "#"pb73, rel is op=0x3; pb73 & pb20=5 & pb7=0 & pb6=0; rel { local v:1 = D1; local m:1 = 1 << pb73; if ((v & m) != 0) goto rel; }
+:BRSET "D6", "#"pb73, rel is op=0x3; pb73 & pb20=6; rel { local v:4 = D6; local m:4 = 1 << pb73; if ((v & m) != 0) goto rel; }
+:BRSET "D7", "#"pb73, rel is op=0x3; pb73 & pb20=7; rel { local v:4 = D7; local m:4 = 1 << pb73; if ((v & m) != 0) goto rel; }
+:BRSET OPW1, "#"pb64, rel is op=0x3; pb7=1 & pb3=0 & pb2=0 & pb10=0 & pb64; OPW1; rel { local v:1 = OPW1; local m:1 = 1 << pb64; if ((v & m) != 0) goto rel; }
+:BRSET OPW2, "#"bn, rel is op=0x3; pb7=1 & pb3=0 & pb2=0 & pb10=2 & pb64 & pb0; OPW2; rel [ bn = pb64 | (pb0 << 3); ] { local v:2 = OPW2; local m:2 = 1 << bn; if ((v & m) != 0) goto rel; }
+:BRSET OPW4, "#"bn, rel is op=0x3; pb7=1 & pb32=2 & pb64 & pb10; OPW4; rel [ bn = pb64 | (pb10 << 3); ] { local v:4 = OPW4; local m:4 = 1 << bn; if ((v & m) != 0) goto rel; }

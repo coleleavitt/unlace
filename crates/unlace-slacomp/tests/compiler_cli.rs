@@ -314,3 +314,14 @@ fn intrinsic_names_are_symbols_unless_applied() {
     );
     assert_compiled(result, &destination);
 }
+
+#[test]
+fn statements_may_follow_an_export() {
+    let scratch = tempfile::tempdir().unwrap();
+    let (result, destination) = compile_body(
+        scratch.path(),
+        "post: \"x\" is imm=1 { local addr:4 = r0; export *:4 addr; r0 = r0 + 4; }\n\
+         :inst post is op=1 & post { r1 = post; }\n",
+    );
+    assert_compiled(result, &destination);
+}

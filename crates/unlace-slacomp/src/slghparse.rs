@@ -1067,18 +1067,23 @@ impl SleighParser {
     /// main section (recording a NOP if empty) (slghparse.y:355-359).
     fn finish_rtl_tail(&mut self, d: &mut dyn ParseDriver, mid: u32) -> KunaResult<u32> {
         if self.accept(d, TokenKind::ExportKey)?.is_some() {
-            if self.peek(d)? == TokenKind::Char1(b'*') {
+            let ct = if self.peek(d)? == TokenKind::Char1(b'*') {
                 let star = self.sizedstar(d)?;
                 let vn = self.lhsvarnode(d)?;
                 self.expect(d, TokenKind::Char1(b';'))?;
                 d.trace("setResultStarVarnode");
-                Ok(d.set_result_star_varnode(mid, star, vn))
+                d.set_result_star_varnode(mid, star, vn)
             } else {
                 let vn = self.exportvarnode(d)?;
                 self.expect(d, TokenKind::Char1(b';'))?;
                 d.trace("setResultVarnode");
-                Ok(d.set_result_varnode(mid, vn))
-            }
+                d.set_result_varnode(mid, vn)
+            };
+            // (kuna) Statements may follow the export, as Ghidra's Java SleighCompiler
+            // accepts (its "No statements allowed after export" check never fires);
+            // their ops run after the ops before it. The C++ grammar ended the section.
+            self.rtl_statements(d, ct)?;
+            Ok(ct)
         } else {
             d.trace("rtl/main");
             Ok(d.finish_main_rtl(mid))
@@ -1090,6 +1095,14 @@ impl SleighParser {
     fn rtlmid(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
         d.trace("enterSection");
         let sec = d.enter_section();
+        self.rtl_statements(d, sec)?;
+        Ok(sec)
+    }
+
+    /// The run of statements and local declarations in section `sec`, up to its
+    /// closing brace, an export or a section label (`rtlmid statement`,
+    /// slghparse.y:362-364).
+    fn rtl_statements(&mut self, d: &mut dyn ParseDriver, sec: u32) -> KunaResult<()> {
         loop {
             match self.peek(d)? {
                 TokenKind::Char1(b'}') | TokenKind::ExportKey | TokenKind::OpLeft => break,
@@ -1106,7 +1119,7 @@ impl SleighParser {
                 }
             }
         }
-        Ok(sec)
+        Ok(())
     }
 
     /// Handle a `local ...` form (slghparse.y:363-364 declarations, plus the

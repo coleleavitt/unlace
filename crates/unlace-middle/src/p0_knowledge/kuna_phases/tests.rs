@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_335() {
-    assert_eq!(kuna_num_settables(), 335);
-    assert_eq!(SETTABLE_TABLE.len(), 335);
+fn settable_count_is_337() {
+    assert_eq!(kuna_num_settables(), 337);
+    assert_eq!(SETTABLE_TABLE.len(), 337);
 }
 
 #[test]
-fn tier_counts_are_69_core_166_transform_100_analysis() {
+fn tier_counts_are_69_core_168_transform_100_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_69_core_166_transform_100_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (69, 166, 100));
+    assert_eq!((core, transform, analysis), (69, 168, 100));
 }
 
 #[test]
@@ -956,7 +956,8 @@ fn option_values_live_value_present_for_129() {
     // 137 -> 138: `spsolve` (#70) added a live_field row without the bump.
     // +1 for `guarddispatch` (live_field = guard_dispatch).
     // +1 for `flownames` (live_field = flow_names).
-    assert_eq!(with_live, 140);
+    // +2 for `atomics` and `llscfold` (live_field = atomics, llsc_fold).
+    assert_eq!(with_live, 142);
 }
 
 #[test]
@@ -1285,7 +1286,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `typemerge`; its P6 row sits after `indirectonly`.
     // +1 for `flownames`; its P6 row sits beside `contextnames`.
     // +1 for `honestgaps`; its P2 row.
-    assert_eq!(json.matches("},\n").count(), 328);
+    // +2 for `atomics` and `llscfold`.
+    assert_eq!(json.matches("},\n").count(), 330);
 }
 
 #[test]

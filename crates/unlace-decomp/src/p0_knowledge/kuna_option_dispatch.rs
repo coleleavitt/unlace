@@ -273,6 +273,8 @@ kuna_options! { self, p1;
     "devectorize" => registered!(crate::kuna_devectorize::DevectorizeReduction),
     "strlenscan" => registered!(crate::kuna_strlenscan::StrlenScan),
     "repstring" => registered!(crate::kuna_repstring::RepString),
+    "atomics" => registered!(crate::kuna_atomicops::Atomics),
+    "llscfold" => registered!(crate::kuna_atomicops::LlscFold),
     "copyrun" => registered!(crate::kuna_copyrun::CopyRun),
     "regionstructure" => registered!(crate::region_structurer::RegionStructure),
     "guardarm" => registered!(crate::kuna_ifnoexit::GuardArm),

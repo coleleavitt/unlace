@@ -2357,7 +2357,9 @@ define pcodeop lswxOp;
 
 
 @ifndef NoLegacyIntegerMultiplyAccumulate
+@ifndef PAIRED_SINGLE
 @include "mulhwInstructions.sinc"
+@endif
 @endif
 
 #mcrf cr0,cr0	0x4c 00 00 00

@@ -22,6 +22,7 @@ mod mep;
 mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
+
 #[path = "v60.rs"]
 mod v60;
 
@@ -31,6 +32,8 @@ mod aarch64_rme;
 mod aarch64_sme;
 #[path = "aarch64_sve2.rs"]
 mod aarch64_sve2;
+#[path = "ppc_gekko.rs"]
+mod ppc_gekko;
 #[path = "ppc_spe2.rs"]
 mod ppc_spe2;
 #[path = "return_branch_cli.rs"]
@@ -1050,6 +1053,8 @@ mod types_header;
 #[path = "typelib.rs"]
 mod typelib;
 
+#[path = "msvccookie_return_cli.rs"]
+mod msvccookie_return_cli;
 #[path = "msvcexport_cli.rs"]
 mod msvcexport_cli;
 #[path = "processors.rs"]

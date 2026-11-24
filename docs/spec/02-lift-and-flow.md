@@ -4560,11 +4560,13 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/st20_raw.rs` |
 | `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/tilegx_raw.rs` |
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/v60.rs` |
+| `PowerPC` (Gekko) | IBM Gekko / Broadway (PowerPC 750CL) paired singles | `PowerPC:BE:32:Gekko` | IBM PowerPC 750CL User's Manual (paired-single chapter); checked against `powerpc-elf-objdump -M gekko` 2.43.1 | `unlace-cli/tests/ppc_gekko.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
 | `M16C` (`M32C_80`) | Renesas M32C/80 (M16C/80 set plus `MUL.L`, `DIV*.L`, `SHANC.L`, `SHLNC.L`) | `M32C/80:LE:24:default` | Renesas M32C/80 Series Software Manual REJ09B0319; checked against `m32c-elf-as` 2.43.1 | `unlace-cli/tests/m32c_raw.rs` |
 | `Propeller` | Parallax Propeller 1 (P8X32A) cog | `propeller:LE:16:default` | Propeller Manual v1.2 assembly reference, P8X32A datasheet opcode matrix | `unlace-cli/tests/propeller_raw.rs` |
 | `MIPS` (MIPS-3D, SmartMIPS) | MIPS64 with MIPS-3D, MIPS32 with SmartMIPS (pre-R6 languages) | existing `MIPS:*:64:*` and `MIPS:*:32:*` pre-R6 languages | binutils MIPS opcode table (MIPS-3D/SmartMIPS rows), MIPS-3D (MD00099) and SmartMIPS ASE specifications; checked against `mips-elf-objdump` 2.43.1 | `unlace-cli/tests/mips_ase.rs` |
 | `NFP` | Netronome NFP-6xxx flow-processor microengine (ME v2.8, 8 contexts) | `NFP:LE:32:ME28` | binutils `opcodes/nfp-dis.c` and `include/opcode/nfp.h` field layouts; checked against binutils objdump (`elf64-nfp`) | `unlace-cli/tests/nfp_raw.rs` |
+| `TLCS870` | Toshiba TLCS-870 (TMP87xx) | `TLCS870:LE:16:default` | Toshiba TLCS-870 data books; MAME tlcs870 (BSD-3) | `unlace-cli/tests/tlcs870_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -4740,6 +4742,25 @@ with LLVM 23's disassembler, 102 rows RV64 and 80 RV32), LLVM-selected
 `th.lrd`/`th.lrw`, `th.extu`, `th.mvnez` and `th.mula` functions, and a
 raw RV64 image. Gaps (XTheadVector, Vdot, Fmv, Int) are listed in
 `specs/Ghidra/Processors/RISCV/README.md`.
+
+### PowerPC Gekko / Broadway paired singles (#98)
+
+A new language `PowerPC:BE:32:Gekko` (`ppc_32_gekko_be.slaspec`) adds
+`paired_single.sinc` to the 32-bit big-endian PowerPC language without AltiVec:
+the paired-single instructions of the GameCube's Gekko and the Wii's Broadway
+(PowerPC 750CL). Each FPR carries a second single-precision slot, `ps1_N`, in the
+otherwise unused low half of the overlaid VSX register; arithmetic, the slot
+moves (`ps_sum*`, `ps_muls*`, `ps_madds*`, `ps_merge*`, `ps_sel`) and the
+compares follow the 750CL manual, each slot rounded to single. `psq_l`/`psq_st`
+with GQR index 0 are plain float loads and stores of one or two slots (the SDKs
+keep GQR0 at the float type); any other GQR makes the transfer a
+`psq_load`/`psq_store` user op on that GQR. Under `@define PAIRED_SINGLE` the
+405/440 multiply-accumulate instructions, which share primary opcode 4, are left
+out, so the other PowerPC languages are unchanged. A 7,060-word probe agrees with
+`objdump -M gekko` except on the invalid rA = 0 update forms. A raw
+`psq_l; psq_l; ps_add; psq_st` decompiles to two float stores of the slot sums.
+Exercised by `unlace-cli/tests/ppc_gekko.rs`; gaps in
+`specs/Ghidra/Processors/PowerPC/README.md`.
 
 ### PowerPC SPE2 and EFS2 (#98)
 

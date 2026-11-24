@@ -852,6 +852,23 @@ expect = [
     "a0 < a1",  # cmpltu feeds cmovnez
 ]
 
+# The TLCS-870 language decompiles a hand-assembled add/compare/store routine.
+[[family]]
+name = "tlcs870"
+language = "TLCS870:LE:16:default"
+base = "0xe000"
+fixture = "crates/unlace-cli/tests/fixtures/tlcs870/add_store.bin"
+
+[[family.function]]
+test = "tlcs870_add_compare_store_decompiles"
+address = "0xe000"
+expect = [
+    "if ((char)(a0 + '\\x05') == '\\x10') {",  # the ADD / CMP / JR NE test survives
+    "dat_80 = a0 + '\\x05';",  # the store to (0x80)
+    "return 0x10;",  # the taken path
+    "return 0;",  # the fall-back path
+]
+
 # The clean-room Toshiba TLCS-90 language loads a raw image and decompiles it.
 [[family]]
 name = "tlcs90"

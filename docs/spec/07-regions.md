@@ -519,7 +519,13 @@ leaves extrapop unknown, chapter 06's stack solver accounts for the call with a
 guess, and deleting it re-solves the frame without that equation, which moved
 the stack arguments of unrelated calls (every argument of a `printf`-like call
 in setuptools' `cli-32.exe` launcher was lost). Such a check keeps its call and
-its argument. An x86-32 check only has an argument to match through
+its argument, but the algebra still proves it is the checker, which preserves
+EAX: its instruction address is recorded as an exact checker site, as the
+locked-void arm below records one, and one restart is requested, so the replay
+keeps the caller's return value across the call instead of reading the
+`KILLEDBYCALL` clobber (an MSVC x86-32 function whose frame has a call no code
+bounds, such as an indirect call, otherwise returned
+`void`). An x86-32 check only has an argument to match through
 `calleereginputs` (chapter 04, on by default on x86-32 Windows).
 
 **What it REMOVES.** The check call, with the stock pair

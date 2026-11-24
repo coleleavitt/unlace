@@ -67,7 +67,7 @@ and the true16 `v_mov_b16`/`v_not_b16` with `.l`/`.h` halves. The scheduling, wa
 cache-control instructions new in these generations (`s_clause`, `s_delay_alu`,
 `s_waitcnt_*cnt`, `s_inst_prefetch`, ...) decode as no-ops.
 
-Gaps beyond GFX9's: wave64 code (64-bit lane masks) is decoded as wave32; most true16 VOP3
+Gaps beyond GFX9's: most true16 VOP3
 forms and op_sel, MIMG/NSA, the gfx11 export and LDS-direct instructions and the RDNA-only
 dot/WMMA operations are not decoded.
 
@@ -75,3 +75,24 @@ Oracle: `fixtures/amdgpu/gfx900_kernels.cl` and the four GFX9 test kernels built
 -O2 for gfx1030 and gfx1100, plus `fixtures/amdgpu/gfx1100_vopd.cl` at -O3 (four VOPD
 instructions): every function decompiles with no bad instruction and `llvm-objdump` lists no
 mnemonic the specs lack.
+
+## Wave64: `AMDGPU:LE:64:GFX10-W64` and `AMDGPU:LE:64:GFX11-W64`
+
+RDNA runs either wave size; the wave size of a kernel is in its kernel descriptor, not in the
+ELF header, so wave64 code (`clang -mwavefrontsize64`, and much compute code) picks these
+languages explicitly. `amdgcn_gfx10_w64.slaspec` and `amdgcn_gfx11_w64.slaspec` are generated
+from the wave32 specs by `tools/gen_amdgpu_wave64.py`; edit the wave32 spec and regenerate. The
+encodings are identical; the generator widens every lane mask: VCC and EXEC are SGPR pairs
+(VOPC e32 and the e32 carry and `v_cndmask` forms write or read `vcc`, `v_cmpx` writes `exec`),
+the VOPC e64 and VOP3b carry-out destinations and the `v_cndmask_b32_e64`/`v_*_co_ci_u32_e64`
+mask sources name SGPR pairs (`null` is a 64-bit sink, or reads 0), and VCCZ, EXECZ and the
+`s_cbranch_vccz/execz` branches test the whole pair. The `*_saveexec_b32`/`*_wrexec_b32` forms
+keep EXEC_LO.
+
+Oracle: `fixtures/amdgpu/wave64_kernels.cl` and `fixtures/amdgpu/wave64_ballot.cl` built with
+clang -O2 `-mwavefrontsize64` for gfx1030 and gfx1100; every lane-mask operand of the 1,512
+listed instructions matches `llvm-objdump --mattr=+wavefrontsize64` (the remaining listing
+differences are the MUBUF scratch and `s_waitcnt_depctr` operand spellings), and every function
+decompiles with no bad instruction. Decoded as wave32 instead, a ballot's high half reads as an
+uninitialized `vcc_hi`.
+

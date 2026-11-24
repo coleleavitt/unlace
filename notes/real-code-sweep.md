@@ -55,6 +55,7 @@ The corpus has 13 functions:
 | Lanai | `lanai:BE:32:default` | 1/13 clean | 4/13 clean | | branches flow to 0 (`R_LANAI_25` not applied) | #677, #676 |
 | LoongArch64 | `Loongarch:LE:64:lp64d` | 11/13 clean | 12/13 clean | | switch tables flow to unmapped memory; `0.5f` reads as `1.4013e-45f` (PCALA not applied) | #677, #676 |
 | NVPTX (ptxas `sm_80` cubin) | `SASS:LE:64:SM80` (`--target`) | 13/13 | 13/13 | none | `CALL.ABS.NOINC` device calls were the opaque `sass_CALL` op (calls dropped). Still open: `BRX` jump tables, and `ISETP`/`P2R`/`I2F` user ops. -O2 `classify` returns the pre-branch value. `str_len` is `void` | `CALL.ABS` fixed in #750. Engine: e_machine 190 (CUDA) not routed and R_CUDA relocations 56-69 not applied (#676, #677) |
+| ARCv2 (arc-elf-gcc 15.3 `-mcpu=hs`) | auto (`ARC:LE:32:ARCv2`) | 13/13 (.o, linked) | 13/13 (.o, linked) | none | -O2 `list_sum`: `jeq.d [blink]` skipped its `mov_s r0,0` delay slot on the fall-through path, so the sum started at the list pointer | #766 |
 
 "n/13" counts functions whose body decompiled. "clean" counts functions with no `halt_missing`.
 

@@ -32,3 +32,13 @@ is public; integer HMX forms are not documented and not decoded. Decompiling
 a multi-instruction packet (which an activation/weight pair always is) fails
 in the crossbuild step for every Hexagon packet, not only HMX; disassembly is
 unaffected.
+
+## Local changes (unlace)
+
+Vendored from Ghidra; besides HMX above, unlace changes `hexagon.slaspec` and
+`hexagon.sinc` to give hardware loops a direct back edge (#98). `loop0` and `loop1`
+(every immediate and register form, `spNloop0` included) record the loop start in two
+new flowing context fields, `lp0sa` and `lp1sa` (the context register grows from 12 to 20
+bytes). The `:endloop0` and `:endloop1` packets branch to that recorded start; without one
+they keep Ghidra's indirect branch through `SA0`/`SA1`, as does the packet that ends both
+loops. Decode and listing are unchanged.

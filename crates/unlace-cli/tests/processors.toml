@@ -13,6 +13,9 @@
 # (docs/processor-tests.md).
 
 [images]
+arcv2_list_sum = """
+0a220080e120c1070c704c4344424b7ae120c10778604c434442f30a31807860e07ee078
+"""
 r32c = """
 f260df9f9f9f9f9f9f9f9f9f9f9f9f9ffa40bbedfff220df9f9f9f9f9f9f9f9f
 a108640304b10864df9f9f9f9f9f9f9fb4ac40007fdf9f9f9f9f9f9f9f9f9f9f
@@ -364,6 +367,33 @@ test = "csky_edsp_simd_byte_add_decompiles"
 address = "0x8018"
 expect = [
     "return padd_8(a0,a1);",  # named lane operation
+]
+
+# Hexagon hardware loops (Hexagon:LE:32:default), assembled with zig cc (LLVM): the
+# :endloop0/:endloop1 packet branches back to the start loop0/loop1 recorded.
+[[family]]
+name = "hexagon_loop"
+language = "Hexagon:LE:32:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/hexagon_loop/loop.bin"
+forbid = ["halt_baddata", "(a1 <= 1);", "(v3 <= 1);"]
+
+[[family.function]]
+test = "hexagon_loop_endloop0_back_edge"
+address = "0x1000"
+expect = [
+    "while( true ) {",
+    "v2 += *a0;",
+    "if (a1 <= 1) break;",
+]
+
+[[family.function]]
+test = "hexagon_loop_endloop1_back_edge"
+address = "0x1020"
+expect = [
+    "while( true ) {",
+    "v2 ^= *a0;",
+    "if (v3 <= 1) break;",
 ]
 
 # C-SKY bloop (CSKY:LE:32:v2) built with csky-elf-as -mcpu=ck804e: the loop-closing
@@ -3319,3 +3349,18 @@ expect = ["* 7"]
 test = "elfroute_gfx1100_o_pick"
 address = "pick"
 expect = ["0x2c"]
+
+# ARCv2 list_sum from arc-elf-gcc 15.3 -mcpu=hs -O2 (the real-code sweep corpus): jeq.d [blink]
+# carries mov_s r0,0 in its delay slot, which runs on the fall-through path too.
+[[family]]
+name = "arcv2"
+language = "ARC:LE:32:ARCv2"
+base = "0x0"
+image = "arcv2_list_sum"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "arcv2_conditional_delayed_return_runs_its_slot"
+address = "0x0"
+expect = ["v2 = 0;", "return v2 + *v1;"]

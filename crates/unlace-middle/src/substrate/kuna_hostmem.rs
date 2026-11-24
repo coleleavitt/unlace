@@ -83,7 +83,7 @@ pub fn level_share(memsize: u64, level: u32) -> u64 {
 }
 
 fn cgroup_root() -> String {
-    std::env::var(CGROUP_ROOT_ENV).unwrap_or_else(|_| "/sys/fs/cgroup".into())
+    unlace_base::env::var(CGROUP_ROOT_ENV).unwrap_or_else(|_| "/sys/fs/cgroup".into())
 }
 
 /// What the cgroups on this process's path still leave a new process: for

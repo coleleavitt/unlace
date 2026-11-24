@@ -24,7 +24,7 @@ pub fn sdk_path() -> Option<PathBuf> {
 /// a load in progress reads [`sdk_path`]. A value that names no directory (set
 /// outside kuna, or removed since) reads no headers and says so once.
 pub fn sdk_path_from_env() -> Option<PathBuf> {
-    let v = std::env::var(OBJCSDK_ENV).ok()?;
+    let v = unlace_base::env::var(OBJCSDK_ENV).ok()?;
     match parse_option_value(&v) {
         Ok(path) => path,
         Err(e) => {

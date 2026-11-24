@@ -50,7 +50,7 @@ impl KernelcacheChoice {
     /// `auto`. Reads only the environment; a load in progress reads
     /// [`Self::in_force`].
     pub fn from_env() -> Self {
-        std::env::var(KERNELCACHE_ENV)
+        unlace_base::env::var(KERNELCACHE_ENV)
             .ok()
             .and_then(|v| Self::parse(&v))
             .unwrap_or_default()

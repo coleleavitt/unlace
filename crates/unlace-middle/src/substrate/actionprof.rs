@@ -95,7 +95,7 @@ pub const ENV_VAR: &str = "KUNA_ACTION_PROF";
 /// Is profiling on? Read once per process.
 pub fn enabled() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os(ENV_VAR).is_some())
+    *ON.get_or_init(|| unlace_base::env::var_os(ENV_VAR).is_some())
 }
 
 /// Name the root schedule that follows, so its rows can be told apart from
@@ -151,7 +151,7 @@ pub fn leave() {
 /// A write failure is ignored: a profile that cannot be written must not change
 /// what the engine does.
 pub fn dump() {
-    let Some(path) = std::env::var_os(ENV_VAR) else {
+    let Some(path) = unlace_base::env::var_os(ENV_VAR) else {
         return;
     };
     let _ = std::fs::write(path, render());

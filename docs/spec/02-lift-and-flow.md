@@ -5147,8 +5147,18 @@ filter funclet by its `<parent>$filt$<n>` name). The first call in the range
 gets the edge, the pad defines RAX (the exception code the handler block
 reads) and RDX as at any pad, and the printer's catch header prints a lone
 `__except` clause as given: `try { ... } __except (EXCEPTION_EXECUTE_HANDLER)
-{ ... }`. A `__try` with no call in it gets no edge; `__finally` funclets and
-x86 scope tables are not spliced.
+{ ... }`. A `__try` with no call in it gets no edge; x64 `__finally` funclets
+are cleanup pads (above).
+
+On x86 (`kuna_msvcseh.rs (x86_seh_splice)`) the SEH3/SEH4 frame keeps the try
+level in `[ebp-4]`, so the regions come from the same state stores as x86 C++
+(the function starts outside every level; SEH4's -2 and SEH3's -1 mean none),
+between the function start and its first filter or handler block, at most
+16 KiB. A region at level `n` gets one record into scope record `n`'s `__except`
+block, which lies in the function and restores the stack pointer itself, so it
+is an ordinary pad, printed `__except (filter 0x401050)` or by its constant
+filter's name. An enclosing level's handler is not chained, and x86
+`__finally` routines (called by the runtime) are not spliced.
 
 ## 2.13 VEX zero-upper writes and per-lane vector p-code
 

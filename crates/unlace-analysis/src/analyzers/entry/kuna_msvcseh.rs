@@ -104,6 +104,7 @@ pub fn collect(
         object::Architecture::I386 => {
             for (func, scopes) in x86_seh(img, &text, code) {
                 scope_notes(func, &scopes, false, &mut out);
+                x86_seh_splice(code, func, &scopes, &mut out);
             }
             let rk = RefKind::new(false, 0, End::Little);
             let mut spliced = FxHashSet::<u64>::default();
@@ -368,6 +369,62 @@ fn x86_splice(
                 }
             }
         }
+    }
+}
+
+/// (kuna `msvceh`) x86 SEH `__except` blocks as pads. The SEH3/SEH4 frame keeps
+/// the try level in `[ebp-4]` too, so the regions come from the same stores,
+/// between the function start (outside every level) and its first filter or
+/// handler block (at most 16 KiB). A region at level `n` gets one call-site
+/// record into record `n`'s `__except` block, which lies in the function and is
+/// entered with the stack pointer the block restores itself. `__finally` levels
+/// (a termination routine the runtime calls) are left out.
+fn x86_seh_splice(code: &[(u64, &[u8])], func: u64, scopes: &[SehScope], out: &mut AnalysisOutput) {
+    let Some(&(base, data)) = code
+        .iter()
+        .find(|&&(b, d)| func >= b && func - b < d.len() as u64)
+    else {
+        return;
+    };
+    let end = scopes
+        .iter()
+        .flat_map(|s| match s.kind {
+            SehKind::Except {
+                filter: Filter::Code(f),
+                handler,
+            } => vec![f, handler],
+            SehKind::Except { handler, .. } => vec![handler],
+            SehKind::Finally { handler } => vec![handler],
+        })
+        .filter(|&a| a > func)
+        .min()
+        .unwrap_or(func + 0x4000)
+        .min(base + data.len() as u64)
+        .min(func + 0x4000);
+    let body = &data[(func - base) as usize..(end - base) as usize];
+    let mut states = vec![(func, -1)];
+    states.extend(x86_state_stores(body, func));
+    for (lo, hi, level) in super::kuna_msvcfuncinfo::state_regions(&states, func, end) {
+        let Some(SehScope {
+            kind: SehKind::Except { filter, handler },
+            ..
+        }) = scopes.get(level as usize)
+        else {
+            continue;
+        };
+        let f = match filter {
+            Filter::Code(a) => format!("filter {a:#x}"),
+            Filter::Constant(c) => constant_filter(*c),
+        };
+        out.eh_call_sites.push(EhCallSite {
+            start: lo,
+            end: hi,
+            pad: *handler,
+            clauses: vec![EhClause::Catch {
+                selector: 1,
+                type_name: Some(format!("__except ({f})")),
+            }],
+        });
     }
 }
 

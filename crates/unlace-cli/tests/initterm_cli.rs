@@ -30,3 +30,28 @@ fn every_initializer_the_crt_runs_is_a_function() {
         );
     }
 }
+
+#[test]
+fn a_static_crt_table_is_read_only_in_the_crt_shape() {
+    let fixture = common::fixture("initterm_static_pe_i386.exe");
+    let mut command = Command::new(kuna());
+    command.args(["functions", &fixture, "--json"]);
+    let output = process::required_output(&mut command);
+    let document: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let starts: Vec<&str> = document["functions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|f| f["address_hex"].as_str())
+        .collect();
+    for want in ["0x401050", "0x401060"] {
+        assert!(
+            starts.contains(&want),
+            "initializer {want} is not a function: {starts:?}"
+        );
+    }
+    assert!(
+        !starts.contains(&"0x401070"),
+        "a table without the leading NULL was read: {starts:?}"
+    );
+}

@@ -1,0 +1,18 @@
+[package]
+name = "unlace-fuzz"
+description = "Whole-pipeline fuzz harness for unlace: load, function discovery and decompile from one byte slice, with panics caught and reported."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+unlace = { path = "../unlace" }
+
+[[bin]]
+name = "unlace-fuzz"
+path = "src/main.rs"
+
+[lints]
+workspace = true

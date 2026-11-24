@@ -55,6 +55,7 @@ pub(super) fn reject_unquotable(what: &str, path: &str) -> Result<(), String> {
 /// Lower the parsed request using this attempt's resolved input and defaults.
 /// `defer_fast_funcdisc` appends `option fast_funcdisc off` after the caller's
 /// options, so it outranks a preset's `on` for this attempt only.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn build_script_for_input(
     args: &DecompileArgs,
     binary: &str,
@@ -64,6 +65,7 @@ pub(super) fn build_script_for_input(
     defer_fast_funcdisc: bool,
     regions_path: Option<&Path>,
     trace_path: Option<&Path>,
+    cfg_dot_path: Option<&Path>,
 ) -> String {
     let DecompileArgs {
         target,
@@ -210,6 +212,12 @@ pub(super) fn build_script_for_input(
         lines.push("print raw".into());
     }
     lines.push("closefile".into());
+    if let Some(cp) = cfg_dot_path {
+        let cp_display = cp.display().to_string();
+        lines.push(format!("openfile write {}", console_path(&cp_display)));
+        lines.push("cfg dot".into());
+        lines.push("closefile".into());
+    }
     if let Some(rp) = regions_path {
         let rp_display = rp.display().to_string();
         lines.push(format!("openfile write {}", console_path(&rp_display)));

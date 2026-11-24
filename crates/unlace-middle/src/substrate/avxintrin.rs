@@ -14,9 +14,15 @@
 /// The intrinsic name and the order of the user-op's arguments (0-based,
 /// after the user-op id) for the user-op `name` whose result is `size` bytes.
 pub fn intrinsic(name: &str, size: i32) -> Option<(String, Vec<usize>)> {
+    intrinsic_sized(name, size, size)
+}
+
+/// `intrinsic` with the widest vector input's size as well: `size` is the result's bytes
+/// and `src` the source operand's, which the VL narrowings name their width by.
+pub fn intrinsic_sized(name: &str, size: i32, src: i32) -> Option<(String, Vec<usize>)> {
     // The `lanefuse` masked forms: `(src, k, operands...)` / `(k, operands...)`.
     if let Some(base) = name.strip_suffix("_maskz") {
-        let (intr, order) = intrinsic(base, size)?;
+        let (intr, order) = intrinsic_sized(base, size, src)?;
         let (head, tail) = intr.split_once('_').and_then(|(_, r)| r.split_once('_'))?;
         let named = format!("_{head}_maskz_{tail}");
         return Some((
@@ -27,7 +33,7 @@ pub fn intrinsic(name: &str, size: i32) -> Option<(String, Vec<usize>)> {
         ));
     }
     if let Some(base) = name.strip_suffix("_mask") {
-        let (intr, order) = intrinsic(base, size)?;
+        let (intr, order) = intrinsic_sized(base, size, src)?;
         let (head, tail) = intr.split_once('_').and_then(|(_, r)| r.split_once('_'))?;
         let named = format!("_{head}_mask_{tail}");
         return Some((
@@ -62,7 +68,7 @@ pub fn intrinsic(name: &str, size: i32) -> Option<(String, Vec<usize>)> {
         return Some(rest_fma(rest, w));
     }
     let m = mnem.strip_prefix('v')?;
-    if let Some(named) = conversion(m, ext, size) {
+    if let Some(named) = conversion(m, ext, size, src) {
         return Some((named, vec![0]));
     }
     // Packed float: add/sub/mul/div/min/max/sqrt/and/or/xor/andn + ps|pd.
@@ -205,11 +211,11 @@ pub fn intrinsic(name: &str, size: i32) -> Option<(String, Vec<usize>)> {
 /// The element-pair conversions: `vpmovsx*` and `vpmovzx*` widen, named by the
 /// result width (`_mm256_cvtepi8_epi16`, `_mm256_cvtepu32_epi64`). The truncating and
 /// saturating narrowings (`vpmovdb`, `vpmovusdw`, `vpmovwb`) take their name from the
-/// source width, which the AVX-512F and AVX-512BW forms fix at 512 bits, so only those
-/// forms are named (`_mm512_cvtepi32_epi8`). The VL narrowings share one name across
-/// 128- and 256-bit sources and stay unnamed. Both keep the vector kind `i` on input and
-/// output, so the printed types agree.
-fn conversion(m: &str, ext: &str, size: i32) -> Option<String> {
+/// source width: the AVX-512F and AVX-512BW forms fix it at 512 bits
+/// (`_mm512_cvtepi32_epi8`), and the VL forms take 128 or 256 bits from the source operand
+/// (`_mm_cvtepi32_epi8`, `_mm256_cvtepi32_epi8`), so `src` is the source vector's size.
+/// Both keep the vector kind `i` on input and output, so the printed types agree.
+fn conversion(m: &str, ext: &str, size: i32, src: i32) -> Option<String> {
     let bits = |c: char| match c {
         'b' => Some(8u32),
         'w' => Some(16),
@@ -249,15 +255,19 @@ fn conversion(m: &str, ext: &str, size: i32) -> Option<String> {
         },
     };
     let (sb, db) = pair(p)?;
-    let need = match sb {
-        16 => "avx512bw",
-        32 | 64 => "avx512f",
-        _ => return None,
-    };
-    if ext != need || db >= sb {
+    if db >= sb {
         return None;
     }
-    Some(format!("_mm512_{sat}i{sb}_epi{db}"))
+    let w = match (sb, ext) {
+        (16 | 32 | 64, "avx512vl") => match src {
+            16 => "",
+            32 => "256",
+            _ => return None,
+        },
+        (16, "avx512bw") | (32 | 64, "avx512f") => "512",
+        _ => return None,
+    };
+    Some(format!("_mm{w}_{sat}i{sb}_epi{db}"))
 }
 
 /// The element kind of an intrinsic's vectors: `b'f'` for `_ps`/`_ss`,
@@ -377,7 +387,19 @@ mod tests {
             intrinsic("vpmovwb_avx512bw_mask", 32),
             Some(("_mm512_mask_cvtepi16_epi8".into(), vec![0, 1, 2]))
         );
-        assert_eq!(intrinsic("vpmovdb_avx512vl", 16), None);
+        assert_eq!(
+            intrinsic_sized("vpmovdb_avx512vl", 16, 16),
+            Some(("_mm_cvtepi32_epi8".into(), vec![0]))
+        );
+        assert_eq!(
+            intrinsic_sized("vpmovdb_avx512vl", 16, 32),
+            Some(("_mm256_cvtepi32_epi8".into(), vec![0]))
+        );
+        assert_eq!(
+            intrinsic_sized("vpmovwb_avx512vl_mask", 16, 32),
+            Some(("_mm256_mask_cvtepi16_epi8".into(), vec![0, 1, 2]))
+        );
+        assert_eq!(intrinsic_sized("vpmovdb_avx512vl", 16, 64), None);
         assert_eq!(intrinsic("vpmovwb_avx512f", 16), None);
         assert_eq!(intrinsic("vpmovsxbw_avx2", 8), None);
     }

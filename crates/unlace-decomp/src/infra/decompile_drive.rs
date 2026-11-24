@@ -3419,6 +3419,7 @@ pub fn print_c_recompile_prelude(arch: &Architecture) -> String {
     // `va_start(ap,..)`/`va_arg(ap,T)` (option `vaarg`) and the `va_list ap;` a
     // body declares for them.
     out.push_str("#include <stdarg.h>\n");
+    out.push_str(&crate::partmacro::prelude(arch));
     // A recovered aggregate can hold target pointers, and a host that compiles
     // this header for a different data model sizes them differently and moves
     // every field after such a member -- which also moves what `p[1]` means in

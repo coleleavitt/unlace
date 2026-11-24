@@ -10904,6 +10904,8 @@ stage-test bytechunk); `off` keeps the faithful concatenation. Pinned by
 `tests/stages/gobool-c-default.toml` (the same bytes on a C image under the
 shipped `auto`).
 
+**(unlace) Taint from an input source to a command sink — `option taintcheck`, default off, `crates/unlace-bandb/src/p4_calls/taintcheck.rs`.** A report-only check, ported from the archived research decompiler's `propagate_taint`. The return value of a call to a listed input source (`recv`, `recvfrom`, `read`, `fread`, `fgets`, `getenv`, `gets`) is tainted. Taint then flows forward over the live ops, flow-insensitively: an op with any tainted input taints its output, and each tainted value keeps the first source it traces to, bounded at 64 rounds. A call to a listed command sink (`system`, `popen`, `execl`, `execle`, `execlp`, `execv`, `execve`, `execvp`) that takes a tainted argument gets a warning comment at the call from `ActionPrototypeWarnings`, the same point as the x87depth warnings. Slot 0 of a CALL is the target address and is never an argument. The pure reachability core (`reach`) is unit-tested over abstract varnodes; `findings` adapts a `Funcdata`. Memory is not modelled, so a buffer an input call fills is not tainted, and a hit is a candidate for review rather than a proven flow. The check changes no code or type, only adds warnings, so it is off in the aggressive preset and listed as unevaluated in `modes.rs`.
+
 ### (unlace) The SysV x86-64 vector calling convention — `option vectorabi`, default on
 
 `crates/unlace-bandb-base/src/p4_calls/vectorabi.rs (model)`. The
@@ -11069,3 +11071,7 @@ never resume their caller, including their ABI wrappers. Disabling `gobounds`
 leaves the no-return decision to the existing `gonoreturn` analysis facts, so
 turning off both options preserves the original flow for auditing. Similar
 application names and explicit type-assertion panics are outside this list.
+
+### SysV AMD64 eightbyte classes (leaf)
+
+`sysveightbyte.rs (classify_aggregate)` is the psABI section 3.2.3 classifier for a struct or union passed or returned by value on x86-64 System V: each 8-byte eightbyte gets INTEGER, SSE, SSEUP, X87, X87UP, COMPLEX_X87, NO_CLASS or MEMORY, and the post-merger rules (a) to (d) apply. An aggregate over 64 bytes, an unaligned field, a field past the end, or nesting deeper than 32 is MEMORY. It is a pure function with no caller yet and changes no output; a later change wires it into the x86-64 prototype model behind an option, default off until the datatest corpus shows no changed assertion.

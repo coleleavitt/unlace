@@ -138,3 +138,32 @@ Also seen, outside the table (the reference keeps DWARF with `--keep-debug`): wi
 compiler_rt DWARF in the image, the export header carries every DWARF type, including a member
 named `register` (a C keyword) and one named `linux` (a predefined macro under `-std=gnu11`),
 so no AArch64 function compiled until the driver stripped the debug info.
+
+## Status after the fixes (2026-11-24)
+
+Fixed in main, not yet re-measured (`baseline.json` still holds the first run's outcomes; re-save it
+with one suite run on a build of current main):
+
+| Item | PR |
+|---|---|
+| AArch64 signed byte printed `char` (1) | sem1 in #1091 |
+| `int` return declared `bool`, callers read wider (2) | sem2 in #1091 |
+| AArch64 `fcvtzu` as `(int)` (3) | #1086 |
+| AArch64 NaN compares (4) | sem4 in #1091 |
+| gcc `.localalias` names the function (7) | sem5 in #1091 |
+| `va_list ap` undeclared, no `<stdarg.h>` (13) | sem6 in #1091 |
+| `undefined16` struct vs 16-byte values (8) | sem7 in #1091 |
+| C keyword member names (`register`) | #1093 |
+| AArch64 `NEON_ucvtf` (16) | #1096 |
+
+Still open, each needs a run to find its cause:
+
+- clang -O0 `zx8` printed `char` (5): expected to be covered by sem2 now that the suite decompiles `main`; unchecked.
+- clang -O2 `fatal` recovered with an extra argument, so its callers' calls do not match (14).
+- AArch64 -O2 mutual tail recursion: `odd` declared `void` (14).
+- `CSWTCH.5` printed verbatim and missing from the header (11).
+- `dat_` pieces of a read-only vector constant left out of the header (12); the real fix is folding the constant in the body.
+- `fmix`: `._4_12_` partial member of a `char[16]` (9).
+- Whole-array assignment of SSE locals, `checksum16`, `sum_weighted` (10).
+- AArch64 static musl: `exit`, `abort`, `fflush` called with no prototype (15).
+- AArch64 varargs: `Register00000008` / `Stack…` storage names never declared (13).

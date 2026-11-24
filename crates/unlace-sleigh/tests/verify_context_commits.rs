@@ -188,7 +188,7 @@ const SOME_TRUE: &[&str] = &["PIC", "M16C", "x86"];
 #[test]
 fn context_commits_agree_with_the_globalset_sources() {
     let corpus = vendored_sla();
-    assert_eq!(corpus.len(), 461, "the vendored language corpus changed");
+    assert_eq!(corpus.len(), 463, "the vendored language corpus changed");
 
     let mut answers: Vec<(String, String, bool, usize)> = Vec::new();
     for (processor, name, path) in &corpus {

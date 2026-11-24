@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="TMS320C1x" endian="big" size="16" variant="default" version="1.0"
+            slafile="tms320c1x.sla" processorspec="tms320c1x.pspec" id="TMS320C1x:BE:16:default">
+    <description>TI TMS320C1x (TMS32010/C10/C14/C15/C17) DSP, 16-bit words stored high byte first</description>
+    <compiler name="default" spec="tms320c1x.cspec" id="default"/>
+  </language>
+  <language processor="TMS320C1x" endian="little" size="16" variant="default" version="1.0"
+            slafile="tms320c1x_le.sla" processorspec="tms320c1x.pspec" id="TMS320C1x:LE:16:default">
+    <description>TI TMS320C1x (TMS32010/C10/C14/C15/C17) DSP, 16-bit words stored low byte first</description>
+    <compiler name="default" spec="tms320c1x.cspec" id="default"/>
+  </language>
+</language_definitions>

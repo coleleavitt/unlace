@@ -1,0 +1,239 @@
+# TI TMS320C1x (TMS32010/C10/C14/C15/C17) DSP.
+#
+# Written for unlace from TI's TMS320C1x User's Guide (SPRU013D, chapter 4 instruction set).
+# Program, data and I/O are separate 16-bit-word spaces; a direct operand is DP:dma (dma = 7 bits),
+# an indirect one the auxiliary register AR(ARP). ARP and DP are flow context while they are known
+# (after LARP/LDPK or an indirect ",ARn"), so most operands resolve to a fixed register or address;
+# after LST/LDP they are read from the ARP/DP registers. TBLR/TBLW borrow a stack level, so the
+# bottom one is lost. The overflow mode (OVM) saturation of the accumulator is not modelled: OV is set,
+# the sum wraps.
+
+define endian=$(ENDIAN);
+define alignment=2;
+
+define space prog type=ram_space size=2 wordsize=2 default;
+define space data type=ram_space size=2 wordsize=2;
+define space io type=ram_space size=2 wordsize=2;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=2 [ PC TREG AR0 AR1 STK0 STK1 STK2 STK3 SP ];
+@if ENDIAN == "big"
+define register offset=0x20 size=2 [ ACCH ACCL PH PL ];
+@else
+define register offset=0x20 size=2 [ ACCL ACCH PL PH ];
+@endif
+define register offset=0x20 size=4 [ ACC PREG ];
+define register offset=0x30 size=1 [ ARP DP OV OVM INTM ];
+
+define register offset=0x40 size=4 contextreg;
+define context contextreg
+	phase = (0,0)
+	arp_k = (1,1)
+	arp_v = (2,2)
+	dp_k = (3,3)
+	dp_v = (4,4)
+	arpkc = (5,5) noflow
+	arpvc = (6,6) noflow
+	dpkc = (7,7) noflow
+	dpvc = (8,8) noflow
+;
+
+define pcodeop bio;
+
+define token iw(16)
+	op16 = (0,15)
+	op15 = (1,15)
+	op13 = (3,15)
+	op9 = (7,15)
+	op8 = (8,15)
+	op7 = (9,15)
+	op5 = (11,15)
+	op4 = (12,15)
+	op3 = (13,15)
+	shf = (8,11)
+	shf3 = (8,10)
+	ia = (7,7)
+	b6 = (6,6)
+	amod = (4,5)
+	nb = (3,3)
+	b21 = (1,2)
+	narv = (0,0)
+	narn = (0,0)
+	dma = (0,6)
+	rr = (8,8)
+	pa = (8,10)
+	pan = (8,10)
+	k8 = (0,7)
+	k1 = (0,0)
+	k13 = (0,12) signed
+;
+define token w2(16)
+	tgt = (0,15)
+;
+
+attach variables [ rr ] [ AR0 AR1 ];
+attach names [ narn ] [ "AR0" "AR1" ];
+attach names [ pan ] [ "PA0" "PA1" "PA2" "PA3" "PA4" "PA5" "PA6" "PA7" ];
+
+# Indirect addressing reads the low 8 bits of AR(ARP); auto-increment/decrement and BANZ count in
+# the low 9 bits and leave bits 9-15 alone (user's guide 3.3.5). BANZ tests before it decrements and
+# decrements whether or not it branches (BANZ page).
+macro arinc(r) { r = (r & 0xfe00) | ((r + 1) & 0x1ff); }
+macro ardec(r) { r = (r & 0xfe00) | ((r - 1) & 0x1ff); }
+
+arcur: is arpkc=1 & arpvc=0 { export AR0; }
+arcur: is arpkc=1 & arpvc=1 { export AR1; }
+arcur: is arpkc=0 { local p:2 = &:2 AR0 + zext(ARP) * 2; export *[register]:2 p; }
+
+mem: daddr is ia=0 & dma & dpkc=1 & dpvc [ daddr = (dpvc << 7) | dma; ] { export *[data]:2 daddr; }
+mem: dma is ia=0 & dma & dpkc=0 { local a:2 = (zext(DP) << 7) | dma; export *[data]:2 a; }
+mem: "*" is ia=1 & b6=0 & b21=0 & amod=0 & arcur { local t:2 = arcur & 0xff; export *[data]:2 t; }
+mem: "*-" is ia=1 & b6=0 & b21=0 & amod=1 & arcur { local t:2 = arcur & 0xff; ardec(arcur); export *[data]:2 t; }
+mem: "*+" is ia=1 & b6=0 & b21=0 & amod=2 & arcur { local t:2 = arcur & 0xff; arinc(arcur); export *[data]:2 t; }
+
+# The address of the operand (DMOV, LTD move the word to the next address).
+mema: daddr is ia=0 & dma & dpkc=1 & dpvc [ daddr = (dpvc << 7) | dma; ] { export *[const]:2 daddr; }
+mema: dma is ia=0 & dma & dpkc=0 { local a:2 = (zext(DP) << 7) | dma; export a; }
+mema: "*" is ia=1 & b6=0 & b21=0 & amod=0 & arcur { local t:2 = arcur & 0xff; export t; }
+mema: "*-" is ia=1 & b6=0 & b21=0 & amod=1 & arcur { local t:2 = arcur & 0xff; ardec(arcur); export t; }
+mema: "*+" is ia=1 & b6=0 & b21=0 & amod=2 & arcur { local t:2 = arcur & 0xff; arinc(arcur); export t; }
+
+# SST writes page 1 whatever DP holds.
+memp1: daddr is ia=0 & dma [ daddr = 0x80 | dma; ] { export *[data]:2 daddr; }
+memp1: mem is ia=1 & mem { export mem; }
+
+# The ARP load at the end of an indirect instruction (bit 3 clear).
+nxt: is ia=0 { }
+nxt: is ia=1 & nb=1 { }
+nxt: ","^narn is ia=1 & nb=0 & narn & narv [ arp_k=1; arp_v=narv; globalset(inst_next, arp_k); globalset(inst_next, arp_v); ] { ARP = narv; }
+
+sh: is shf=0 { export 0:1; }
+sh: ","^shf is shf { export *[const]:1 shf; }
+
+sh3: is shf3=0 { export 0:1; }
+sh3: ","^shf3 is shf3 { export *[const]:1 shf3; }
+
+addr: tgt is tgt { export *[prog]:2 tgt; }
+
+macro push(v) {
+	STK3 = STK2;
+	STK2 = STK1;
+	STK1 = STK0;
+	STK0 = v;
+}
+
+macro pop(v) {
+	v = STK0;
+	STK0 = STK1;
+	STK1 = STK2;
+	STK2 = STK3;
+}
+
+macro addacc(v) {
+	OV = OV | scarry(ACC, v);
+	ACC = ACC + v;
+}
+
+macro subacc(v) {
+	OV = OV | sborrow(ACC, v);
+	ACC = ACC - v;
+}
+
+:^instruction is phase=0 & instruction [ phase=1; arpkc=arp_k; arpvc=arp_v; dpkc=dp_k; dpvc=dp_v; ] {}
+
+with : phase=1 {
+
+:ADD mem^sh^nxt is op4=0x0 & mem & sh & nxt { local v:4 = sext(mem) << sh; addacc(v); build nxt; }
+:SUB mem^sh^nxt is op4=0x1 & mem & sh & nxt { local v:4 = sext(mem) << sh; subacc(v); build nxt; }
+:LAC mem^sh^nxt is op4=0x2 & mem & sh & nxt { ACC = sext(mem) << sh; build nxt; }
+:SAR rr, mem^nxt is op7=0x18 & rr & mem & nxt { mem = rr; build nxt; }
+:LAR rr, mem^nxt is op7=0x1c & rr & mem & nxt { rr = mem; build nxt; }
+:IN mem, pan^nxt is op5=0x08 & pa & pan & mem & nxt { mem = *[io]:2 pa:2; build nxt; }
+:OUT mem, pan^nxt is op5=0x09 & pa & pan & mem & nxt { *[io]:2 pa:2 = mem; build nxt; }
+:SACL mem^nxt is op5=0x0a & mem & nxt { mem = ACCL; build nxt; }
+:SACH mem^sh3^nxt is op5=0x0b & mem & sh3 & nxt { local v:4 = ACC << sh3; mem = v(2); build nxt; }
+:ADDH mem^nxt is op8=0x60 & ia & mem & nxt { local v:4 = zext(mem) << 16; addacc(v); build nxt; }
+:ADDS mem^nxt is op8=0x61 & mem & nxt { local v:4 = zext(mem); addacc(v); build nxt; }
+:SUBH mem^nxt is op8=0x62 & mem & nxt { local v:4 = zext(mem) << 16; subacc(v); build nxt; }
+:SUBS mem^nxt is op8=0x63 & mem & nxt { local v:4 = zext(mem); subacc(v); build nxt; }
+:SUBC mem^nxt is op8=0x64 & mem & nxt {
+	local d:4 = ACC - (zext(mem) << 15);
+	if (d s< 0) goto <keep>;
+	ACC = (d << 1) + 1;
+	goto <done>;
+	<keep>
+	ACC = ACC << 1;
+	<done>
+	build nxt;
+}
+:ZALH mem^nxt is op8=0x65 & mem & nxt { ACC = zext(mem) << 16; build nxt; }
+:ZALS mem^nxt is op8=0x66 & mem & nxt { ACC = zext(mem); build nxt; }
+:TBLR mem^nxt is op8=0x67 & mem & nxt { local a:2 = ACCL & 0xfff; mem = *[prog]:2 a; STK3 = STK2; build nxt; }
+:LARP narv is op15=0x3440 & narv [ arp_k=1; arp_v=narv; globalset(inst_next, arp_k); globalset(inst_next, arp_v); ] { ARP = narv; }
+:MAR mem^nxt is op8=0x68 & mem & nxt { build mem; build nxt; }
+:DMOV mema^nxt is op8=0x69 & mema & nxt { local a:2 = mema; *[data]:2 (a + 1) = *[data]:2 a; build nxt; }
+:LT mem^nxt is op8=0x6a & mem & nxt { TREG = mem; build nxt; }
+:LTD mema^nxt is op8=0x6b & mema & nxt {
+	local a:2 = mema;
+	TREG = *[data]:2 a;
+	*[data]:2 (a + 1) = TREG;
+	addacc(PREG);
+	build nxt;
+}
+:LTA mem^nxt is op8=0x6c & mem & nxt { TREG = mem; addacc(PREG); build nxt; }
+:MPY mem^nxt is op8=0x6d & mem & nxt { PREG = sext(TREG) * sext(mem); build nxt; }
+:LDPK k1 is op15=0x3700 & k1 [ dp_k=1; dp_v=k1; globalset(inst_next, dp_k); globalset(inst_next, dp_v); ] { DP = k1; }
+:LDP mem^nxt is op8=0x6f & mem & nxt [ dp_k=0; globalset(inst_next, dp_k); ] { local v:2 = mem; local lo:1 = v:1; DP = lo & 1; build nxt; }
+:LARK rr, k8 is op7=0x38 & rr & k8 { rr = k8; }
+:XOR mem^nxt is op8=0x78 & mem & nxt { ACCL = ACCL ^ mem; build nxt; }
+:AND mem^nxt is op8=0x79 & mem & nxt { ACC = ACC & zext(mem); build nxt; }
+:OR mem^nxt is op8=0x7a & mem & nxt { ACCL = ACCL | mem; build nxt; }
+:LST mem^nxt is op8=0x7b & mem & nxt [ arp_k=0; dp_k=0; globalset(inst_next, arp_k); globalset(inst_next, dp_k); ] {
+	local s:2 = mem;
+	OV = ((s >> 15) & 1) != 0;
+	OVM = ((s >> 14) & 1) != 0;
+	local hi:1 = s(1);
+	ARP = hi & 1;
+	local lo:1 = s:1;
+	DP = lo & 1;
+	build nxt;
+}
+:SST memp1^nxt is op8=0x7c & memp1 & nxt {
+	local ov:2 = zext(OV);
+	local ovm:2 = zext(OVM);
+	local im:2 = zext(INTM);
+	local ap:2 = zext(ARP);
+	local dp:2 = zext(DP);
+	memp1 = (ov << 15) | (ovm << 14) | (im << 13) | 0x1efe | (ap << 8) | dp;
+	build nxt;
+}
+:TBLW mem^nxt is op8=0x7d & mem & nxt { local a:2 = ACCL & 0xfff; *[prog]:2 a = mem; STK3 = STK2; build nxt; }
+:LACK k8 is op8=0x7e & k8 { ACC = k8; }
+:NOP is op16=0x7f80 { }
+:DINT is op16=0x7f81 { INTM = 1; }
+:EINT is op16=0x7f82 { INTM = 0; }
+:ABS is op16=0x7f88 { if (ACC s>= 0) goto inst_next; ACC = -ACC; }
+:ZAC is op16=0x7f89 { ACC = 0; }
+:ROVM is op16=0x7f8a { OVM = 0; }
+:SOVM is op16=0x7f8b { OVM = 1; }
+:CALA is op16=0x7f8c { local t:2 = ACCL & 0xfff; push(inst_next); call [t]; }
+:RET is op16=0x7f8d { local r:2 = 0; pop(r); return [r]; }
+:PAC is op16=0x7f8e { ACC = PREG; }
+:APAC is op16=0x7f8f { addacc(PREG); }
+:SPAC is op16=0x7f90 { subacc(PREG); }
+:PUSH is op16=0x7f9c { push(ACCL & 0xfff); }
+:POP is op16=0x7f9d { local v:2 = 0; pop(v); ACC = zext(v & 0xfff); }
+:MPYK k13 is op3=0x4 & k13 { PREG = sext(TREG) * k13; }
+:BANZ addr is op16=0xf400 & arcur ; addr { local z:1 = (arcur & 0x1ff) == 0; ardec(arcur); if (z) goto inst_next; goto addr; }
+:BV addr is op16=0xf500 ; addr { if (OV == 0) goto inst_next; OV = 0; goto addr; }
+:BIOZ addr is op16=0xf600 ; addr { local b:1 = bio(); if (b == 0) goto addr; }
+:CALL addr is op16=0xf800 ; addr { push(inst_next); call addr; }
+:B addr is op16=0xf900 ; addr { goto addr; }
+:BLZ addr is op16=0xfa00 ; addr { if (ACC s< 0) goto addr; }
+:BLEZ addr is op16=0xfb00 ; addr { if (ACC s<= 0) goto addr; }
+:BGZ addr is op16=0xfc00 ; addr { if (ACC s> 0) goto addr; }
+:BGEZ addr is op16=0xfd00 ; addr { if (ACC s>= 0) goto addr; }
+:BNZ addr is op16=0xfe00 ; addr { if (ACC != 0) goto addr; }
+:BZ addr is op16=0xff00 ; addr { if (ACC == 0) goto addr; }
+
+}

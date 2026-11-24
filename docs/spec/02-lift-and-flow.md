@@ -5494,6 +5494,33 @@ the half load and store), with the options of the F/D generation (see
 Zvfh adds no encodings: the vector FP instructions in `riscv.rvv.sinc` cover SEW 16, as user
 operations. The vector accrued flags (fflags, vxsat) are not written, as in the scalar lift.
 
+### RISC-V Svinval, hypervisor fences, Zalasr, Zfbfmin, Smrnmi and Ssctr
+
+These fill decode gaps that `tools/sail_sleigh_compare.py decode` against llvm-objdump showed:
+- **Svinval and hypervisor fences.** `riscv.svinval.sinc` is generated from the Sail model
+  (`extensions/H/hext_insts.sail`, `extensions/Svinval/svinval_insts.sail`). It holds
+  `hfence.vvma`/`hfence.gvma`, `sinval.vma`, `hinval.vvma`/`hinval.gvma` as user operations
+  over `rs1` and `rs2`, and `sfence.w.inval`/`sfence.inval.ir` with no effect.
+- **Hypervisor loads and stores.** In `riscv.priv.sinc` these now print as LLVM does:
+  `hlv.b rd,(rs1)` and `hsv.b rs2,(rs1)`.
+- **Zalasr.** `riscv.zalasr.sinc` adds the load-acquire forms `l{b,h,w,d}.aq`/`.aqrl` and the
+  store-release forms `s{b,h,w,d}.rl`/`.aqrl`. Each is a plain load or store; the ordering is
+  not modelled.
+- **Zfbfmin.** `riscv.zfbfmin.sinc`, also generated, holds `fcvt.bf16.s` and `fcvt.s.bf16`.
+  Both are user operations whose result is written NaN-boxed, and `fcvt.s.bf16` prints no
+  rounding mode.
+- **Smrnmi and Ssctr.** `mnret` returns to `mnepc`; `mnscratch`, `mnepc`, `mncause` and
+  `mnstatus` now have names. `sctrclr` (Ssctr) replaces the pre-1.10 `sfence.vm` on its
+  encoding.
+- **Not done.** Q (128-bit FP) stays undecoded: it needs a language with 16-byte f registers. CSR
+  operands print as numbers where LLVM prints names, and `jalr` and `fence` print in Ghidra's
+  form.
+
+The generator's opaque fallback now writes a result only to `rd`/`frd`, so a fence takes all its
+operands as inputs. It also boxes the result of a conversion to S or H by the format after
+`fcvt.`, which affects `fcvt.s.w`/`fcvt.h.l`... with a static rounding mode in `riscv.fd.sinc`
+and `riscv.zfh.sinc`.
+
 ### RISC-V F and D
 
 `riscv.fd.sinc` decodes the F and D extensions. It is generated from the Sail model's

@@ -98,6 +98,15 @@ becomes one constructor per cube.
 '^fcvt\.(s|d)\.h$=rne'`. A half bound past the half range is the infinity of its sign; a signed
 lower bound is the largest negative finite half, so only -inf clamps low.
 
+`riscv.svinval.sinc` comes from `extensions/H/hext_insts.sail,extensions/Svinval/svinval_insts.sail` with
+`--exts rv_h,rv64_h,rv_svinval,rv_svinval_h --only '^(hfence|hinval|sinval|sfence\.(w\.inval|inval\.ir))' --opaque-fallback`
+(the hypervisor loads and stores stay hand-written: their execute clause does not compile).
+`riscv.zfbfmin.sinc` comes from `extensions/FD/fdext_regs.sail,extensions/FD/fext_insts.sail,extensions/bfloat16/zfbfmin_utils.sail,extensions/bfloat16/zfbfmin_insts.sail`
+with `--exts rv_zfbfmin --only '^fcvt\.(bf16\.s|s\.bf16)$' --opaque-fallback --unbox exact --dyn-rounding rne --drop-display '^fcvt\.s\.bf16$=rne'`.
+Zimop is not generated: its `encdec` clause splits the operand into typed pieces
+(`mop_30 : bits(1) @ ...`), which the parser does not read. Zca, Zcb and Zcmop are 16-bit, which
+the generator does not lay out, and Zcmp/Zcmt and Zalasr are not in the Sail model yet.
+
 `riscv.zfa.sinc` comes from `extensions/FD/zfa_insts.sail` with
 `--exts rv_f_zfa,rv_d_zfa,rv_zfh_zfa,rv32_d_zfa --display-table constantidx=fliConstS --opaque-fallback`.
 For floating point, the compiler maps `encdec_freg` fields to `frd`/`frs1`/`frs2`/`frs3`,

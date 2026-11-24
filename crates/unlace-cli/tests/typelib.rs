@@ -119,3 +119,72 @@ fn an_image_of_another_target_is_unchanged() {
         assert_eq!(auto, off, "{name}");
     }
 }
+
+/// One IDA type-library entry (format 0x12, 32-bit ordinal).
+fn til_entry(name: &str, ordinal: u32, tinfo: &[u8], names: &[&str]) -> Vec<u8> {
+    let mut e = 0x7fff_ffffu32.to_le_bytes().to_vec();
+    e.extend_from_slice(name.as_bytes());
+    e.push(0);
+    e.extend(ordinal.to_le_bytes());
+    e.extend_from_slice(tinfo);
+    e.extend([0, 0]);
+    for n in names {
+        e.push(u8::try_from(n.len() + 1).unwrap());
+        e.extend_from_slice(n.as_bytes());
+    }
+    e.extend([0, 0, 0]);
+    e
+}
+
+fn til_bucket(entries: &[Vec<u8>]) -> Vec<u8> {
+    let data = entries.concat();
+    let mut b = u32::try_from(entries.len()).unwrap().to_le_bytes().to_vec();
+    b.extend(u32::try_from(data.len()).unwrap().to_le_bytes());
+    b.extend(data);
+    b
+}
+
+/// An IDA type library declaring `poll` over a `pollfd` whose members are
+/// renamed, the `.til` twin of `typelib_custom.ktl`.
+fn pollfd_til() -> Vec<u8> {
+    let pollfd = [0x0d, (3 << 3) + 1, 0x14, 0x13, 0x13];
+    let mut poll = vec![0x0c, 0x30, 0x17, 4, 0x0a, 0x3d, 7];
+    poll.extend_from_slice(b"pollfd");
+    poll.extend([0x25, 0x17]);
+    let mut b = b"IDATIL".to_vec();
+    b.extend(0x12u32.to_le_bytes());
+    b.extend(0u32.to_le_bytes());
+    b.push(4);
+    b.extend_from_slice(b"test");
+    b.push(0);
+    b.extend([6, 0x31, 4, 1, 4, 0]);
+    b.extend(til_bucket(&[til_entry(
+        "poll",
+        2,
+        &poll,
+        &["fds", "nfds", "timeout"],
+    )]));
+    b.extend(til_bucket(&[til_entry(
+        "pollfd",
+        1,
+        &pollfd,
+        &["descriptor", "wanted", "got"],
+    )]));
+    b
+}
+
+#[test]
+fn an_ida_type_library_is_read_like_a_library_file() {
+    let image = fixture("typelib_x86_64");
+    let til = common::scratch_file("pollfd", "til");
+    std::fs::write(&til, pollfd_til()).unwrap();
+    let c = kuna(&[
+        "decompile",
+        &image,
+        "wait_readable",
+        "--option",
+        "typelib",
+        til.to_str().unwrap(),
+    ]);
+    assert!(c.contains("return v1.got & 1;"), "{c}");
+}

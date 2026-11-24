@@ -3,6 +3,8 @@
 mod arcv2_loops;
 #[path = "c28x_raw.rs"]
 mod c28x_raw;
+#[path = "chip8.rs"]
+mod chip8;
 mod common;
 #[path = "m6800_family.rs"]
 mod m6800_family;

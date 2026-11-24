@@ -1,0 +1,154 @@
+# CHIP-8 and SUPER-CHIP 1.1 interpreter bytecode.
+# Written from the CHIP-8 instruction set as documented in the RCA COSMAC VIP
+# manual (1978) and the SUPER-CHIP 1.1 documentation (Erik Bryntse, 1991).
+# CHIP8_VIP selects the original COSMAC VIP quirks; CHIP8_SCHIP the SUPER-CHIP 1.1 ones.
+
+define endian=big;
+define alignment=2;
+
+define space ram type=ram_space size=2 default;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=1 [ V0 V1 V2 V3 V4 V5 V6 V7 V8 V9 VA VB VC VD VE VF ];
+define register offset=0x10 size=2 [ I PC SP ];
+define register offset=0x16 size=1 [ DT ST ];
+
+define token instr(16)
+  op    = (12,15)
+  vx    = (8,11)
+  xi    = (8,11)
+  vy    = (4,7)
+  n     = (0,3)
+  kk    = (0,7)
+  low8  = (0,7)
+  imm12 = (0,11)
+  low12 = (0,11)
+;
+
+attach variables [ vx vy ] [ V0 V1 V2 V3 V4 V5 V6 V7 V8 V9 VA VB VC VD VE VF ];
+
+define pcodeop clearScreen;
+define pcodeop machineCall;
+define pcodeop random;
+define pcodeop drawSprite;
+define pcodeop keyPressed;
+define pcodeop waitKey;
+define pcodeop fontAddress;
+@ifdef CHIP8_SCHIP
+define pcodeop scrollDown;
+define pcodeop scrollRight;
+define pcodeop scrollLeft;
+define pcodeop exitInterpreter;
+define pcodeop lowResolution;
+define pcodeop highResolution;
+define pcodeop bigFontAddress;
+define pcodeop saveFlags;
+define pcodeop loadFlags;
+@endif
+
+Addr: imm12 is imm12 { export *:2 imm12; }
+Skip: loc is epsilon [ loc = inst_next + 2; ] { export *:2 loc; }
+
+StoreRegs: is xi=0 { *:1 (I + 0) = V0; }
+StoreRegs: is xi=1 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; }
+StoreRegs: is xi=2 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; }
+StoreRegs: is xi=3 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; }
+StoreRegs: is xi=4 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; *:1 (I + 4) = V4; }
+StoreRegs: is xi=5 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; *:1 (I + 4) = V4; *:1 (I + 5) = V5; }
+StoreRegs: is xi=6 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; *:1 (I + 4) = V4; *:1 (I + 5) = V5; *:1 (I + 6) = V6; }
+StoreRegs: is xi=7 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; *:1 (I + 4) = V4; *:1 (I + 5) = V5; *:1 (I + 6) = V6; *:1 (I + 7) = V7; }
+StoreRegs: is xi=8 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; *:1 (I + 4) = V4; *:1 (I + 5) = V5; *:1 (I + 6) = V6; *:1 (I + 7) = V7; *:1 (I + 8) = V8; }
+StoreRegs: is xi=9 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; *:1 (I + 4) = V4; *:1 (I + 5) = V5; *:1 (I + 6) = V6; *:1 (I + 7) = V7; *:1 (I + 8) = V8; *:1 (I + 9) = V9; }
+StoreRegs: is xi=10 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; *:1 (I + 4) = V4; *:1 (I + 5) = V5; *:1 (I + 6) = V6; *:1 (I + 7) = V7; *:1 (I + 8) = V8; *:1 (I + 9) = V9; *:1 (I + 10) = VA; }
+StoreRegs: is xi=11 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; *:1 (I + 4) = V4; *:1 (I + 5) = V5; *:1 (I + 6) = V6; *:1 (I + 7) = V7; *:1 (I + 8) = V8; *:1 (I + 9) = V9; *:1 (I + 10) = VA; *:1 (I + 11) = VB; }
+StoreRegs: is xi=12 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; *:1 (I + 4) = V4; *:1 (I + 5) = V5; *:1 (I + 6) = V6; *:1 (I + 7) = V7; *:1 (I + 8) = V8; *:1 (I + 9) = V9; *:1 (I + 10) = VA; *:1 (I + 11) = VB; *:1 (I + 12) = VC; }
+StoreRegs: is xi=13 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; *:1 (I + 4) = V4; *:1 (I + 5) = V5; *:1 (I + 6) = V6; *:1 (I + 7) = V7; *:1 (I + 8) = V8; *:1 (I + 9) = V9; *:1 (I + 10) = VA; *:1 (I + 11) = VB; *:1 (I + 12) = VC; *:1 (I + 13) = VD; }
+StoreRegs: is xi=14 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; *:1 (I + 4) = V4; *:1 (I + 5) = V5; *:1 (I + 6) = V6; *:1 (I + 7) = V7; *:1 (I + 8) = V8; *:1 (I + 9) = V9; *:1 (I + 10) = VA; *:1 (I + 11) = VB; *:1 (I + 12) = VC; *:1 (I + 13) = VD; *:1 (I + 14) = VE; }
+StoreRegs: is xi=15 { *:1 (I + 0) = V0; *:1 (I + 1) = V1; *:1 (I + 2) = V2; *:1 (I + 3) = V3; *:1 (I + 4) = V4; *:1 (I + 5) = V5; *:1 (I + 6) = V6; *:1 (I + 7) = V7; *:1 (I + 8) = V8; *:1 (I + 9) = V9; *:1 (I + 10) = VA; *:1 (I + 11) = VB; *:1 (I + 12) = VC; *:1 (I + 13) = VD; *:1 (I + 14) = VE; *:1 (I + 15) = VF; }
+
+LoadRegs: is xi=0 { V0 = *:1 (I + 0); }
+LoadRegs: is xi=1 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); }
+LoadRegs: is xi=2 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); }
+LoadRegs: is xi=3 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); }
+LoadRegs: is xi=4 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); V4 = *:1 (I + 4); }
+LoadRegs: is xi=5 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); V4 = *:1 (I + 4); V5 = *:1 (I + 5); }
+LoadRegs: is xi=6 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); V4 = *:1 (I + 4); V5 = *:1 (I + 5); V6 = *:1 (I + 6); }
+LoadRegs: is xi=7 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); V4 = *:1 (I + 4); V5 = *:1 (I + 5); V6 = *:1 (I + 6); V7 = *:1 (I + 7); }
+LoadRegs: is xi=8 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); V4 = *:1 (I + 4); V5 = *:1 (I + 5); V6 = *:1 (I + 6); V7 = *:1 (I + 7); V8 = *:1 (I + 8); }
+LoadRegs: is xi=9 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); V4 = *:1 (I + 4); V5 = *:1 (I + 5); V6 = *:1 (I + 6); V7 = *:1 (I + 7); V8 = *:1 (I + 8); V9 = *:1 (I + 9); }
+LoadRegs: is xi=10 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); V4 = *:1 (I + 4); V5 = *:1 (I + 5); V6 = *:1 (I + 6); V7 = *:1 (I + 7); V8 = *:1 (I + 8); V9 = *:1 (I + 9); VA = *:1 (I + 10); }
+LoadRegs: is xi=11 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); V4 = *:1 (I + 4); V5 = *:1 (I + 5); V6 = *:1 (I + 6); V7 = *:1 (I + 7); V8 = *:1 (I + 8); V9 = *:1 (I + 9); VA = *:1 (I + 10); VB = *:1 (I + 11); }
+LoadRegs: is xi=12 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); V4 = *:1 (I + 4); V5 = *:1 (I + 5); V6 = *:1 (I + 6); V7 = *:1 (I + 7); V8 = *:1 (I + 8); V9 = *:1 (I + 9); VA = *:1 (I + 10); VB = *:1 (I + 11); VC = *:1 (I + 12); }
+LoadRegs: is xi=13 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); V4 = *:1 (I + 4); V5 = *:1 (I + 5); V6 = *:1 (I + 6); V7 = *:1 (I + 7); V8 = *:1 (I + 8); V9 = *:1 (I + 9); VA = *:1 (I + 10); VB = *:1 (I + 11); VC = *:1 (I + 12); VD = *:1 (I + 13); }
+LoadRegs: is xi=14 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); V4 = *:1 (I + 4); V5 = *:1 (I + 5); V6 = *:1 (I + 6); V7 = *:1 (I + 7); V8 = *:1 (I + 8); V9 = *:1 (I + 9); VA = *:1 (I + 10); VB = *:1 (I + 11); VC = *:1 (I + 12); VD = *:1 (I + 13); VE = *:1 (I + 14); }
+LoadRegs: is xi=15 { V0 = *:1 (I + 0); V1 = *:1 (I + 1); V2 = *:1 (I + 2); V3 = *:1 (I + 3); V4 = *:1 (I + 4); V5 = *:1 (I + 5); V6 = *:1 (I + 6); V7 = *:1 (I + 7); V8 = *:1 (I + 8); V9 = *:1 (I + 9); VA = *:1 (I + 10); VB = *:1 (I + 11); VC = *:1 (I + 12); VD = *:1 (I + 13); VE = *:1 (I + 14); VF = *:1 (I + 15); }
+
+:CLS is op=0 & low12=0x0E0 { clearScreen(); }
+:RET is op=0 & low12=0x0EE { ra:2 = *:2 SP; SP = SP + 2; return [ra]; }
+:SYS imm12 is op=0 & imm12 { machineCall(imm12:2); }
+
+@ifdef CHIP8_SCHIP
+:SCD n is op=0 & xi=0 & vy=0xC & n { scrollDown(n:1); }
+:SCR is op=0 & low12=0x0FB { scrollRight(); }
+:SCL is op=0 & low12=0x0FC { scrollLeft(); }
+:EXIT is op=0 & low12=0x0FD { exitInterpreter(); goto inst_start; }
+:LOW is op=0 & low12=0x0FE { lowResolution(); }
+:HIGH is op=0 & low12=0x0FF { highResolution(); }
+@endif
+
+:JP Addr is op=1 & Addr { goto Addr; }
+:CALL Addr is op=2 & Addr { SP = SP - 2; *:2 SP = inst_next; call Addr; }
+:SE vx, kk is op=3 & vx & kk & Skip { if (vx == kk) goto Skip; }
+:SNE vx, kk is op=4 & vx & kk & Skip { if (vx != kk) goto Skip; }
+:SE vx, vy is op=5 & vx & vy & n=0 & Skip { if (vx == vy) goto Skip; }
+:LD vx, kk is op=6 & vx & kk { vx = kk; }
+:ADD vx, kk is op=7 & vx & kk { vx = vx + kk; }
+
+:LD vx, vy is op=8 & vx & vy & n=0 { vx = vy; }
+@ifdef CHIP8_VIP
+:OR vx, vy is op=8 & vx & vy & n=1 { vx = vx | vy; VF = 0; }
+:AND vx, vy is op=8 & vx & vy & n=2 { vx = vx & vy; VF = 0; }
+:XOR vx, vy is op=8 & vx & vy & n=3 { vx = vx ^ vy; VF = 0; }
+@else
+:OR vx, vy is op=8 & vx & vy & n=1 { vx = vx | vy; }
+:AND vx, vy is op=8 & vx & vy & n=2 { vx = vx & vy; }
+:XOR vx, vy is op=8 & vx & vy & n=3 { vx = vx ^ vy; }
+@endif
+:ADD vx, vy is op=8 & vx & vy & n=4 { c:1 = carry(vx, vy); vx = vx + vy; VF = c; }
+:SUB vx, vy is op=8 & vx & vy & n=5 { nb:1 = vx >= vy; vx = vx - vy; VF = nb; }
+:SUBN vx, vy is op=8 & vx & vy & n=7 { nb:1 = vy >= vx; vx = vy - vx; VF = nb; }
+@ifdef CHIP8_VIP
+:SHR vx, vy is op=8 & vx & vy & n=6 { b:1 = vy & 1; vx = vy >> 1; VF = b; }
+:SHL vx, vy is op=8 & vx & vy & n=0xE { b:1 = vy >> 7; vx = vy << 1; VF = b; }
+@else
+:SHR vx is op=8 & vx & n=6 { b:1 = vx & 1; vx = vx >> 1; VF = b; }
+:SHL vx is op=8 & vx & n=0xE { b:1 = vx >> 7; vx = vx << 1; VF = b; }
+@endif
+:SNE vx, vy is op=9 & vx & vy & n=0 & Skip { if (vx != vy) goto Skip; }
+:LD "I", imm12 is op=0xA & imm12 { I = imm12; }
+@ifdef CHIP8_VIP
+:JP "V0", imm12 is op=0xB & imm12 { dest:2 = imm12 + zext(V0); goto [dest]; }
+@else
+:JP imm12, vx is op=0xB & imm12 & vx { dest:2 = imm12 + zext(vx); goto [dest]; }
+@endif
+:RND vx, kk is op=0xC & vx & kk { r:1 = random(); vx = r & kk; }
+:DRW vx, vy, n is op=0xD & vx & vy & n { rows:1 = n; VF = drawSprite(vx, vy, I, rows); }
+:SKP vx is op=0xE & vx & low8=0x9E & Skip { k:1 = keyPressed(vx); if (k != 0) goto Skip; }
+:SKNP vx is op=0xE & vx & low8=0xA1 & Skip { k:1 = keyPressed(vx); if (k == 0) goto Skip; }
+:LD vx, "DT" is op=0xF & vx & low8=0x07 { vx = DT; }
+:LD vx, "K" is op=0xF & vx & low8=0x0A { vx = waitKey(); }
+:LD "DT", vx is op=0xF & vx & low8=0x15 { DT = vx; }
+:LD "ST", vx is op=0xF & vx & low8=0x18 { ST = vx; }
+:ADD "I", vx is op=0xF & vx & low8=0x1E { I = I + zext(vx); }
+:LD "F", vx is op=0xF & vx & low8=0x29 { I = fontAddress(vx); }
+:LD "B", vx is op=0xF & vx & low8=0x33 { *:1 I = vx / 100; *:1 (I + 1) = (vx / 10) % 10; *:1 (I + 2) = vx % 10; }
+@ifdef CHIP8_VIP
+:LD "[I]", vx is op=0xF & vx & xi & low8=0x55 & StoreRegs { build StoreRegs; I = I + xi + 1; }
+:LD vx, "[I]" is op=0xF & vx & xi & low8=0x65 & LoadRegs { build LoadRegs; I = I + xi + 1; }
+@else
+:LD "[I]", vx is op=0xF & vx & low8=0x55 & StoreRegs { build StoreRegs; }
+:LD vx, "[I]" is op=0xF & vx & low8=0x65 & LoadRegs { build LoadRegs; }
+:LD "HF", vx is op=0xF & vx & low8=0x30 { I = bigFontAddress(vx); }
+:LD "R", vx is op=0xF & vx & xi & low8=0x75 { saveFlags(xi:1); }
+:LD vx, "R" is op=0xF & vx & xi & low8=0x85 { loadFlags(xi:1); }
+@endif

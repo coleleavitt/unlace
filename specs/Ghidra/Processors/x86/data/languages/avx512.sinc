@@ -15942,36 +15942,15 @@ define pcodeop vfmsubadd231ph_avx512fp16 ;
 	ZmmReg1 = ZmmResult;
 }
 
-ClassNeg: "Negative" is imm8_6=1 & imm8_7=0 {}
-ClassNeg: "Negative,SNAN" is imm8_6=1 & imm8_7=1 {}
-ClassNeg: "SNAN" is imm8_6=0 & imm8_7=1 {}
 
-ClassDenorm: "Denormal" is imm8_5=1 & imm8_6_7=0 {}
-ClassDenorm: "Denormal,"^ClassNeg is imm8_5=1 & ClassNeg {}
-ClassDenorm: ClassNeg is imm8_5=0 & ClassNeg {}
 
-ClassNegI: "NegINF" is imm8_4=1 & imm8_5_7=0 {}
-ClassNegI: "NegINF,"^ClassDenorm is imm8_4=1 & ClassDenorm {}
-ClassNegI: ClassDenorm is imm8_4=0 & ClassDenorm {}
 
-ClassPosI: "PosINF" is imm8_3=1 & imm8_4_7=0 {}
-ClassPosI: "PosINF,"^ClassNegI is imm8_3=1 & ClassNegI {}
-ClassPosI: ClassNegI is imm8_3=0 & ClassNegI {}
 
-ClassNegZ: "NegZero" is imm8_2=1 & imm8_3_7=0 {}
-ClassNegZ: "NegZero,"^ClassPosI is imm8_2=1 & ClassPosI {}
-ClassNegZ: ClassPosI is imm8_2=0 & ClassPosI {}
 
-ClassPosZ: "PosZero" is imm8_1=1 & imm8_2_7=0 {}
-ClassPosZ: "PosZero,"^ClassNegZ is imm8_1=1 & ClassNegZ {}
-ClassPosZ: ClassNegZ is imm8_1=0 & ClassNegZ {}
 
-ClassQNaN: "QNAN" is imm8_0=1 & imm8_1_7=0 {}
-ClassQNaN: "QNAN,"^ClassPosZ is imm8_0=1 & ClassPosZ {}
-ClassQNaN: ClassPosZ is imm8_0=0 & ClassPosZ {}
-ClassQNaN: ""     is imm8=0 {}
 
-ClassOp: "{"^ClassQNaN^"}" is ClassQNaN & imm8 { export *[const]:1 imm8;}
+# VFPCLASSPH/SH print the class mask as an immediate, like VFPCLASSPS/PD and LLVM.
+ClassOp: imm8 is imm8 { export *[const]:1 imm8;}
 # VFPCLASSPH 5-332 PAGE 2156 LINE 118786
 define pcodeop vfpclassph_avx512fp16 ;
 :VFPCLASSPH KReg_reg^XmmOpMask, XmmReg2_m128_m16bcst, ClassOp is $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F3A) & $(VEX_W0) & XmmOpMask; byte=0x66; KReg_reg ... & XmmReg2_m128_m16bcst; ClassOp

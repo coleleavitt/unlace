@@ -1,0 +1,3 @@
+# C-SKY CK860: ABIv2 with FPUv3, little endian.
+@define CSKY_FPUV3 ""
+@include "csky.sinc"

@@ -71,7 +71,7 @@ long csjmp(long a0,long a1)
 
 ## The tests
 
-`tests/stages/re-constselectjump.xml` is the two-pass case (pass 1 default = the
+`tests/stages/re-constselectjump.toml` is the two-pass case (pass 1 default = the
 computed call, pass 2 `option constselectjump on` = the switch plus both arms);
 `tests/cli/conditional-indirect-branches-hide.json` is the promoted regression
 probe over a vendored 5 KB fixture. Gates: `make test` PARITY OK 675/675

@@ -4989,7 +4989,7 @@ is b_1230=0b1011010110000000000 & b_31=1 & b_1011=0b10 & Rn_GPR64 & Rd_GPR64
 :rmif Rn_GPR64, UImm6, NZCVImm_uimm4
 is b_2131=0b10111010000 & b_1014=0b00001 & b_04=0b0 & Rn_GPR64 & UImm6 & NZCVImm_uimm4
 {
-	tmp:8 = Rn_GPR64 >> UImm6;
+	tmp:8 = (Rn_GPR64 >> UImm6) | (Rn_GPR64 << (64 - UImm6));
 	condMask:1 = NZCVImm_uimm4;
 	set_NZCV(tmp,condMask);
 }
@@ -5450,11 +5450,11 @@ is sf=1 & op.dp3_op54=0 & b_2428=0x1b & op.dp3_op31=1 & Rm_GPR32 & op.dp3_o0=1 &
 define pcodeop sveStreamingModeStart;
 define pcodeop sveStreamingModeStop;
 
-SVAmodeOp: "SM" is b_0911=0x1 & b_08 { svcr[0,1] = b_08; }
-SVAmodeOp: "ZA" is b_0911=0x2 & b_08 { svcr[1,1] = b_08; }
+SVAmodeOp: "sm" is b_0911=0x1 & b_08 { svcr[0,1] = b_08; }
+SVAmodeOp: "za" is b_0911=0x2 & b_08 { svcr[1,1] = b_08; }
 SVAmodeOp: ""   is b_0911=0x3 & b_08 { svcr[0,1] = b_08; svcr[1,1] = b_08; }
 
-:smstart "{"^SVAmodeOp^"}"
+:smstart SVAmodeOp
 is b_1131=0x1aa068 & SVAmodeOp & b_08=1 & b_0507=0x3 & op4=0x1f {
 	build SVAmodeOp;
 	sveStreamingModeStart();
@@ -5467,7 +5467,7 @@ is b_1131=0x1aa068 & SVAmodeOp & b_08=1 & b_0507=0x3 & op4=0x1f {
 # xd503407f/mask=xfffff9ff NOT MATCHED BY ANY CONSTRUCTOR
 # b_0031=110101010000001101000..001111111
 
-:smstop "{"^SVAmodeOp^"}"
+:smstop SVAmodeOp
 is b_1131=0x1aa068 & SVAmodeOp & b_08=0 & b_0507=0x3 & op4=0x1f {
 	sveStreamingModeStop();
 }

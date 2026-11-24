@@ -1,0 +1,94 @@
+# Swift metadata names on folded code (`swiftmetadata`, identical code
+# folding).
+#
+# Issue: the linker folds functions with identical bodies, so one address
+# is the target of several metadata records of unrelated types, and the
+# pass named it after whichever record sorted first (on a large
+# third-party iOS app, 2,350 of the 57,147 named functions; 2,037 of them claimed by more
+# than one type) while the layout arm typed its `self` after another.
+#
+# Stage / sub-stage: P1 external-refinement, the Swift metadata pass
+# (`unlace-analysis/src/analyzers/swift/mod.rs`, `resolve_claims`).
+#
+# P0 assertion: `option swiftmetadata on|off` (the fix needs no option
+# of its own: it only corrects wrong output).
+#
+# Both passes clear the harness architecture and load the real fixture
+# `swift_icf_elf` (x86-64 ELF, swiftc 6.3 with function sections and the
+# linker's identical code folding, `llvm-strip` strip all). Pass 1
+# (`option swiftmetadata off`) shows the placeholders. Pass 2 (on): the
+# function both `Alpha` and `Beta` use for `Tagged.tag.getter` is
+# `<*:icffix.Tagged>.requirement#0` with no `self` parameter; `Delta`'s
+# `tag.getter` and `describe()` share one function,
+# `<icffix.Delta:icffix.Tagged>.requirement#0.merged#2`, also without a
+# `self`; `Gamma`'s own `key.getter` keeps its name and its typed `self`.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_icf_elf',
+    'option swiftmetadata off',
+    'read symbols',
+    'load addr 0x27f0',
+    'decompile',
+    'print C',
+    'load addr 0x2ab0',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_icf_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x27f0',
+    'decompile',
+    'print C',
+    'load addr 0x2ab0',
+    'decompile',
+    'print C',
+    'load addr 0x2850',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'swiftmetadata off: the folded getter is a placeholder'
+count = 1
+literal = 'sub_27f0(void)'
+
+[[match]]
+name = 'swiftmetadata off: the folded pair is a placeholder'
+count = 1
+literal = 'sub_2ab0(void)'
+
+[[match]]
+name = 'swiftmetadata on: a member two types share is named without a type and takes no self'
+count = 1
+literal = '<*:icffix.Tagged>.requirement#0(void)'
+
+[[match]]
+name = 'swiftmetadata on: two members of one type sharing a body are named after the first with the count'
+count = 1
+literal = '<icffix.Delta:icffix.Tagged>.requirement#0.merged#2(void)'
+
+[[match]]
+name = 'swiftmetadata on: an unshared witness getter keeps its name and typed self'
+count = 1
+literal = '<icffix.Gamma:icffix.Keyed>.requirement#0(swift.type_metadata *Self,void *witness_table,icffix.Gamma *self)'
+
+[[match]]
+name = "swiftmetadata on: no type's self is pretended on folded code"
+count = 0
+regex = 'icffix\.Alpha \*self|icffix\.Beta \*self|icffix\.Delta \*self'

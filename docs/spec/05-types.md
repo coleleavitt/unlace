@@ -196,7 +196,7 @@ completion link and so one identity, but not one shape, so a type carrying such
 a link orders by id, then after every unlinked type of that id, then by the
 link's address, never by shape: the order of two identity classes cannot depend
 on which member of a class is compared.
-`tests/stages/kuna-typeorder.xml` pins the order on a DWARF fixture.
+`tests/stages/kuna-typeorder.toml` pins the order on a DWARF fixture.
 
 (kuna) **A record the C grammar declared completes the pointers built to it.**
 Upstream completes a struct or union in place (`TypeFactory::setFields`), so a
@@ -2377,7 +2377,7 @@ and filler) over every byte range the reader accessed without claiming
 the reader's own layout. The reader it turns away mints its own shape even
 though a live structure contains it, so that name is superseded from the start,
 and the convergence sweep below decides the reader again to the same answer.
-`tests/stages/structsynth-unclaimed-bytes.xml` pins the shape. Over the 101
+`tests/stages/structsynth-unclaimed-bytes.toml` pins the shape. Over the 101
 builds of the first five sets measured below, the veto changes one parameter: `rsyslogd` O2
 `timeConvertToUTC`'s `struct syslogTime *`, whose 4-byte store at offset 7 a
 same-size layout with bytes at 7 to 10 answered, keeps its own shape and loses 4
@@ -2547,7 +2547,7 @@ union the factory declines to complete is not part of it: the lookup falls
 through to the reader's own claims, exactly as `off` mints them
 (`ledger.rs (lookup_or_mint)`, traced by `KUNA_STRUCTMERGE_TRACE=1`).
 
-`tests/stages/structmerge-siblings.xml` is the
+`tests/stages/structmerge-siblings.toml` is the
 two-arm witness. Like the rest of the ledger the merge needs one process holding
 the whole program: `unlace decompile` numbers each function's records from
 `struct_0` again, and a `--jobs N` worker answers through the shard replay, which
@@ -2821,7 +2821,7 @@ arms, nesting unchanged) and the headers carry 539 structures instead of 500.
 
 **The default is `locals`.** Flipping it moves no datatest assertion
 (675/675) and no stage assertion of another feature (1306/1306; the only new
-keys are `tests/stages/structsynth-locals.xml`'s, whose first pass pins
+keys are `tests/stages/structsynth-locals.toml`'s, whose first pass pins
 `param`), and `PYTHONPATH=. python3 -m scripts.repipe.clitests` is 221/221. The 444-slice typesweep is 1,472
 perfect in both arms (aggregate 3,773.19) with no function better or worse and
 no function's scored variable count changed. Of its 65,377 scored decisions
@@ -2901,7 +2901,7 @@ min-of-15 over `fmt`, `ls` and `sort` at O2 and the 1.3 MB `bash` O2), against a
 
 **`nest` stays opt-in.** Against `param` on the same build it moves no datatest
 assertion (675/675) and no stage assertion of any other feature (the only new
-keys are `tests/stages/structsynth-nest.xml`'s, whose first pass pins `param`).
+keys are `tests/stages/structsynth-nest.toml`'s, whose first pass pins `param`).
 Over 15 binaries and 7,819 functions (x86-64 coreutils `fmt`, `ls`, `sort` and
 `du`, findutils `find`, grep, gzip, bzip2, diffutils `diff` and tar, and the ARM32
 firmwares `chibios` at O0 and O2-noinline and `freertos` at O0) 93 functions
@@ -4311,11 +4311,11 @@ store of `0x80000001038e4750` as its forty-byte text, and the empty literal
 (`0xe000000000000000` beside a zero count word) as `""`; the count word is left,
 because the code really stores it. At `auto` the rule acts when the image's
 source language is Swift; `always` drops the language test; `off` keeps the
-constants. The stage test `tests/stages/kuna-swiftstr.xml` runs the stripped
-`swift_types_elf` off and on; `tests/stages/kuna-swiftstrcsel.xml` runs the
+constants. The stage test `tests/stages/kuna-swiftstr.toml` runs the stripped
+`swift_types_elf` off and on; `tests/stages/kuna-swiftstrcsel.toml` runs the
 arm64 Mach-O `macho_swift_strsel_arm64`, whose literals are picked by `csel`
 pairs, a switch and a selected store, off, on, and on with `swiftmetadata`;
-`tests/stages/kuna-swiftstrcmp.xml` runs `macho_swift_strcmp_arm64`, whose
+`tests/stages/kuna-swiftstrcmp.toml` runs `macho_swift_strcmp_arm64`, whose
 `s == "…"` tests compare both words inline, off and on.
 
 The **language-facet table** the rule consults is the multilang W3 plane's

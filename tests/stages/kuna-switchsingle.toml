@@ -1,0 +1,49 @@
+# RuleSwitchSingle: a jump table whose every entry is one address.
+#
+# Ported from decompiler/cpp/ruleaction.cc (RuleSwitchSingle). A BRANCHIND
+# whose block has a single out-edge and a recovered, labelled jump table
+# becomes a BRANCH to that address; the table and any switch structure are
+# dropped, with a header warning when the cases were not one constant entry.
+# The rule was registered but returned before reading the table.
+#
+# Authored x86-64 (nasm): `and edi,3` bounds a four-entry relative table whose
+# entries all point at one block.
+#
+# Fixed: `return y + 5;` with the "all go to same destination" warning.
+# Before: `switch(x & 3) { default: return y + 5; }`.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'f' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '83e703488d0512000000486314b84801c2ffe289f083c005c3909090f7fffffff7fffffff7fffffff7ffffff'
+
+[script]
+commands = [
+    'parse line extern int4 f(int4 x, int4 y);',
+    'lo fu f',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'SWITCHSINGLE #1: the one-destination switch is removed with its warning'
+count = 1
+literal = 'Switch with 1 destination removed at 0x00100011 : 4 cases all go to same destination'
+
+[[match]]
+name = 'SWITCHSINGLE #2: no switch remains'
+count = 0
+literal = 'switch'
+
+[[match]]
+name = 'SWITCHSINGLE #3: the shared case body is the straight-line return'
+count = 1
+regex = '^  return y \+ 5;'

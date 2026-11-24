@@ -6495,7 +6495,13 @@ moves.
   dropping it would leave a leading `::`, an empty scope component the symbol
   table rejects outright. `<X as Y>` keeps the type `X` (so the method stays
   attached to the type that defines it), `<impl X as Y>` keeps the trait `Y`,
-  and `<impl Trait for Type>` keeps `Type`. Angle brackets nest, so this is a
+  and `<impl Trait for Type>` keeps `Type`. An inherent method's qualified self
+  type at the start of the name (`<serde_json::de::Deserializer<R>>::parse_integer`)
+  keeps its path too, and loses only its own generics
+  (`serde_json::de::Deserializer::parse_integer`); it was dropped like a generic list,
+  which left the bare `parse_integer` for 2,154 of fclones' 8,341 functions. A
+  self type with no path (`<[T]>::sort_unstable`, a reference, a tuple) still
+  resolves to nothing. Angle brackets nest, so this is a
   depth-tracking scan iterated to a fixed point rather than a pattern match.
 
   A this-adjusting thunk (`_ZTh`, `_ZTv`, `_ZTc`) is named for the function it
@@ -9463,7 +9469,18 @@ both
   right after an `endbr64`/`endbr32` or AArch64 `bti` landing pad (an empty
   function matches every empty-function module), a name found at two
   entries goes only to the strictly best scored one or to none, and a name the
-  binary already carries is not given again. The names go out through the FID
+  binary already carries is not given again. A module's name is the library
+  object's linkage spelling, so it is demangled the way the loader demangles an
+  installed symbol (`flirt/mod.rs (display_name)`): a Rust library's
+  `_RNvNtCs…_4core6option13expect_failed` is `core::option::expect_failed`, and a jump
+  thunk's `j_` prefix moves onto the leaf (`__rustc::j___rdl_alloc`) so the thunk
+  and its target stay apart. A referenced name is compared both raw and
+  demangled, since the binary's own names are demangled. Measured with a `.sig`
+  made by `unlace flirt make` from the Rust 1.95 `libstd`/`libcore`/`liballoc` rlibs
+  on the stripped rustc 1.94 nightly `json_typegen` (`--option listing on`): 137
+  functions named, mangled before; against its unstripped twin 132 are right, 3 are
+  the `__rust_alloc` jump stubs named `j_` for the `__rdl_alloc` they jump to, and 2
+  are functions with another one's identical code. The names go out through the FID
   rename stream and its placeholder label gate. FID and FLIRT names are code
   signature guesses (`FidMatch::by_signature`): the commit applies the metadata
   renames (PDB, Objective-C, Swift) first, so a guess never replaces one, and

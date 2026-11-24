@@ -3642,6 +3642,26 @@ test = "elfroute_msp430_elf_pick"
 address = "pick"
 expect = ["0x2c", "scale7("]
 
+# switchextent: a byte selector with no range check reads its table up to the next jump table,
+# of the function (csplit's regcomp) or of the next function (an OCaml match's last table).
+[[family]]
+name = "switchextent_x86_byte"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/switchextent_x86/tables.elf"
+forbid = ["halt_baddata", "jump-as-call"]
+
+[[family.function]]
+test = "switchextent_x86_byte_selector_ends_at_own_next_table"
+address = "bytesel"
+expect = ["case 2:", "0x15"]
+forbid = ["case 3:"]
+
+[[family.function]]
+test = "switchextent_x86_last_table_ends_at_next_functions_table"
+address = "lastsel"
+expect = ["case 3:", "return 0x21;"]
+forbid = ["case 4:"]
+
 # Hexagon ET_REL (EM_HEXAGON) routes to Hexagon:LE:32:default (#706); B22_PCREL calls, 32_6_X/16_X/6_X globals (#737).
 [[family]]
 name = "elfroute_hexagon_o"
@@ -4392,6 +4412,30 @@ test = "tricore_tc18_gcc_shl_reg"
 address = "g_shlv"
 expect = ["a0 << "]
 forbid = ["-(int)"]
+
+# A 64-bit argument takes an aligned d4/d5 or d6/d7 pair, so the second double of f(double,double)
+# is the parameter in e6, not an uninitialised local, and an int before a double leaves d5 empty.
+[[family]]
+name = "tricore_tc18_gcc_double"
+loader = "auto"
+args = ["--target", "tricore:LE:32:tc18"]
+fixture = "crates/unlace-cli/tests/fixtures/tricore_tc18_gcc/gcc_double.elf"
+forbid = ["// e6"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_double_second_arg"
+address = "g_dadd"
+expect = ["double g_dadd(double a0,double a1)", "return a0 + a1;"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_double_msub"
+address = "g_dmsub"
+expect = ["double g_dmsub(double a0,double a1)", "a0 * a1"]
+
+[[family.function]]
+test = "tricore_tc18_gcc_int_then_double"
+address = "g_idmul"
+expect = ["(double)a0 * a2"]
 
 # The AVR-Dx languages (avr8xt.sla, I/O at data 0, one pspec per series from Microchip's AVR-Dx_DFP)
 # name an `in` from the VPORT window and an `sts` to the PORT block.

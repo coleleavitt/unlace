@@ -49,6 +49,8 @@ def from_float(x, size):
 class State:
     # {LOAD/STORE space id: "register" or "ram"}; set from slaregs.space_names, unknown ids are ram
     space_ids: dict = {}
+    # registers the language keeps in a RAM space (slaregs.mem_registers): get/set go to memory
+    mem_names: frozenset = frozenset()
 
     def __init__(self, big_endian, fill, regs):
         self.big = big_endian
@@ -97,11 +99,11 @@ class State:
 
     def get(self, name):
         off, size = self.regs[name]
-        return self.read("register", off, size)
+        return self.read("ram" if name in self.mem_names else "register", off, size)
 
     def set(self, name, val):
         off, size = self.regs[name]
-        self.write("register", off, size, val)
+        self.write("ram" if name in self.mem_names else "register", off, size, val)
 
 
 def _vn(v):

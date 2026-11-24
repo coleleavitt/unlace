@@ -3031,4 +3031,78 @@ class Cr16(ObjdumpArch):
         return 0x10 <= a < 0x1000000
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru(), Cr16())}
+AVR_DENY = re.compile(
+    r"^(br[a-z]+|rjmp|rcall|jmp|call|ijmp|icall|eijmp|eicall|ret|reti|sbrc|sbrs|sbic|sbis|cpse|"
+    r"sleep|break|wdr|spm|lpm|elpm|push|pop|des|xch|las|lac|lat|nop|in|out|sbi|cbi|"
+    r"bset|bclr|se[a-z]|cl[a-z]|cli|sei)$"
+)
+AVR_NAMES = [f"R{i}" for i in range(26)] + ["Xlo", "Xhi", "Ylo", "Yhi", "Zlo", "Zhi"]
+
+
+class Avr(ObjdumpArch):
+    """Atmel AVR (avr5) against gdb's avr simulator (--oracle gdbsim). R0..R31 are data addresses
+    0..31 in both (the language keeps them in its mem space, so mem_registers), the simulator's
+    SRAM is at 0x800000 + address. All eight SREG flags are compared. Branches, skips, calls,
+    returns, program-memory loads, I/O-space moves, push/pop and the SREG bit set/clear forms are
+    not generated."""
+    name = "avr"
+    lang = "avr8:LE:16:extended"
+    elf_machine = 83
+    elf_flags = 5
+    base = 0x1000
+    big = False
+    pc = "PC"
+    gprs = [(n, None) for n in AVR_NAMES]
+    pc_const = None
+    flags_reg = "sreg"
+    flag_bits = {"C": 0, "Z": 1, "N": 2, "V": 3, "S": 4, "H": 5, "T": 6, "I": 7}
+    deny = AVR_DENY
+    mem_registers = True
+    gdbsim = "avr"
+    gdb_pc = "pc"
+    gdb_data_bias = 0x800000
+    sim_regnums = dict([(n, (i, 1)) for i, n in enumerate(AVR_NAMES)] + [("sreg", (32, 1)), ("pc", (34, 4))])
+
+    def unicorn(self):
+        raise NotImplementedError("avr runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("avr:5", False, 4, b"\x00\x00", 2)
+        return self._dis
+
+    def sleigh_field(self, name, shift, width):
+        return name + "flg", 0
+
+    def rand_reg(self, rng, bits):
+        return rng.choice([0, 1, 0x7F, 0x80, 0xFF, rng.getrandbits(8)])
+
+    def addr_ok(self, a):
+        return 0 <= a < 0x10000
+
+    def ignored(self, mnemonic, operands, state):
+        # a Y/Z displacement past 0xffff wraps differently in the 16-bit mem space and in sim/avr,
+        # and a load into the pointer itself changes it before it is read back here
+        m = re.search(r"([YZ])\+(\d+)", operands)
+        if mnemonic in ("ldd", "std") and m:
+            p = m.group(1)
+            dest = operands.split(",")[0].strip()
+            if dest in ({"Y": ("r28", "r29"), "Z": ("r30", "r31")}[p]):
+                return {"*"}
+            ptr = self._init[p + "hi"] << 8 | self._init[p + "lo"]
+            if ptr + int(m.group(2)) > 0xFFFF:
+                return {"*"}
+        # sim/avr takes FMUL*'s C from bit 15 after the shift; the manual takes it before
+        if mnemonic.startswith("fmul"):
+            return {"C"}
+        return set()
+
+    def fix_inputs(self, init, rng):
+        self._init = {n: v & 0xFF for n, v in init.items()}
+
+    def mem_ignored(self, a):
+        # SP and SREG are I/O registers in the simulator's SRAM; the language keeps them apart
+        return 0x5D <= a <= 0x5F
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru(), Cr16(), Avr())}

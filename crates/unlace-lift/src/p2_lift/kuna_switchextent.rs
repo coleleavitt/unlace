@@ -467,6 +467,10 @@ impl Fold<'_> {
                     Some(Val::Entry { width: 1 | 2, .. }),
                     Some(Val::Const(base) | Val::Indexed { base, .. }),
                 ) => Some(Val::Indexed { base, cases: None }),
+                // An unknown register plus a small immediate is a field or
+                // displacement (`movzbl 1(%rdi)`), not a table and its index.
+                (Some(Val::Const(_)), None) if small_imm(vars.first()) => None,
+                (None, Some(Val::Const(_))) if small_imm(vars.get(1)) => None,
                 (Some(Val::Const(base) | Val::Indexed { base, .. }), None)
                 | (None, Some(Val::Const(base) | Val::Indexed { base, .. })) => {
                     Some(Val::Indexed { base, cases: None })
@@ -530,6 +534,22 @@ impl Fold<'_> {
     }
 }
 
+/// Whether `vn` is an immediate within 4 KiB of zero (`1(%rdi)`, OCaml's
+/// `-0x8(%rbx)` header byte): an offset, never a table address.
+fn small_imm(vn: Option<&VarnodeData>) -> bool {
+    vn.is_some_and(|vn| {
+        vn.space
+            .as_ref()
+            .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
+            && is_small(vn.offset, vn.size)
+    })
+}
+
+/// Whether `v`, read as a signed `size`-byte value, lies within 4 KiB of zero.
+fn is_small(v: u64, size: u32) -> bool {
+    (sign_extend(v, size) as i64).unsigned_abs() < 0x1000
+}
+
 fn key_of(vn: &VarnodeData) -> Option<Key> {
     let space = vn.space.as_ref()?;
     match space.get_type() {
@@ -577,11 +597,16 @@ pub fn table_read(fd: &Funcdata, load: OpId) -> Option<(u64, u64, VarnodeId)> {
         return None;
     }
     let (a, b) = (add.get_in(0)?, add.get_in(1)?);
-    let (table, scaled) = match (constant(fd, a), constant(fd, b)) {
+    let (table, scaled) = match (base_constant(fd, a), base_constant(fd, b)) {
         (Some(t), None) => (t, b),
         (None, Some(t)) => (t, a),
         _ => return None,
     };
+    // A field read next to the table read (the selector byte at `8(%rax)`) adds
+    // a small displacement, not a table.
+    if is_small(table, fd.vbank().get(ptr)?.get_size() as u32) {
+        return None;
+    }
     let mut index = scaled;
     let mut stride = 1;
     loop {
@@ -610,6 +635,43 @@ pub fn table_read(fd: &Funcdata, load: OpId) -> Option<(u64, u64, VarnodeId)> {
 fn constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
     let v = fd.vbank().get(vn)?;
     v.is_constant().then(|| v.get_offset())
+}
+
+/// A constant, also through copies and through a loop-carried register: a
+/// MULTIEQUAL each of whose inputs is that constant or the MULTIEQUAL itself
+/// (gnulib's regcomp keeps its table base in `%rbx` across the loop, and an
+/// INDIRECT carries it past each call).
+fn base_constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
+    let mut seen: Vec<VarnodeId> = Vec::new();
+    let mut work = vec![vn];
+    let mut value = None;
+    while let Some(at) = work.pop() {
+        if seen.contains(&at) {
+            continue;
+        }
+        if seen.len() >= 16 {
+            return None;
+        }
+        seen.push(at);
+        if let Some(c) = constant(fd, at) {
+            if value.is_some_and(|v| v != c) {
+                return None;
+            }
+            value = Some(c);
+            continue;
+        }
+        let op = fd.obank().get(fd.vbank().get(at)?.get_def()?)?;
+        match op.code() {
+            OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT => work.push(op.get_in(0)?),
+            OpCode::CPUI_MULTIEQUAL => {
+                for i in 0..op.num_input() {
+                    work.push(op.get_in(i)?);
+                }
+            }
+            _ => return None,
+        }
+    }
+    value
 }
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).

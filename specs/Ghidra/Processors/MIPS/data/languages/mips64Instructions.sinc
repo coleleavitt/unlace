@@ -421,9 +421,16 @@
 	RD = tmpS[64,64];
 }
 
-:dlsa RD, RSsrc, RTsrc, SAV		is $(AMODE) & prime=0x00 & fct=0x15 & spec3=0 & SAV & RD & RSsrc & RTsrc {
+:dlsa RD, RSsrc, RTsrc, SAV		is $(AMODE) & REL6=1 & prime=0x00 & fct=0x15 & spec3=0 & SAV & RD & RSsrc & RTsrc {
 	RD = (RSsrc << SAV) + RTsrc;
 }
+
+# Release 5 MSA brings LSA/DLSA to pre-R6 cores; Octeon has no MSA.
+@ifndef OCTEON
+:dlsa RD, RSsrc, RTsrc, SAV		is $(AMODE) & REL6=0 & prime=0x00 & fct=0x15 & spec3=0 & SAV & RD & RSsrc & RTsrc {
+	RD = (RSsrc << SAV) + RTsrc;
+}
+@endif
 
 :ldpc RS, S18L3					is $(AMODE) & REL6=1 & prime=0x3B & pcrel2=0x6 & RS & S18L3 {
 	tmp:8 = inst_start + sext(S18L3);

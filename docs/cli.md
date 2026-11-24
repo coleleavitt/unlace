@@ -157,9 +157,9 @@ them once per load into the program's load options (`LoadOptions`,
 `crates/unlace-middle/src/p0_knowledge/loadoptions.rs`). The program keeps those
 values for its analysis commit and its decompiles. `--option NAME VALUE` and the
 console's `option NAME VALUE` set the same option for one run. The variables are
-meant as input only, and a console child process gets them through its own
-environment. Some `option` arms and the in-process `decompile-all` load still
-write them while `notes/load-options-plan.md` is in progress.
+input only: unlace does not write them to carry an option. The CLI keeps
+`--image` and the image-selection `--option` values in its own invocation
+settings, and hands them to a child process through that child's environment.
 
 | Variable | Option |
 |---|---|

@@ -110,6 +110,9 @@ pub fn main() -> ExitCode {
         eprintln!("error: {e}");
         return ExitCode::from(2);
     }
+    // Every gate read on this thread reads the invocation's load options; a
+    // newer scope below replaces it once the image selection is complete.
+    let _image = loadtime::invocation_options().enter();
     let follow_limit = match followimages::take_limit(&mut rest) {
         Ok(limit) => limit,
         Err(e) => {
@@ -135,7 +138,9 @@ pub fn main() -> ExitCode {
     };
     let rest = &mut prepared.args;
     loadtime::export_image_selection(rest);
+    let _selection = loadtime::invocation_options().enter();
     followimages::apply(sub, rest, follow_limit);
+    let _invocation = loadtime::invocation_options().enter();
     let rest = rest.as_slice();
     runtime_hints::note_for_invocation(sub, rest);
     let code = match sub {

@@ -2,14 +2,16 @@
 //! (`docs/architecture/ctree.md` §3).
 //!
 //! One statement per structured block: a `BlockList`/`BlockGraph` is a [`StmtKind::Seq`], a leaf
-//! is [`StmtKind::Ops`], a `BlockIf` is an [`StmtKind::If`] whose `pre` and condition both name
-//! the condition block (an if-goto's `then` is a [`StmtKind::Goto`]), a `BlockWhileDo` a
+//! is [`StmtKind::Ops`], a `BlockIf` is an [`StmtKind::If`] whose `pre` is the condition block's
+//! statements (built like any block and marked as a condition) and whose condition names the
+//! condition block (an if-goto's `then` is a [`StmtKind::Goto`]), a `BlockWhileDo` a
 //! [`StmtKind::For`] when it carries its initializer and iterator ops and a [`StmtKind::While`]
 //! otherwise, a `BlockDoWhile` a [`StmtKind::DoWhile`] whose condition is its body's branch, a
 //! `BlockInfLoop` a [`StmtKind::Loop`], a `BlockSwitch` a [`StmtKind::Switch`] over its
-//! components, and a `BlockGoto` a sequence of its body and a [`StmtKind::Goto`]. Condition and
-//! multi-goto blocks are [`StmtKind::Opaque`] and print from their origin block. The builder decides nothing a
-//! printer would print differently: a tree printed node for node gives the block printer's text.
+//! components, a `BlockGoto` a sequence of its body and a [`StmtKind::Goto`], and a condition or
+//! multi-goto block a sequence of its components. Nesting past the depth bound is
+//! [`StmtKind::Opaque`] and prints from its origin block. The builder decides nothing a printer
+//! would print differently: a tree printed node for node gives the block printer's text.
 
 use crate::block::{BlockKind, BlockType};
 use crate::context::{BlockId, OpId};
@@ -67,6 +69,14 @@ fn build_stmt(fd: &Funcdata, tree: &mut CTree, blk: BlockId, depth: usize) -> St
                 .collect();
             StmtKind::Switch { parts }
         }
+        BlockType::Condition | BlockType::MultiGoto => {
+            let list: Vec<BlockId> = block.get_list().to_vec();
+            let children = list
+                .into_iter()
+                .map(|child| build_stmt(fd, tree, child, depth + 1))
+                .collect();
+            StmtKind::Seq(children)
+        }
         BlockType::Goto if block.get_size() >= 1 => {
             let body = build_stmt(fd, tree, block.get_block(0), depth + 1);
             match block.get_goto_target() {
@@ -88,6 +98,15 @@ fn build_stmt(fd: &Funcdata, tree: &mut CTree, blk: BlockId, depth: usize) -> St
     tree.add_stmt(kind, Some(blk))
 }
 
+/// The statements of the condition block `cond_block`, marked as a condition
+/// ([`CTree::mark_conditions_from`]).
+fn build_cond(fd: &Funcdata, tree: &mut CTree, cond_block: BlockId, depth: usize) -> StmtId {
+    let first = tree.stmt_count();
+    let pre = build_stmt(fd, tree, cond_block, depth);
+    tree.mark_conditions_from(first);
+    pre
+}
+
 fn build_while(fd: &Funcdata, tree: &mut CTree, blk: BlockId, depth: usize) -> StmtKind {
     let block = fd.sblocks_ref().block(blk);
     if block.get_size() < 2 {
@@ -95,7 +114,7 @@ fn build_while(fd: &Funcdata, tree: &mut CTree, blk: BlockId, depth: usize) -> S
     }
     let cond_block = block.get_block(0);
     let body = build_stmt(fd, tree, block.get_block(1), depth + 1);
-    let pre = tree.add_stmt(StmtKind::Opaque, Some(cond_block));
+    let pre = build_cond(fd, tree, cond_block, depth + 1);
     let cond = tree.add_expr(ExprKind::Branch(cond_block));
     match (block.get_initialize_op(), block.get_iterate_op()) {
         (Some(init), Some(step)) => StmtKind::For {
@@ -132,7 +151,7 @@ fn build_if(fd: &Funcdata, tree: &mut CTree, blk: BlockId, depth: usize) -> Stmt
     };
     let els = (block.get_if_goto_target().is_none() && size == 3)
         .then(|| build_stmt(fd, tree, block.get_block(2), depth + 1));
-    let pre = tree.add_stmt(StmtKind::Opaque, Some(cond_block));
+    let pre = build_cond(fd, tree, cond_block, depth + 1);
     let cond = tree.add_expr(ExprKind::Branch(cond_block));
     StmtKind::If {
         pre: Some(pre),

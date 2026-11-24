@@ -6199,6 +6199,27 @@ block printer makes for the same block, so the output with the option on is the
 output with it off; a difference is a bug. The tree is dropped when the body is
 printed.
 
+
+## (unlace) Per-stage attribution of text cleanup removals (`UNLACE_STAGE_DIFF`)
+
+With `UNLACE_STAGE_DIFF` set in the environment, each text-level cleanup stage that
+runs after the C text is rendered reports the statement lines it removed or added,
+to stderr. The stage diff is a multiset diff of the trimmed, non-blank lines before
+and after the stage, so a line the stage moves or rewrites appears once as removed
+and once as added, and a repeated line reports its multiplicity. Each line names the
+stage and the function's entry address; per stage and direction at most 40 lines
+print, then a `note=diff-capped` line gives the full totals. The helper is
+`unlace_emit::stagediff` (`p9_emit/stagediff.rs`) and is off by default: with the
+variable unset the only cost is one environment lookup per stage.
+
+The stages wired today are the ones main runs on the rendered text: the cookie
+literal-return rewrite (`rewrite_cookie_literal_returns`, the `/GS` checker inline),
+called from `print_c`, `print_c_with_provenance` and `print_c_with_srcmap`. The
+structured printer's own passes that change the rendered text inside
+`doc_function_full` are not yet traced, so a statement they drop is not attributed.
+Output is unchanged with the variable set.
+||||||| a49947cd2a
+
 ## (unlace) Part macros (`partmacro`) -- `option partmacro`, default off
 
 With `option partmacro on` (C output; default off), a SUBPIECE that takes a part of an

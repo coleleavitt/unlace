@@ -74,13 +74,13 @@ non-static and every output deterministic (no uninitialised reads, no evaluation
 dependence between a call and its arguments), and print each result with `P`. Run it, check the
 new rows, and re-save the baseline in the same change.
 
-## Running it in CI (proposal: its own tier)
+## Running it in CI
 
 `notes/test-tiers.md` already names T4, semantic compile-and-run, as the only tier that checks
 meaning; today its only members are crate tests that each compile one fixture. This suite is T4
 as a corpus:
 
-- **Where:** a `semantic` job in `nightly.yml`, not in the per-PR `gates` job yet. It needs gcc,
+- **Where:** the `semantic` job in `nightly.yml` (added 2026-11-24, not yet run on CI), not the per-PR `gates` job. It needs gcc,
   clang, zig and qemu-user-static on the runner (all apt or a release tarball), and one built
   `unlace` plus the compiled specs, which the nightly already produces.
 - **What fails it:** `run.py --baseline tools/semantic/baseline.json`: a row that passed and stops

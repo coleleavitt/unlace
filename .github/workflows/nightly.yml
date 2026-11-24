@@ -1,23 +1,29 @@
 name: Nightly
 
 # Once a night on main:
-#   tests     -- the Tests workflow, called whole, so the nightly runs exactly the
-#                gates every push runs (parity, stages, spec, CLI, workspace suite).
+#   slow-tests -- the seven workspace tests the Tests workflow's `ci` profile leaves out
+#                 (the `nightly` nextest profile, .config/nextest.toml).
+#   semantic  -- the T4 compile-and-run corpus (tools/semantic) against its baseline: a row that
+#                passed and no longer does fails the job.
 #   decbench  -- a fixed sample of the published decbench dataset (the `optimized`
 #                config) decompiled by tonight's build and by last night's build on
 #                the same runner, one binary at a time (the speed A/B), then scored
 #                with decbench (GED + type_match) and compared with last night's
 #                scores per function.
 #   report    -- one verdict for the night.
-# The design, the statistics, and how to read the report: docs/nightly.md.
+# The Tests workflow's gates run on every push and pull request, so the nightly does not repeat
+# them. The tier table: notes/test-tiers.md. The design, the statistics, and how to read the report:
+# docs/nightly.md.
 #
 # A pull request that edits the harness runs the decbench job (not the tests) so a
 # change to it is proven on a real runner before it merges; only main's runs ever
 # become the next night's baseline.
 
-# unlace: no schedule yet. The decbench arm compares against last night's build or the latest
-# release, and coleleavitt/unlace has neither until the first run; start it from the Actions tab.
+# Scheduled at 07:17 UTC. The decbench arm compares against last night's build; until a scheduled
+# run has left one, scripts/nightly/previous.sh falls back to the latest release.
 on:
+  schedule:
+    - cron: "17 7 * * *"
   workflow_dispatch:
     inputs:
       binaries:
@@ -51,9 +57,137 @@ env:
   SAMPLE_SEED: unlace-nightly-v1
 
 jobs:
-  tests:
+  slow-tests:
+    name: slow tests (nextest profile nightly)
     if: github.event_name != 'pull_request'
-    uses: ./.github/workflows/tests.yml
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    # The same test environment as the Tests workflow's workspace suite (tests.yml, rust-test):
+    # the binaries find the repository and the specs through these variables.
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
+      UNLACE_SLA_CACHE: ${{ github.workspace }}/.sla-cache
+      UNLACE_ROOT: ${{ github.workspace }}
+      UNLACE_SPECS: ${{ github.workspace }}/specs
+      SLEIGHHOME: ${{ github.workspace }}/specs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: nightly-slow-tests
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+
+      - uses: taiki-e/install-action@cargo-nextest
+
+      # Restore only: the Tests workflow's gates job saves this cache on main under the same key.
+      - name: Restore the .sla cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .sla-cache
+          key: sla-v2-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
+
+      # The `nightly` profile (.config/nextest.toml) selects exactly the seven tests that the
+      # `ci` profile leaves out; scripts/check_test_tiers.py keeps the two lists equal.
+      - name: Build and run the slow tests
+        run: |
+          cargo nextest run --workspace --profile nightly \
+            ${{ vars.UNLACE_WEB == 'true' && ' ' || '--exclude unlace-wasm' }}
+
+      - name: Upload the JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-nightly
+          path: target/nextest/nightly/junit.xml
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # The T4 corpus (tools/semantic/README.md): every function of the construct cases is decompiled,
+  # its emitted C compiled in place of the original and run. Fails only when a row that passes in
+  # tools/semantic/baseline.json no longer passes (run.py --baseline); newly passing rows are listed.
+  semantic:
+    name: semantic compile-and-run
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: "0"
+      UNLACE_SLA_CACHE: ${{ github.workspace }}/.sla-cache
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      # gcc and clang build the x86_64 rows; qemu-user runs the aarch64 rows; binutils supplies
+      # nm and objcopy (run.py falls back from llvm-nm and llvm-objcopy to them).
+      - name: Install gcc, clang, qemu-user and binutils
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q gcc clang qemu-user binutils
+
+      # The aarch64 rows link with zig's cc. Pinned to the release the baseline was recorded with
+      # (notes/semantic-results.md).
+      - name: Install zig 0.15.2
+        run: |
+          curl -sSfL https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz -o "$RUNNER_TEMP/zig.tar.xz"
+          mkdir -p "$RUNNER_TEMP/zig"
+          tar -xJf "$RUNNER_TEMP/zig.tar.xz" -C "$RUNNER_TEMP/zig" --strip-components=1
+          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+
+      - name: Record the compilers
+        run: |
+          gcc --version | head -1
+          clang --version | head -1
+          zig version
+          qemu-aarch64 --version | head -1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: nightly-semantic
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+
+      - name: Restore the .sla cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .sla-cache
+          key: sla-v2-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
+
+      - name: Build unlace
+        run: cargo build --release -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli
+
+      - name: Run the semantic suite against its baseline
+        run: |
+          mkdir -p out
+          python3 tools/semantic/run.py --unlace target/release/unlace --sleighpath specs \
+            --config x86_64-gcc,x86_64-clang,aarch64-zig --opt O0,O2 --jobs "$(nproc)" \
+            --baseline tools/semantic/baseline.json --json out/semantic.json --markdown out/semantic.md
+
+      - name: Table for the run summary
+        if: always()
+        run: |
+          if [ -f out/semantic.md ]; then
+            { echo "## Semantic suite (T4)"; echo; cat out/semantic.md; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('out/semantic.json') != ''
+        with:
+          name: semantic-nightly
+          path: out/semantic.*
+          retention-days: 30
 
   decbench:
     name: decbench sample
@@ -189,7 +323,7 @@ jobs:
 
   report:
     name: nightly verdict
-    needs: [tests, decbench]
+    needs: [slow-tests, semantic, decbench]
     if: always() && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -201,7 +335,8 @@ jobs:
 
       - name: Summarize
         env:
-          TESTS: ${{ needs.tests.result }}
+          SLOW: ${{ needs.slow-tests.result }}
+          SEMANTIC: ${{ needs.semantic.result }}
           DECBENCH: ${{ needs.decbench.result }}
         run: |
           regressions=$(python3 -c "import json; print('; '.join(json.load(open('nightly/summary.json'))['regressions']) or 'none')" 2>/dev/null || echo "no decbench result")
@@ -210,8 +345,9 @@ jobs:
             echo
             echo "| check | result |"
             echo "|---|---|"
-            echo "| tests (all gates) | $TESTS |"
+            echo "| slow tests (nextest nightly) | $SLOW |"
+            echo "| semantic suite (T4) | $SEMANTIC |"
             echo "| decbench sample | $DECBENCH |"
             echo "| decbench regressions | $regressions |"
           } >> "$GITHUB_STEP_SUMMARY"
-          [ "$TESTS" = success ] && [ "$DECBENCH" = success ]
+          [ "$SLOW" = success ] && [ "$SEMANTIC" = success ] && [ "$DECBENCH" = success ]

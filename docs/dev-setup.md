@@ -191,7 +191,8 @@ tools/hooks/unlace-ci-gates.sh [fast|parity|full]   # default parity
 ## CI
 
 `.github/workflows/tests.yml` runs on every pull request and every push to `main` (and is
-called whole by the nightly). Its four jobs start together; none waits for another.
+not called by the nightly, which runs its own `slow-tests` and `semantic` jobs; see
+notes/test-tiers.md). Its four jobs start together; none waits for another.
 
 | Job | What it runs | Typical time |
 |---|---|---|

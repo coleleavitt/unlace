@@ -29,7 +29,7 @@ baseline (last night) and cannot gate a PR.
 | `scripts/check_determinism.py` (lint) / `--run` | T3 | `tidy` / `gates` |
 | Crate unit tests and integration suites (`unlace-cli` 398 test files, `unlace-console` 233, `unlace-decomp` 168, `unlace-sleigh` 35, others) | mostly T2; T4 where they compile output | workspace suite (nextest `ci`, 3 partitions) |
 | Tests that build and run what the decompiler emitted (about 129 test files call `cc`/`clang`/`zig`/`rustc`/`go`, nearly all in `unlace-cli/tests`) | T4 | workspace suite |
-| `tools/semantic`: each function of 12 construct programs, decompiled, recompiled in place of the original and run (gcc, clang, zig aarch64; -O0, -O2), vs `tools/semantic/baseline.json` | T4 (corpus) | manual; proposed `nightly.yml` job (`tools/semantic/README.md`), results in `notes/semantic-results.md` |
+| `tools/semantic`: each function of 12 construct programs, decompiled, recompiled in place of the original and run (gcc, clang, zig aarch64; -O0, -O2), vs `tools/semantic/baseline.json` | T4 (corpus) | nightly.yml `semantic` job (since 2026-11-24; `tools/semantic/README.md`), results in `notes/semantic-results.md` |
 | `tests/bug-repro`, `tests/hang-repro` binaries | T5 inputs (a regression check once an issue is fixed) | through the CLI tests that name them |
 | decbench sample (`nightly.yml` `decbench`, `scripts/nightly`), `scripts/quality` | T5 | nightly.yml, manual dispatch only (no schedule yet) |
 | CodSpeed benchmarks (`unlace-bench`) | T5 (speed) | codspeed.yml, every PR and push |
@@ -77,3 +77,21 @@ baseline (last night) and cannot gate a PR.
   (proposal in `tools/semantic/README.md`).
 - **Not moved:** T1 and T2 stay per PR. They are the gates that catch a regression at the PR that
   causes it, and per-file selection and the times artifact make them cheap to iterate on locally.
+
+## Status: what runs where (2026-11-24)
+
+**T1 and T2 run once per event.** `tests.yml`'s `gates` job runs `cargo test --release -p unlace-harness --test parity`, which is both corpora. Nothing else in `tests.yml` runs that binary: `rust-test-build` only archives the test binaries and runs `cargo test --doc`, and the three `rust-test` partitions run `--profile ci`, whose `default-filter` excludes `binary_id(unlace-harness::parity)`. `scripts/check_test_tiers.py` (run through `scripts/tests` in the tidy job) keeps the `nightly` profile's seven tests equal to the `ci` exclusions.
+
+| Tier | Every pull request | Push to main | Nightly (`nightly.yml`, 07:17 UTC, and dispatch) | Daily coverage (`coverage.yml`) |
+|---|---|---|---|---|
+| T1 datatests; golden and ghidra differential | `gates` (parity, once) | `gates` (parity, once) | not run | runs (every test, parity included) |
+| T2 stages, `tests/cli` probes, catalog and spec metadata | `gates` | `gates` | not run | runs |
+| T3 determinism | `tidy` (static lint), `gates` (`--run`) | same | not run | runs |
+| T4 fast crate tests | `rust-test` partitions only for fork PRs and PRs with `full-ci`; skipped for internal PRs | `rust-test` partitions (`ci` profile) | not run | runs |
+| T4 the seven slow tests | not run (excluded from `ci`) | not run | `slow-tests` (`nightly` profile) | runs |
+| T4 semantic corpus (`tools/semantic`) | not run | not run | `semantic` (`--baseline`) | not run |
+| T5 decbench sample | `decbench` only for a PR that edits `nightly.yml` or `scripts/nightly/**` | not run | `decbench` (vs last night's build) | not run |
+
+**Behaviour change.** The nightly no longer calls `tests.yml`, so it no longer repeats the gates and the workspace suite (they already ran on the push to main it builds from). The nightly is now the only scheduled run of the seven slow tests and of the semantic corpus. Its verdict has three rows: slow tests, semantic, decbench.
+
+**Not yet proven on CI.** This change was written without running the workflows. The first manual dispatch of `nightly.yml` is the check: the `semantic` job's "Record the compilers" step prints the versions to copy into `notes/semantic-results.md`, and the zig download is pinned by version but not by checksum. The other pins (gcc and clang) come from the runner image.

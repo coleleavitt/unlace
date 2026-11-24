@@ -701,6 +701,8 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
                 continue;
             }
             let spec = spec.refine_call_from_field(&laid[li].data[off..end], little_endian);
+            let opcode_call =
+                field_is_branch_operand(architecture, &laid[li].data, off, spec.width());
             let special = match reloc.target() {
                 // `.TOC.`, which ELFv2 code reaches `r2` through, is the linker's.
                 RelocationTarget::Symbol(idx) if architecture == Architecture::PowerPc64 => toc
@@ -753,7 +755,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
                     RelocationTarget::Symbol(sym_idx) => {
                         // Instruction branches mark even STT_NOTYPE undefined symbols
                         // as callable externs, including r_types object leaves Unknown.
-                        if spec.targets_code() {
+                        if spec.targets_code() || opcode_call {
                             code_externs.insert(sym_idx);
                         }
                         resolve_symbol(
@@ -1235,6 +1237,28 @@ fn relocation_name(architecture: Architecture, r_type: u32) -> &'static str {
 }
 
 /// Round `value` up to a multiple of `align` (a power of two ≥ 1).
+/// Is the `width`-byte field at `off` the operand of a call or jump, by the
+/// opcode in front of it, where the relocation type itself is a plain data
+/// form? x86 calls an extern through `R_386_PC32`/`R_X86_64_PC32` on the rel32
+/// of `call` (E8), `jmp` (E9) or `jcc` (0F 8x); MSP430 through
+/// `R_MSP430_16_BYTE` on `call #imm` (`12b0`). Such an extern is code and gets
+/// its name, as a PLT-relative one does.
+fn field_is_branch_operand(
+    architecture: Architecture,
+    data: &[u8],
+    off: usize,
+    width: usize,
+) -> bool {
+    match architecture {
+        Architecture::I386 | Architecture::X86_64 if width == 4 && off >= 1 => {
+            matches!(data[off - 1], 0xe8 | 0xe9)
+                || (off >= 2 && data[off - 2] == 0x0f && data[off - 1] & 0xf0 == 0x80)
+        }
+        Architecture::Msp430 if width == 2 && off >= 2 => data[off - 2..off] == [0xb0, 0x12],
+        _ => false,
+    }
+}
+
 /// The ELF `e_machine` of `file`, `None` for any other format.
 fn elf_machine(file: &object::File) -> Option<u16> {
     use object::read::elf::FileHeader;
@@ -1471,6 +1495,34 @@ mod tests {
         let mut a = [0u8; 8];
         a.copy_from_slice(&b[..8]);
         u64::from_le_bytes(a)
+    }
+
+    #[test]
+    fn a_data_relocation_on_a_call_operand_marks_its_target_code() {
+        let call = [0x55, 0xe8, 0, 0, 0, 0];
+        assert!(field_is_branch_operand(Architecture::I386, &call, 2, 4));
+        assert!(field_is_branch_operand(
+            Architecture::X86_64,
+            &[0x0f, 0x84, 0, 0, 0, 0],
+            2,
+            4
+        ));
+        assert!(
+            !field_is_branch_operand(Architecture::I386, &[0xb8, 0, 0, 0, 0], 1, 4),
+            "mov eax, imm32"
+        );
+        assert!(!field_is_branch_operand(Architecture::I386, &call, 0, 4));
+        assert!(field_is_branch_operand(
+            Architecture::Msp430,
+            &[0xb0, 0x12, 0, 0],
+            2,
+            2
+        ));
+        assert!(
+            !field_is_branch_operand(Architecture::Msp430, &[0x3c, 0x40, 0, 0], 2, 2),
+            "mov #imm"
+        );
+        assert!(!field_is_branch_operand(Architecture::Aarch64, &call, 2, 4));
     }
 
     #[test]

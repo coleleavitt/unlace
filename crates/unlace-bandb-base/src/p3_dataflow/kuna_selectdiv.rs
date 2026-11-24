@@ -41,13 +41,13 @@ impl RuleSelectDiv {
     }
 }
 
-fn constant(data: &Funcdata, vn: VarnodeId) -> Option<uintb> {
+pub(crate) fn constant(data: &Funcdata, vn: VarnodeId) -> Option<uintb> {
     let v = data.vbank().get(vn)?;
     v.is_constant().then(|| v.get_offset())
 }
 
 /// `vn` with any chain of `COPY`s that defined it skipped.
-fn source(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
+pub(crate) fn source(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
     let mut vn = vn;
     while let Some(op) = def_of(data, vn, OpCode::CPUI_COPY) {
         match input(data, op, 0) {
@@ -59,20 +59,20 @@ fn source(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
 }
 
 /// Do `a` and `b` hold the same value through `COPY`s?
-fn same(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
+pub(crate) fn same(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
     source(data, a) == source(data, b)
 }
 
-fn def_of(data: &Funcdata, vn: VarnodeId, opc: OpCode) -> Option<OpId> {
+pub(crate) fn def_of(data: &Funcdata, vn: VarnodeId, opc: OpCode) -> Option<OpId> {
     let def = data.vbank().get(vn)?.get_def()?;
     (data.obank().get(def)?.code() == opc).then_some(def)
 }
 
-fn input(data: &Funcdata, op: OpId, slot: int4) -> Option<VarnodeId> {
+pub(crate) fn input(data: &Funcdata, op: OpId, slot: int4) -> Option<VarnodeId> {
     data.obank().get(op)?.get_in(slot)
 }
 
-fn size(data: &Funcdata, vn: VarnodeId) -> int4 {
+pub(crate) fn size(data: &Funcdata, vn: VarnodeId) -> int4 {
     data.vbank().get(vn).map_or(0, |v| v.get_size())
 }
 
@@ -110,7 +110,7 @@ fn last_op(data: &Funcdata, bl: BlockId) -> Option<OpId> {
 
 /// For a two-input MULTIEQUAL, the CBRANCH condition of its block's immediate
 /// dominator and the condition's value on the edge each input arrives by.
-fn select_condition(data: &Funcdata, phi: OpId) -> Option<(VarnodeId, [bool; 2])> {
+pub(crate) fn select_condition(data: &Funcdata, phi: OpId) -> Option<(VarnodeId, [bool; 2])> {
     let graph = data.bblocks_ref();
     let bl = data.obank().get(phi)?.get_parent()?;
     if graph.block(bl).size_in() != 2 || data.obank().get(phi)?.num_input() != 2 {

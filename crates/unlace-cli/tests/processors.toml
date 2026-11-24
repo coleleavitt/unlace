@@ -194,6 +194,77 @@ expect = [
     "return 99;",
 ]
 
+# C-SKY FPUv2 (CSKY:LE:32:v2) built with csky-elf-as -mcpu=ck810f: single-precision
+# multiply-add through fmtvrl/fmfvrl, loads and stores, a compare with zero feeding bt,
+# and the int-to-double conversion.
+[[family]]
+name = "csky_fpuv2"
+language = "CSKY:LE:32:v2"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/fpuv2.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_fpuv2_multiply_add_decompiles"
+address = "0x8000"
+expect = [
+    "return a0 * a1 + a0;",  # fmuls + fadds on the moved-in arguments
+]
+
+[[family.function]]
+test = "csky_fpuv2_compare_and_convert_decompiles"
+address = "0x8028"
+expect = [
+    "if (!(0.0f <= a0))",  # fcmpzhss + bt
+    "return (int)a0;",  # fstosi.rz
+]
+
+[[family.function]]
+test = "csky_fpuv2_int_to_double_decompiles"
+address = "0x8040"
+expect = [
+    "*a1 = (double)a0;",  # fsitod + fstd
+]
+
+# C-SKY FPUv3 (CSKY:LE:32:ck860) built with csky-elf-as -mcpu=ck860f: fr16-fr31, double
+# multiply, and an fmovi constant.
+[[family]]
+name = "csky_fpuv3"
+language = "CSKY:LE:32:ck860"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/fpuv3.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_fpuv3_double_multiply_decompiles"
+address = "0x8016"
+expect = [
+    "*a1 = a0->field_0x0 * a0->field_0x8;",  # fld.64 into fr0 and fr17, fmul.64, fst.64
+]
+
+[[family.function]]
+test = "csky_fpuv3_fmovi_constant_decompiles"
+address = "0x8028"
+expect = [
+    "*a0 = *a0 * 0.5f;",  # fmovi.32 fr1, 0.5
+]
+
+# C-SKY VDSP (CSKY:LE:32:ck810v) built with csky-elf-as -mcpu=ck810v: 128-bit vector
+# loads and stores around a lane add.
+[[family]]
+name = "csky_vdsp"
+language = "CSKY:LE:32:ck810v"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/vdsp.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_vdsp_vector_add_decompiles"
+address = "0x8000"
+expect = [
+    "*a2 = vadd_s32(*a0,*a1);",  # vldq.32, vadd.s32, vstq.32
+]
+
 # The native RCA CDP1802 language (SCRT variant) decompiles a raw image: a
 # store-increment loop through R1 closed by BNZ, returning with SEP R5.
 [[family]]
@@ -2239,3 +2310,102 @@ image = "x86_64_movdr_mod"
 test = "x86_mov_dr_ignores_mod"
 address = "0x0"
 expect = ["return;"]
+
+# The Java Card 3.1 bytecode language decompiles hand-assembled method bodies from a raw
+# image: 16-bit stack words and locals, int pairs, array and field user-ops.
+#
+# `static short sum(short[] a, short n) { short s = 0; for (short i = 0; i < n; i++) s += a[i];
+# return s; }` hand-assembled: sconst_0, sstore_2, sconst_0, sstore_3, sload_3, sload_1,
+# if_scmpge +13, sload_2, aload_0, sload_3, saload, sadd, sstore_2, sinc 3 1, goto -13,
+# sload_2, sreturn.
+[[family]]
+name = "javacard_sum"
+language = "JavaCard:BE:16:3.1"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/javacard/sum.bin"
+
+[[family.function]]
+test = "javacard_short_loop_decompiles"
+address = "0x0"
+expect = [
+    "short sub_0(unsigned short a0,short a1)",
+    "v1 += jc_array_load(a0,v2);",
+    "v2 += 1;",
+    "return v1;",
+]
+
+# `int f(short x) { return x * 1000 + this.f0; }`: sload_1, s2i, sipush 1000, imul,
+# getfield_i_this 0, iadd, ireturn.
+[[family]]
+name = "javacard_field"
+language = "JavaCard:BE:16:3.1"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/javacard/field.bin"
+
+[[family.function]]
+test = "javacard_int_field_decompiles"
+address = "0x0"
+expect = [
+    "return a1 * 1000 + jc_getfield(a0,0);",
+]
+
+# Every opcode that neither branches nor returns, in order with its operands, then
+# impdep1, impdep2 and return.
+[[family]]
+name = "javacard_coverage"
+language = "JavaCard:BE:16:3.1"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/javacard/coverage.bin"
+
+[[family.function]]
+test = "javacard_all_straight_line_opcodes_decode"
+address = "0x0"
+
+# The V8 Ignition (V8 13.6, Node.js 24) language decompiles bytecode arrays printed by
+# `node --print-bytecode` for `fixtures/v8ignition/source.js`: the accumulator and frame
+# registers fold into expressions over user-ops, and Wide operands decode.
+#
+# `f`: a counted for loop with a break (TestLessThan, JumpIfFalse, JumpLoop, Inc).
+[[family]]
+name = "v8ignition_loop"
+language = "V8Ignition:LE:32:13.6"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/v8ignition/loop.bin"
+
+[[family.function]]
+test = "ignition_loop_decompiles"
+address = "0x0"
+expect = [
+    "v2 = js_add(v2,js_mul(v1,a2));",
+    "v1 = js_inc(v1);",
+    "return v2;",
+]
+
+# `g`: named and keyed property loads and a CallProperty2 method call.
+[[family]]
+name = "v8ignition_props"
+language = "V8Ignition:LE:32:13.6"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/v8ignition/props.bin"
+
+[[family.function]]
+test = "ignition_properties_decompile"
+address = "0x0"
+expect = [
+    "v1 = js_getprop(a1,js_const(0));",
+    "return js_add(v1,js_call(js_getprop(a1,js_const(2)),a1,1,2));",
+]
+
+# `w`: AddSmi and MulSmi with Wide-prefixed 16- and 32-bit immediates.
+[[family]]
+name = "v8ignition_wide"
+language = "V8Ignition:LE:32:13.6"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/v8ignition/wide.bin"
+
+[[family.function]]
+test = "ignition_wide_operands_decode"
+address = "0x0"
+expect = [
+    "return js_mul(js_add(a1,300),100000);",
+]

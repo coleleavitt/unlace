@@ -678,6 +678,11 @@ pub fn universal_sched_hooked(
             crate::kuna_x87truncate::RuleX87Truncate::new("analysis")
         ),
         rrow!(
+            "satconvert",
+            "analysis",
+            crate::kuna_satconvert::RuleSatConvert::new("analysis")
+        ),
+        rrow!(
             "selectdiv",
             "analysis",
             crate::kuna_selectdiv::RuleSelectDiv::new("analysis")

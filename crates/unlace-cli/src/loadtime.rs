@@ -9,7 +9,7 @@ use std::ffi::OsString;
 use std::process::Command;
 
 use unlace_decomp::{
-    kuna_calltargettype, kuna_debuglink, kuna_dyldcache, kuna_exporttrie, kuna_goabi,
+    kuna_calltargettype, kuna_debuglink, kuna_delphiabi, kuna_dyldcache, kuna_exporttrie, kuna_goabi,
     kuna_ifuncfpret, kuna_kernelcache, kuna_libctypes, kuna_macho_arm64e, kuna_objcivars,
     kuna_objcsdk, kuna_ppcapu, kuna_sourcelang, kuna_symbolnamechars,
 };
@@ -32,6 +32,7 @@ fn binding(name: &str) -> Option<(&'static str, Encoding)> {
         "ppc32picimports" => (unlace_decomp::kuna_ppc32picimports::ENV, Ppc32Pic),
         "ifuncfpret" => (kuna_ifuncfpret::IFUNCFPRET_ENV, DefaultOn),
         "ppcapu" => (kuna_ppcapu::PPCAPU_ENV, DefaultOff),
+        "delphiabi" => (kuna_delphiabi::DELPHIABI_ENV, DefaultOff),
         "debuglink" => (kuna_debuglink::DEBUGLINK_ENV, DefaultOn),
         "kernelcache" => (kuna_kernelcache::KERNELCACHE_ENV, Kernelcache),
         "kernelcache-boot" => (

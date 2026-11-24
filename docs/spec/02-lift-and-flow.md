@@ -4273,6 +4273,16 @@ bits before the shift. `sha` sets C to the OR of the bits shifted out (the top
 `count` bits left, the low `-count` bits right); `shas` leaves C alone. The 64-bit
 (E register) multiply-accumulate forms set V from the add's signed overflow (unsigned
 carry for `madds.u`). Checked with `tools/difffuzz` against Unicorn.
+
+The q-format 16x16 multiplies (`mul.q`/`mulr.q`/`madd(r)(s).q`/`msub(r)(s).q` on the U/L
+halves) multiply in 32 bits; they truncated the product to 16 bits, and the rounding forms
+cleared the result (`zext(res[16,16] << 16)`). The 64-bit (E register) `madd`, `msub`, `mul`
+families, plain, `.u`, saturating and `.q`, extend the operands before multiplying (they
+truncated the 32x32 product), take V from the 64-bit add's signed overflow (unsigned carry or
+borrow for `.u`) instead of bit 63, and saturate on it; `msubs.u` multiplies (it subtracted).
+The 32-bit `msub.q`/`msubs.q` (32x32 and 32x16) subtract at full precision and then drop the
+low bits, as `madd.q` does, so the result is `D[d] - ceil(product)` rather than
+`D[d] - floor(product)`, matching Unicorn's TriCore core.
 ### AArch64 SVE2 and SVE2.1 (#98)
 
 `specs/Ghidra/Processors/AARCH64/data/languages/AARCH64_sve2.sinc` decodes

@@ -5827,7 +5827,7 @@ over the two arms' ops). `emit_block_if` asks the tree for that form
 (`ite_form`): a rewritten `if` prints as its assignment, any other as an `if`;
 without a tree it runs the two tests itself.
 
-With `option boolreturn on` (C output; default off), the same pass turns an
+With `option boolreturn on` (C output; default on since issue #9's DecBench A/B), the same pass turns an
 `if`/`else` without a goto whose body and else are each a `BlockCopy` leaf with
 no label line and no comment printing exactly one statement, a `RETURN` of the
 constant `1` in one arm and `0` in the other, into a return statement whose value

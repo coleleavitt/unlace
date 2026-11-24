@@ -559,6 +559,15 @@ pub trait Decoder {
     /// no child to open.
     fn open_element(&mut self) -> KunaResult<u32>;
 
+    /// (kuna) Skip the next child element of the current parent, appending its
+    /// encoded bytes (start record to end record) to `out`, so it can be
+    /// decoded later from those bytes alone.  Only a byte-encoded decoder can;
+    /// the default consumes nothing and returns `false`.
+    fn skip_element_raw(&mut self, out: &mut Vec<u8>) -> KunaResult<bool> {
+        let _ = out;
+        Ok(false)
+    }
+
     /// \brief Open (traverse into) the next child element, which must be of
     /// a specific type (C++ `openElement(const ElementId &)`)
     ///
@@ -1774,6 +1783,27 @@ impl Decoder for PackedDecode<'_> {
             return Err(KunaError::decoder("Did not see expected closing element"));
         }
         Ok(())
+    }
+
+    fn skip_element_raw(&mut self, out: &mut Vec<u8>) -> KunaResult<bool> {
+        let start = self.end_pos;
+        let id = self.open_element()?;
+        if id == 0 {
+            return Err(KunaError::decoder("Expecting an element to skip"));
+        }
+        self.close_element_skipping(id)?;
+        let end = self.end_pos;
+        for seq in start.seq..=end.seq {
+            let chunk = &self.in_stream[seq];
+            let from = if seq == start.seq { start.current } else { 0 };
+            let to = if seq == end.seq {
+                end.current
+            } else {
+                chunk.len()
+            };
+            out.extend_from_slice(&chunk[from..to]);
+        }
+        Ok(true)
     }
 
     fn close_element_skipping(&mut self, id: u32) -> KunaResult<()> {

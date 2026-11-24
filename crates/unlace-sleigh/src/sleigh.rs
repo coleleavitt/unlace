@@ -1194,8 +1194,6 @@ struct SleighBuilder<'a> {
     contexts: &'a [ResolvedCtx],
     /// Symbol table (read-only navigation).
     table: &'a SymbolTable,
-    /// ConstructTpl store (template lookups during build).
-    templates: &'a [ConstructTpl],
     /// The engine (n2addr length lookups).
     engine: &'a Sleigh,
     const_space: Rc<AddrSpace>,
@@ -1217,9 +1215,11 @@ impl<'a> SleighBuilder<'a> {
         }
     }
 
-    /// The constructor template referenced by a handle (C++ `getTempl`).
-    fn templ(&self, handle: usize) -> &'a ConstructTpl {
-        &self.templates[handle]
+    /// The constructor template referenced by a handle (C++ `getTempl`);
+    /// a lazily decoded one is decoded here on its first use.
+    fn templ(&self, handle: usize) -> KunaResult<&'a ConstructTpl> {
+        let engine: &'a Sleigh = self.engine;
+        engine.base.template(handle)
     }
 
     /// C++ `SleighBuilder::setUniqueOffset`.
@@ -1331,7 +1331,7 @@ impl<'a> SleighBuilder<'a> {
             match construct {
                 None => self.build_empty(cur_ct, secnum)?,
                 Some(handle) => {
-                    let tpl = self.templ(handle);
+                    let tpl = self.templ(handle)?;
                     self.build(Some(tpl), secnum)?
                 }
             }
@@ -1481,13 +1481,13 @@ impl PcodeBuilder for SleighBuilder<'_> {
             match construct {
                 None => self.build_empty(cur_ct, secnum)?,
                 Some(handle) => {
-                    let tpl = self.templ(handle);
+                    let tpl = self.templ(handle)?;
                     self.build(Some(tpl), secnum)?
                 }
             }
         } else {
             let handle = self.table.get_constructor(cur_ct)?.get_templ();
-            let tpl = handle.map(|h| self.templ(h));
+            let tpl = handle.map(|h| self.templ(h)).transpose()?;
             self.build(tpl, -1)?;
         }
         self.pop_operand();
@@ -1526,7 +1526,7 @@ impl PcodeBuilder for SleighBuilder<'_> {
             self.cur.point = Some(self.contexts[idx].ctx.base_state);
             let ct = self.walker().get_constructor_inner()?;
             let handle = self.table.get_constructor(ct)?.get_templ();
-            let tpl = handle.map(|h| self.templ(h));
+            let tpl = handle.map(|h| self.templ(h)).transpose()?;
             self.build(tpl, -1)?;
             fall_offset += len;
             bytecount += len;
@@ -1587,7 +1587,7 @@ impl PcodeBuilder for SleighBuilder<'_> {
         match construct {
             None => self.build_empty(ct, secnum)?,
             Some(handle) => {
-                let tpl = self.templ(handle);
+                let tpl = self.templ(handle)?;
                 self.build(Some(tpl), secnum)?
             }
         }
@@ -2103,7 +2103,7 @@ impl Sleigh {
                 // delay slot
                 let handle = constructor.get_templ();
                 if let Some(h) = handle {
-                    let ds = self.base.templates[h].delay_slot();
+                    let ds = self.base.template_delay_slot(h)?;
                     if ds > 0 {
                         walker.ctx.set_delay_slot(ds as i32); // C++ uint4 -> int4
                     }
@@ -2175,7 +2175,7 @@ impl Sleigh {
             if oper >= numoper {
                 let handle = constructor.get_templ();
                 if let Some(h) = handle {
-                    if let Some(res) = self.base.templates[h].get_result() {
+                    if let Some(res) = self.base.template(h)?.get_result() {
                         let mut hand = FixedHandle::default();
                         {
                             let reader = walker.as_reader();
@@ -2782,7 +2782,6 @@ impl Sleigh {
             cross_ctx: None,
             contexts: &contexts,
             table,
-            templates: &self.base.templates,
             engine: self,
             const_space: Rc::clone(&const_space),
             uniq_space,
@@ -2793,7 +2792,7 @@ impl Sleigh {
         builder.cur.point = Some(contexts[0].ctx.base_state);
         let main_ct = builder.walker().get_constructor_inner()?;
         let handle = table.get_constructor(main_ct)?.get_templ();
-        let tpl = handle.map(|h| &self.base.templates[h]);
+        let tpl = handle.map(|h| self.base.template(h)).transpose()?;
         match builder.build(tpl, -1) {
             Ok(()) => {}
             Err(KunaError::Unimpl { .. }) => {

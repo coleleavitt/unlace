@@ -113,6 +113,10 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // `__aeabi_memcpy`, ...) typed as RTABI32 declares them, on a 32-bit ARM
         // image that names one. Registered always.
         Box::new(crate::protos::kuna_aeabisigs::AeabiSigsPass),
+        // (kuna) The libgcc soft-float and machine-mode integer routines
+        // (`__addsf3`, `__fixdfsi`, `__muldi3`, ...) typed by their machine modes
+        // on every target but 32-bit ARM. Registered always.
+        Box::new(crate::protos::kuna_softfpsigs::SoftFpSigsPass),
         // S1 built-in Win32 API signatures (`win32sigs`): the Windows half of the
         // `.gdt` stand-in, which nothing in the tree carried. PE/COFF only, and
         // keyed by ENTRY ADDRESS rather than by name -- a PE import is TWO

@@ -5975,6 +5975,25 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "mbawide"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace-1139"
+summary = "Simplify a linear mixed boolean-arithmetic (MBA) expression over seven to sixteen variables, which option mba leaves alone past six. It is the same linear reading as mba (the tree is evaluated on the 2^n points where each leaf is 0 or 1 and Möbius-inverted into conjunction-basis coefficients, then the multi-leaf terms are regrouped), with the leaf limit raised from 6 to 16. The coefficient pass costs 2^n evaluations of the tree, bounded by the 48-node tree limit. A group of more than six leaves keeps its exact conjunction terms instead of a closed form. The replacement is applied only when it has fewer ops and 64 pseudo-random full-width evaluations agree. Nonlinear and polynomial trees stay at six leaves, and the egraph option is unchanged. Needs option mba on."
+use_when = "Off by default. Turn it on together with mba for obfuscated code whose linear MBA spans more than six inputs, such as a sum of and/or/xor terms over seven or more variables. Its coefficient pass costs 2^n evaluations per candidate, so it stays off for ordinary code."
+example = "--option mbawide on"
+source_decompiler = "unlace"
+inspiration = "IDA 9.5 gooMBA (goomba.so sub_37D00 conjunction-basis step for up to 16 input variables, sub_3B600 simplification); the linear-MBA theorem replaces z3 as in SiMBA"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "obfuscated arithmetic over seven or more inputs that option mba leaves as xor and and soup|a linear mba whose terms share a boolean function over more than six variables|a sum of conjunctions over many variables where a plain linear combination is expected"
+
+[[settable]]
 option = "pairlocal"
 values = "on|off"
 default = "off"

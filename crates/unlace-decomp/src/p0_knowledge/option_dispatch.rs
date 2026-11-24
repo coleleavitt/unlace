@@ -395,6 +395,7 @@ unlace_options! { self, p1;
     "strcodelen" => registered!(crate::analysisgates::Strcodelen),
     "mba" => registered!(crate::mba::Mba),
     "egraph" => registered!(crate::egraph::Egraph),
+    "mbawide" => registered!(crate::mba::MbaWide),
     "pairlocal" => registered!(crate::pairphi::PairLocal),
     "spphistack" => registered!(crate::spphistack::SpPhiStack),
     "avxintrinsics" => registered!(crate::printc::AvxIntrinsics),

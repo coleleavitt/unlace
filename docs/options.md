@@ -550,6 +550,9 @@ Three tiers:
 | obfuscated arithmetic that option mba leaves unsimplified | [`egraph`](#egraph----on--off-default-off) |
 | one mba identity applied to the result of another | [`egraph`](#egraph----on--off-default-off) |
 | ollvm substitution chains such as (a ^ ~b) & a instead of a & b | [`egraph`](#egraph----on--off-default-off) |
+| obfuscated arithmetic over seven or more inputs that option mba leaves as xor and and soup | [`mbawide`](#mbawide----on--off-default-off) |
+| a linear mba whose terms share a boolean function over more than six variables | [`mbawide`](#mbawide----on--off-default-off) |
+| a sum of conjunctions over many variables where a plain linear combination is expected | [`mbawide`](#mbawide----on--off-default-off) |
 | a long long local on a 32-bit target prints as CONCAT44 of two variables | [`pairlocal`](#pairlocal----on--off-default-off) |
 | CONCAT44(v13, v12) after an if where each half is set on every path | [`pairlocal`](#pairlocal----on--off-default-off) |
 | a 64-bit sum or compare reads CONCAT44 of a sign-extended pair | [`pairlocal`](#pairlocal----on--off-default-off) |
@@ -2659,6 +2662,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default and stays opt-in. Turn it on together with mba for obfuscated code where mba alone leaves xor/and/or soup: substitutions stacked on each other, or linear and nonlinear MBA mixed in one tree (synthetic OLLVM-style corpus: mba+egraph solves 101-145 functions per build where mba alone solves 93-143). On ordinary compiler output it costs +2.3% instructions over DecBench O2-noinline (+64% on the libopencm3 examples, +71% on coreutils shuf) and its 247 changed functions of 91,216 are not improvements on the whole (a named local or a |= idiom folded away, a bit-field store respelled as a shift and multiply), so it is not a default candidate; see notes/egraph.md.
 - **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-egraph
 - **Example:** `--option egraph on`
+
+### `mbawide` -- on | off, default `off`
+
+- **Symptoms:** obfuscated arithmetic over seven or more inputs that option mba leaves as xor and and soup; a linear mba whose terms share a boolean function over more than six variables; a sum of conjunctions over many variables where a plain linear combination is expected.
+- **What it does:** Simplify a linear mixed boolean-arithmetic (MBA) expression over seven to sixteen variables, which option mba leaves alone past six. It is the same linear reading as mba (the tree is evaluated on the 2^n points where each leaf is 0 or 1 and Möbius-inverted into conjunction-basis coefficients, then the multi-leaf terms are regrouped), with the leaf limit raised from 6 to 16. The coefficient pass costs 2^n evaluations of the tree, bounded by the 48-node tree limit. A group of more than six leaves keeps its exact conjunction terms instead of a closed form. The replacement is applied only when it has fewer ops and 64 pseudo-random full-width evaluations agree. Nonlinear and polynomial trees stay at six leaves, and the egraph option is unchanged. Needs option mba on.
+- **When to flip:** Off by default. Turn it on together with mba for obfuscated code whose linear MBA spans more than six inputs, such as a sum of and/or/xor terms over seven or more variables. Its coefficient pass costs 2^n evaluations per candidate, so it stays off for ordinary code.
+- **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-1139
+- **Example:** `--option mbawide on`
 
 ### `pairlocal` -- on | off, default `off`
 

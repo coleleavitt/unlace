@@ -61,6 +61,10 @@ use crate::funcdata::Funcdata;
 
 /// Most distinct leaves the truth table covers (`2^6` evaluations).
 pub(crate) const MAX_LEAVES: usize = 6;
+/// Most distinct leaves of a linear MBA under the `mbawide` option. Its
+/// conjunction basis takes `2^n` evaluations of the tree, so the cost stays
+/// under `2^16 * MAX_NODES`.
+pub(crate) const MAX_WIDE_LEAVES: usize = 16;
 /// Highest degree and most monomials of a polynomial MBA.
 const MAX_DEGREE: usize = 4;
 const MAX_MONOMIALS: usize = 128;
@@ -180,10 +184,10 @@ impl Expr {
 /// The conjunction-basis coefficients `b[S]` (index = leaf bitmask) of `f`.
 fn coefficients(f: &Expr, n: usize, mask: u64) -> Vec<u64> {
     let points = 1usize << n;
+    let mut leaves = vec![0u64; n];
     let mut b: Vec<u64> = (0..points)
         .map(|e| {
-            let mut leaves = [0u64; MAX_LEAVES];
-            for (i, l) in leaves.iter_mut().enumerate().take(n) {
+            for (i, l) in leaves.iter_mut().enumerate() {
                 *l = ((e >> i) & 1) as u64;
             }
             f.eval(&leaves, mask)
@@ -698,6 +702,25 @@ fn group_terms(b: &[u64], vars: &[usize], mask: u64) -> (Vec<(Expr, u64)>, u64) 
     best
 }
 
+/// The groups of leaves joined by a shared term in `multi` (the multi-leaf
+/// conjunctions with a nonzero coefficient): each group is the union of the
+/// leaf sets that chain together.
+fn share_groups(multi: &[usize]) -> Vec<usize> {
+    let mut groups: Vec<usize> = Vec::new();
+    for &s in multi {
+        let mut g = s;
+        groups.retain(|&h| {
+            let joined = h & g != 0;
+            if joined {
+                g |= h;
+            }
+            !joined
+        });
+        groups.push(g);
+    }
+    groups
+}
+
 /// The cheapest expression equal to the linear MBA `f` over `n` leaves.
 pub(crate) fn simplify(f: &Expr, n: usize, mask: u64) -> Expr {
     let b = coefficients(f, n, mask);
@@ -709,18 +732,7 @@ pub(crate) fn simplify(f: &Expr, n: usize, mask: u64) -> Expr {
         return full;
     }
     // Groups of leaves joined by a shared multi-leaf term.
-    let mut groups: Vec<usize> = Vec::new();
-    for &s in &multi {
-        let mut g = s;
-        groups.retain(|&h| {
-            let joined = h & g != 0;
-            if joined {
-                g |= h;
-            }
-            !joined
-        });
-        groups.push(g);
-    }
+    let groups = share_groups(&multi);
     let mut k = b[0];
     let mut terms: Vec<(Expr, u64)> = Vec::new();
     for &grp in &groups {
@@ -737,6 +749,43 @@ pub(crate) fn simplify(f: &Expr, n: usize, mask: u64) -> Expr {
     );
     let cand = sum(terms, k, mask);
     if cand.ops() < full.ops() { cand } else { full }
+}
+
+/// [`simplify`] for a linear MBA over more than [`MAX_LEAVES`] leaves (the
+/// `mbawide` option). A group of at most [`MAX_LEAVES`] leaves is solved as in
+/// [`simplify`]; a larger group keeps its conjunction terms, which are exact,
+/// so the caller keeps the result only when it has fewer ops.
+pub(crate) fn simplify_wide(f: &Expr, n: usize, mask: u64) -> Expr {
+    let b = coefficients(f, n, mask);
+    let multi: Vec<usize> = (1..b.len())
+        .filter(|&s| s.count_ones() > 1 && b[s] != 0)
+        .collect();
+    let groups = share_groups(&multi);
+    let mut k = b[0];
+    let mut terms: Vec<(Expr, u64)> = Vec::new();
+    for &grp in &groups {
+        if grp.count_ones() as usize > MAX_LEAVES {
+            let mut sub = grp;
+            while sub != 0 {
+                if b[sub] != 0 {
+                    terms.push((conj(sub), b[sub]));
+                }
+                sub = (sub - 1) & grp;
+            }
+        } else {
+            let vars: Vec<usize> = (0..n).filter(|&i| grp & (1 << i) != 0).collect();
+            let (t, kk) = group_terms(&b, &vars, mask);
+            terms.extend(t);
+            k = k.wrapping_add(kk) & mask;
+        }
+    }
+    let grouped = groups.iter().fold(0usize, |a, &g| a | g);
+    terms.extend(
+        (0..n)
+            .filter(|&i| grouped & (1 << i) == 0)
+            .map(|i| (Expr::Leaf(i), b[1 << i])),
+    );
+    sum(terms, k, mask)
 }
 
 /// A polynomial over the conjunctions `AND(S)`: each monomial is the sorted
@@ -895,6 +944,9 @@ struct Collector<'a> {
     data: &'a Funcdata,
     size: int4,
     leaves: Vec<LeafRef>,
+    /// Most distinct leaves the collection takes: [`MAX_LEAVES`], or
+    /// [`MAX_WIDE_LEAVES`] under the `mbawide` option.
+    max_leaves: usize,
     nodes: usize,
     /// Inline a bitwise op with several readers too.
     inline_shared: bool,
@@ -927,7 +979,7 @@ impl Collector<'_> {
                 self.leaves.len() - 1
             }
         };
-        (i < MAX_LEAVES).then_some(Expr::Leaf(i))
+        (i < self.max_leaves).then_some(Expr::Leaf(i))
     }
 
     /// A constant under a bitwise op: a leaf, or the complement of one.
@@ -1101,12 +1153,15 @@ fn rewrite(
     code: OpCode,
     size: int4,
     inline_shared: bool,
+    wide: bool,
 ) -> (Option<Rewrite>, bool) {
+    let limit = if wide { MAX_WIDE_LEAVES } else { MAX_LEAVES };
     let mut col = Collector {
         data,
         size,
         leaves: Vec::new(),
         nodes: 0,
+        max_leaves: limit,
         inline_shared,
         shared: false,
         bitwise: false,
@@ -1124,7 +1179,7 @@ fn rewrite(
     };
     let expr = col.bind_consts(expr);
     let n = col.leaves.len();
-    if n == 0 || n > MAX_LEAVES || !col.bitwise {
+    if n == 0 || n > limit || !col.bitwise {
         return (None, shared);
     }
     let mask = mask_of(size);
@@ -1138,7 +1193,13 @@ fn rewrite(
             Bool::E(e) => e,
         }
     } else if expr.is_linear() {
-        simplify(&expr, n, mask)
+        if n > MAX_LEAVES {
+            simplify_wide(&expr, n, mask)
+        } else {
+            simplify(&expr, n, mask)
+        }
+    } else if n > MAX_LEAVES {
+        return (None, shared);
     } else {
         match to_poly(&expr, n, mask) {
             Some(p) => from_poly(&p, n, mask),
@@ -1150,7 +1211,7 @@ fn rewrite(
         return (None, shared);
     }
     // The same bitwise terms in a different sum is plain arithmetic.
-    if expr.has_arith() && !col.not_arith {
+    if expr.has_arith() && !col.not_arith && n <= MAX_LEAVES {
         let (mut before, mut after) = (Vec::new(), Vec::new());
         expr.bitwise_tables(n, &mut before);
         simple.bitwise_tables(n, &mut after);
@@ -1459,6 +1520,7 @@ pub(crate) fn collect_deep(
         size,
         leaves: Vec::new(),
         nodes: 0,
+        max_leaves: MAX_LEAVES,
         inline_shared: true,
         shared: false,
         bitwise: false,
@@ -1635,9 +1697,10 @@ impl Rule for RuleMbaSimplify {
         // A subtree is simplified on its own too: a non-linear reader (an
         // `^ v0` over the whole sum) must not hide a linear tree below it.
         // Each rewrite strictly lowers the op count, so this terminates.
-        let rw = match rewrite(data, op, code, size, false) {
+        let wide = data.get_arch().unlace_options.get::<MbaWide>().0;
+        let rw = match rewrite(data, op, code, size, false, wide) {
             (Some(rw), _) => Some(rw),
-            (None, true) => rewrite(data, op, code, size, true).0,
+            (None, true) => rewrite(data, op, code, size, true, wide).0,
             (None, false) => None,
         };
         let rw = match rw {
@@ -1656,6 +1719,15 @@ crate::unlace_flag!(
     Mba,
     "mba",
     "Linear MBA simplification",
+    unset: false,
+    shipped: false
+);
+
+crate::unlace_flag!(
+    /// (unlace `mbawide`) Linear MBA simplification over up to 16 leaves; needs `mba on`.
+    MbaWide,
+    "mbawide",
+    "Wide linear MBA simplification",
     unset: false,
     shipped: false
 );
@@ -1733,6 +1805,24 @@ mod tests {
         let s = simplify(&f, 3, m);
         assert_eq!(s.ops(), 2, "{s:?}");
         assert!(agree(&f, &s, 3, m));
+    }
+
+    #[test]
+    fn wide_linear_mba_over_seven_leaves_folds() {
+        let pair = |a: usize, b: usize| {
+            Expr::Add(
+                Box::new(Expr::Xor(leaf(a), leaf(b))),
+                Box::new(Expr::Mul(and(leaf(a), leaf(b)), 2)),
+            )
+        };
+        let f = Expr::Add(
+            Box::new(Expr::Add(Box::new(pair(0, 1)), Box::new(pair(5, 6)))),
+            leaf(3),
+        );
+        let mask = u64::MAX;
+        let s = simplify_wide(&f, 7, mask);
+        assert!(agree(&f, &s, 7, mask));
+        assert!(s.ops() < f.ops());
     }
 
     #[test]

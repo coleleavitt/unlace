@@ -13,6 +13,10 @@
 # (docs/processor-tests.md).
 
 [images]
+v60_long = """
+2d80fe2000000008000000fe2400000004000000cacdcdcdcdcdcdcdcdcdcdcd
+0010000000200000
+"""
 epiphany = """
 ba4070043a044f190204ba004f1902045cd50027dc140084ef0002804321f0f1
 4c6100109a011f000a028b8622410b8f62551f020a01cc1400844cd500241bb4
@@ -1029,3 +1033,92 @@ expect = [
     "= ee_vadds_s16(",
     "v2 = a0 + 0x10;",
 ]
+
+# NEC V60/V70: hand-assembled stack-argument, loop/store, frame/call and 20-byte Format II images.
+[[family]]
+name = "v60"
+language = "V60:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/v60/mul_ret.bin"
+
+[[family.function]]
+test = "v60_mul_return_decompiles"
+address = "0x0"
+expect = ["return a0 * a1;"]  # mov.w 4[SP],R0; mul.w 8[SP],R0; rsr
+
+[[family]]
+name = "v60_sum_store"
+language = "V60:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/v60/sum_store.bin"
+
+[[family.function]]
+test = "v60_sum_loop_and_store_decompile"
+address = "0x0"
+expect = ["v1 += *a0;", "} while (a1);", "dat_200010 = v1;"]  # add.w [R1+],R0 / dbr loop, direct store
+
+[[family]]
+name = "v60_frame_call"
+language = "V60:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/v60/frame_call.bin"
+
+[[family.function]]
+test = "v60_caller_pushes_stack_arguments"
+address = "0x0"
+expect = ["sub_20(5,3);"]  # push/push/bsr
+
+[[family.function]]
+test = "v60_prepare_pushm_frame_reads_fp_arguments"
+address = "0x20"
+expect = ["return a0 + a1;"]  # prepare/pushm/popm/dispose/rsr
+
+[[family]]
+name = "v60_long_format_ii"
+language = "V60:LE:32:default"
+base = "0x0"
+image = "v60_long"
+
+[[family.function]]
+test = "v60_twenty_byte_instruction_decodes"
+address = "0x0"
+expect = ["*(unsigned int *)(dat_24 + 4) = *(unsigned int *)(dat_20 + 8);"]  # one 20-byte mov.w, two PC double displacements
+
+# DEC VAX: CALLS procedure with entry mask, (r1)+/sobgtr loop, extzv.
+[[family]]
+name = "vax_calls"
+language = "VAX:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/vax/calls.bin"
+
+[[family.function]]
+test = "vax_calls_caller"
+address = "0x0"
+expect = ["sub_20(5,3);"]  # pushl #3; pushl #5; calls #2, sub
+
+[[family.function]]
+test = "vax_calls_procedure_reads_ap_arguments"
+address = "0x20"
+expect = ["return a1 + a0;"]  # entry mask; addl3 4(ap), 8(ap), r0; ret
+
+[[family]]
+name = "vax_sum_store"
+language = "VAX:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/vax/sum_store.bin"
+
+[[family.function]]
+test = "vax_sum_loop_and_store_decompile"
+address = "0x0"
+expect = ["v1 += *a0;", "} while (0 < a1);", "dat_200010 = v1;"]
+
+[[family]]
+name = "vax_extzv"
+language = "VAX:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/vax/extzv.bin"
+
+[[family.function]]
+test = "vax_extzv_decompiles"
+address = "0x0"
+expect = ["return a0 >> 4 & 0xff;"]

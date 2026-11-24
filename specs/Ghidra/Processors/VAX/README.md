@@ -5,8 +5,9 @@ operand specifier modes, the condition codes, CALLS/CALLG/RET frames). The vendo
 Apache-2.0 module that #318 added was dropped in #400, because its 99 PC-relative forms
 used an undefined `operand_offset` symbol. This module shares no text with it.
 Instruction lengths and mnemonics were checked against MAME's `vax` disassembler
-(BSD-3-Clause), run as an oracle: across 18,000 random encodings, every one of 16 bytes
-or less decodes to the same length and mnemonic.
+(BSD-3-Clause), run as an oracle: across 16,000 random encodings (109 of them longer
+than 16 bytes) decode to the same length and mnemonic, apart from one reserved
+indexed-immediate encoding.
 
 Language: `VAX:LE:32:default`, the VAX base instruction set plus the G/H floating
 point and vector instruction encodings (`FD`-prefixed).
@@ -70,8 +71,8 @@ Gaps:
 - Exceptions, the PSL beyond N/Z/V/C, the per-mode stack pointers and the memory
   management registers are not modelled.
 
-Oracle: MAME `vax` disassembler (run for lengths and mnemonics). The CLI test
-`crates/unlace-cli/tests/vax.rs` carries three hand-assembled images.
+Oracle: MAME `vax` disassembler (run for lengths and mnemonics). The
+`vax_*` families in `crates/unlace-cli/tests/processors.toml` carry three hand-assembled images.
 
 MAME licence for `vaxops.json`:
 

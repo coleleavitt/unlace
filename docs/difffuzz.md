@@ -287,8 +287,8 @@ clang -O2 -mapxf -fPIC -shared -o lib.so *.c
 ~/.local/share/difffuzz-venv/bin/python tools/difffuzz/apxcheck.py lib.so --unlace <unlace> --sleighpath specs
 ```
 
-On Lua 5.3 and zlib built with clang 22 and gcc 15 (`-O2 -mapxf`), 3307 of the 3406 distinct APX
-encodings (the 158 CCMP/CTEST/CFCMOV among them) were verified (at least one trial with in-range
+On Lua 5.3 and zlib built with clang 22 and gcc 15 (`-O2 -mapxf`), 3314 of the 3406 distinct APX
+encodings (CCMP/CTEST/CFCMOV included) were verified (at least one trial with in-range
 addresses) and none differed. A hand-written probe of every CCMP/CTEST condition, size, operand form
 and several dfv values, and every CFCMOVcc/CMOVcc NDD form and condition (928 encodings) verifies
 927 with no difference. Breaking the NF ADD, or the false-path PF of CCMP or the zeroing of CFCMOV,

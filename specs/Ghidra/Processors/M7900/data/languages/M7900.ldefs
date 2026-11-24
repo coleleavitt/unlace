@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="M7900"
+            endian="little"
+            size="24"
+            variant="default"
+            version="1.0"
+            slafile="m7900.sla"
+            processorspec="m7900.pspec"
+            id="M7900:LE:24:default">
+    <description>Mitsubishi/Renesas 7900 Series (direct page register DPR0 only)</description>
+    <compiler name="default" spec="m7900.cspec" id="default"/>
+  </language>
+  <language processor="M7900"
+            endian="little"
+            size="24"
+            variant="DPR4"
+            version="1.0"
+            slafile="m7900.sla"
+            processorspec="m7900_dpr4.pspec"
+            id="M7900:LE:24:DPR4">
+    <description>Mitsubishi/Renesas 7900 Series (direct page registers DPR0-DPR3 selected by the operand's top two bits)</description>
+    <compiler name="default" spec="m7900.cspec" id="default"/>
+  </language>
+</language_definitions>

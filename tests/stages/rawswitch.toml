@@ -1,0 +1,47 @@
+# rawswitch: a jump table whose index is a constant on the only path into it.
+#
+# zlib inflateBack sets state->mode = TYPE right before switch (state->mode), and
+# gcc threads every case straight to the next, so the dispatch's one path carries
+# TYPE - TYPE = 0. The value-range models then cannot bound the table and the
+# dispatch prints as a computed call; IDA matches the cmp/ja/lea/movslq/jmp shape
+# and takes the N + 1 rows. Synthetic x86-64 copy:
+#
+#     1000  mov %edi,%ecx ; mov $5,%eax ; sub $5,%eax ; cmp $3,%eax ; ja default
+#           lea table(%rip),%rdi ; movslq (%rdi,%rax,4),%rax ; add %rdi,%rax
+#           notrack jmp *%rax
+#     cases: return x + 10 .. x + 13 ; default: return 99
+#
+# Pass 1 (default, rawswitch off) keeps the computed call; pass 2 (option rawswitch
+# on) recovers the four rows. Stage: P2 switch-model.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [ { space = 'ram', offset = '0x1000', name = 'rawsw' } ]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '89f9b80500000083e80583f8037721488d3d22000000486304874801f83effe08d410ac38d410bc38d410cc38d410dc3b863000000c36690e8ffffffecfffffff0fffffff4ffffff'
+
+[script]
+commands = [
+    'lo fu rawsw',
+    'decompile',
+    'print C',
+    'option rawswitch on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'RAWSWITCH #1: rawswitch on decodes the last row of the table'
+count = 1
+regex = '\+ 0xd;'
+
+[[match]]
+name = 'RAWSWITCH #2: rawswitch on decodes the first row of the table'
+min = 1
+max = 2
+regex = '\+ 10;|\+ 0xa;'

@@ -54,6 +54,7 @@ pub mod kuna_overlapbranch; // (kuna) a conditional branch target inside its own
 pub mod kuna_ppc32piccalls;
 pub mod kuna_ptrauthtrap; // (kuna) drop the arm64e pointer-auth failure checks
 pub mod kuna_pushimmediateret; // (kuna) recover a one-store push-immediate/ret tail transfer as a branch
+pub mod kuna_rawswitch; // (kuna `rawswitch`) recover an x86-64 jump table from its cmp/ja/lea/movslq/jmp instructions
 pub mod kuna_retpolinethunk; // (kuna) a retpoline thunk recognized by its body is `call *%reg`
 pub mod kuna_sparcstructret;
 pub mod kuna_stackprobeloop;

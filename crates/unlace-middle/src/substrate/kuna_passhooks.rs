@@ -646,6 +646,8 @@ declare_hooks! {
     constselectjump_from_flow_targets: fn(Vec<uintb>, Option<uintb>) -> Box<dyn JumpModel>;
     /// `kuna_constselectjump::recover`.
     constselectjump_recover: fn(&JumpTable, &mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
+    /// `kuna_rawswitch::recover`.
+    rawswitch_recover: fn(&JumpTable, &mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
     /// `kuna_jumpassist::recover`.
     jumpassist_recover: fn(&mut Funcdata, OpId, uint4, uint4) -> KunaResult<Option<Box<dyn JumpModel>>>;
     /// `kuna_indexaliasguard::stores_into`.

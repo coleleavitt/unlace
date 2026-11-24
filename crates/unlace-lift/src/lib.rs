@@ -42,6 +42,7 @@ pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
     crate::kuna_switchguardrange::provide(slots);
     crate::kuna_loweredswitchvalue::provide(slots);
     crate::kuna_constselectjump::provide(slots);
+    crate::kuna_rawswitch::provide(slots);
     crate::kuna_jumpassist::provide(slots);
     crate::kuna_atomics::provide(slots);
 }

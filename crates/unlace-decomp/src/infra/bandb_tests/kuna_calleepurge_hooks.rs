@@ -35,6 +35,7 @@ fn fx() -> Fx {
     let regs = Regs {
         space: reg.get_index(),
         offs: [0, 4, 8, 0xc, 0x10, 0x14, 0x18, 0x1c],
+        fs: None,
     };
     Fx {
         cst: Rc::new(ConstantSpace::new()),

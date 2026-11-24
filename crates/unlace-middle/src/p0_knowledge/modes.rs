@@ -662,6 +662,8 @@ mod tests {
             "phiarm",
             // `calleesaved` (issue #20) landed without a corpus sweep.
             "calleesaved",
+            // `calleeargsmsvc` landed on hand-built MSVC-shape fixtures only.
+            "calleeargsmsvc",
             // Landed with fixture measurements only: `funcchunks` changes only FID's
             // input, `tailcallentryall` was measured on Lua and the LLVM tools, and
             "funcchunks",

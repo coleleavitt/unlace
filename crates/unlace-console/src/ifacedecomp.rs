@@ -72,9 +72,7 @@
 //! `Architecture`), each `engine_unavailable` site is the single place to wire
 //! the real call; the surrounding faithful structure does not change.
 
-use crate::engine::{
-    ArmIsa, ConsoleProgram, UNBOUNDED_SIZE, bootstrap_from_file, bootstrap_from_raw,
-};
+use crate::engine::{ArmIsa, ConsoleProgram, UNBOUNDED_SIZE, bootstrap_from_file};
 use crate::interface::{
     CommandStream, IfaceCommandAction, IfaceData, IfaceError, IfaceResult, IfaceStatus,
 };
@@ -1305,7 +1303,7 @@ decomp_command!(
             dcp.spec_roots.clone()
         };
         // capa->buildArchitecture + conf->init(store) (the bootstrap chain).
-        match bootstrap_from_file(&filename, &target, &spec_roots) {
+        match console_load_file(&filename, &target, &spec_roots) {
             Ok(prog) => {
                 // *status->optr << filename << " successfully loaded: " << desc;
                 let desc = prog.description().to_string();
@@ -1324,6 +1322,53 @@ decomp_command!(
         }
     }
 );
+
+/// The load-time options a console load reads: the environment as it stands at
+/// the load, which is what every gate of an environment-mode load reads, with
+/// the Go release left to the image as an environment-mode load leaves it.
+fn console_load_options() -> unlace_decomp::loadoptions::LoadOptions {
+    unlace_decomp::loadoptions::LoadOptions {
+        go_version: None,
+        ..unlace_decomp::loadoptions::LoadOptions::from_env()
+    }
+}
+
+/// `load file`: [`bootstrap_from_file`] with [`console_load_options`] and the
+/// ARM ISA of [`ARM_ISA_ENV`](crate::engine::ARM_ISA_ENV). An unreadable ISA
+/// variable keeps the environment-mode load, which reports it only for an input
+/// that reads it.
+fn console_load_file(
+    path: &str,
+    target: &str,
+    spec_roots: &[String],
+) -> unlace_base::error::UnlaceResult<ConsoleProgram> {
+    let Ok(isa) = crate::engine::arm_isa_from_env() else {
+        return bootstrap_from_file(path, target, spec_roots);
+    };
+    let options = console_load_options();
+    crate::engine::Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(isa)
+        .options(&options)
+        .file(path)
+}
+
+/// `load raw`: [`bootstrap_from_raw`](crate::engine::bootstrap_from_raw) with [`console_load_options`].
+fn console_load_raw(
+    path: &str,
+    target: &str,
+    base: u64,
+    entries: &[u64],
+    isa: Option<ArmIsa>,
+    spec_roots: &[String],
+) -> unlace_base::error::UnlaceResult<ConsoleProgram> {
+    let options = console_load_options();
+    crate::engine::Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(isa)
+        .options(&options)
+        .raw(path, base, entries)
+}
 
 fn parse_raw_address(token: &str) -> Result<u64, IfaceError> {
     let token = token.trim();
@@ -1380,10 +1425,10 @@ decomp_command!(
         // A language id can contain spaces (`x86:LE:16:Real Mode`), which a
         // console token cannot: `_` stands for a space when the id as written
         // has no specification.
-        let loaded = bootstrap_from_raw(&filename, &target, base, &entries, isa, &spec_roots)
+        let loaded = console_load_raw(&filename, &target, base, &entries, isa, &spec_roots)
             .or_else(|e| {
                 if target.contains('_') {
-                    bootstrap_from_raw(
+                    console_load_raw(
                         &filename,
                         &target.replace('_', " "),
                         base,

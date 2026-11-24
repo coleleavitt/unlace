@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Loader opinion for the TI C6000 family.
+
+  ELF: e_machine 140 (EM_TI_C6000) selects this language.  The endianness
+  comes from the ELF header, so the opinion does not have to guess.  The loader
+  attribute is the loader's name, not its class.
+-->
+<opinions>
+  <constraint loader="Executable and Linking Format (ELF)"
+              compilerSpecID="default">
+    <constraint primary="140"
+                processor="C6000"
+                endian="little"
+                size="32"
+                variant="default"/>
+    <constraint primary="140"
+                processor="C6000"
+                endian="big"
+                size="32"
+                variant="default"/>
+  </constraint>
+</opinions>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  TMS320C6000 language definitions.
+
+  C674x is the union of the C64x+ and C67x+ instruction sets (SPRUFE8B
+  section 1.1); the same SLEIGH description therefore also serves the C64x,
+  C64x+, C67x and C67x+ parts, which are subsets.  Both byte orders are
+  offered because C6000 supports little- and big-endian operation.
+-->
+<language_definitions>
+  <language processor="C6000"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="c6000_le.sla"
+            processorspec="c6000.pspec"
+            id="C6000:LE:32:default">
+    <description>TMS320C674x / C64x+ / C64x / C67x+ / C67x (little endian)</description>
+    <compiler name="default" spec="c6000.cspec" id="default"/>
+    <external_name tool="DWARF.register.mapping.file" name="c6000.dwarf"/>
+    <external_name tool="gnu" name="tic6x"/>
+    <external_name tool="ELF" name="EM_TI_C6000"/>
+  </language>
+  <language processor="C6000"
+            endian="little"
+            size="32"
+            variant="analysis"
+            version="1.0"
+            slafile="c6000_le_analysis.sla"
+            processorspec="c6000.pspec"
+            id="C6000:LE:32:analysis">
+    <description>TMS320C6000 (little endian, concise floating-point analysis)</description>
+    <compiler name="default" spec="c6000.cspec" id="default"/>
+    <external_name tool="DWARF.register.mapping.file" name="c6000.dwarf"/>
+  </language>
+  <language processor="C6000"
+            endian="big"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="c6000_be.sla"
+            processorspec="c6000.pspec"
+            id="C6000:BE:32:default">
+    <description>TMS320C674x / C64x+ / C64x / C67x+ / C67x (big endian)</description>
+    <compiler name="default" spec="c6000.cspec" id="default"/>
+    <external_name tool="DWARF.register.mapping.file" name="c6000.dwarf"/>
+    <external_name tool="gnu" name="tic6x"/>
+    <external_name tool="ELF" name="EM_TI_C6000"/>
+  </language>
+  <language processor="C6000"
+            endian="big"
+            size="32"
+            variant="analysis"
+            version="1.0"
+            slafile="c6000_be_analysis.sla"
+            processorspec="c6000.pspec"
+            id="C6000:BE:32:analysis">
+    <description>TMS320C6000 (big endian, concise floating-point analysis)</description>
+    <compiler name="default" spec="c6000.cspec" id="default"/>
+    <external_name tool="DWARF.register.mapping.file" name="c6000.dwarf"/>
+  </language>
+</language_definitions>

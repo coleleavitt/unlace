@@ -50,6 +50,10 @@ specs/Ghidra/Processors/OpenRISC vendors the OpenRISC 1000 (or1k) SLEIGH specifi
 aleph-void/ghidra-or1k-le-hack (https://github.com/aleph-void/ghidra-or1k-le-hack), a fork of Spritetm/ghidra-or1k-le-hack, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/C6000 vendors the TI TMS320C6000 (C6x, C64x, C674x) SLEIGH specification of
+aleph-void/ghidra-c6000 (https://github.com/aleph-void/ghidra-c6000), a fork of geepot/ghidra-c6000, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

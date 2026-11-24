@@ -1,0 +1,6 @@
+# C6000 big-endian language with concise floating-point decompilation.
+# The default language retains exact rounding and status-register semantics.
+@define ENDIAN "big"
+@define FP_MODEL "analysis"
+define endian=big;
+@include "c6000.sinc"

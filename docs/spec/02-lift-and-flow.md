@@ -4173,6 +4173,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `i960` | Intel i960 | `i960:LE:32:default`, `i960:LEBE:32:lebe` | aleph-void/ghidra-i960 @ `1b84289e7f`, Apache-2.0 |
 | `Alpha` | DEC Alpha (21064-21364) | `21064:LE:64:unix`, `21064:LE:64:vms`, `21064:LE:64:nt`, `21164:LE:64:unix`, `21164:LE:64:vms`, `21164:LE:64:nt`, `21264:LE:64:unix`, `21264:LE:64:vms`, `21264:LE:64:nt`, `21364:LE:64:unix`, `21364:LE:64:vms`, `21364:LE:64:nt`, `21464:LE:64:unix`, `21464:LE:64:vms`, `21464:LE:64:nt` | aleph-void/ghidra-alpha (fork of kkaempf/ghidra-alpha) @ `b01ef29723`, Apache-2.0 |
 | `OpenRISC` | OpenRISC 1000 (or1k) | `OpenRISC:LE:32:default`, `OpenRISC:BE:32:default` | aleph-void/ghidra-or1k-le-hack (fork of Spritetm/ghidra-or1k-le-hack) @ `ec64ef6631`, Apache-2.0 |
+| `C6000` | TI TMS320C6000 (C6x, C64x, C674x) | `C6000:LE:32:default`, `C6000:LE:32:analysis`, `C6000:BE:32:default`, `C6000:BE:32:analysis` | aleph-void/ghidra-c6000 (fork of geepot/ghidra-c6000) @ `854fa26859`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

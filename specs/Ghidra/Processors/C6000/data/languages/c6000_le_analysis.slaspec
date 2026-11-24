@@ -1,0 +1,6 @@
+# C6000 little-endian language with concise floating-point decompilation.
+# The default language retains exact rounding and status-register semantics.
+@define ENDIAN "little"
+@define FP_MODEL "analysis"
+define endian=little;
+@include "c6000.sinc"

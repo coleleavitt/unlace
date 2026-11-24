@@ -1,0 +1,190 @@
+#  Hand-written C6000 instructions whose encoding is not a simple opcode-map
+#  entry, plus the software-pipelined-loop control instructions.
+#  Apache-2.0; encodings from TI SPRUFE8B and SPRU732J (see NOTICE.md).
+#
+#  Every constructor here names the figure or section it implements.
+
+# SUB .S reverse-operand form, SPRUFE8B section 3.12 SUB,
+# "src2 - src1" encoding (separate from the .S opcode-map table).
+# The x bit selects local or cross-path src2 (SPRUFE8B p. 529).
+:^Cond^"SUB.S1" Src2, Src1, Dst is c_is16=0 & Cond & creg!=7 & cregz!=1 & Src2 & Src1 & Dst
+  & i1=0 & i11=1 & i10=1 & i9=0 & i8=1 & i7=0 & i6=1
+  & i5=1 & i4=1 & i3=0 & i2=0
+{ if (Cond == 0) goto <skip>; c6000_sem_sub(Src2, Src1, Dst); <skip> }
+
+:^Cond^"SUB.S2" Src2, Src1, Dst is c_is16=0 & Cond & creg!=7 & cregz!=1 & Src2 & Src1 & Dst
+  & i1=1 & i11=1 & i10=1 & i9=0 & i8=1 & i7=0 & i6=1
+  & i5=1 & i4=1 & i3=0 & i2=0
+{ if (Cond == 0) goto <skip>; c6000_sem_sub(Src2, Src1, Dst); <skip> }
+
+# MVC control-register transfers, SPRUFE8B Figure F-1 and Table 3-27.
+# Bit 6 selects the direction: zero writes the control register named by dst,
+# one reads the control register named by src2.  Both forms are .S2 only.
+:^Cond^"MVC.S2" Src2, CtlDst is c_is16=0 & Cond & creg!=7 & cregz!=1 & Src2 & CtlDst
+  & i1=1 & i2=0 & i3=0 & i4=0 & i5=1 & i6=0 & i7=1 & i8=1 & i9=1 & i10=0 & i11=0
+{ if (Cond == 0) goto <skip>; CtlDst = Src2; <skip> }
+
+:^Cond^"MVC.S2" CtlReg, Dst is c_is16=0 & Cond & creg!=7 & cregz!=1 & CtlReg & Dst
+  & i1=1 & i2=0 & i3=0 & i4=0 & i5=1 & i6=1 & i7=1 & i8=1 & i9=1 & i10=0 & i11=0
+  & i12=0
+{ if (Cond == 0) goto <skip>; Dst = CtlReg; <skip> }
+
+# C64x+ linked-word operations, SPRU732J Figure C-4 and the LL/SL/CMTL
+# descriptions. These execute only on .D2 with the T2 data path. The named
+# userops carry the linked-memory event to a system-aware emulator; CMTL's
+# output is the monitor's success flag.
+:^Cond^"LL.D2T2" "*"^rb_base, rb_dst is c_is16=0 & Cond & creg!=7 & cregz!=1 & rb_base & rb_dst
+  & i1=1 & i2=0 & i3=0 & i4=0 & op7=0x32
+  & i12=0 & i13=0 & i14=0 & i15=0 & i16=0 & i17=0
+{ if (Cond == 0) goto <skip>; rb_dst = *[ram]:4 rb_base; c6000_link_load(rb_base); <skip> }
+
+:^Cond^"SL.D2T2" rb_dst, "*"^rb_base is c_is16=0 & Cond & creg!=7 & cregz!=1 & rb_base & rb_dst
+  & i1=1 & i2=0 & i3=0 & i4=0 & op7=0x36
+  & i12=0 & i13=0 & i14=0 & i15=0 & i16=0 & i17=0
+{ if (Cond == 0) goto <skip>; c6000_link_store(rb_base, rb_dst); *[ram]:4 rb_base = rb_dst; <skip> }
+
+:^Cond^"CMTL.D2T2" "*"^rb_base, rb_dst is c_is16=0 & Cond & creg!=7 & cregz!=1 & rb_base & rb_dst
+  & i1=1 & i2=0 & i3=0 & i4=0 & op7=0x3a
+  & i12=0 & i13=0 & i14=0 & i15=0 & i16=0 & i17=0
+{ if (Cond == 0) goto <skip>; rb_dst = c6000_link_commit(rb_base); <skip> }
+
+# ---------------------------------------------------------------------------
+# BNOP - Branch Using a Displacement with NOP, and Branch Using a Register
+# with NOP.  SPRUFE8B figures F-10 and F-11.
+#
+# The displacement form carries a 12-bit signed displacement in src2 (shifted
+# left by two) and a 3-bit NOP count in src1.  The target is relative to PCE1,
+# the address of the first instruction of the fetch packet that contains the
+# branch - SPRUFE8B BNOP execution block.  The register form branches to an
+# address held in a register.
+# ---------------------------------------------------------------------------
+
+:"BNOP.S1" BnopTgt, bnopc is c_is16=0 & creg=0 & z=0 & BnopTgt & bnopc & DSlot
+  & i1=0 & i12=0 & i11=0 & i10=0 & i9=0 & i8=1 & i7=0 & i6=0 & i5=1 & i4=0 & i3=0 & i2=0
+{ build DSlot; goto BnopTgt; }
+:^Cond^"BNOP.S1" BnopTgt, bnopc is c_is16=0 & Cond & creg!=0 & creg!=7 & cregz!=1 & BnopTgt & bnopc & DSlot
+  & i1=0 & i12=0 & i11=0 & i10=0 & i9=0 & i8=1 & i7=0 & i6=0 & i5=1 & i4=0 & i3=0 & i2=0
+{
+  local c:1 = Cond;
+  build DSlot;
+  if (c != 0) goto BnopTgt;
+}
+:"BNOP.S2" BnopTgt, bnopc is c_is16=0 & creg=0 & z=0 & BnopTgt & bnopc & DSlot
+  & i1=1 & i12=0 & i11=0 & i10=0 & i9=0 & i8=1 & i7=0 & i6=0 & i5=1 & i4=0 & i3=0 & i2=0
+{ build DSlot; goto BnopTgt; }
+:^Cond^"BNOP.S2" BnopTgt, bnopc is c_is16=0 & Cond & creg!=0 & creg!=7 & cregz!=1 & BnopTgt & bnopc & DSlot
+  & i1=1 & i12=0 & i11=0 & i10=0 & i9=0 & i8=1 & i7=0 & i6=0 & i5=1 & i4=0 & i3=0 & i2=0
+{
+  local c:1 = Cond;
+  build DSlot;
+  if (c != 0) goto BnopTgt;
+}
+
+:"BNOP.S2" Src2, bnopc is c_is16=0 & creg=0 & z=0 & c_branch_terminal=1 & Src2 & bnopc & DSlot
+  & i27=0 & i26=0 & i25=0 & i24=0 & i23=1 & i17=0 & i16=0
+  & i11=0 & i10=0 & i9=1 & i8=1 & i7=0 & i6=1 & i5=1 & i4=0 & i3=0 & i2=0 & i1=1
+{
+  local t:4 = Src2;
+  build DSlot;
+  goto [t];
+}
+:^Cond^"BNOP.S2" Src2, bnopc is c_is16=0 & Cond & creg!=7 & cregz!=1 & c_branch_terminal=0 & Src2 & bnopc & DSlot
+  & i27=0 & i26=0 & i25=0 & i24=0 & i23=1 & i17=0 & i16=0
+  & i11=0 & i10=0 & i9=1 & i8=1 & i7=0 & i6=1 & i5=1 & i4=0 & i3=0 & i2=0 & i1=1
+{
+  local c:1 = Cond;
+  local t:4 = Src2;
+  build DSlot;
+  if (c == 0) goto <skip>;
+  goto [t];
+  <skip>
+}
+
+# ---------------------------------------------------------------------------
+# Software pipelined loop (SPLOOP) buffer control.  SPRUFE8B chapter 7 and
+# figures H-3/H-4; the opcode values below are the ones printed in the
+# instruction descriptions of section 3.12.
+#
+# These userops preserve the loop-buffer command and its operands for emulators
+# and analysis. The buffer executes without changing the architectural PC;
+# an ordinary p-code branch at SPKERNEL would execute the wrong schedule.
+# ---------------------------------------------------------------------------
+
+LoopII: value is ii [ value = ii + 1; ] { export *[const]:4 value; }
+
+:^Cond^"SPLOOP" LoopII is c_is16=0 & Cond & creg & z & LoopII
+  & i22=0 & i21=0 & i20=0 & i19=0 & i18=0 & i17=1
+  & i16=1 & i15=1 & i14=0 & i13=0
+  & i12=0 & i11=0 & i10=0 & i9=0 & i8=0 & i7=0 & i6=0 & i5=0 & i4=0 & i3=0 & i2=0
+{
+  local predicateEncoding:4 = creg;
+  local negate:4 = z;
+  local selector:4 = (predicateEncoding << 1) | negate;
+  c6000_sploop(LoopII, selector);
+  # Only an unconditional SPLOOP performs the initial ILC decrement.
+  if (predicateEncoding != 0) goto <done>;
+  if (ILC == 0) goto <done>;
+  ILC = ILC - 1;
+  <done>
+}
+
+:^Cond^"SPLOOPD" LoopII is c_is16=0 & Cond & creg & z & LoopII
+  & i22=0 & i21=0 & i20=0 & i19=0 & i18=0 & i17=1
+  & i16=1 & i15=1 & i14=0 & i13=1
+  & i12=0 & i11=0 & i10=0 & i9=0 & i8=0 & i7=0 & i6=0 & i5=0 & i4=0 & i3=0 & i2=0
+{
+  local regcode:4 = creg;
+  local negate:4 = z;
+  local selector:4 = (regcode << 1) | negate;
+  c6000_sploopd(LoopII, selector);
+}
+
+:^Cond^"SPLOOPW" LoopII is c_is16=0 & Cond & creg!=0 & creg & z & LoopII
+  & i22=0 & i21=0 & i20=0 & i19=0 & i18=0 & i17=1
+  & i16=1 & i15=1 & i14=1 & i13=1
+  & i12=0 & i11=0 & i10=0 & i9=0 & i8=0 & i7=0 & i6=0 & i5=0 & i4=0 & i3=0 & i2=0
+{
+  local regcode:4 = creg;
+  local negate:4 = z;
+  local selector:4 = (regcode << 1) | negate;
+  c6000_sploopw(LoopII, selector);
+}
+
+:SPKERNEL SpkFld is c_is16=0 & kfstg & SpkFld
+  & i31=0 & i30=0 & i29=0 & i28=0 & i21=0 & i20=0 & i19=0 & i18=0 & i17=1
+  & i16=1 & i15=0 & i14=1 & i13=0
+  & i12=0 & i11=0 & i10=0 & i9=0 & i8=0 & i7=0 & i6=0 & i5=0 & i4=0 & i3=0 & i2=0
+{ local delay:4 = SpkFld; c6000_spkernel(delay); }
+
+:SPKERNELR is c_is16=0
+  & i31=0 & i30=0 & i29=0 & i28=0 & i27=0 & i26=0 & i25=0 & i24=0 & i23=0
+  & i22=0 & i21=0 & i20=0 & i19=0 & i18=0 & i17=1
+  & i16=1 & i15=0 & i14=1 & i13=1
+  & i12=0 & i11=0 & i10=0 & i9=0 & i8=0 & i7=0 & i6=0 & i5=0 & i4=0 & i3=0 & i2=0
+{ c6000_spkernelr(ILC, RILC); }
+
+:SPMASK spmask is c_is16=0 & spmask
+  & i31=0 & i30=0 & i29=0 & i28=0 & i27=0 & i26=0 & i17=1
+  & i16=1 & i15=0 & i14=0 & i13=0
+  & i12=0 & i11=0 & i10=0 & i9=0 & i8=0 & i7=0 & i6=0 & i5=0 & i4=0 & i3=0 & i2=0
+{ local mask:4 = spmask; c6000_spmask(mask); }
+
+:SPMASKR spmask is c_is16=0 & spmask
+  & i31=0 & i30=0 & i29=0 & i28=0 & i27=0 & i26=0 & i17=1
+  & i16=1 & i15=0 & i14=0 & i13=1
+  & i12=0 & i11=0 & i10=0 & i9=0 & i8=0 & i7=0 & i6=0 & i5=0 & i4=0 & i3=0 & i2=0
+{ local mask:4 = spmask; c6000_spmaskr(mask, ILC, RILC); }
+
+# ---------------------------------------------------------------------------
+# Compact fetch-packet header word (SPRUFE8B section 3.10.2, figures 3-5..3-8).
+#
+# A fetch packet is a header-based (compact) packet exactly when bits 31..28
+# of its eighth word are 1110.  That combination is the reserved predication
+# encoding creg=7, z=0 (SPRUFE8B Table 3-9), so no valid 32-bit instruction
+# matches it.  The header has no architectural effect of its own beyond what
+# the packet analyzer has already folded into the context register.
+# ---------------------------------------------------------------------------
+
+:CPKT hdr_layout, hdr_exp, hdr_pbits is
+  c_is16=0 & c_isheader=1 & i31=1 & i30=1 & i29=1 & i28=0
+  & hdr_layout & hdr_exp & hdr_pbits { }

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TMS320C6000 processor specification. -->
+<processor_spec>
+  <programcounter register="PC"/>
+  <properties>
+    <property key="c6000.packetSize" value="32"/>
+    <property key="c6000.delaySlotsBranch" value="5"/>
+    <property key="c6000.delaySlotsLoad" value="4"/>
+    <!-- Ghidra's heuristic no-return discovery walks the static fall-through
+         after each call. A C6000 call returns past delay slots that are only
+         decoded once C6000CallAnalyzer recognises the call, so the heuristic
+         sees "falls into data", marks returning functions no-return, and its
+         repair then clears the code that would disprove it. -->
+    <property key="enableNoReturnAnalysis" value="false"/>
+  </properties>
+  <!-- Compiled code runs with linear addressing (AMR = 0); the C ABI requires AMR to be 0
+       at calls and returns.  Telling the decompiler so folds the circular-addressing
+       arithmetic in every .D address computation away (a function that sets AMR still
+       sees its own writes). -->
+  <context_data>
+    <tracked_set space="ram">
+      <set name="AMR" val="0"/>
+    </tracked_set>
+  </context_data>
+</processor_spec>

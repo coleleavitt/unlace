@@ -1,0 +1,267 @@
+# GENERATED FILE - tools/gen_nonalign.py; edit the generator, not this file.
+# SPRUFE8B section 3.9.2.3: each byte of a nonaligned transfer wraps
+# independently inside the selected AMR circular buffer.
+
+@if ENDIAN == "big"
+macro c6000_sem_ldnw(a, d, index, side) {
+  local address:4 = a;
+  local mask:4;
+  c6000_circular_mask(index, side, mask);
+  local fixed:4 = address & ~mask;
+  local full:4 = 0;
+  local addr0:4 = fixed | ((address + 0) & mask);
+  local byte0:1 = *[ram]:1 addr0;
+  local part0:4 = zext(byte0);
+  full = full | (part0 << 24);
+  local addr1:4 = fixed | ((address + 1) & mask);
+  local byte1:1 = *[ram]:1 addr1;
+  local part1:4 = zext(byte1);
+  full = full | (part1 << 16);
+  local addr2:4 = fixed | ((address + 2) & mask);
+  local byte2:1 = *[ram]:1 addr2;
+  local part2:4 = zext(byte2);
+  full = full | (part2 << 8);
+  local addr3:4 = fixed | ((address + 3) & mask);
+  local byte3:1 = *[ram]:1 addr3;
+  local part3:4 = zext(byte3);
+  full = full | (part3 << 0);
+  d = full;
+}
+
+macro c6000_sem_ldndw(a, d, index, side) {
+  local address:4 = a;
+  local mask:4;
+  c6000_circular_mask(index, side, mask);
+  local fixed:4 = address & ~mask;
+  local full:8 = 0;
+  local addr0:4 = fixed | ((address + 0) & mask);
+  local byte0:1 = *[ram]:1 addr0;
+  local part0:8 = zext(byte0);
+  full = full | (part0 << 56);
+  local addr1:4 = fixed | ((address + 1) & mask);
+  local byte1:1 = *[ram]:1 addr1;
+  local part1:8 = zext(byte1);
+  full = full | (part1 << 48);
+  local addr2:4 = fixed | ((address + 2) & mask);
+  local byte2:1 = *[ram]:1 addr2;
+  local part2:8 = zext(byte2);
+  full = full | (part2 << 40);
+  local addr3:4 = fixed | ((address + 3) & mask);
+  local byte3:1 = *[ram]:1 addr3;
+  local part3:8 = zext(byte3);
+  full = full | (part3 << 32);
+  local addr4:4 = fixed | ((address + 4) & mask);
+  local byte4:1 = *[ram]:1 addr4;
+  local part4:8 = zext(byte4);
+  full = full | (part4 << 24);
+  local addr5:4 = fixed | ((address + 5) & mask);
+  local byte5:1 = *[ram]:1 addr5;
+  local part5:8 = zext(byte5);
+  full = full | (part5 << 16);
+  local addr6:4 = fixed | ((address + 6) & mask);
+  local byte6:1 = *[ram]:1 addr6;
+  local part6:8 = zext(byte6);
+  full = full | (part6 << 8);
+  local addr7:4 = fixed | ((address + 7) & mask);
+  local byte7:1 = *[ram]:1 addr7;
+  local part7:8 = zext(byte7);
+  full = full | (part7 << 0);
+  d = full;
+}
+
+macro c6000_sem_stnw(s, a, index, side) {
+  local address:4 = a;
+  local mask:4;
+  c6000_circular_mask(index, side, mask);
+  local fixed:4 = address & ~mask;
+  local full:4 = s;
+  local addr0:4 = fixed | ((address + 0) & mask);
+  local part0:4 = full >> 24;
+  local byte0:1 = part0:1;
+  *[ram]:1 addr0 = byte0;
+  local addr1:4 = fixed | ((address + 1) & mask);
+  local part1:4 = full >> 16;
+  local byte1:1 = part1:1;
+  *[ram]:1 addr1 = byte1;
+  local addr2:4 = fixed | ((address + 2) & mask);
+  local part2:4 = full >> 8;
+  local byte2:1 = part2:1;
+  *[ram]:1 addr2 = byte2;
+  local addr3:4 = fixed | ((address + 3) & mask);
+  local part3:4 = full >> 0;
+  local byte3:1 = part3:1;
+  *[ram]:1 addr3 = byte3;
+}
+
+macro c6000_sem_stndw(s, a, index, side) {
+  local address:4 = a;
+  local mask:4;
+  c6000_circular_mask(index, side, mask);
+  local fixed:4 = address & ~mask;
+  local full:8 = s;
+  local addr0:4 = fixed | ((address + 0) & mask);
+  local part0:8 = full >> 56;
+  local byte0:1 = part0:1;
+  *[ram]:1 addr0 = byte0;
+  local addr1:4 = fixed | ((address + 1) & mask);
+  local part1:8 = full >> 48;
+  local byte1:1 = part1:1;
+  *[ram]:1 addr1 = byte1;
+  local addr2:4 = fixed | ((address + 2) & mask);
+  local part2:8 = full >> 40;
+  local byte2:1 = part2:1;
+  *[ram]:1 addr2 = byte2;
+  local addr3:4 = fixed | ((address + 3) & mask);
+  local part3:8 = full >> 32;
+  local byte3:1 = part3:1;
+  *[ram]:1 addr3 = byte3;
+  local addr4:4 = fixed | ((address + 4) & mask);
+  local part4:8 = full >> 24;
+  local byte4:1 = part4:1;
+  *[ram]:1 addr4 = byte4;
+  local addr5:4 = fixed | ((address + 5) & mask);
+  local part5:8 = full >> 16;
+  local byte5:1 = part5:1;
+  *[ram]:1 addr5 = byte5;
+  local addr6:4 = fixed | ((address + 6) & mask);
+  local part6:8 = full >> 8;
+  local byte6:1 = part6:1;
+  *[ram]:1 addr6 = byte6;
+  local addr7:4 = fixed | ((address + 7) & mask);
+  local part7:8 = full >> 0;
+  local byte7:1 = part7:1;
+  *[ram]:1 addr7 = byte7;
+}
+
+@else
+macro c6000_sem_ldnw(a, d, index, side) {
+  local address:4 = a;
+  local mask:4;
+  c6000_circular_mask(index, side, mask);
+  local fixed:4 = address & ~mask;
+  local full:4 = 0;
+  local addr0:4 = fixed | ((address + 0) & mask);
+  local byte0:1 = *[ram]:1 addr0;
+  local part0:4 = zext(byte0);
+  full = full | (part0 << 0);
+  local addr1:4 = fixed | ((address + 1) & mask);
+  local byte1:1 = *[ram]:1 addr1;
+  local part1:4 = zext(byte1);
+  full = full | (part1 << 8);
+  local addr2:4 = fixed | ((address + 2) & mask);
+  local byte2:1 = *[ram]:1 addr2;
+  local part2:4 = zext(byte2);
+  full = full | (part2 << 16);
+  local addr3:4 = fixed | ((address + 3) & mask);
+  local byte3:1 = *[ram]:1 addr3;
+  local part3:4 = zext(byte3);
+  full = full | (part3 << 24);
+  d = full;
+}
+
+macro c6000_sem_ldndw(a, d, index, side) {
+  local address:4 = a;
+  local mask:4;
+  c6000_circular_mask(index, side, mask);
+  local fixed:4 = address & ~mask;
+  local full:8 = 0;
+  local addr0:4 = fixed | ((address + 0) & mask);
+  local byte0:1 = *[ram]:1 addr0;
+  local part0:8 = zext(byte0);
+  full = full | (part0 << 0);
+  local addr1:4 = fixed | ((address + 1) & mask);
+  local byte1:1 = *[ram]:1 addr1;
+  local part1:8 = zext(byte1);
+  full = full | (part1 << 8);
+  local addr2:4 = fixed | ((address + 2) & mask);
+  local byte2:1 = *[ram]:1 addr2;
+  local part2:8 = zext(byte2);
+  full = full | (part2 << 16);
+  local addr3:4 = fixed | ((address + 3) & mask);
+  local byte3:1 = *[ram]:1 addr3;
+  local part3:8 = zext(byte3);
+  full = full | (part3 << 24);
+  local addr4:4 = fixed | ((address + 4) & mask);
+  local byte4:1 = *[ram]:1 addr4;
+  local part4:8 = zext(byte4);
+  full = full | (part4 << 32);
+  local addr5:4 = fixed | ((address + 5) & mask);
+  local byte5:1 = *[ram]:1 addr5;
+  local part5:8 = zext(byte5);
+  full = full | (part5 << 40);
+  local addr6:4 = fixed | ((address + 6) & mask);
+  local byte6:1 = *[ram]:1 addr6;
+  local part6:8 = zext(byte6);
+  full = full | (part6 << 48);
+  local addr7:4 = fixed | ((address + 7) & mask);
+  local byte7:1 = *[ram]:1 addr7;
+  local part7:8 = zext(byte7);
+  full = full | (part7 << 56);
+  d = full;
+}
+
+macro c6000_sem_stnw(s, a, index, side) {
+  local address:4 = a;
+  local mask:4;
+  c6000_circular_mask(index, side, mask);
+  local fixed:4 = address & ~mask;
+  local full:4 = s;
+  local addr0:4 = fixed | ((address + 0) & mask);
+  local part0:4 = full >> 0;
+  local byte0:1 = part0:1;
+  *[ram]:1 addr0 = byte0;
+  local addr1:4 = fixed | ((address + 1) & mask);
+  local part1:4 = full >> 8;
+  local byte1:1 = part1:1;
+  *[ram]:1 addr1 = byte1;
+  local addr2:4 = fixed | ((address + 2) & mask);
+  local part2:4 = full >> 16;
+  local byte2:1 = part2:1;
+  *[ram]:1 addr2 = byte2;
+  local addr3:4 = fixed | ((address + 3) & mask);
+  local part3:4 = full >> 24;
+  local byte3:1 = part3:1;
+  *[ram]:1 addr3 = byte3;
+}
+
+macro c6000_sem_stndw(s, a, index, side) {
+  local address:4 = a;
+  local mask:4;
+  c6000_circular_mask(index, side, mask);
+  local fixed:4 = address & ~mask;
+  local full:8 = s;
+  local addr0:4 = fixed | ((address + 0) & mask);
+  local part0:8 = full >> 0;
+  local byte0:1 = part0:1;
+  *[ram]:1 addr0 = byte0;
+  local addr1:4 = fixed | ((address + 1) & mask);
+  local part1:8 = full >> 8;
+  local byte1:1 = part1:1;
+  *[ram]:1 addr1 = byte1;
+  local addr2:4 = fixed | ((address + 2) & mask);
+  local part2:8 = full >> 16;
+  local byte2:1 = part2:1;
+  *[ram]:1 addr2 = byte2;
+  local addr3:4 = fixed | ((address + 3) & mask);
+  local part3:8 = full >> 24;
+  local byte3:1 = part3:1;
+  *[ram]:1 addr3 = byte3;
+  local addr4:4 = fixed | ((address + 4) & mask);
+  local part4:8 = full >> 32;
+  local byte4:1 = part4:1;
+  *[ram]:1 addr4 = byte4;
+  local addr5:4 = fixed | ((address + 5) & mask);
+  local part5:8 = full >> 40;
+  local byte5:1 = part5:1;
+  *[ram]:1 addr5 = byte5;
+  local addr6:4 = fixed | ((address + 6) & mask);
+  local part6:8 = full >> 48;
+  local byte6:1 = part6:1;
+  *[ram]:1 addr6 = byte6;
+  local addr7:4 = fixed | ((address + 7) & mask);
+  local part7:8 = full >> 56;
+  local byte7:1 = part7:1;
+  *[ram]:1 addr7 = byte7;
+}
+
+@endif

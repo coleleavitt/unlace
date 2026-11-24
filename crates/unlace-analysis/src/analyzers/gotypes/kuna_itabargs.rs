@@ -74,8 +74,12 @@ fn may_write(mnemonic: &str, operands: &str, reg: &str) -> bool {
 }
 
 /// The callee of the first direct call after the `LEA` at `at` whose
-/// destination is `reg`, with `reg` unchanged in between.
-fn call_after(listing: &Listing, at: u64, reg: &str) -> Option<u64> {
+/// destination is `reg`, with the registers still holding the itab there: the
+/// `LEA`'s destination and every register a whole-register `MOV` copied it
+/// to, each until an instruction may write it. `None` once no register holds
+/// it.
+fn call_after(listing: &Listing, at: u64, reg: &'static str) -> Option<(u64, Vec<&'static str>)> {
+    let mut held: Vec<&'static str> = vec![reg];
     let mut next = listing.instruction_at(at)?.fall_through?;
     for _ in 0..MAX_STEPS {
         let insn = listing.instruction_at(next)?;
@@ -84,19 +88,43 @@ fn call_after(listing: &Listing, at: u64, reg: &str) -> Option<u64> {
                 return None;
             }
             return match insn.flows.as_slice() {
-                [callee] => Some(*callee),
+                [callee] => Some((*callee, held)),
                 _ => None,
             };
         }
         if insn.flow.is_jump || insn.flow.is_terminal || !insn.flow.has_fallthrough {
             return None;
         }
-        if may_write(&insn.mnemonic, &insn.operands, reg) {
+        let copied = copy_of_held(&insn.mnemonic, &insn.operands, &held);
+        held.retain(|r| !may_write(&insn.mnemonic, &insn.operands, r));
+        if let Some(dest) = copied {
+            if !held.contains(&dest) {
+                held.push(dest);
+            }
+        }
+        if held.is_empty() {
             return None;
         }
         next = insn.fall_through?;
     }
     None
+}
+
+/// The destination of `MOV dst,src` when both are whole integer argument
+/// registers and `src` holds the itab.
+fn copy_of_held(mnemonic: &str, operands: &str, held: &[&'static str]) -> Option<&'static str> {
+    if mnemonic.trim() != "MOV" {
+        return None;
+    }
+    let (dest, source) = operands.split_once(',')?;
+    let source = source.trim();
+    if !held.iter().any(|reg| *reg == source) {
+        return None;
+    }
+    INTEGER_REGISTERS
+        .iter()
+        .copied()
+        .find(|reg| *reg == dest.trim())
 }
 
 /// The `(callee, register index) -> interfaces` votes of every `LEA` of a
@@ -118,10 +146,15 @@ pub(crate) fn votes(
             let Some(index) = INTEGER_REGISTERS.iter().position(|reg| *reg == dest) else {
                 continue;
             };
-            if let Some(callee) = call_after(listing, r.from, INTEGER_REGISTERS[index]) {
-                out.entry((callee, index))
-                    .or_default()
-                    .insert(interface.clone());
+            let Some((callee, held)) = call_after(listing, r.from, INTEGER_REGISTERS[index]) else {
+                continue;
+            };
+            for reg in held {
+                if let Some(index) = INTEGER_REGISTERS.iter().position(|r| *r == reg) {
+                    out.entry((callee, index))
+                        .or_default()
+                        .insert(interface.clone());
+                }
             }
         }
     }
@@ -204,5 +237,16 @@ mod tests {
             may_write("", "", "RAX"),
             "an unknown instruction is a write"
         );
+    }
+
+    #[test]
+    fn a_whole_register_copy_carries_the_itab() {
+        assert_eq!(copy_of_held("MOV", "RAX,RCX", &["RCX"]), Some("RAX"));
+        assert_eq!(copy_of_held("MOV", "EAX,ECX", &["RCX"]), None);
+        assert_eq!(
+            copy_of_held("MOV", "qword ptr [RSP + 0x78],RCX", &["RCX"]),
+            None
+        );
+        assert_eq!(copy_of_held("MOV", "RAX,RBX", &["RCX"]), None);
     }
 }

@@ -10915,14 +10915,21 @@ function that materializes a `va_list` spills the unnamed argument registers
 to a 176-byte register save area (the XMM half under `if (al)`) and sets the
 four `__va_list_tag` fields. The action finds the two offset constants (two
 4-byte COPYs or one 8-byte COPY at a stack slot `X`: `gp_offset` a multiple of
-8 up to 48, `fp_offset` 48 plus a multiple of 16 up to 176) and, in the same
-block, the writes of `X+8` and `X+16`, where the `X+16` value is a stack
-address (`PTRSUB` or `INT_ADD` off the stack pointer) giving the save area. A
-write is a COPY, or an INDIRECT whose input is other storage (a store folded
-into a later call's effect on the slot). It inserts `va_start(&X, last)`
+8 up to 48, `fp_offset` 48 plus a multiple of 16 up to 176) and the writes of
+`X+8` and `X+16`, where the `X+16` value is a stack address (`PTRSUB` or
+`INT_ADD` off the stack pointer) giving the save area. A write is a COPY, or an
+INDIRECT whose input is other storage (a store folded into a later call's
+effect on the slot), and counts when the write or the value it writes is in
+the offset COPY's block: once the fields are heritaged, a prologue followed by
+a switch of calls keeps its pointer writes only as the INDIRECTs each call
+carries, while the values stay in the prologue (libedit `el_get`,
+`history_w`). A match whose two pointer values are both computed in that
+block wins over one whose writes merely sit there: a `gp_offset` store that
+steps the offset after a `va_arg` gcc folded (`history_w`'s `H_LOAD` arm
+stores 0x20) sits beside the INDIRECTs of a call. It inserts `va_start(&X, last)`
 before the offset COPYs, turns those COPYs into indirect creations of it, and
-feeds the pointer writes from new indirect creations of it, so the `va_list`
-keeps every later reader. `last` is the prototype's parameter
+feeds every write of each pointer value to its field from one new indirect
+creation of it per field, so the `va_list` keeps every later reader. `last` is the prototype's parameter
 `gp_offset/8 + (fp_offset-48)/16 - 1`, or, before a prototype exists and with
 no named float argument, the integer argument register `gp_offset/8 - 1`. The
 save area's slots lose their address-forced liveness and local mapping (as the
@@ -10940,7 +10947,7 @@ against 48 (176 for a double, `fp_offset`). Below it the register arm reads
 `reg_save_area + offset` and steps the offset by 8 (or 16); otherwise the
 overflow arm reads through `overflow_arg_area` and steps that pointer.
 
-**(unlace) A constant-offset `va_arg` on a local `va_list` — `option vaargconst`, values `off|on|builtin`, default off, `crates/unlace-bandb-base/src/p4_calls/vaargconst.rs (rewrite)`.** gcc tests `gp_offset` (`fp_offset` for a double) at every `va_arg`. On a `va_list` the function starts itself, every offset on a path from `va_start` is a constant, so dataflow folds each test and the read becomes a plain read of an argument register or a stack argument. No expansion is left for `vaarg`, and the function keeps every argument register as a parameter (libedit `history_w(h, ev, fun, ...)` printed fourteen). At `ActionStart`, before heritage, the pass walks the raw ops in breadth-first block order. A block with one predecessor starts from that predecessor's final state; any other block starts from the stack pointer alone, when every predecessor agrees on it. The walk resolves each write to a symbolic value: the entry stack pointer plus a constant, a 4-byte field loaded from a stack offset plus a constant, an 8-byte field loaded from a stack offset plus a constant, or the sum of an 8-byte and a 4-byte field. A raw CALL leaves the stack pointer 8 lower and forgets every other register. A `va_list` at stack offset `L` qualifies when one block stores a 4-byte constant `gp_offset` (a multiple of 8, at most 48) at `L` and stack addresses at `L+8` and `L+16`. A site is a block ending in a CBRANCH that compares the field at `L` (or `L+4`) with the save-area limit: 39, 40, 47 or 48 for an integer, 159, 160, 175 or 176 for a double. One successor of the site must have the site as its only predecessor and read through the field at `L+16` plus that offset field; the other must load the field at `L+8`. That read becomes the CALLOTHER `va_arg(&L, class)` (`BUILTIN_VAARG`; class 1 for the `fp_offset` half). The arm's stores of the stepped offset back to its field are destroyed, and the branch's condition becomes the constant that selects the register arm, so the memory arm is unreachable. While the option is on, `vastart` also accepts a lone 4-byte `gp_offset` write, which gcc emits when no `va_arg` reads a double, with `fp_offset` 48; it then folds the prologue to `va_start(&ap, last)` and marks the prototype variadic. The value `builtin` prints the call as `__builtin_va_arg`, gcc's name.
+**(unlace) A constant-offset `va_arg` on a local `va_list` — `option vaargconst`, values `off|on|builtin`, default off, `crates/unlace-bandb-base/src/p4_calls/vaargconst.rs (rewrite)`.** gcc tests `gp_offset` (`fp_offset` for a double) at every `va_arg`. On a `va_list` the function starts itself, every offset on a path from `va_start` is a constant, so dataflow folds each test and the read becomes a plain read of an argument register or a stack argument. No expansion is left for `vaarg`, and the function keeps every argument register as a parameter (libedit `history_w(h, ev, fun, ...)` printed fourteen). At `ActionStart`, before heritage, the pass walks the raw ops in breadth-first block order. A block with one predecessor starts from that predecessor's final state; any other block starts from the stack pointer alone, when every predecessor agrees on it. The walk resolves each write to a symbolic value: the entry stack pointer plus a constant, a 4-byte field loaded from a stack offset plus a constant, an 8-byte field loaded from a stack offset plus a constant, or the sum of an 8-byte and a 4-byte field. A raw CALL leaves the stack pointer 8 lower and forgets every other register. A `va_list` at stack offset `L` qualifies when one block stores a 4-byte constant `gp_offset` (a multiple of 8, at most 48) at `L` and stack addresses at `L+8` and `L+16`. A site is a block ending in a CBRANCH that compares the field at `L` (or `L+4`) with the save-area limit: 39, 40, 47 or 48 for an integer, 159, 160, 175 or 176 for a double. One successor of the site must have the site as its only predecessor and read through the field at `L+16` plus that offset field; the other must load the field at `L+8`. That read becomes the CALLOTHER `va_arg(&L, class)` (`BUILTIN_VAARG`; class 1 for the `fp_offset` half). The arm's stores of the stepped offset back to its field are destroyed, and the branch's condition becomes the constant that selects the register arm, so the memory arm is unreachable. While the option is on, `vastart` also accepts a lone 4-byte `gp_offset` write of at least 8, which gcc emits when no `va_arg` reads a double, with `fp_offset` 48; it then folds the prologue to `va_start(&ap, last)` and marks the prototype variadic. The value `builtin` prints the call as `__builtin_va_arg`, gcc's name.
 
 The action collects the `va_list` state into webs: the offset web (the values
 of `gp_offset` or `fp_offset`, through copies, extensions, phis and constant

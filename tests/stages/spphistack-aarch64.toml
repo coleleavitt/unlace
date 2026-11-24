@@ -1,0 +1,67 @@
+# unlace option spphistack (unlace#975): a va_list walk that starts at the
+# incoming stack pointer is a local holding a stack address, not the stack
+# pointer register.
+#
+# AAPCS64 keeps the va_list overflow area (__stack) at the incoming sp; the
+# loop's overflow pointer starts as sp(i) and printed
+#     v4 = (int4 *)Register00000008;   (sp is 0x8)
+#
+# Stage: P6 variables and merge (merge-aggressiveness), option spphistack
+# off|on.  Pass 1 (off) pins the old print, where the loop pointer takes the
+# stack pointer's addrtied storage name; pass 2 (on, the default) merges the
+# phi with PTRSUB(sp, 0), which prints as a stack reference.
+#
+# Source (zig cc -target aarch64-freestanding -O2 -c, .text):
+#     #include <stdarg.h>
+#     int v2(int n, ...) { va_list ap; va_start(ap, n); int s = 0;
+#         for (int i = 0; i < n; i++) s += va_arg(ap, int); va_end(ap); return s; }
+#
+# Assert #1: off, the loop pointer prints under the stack pointer's storage.
+# Assert #2: only the off pass names that storage at all.
+# Assert #3: on, the walk starts from a stack reference held in a local.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'v2' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '''
+ff8303d1e8068092e9030091ea23029108f0dff2290102911f040071e9230da9
+48e10091e9830391e18b08a9e39309a9e59b0aa9e00700ade20f01ade41702ad
+e61f03ade86700f9e7a70ba90b030054ea274ca9e8031f2aecdb40b90a000014
+2cc12c8bed030aaaea030caa4a0140b900040071ec030b2a4801080bea030daa
+800100546c00f837eb030c2a050000148b2100119f210031ebdb00b929feff54
+4d210091ed6300f9f1ffff17e8031f2ae003082aff830391c0035fd6
+'''
+
+[script]
+commands = [
+    'lo fu v2',
+    'option spphistack off',
+    'decompile',
+    'print C',
+    'option spphistack on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'spphistack aarch64 #1: off, the walk is named after the stack pointer'
+count = 1
+literal = 'v4 = (int4 *)Register00000008;'
+
+[[match]]
+name = 'spphistack aarch64 #2: only the off pass names the stack pointer storage'
+count = 1
+literal = 'Register000'
+
+[[match]]
+name = 'spphistack aarch64 #3: on, the walk starts at a stack reference'
+count = 1
+literal = 'v4 = (int4 *)(unsigned long)&Stack0000000000000000;'

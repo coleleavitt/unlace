@@ -1519,7 +1519,7 @@ pub fn c_declarations(til: &Til, ptr_size: u8) -> Vec<(u64, String, String)> {
     out
 }
 
-/// The first line of every type-library text (`unlace-typelib 1`).
+/// The first line of every type-library text (`typelib 1`).
 pub const FORMAT_LINE: &str = "typelib 1";
 
 /// `true` when `bytes` opens like an IDA type library.

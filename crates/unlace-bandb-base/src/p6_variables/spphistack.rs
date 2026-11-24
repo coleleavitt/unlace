@@ -27,8 +27,8 @@ crate::unlace_flag!(
     SpPhiStack,
     "spphistack",
     "phi input stack pointer as a stack reference",
-    unset: false,
-    shipped: false
+    unset: true,
+    shipped: true
 );
 
 /// Every live MULTIEQUAL input slot holding the spacebase input register.

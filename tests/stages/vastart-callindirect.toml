@@ -1,0 +1,89 @@
+# unlace option vastart: a va_start prologue whose va_list field writes moved
+# into the INDIRECTs of the calls after it still folds to va_start.
+#
+# gcc -O2 folds every va_arg of a va_list the function starts itself when the
+# offsets are constants: here each arm reads the register save area directly
+# and only the prologue's three field stores are left (gp_offset = 0x10, no
+# fp_offset store since no va_arg reads a double).  Once the fields are
+# heritaged the overflow_arg_area and reg_save_area writes survive only as the
+# INDIRECTs each call carries, in the switch arms, while their values stay in
+# the prologue.  vastart required the writes in the gp_offset COPY's block, so
+# the function printed the four stores and a six-parameter prototype (libedit
+# el_get, unlace#975).  A write now counts when its value is computed in that
+# block.
+#
+# Stage: P4 calls and prototypes (output-prototype), options vastart (default
+# on) and vaargconst (default off; on, vastart takes the lone gp_offset store).
+# Pass 1 (vaargconst off) keeps the stores; pass 2 (on) folds the prologue.
+#
+# Source (gcc 15 -O2 -fno-stack-protector -fcf-protection=none, x86-64,
+# .text of elget.o at 0x100000, calls relocated to ret stubs wget 0x100200,
+# other 0x100210):
+#     int el_get_like(void *e, int op, ...) {
+#       va_list ap; int rv;
+#       if (!e) return -1;
+#       va_start(ap, op);
+#       switch (op) {
+#       case 0: rv = wget(e, 0, va_arg(ap, int *)); break;
+#       case 1: rv = wget(e, 1, va_arg(ap, int *)); break;
+#       case 2: { int x = va_arg(ap, int); rv = wget(e, 2, x, va_arg(ap, char **)); break; }
+#       case 3: { int q = 0; rv = other(e, va_arg(ap, long), &q, op); *va_arg(ap, int *) = q; break; }
+#       default: rv = -1; break;
+#       }
+#       va_end(ap);
+#       return rv;
+#     }
+#
+# Assert #1: only the vaargconst pass folds the prologue to va_start.
+# Assert #2: only that pass marks the prototype variadic.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'el_get_like' },
+    { space = 'ram', offset = '0x100200', name = 'wget' },
+    { space = 'ram', offset = '0x100210', name = 'other' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '''
+4883ec58488954243048894c24384c894424404c894c24484885ff0f848f0000
+00488d442460c7442408100000004889442410488d442420488944241883fe02
+0f849a0000007f2885f6747483fe01755f488b442418be01000000488b501031
+c0e89a0100004883c458c30f1f44000083fe03753b488b442418488d542404b9
+03000000c744240400000000488b7010e87b010000488b5424188b4c2404488b
+5218890a4883c458c30f1f8000000000b8ffffffff4883c458c3660f1f440000
+488b44241831f6488b501031c0e82e0100004883c458c3660f1f840000000000
+488b442418be020000008b5010488b481831c0e8080100004883c458c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100200'
+readonly = true
+hex = 'c3000000000000000000000000000000c3'
+
+[script]
+commands = [
+    'lo fu el_get_like',
+    'option vaargconst off',
+    'decompile',
+    'print C',
+    'option vaargconst on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'vastart call-indirect prologue #1: only the vaargconst pass prints va_start'
+count = 1
+regex = 'va_start\(.*,a1\);'
+
+[[match]]
+name = 'vastart call-indirect prologue #2: only that pass prints a variadic prototype'
+count = 1
+regex = 'el_get_like\(int8 a0,int4 a1,.*\.\.\.\)'

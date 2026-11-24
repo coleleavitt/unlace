@@ -10,7 +10,7 @@
 //! them is one function, one typedef or one record:
 //!
 //! ```text
-//! unlace-typelib 1
+//! typelib 1
 //! target linux x86_64
 //! source musl 1.2.6
 //! T nfds_t *<TAB>unsigned long

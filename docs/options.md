@@ -543,9 +543,9 @@ Three tiers:
 | a long long local on a 32-bit target prints as CONCAT44 of two variables | [`pairlocal`](#pairlocal----on--off-default-off) |
 | CONCAT44(v13, v12) after an if where each half is set on every path | [`pairlocal`](#pairlocal----on--off-default-off) |
 | a 64-bit sum or compare reads CONCAT44 of a sign-extended pair | [`pairlocal`](#pairlocal----on--off-default-off) |
-| a va_list walk prints as Register00000074 = (int *)((int)Register00000074 + 4) on MIPS | [`spphistack`](#spphistack----on--off-default-off) |
-| a varargs loop on AArch64 reads (int *)Register00000008 | [`spphistack`](#spphistack----on--off-default-off) |
-| a loop pointer that starts at the incoming stack pointer is named after the stack pointer register's storage | [`spphistack`](#spphistack----on--off-default-off) |
+| a va_list walk prints as Register00000074 = (int *)((int)Register00000074 + 4) on MIPS | [`spphistack`](#spphistack----on--off-default-on) |
+| a varargs loop on AArch64 reads (int *)Register00000008 | [`spphistack`](#spphistack----on--off-default-on) |
+| a loop pointer that starts at the incoming stack pointer is named after the stack pointer register's storage | [`spphistack`](#spphistack----on--off-default-on) |
 | heavily-called custom die()/fatal() wrapper still treated as returning | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
 | dead code after a stripped sub_ wrapper that never falls through at 3+ call sites | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
 | caller swallows the next function after a wrapper call | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
@@ -2627,13 +2627,13 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · pairlocal
 - **Example:** `--option pairlocal on`
 
-### `spphistack` -- on | off, default `off`
+### `spphistack` -- on | off, default `on`
 
 - **Symptoms:** a va_list walk prints as Register00000074 = (int *)((int)Register00000074 + 4) on MIPS; a varargs loop on AArch64 reads (int *)Register00000008; a loop pointer that starts at the incoming stack pointer is named after the stack pointer register's storage.
-- **What it does:** Turn a MULTIEQUAL input that is the bare input stack pointer into PTRSUB(sp, 0) computed at the end of that edge's predecessor, just before HighVariables are assigned. A va_list the function spills and reloads becomes, after the stack is heritaged and its +4 steps move into the loop, a loop phi whose entry value is sp(i) itself (MIPS o32 and AArch64 add_all); merging puts sp(i) into the phi's HighVariable, which then takes the stack pointer's addrtied storage name and prints as Register00000074 = (int *)((int)Register00000074 + 4). With the option on the phi merges with an ordinary value whose source is a stack reference, as an sp(i) + c already is.
-- **When to flip:** Off by default: it inserts an op on the edge into every phi that reads the input stack pointer, and what the stack reference prints as depends on the stack symbols mapped at offset 0. Turn it on when a varargs loop or another walk that starts at the incoming stack pointer prints as an assignment to RegisterNNNNNNNN (the stack pointer's storage) instead of a local.
+- **What it does:** Turn a MULTIEQUAL input that is the bare input stack pointer into PTRSUB(sp, 0) computed at the end of that edge's predecessor, just before HighVariables are assigned. A va_list the function spills and reloads becomes, after the stack is heritaged and its +4 steps move into the loop, a loop phi whose entry value is sp(i) itself (MIPS o32, AArch64, Hexagon and OpenRISC add_all); merging puts sp(i) into the phi's HighVariable, which then takes the stack pointer's addrtied storage name and prints as Register00000074 = (int *)((int)Register00000074 + 4). With the option on the phi merges with an ordinary value whose source is a stack reference, as an sp(i) + c already is.
+- **When to flip:** On by default: a walk that starts at the incoming stack pointer (a va_list on MIPS o32, AArch64, Hexagon or OpenRISC) is a local holding a stack address instead of an assignment to RegisterNNNNNNNN, the stack pointer's storage. What the stack reference prints as depends on the stack symbols mapped at offset 0 (a local array, or &Stack00000000). Turn it off to see the phi read the stack pointer register itself.
 - **Where / provenance:** P6/merge-aggressiveness · unlace · new-analysis · unlace-975
-- **Example:** `--option spphistack on`
+- **Example:** `--option spphistack off`
 
 ### `noreturn_disc` -- on | off, default `on`
 

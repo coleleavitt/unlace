@@ -5606,9 +5606,8 @@ before optimization can create indistinguishable same-address reconstructions.
 IBM z/Architecture, language id `s390x:BE:64:default`. It is the first slice of
 s390x support: the general instructions through the z15 facilities, the
 binary-floating-point instructions on `f0`-`f15` (short, long, and extended in
-register pairs), and the s390x ELF ABI. The vector facility (opcode `E7`) is
-not decoded yet, so a function that reaches a vector instruction ends there in
-`halt_baddata()`. The four `s390x_*.sinc` files are written by
+register pairs), the vector facility (`s390x_vector.sinc`, below), and the s390x
+ELF ABI. The four `s390x_*.sinc` files are written by
 `specs/Ghidra/Processors/s390x/gen_sinc.py` from its opcode tables.
 
 Instructions are 2, 4 or 6 bytes long, fixed by the top two bits of the first
@@ -5679,6 +5678,26 @@ z13+ build halted on the high-word instructions and every `isnan` halted on `tcd
 `tools/difffuzz --arch s390x --oracle qemu`, which also found that `risbhg` and `risblg` took their
 start and end positions from six bits of I3/I4 instead of bits 3-7 (a position within the word),
 so `risblg r11,r1,0xdf,0xe4,11` cleared the register instead of inserting a wrapped field.
+
+### s390x vector facility (#98)
+
+`specs/Ghidra/Processors/s390x/gen_vector.py` writes `s390x_vector.sinc` from
+`vector_insts.json`, the 798 `E6`/`E7` instructions of LLVM's SystemZ TableGen records
+(mnemonics, operands and encoding bits). `v0`-`v31` are 16-byte registers and `f16`-`f31`
+(and `f16s`-`f31s`) extend the existing `f0`-`f15` views of their leftmost doubleword (word),
+so a scalar W instruction (`wfadb %f0,%f2,%f4`) reads and writes a `double` like the BFP
+instructions do. A register operand is a subtable over its four-bit field and its RXB bit.
+The generator gives exact p-code to the families LLVM emits at `-march=z13` and later
+(lane arithmetic, logic, compares, shifts, permutes, loads and stores, scalar and vector
+binary floating point including compares, data-class tests, conversions and `vfi`/`wfi` for
+explicit rounding modes) and a user operation `vec_<mnemonic>` (plus `vec_<mnemonic>_cc`)
+to the rest. `vsl`/`vsrl`/`vsra` shift each byte by its own count from the matching byte
+of the shift operand, as the vector-enhancements 2 facility defines. `lde`/`lder` (HFP load
+lengthened, which keeps the bits and clears the right half) are decoded because LLVM loads a
+`float` with them. Checked with `tools/difffuzz --arch s390x-vec --oracle qemu` (every
+encoding of the exact families, three per instruction): no mismatch outside the fused
+multiply-adds. A static musl image built for `-mcpu=z15` went from 49 of 113 functions
+halting to 7, all on the `0x0000` crash word.
 
 ### x86-64 lifter fixes from differential fuzzing
 

@@ -766,7 +766,7 @@ class S390x(Arch):
     pc = "PC"
     max_len = 6
     gprs = [(f"r{i}", getattr(sz, f"UC_S390X_REG_R{i}")) for i in range(16)]
-    vecs = [(f"f{i}", getattr(sz, f"UC_S390X_REG_F{i}")) for i in range(16)]
+    vecs = [(f"v{i}", getattr(sz, f"UC_S390X_REG_V{i}", None)) for i in range(32)]
     pc_const = sz.UC_S390X_REG_PC
     deny = S390X_DENY
     qemu_bits = ("CC0", "CC1", "CC2", "CC3", "CCA", "CCB")
@@ -789,6 +789,43 @@ class S390x(Arch):
     def skip(self, cand):
         # QEMU 10.2 stores the low word shifted left by 32 (zero) for STMH, not bits 0-31
         return cand["mnemonic"] == "stmh"
+
+    def ignored(self, mnemonic, operands, state):
+        dst = "v" + operands.split(",")[0].strip()[2:]
+        if re.match(r"^[vw]fn?m[as](sb|db|xb)$", mnemonic):
+            return {dst}  # fused: p-code rounds twice
+        if re.match(r"^[vw]c(dg|dlg|ef|elf)b?$", mnemonic):
+            mode = operands.split(",")[-1].strip()
+            if mode not in ("0", "4"):
+                return {dst}  # an int-to-float conversion rounds to nearest in p-code, whatever M5 says
+        return set()
+
+    partial_uses_sleigh = True
+
+    def partial(self, mnemonic, operands, sleigh=None):
+        """A scalar (W) vector instruction defines element 0 of its target; the rest of the
+        register is unpredictable. The SLEIGH mnemonic is used when there is one (Capstone 5
+        prints the newer W forms as their generic V form)."""
+        if sleigh is not None:
+            mnemonic = sleigh["mnemonic"]
+            dst = sleigh["operands"].split(",")[0].strip()
+            dst = "%" + dst.rstrip("s") if dst.startswith(("f", "v")) else dst
+        else:
+            dst = operands.split(",")[0].strip()
+        if not mnemonic.startswith("w") or not dst.startswith(("%f", "%v")) or mnemonic.endswith("xb") and not mnemonic.startswith("wflrx"):
+            return {}
+        sb = re.search(r"sbs?$", mnemonic) is not None or \
+            mnemonic in ("wledb", "wcefb", "wcelfb", "wcfeb", "wclfeb")
+        return {"v" + dst[2:]: ((1 << 32) - 1) << 96 if sb else ((1 << 64) - 1) << 64}
+
+
+class S390xVec(S390x):
+    """s390x with the generator drawing vector-facility (E7, E6) encodings."""
+    name = "s390x-vec"
+    deny = re.compile(r"$^")
+
+    def gen(self, rng):
+        return bytes([0xE6 if rng.random() < 0.1 else 0xE7]) + rng.getrandbits(40).to_bytes(5, "big")
 
 
 class _ObjdumpIns:
@@ -1201,4 +1238,4 @@ class M68k(Arch32):
         return cand["mnemonic"] == "link.w" and cand["op_str"].startswith("a7,")
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k())}
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k())}

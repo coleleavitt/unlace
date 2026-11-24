@@ -265,7 +265,7 @@ def _float(opc, ins, a, asz, b, osz):
             if r != sext(r, osz):
                 raise Unmodeled("float to int overflow")
             return r & mask(osz)
-        return from_float(float(f(x)), osz)
+        return from_float(math.copysign(float(f(x)), x), osz)
     if opc == "FLOAT_SQRT":
         if not x >= 0:
             raise Unmodeled("nan result")

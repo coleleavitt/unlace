@@ -461,7 +461,7 @@ fn round_trip(image: &Image, text: &str) -> Result<(), String> {
 /// `w`, which returns its result as it is), and `z6`, `z7` and `z8`, whose
 /// callers shift the result before returning it or passing it on, return the
 /// whole register,
-/// `lb` an `unsigned char`, while `ru` and `si`, whose callers extend the
+/// `lb`, whose caller sign-extends its 32-bit result, a 32-bit value, while `ru` and `si`, whose callers extend the
 /// result themselves, still return 32 bits. A caller that compares or adds the
 /// low word of a result its callee returns whole (`eqv`, `ar`, and `eqw` over
 /// the 64-bit `w64`) truncates the call explicitly, to an unsigned word where
@@ -476,7 +476,7 @@ fn a_caller_that_computes_with_the_whole_register_keeps_the_zero_extension() {
         ("z6", "unsigned long z6("),
         ("z7", "unsigned long z7("),
         ("z8", "unsigned long z8("),
-        ("lb", "unsigned char lb("),
+        ("lb", "int lb("),
     ];
     for image in IMAGES {
         let text = decompile_all(image);

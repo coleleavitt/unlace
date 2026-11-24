@@ -31,7 +31,7 @@ use crate::pass::{AnalysisOutput, CommentFact};
 use crate::rtti::models::ImageBytes;
 use crate::rtti::refkind::{End, RefKind};
 use crate::rtti::vftable::TextRanges;
-use unlace_decomp::kuna_itaniumeh::{EhCallSite, EhClause};
+use unlace_decomp::kuna_itaniumeh::{EhCallSite, EhClause, MsvcFunclet};
 
 use super::kuna_msvcfuncinfo::{
     decode_fh3, funclet_name, is_fh3, language_handler, name_funclet, notes, parent_names,
@@ -106,9 +106,11 @@ pub fn collect(
                 scope_notes(func, &scopes, false, &mut out);
             }
             let rk = RefKind::new(false, 0, End::Little);
+            let mut spliced = FxHashSet::<u64>::default();
             for (func, info) in x86_funcinfos(img, code) {
                 if let Some(decoded) = decode_fh3(img, &rk, 0, info) {
                     notes(func, &decoded, false, &mut out);
+                    x86_splice(code, func, &decoded, &mut spliced, &mut out);
                 }
             }
         }
@@ -226,6 +228,133 @@ pub fn constant_filter(c: i32) -> String {
         -1 => "EXCEPTION_CONTINUE_EXECUTION".to_string(),
         c => format!("{c}"),
     }
+}
+
+/// (kuna `msvceh`) The x86 C++ try regions of `func` as call-site records whose
+/// pads are its catch blocks. x86 keeps the EH state in `[ebp-4]`, so the regions
+/// come from the state stores between the function start and its first catch
+/// block (or 16 KiB), in layout order; a catch block is used when it ends in
+/// `mov eax, <continuation in the function>; ret`.
+fn x86_splice(
+    code: &[(u64, &[u8])],
+    func: u64,
+    info: &super::kuna_msvcfuncinfo::EhFuncInfo,
+    spliced: &mut FxHashSet<u64>,
+    out: &mut AnalysisOutput,
+) {
+    let Some(&(base, data)) = code
+        .iter()
+        .find(|&&(b, d)| func >= b && func - b < d.len() as u64)
+    else {
+        return;
+    };
+    let handlers: Vec<u64> = info
+        .tries
+        .iter()
+        .flat_map(|t| t.catches.iter().map(|c| c.handler))
+        .collect();
+    let end = handlers
+        .iter()
+        .copied()
+        .filter(|&h| h > func)
+        .min()
+        .unwrap_or(func + 0x4000)
+        .min(base + data.len() as u64)
+        .min(func + 0x4000);
+    let body = &data[(func - base) as usize..(end - base) as usize];
+    let mut states = vec![(func, -1)];
+    states.extend(x86_state_stores(body, func));
+    let regions = super::kuna_msvcfuncinfo::state_regions(&states, func, end);
+    if regions.is_empty() {
+        return;
+    }
+    for t in &info.tries {
+        for (k, c) in t.catches.iter().enumerate() {
+            let Some(off) = c
+                .handler
+                .checked_sub(base)
+                .filter(|&o| o < data.len() as u64)
+            else {
+                continue;
+            };
+            let window = &data[off as usize..(off as usize + 0x1000).min(data.len())];
+            let returns = x86_handler_returns(window, c.handler, func, end);
+            if returns.is_empty() {
+                continue;
+            }
+            if spliced.insert(c.handler) {
+                out.msvc_funclets.push(MsvcFunclet {
+                    pad: c.handler,
+                    frame_reg: None,
+                    frame_offset: 0,
+                    returns,
+                    x86: true,
+                });
+            }
+            let selector = k as i64 + 1;
+            let clause = if c.type_name.is_some() {
+                EhClause::Catch {
+                    selector,
+                    type_name: Some(c.caught()),
+                }
+            } else {
+                EhClause::CatchAll { selector }
+            };
+            for &(lo, hi, s) in &regions {
+                if s >= t.low as i32 && s <= t.high as i32 {
+                    out.msvc_eh_sites.push(EhCallSite {
+                        start: lo,
+                        end: hi,
+                        pad: c.handler,
+                        clauses: vec![clause.clone()],
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// `(address after the store, state)` for each x86 EH state store in `code`
+/// (at `base`): `mov dword [ebp-4], imm32`, `mov byte [ebp-4], imm8`,
+/// `and dword [ebp-4], 0`, `or dword [ebp-4], -1`.
+pub fn x86_state_stores(code: &[u8], base: u64) -> Vec<(u64, i32)> {
+    let mut v = Vec::new();
+    let mut i = 0usize;
+    while i < code.len() {
+        let hit = match &code[i..] {
+            [0xC7, 0x45, 0xFC, a, b, c, d, ..] => Some((7, i32::from_le_bytes([*a, *b, *c, *d]))),
+            [0xC6, 0x45, 0xFC, a, ..] => Some((4, *a as i8 as i32)),
+            [0x83, 0x65, 0xFC, 0x00, ..] => Some((4, 0)),
+            [0x83, 0x4D, 0xFC, 0xFF, ..] => Some((4, -1)),
+            _ => None,
+        };
+        match hit {
+            Some((len, state)) => {
+                v.push((base + (i + len) as u64, state));
+                i += len;
+            }
+            None => i += 1,
+        }
+    }
+    v
+}
+
+/// `(ret, continuation)` for each `mov eax, imm32; ret` in an x86 catch block
+/// (`window` at `start`) whose immediate lies in `[lo, hi)`.
+pub fn x86_handler_returns(window: &[u8], start: u64, lo: u64, hi: u64) -> Vec<(u64, u64)> {
+    let mut out = Vec::new();
+    for j in 0..window.len().saturating_sub(5) {
+        if window[j] != 0xB8 || window[j + 5] != 0xC3 {
+            continue;
+        }
+        let cont =
+            u32::from_le_bytes([window[j + 1], window[j + 2], window[j + 3], window[j + 4]]) as u64;
+        if cont >= lo && cont < hi {
+            out.push((start + j as u64 + 5, cont));
+            break;
+        }
+    }
+    out
 }
 
 /// `__C_specific_handler`, with or without leading underscores.
@@ -539,6 +668,23 @@ mod tests {
         code.push(0xE8);
         code.extend_from_slice(&[0, 0, 0, 0]);
         assert_eq!(x86_eh_prologue(&code, 2), Some((0, 0x0040_1900)));
+    }
+
+    #[test]
+    fn x86_state_stores_and_handler_returns() {
+        let code = [
+            0xC7, 0x45, 0xFC, 0x00, 0x00, 0x00, 0x00, 0x90, 0xC6, 0x45, 0xFC, 0x01, 0x83, 0x4D,
+            0xFC, 0xFF,
+        ];
+        assert_eq!(
+            x86_state_stores(&code, 0x1000),
+            vec![(0x1007, 0), (0x100c, 1), (0x1010, -1)]
+        );
+        let handler = [0x90, 0xB8, 0x40, 0x10, 0x40, 0x00, 0xC3];
+        assert_eq!(
+            x86_handler_returns(&handler, 0x401200, 0x401000, 0x401200),
+            vec![(0x401206, 0x401040)]
+        );
     }
 
     #[test]

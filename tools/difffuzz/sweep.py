@@ -38,6 +38,7 @@ CONFIGS = [
     ("loongarch64", "qemu"), ("s390x-vec", "qemu"), ("alpha", "qemu"), ("hppa", "qemu"), ("microblaze", "qemu"),
     ("microblazeel", "qemu"), ("or1k", "qemu"),
     ("x86-64-native", "native"), ("x86-64-x87", "native"),
+    ("x86-32-native", "native"), ("x86-16", "unicorn"),
 ]
 FAILING = ("mismatch", "length", "missing-output", "missing-input")
 KNOWN = HERE / "sweep_known.json"

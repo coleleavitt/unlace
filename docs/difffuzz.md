@@ -485,6 +485,31 @@ scalar float arithmetic, integer and flag semantics are compared.
 `tools/x86_avx512_sweep.py --enc EncVEX` / `--enc EncNormal` (with VEX or legacy `--predicates`) is the
 matching decode check against `llvm-objdump` for those encodings.
 
+### 32-bit x86 (`--arch x86-32-native`) and real mode (`--arch x86-16`)
+
+`--arch x86-32-native --oracle native` builds an i386 static ELF (`X86_32NativeHarness`) the kernel
+runs under its IA-32 emulation: EAX-EDI, EFLAGS, XMM0-XMM7 and the six segment registers are
+compared, the p-code state starting from the selectors a 32-bit process has (CS 0x23, DS/ES/SS
+0x2B, FS/GS 0) with IF set. The epilogue stores through SS until it has reloaded DS and ES, so an
+instruction that loads a null DS still reports. The generator favours the forms 64-bit mode lacks:
+BCD adjusts, PUSHA/POPA, BOUND, PUSH/POP and MOV of segment registers, LDS/LES/LSS/LFS/LGS, far
+JMP/CALL to selector 0x23 and RETF, string instructions, 0x66/0x67 prefixes; registers now and then
+hold a valid selector. Branches and calls run (a taken branch lands on a second epilogue).
+
+`--arch x86-16` lifts with `x86:LE:16:Real Mode` and runs Unicorn's 16-bit mode (QEMU's real mode) with
+random DS/ES/SS/FS/GS and CS 0. `segment(selector, offset)` (user operation 0) is evaluated as
+selector*16 + offset here and as the offset in the flat 32-bit mode. Encodings this CPU raises #UD
+for although Capstone and LLVM decode them (control registers that do not exist, VEX after a
+66/F2/F3 prefix, MOVNTI with 66/F2/F3, 66-prefixed RCPPS/RSQRTPS/MOVLHPS/MOVHLPS), AMD-only SSE4a
+and 3DNow are not generated.
+
+```sh
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch x86-32-native --oracle native \
+    --count 2500 --seed 6 --unlace <unlace> --sleighpath specs
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch x86-16 \
+    --count 1500 --seed 4 --unlace <unlace> --sleighpath specs
+```
+
 ### x87 (`--arch x86-64-x87`)
 
 `pcode_emu.py` computes every float op with an 80-bit operand or result exactly (`softfloat.py`:

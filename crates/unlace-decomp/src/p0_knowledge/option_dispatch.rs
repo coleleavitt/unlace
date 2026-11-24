@@ -657,9 +657,6 @@ unlace_options! { self, p1;
         self.unlace_options.set(val);
         Ok(msg)
     },
-    "fidproto" => {
-        registered!(crate::fidproto::Fidproto)
-    },
     "codestrings" => {
         let (val, msg) = <crate::analysisgates::Codestrings as crate::optionset::UnlaceOption>::parse(p1)?;
         self.load_options_mut().codestrings = val.0;

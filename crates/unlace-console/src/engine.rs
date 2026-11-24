@@ -3042,7 +3042,7 @@ impl ConsoleProgram {
         Ok(name)
     }
 
-    /// (unlace `fidproto`) After a FID / FLIRT rename, park the libc prototype the
+    /// (unlace) After a FID / FLIRT rename, park the libc prototype the
     /// name (or one of its `nameladder` spellings) has, and mark the function
     /// no-return when the no-return list names it.
     fn apply_renamed_library_facts(
@@ -8146,16 +8146,9 @@ fn commit_analysis_output(
             }
             prog.arch_mut().symboltab.rename_symbol(sid, &m.name)?;
             prog.register_symbol(&m.name, addr.clone());
-            // (unlace `fidproto`) The new name brings what the name means: the
+            // (unlace) The new name brings what the name means: the
             // libc prototype and the no-return verdict.
-            if prog
-                .arch()
-                .unlace_options
-                .get::<unlace_decomp::fidproto::Fidproto>()
-                .0
-            {
-                prog.apply_renamed_library_facts(sid, &m.name, &addr);
-            }
+            prog.apply_renamed_library_facts(sid, &m.name, &addr);
         }
     }
     let contested = signature_names::contested_addresses(
@@ -8167,14 +8160,7 @@ fn commit_analysis_output(
         if !contested.contains(&prog.thumb_normalized(addr.get_offset())) {
             prog.arch_mut().symboltab.rename_symbol(sid, name)?;
             prog.register_symbol(name, addr.clone());
-            if prog
-                .arch()
-                .unlace_options
-                .get::<unlace_decomp::fidproto::Fidproto>()
-                .0
-            {
-                prog.apply_renamed_library_facts(sid, name, &addr);
-            }
+            prog.apply_renamed_library_facts(sid, name, &addr);
         }
     }
 

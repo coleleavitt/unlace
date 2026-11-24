@@ -12902,7 +12902,7 @@ mnemonics, and it also knows x86 `pop` / `leave` / `add rsp`, AArch64
 built `-O2` gains 5 functions on x86-64 and 12 on AArch64, every one a real
 function start, with no entry lost.
 
-**Rename facts** (`fidproto`, default-on;
+**Rename facts** (always on, no option;
 `crates/unlace-console/src/engine.rs (apply_renamed_library_facts)`):
 when a FID or FLIRT rename (the FLIRT pass is described under §1.4 above)
 replaces a placeholder, the function also gets the libc prototype of its name

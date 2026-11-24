@@ -5019,24 +5019,6 @@ change_kind = "analysis-enablement"
 tier = "analysis"
 symptoms = ["a stripped rust binary lists core and std functions as sub_<addr>", "rust panic and allocation helpers have no names in a stripped binary"]
 
-[[option]]
-option = "fidproto"
-values = ["on", "off"]
-default = "on"
-destructive_as_default = false
-phase = "P1"
-subphase = "external-refinement"
-strength = "HARD"
-rewind = "P1"
-issue = "unlace-fidproto"
-summary = "When a FID or FLIRT match renames a sub_ placeholder (the fid_names rename at the analysis commit), give the function what its new name means: the built-in libc/libm prototype for the name or one of its nameladder spellings (the declaredlibcproto tables, parked by address), and the no-return flag when the shipped no-return lists (ELF and PE/Mach-O) name it. IDA applies the type library prototype and the no-return attribute on every FLIRT rename; without this a function FID or FLIRT names memcpy or exit still renders with recovered parameters and keeps its callers' code after the call."
-use_when = "On (default). It only acts on a function a FID/FLIRT/PDB/Objective-C/Swift rename just named, and only when the name is a libc/libm name or on the no-return list. Flip off to keep the renamed function's recovered prototype."
-example = "--option fidproto off"
-source_decompiler = "unlace"
-inspiration = "IDA 9.5 FLIRT apply (sub_6fe540): the matched name's type is applied from the loaded type libraries, and noret.cfg names become no-return"
-change_kind = "correctness-fix"
-tier = "analysis"
-symptoms = ["a function fid or flirt named memcpy keeps its recovered parameters", "a flirt-named exit or abort is not treated as no-return", "code after a call to a renamed library abort is decompiled as reachable"]
 
 [[option]]
 option = "rtti"

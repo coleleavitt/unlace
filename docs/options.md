@@ -894,9 +894,6 @@ Three tiers:
 | memcpy and printf in a static binary have no names | [`flirt`](#flirt----on--off-default-off) |
 | a stripped rust binary lists core and std functions as sub_<addr> | [`ruststdsigs`](#ruststdsigs----off--exact--nearest-default-off) |
 | rust panic and allocation helpers have no names in a stripped binary | [`ruststdsigs`](#ruststdsigs----off--exact--nearest-default-off) |
-| a function fid or flirt named memcpy keeps its recovered parameters | [`fidproto`](#fidproto----on--off-default-on) |
-| a flirt-named exit or abort is not treated as no-return | [`fidproto`](#fidproto----on--off-default-on) |
-| code after a call to a renamed library abort is decompiled as reachable | [`fidproto`](#fidproto----on--off-default-on) |
 | msvc c++ class names missing and vftables left as unnamed data | [`rtti`](#rtti----on--off-default-on) |
 | no Class::vftable or RTTI_ labels in a windows pe with polymorphic classes | [`rtti`](#rtti----on--off-default-on) |
 | _CxxThrowException(&v1, &dat_<addr>) with no thrown type | [`msvceh`](#msvceh----on--off-default-off) |
@@ -3451,13 +3448,6 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · unlace · analysis-enablement · unlace-ruststdsigs
 - **Example:** `unlace functions ./stripped-rust --option listing on --option flirt on --option ruststdsigs nearest`
 
-### `fidproto` -- on | off, default `on`
-
-- **Symptoms:** a function fid or flirt named memcpy keeps its recovered parameters; a flirt-named exit or abort is not treated as no-return; code after a call to a renamed library abort is decompiled as reachable.
-- **What it does:** When a FID or FLIRT match renames a sub_ placeholder (the fid_names rename at the analysis commit), give the function what its new name means: the built-in libc/libm prototype for the name or one of its nameladder spellings (the declaredlibcproto tables, parked by address), and the no-return flag when the shipped no-return lists (ELF and PE/Mach-O) name it. IDA applies the type library prototype and the no-return attribute on every FLIRT rename; without this a function FID or FLIRT names memcpy or exit still renders with recovered parameters and keeps its callers' code after the call.
-- **When to flip:** On (default). It only acts on a function a FID/FLIRT/PDB/Objective-C/Swift rename just named, and only when the name is a libc/libm name or on the no-return list. Flip off to keep the renamed function's recovered prototype.
-- **Where / provenance:** P1/external-refinement · unlace · correctness-fix · unlace-fidproto
-- **Example:** `--option fidproto off`
 
 ### `rtti` -- on | off, default `on`
 

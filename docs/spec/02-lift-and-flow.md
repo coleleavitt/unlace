@@ -4229,7 +4229,9 @@ The operand mode bits select `a = b op c`, `a = b op u6`, `b = b op s12` or
 the conditional `b = b op c|u6`, whose condition skips the instruction when it
 fails. The `F` bit selects a second constructor that writes `Z`, `N`, `C` and
 `V`; carry on a subtraction is the borrow. A `.d` branch, jump or call
-evaluates its condition and target first, then runs the delay slot.
+evaluates its condition and target first, then runs the delay slot whether
+or not the condition holds, and only then branches. A delayed `bl`/`jl` links
+`blink` to the instruction after the delay slot.
 
 The zero-overhead loop is carried in the decode context. `lp end` records the
 address after itself in `lpstart` at address `end` and sets `lpend` there

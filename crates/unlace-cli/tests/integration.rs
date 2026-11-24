@@ -12,6 +12,8 @@ mod riscv_bitmanip;
 mod riscv_crypto;
 #[path = "riscv_hints.rs"]
 mod riscv_hints;
+#[path = "riscv_vector.rs"]
+mod riscv_vector;
 #[path = "riscv_zabha.rs"]
 mod riscv_zabha;
 #[path = "riscv_zcb.rs"]

@@ -371,6 +371,7 @@ unlace_options! { self, p1;
     "latecse" => registered!(crate::latecse::LateCse),
     "phithread" => registered!(crate::phithread::PhiThread),
     "gotosink" => registered!(crate::gotosink::GotoSink),
+    "gotochain" => registered!(crate::gotochain::GotoChain),
     "cmpmerge" => registered!(crate::cmpmerge::CmpMerge),
     "switchmerge" => registered!(crate::switchmerge::Switchmerge),
     "gotonext" => registered!(crate::funcdata_block::GotoNext),

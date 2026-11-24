@@ -333,14 +333,15 @@
 0326                  postinc
 0327                  gotoreduce
 0328                  taildup
-0329                  ifelseflatten
-0330                  crossjumprevert
-0331                  dedupitetail
-0332                  iteregion
-0333                  iteboolean
-0334                  gotosink
-0335                  crossjumptail
-0336                  guardedloop
-0337                  paramcopyhoist
-0338        !         prototypewarnings
-0339                  stop
+0329                  gotochain
+0330                  ifelseflatten
+0331                  crossjumprevert
+0332                  dedupitetail
+0333                  iteregion
+0334                  iteboolean
+0335                  gotosink
+0336                  crossjumptail
+0337                  guardedloop
+0338                  paramcopyhoist
+0339        !         prototypewarnings
+0340                  stop

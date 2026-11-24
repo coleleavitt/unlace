@@ -393,6 +393,9 @@ Three tiers:
 | if (c) goto label_N; ... label_N: where an if around the skipped statements would do | [`gotosink`](#gotosink----on--off-default-on) |
 | label_N: ... if (c) goto label_N; where a do-while would do | [`gotosink`](#gotosink----on--off-default-on) |
 | label_N: ... goto label_N; at the end of a statement run instead of a loop | [`gotosink`](#gotosink----on--off-default-on) |
+| a goto label_A where label_A: is followed directly by goto label_B; | [`gotochain`](#gotochain----on--off-default-off) |
+| a label whose only statement is a goto to another label | [`gotochain`](#gotochain----on--off-default-off) |
+| two labels in a row, the first holding only a jump | [`gotochain`](#gotochain----on--off-default-off) |
 | goto to a label that only returns | [`gotoreduce`](#gotoreduce----off--return--on-default-on) |
 | label_N: return; shared tail after an if | [`gotoreduce`](#gotoreduce----off--return--on-default-on) |
 | more gotos than angr for the same function | [`gotoreduce`](#gotoreduce----off--return--on-default-on) |
@@ -2411,6 +2414,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default: 0/675 datatest assertions move. Measured over 4,072 x86-64 functions (gcc/clang -O2 and gcc -O0 Lua, bzip2; zlib, libexpat, libyaml): 58 functions change, every one with fewer gotos and none with more; gotos 9,069 -> 8,892, labels 3,124 -> 3,076, `continue;` 55 -> 128. Sinking fires rarely after the structurer (it already sinks a local jump): 0 times with the default passes, 3 times with crossjumprevert/taildup/gotoreduce/returndup off. Flip off to keep the backward gotos.
 - **Where / provenance:** P8/goto-quality · unlace · structure-recovery · gotosink
 - **Example:** `option gotosink off`
+
+### `gotochain` -- on | off, default `off`
+
+- **Symptoms:** a goto label_A where label_A: is followed directly by goto label_B; a label whose only statement is a goto to another label; two labels in a row, the first holding only a jump.
+- **What it does:** Retarget a goto to a label whose block is only an unconditional goto. When a label leaf holds no statement (its block only branches) and is immediately followed in its statement list by `goto L2;`, every unstructured `goto L1;` and `if (c) goto L1;` that names it is rewritten to `goto L2;` (chains followed transitively, with a cycle guard). The new target is labelled, and the old label is released once no goto, switch case or multi-goto edge still names it. Only plain gotos are retargeted: switch-case and multi-goto edges keep their label, so the output stays valid C.
+- **When to flip:** Off by default: the goto-to-goto rendering is upstream's. Set `on` when a function prints `label_A: goto label_B;` and several gotos reach `label_A` only to fall through to `label_B`; each such jump then names `label_B` directly and the middle label disappears. The original unlace `goto_coalesce` pass ran this on its HIR; this is the structured-tree port. Not yet measured on the datatest corpus: flip to `on` only after `make test` shows 0/675 movement for the default and a stage run confirms the labels it removes.
+- **Where / provenance:** P8/goto-quality · unlace · structure-recovery · gotochain
+- **Example:** `option gotochain on`
 
 ### `gotoreduce` -- off | return | on, default `on`
 

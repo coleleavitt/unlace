@@ -635,6 +635,10 @@ pub struct AnalysisOutput {
     /// method): an unlocked hint on its first argument register, typed
     /// `Class *` under `objcivars`.
     pub objc_self_hints: Vec<InputHintFact>,
+    /// (kuna `dextrpc`) The `this` of each DriverKit instance method a dext's
+    /// symbols name (`init`, `free`, `M_Impl`): an unlocked hint on `x0`,
+    /// typed `C *`.
+    pub dext_this_hints: Vec<InputHintFact>,
     /// (kuna) Address ranges holding an **external reference** — an import slot
     /// whose contents the dynamic loader fills in with the address of a function
     /// living in another image (a PE IAT entry or a typed Mach-O lazy/non-lazy
@@ -1249,6 +1253,7 @@ impl AnalysisOutput {
         self.kalloc_types.extend(other.kalloc_types);
         self.com_interfaces.extend(other.com_interfaces);
         self.objc_self_hints.extend(other.objc_self_hints);
+        self.dext_this_hints.extend(other.dext_this_hints);
         self.externref.extend(other.externref);
         self.import_slot_names.extend(other.import_slot_names);
         self.vcall_sites.extend(other.vcall_sites);

@@ -651,6 +651,7 @@ kuna_options! { self, p1;
     "iokitclasses" => registered!(crate::kuna_analysisgates::IokitClasses),
     "xnutables" => registered!(crate::kuna_analysisgates::Xnutables),
     "osclassinfo" => registered!(crate::kuna_analysisgates::Osclassinfo),
+    "dextrpc" => registered!(crate::kuna_analysisgates::Dextrpc),
     "swiftcall" => registered!(crate::kuna_swiftcall::Swiftcall),
     "swiftruntime" => registered!(crate::kuna_analysisgates::Swiftruntime),
     "typelib" => registered!(crate::kuna_typelib::TypeLib),

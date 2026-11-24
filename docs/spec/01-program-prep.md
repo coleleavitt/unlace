@@ -8635,6 +8635,33 @@ both
   `<Name>_Class`, `<Name>_ClassDescription` and `g<Name>MetaClass` (the global
   `metaPointer` points at), and names `New` `<Name>_New`, adding it as an
   entry. The names come from the records, so nothing is inferred from code.
+- **DriverKit IORPC dispatch types** (kuna, `dextrpc`, arm64 dexts, read
+  inside the `osclassinfo` pass, default-off;
+  `crates/unlace-analysis/src/analyzers/iokit/kuna_dextrpc.rs (emit)`):
+  every symbol the dext defines or imports that names `C::_Dispatch(C *,
+  IORPC)` (`_ZN<n>C9_DispatchEPS_5IORPC`), `C::Dispatch(IORPC)`
+  (`_ZN<n>C8DispatchE5IORPC`) or `X::M_Invoke(IORPC, OSMetaClassBase *,
+  handler[, const OSMetaClass *])` gets its prototype by address: an `int`
+  (`kern_return_t`) return, the `IORPC` as `IORPC *` (AAPCS64 passes the
+  24-byte struct by reference to a caller copy), `self`/`this` as `C *` for a
+  class of the dext and `void *` otherwise; `IORPCMessageFromMach` gets
+  `IORPCMessage *(IORPCMessageMach *msg, bool reply)`. `IORPC` and
+  `IORPCMessage` follow `IORPC.h`; `IORPCMessage.msgid` is an 8-byte enum
+  `IORPCMessageID` whose values `C_M_ID` come from the descriptions (the
+  method-options table holds the n message ids of the methods a class
+  implements, then n option words; the method-names table the n
+  length-prefixed names in the same order; the meta tables likewise; an id two
+  classes list keeps the first name), so `_Dispatch`'s comparisons print the
+  method names. Each class becomes a struct `C` of its `instanceSize`: iig
+  gives every class one `C_IVars *ivars` after its superclass, so `ivars` sits
+  at `instanceSize - 8`, behind the superclass's struct as `super` when the
+  superclass is a class of the dext whose size leaves room for it (else those
+  bytes stay untyped). `init`, `free` and every `M_Impl` take an unlocked
+  `C *this` hint on `x0`. A table that does not parse adds no ids, a class
+  whose `instanceSize` is not a multiple of 8 gets no struct, and a name the
+  program already holds for another shape is left alone. Like IDA's dku it
+  reads names from the symbol table, so a dext stripped of its C++ symbols gets
+  only the types.
 - **Swift slot names from `@objc` thunks** (`swiftobjcthunk`, the naming arm
   of `swiftmetadata` for Mach-O arm64, default-on and inert unless
   `swiftmetadata` is on;

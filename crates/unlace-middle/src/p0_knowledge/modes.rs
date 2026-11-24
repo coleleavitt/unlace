@@ -649,6 +649,9 @@ mod tests {
         const UNEVALUATED: &[&str] = &[
             // `phithread` (issue #20) landed without a corpus sweep.
             "phithread",
+            // `dextrpc` landed measured on 17 macOS dexts only; preset membership
+            // would make it the default under 500 KiB, which is the lead's call.
+            "dextrpc",
             // `phiarm` (issue #20) landed without a corpus sweep.
             "phiarm",
             // `calleesaved` (issue #20) landed without a corpus sweep.

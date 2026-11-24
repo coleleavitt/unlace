@@ -191,6 +191,9 @@ pub const BUILTIN_LABS: uint4 = 0x1000001e;
 pub const BUILTIN_STRCPY: uint4 = 0x1000001f;
 /// (kuna) Built-in id for `va_arg` (`vaarg`).
 pub const BUILTIN_VAARG: uint4 = 0x10000020;
+/// (kuna) Built-in id for `saturated_mul`, a multiply that yields all-ones on
+/// overflow (`satmul`).
+pub const BUILTIN_SATURATED_MUL: uint4 = 0x10000038;
 /// (kuna) Built-in ids for the atomic read-modify-write builtins one locked x86
 /// instruction, AArch64 LSE atomic or RISC-V AMO lifts to (`kuna_atomics`), in
 /// [`ATOMIC_BUILTINS`] order.
@@ -1394,6 +1397,9 @@ impl UserOpManage {
             }
             BUILTIN_BITREV => UserPcodeOp::new_unspecialized(b"bitreverse", BUILTIN_BITREV as int4),
             BUILTIN_VAARG => UserPcodeOp::new_unspecialized(b"va_arg", BUILTIN_VAARG as int4),
+            BUILTIN_SATURATED_MUL => {
+                UserPcodeOp::new_unspecialized(b"saturated_mul", BUILTIN_SATURATED_MUL as int4)
+            }
             BUILTIN_STRCPY => {
                 let ptr_size = types.get_size_of_pointer();
                 let word_size = types.get_default_data_space_word_size();

@@ -114,6 +114,7 @@ kuna_options! { self, p1;
     },
     "returnpair" => registered!(crate::kuna_returnpair::ReturnSingle),
     "bitidioms" => registered!(crate::kuna_bitidioms::BitIdioms),
+    "satmul" => registered!(crate::kuna_satmul::SatMul),
     "helperroles" => registered!(crate::kuna_helperrole::HelperRoles),
     "dynalloca" => registered!(crate::kuna_dynalloca::DynAlloca),
     "vaarg" => registered!(crate::kuna_vaarg::VaArg),

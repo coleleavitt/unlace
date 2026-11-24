@@ -161,6 +161,10 @@ specs/Ghidra/Processors/RadeonF32 vendors the AMD Radeon F32 microengine SLEIGH 
 aleph-void/ghidra-radeon-f32 (https://github.com/aleph-void/ghidra-radeon-f32), a fork of cyrozap/ghidra-radeon-f32, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/RL78 vendors the Renesas RL78 SLEIGH specification of
+aleph-void/ghidra-rl78 (https://github.com/aleph-void/ghidra-rl78), a fork of CUB3D/ghidra-rl78, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

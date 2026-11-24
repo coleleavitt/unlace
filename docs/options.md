@@ -1795,6 +1795,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P2/flow-classification · unlace · transform · unlace-evm-internal-calls
 - **Example:** `option evmcalls on`
 
+### `evmstorage` -- on | off, default `off`
+
+- **Symptoms:** sload and sstore print as raw sload(0) and sstore(0,v1) calls; contract state reads as slot arithmetic; a mapping slot prints as an opaque keccak result.
+- **What it does:** Print an EVM storage access as a storage access instead of a raw `sload(0)` or `sstore(0,v1)` call. The EVM spec lowers `SLOAD` and `SSTORE` to the user ops `sload(slot)` and `sstore(slot, value)`, so contract state reads as slot arithmetic. With the option on, a constant slot prints as `storage[0x0]` (a fixed state variable), a slot that a `keccak256` user op computes prints as `mapping(v5)` (a mapping or dynamic-array element, the Solidity layout `keccak(key . slot)`), any other computed slot prints as `storage(v3)`, and an `sstore` prints as an assignment to the same spelling. `evmstorage.rs` reads the slot operand's def chain (at most six ops) for the hash, a dataflow test in place of the original lifter's eight-instruction SHA3 window. The hash test is a heuristic: a slot that adds a hash to an unrelated value is read as hashed, so the printed slot operand stays visible for the reader to check. Printing only; the lifted operations are unchanged.
+- **When to flip:** Off by default: the output of every corpus unit is unchanged. Turn on for a solc storage layout read by hand, to see which storage words are fixed and which are mapping elements; expect a false `mapping` where a hash feeds an arithmetic slot.
+- **Where / provenance:** P9/literal-format · unlace · presentation-default · unlace-evm-storage-slots
+- **Example:** `option evmstorage on`
+
 ### `selectmul` -- on | off, default `on`
 
 - **Symptoms:** a min or max prints as a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0); a select prints as a sum of two products with (unsigned int) casts of complementary compares; tricore sel or sat prints as multiplications by booleans.

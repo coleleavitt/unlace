@@ -9302,6 +9302,42 @@ impl PrintC {
         }
     }
 
+    /// (unlace `evmstorage`) Print an EVM `sload`/`sstore` user op as a storage access:
+    /// `storage[0x0]` for a constant slot, `mapping(v5)` for a slot a KECCAK256 computed and
+    /// `storage(v3)` for any other slot. A store prints as an assignment.
+    fn op_evm_storage_ir(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        op: OpId,
+        access: crate::evmstorage::StorageAccess,
+    ) {
+        if access.store {
+            self.push_op(&tokens::ASSIGNMENT, Some(op_key(op)));
+        }
+        if let Some(slot) = access.constant {
+            self.push_atom(&Atom::with_op(
+                format!("storage[0x{slot:x}]"),
+                TagType::OpToken,
+                crate::printlanguage::SyntaxHighlight::funcname_color,
+                op_key(op),
+            ));
+        } else {
+            let name = if access.hashed { "mapping" } else { "storage" };
+            self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
+            self.push_atom(&Atom::with_op(
+                name.to_string(),
+                TagType::OpToken,
+                crate::printlanguage::SyntaxHighlight::funcname_color,
+                op_key(op),
+            ));
+            self.push_vn_ir(fd, arch, access.slot, op);
+        }
+        if let Some(value) = access.value {
+            self.push_vn_ir(fd, arch, value, op);
+        }
+    }
+
     /// C++ `PrintC::opCallother` (printc.cc:693): render a CALLOTHER (user
     /// p-code op).  The op's in0 constant indexes a `UserPcodeOp` whose
     /// `getDisplay()` selects the form:
@@ -9343,6 +9379,21 @@ impl PrintC {
         }
         if in0_off == crate::userop::BUILTIN_VA_START as u64 && self.push_va_start(fd, arch, op) {
             return;
+        }
+        if self.out_lang == crate::lang::OutLang::C
+            && arch.unlace_options.get::<crate::evmstorage::EvmStorage>().0
+        {
+            if let Some(name) = userop.map(|u| u.get_name()) {
+                let keccak = |index: u64| {
+                    arch.userops
+                        .get_op(index as u32)
+                        .is_some_and(|u| u.get_name() == "keccak256")
+                };
+                if let Some(access) = crate::evmstorage::access(fd, op, name, keccak) {
+                    self.op_evm_storage_ir(fd, arch, op, access);
+                    return;
+                }
+            }
         }
         if display == 0 {
             if let Some((name, args)) =

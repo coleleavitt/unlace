@@ -2517,6 +2517,8 @@ prints as `vget[q]_lane_<t>(v, n)`. At `all`, the flow walk also runs `fuse_neon
   becomes one built-in (`vaddq_s32`; integer lanes print signed);
 - a run of lane COPYs of one scalar covering a register becomes `vdup[q]_n_s<bits>`.
 
+(unlace `evmstorage`, default off) An EVM `sload`/`sstore` user op prints as a storage access, `storage[0x..]` for a constant slot, `mapping(..)` when a `keccak256` user op computes the slot (a def-chain walk of at most six ops), `storage(..)` for any other computed slot, and an `sstore` as an assignment (`crates/unlace-emit/src/p9_emit/evmstorage.rs`, `printc.rs` `op_evm_storage_ir`). The hash test is a heuristic and is printed-only.
+
 (unlace `wideconst`, default on) A constant wider than 64 bits that the lifter built from
 pieces prints as one hexadecimal literal (`crates/unlace-emit/src/p9_emit/wideconst.rs`).
 A Varnode constant holds at most 64 bits, so a wider value stays an expression tree; EVM's

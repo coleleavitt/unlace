@@ -1,0 +1,373 @@
+# SLEIGH specification for the IBM ROMP (RT PC processor). Written for unlace
+# from the IBM RT PC Hardware Technical Reference, Volume I (75X0232, 1987);
+# encodings and corner cases cross-checked against MAME's romp core
+# (BSD-3-Clause, read only).
+
+define endian=big;
+define alignment=2;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0x000 size=4 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+define register offset=0x100 size=4 [ scr0 scr1 scr2 scr3 scr4 scr5 cous cou ts ecr mq mpcs irb iar ics cs ];
+define register offset=0x200 size=4 [ PC ];
+define register offset=0x210 size=1 [ LT EQ GT CY OV TB CS2 ];
+
+define token h16(16)
+  op4=(12,15) op8=(8,15) ra=(4,7) rb=(0,3) ras=(4,7) rbs=(0,3) ri=(0,3) rx=(8,11)
+  ra7=(7,7) bit6=(6,6) bit5=(5,5) bit4=(4,4)
+  jbit=(11,11) jcond=(8,10) jdisp=(0,7) signed i4=(8,11)
+;
+define token w32(32)
+  wop8=(24,31) wra=(20,23) wrb=(16,19) wras=(20,23) w7=(23,23) w6=(22,22) w5=(21,21) w4=(20,20)
+  wi16=(0,15) wsi16=(0,15) signed wd20=(0,19) signed wba=(0,23)
+;
+
+attach variables [ ra rb rx wra wrb ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+attach variables [ ras ] [ scr0 scr1 scr2 scr3 scr4 scr5 cous cou ts ecr mq mpcs irb iar ics cs ];
+
+define pcodeop svc;
+define pcodeop load_program_status;
+define pcodeop io_read;
+define pcodeop io_write;
+define pcodeop program_trap;
+define pcodeop wait_state;
+define pcodeop read_scr;
+define pcodeop write_scr;
+
+macro logf(r) { LT = r s< 0; EQ = r == 0; GT = r s> 0; }
+macro addf(a, b, cin) {
+  local s1:4 = a + b; local r:4 = s1 + zext(cin);
+  logf(r); CY = carry(a, b) || carry(s1, zext(cin));
+  OV = ((~(a ^ b) & (a ^ r)) s< 0);
+}
+macro subf(a, b) { local r:4 = a - b; logf(r); CY = a >= b; OV = sborrow(a, b); }
+macro packcs(v) { v = zext(CS2 != 0) << 2 | zext(LT) << 6 | zext(EQ) << 5 | zext(GT) << 4 | zext(CY) << 3 | zext(OV) << 1 | zext(TB); }
+macro unpackcs(v) { LT = (v & 0x40) != 0; EQ = (v & 0x20) != 0; GT = (v & 0x10) != 0; CY = (v & 8) != 0; CS2 = (v & 4) != 0; OV = (v & 2) != 0; TB = (v & 1) != 0; }
+
+# Condition bits 8-15 of the condition status: 8 is the permanent zero, 13 reserved.
+cb: "nop" is ra=8 { export 0:1; }
+cb: "lt" is ra=9 { export LT; }
+cb: "eq" is ra=10 { export EQ; }
+cb: "gt" is ra=11 { export GT; }
+cb: "c" is ra=12 { export CY; }
+cb: "13" is ra=13 { export CS2; }
+cb: "o" is ra=14 { export OV; }
+cb: "tb" is ra=15 { export TB; }
+wcb: "nop" is wra=8 { export 0:1; }
+wcb: "lt" is wra=9 { export LT; }
+wcb: "eq" is wra=10 { export EQ; }
+wcb: "gt" is wra=11 { export GT; }
+wcb: "c" is wra=12 { export CY; }
+wcb: "13" is wra=13 { export CS2; }
+wcb: "o" is wra=14 { export OV; }
+wcb: "tb" is wra=15 { export TB; }
+jc: "nop" is jcond=0 { export 0:1; }
+jc: "lt" is jcond=1 { export LT; }
+jc: "eq" is jcond=2 { export EQ; }
+jc: "gt" is jcond=3 { export GT; }
+jc: "c" is jcond=4 { export CY; }
+jc: "13" is jcond=5 { export CS2; }
+jc: "o" is jcond=6 { export OV; }
+jc: "tb" is jcond=7 { export TB; }
+
+jrel: addr is jdisp [ addr = inst_start + jdisp * 2; ] { export *:4 addr; }
+brel: addr is wd20 [ addr = inst_start + wd20 * 2; ] { export *:4 addr; }
+babs: addr is wba [ addr = wba & 0xfffffe; ] { export *:4 addr; }
+
+base: rb is rb { export rb; }
+base: "0" is rb & rb=0 { export 0:4; }
+wbase: wrb is wrb { export wrb; }
+wbase: "0" is wrb & wrb=0 { export 0:4; }
+
+# JI: jump on (not) condition bit; bit 11 is the value that jumps.
+:j^jc jrel is op4=0 & jbit=1 & jc & jrel { if (jc) goto jrel; }
+:jn^jc jrel is op4=0 & jbit=0 & jc & jrel { if (!jc) goto jrel; }
+:j jrel is op4=0 & jbit=0 & jcond=0 & jrel { goto jrel; }
+
+# DS: short displacement loads and stores
+:stcs ra, i4^"("^base^")" is op4=1 & ra & i4 & base { local a:4 = base + i4; *:1 a = ra:1; }
+:sths ra, d^"("^base^")" is op4=2 & ra & i4 & base [ d = i4 * 2; ] { local a:4 = base + d; *:2 a = ra:2; }
+:sts ra, d^"("^base^")" is op4=3 & ra & i4 & base [ d = i4 * 4; ] { local a:4 = base + d; *:4 a = ra; }
+:lcs ra, i4^"("^base^")" is op4=4 & ra & i4 & base { local a:4 = base + i4; ra = zext(*:1 a); }
+:lhas ra, d^"("^base^")" is op4=5 & ra & i4 & base [ d = i4 * 2; ] { local a:4 = base + d; ra = sext(*:2 a); }
+:cas rx, ra, base is op4=6 & rx & ra & base { rx = ra + base; }
+:ls ra, d^"("^base^")" is op4=7 & ra & i4 & base [ d = i4 * 4; ] { local a:4 = base + d; ra = *:4 a; }
+
+# BI/BA: branches with 20-bit relative or 24-bit absolute targets; x forms execute the next instruction.
+:b brel is wop8=0x88 & wra=8 & brel { goto brel; }
+:bnx brel is wop8=0x89 & wra=8 & brel { delayslot(1); goto brel; }
+:bn^wcb brel is wop8=0x88 & w7=1 & wcb & brel { if (!wcb) goto brel; }
+:bn^wcb^"x" brel is wop8=0x89 & w7=1 & wcb & brel { local c:1 = wcb; delayslot(1); if (!c) goto brel; }
+:bala babs is wop8=0x8a & babs { r15 = inst_next; call babs; }
+:balax babs is wop8=0x8b & babs { r15 = inst_next + 4; delayslot(1); call babs; }
+:bali wra, brel is wop8=0x8c & wra & brel { wra = inst_next; call brel; }
+:balix wra, brel is wop8=0x8d & wra & brel { wra = inst_next + 4; delayslot(1); call brel; }
+:b^wcb brel is wop8=0x8e & w7=1 & wcb & brel { if (wcb) goto brel; }
+:b^wcb^"x" brel is wop8=0x8f & w7=1 & wcb & brel { local c:1 = wcb; delayslot(1); if (c) goto brel; }
+
+# D: 16-bit immediate or displacement
+:svc wi16^"("^wbase^")" is wop8=0xc0 & wi16 & wbase { svc(wbase + wi16); }
+:ai wra, wrb, wsi16 is wop8=0xc1 & wra & wrb & wsi16 { local a:4 = wrb; local b:4 = wsi16; addf(a, b, 0:1); wra = a + b; }
+:cal16 wra, wi16^"("^wbase^")" is wop8=0xc2 & wra & wi16 & wbase { local v:4 = wbase; wra = (v & 0xffff0000) | zext(v:2 + wi16:2); }
+:oiu wra, wrb, wi16 is wop8=0xc3 & wra & wrb & wi16 { local r:4 = (wi16 << 16) | wrb; wra = r; logf(r); }
+:oil wra, wrb, wi16 is wop8=0xc4 & wra & wrb & wi16 { local r:4 = wi16 | wrb; wra = r; logf(r); }
+:nilz wra, wrb, wi16 is wop8=0xc5 & wra & wrb & wi16 { local r:4 = wi16 & wrb; wra = r; logf(r); }
+:nilo wra, wrb, wi16 is wop8=0xc6 & wra & wrb & wi16 { local r:4 = (wi16 | 0xffff0000) & wrb; wra = r; logf(r); }
+:xil wra, wrb, wi16 is wop8=0xc7 & wra & wrb & wi16 { local r:4 = wi16 ^ wrb; wra = r; logf(r); }
+:cal wra, wsi16^"("^wbase^")" is wop8=0xc8 & wra & wsi16 & wbase { wra = wbase + wsi16; }
+:lha wra, wsi16^"("^wbase^")" is wop8=0xca & wra & wsi16 & wbase { local a:4 = wbase + wsi16; wra = sext(*:2 a); }
+:ior wra, wi16^"("^wbase^")" is wop8=0xcb & wra & wi16 & wbase { wra = io_read(wbase + wi16); }
+:l wra, wsi16^"("^wbase^")" is wop8=0xcd & wra & wsi16 & wbase { local a:4 = wbase + wsi16; wra = *:4 a; }
+:lc wra, wsi16^"("^wbase^")" is wop8=0xce & wra & wsi16 & wbase { local a:4 = wbase + wsi16; wra = zext(*:1 a); }
+:tsh wra, wsi16^"("^wbase^")" is wop8=0xcf & wra & wsi16 & wbase { local a:4 = wbase + wsi16; local v:2 = *:2 a; *:2 a = v | 0xff00; wra = zext(v); }
+:lps wras, wsi16^"("^wbase^")" is wop8=0xd0 & wras & wsi16 & wbase { local a:4 = wbase + wsi16; local t:4 = *:4 a; local csv:2 = *:2 (a + 6); local v:4 = zext(csv); unpackcs(v); load_program_status(a); return [t]; }
+:aei wra, wrb, wsi16 is wop8=0xd1 & wra & wrb & wsi16 { local a:4 = wrb; local b:4 = wsi16; local c:1 = CY; addf(a, b, c); wra = a + b + zext(c); }
+:sfi wra, wrb, wsi16 is wop8=0xd2 & wra & wrb & wsi16 { local a:4 = wsi16; local b:4 = wrb; subf(a, b); wra = a - b; }
+:cli wrb, wsi16 is wop8=0xd3 & wrb & wsi16 { local a:4 = wrb; local b:4 = wsi16; LT = a < b; EQ = a == b; GT = a > b; }
+:ci wrb, wsi16 is wop8=0xd4 & wrb & wsi16 { local a:4 = wrb; local b:4 = wsi16; LT = a s< b; EQ = a == b; GT = a s> b; }
+:niuz wra, wrb, wi16 is wop8=0xd5 & wra & wrb & wi16 { local r:4 = (wi16 << 16) & wrb; wra = r; logf(r); }
+:niuo wra, wrb, wi16 is wop8=0xd6 & wra & wrb & wi16 { local r:4 = ((wi16 << 16) | 0xffff) & wrb; wra = r; logf(r); }
+:xiu wra, wrb, wi16 is wop8=0xd7 & wra & wrb & wi16 { local r:4 = (wi16 << 16) ^ wrb; wra = r; logf(r); }
+:cau wra, wi16^"("^wbase^")" is wop8=0xd8 & wra & wi16 & wbase { wra = wbase + (wi16 << 16); }
+:lh wra, wsi16^"("^wbase^")" is wop8=0xda & wra & wsi16 & wbase { local a:4 = wbase + wsi16; wra = zext(*:2 a); }
+:iow wra, wi16^"("^wbase^")" is wop8=0xdb & wra & wi16 & wbase { io_write(wbase + wi16, wra); }
+:sth wra, wsi16^"("^wbase^")" is wop8=0xdc & wra & wsi16 & wbase { local a:4 = wbase + wsi16; *:2 a = wra:2; }
+:st wra, wsi16^"("^wbase^")" is wop8=0xdd & wra & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 a = wra; }
+:stc wra, wsi16^"("^wbase^")" is wop8=0xde & wra & wsi16 & wbase { local a:4 = wbase + wsi16; *:1 a = wra:1; }
+:tnop wrb, wsi16 is wop8=0xcc & w6=0 & w5=0 & w4=0 & wrb & wsi16 { local a:4 = wrb; local b:4 = wsi16; local c:1 = 0:1; if (!c) goto inst_next; program_trap(); }
+:tigt wrb, wsi16 is wop8=0xcc & w6=0 & w5=0 & w4=1 & wrb & wsi16 { local a:4 = wrb; local b:4 = wsi16; local c:1 = (a > b); if (!c) goto inst_next; program_trap(); }
+:tieq wrb, wsi16 is wop8=0xcc & w6=0 & w5=1 & w4=0 & wrb & wsi16 { local a:4 = wrb; local b:4 = wsi16; local c:1 = (a == b); if (!c) goto inst_next; program_trap(); }
+:tige wrb, wsi16 is wop8=0xcc & w6=0 & w5=1 & w4=1 & wrb & wsi16 { local a:4 = wrb; local b:4 = wsi16; local c:1 = (a == b) || (a > b); if (!c) goto inst_next; program_trap(); }
+:tilt wrb, wsi16 is wop8=0xcc & w6=1 & w5=0 & w4=0 & wrb & wsi16 { local a:4 = wrb; local b:4 = wsi16; local c:1 = (a < b); if (!c) goto inst_next; program_trap(); }
+:tine wrb, wsi16 is wop8=0xcc & w6=1 & w5=0 & w4=1 & wrb & wsi16 { local a:4 = wrb; local b:4 = wsi16; local c:1 = (a < b) || (a > b); if (!c) goto inst_next; program_trap(); }
+:tile wrb, wsi16 is wop8=0xcc & w6=1 & w5=1 & w4=0 & wrb & wsi16 { local a:4 = wrb; local b:4 = wsi16; local c:1 = (a < b) || (a == b); if (!c) goto inst_next; program_trap(); }
+:trap wrb, wsi16 is wop8=0xcc & w6=1 & w5=1 & w4=1 & wrb & wsi16 { local a:4 = wrb; local b:4 = wsi16; local c:1 = (a < b) || (a == b) || (a > b); if (!c) goto inst_next; program_trap(); }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=0 & wsi16 & wbase { local a:4 = wbase + wsi16; r0 = *:4 (a + 0); r1 = *:4 (a + 4); r2 = *:4 (a + 8); r3 = *:4 (a + 12); r4 = *:4 (a + 16); r5 = *:4 (a + 20); r6 = *:4 (a + 24); r7 = *:4 (a + 28); r8 = *:4 (a + 32); r9 = *:4 (a + 36); r10 = *:4 (a + 40); r11 = *:4 (a + 44); r12 = *:4 (a + 48); r13 = *:4 (a + 52); r14 = *:4 (a + 56); r15 = *:4 (a + 60); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=0 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r0; *:4 (a + 4) = r1; *:4 (a + 8) = r2; *:4 (a + 12) = r3; *:4 (a + 16) = r4; *:4 (a + 20) = r5; *:4 (a + 24) = r6; *:4 (a + 28) = r7; *:4 (a + 32) = r8; *:4 (a + 36) = r9; *:4 (a + 40) = r10; *:4 (a + 44) = r11; *:4 (a + 48) = r12; *:4 (a + 52) = r13; *:4 (a + 56) = r14; *:4 (a + 60) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=1 & wsi16 & wbase { local a:4 = wbase + wsi16; r1 = *:4 (a + 0); r2 = *:4 (a + 4); r3 = *:4 (a + 8); r4 = *:4 (a + 12); r5 = *:4 (a + 16); r6 = *:4 (a + 20); r7 = *:4 (a + 24); r8 = *:4 (a + 28); r9 = *:4 (a + 32); r10 = *:4 (a + 36); r11 = *:4 (a + 40); r12 = *:4 (a + 44); r13 = *:4 (a + 48); r14 = *:4 (a + 52); r15 = *:4 (a + 56); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=1 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r1; *:4 (a + 4) = r2; *:4 (a + 8) = r3; *:4 (a + 12) = r4; *:4 (a + 16) = r5; *:4 (a + 20) = r6; *:4 (a + 24) = r7; *:4 (a + 28) = r8; *:4 (a + 32) = r9; *:4 (a + 36) = r10; *:4 (a + 40) = r11; *:4 (a + 44) = r12; *:4 (a + 48) = r13; *:4 (a + 52) = r14; *:4 (a + 56) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=2 & wsi16 & wbase { local a:4 = wbase + wsi16; r2 = *:4 (a + 0); r3 = *:4 (a + 4); r4 = *:4 (a + 8); r5 = *:4 (a + 12); r6 = *:4 (a + 16); r7 = *:4 (a + 20); r8 = *:4 (a + 24); r9 = *:4 (a + 28); r10 = *:4 (a + 32); r11 = *:4 (a + 36); r12 = *:4 (a + 40); r13 = *:4 (a + 44); r14 = *:4 (a + 48); r15 = *:4 (a + 52); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=2 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r2; *:4 (a + 4) = r3; *:4 (a + 8) = r4; *:4 (a + 12) = r5; *:4 (a + 16) = r6; *:4 (a + 20) = r7; *:4 (a + 24) = r8; *:4 (a + 28) = r9; *:4 (a + 32) = r10; *:4 (a + 36) = r11; *:4 (a + 40) = r12; *:4 (a + 44) = r13; *:4 (a + 48) = r14; *:4 (a + 52) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=3 & wsi16 & wbase { local a:4 = wbase + wsi16; r3 = *:4 (a + 0); r4 = *:4 (a + 4); r5 = *:4 (a + 8); r6 = *:4 (a + 12); r7 = *:4 (a + 16); r8 = *:4 (a + 20); r9 = *:4 (a + 24); r10 = *:4 (a + 28); r11 = *:4 (a + 32); r12 = *:4 (a + 36); r13 = *:4 (a + 40); r14 = *:4 (a + 44); r15 = *:4 (a + 48); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=3 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r3; *:4 (a + 4) = r4; *:4 (a + 8) = r5; *:4 (a + 12) = r6; *:4 (a + 16) = r7; *:4 (a + 20) = r8; *:4 (a + 24) = r9; *:4 (a + 28) = r10; *:4 (a + 32) = r11; *:4 (a + 36) = r12; *:4 (a + 40) = r13; *:4 (a + 44) = r14; *:4 (a + 48) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=4 & wsi16 & wbase { local a:4 = wbase + wsi16; r4 = *:4 (a + 0); r5 = *:4 (a + 4); r6 = *:4 (a + 8); r7 = *:4 (a + 12); r8 = *:4 (a + 16); r9 = *:4 (a + 20); r10 = *:4 (a + 24); r11 = *:4 (a + 28); r12 = *:4 (a + 32); r13 = *:4 (a + 36); r14 = *:4 (a + 40); r15 = *:4 (a + 44); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=4 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r4; *:4 (a + 4) = r5; *:4 (a + 8) = r6; *:4 (a + 12) = r7; *:4 (a + 16) = r8; *:4 (a + 20) = r9; *:4 (a + 24) = r10; *:4 (a + 28) = r11; *:4 (a + 32) = r12; *:4 (a + 36) = r13; *:4 (a + 40) = r14; *:4 (a + 44) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=5 & wsi16 & wbase { local a:4 = wbase + wsi16; r5 = *:4 (a + 0); r6 = *:4 (a + 4); r7 = *:4 (a + 8); r8 = *:4 (a + 12); r9 = *:4 (a + 16); r10 = *:4 (a + 20); r11 = *:4 (a + 24); r12 = *:4 (a + 28); r13 = *:4 (a + 32); r14 = *:4 (a + 36); r15 = *:4 (a + 40); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=5 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r5; *:4 (a + 4) = r6; *:4 (a + 8) = r7; *:4 (a + 12) = r8; *:4 (a + 16) = r9; *:4 (a + 20) = r10; *:4 (a + 24) = r11; *:4 (a + 28) = r12; *:4 (a + 32) = r13; *:4 (a + 36) = r14; *:4 (a + 40) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=6 & wsi16 & wbase { local a:4 = wbase + wsi16; r6 = *:4 (a + 0); r7 = *:4 (a + 4); r8 = *:4 (a + 8); r9 = *:4 (a + 12); r10 = *:4 (a + 16); r11 = *:4 (a + 20); r12 = *:4 (a + 24); r13 = *:4 (a + 28); r14 = *:4 (a + 32); r15 = *:4 (a + 36); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=6 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r6; *:4 (a + 4) = r7; *:4 (a + 8) = r8; *:4 (a + 12) = r9; *:4 (a + 16) = r10; *:4 (a + 20) = r11; *:4 (a + 24) = r12; *:4 (a + 28) = r13; *:4 (a + 32) = r14; *:4 (a + 36) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=7 & wsi16 & wbase { local a:4 = wbase + wsi16; r7 = *:4 (a + 0); r8 = *:4 (a + 4); r9 = *:4 (a + 8); r10 = *:4 (a + 12); r11 = *:4 (a + 16); r12 = *:4 (a + 20); r13 = *:4 (a + 24); r14 = *:4 (a + 28); r15 = *:4 (a + 32); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=7 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r7; *:4 (a + 4) = r8; *:4 (a + 8) = r9; *:4 (a + 12) = r10; *:4 (a + 16) = r11; *:4 (a + 20) = r12; *:4 (a + 24) = r13; *:4 (a + 28) = r14; *:4 (a + 32) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=8 & wsi16 & wbase { local a:4 = wbase + wsi16; r8 = *:4 (a + 0); r9 = *:4 (a + 4); r10 = *:4 (a + 8); r11 = *:4 (a + 12); r12 = *:4 (a + 16); r13 = *:4 (a + 20); r14 = *:4 (a + 24); r15 = *:4 (a + 28); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=8 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r8; *:4 (a + 4) = r9; *:4 (a + 8) = r10; *:4 (a + 12) = r11; *:4 (a + 16) = r12; *:4 (a + 20) = r13; *:4 (a + 24) = r14; *:4 (a + 28) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=9 & wsi16 & wbase { local a:4 = wbase + wsi16; r9 = *:4 (a + 0); r10 = *:4 (a + 4); r11 = *:4 (a + 8); r12 = *:4 (a + 12); r13 = *:4 (a + 16); r14 = *:4 (a + 20); r15 = *:4 (a + 24); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=9 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r9; *:4 (a + 4) = r10; *:4 (a + 8) = r11; *:4 (a + 12) = r12; *:4 (a + 16) = r13; *:4 (a + 20) = r14; *:4 (a + 24) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=10 & wsi16 & wbase { local a:4 = wbase + wsi16; r10 = *:4 (a + 0); r11 = *:4 (a + 4); r12 = *:4 (a + 8); r13 = *:4 (a + 12); r14 = *:4 (a + 16); r15 = *:4 (a + 20); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=10 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r10; *:4 (a + 4) = r11; *:4 (a + 8) = r12; *:4 (a + 12) = r13; *:4 (a + 16) = r14; *:4 (a + 20) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=11 & wsi16 & wbase { local a:4 = wbase + wsi16; r11 = *:4 (a + 0); r12 = *:4 (a + 4); r13 = *:4 (a + 8); r14 = *:4 (a + 12); r15 = *:4 (a + 16); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=11 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r11; *:4 (a + 4) = r12; *:4 (a + 8) = r13; *:4 (a + 12) = r14; *:4 (a + 16) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=12 & wsi16 & wbase { local a:4 = wbase + wsi16; r12 = *:4 (a + 0); r13 = *:4 (a + 4); r14 = *:4 (a + 8); r15 = *:4 (a + 12); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=12 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r12; *:4 (a + 4) = r13; *:4 (a + 8) = r14; *:4 (a + 12) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=13 & wsi16 & wbase { local a:4 = wbase + wsi16; r13 = *:4 (a + 0); r14 = *:4 (a + 4); r15 = *:4 (a + 8); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=13 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r13; *:4 (a + 4) = r14; *:4 (a + 8) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=14 & wsi16 & wbase { local a:4 = wbase + wsi16; r14 = *:4 (a + 0); r15 = *:4 (a + 4); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=14 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r14; *:4 (a + 4) = r15; }
+:lm wra, wsi16^"("^wbase^")" is wop8=0xc9 & wra & wra=15 & wsi16 & wbase { local a:4 = wbase + wsi16; r15 = *:4 (a + 0); }
+:stm wra, wsi16^"("^wbase^")" is wop8=0xd9 & wra & wra=15 & wsi16 & wbase { local a:4 = wbase + wsi16; *:4 (a + 0) = r15; }
+
+# R format
+:ais ra, ri is op8=0x90 & ra & ri { local a:4 = ra; local b:4 = ri; addf(a, b, 0:1); ra = a + b; }
+:inc ra, ri is op8=0x91 & ra & ri { ra = ra + ri; }
+:sis ra, ri is op8=0x92 & ra & ri { local a:4 = ra; local b:4 = ri; subf(a, b); ra = a - b; }
+:dec ra, ri is op8=0x93 & ra & ri { ra = ra - ri; }
+:cis ra, ri is op8=0x94 & ra & ri { local a:4 = ra; local b:4 = ri; LT = a s< b; EQ = a == b; GT = a s> b; }
+:clrsb ras, ri is op8=0x95 & ras & ra=15 & ri { local v:4 = 0; packcs(v); v = v & ~(0x8000 >> ri); unpackcs(v); }
+:clrsb ras, ri is op8=0x95 & ras & ri { ras = ras & ~(0x8000 >> ri); }
+:mfs ras, rb is op8=0x96 & ras & ra=15 & rb { local v:4 = 0; packcs(v); rb = v; }
+:mfs ras, rb is op8=0x96 & ras & ra=13 & rb { rb = inst_next; }
+:mfs ras, rb is op8=0x96 & ras & ra=10 & rb { rb = mq; }
+:mfs ras, rb is op8=0x96 & ras & rb { rb = read_scr(ras); }
+:setsb ras, ri is op8=0x97 & ras & ra=15 & ri { local v:4 = 0; packcs(v); v = v | (0x8000 >> ri); unpackcs(v); }
+:setsb ras, ri is op8=0x97 & ras & ri { ras = ras | (0x8000 >> ri); }
+:clrbu ra, ri is op8=0x98 & ra & ri { local r:4 = ra & ~(0x80000000 >> ri); ra = r; logf(r); }
+:clrbl ra, ri is op8=0x99 & ra & ri { local r:4 = ra & ~(0x8000 >> ri); ra = r; logf(r); }
+:setbu ra, ri is op8=0x9a & ra & ri { local r:4 = ra | (0x80000000 >> ri); ra = r; logf(r); }
+:setbl ra, ri is op8=0x9b & ra & ri { local r:4 = ra | (0x8000 >> ri); ra = r; logf(r); }
+:mftbiu ra, ri is op8=0x9c & ra & ri { local m:4 = 0x80000000 >> ri; ra = (ra & ~m) | (m * zext(TB)); }
+:mftbil ra, ri is op8=0x9d & ra & ri { local m:4 = 0x8000 >> ri; ra = (ra & ~m) | (m * zext(TB)); }
+:mttbiu ra, ri is op8=0x9e & ra & ri { TB = (ra & (0x80000000 >> ri)) != 0; }
+:mttbil ra, ri is op8=0x9f & ra & ri { TB = (ra & (0x8000 >> ri)) != 0; }
+:sari ra, ri is op8=0xa0 & ra & ri { local r:4 = ra s>> ri; ra = r; logf(r); }
+:sari16 ra, ri is op8=0xa1 & ra & ri { local r:4 = ra s>> (ri + 16); ra = r; logf(r); }
+:lis ra, ri is op8=0xa4 & ra & ri { ra = ri; }
+:sri ra, ri is op8=0xa8 & ra & ri { local r:4 = ra >> ri; ra = r; logf(r); }
+:sri16 ra, ri is op8=0xa9 & ra & ri { local r:4 = ra >> (ri + 16); ra = r; logf(r); }
+:sli ra, ri is op8=0xaa & ra & ri { local r:4 = ra << ri; ra = r; logf(r); }
+:sli16 ra, ri is op8=0xab & ra & ri { local r:4 = ra << (ri + 16); ra = r; logf(r); }
+:srpi ra, ri is op8=172 & ra & ra=0 & ri { local v:4 = ra >> (ri + 0); r1 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=1 & ri { local v:4 = ra >> (ri + 0); r0 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=2 & ri { local v:4 = ra >> (ri + 0); r3 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=3 & ri { local v:4 = ra >> (ri + 0); r2 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=4 & ri { local v:4 = ra >> (ri + 0); r5 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=5 & ri { local v:4 = ra >> (ri + 0); r4 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=6 & ri { local v:4 = ra >> (ri + 0); r7 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=7 & ri { local v:4 = ra >> (ri + 0); r6 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=8 & ri { local v:4 = ra >> (ri + 0); r9 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=9 & ri { local v:4 = ra >> (ri + 0); r8 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=10 & ri { local v:4 = ra >> (ri + 0); r11 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=11 & ri { local v:4 = ra >> (ri + 0); r10 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=12 & ri { local v:4 = ra >> (ri + 0); r13 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=13 & ri { local v:4 = ra >> (ri + 0); r12 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=14 & ri { local v:4 = ra >> (ri + 0); r15 = v; logf(v); }
+:srpi ra, ri is op8=172 & ra & ra=15 & ri { local v:4 = ra >> (ri + 0); r14 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=0 & ri { local v:4 = ra >> (ri + 16); r1 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=1 & ri { local v:4 = ra >> (ri + 16); r0 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=2 & ri { local v:4 = ra >> (ri + 16); r3 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=3 & ri { local v:4 = ra >> (ri + 16); r2 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=4 & ri { local v:4 = ra >> (ri + 16); r5 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=5 & ri { local v:4 = ra >> (ri + 16); r4 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=6 & ri { local v:4 = ra >> (ri + 16); r7 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=7 & ri { local v:4 = ra >> (ri + 16); r6 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=8 & ri { local v:4 = ra >> (ri + 16); r9 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=9 & ri { local v:4 = ra >> (ri + 16); r8 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=10 & ri { local v:4 = ra >> (ri + 16); r11 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=11 & ri { local v:4 = ra >> (ri + 16); r10 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=12 & ri { local v:4 = ra >> (ri + 16); r13 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=13 & ri { local v:4 = ra >> (ri + 16); r12 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=14 & ri { local v:4 = ra >> (ri + 16); r15 = v; logf(v); }
+:srpi16 ra, ri is op8=173 & ra & ra=15 & ri { local v:4 = ra >> (ri + 16); r14 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=0 & ri { local v:4 = ra << (ri + 0); r1 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=1 & ri { local v:4 = ra << (ri + 0); r0 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=2 & ri { local v:4 = ra << (ri + 0); r3 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=3 & ri { local v:4 = ra << (ri + 0); r2 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=4 & ri { local v:4 = ra << (ri + 0); r5 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=5 & ri { local v:4 = ra << (ri + 0); r4 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=6 & ri { local v:4 = ra << (ri + 0); r7 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=7 & ri { local v:4 = ra << (ri + 0); r6 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=8 & ri { local v:4 = ra << (ri + 0); r9 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=9 & ri { local v:4 = ra << (ri + 0); r8 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=10 & ri { local v:4 = ra << (ri + 0); r11 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=11 & ri { local v:4 = ra << (ri + 0); r10 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=12 & ri { local v:4 = ra << (ri + 0); r13 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=13 & ri { local v:4 = ra << (ri + 0); r12 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=14 & ri { local v:4 = ra << (ri + 0); r15 = v; logf(v); }
+:slpi ra, ri is op8=174 & ra & ra=15 & ri { local v:4 = ra << (ri + 0); r14 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=0 & ri { local v:4 = ra << (ri + 16); r1 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=1 & ri { local v:4 = ra << (ri + 16); r0 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=2 & ri { local v:4 = ra << (ri + 16); r3 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=3 & ri { local v:4 = ra << (ri + 16); r2 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=4 & ri { local v:4 = ra << (ri + 16); r5 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=5 & ri { local v:4 = ra << (ri + 16); r4 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=6 & ri { local v:4 = ra << (ri + 16); r7 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=7 & ri { local v:4 = ra << (ri + 16); r6 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=8 & ri { local v:4 = ra << (ri + 16); r9 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=9 & ri { local v:4 = ra << (ri + 16); r8 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=10 & ri { local v:4 = ra << (ri + 16); r11 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=11 & ri { local v:4 = ra << (ri + 16); r10 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=12 & ri { local v:4 = ra << (ri + 16); r13 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=13 & ri { local v:4 = ra << (ri + 16); r12 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=14 & ri { local v:4 = ra << (ri + 16); r15 = v; logf(v); }
+:slpi16 ra, ri is op8=175 & ra & ra=15 & ri { local v:4 = ra << (ri + 16); r14 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=0 & rb { local v:4 = ra >> (rb & 63); r1 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=1 & rb { local v:4 = ra >> (rb & 63); r0 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=2 & rb { local v:4 = ra >> (rb & 63); r3 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=3 & rb { local v:4 = ra >> (rb & 63); r2 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=4 & rb { local v:4 = ra >> (rb & 63); r5 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=5 & rb { local v:4 = ra >> (rb & 63); r4 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=6 & rb { local v:4 = ra >> (rb & 63); r7 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=7 & rb { local v:4 = ra >> (rb & 63); r6 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=8 & rb { local v:4 = ra >> (rb & 63); r9 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=9 & rb { local v:4 = ra >> (rb & 63); r8 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=10 & rb { local v:4 = ra >> (rb & 63); r11 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=11 & rb { local v:4 = ra >> (rb & 63); r10 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=12 & rb { local v:4 = ra >> (rb & 63); r13 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=13 & rb { local v:4 = ra >> (rb & 63); r12 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=14 & rb { local v:4 = ra >> (rb & 63); r15 = v; logf(v); }
+:srp ra, rb is op8=185 & ra & ra=15 & rb { local v:4 = ra >> (rb & 63); r14 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=0 & rb { local v:4 = ra << (rb & 63); r1 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=1 & rb { local v:4 = ra << (rb & 63); r0 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=2 & rb { local v:4 = ra << (rb & 63); r3 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=3 & rb { local v:4 = ra << (rb & 63); r2 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=4 & rb { local v:4 = ra << (rb & 63); r5 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=5 & rb { local v:4 = ra << (rb & 63); r4 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=6 & rb { local v:4 = ra << (rb & 63); r7 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=7 & rb { local v:4 = ra << (rb & 63); r6 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=8 & rb { local v:4 = ra << (rb & 63); r9 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=9 & rb { local v:4 = ra << (rb & 63); r8 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=10 & rb { local v:4 = ra << (rb & 63); r11 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=11 & rb { local v:4 = ra << (rb & 63); r10 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=12 & rb { local v:4 = ra << (rb & 63); r13 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=13 & rb { local v:4 = ra << (rb & 63); r12 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=14 & rb { local v:4 = ra << (rb & 63); r15 = v; logf(v); }
+:slp ra, rb is op8=187 & ra & ra=15 & rb { local v:4 = ra << (rb & 63); r14 = v; logf(v); }
+:sar ra, rb is op8=0xb0 & ra & rb { local r:4 = ra s>> (rb & 63); ra = r; logf(r); }
+:exts ra, rb is op8=0xb1 & ra & rb { local r:4 = sext(rb:2); ra = r; logf(r); }
+:sf ra, rb is op8=0xb2 & ra & rb { local a:4 = rb; local b:4 = ra; subf(a, b); ra = a - b; }
+:cl ra, rb is op8=0xb3 & ra & rb { local a:4 = ra; local b:4 = rb; LT = a < b; EQ = a == b; GT = a > b; }
+:c ra, rb is op8=0xb4 & ra & rb { local a:4 = ra; local b:4 = rb; LT = a s< b; EQ = a == b; GT = a s> b; }
+:mts ras, rb is op8=0xb5 & ras & ra=15 & rb { local v:4 = rb; unpackcs(v); }
+:mts ras, rb is op8=0xb5 & ras & ra=10 & rb { mq = rb; }
+:mts ras, rb is op8=0xb5 & ras & rb { write_scr(ras, rb); ras = rb; }
+:d ra, rb is op8=0xb6 & ra & rb {
+  local a:4 = ra; local b:4 = rb;
+  local sum:8 = (sext(a) << 1) | zext(mq >> 31);
+  local same:1 = (a s< 0) == (b s< 0);
+  sum = sum - (sext(b) * zext(same)) + (sext(b) * zext(!same));
+  ra = sum:4;
+  local s32:1 = ((sum >> 32) & 1) != 0;
+  local q:1 = s32 == (b s< 0);
+  mq = (mq << 1) | zext(q);
+  CY = q;
+  OV = s32 == (sum:4 s< 0);
+}
+:sr ra, rb is op8=0xb8 & ra & rb { local r:4 = ra >> (rb & 63); ra = r; logf(r); }
+:sl ra, rb is op8=0xba & ra & rb { local r:4 = ra << (rb & 63); ra = r; logf(r); }
+:mftb ra, rb is op8=0xbc & ra & rb { local m:4 = 0x80000000 >> (rb & 31); ra = (ra & ~m) | (m * zext(TB)); }
+:tgte ra, rb is op8=0xbd & ra & rb { if (ra < rb) goto inst_next; program_trap(); }
+:tlt ra, rb is op8=0xbe & ra & rb { if (ra >= rb) goto inst_next; program_trap(); }
+:mttb ra, rb is op8=0xbf & ra & rb { TB = (ra & (0x80000000 >> (rb & 31))) != 0; }
+:abs ra, rb is op8=0xe0 & ra & rb { local v:4 = rb; local r:4 = v; if (v s>= 0) goto <pos>; r = -v; <pos> ra = r; OV = v == 0x80000000; CY = 0; logf(r); }
+:a ra, rb is op8=0xe1 & ra & rb { local a:4 = ra; local b:4 = rb; addf(a, b, 0:1); ra = a + b; }
+:s ra, rb is op8=0xe2 & ra & rb { local a:4 = ra; local b:4 = rb; subf(a, b); ra = a - b; }
+:o ra, rb is op8=0xe3 & ra & rb { local r:4 = ra | rb; ra = r; logf(r); }
+:twoc ra, rb is op8=0xe4 & ra & rb { local b:4 = rb; local z:4 = 0; subf(z, b); ra = -b; }
+:n ra, rb is op8=0xe5 & ra & rb { local r:4 = ra & rb; ra = r; logf(r); }
+:m ra, rb is op8=0xe6 & ra & rb {
+  local sum:8 = sext(ra); local b:8 = sext(rb); local k:4 = mq & 3;
+  local nc:1 = CY != 0;
+  local add1:1 = (nc && k == 1) || (!nc && k == 0);
+  local sub2:1 = nc && k == 2;
+  local sub1:1 = (nc && k == 3) || (!nc && k == 2);
+  local add2:1 = !nc && k == 1;
+  sum = sum + b * zext(add1) + (b * 2) * zext(add2) - (b * 2) * zext(sub2) - b * zext(sub1);
+  CY = (mq & 2) == 0;
+  mq = (sum:4 << 30) | (mq >> 2);
+  local sh:8 = sum s>> 2; ra = sh:4;
+}
+:x ra, rb is op8=0xe7 & ra & rb { local r:4 = ra ^ rb; ra = r; logf(r); }
+:br rb is op8=0xe8 & ra=8 & rb & rb=15 { return [r15]; }
+:br rb is op8=0xe8 & ra=8 & rb { local t:4 = rb & ~1; goto [t]; }
+:bnbr^cb rb is op8=0xe8 & ra7=1 & cb & rb { local t:4 = rb & ~1; if (cb) goto inst_next; goto [t]; }
+:brx rb is op8=0xe9 & ra=8 & rb & rb=15 { local t:4 = r15; delayslot(1); return [t]; }
+:brx rb is op8=0xe9 & ra=8 & rb { local t:4 = rb & ~1; delayslot(1); goto [t]; }
+:bnbrx^cb rb is op8=0xe9 & ra7=1 & cb & rb { local t:4 = rb & ~1; local c:1 = cb; delayslot(1); if (c) goto inst_next; goto [t]; }
+:lhs ra, "0("^rb^")" is op8=0xeb & ra & rb { ra = zext(*:2 rb); }
+:balr ra, rb is op8=0xec & ra & rb { local t:4 = rb & ~1; ra = inst_next; call [t]; }
+:balrx ra, rb is op8=0xed & ra & rb { local t:4 = rb & ~1; ra = inst_next + 4; delayslot(1); call [t]; }
+:bbr^cb rb is op8=0xee & ra7=1 & cb & rb { local t:4 = rb & ~1; if (!cb) goto inst_next; goto [t]; }
+:bbrx^cb rb is op8=0xef & ra7=1 & cb & rb { local t:4 = rb & ~1; local c:1 = cb; delayslot(1); if (!c) goto inst_next; goto [t]; }
+:wait is op8=0xf0 { wait_state(); }
+:ae ra, rb is op8=0xf1 & ra & rb { local a:4 = ra; local b:4 = rb; local c:1 = CY; addf(a, b, c); ra = a + b + zext(c); }
+:se ra, rb is op8=0xf2 & ra & rb { local a:4 = ra; local b:4 = ~rb; local c:1 = CY; addf(a, b, c); ra = a + b + zext(c); }
+:ca16 ra, rb is op8=0xf3 & ra & rb { ra = (rb & 0xffff0000) | zext(ra:2 + rb:2); }
+:onec ra, rb is op8=0xf4 & ra & rb { local r:4 = ~rb; ra = r; logf(r); }
+:clz ra, rb is op8=0xf5 & ra & rb { local h:2 = rb:2; ra = lzcount(h); }
+:mc03 ra, rb is op8=0xf9 & ra & rb { ra = (ra & 0x00ffffff) | ((rb & 0xff) << 24); }
+:mc13 ra, rb is op8=0xfa & ra & rb { ra = (ra & 0xff00ffff) | ((rb & 0xff) << 16); }
+:mc23 ra, rb is op8=0xfb & ra & rb { ra = (ra & 0xffff00ff) | ((rb & 0xff) << 8); }
+:mc33 ra, rb is op8=0xfc & ra & rb { ra = (ra & 0xffffff00) | (rb & 0xff); }
+:mc30 ra, rb is op8=0xfd & ra & rb { ra = (ra & 0xffffff00) | (rb >> 24); }
+:mc31 ra, rb is op8=0xfe & ra & rb { ra = (ra & 0xffffff00) | ((rb >> 16) & 0xff); }
+:mc32 ra, rb is op8=0xff & ra & rb { ra = (ra & 0xffffff00) | ((rb >> 8) & 0xff); }

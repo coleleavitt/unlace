@@ -4514,10 +4514,19 @@ TMS320C5x, TMS320C54x). Without that block, the self-referencing root never take
 over the ordinary constructors and the loop-back is silently dropped.
 
 C-SKY `bloop` needs none of this: it sits after the body it closes and is lifted as a
-decrement-and-branch. Not modelled: Epiphany (its loop registers are written with `movts`,
-not named by one instruction), StarCore `DOEN`/`DOSETUP` (not decoded), and Hexagon `endloop`
-(a branch through `SA0`/`SA1`, which resolves only where the decompiler propagates the
-`loop0`/`loop1` constants).
+decrement-and-branch.
+
+Hexagon is the other way round: the packet that ends the loop carries the mark (its parse
+bits, `:endloop0`/`:endloop1`), and only `loop0`/`loop1` names the start. Those
+instructions record the start in flowing (not `noflow`) context, `lp0sa`/`lp1sa`, set
+with `globalset(inst_next, ...)`, so it reaches every instruction the loop setup flows to.
+An end-of-loop packet that sees a recorded start counts `LC0`/`LC1` down and branches
+directly to it; with no recorded start (a loop set up in another function, or through
+`SA0`/`SA1` writes) it keeps the indirect branch through `SA0`/`SA1`. A packet that ends
+both loops at once keeps the indirect form.
+
+Not modelled: Epiphany (its loop registers are written with `movts`, not named by one
+instruction) and StarCore `DOEN`/`DOSETUP` (not decoded).
 
 ### Vendored community processor modules (#98)
 

@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/compiler_spec.rxg -->
+
+<!-- JTEC+ PCM/TCM compiler spec (language 68HC16:BE:24:JTEC).
+
+     Same as the generic 68HC16.cspec EXCEPT the default convention is
+     __pcm_default, which additionally treats IZ as callee-saved (the JTEC+
+     firmware dedicates IZ=0x8000 as a global data pointer). For any
+     non-JTEC binary use 68HC16:BE:24:default, whose __asmcall default does
+     NOT assume a global pointer in IZ.
+
+     MC68HC16 (CPU16) Compiler Spec for Ghidra
+     This file defines:
+       - C data type sizes and alignment for the CPU16 architecture
+       - Stack pointer and return address conventions
+       - Default calling convention (parameter passing, return values,
+         which registers are preserved vs. trashed across function calls)
+     
+     Register DEFINITIONS live in 68HC16.slaspec, not here.
+     Register UI GROUPING lives in 68HC16.pspec, not here.
+     This file only REFERENCES registers by name for calling-convention purposes.
+-->
+
+<compiler_spec>
+
+  <!-- ================================================================
+       Data Organization
+       CPU16: 16-bit data bus, big-endian, 20-bit addresses (3 bytes)
+       Natural data sizes for this architecture (era assemblers/compilers):
+          char=1, short=2, int=2, long=4, pointer=3 (20-bit addr space) 
+       ================================================================ -->
+  <data_organization>
+    <absolute_max_alignment value="0"/>
+    <machine_alignment value="2"/>
+    <default_alignment value="1"/>
+    <default_pointer_alignment value="2"/>
+    <pointer_size value="3"/>
+    <char_size value="1"/>
+    <short_size value="2"/>
+    <integer_size value="2"/>
+    <long_size value="4"/>
+    <long_long_size value="4"/>
+    <float_size value="4"/>
+    <double_size value="4"/>
+    <size_alignment_map>
+      <entry size="1" alignment="1"/>
+      <entry size="2" alignment="2"/>
+      <entry size="4" alignment="2"/>
+    </size_alignment_map>
+  </data_organization>
+
+  <!-- Global address space -->
+  <global>
+    <range space="ram"/>
+  </global>
+
+  <!-- Stack: SP register, grows downward (high-to-low), lives in RAM.
+       The CPU16 uses SK:SP for 20-bit stack addressing, but Ghidra
+       tracks the 16-bit SP and the extension separately. -->
+       
+  <stackpointer register="SSP" space="ram" growth="negative"/>
+
+  <!-- Return address: pushed onto stack by BSR/JSR, pulled by RTS.
+       The CPU16 stores PK:PC on the stack. Ghidra models this via PC. -->
+       
+  <returnaddress>
+    <register name="PC"/>
+  </returnaddress>
+
+  <!-- ================================================================
+       Default Calling Convention: __pcm_default
+
+       PROVENANCE: the JTEC+ PCM firmware is hand-written assembly; no C
+       compiler (Cosmic CX6816 or otherwise) was ever used. Hand-written
+       assembly enforces no single calling convention, so this default is
+       an EMPIRICAL best-effort model of the register usage actually
+       observed in the firmware; a reasonable starting point for the
+       decompiler, not a formal ABI. Reassign a per-function convention
+       wherever a routine clearly deviates.
+       
+       Observed parameter passing:
+         - First integer/pointer arg tends to arrive in D (1-2 bytes),
+           or in the E:D pair for 32-bit values (E=high word, D=low).
+         - Further args, when stack-passed, are pushed right to left.
+       
+       Observed return values:
+         - char/short/int/pointer: D register
+         - long/float-width: E:D pair (E=high word, D=low word)
+
+       Register preservation (as observed):
+         - Treated as clobbered by a call: D, E, IY, CCR
+         - Treated as preserved across a call: IX (frame pointer), SP/SK,
+           and all address-extension registers (EK, XK, YK, ZK, PK)
+       
+       IZ IS DELIBERATELY PRESERVED: this firmware dedicates IZ=0x8000 as
+       a global data pointer, set once at startup and never modified by a
+       routine. Marking IZ killedbycall would make the decompiler lose
+       every Z-indexed global access across a call, so IZ is kept
+       unaffected to match real firmware behavior (paired with ZK=0x0F).
+       
+       Stack frame (as observed):
+         - IX commonly serves as the frame pointer.
+         - Prologue pattern: pshm <regs>; ais #-<size>; tsx
+         - stackshift=4: JSR/BSR push PK:PC + CCR = 4 bytes.
+       ================================================================ -->
+  <default_proto>
+    <prototype name="__pcm_default" extrapop="0" stackshift="4">
+  <input>
+    <!-- First arg: D register for char/short/int/pointer (1-2 bytes) -->
+    <pentry minsize="1" maxsize="2">
+      <register name="D"/>
+    </pentry>
+    <!-- First arg: E:D join for long/float-width values (3-4 bytes)
+         E=high word (piece1), D=low word (piece2), as observed in firmware -->
+
+    <pentry minsize="3" maxsize="4">
+      <addr space="join" piece1="E" piece2="D"/>
+    </pentry>
+    <!-- Remaining args: stack, right-to-left -->
+    <pentry minsize="1" maxsize="500" align="2">
+      <addr offset="4" space="stack"/>
+    </pentry>
+  </input>
+  <output>
+    <!-- Return: D for char/short/int/pointer (1-2 bytes) -->
+    <pentry minsize="1" maxsize="2">
+      <register name="D"/>
+    </pentry>
+    <!-- Return: E:D join for long/float (3-4 bytes)
+         E=high word, D=low word -->
+    <pentry minsize="3" maxsize="4">
+      <addr space="join" piece1="E" piece2="D"/>
+    </pentry>
+  </output>
+  <unaffected>
+    <register name="SSP"/>
+    <register name="SP"/>
+    <register name="SK"/>
+    <register name="IX"/>
+    <register name="IZ"/>
+    <register name="XK"/>
+    <register name="YK"/>
+    <register name="ZK"/>
+    <register name="PK"/>
+    <register name="EK"/>
+  </unaffected>
+  <killedbycall>
+    <register name="A"/>
+    <register name="B"/>
+    <register name="D"/>
+    <register name="E"/>
+    <register name="IY"/>
+    <register name="CCR"/>
+  </killedbycall>
+</prototype>
+  </default_proto>
+
+  <!-- ================================================================
+       Alternate Calling Conventions: Register-Heavy Functions
+       
+       Many JTEC+ firmware functions pass parameters in registers that
+       the default convention does not model, particularly pointer-in-IX
+       patterns. Examples include table interpolation routines that take
+       a table pointer in IX and an input value in D.
+       
+       Assign to specific functions via right-click -> Edit Function
+       Signature -> select the convention from the calling convention
+       dropdown.
+       ================================================================ -->
+
+
+<!-- 1D table lookup: IX=table pointer, A=lookup param -->
+<prototype name="__table_1d" extrapop="0" stackshift="4">
+  <input>
+    <pentry minsize="2" maxsize="2">
+      <register name="IX"/>
+    </pentry>
+    <pentry minsize="1" maxsize="1">
+      <register name="A"/>
+    </pentry>
+  </input>
+  <output>
+    <pentry minsize="1" maxsize="1">
+      <register name="B"/>
+    </pentry>
+    <pentry minsize="2" maxsize="2">
+      <register name="D"/>
+    </pentry>
+  </output>
+  <unaffected>
+    <register name="SSP"/>
+    <register name="SP"/>
+    <register name="SK"/>
+    <register name="IX"/>
+    <register name="IZ"/>
+    <register name="XK"/>
+    <register name="YK"/>
+    <register name="ZK"/>
+    <register name="PK"/>
+    <register name="EK"/>
+  </unaffected>
+  <killedbycall>
+    <register name="A"/>
+    <register name="B"/>
+    <register name="D"/>
+    <register name="E"/>
+    <register name="IY"/>
+    <register name="CCR"/>
+  </killedbycall>
+</prototype>
+
+<!-- 2D table lookup: IX=table pointer, A=row param, B=column param -->
+<prototype name="__table_2d" extrapop="0" stackshift="4">
+  <input>
+    <pentry minsize="2" maxsize="2">
+      <register name="IX"/>
+    </pentry>
+    <pentry minsize="1" maxsize="1">
+      <register name="A"/>
+    </pentry>
+    <pentry minsize="1" maxsize="1">
+      <register name="B"/>
+    </pentry>
+  </input>
+  <output>
+    <pentry minsize="1" maxsize="1">
+      <register name="A"/>
+    </pentry>
+    <pentry minsize="2" maxsize="2">
+      <register name="E"/>
+    </pentry>
+  </output>
+  <unaffected>
+    <register name="SSP"/>
+    <register name="SP"/>
+    <register name="SK"/>
+    <register name="IX"/>
+    <register name="IZ"/>
+    <register name="XK"/>
+    <register name="YK"/>
+    <register name="ZK"/>
+    <register name="PK"/>
+    <register name="EK"/>
+  </unaffected>
+  <killedbycall>
+    <register name="A"/>
+    <register name="B"/>
+    <register name="D"/>
+    <register name="E"/>
+    <register name="IY"/>
+    <register name="CCR"/>
+  </killedbycall>
+</prototype>
+   
+</compiler_spec>

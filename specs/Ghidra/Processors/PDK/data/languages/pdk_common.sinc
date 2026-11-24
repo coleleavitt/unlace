@@ -1,0 +1,57 @@
+# Common definitions for the Padauk PDK13/14/15/16 processors.
+#
+# Address spaces (Harvard architecture):
+#   rom       code, one 16-bit word per address (addresses are WORD addresses, as in Padauk/SDCC listings)
+#   ram       data memory, bytes
+#   register  accumulator and internal state (0x00..0xff) and the I/O registers (0x100 + I/O address, 0 .. 31/63/127),
+#             which the IO forms of the instructions reach
+define endian=little;
+define alignment=2;
+
+define space rom      type=ram_space      size=2 wordsize=2 default;
+define space ram      type=ram_space      size=2 wordsize=1;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=1 [ A ];
+define register offset=0x02 size=2 [ IP ];
+define register offset=0x04 size=2 [ T16 ];      # 16 bit timer (STT16 / LDT16)
+define register offset=0x08 size=1 [ GIE ];      # global interrupt enable (ENGINT / DISGINT / RETI)
+
+# io 0 and 2 exist on every device
+define register offset=0x100 size=1 [ flag ];
+define register offset=0x102 size=1 [ sp ];
+
+define bitrange ZF=flag[0,1]    # zero
+                CF=flag[1,1]    # carry / not borrow-free: set when a subtraction borrows
+                AC=flag[2,1]    # carry (borrow) out of bit 3
+                OV=flag[3,1]    # signed overflow
+;
+
+# r = a + b + c  (c is 0 or 1)
+macro addflags(r, a, b, c) {
+	local t:2 = zext(a) + zext(b) + zext(c);
+	r = t:1;
+	ZF = (r == 0);
+	CF = (t > 0xff);
+	AC = (((a & 0xf) + (b & 0xf) + c) > 0xf);
+	OV = (((a ^ r) & (b ^ r) & 0x80) != 0);
+}
+
+# r = a - b - c  (c is 0 or 1); CF and AC are borrows
+macro subflags(r, a, b, c) {
+	r = a - b - c;
+	ZF = (r == 0);
+	local wa:2 = zext(a);
+	local wb:2 = zext(b) + zext(c);
+	CF = (wa < wb);
+	AC = ((a & 0xf) < ((b & 0xf) + c));
+	OV = (((a ^ b) & (a ^ r) & 0x80) != 0);
+}
+
+define pcodeop watchdog_reset;
+define pcodeop chip_reset;
+define pcodeop stop_sys;
+define pcodeop stop_exe;
+define pcodeop pmode;
+define pcodeop fppa_getpc;
+define pcodeop fppa_setpc;

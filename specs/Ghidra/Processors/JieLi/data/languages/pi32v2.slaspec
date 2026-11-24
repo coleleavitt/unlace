@@ -1,0 +1,227 @@
+define endian    = little;
+define alignment = 2;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+
+#############################################################################
+#
+# General purpose registers
+#
+define register offset=0x0 size=4
+	[ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+
+# Paired registers
+define register offset=0x0 size=8
+	[ r1_r0 r3_r2 r5_r4 r7_r6 r9_r8 r11_r10 r13_r12 r15_r14 ];
+
+#
+# Special function registers
+#
+define register offset=0x100 size=4
+	[ reti rete retx rets sr4 psr cnum uspn
+	  sspn icfgn icfgs icfg usp ssp sp pc
+    ];
+
+define register offset=0x0160 size=4
+    [
+        mult_addr 	  # Special internal register for dealing with multiple stores/loads
+        cres          # Register used to store any if...then...else condition result
+        rep_count     # Repeat block counter
+        rep_start     # Repeat start address
+    ];
+
+##
+# Pi32v2 Context register
+##
+
+define register offset=0x300 size=8 [ contextreg ];
+
+define context contextreg
+    # Used while parsing any if...then...else structure
+    ifblock = (0,0)
+    closebracket = (1,1) noflow
+    thenbranch = (2,4)
+    elsebranch = (5,6)
+    
+    # Used to generate registers list from bitmap
+    counter = (7,10)
+    sep = (11,11)
+    bitset = (12,12)
+
+    # Group preprocessing
+    group = (13, 15)
+
+    # Repeat block
+    reploop = (16,16)
+    replen = (17,23)
+
+    parallel_phase = (29,29)
+    parallel = (30,30)
+    phase = (31,31)
+
+    repblock_endaddr = (32,63)
+;
+
+
+
+# PSR bits
+@define V	"psr[0,1]"	# overflow
+@define C	"psr[1,1]"	# carry
+@define Z	"psr[2,1]"	# zero
+@define N	"psr[3,1]"	# negative
+
+#############################################################################
+# Operations that p-code cannot express (hardware state, caches, interrupts, DSP lanes, FPU)
+#############################################################################
+
+
+
+# Generated tokens, operand tables and instruction constructors (tools/gen_pi32v2.py)
+@include "pi32v2_gen.sinc"
+
+######################################################
+# Parallel execution
+#
+# Instructions with prefix=6 are basic group 0 instructions
+# that are parallelized, so we set the group to 0 and 
+# we parse the instruction accordingly.
+#
+# Instructions with prefix=7 are part of the extended set
+# and only instructions with bit 12 set and bit 11 clear
+# seem to support a parallelized version.
+#
+# The following lines define the `parainst` table that
+# is used to take care of the order of execution of such
+# parallelized instructions.
+#
+######################################################
+
+# For prefixes below 6, no parallelization.
+parainst:^instruction is parallel_phase=0 & prefix<6 & prefix & instruction
+[parallel_phase=1; group=prefix; parallel=0; ]
+{
+    build instruction;
+}
+
+# If instruction prefix is 6, then it is parallelized.
+# Next instruction is executed first, then this one.
+parainst:^instruction is parallel_phase=0 & prefix=6 & instruction
+[   
+    parallel_phase=1;
+    parallel=1;
+    group=0; globalset(inst_next, group);
+]
+{
+    delayslot(1);
+    build instruction;
+}
+
+# If instruction prefix is 7, then it is parallelized only
+# when bit 12 is set and bit 11 not set. Instructions defined for group 7 must
+# not use this bit for instruction matching.
+parainst:^instruction is parallel_phase=0 & prefix=7 & ins1112=0b10 & instruction
+[
+    parallel=1;
+    parallel_phase=1;
+    group=7; globalset(inst_next, group);
+]
+{
+    delayslot(1);
+    build instruction;
+}
+
+# If instruction prefix is 7 and bit 12 is not set, we simply
+# execute this instruction.
+parainst:^instruction is parallel_phase=0 & prefix=7 & ins1112!=0b10 & instruction
+[ parallel=0; parallel_phase=1; group=7; globalset(inst_next, group); ]
+{
+    build instruction;
+}
+
+######################################################
+# Repeat blocks
+######################################################
+
+# The loop-back check runs just before the first instruction after the body (the rep instruction flags that address with
+# reploop/replen), so it does not matter how long the last body instruction is.
+repstart: target is replen [target = inst_start - replen; ]
+{
+    export *:4 target;
+}
+
+# Disassemble repeat block instructions
+:^parainst is parainst & phase=0 & reploop=1 & repstart
+[ phase=1; reploop=0; globalset(inst_next, reploop); ]
+{
+    # Repeat until the counter reaches zero
+    rep_count = rep_count - 1;
+    if (rep_count != 0) goto repstart;
+    build parainst;
+}
+
+
+######################################################
+# Conditional blocks
+#
+# The Pi32v2 architecture provides specific instructions
+# to test a specific condition and execute a block composed
+# of at most 4 instructions if this condition is met, or
+# another block of at most 3 instructions if it is not.
+#
+# The following lines specify the `cdtinst` table that
+# deals with these conditional blocks using our context
+# register `ifblock`, `closebracket`, `thenbranch` and
+# `elsebranch` bits.
+######################################################
+
+theninst:^parainst is parainst
+[ thenbranch=thenbranch-1; globalset(inst_next, thenbranch); ]
+{
+    if (cres != 1) goto inst_next;
+        build parainst;
+}
+
+elseinst:^parainst is parainst
+[ elsebranch=elsebranch-1; globalset(inst_next, elsebranch); ]
+{
+    if (cres==1) goto inst_next;
+    build parainst;
+}
+
+# Processing `then` instructions while we have more than 1 inst.
+cdtinst:^theninst is thenbranch>1 & theninst {}
+
+# Last instruction in the `then` branch with an `else` branch to come: `closebracket` marks the first `else` instruction.
+cdtinst:^theninst is thenbranch=1 & theninst & elsebranch>0
+    [ closebracket=1; globalset(inst_next, closebracket); ]{}
+
+# Last instruction in the `then` branch, no `else` branch: the block is closed.  No context may be left behind: the
+# instruction after the block is also reached by branches, and flows that arrive with different context make Ghidra
+# report "inconsistent instruction prototype".
+cdtinst:^theninst is thenbranch=1 & theninst & elsebranch=0
+    [ ifblock=0; globalset(inst_next, ifblock); ]{}
+
+# First instruction of the `else` branch (it also closes the `then` part).
+cdtinst:^"} else { " elseinst is thenbranch=0 & elsebranch>1 & elseinst & closebracket=1
+    [ closebracket=0; globalset(inst_next, closebracket); ]{}
+
+# Special case: the `else` branch has a single instruction.
+cdtinst:^"} else { " elseinst is thenbranch=0 & elsebranch=1 & elseinst & closebracket=1
+    [ ifblock=0; globalset(inst_next, ifblock); closebracket=0; globalset(inst_next, closebracket); ]{}
+
+# Other instructions in else branch
+cdtinst:^elseinst is thenbranch=0 & elsebranch>1 & closebracket=0 & elseinst {}
+
+# Last instruction of the `else` branch: the block is closed.
+cdtinst:^elseinst is thenbranch=0 & elsebranch=1 & elseinst & closebracket=0
+    [ ifblock=0; globalset(inst_next, ifblock); ]{}
+
+# Conditional instruction
+:^cdtinst is phase=0 & ifblock=1 & cdtinst [phase=1;]{}
+
+# Default case, we are not processing a conditional instruction.
+:^parainst is parainst & phase=0 & ifblock=0 & closebracket=0 [phase=1;]{}
+
+
+

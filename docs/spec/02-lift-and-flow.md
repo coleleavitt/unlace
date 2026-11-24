@@ -4190,7 +4190,17 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `F2MC16` | Fujitsu F2MC-16L / 16LX | `F2MC:LE:24:default` | aleph-void/F2MC-16LX (fork of mehmooda/F2MC-16LX) @ `0308d3095a`, MIT |
 | `8008` | Intel 8008 | `8008:LE:16:default` | aleph-void/ghidra-8008 @ `71c3e7378c`, Apache-2.0 |
 | `F8` | Fairchild F8 | `F8:BE:16:default`, `F8:BE:16:F3850`, `F8:BE:16:MK3870`, `F8:BE:16:F3870`, `F8:BE:16:MK3873` | aleph-void/ghidra-f8 @ `bad5887f84`, Apache-2.0 |
+| `H8` | Hitachi H8/300, H8/300H, H8S | `h8_300:BE:16:normal`, `h8_300l:BE:16:normal`, `h8_300h:BE:32:normal`, `h8_300h:BE:32:advanced`, `h8s:BE:32:normal`, `h8s:BE:32:advanced`, `h8sx:BE:32:normal`, `h8sx:BE:32:middle`, `h8sx:BE:32:advanced`, `h8sx:BE:32:maximum` | aleph-void/ghidra-h8-300 (fork of shizmob/ghidra-h8-300) @ `480471258a`, WTFPL |
+| `JieLi` | JieLi audio SoC | `pi32:LE:32:default`, `pi32v2:LE:32:default`, `q32s:LE:32:default` | aleph-void/ghidra-jieli (fork of quarkslab/ghidra-jieli) @ `a69a59056f`, Apache-2.0 |
+| `M740` | Mitsubishi MELPS 740 | `MELPS740:LE:16:default`, `MELPS740:LE:16:wit`, `MELPS740:LE:16:muldiv` | aleph-void/ghidra-m740 @ `4495d71ab8`, Apache-2.0 |
+| `MN102` | Panasonic MN10200 | `MN102:BE:24:default` | aleph-void/ghidra-mn102-lang (fork of Pokechu22/ghidra-mn102-lang) @ `3cf1d57f86`, Apache-2.0 |
+| `MN103` | Panasonic MN10300 (AM33) | `mn10300:LE:32:default`, `mn10300:LE:32:am33`, `mn10300:LE:32:mn10300` | aleph-void/ghidra-mn103-extension (fork of michaelbrandi/ghidra-mn103-extension) @ `32d7ce4d79`, Apache-2.0 |
+| `PDK` | Padauk PDK (PMS/PFS) | `pdk13:LE:16:default`, `pms152:LE:16:default`, `pms132:LE:16:default`, `pms134:LE:16:default`, `pmc884:LE:16:default` | aleph-void/ghidra-pdk (fork of CUB3D/ghidra-pdk) @ `d4cdebc983`, Apache-2.0 |
+| `PIC16F153xx` | Microchip PIC16F153xx enhanced midrange | `PIC-16:LE:16:PIC-16F153xx` | aleph-void/ghidra-pic16f153xx @ `85c02a04a0`, Apache-2.0 |
+| `PicoBlaze` | Xilinx PicoBlaze (KCPSM) | `KCPSM3:BE:24:default`, `KCPSM6:BE:24:default` | aleph-void/ghidra-picoblaze-kcpsm @ `ba271a21d6`, Apache-2.0 |
+| `MC68HC16` | Motorola MC68HC16 | `68HC16:BE:24:cpu16`, `68HC16:BE:24:default`, `68HC16:BE:24:JTEC` | aleph-void/Ghidra-Processor-MC68HC16Z (fork of HausRummel/Ghidra-Processor-MC68HC16Z) @ `974d796590`, Apache-2.0 |
 | `GCDSP` | Nintendo GameCube DSP | `GCDSP:BE:16:default`, `GCDSP:BE:16:exact` | aleph-void/ghidra-gcdsp-lang (fork of Pokechu22/ghidra-gcdsp-lang) @ `4fc59950c6`, Apache-2.0 |
+||||||| e949085348
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

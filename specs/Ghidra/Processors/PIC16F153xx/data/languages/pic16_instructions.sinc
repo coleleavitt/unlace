@@ -1,0 +1,707 @@
+#
+# PIC16(L)F153xx Instruction Section (enhanced mid-range core)
+#   includes token definitions, macros, sub-constructors and instruction definitions
+#
+# Instructions are 14 bits wide, stored in 16-bit cells (the top two bits are ignored).
+#
+
+# Little-endian bit numbering
+define token instr16(16)
+	op16 =	(0,15)
+	op14 =	(0,13)
+	op12 =  (2,13)
+	op11 =	(3,13)
+	op9 =	(5,13)
+	op8 =	(6,13)
+	op7 =   (7,13)
+	op6 =	(8,13)
+	op5 =	(9,13)
+	op4 =	(10,13)
+	op3 =	(11,13)
+	d =		(7,7)
+	b3 =	(7,9)
+	f7 =	(0,6)
+	lf7 = 	(0,3)
+	uf7 =	(4,6)
+	fsr = 	(2,2)
+	fsrk =	(6,6)
+	fregCore = (0,3)
+	k5 = 	(0,4)
+	k6 = 	(0,5)
+	k7 = 	(0,6)
+	k8 =	(0,7)
+	sk9 =   (0,8) signed
+	k11 =	(0,10)
+	sk6 =	(0,5) signed
+	l5 =	(0,4)
+	mm =	(0,1)
+;
+
+define register offset=0x100 size=4 contextreg;
+# pcHi: PCLATH<6:3>, the page bits that CALL and GOTO put into PC<14:11>. MOVLP sets it for the
+# instructions that follow it (context flows along the control flow), so the target of a CALL or
+# GOTO is known when the instruction is disassembled and both are plain direct branches. The
+# pspec starts every 2K-word page with its own page number (the usual case: PCLATH names the page
+# of the code that runs). PCLATH written by anything but MOVLP is not tracked.
+define context contextreg
+	doPseudo = (0,0)
+	pcHi = (1,4)
+;
+
+attach variables [ fregCore ] [
+	INDF0	INDF1	PCL		STATUS	FSR0L	FSR0H	FSR1L	FSR1H	BSR	W	PCLATH	INTCON	_ _ _ _
+];
+
+attach variables [ fsr fsrk ] [ FSR0 FSR1 ];
+
+#
+# Operations Ghidra cannot model
+#
+
+define pcodeop clearWatchDogTimer;
+define pcodeop sleep;
+define pcodeop reset;
+define pcodeop option_write;
+
+#
+# MACROS
+#
+
+# 16-level hardware return stack of 15-bit addresses
+macro push(val) {
+	*[HWSTACK]:2 STKPTR = val;
+	STKPTR = STKPTR + 1;
+}
+
+macro pop(val) {
+	STKPTR = STKPTR - 1;
+	val = *[HWSTACK]:2 STKPTR;
+}
+
+#
+# SUB-CONSTRUCTORS
+#
+
+# File register operand. Direct addressing: BSR<5:0> (128-byte banks) and the 7-bit file
+# register number. The first 12 registers of every bank are the core registers and map to bank 0
+# (below), the top 16 bytes of every bank are common RAM and map to 0x70-0x7F (below).
+srcREG: f7		is f7									{
+	 addr:2 = (zext(BSR & 0x3F) << 7) | f7;
+	 export *[DATA]:1 addr;
+}
+
+# Common RAM (x70h-x7Fh) is the same in all banks
+srcREG: fv		is uf7=0x7 & lf7  [fv = 0x70 + lf7; ]								{
+	 addr:2 = fv;
+	 export *[DATA]:1 addr;
+}
+
+# INDF0/INDF1: indirect access through FSR0/FSR1
+srcREG: fregCore		is f7=0 & fregCore									{
+	addr:2 = FSR0;
+	export *[DATA]:1 addr;
+}
+
+srcREG: fregCore		is f7=1 & fregCore									{
+	addr:2 = FSR1;
+	export *[DATA]:1 addr;
+}
+
+# PCL: reading it gives the low byte of the address of the next instruction (the PC has
+# already been incremented); writing it is a jump (see pcWrite)
+srcREG: fregCore	is f7=0x02 & fregCore {
+	# inst_next is a byte offset in p-code, the program counter counts words
+	local nx:2 = inst_next >> 1;
+	PCL = nx:1;
+	export PCL;
+}
+
+# Core registers are always mapped to bank 0
+srcREG: fregCore		is f7=0x03 & fregCore				{ export fregCore; }
+srcREG: fregCore		is f7=0x04 & fregCore				{ export fregCore; }
+srcREG: fregCore		is f7=0x05 & fregCore				{ export fregCore; }
+srcREG: fregCore		is f7=0x06 & fregCore				{ export fregCore; }
+srcREG: fregCore		is f7=0x07 & fregCore				{ export fregCore; }
+srcREG: fregCore		is f7=0x08 & fregCore				{ export fregCore; }
+srcREG: fregCore		is f7=0x09 & fregCore				{ export fregCore; }
+srcREG: fregCore		is f7=0x0a & fregCore				{ export fregCore; }
+srcREG: fregCore		is f7=0x0b & fregCore				{ export fregCore; }
+
+# Destination register (either srcREG or W)
+destREG: "0"		is d=0									{ export W; }
+destREG: "1"		is d=1 & srcREG							{ export srcREG; }
+
+# Destination register of the instructions that affect Z, DC or C. When STATUS is the destination
+# of such an instruction the write to Z, DC and C is disabled (the flags come from the ALU) and
+# TO/PD are read-only, so the result is dropped (STATUS bits 7:5 are unimplemented).
+destREGalu: "0"		is d=0									{ export W; }
+destREGalu: "1"		is d=1 & srcREG							{ export srcREG; }
+destREGalu: "1"		is d=1 & f7=0x03						{ export ALURES; }
+
+# Destination operand representation (w: W register is destination; f: specified srcREG is destination)
+D: "w"		is d=0										{ }
+D: "f"		is d=1										{ }
+
+# Writing PCL with an instruction jumps to PCLATH<6:0>:PCL
+pcWriteD: is d=1 & f7=0x02	{
+	local pcnew:2 = (zext(PCLATH & 0x7F) << 8) | zext(PCL);
+	goto [pcnew];
+}
+pcWriteD: is epsilon		{ }
+
+pcWriteF: is f7=0x02	{
+	local pcnew:2 = (zext(PCLATH & 0x7F) << 8) | zext(PCL);
+	goto [pcnew];
+}
+pcWriteF: is epsilon	{ }
+
+# Absolute address of CALL/GOTO: k11 and PCLATH<6:3> (the context field pcHi)
+absAddr11: dest	is k11 & pcHi	[ dest = (pcHi << 11) + k11; ]	{
+	export *[CODE]:2 dest;
+}
+
+# Relative address (BRA) generated from sk9: PC + 1 + k
+relAddr9: addr	is sk9	[ addr = inst_next + sk9; ]								{
+	export *[CODE]:2 addr;
+}
+
+# Immediate Data (Literal operation)
+imm8: "#"k8	is k8										{ export *[const]:1 k8; }
+imm7: "#"k7	is k7										{ export *[const]:1 k7; }
+imm6: "#"k6	is k6										{ export *[const]:1 k6; }
+
+# Bit identifier
+bit: "#"b3		is b3									{ export *[const]:1 b3; }
+
+# Names of the bits of STATUS and INTCON
+statusBit: "C"		is b3=0	{ }
+statusBit: "DC"		is b3=1	{ }
+statusBit: "Z"		is b3=2	{ }
+statusBit: "PD"		is b3=3	{ }
+statusBit: "TO"		is b3=4	{ }
+statusBit: "#"b3	is b3	{ }
+intconBit: "INTEDG"	is b3=0	{ }
+intconBit: "PEIE"	is b3=6	{ }
+intconBit: "GIE"	is b3=7	{ }
+intconBit: "#"b3	is b3	{ }
+
+# TRIS (legacy instruction): TRISA/TRISB/TRISC are at x12h-x14h
+trisREG: "5"	is l5=5												{ local trl:2 = 0x012; export *[DATA]:1 trl; } # TRISA
+trisREG: "6"	is l5=6												{ local trl:2 = 0x013; export *[DATA]:1 trl; } # TRISB
+trisREG: "7"	is l5=7												{ local trl:2 = 0x014; export *[DATA]:1 trl; } # TRISC
+
+
+
+#
+# BYTE-ORIENTED FILE REGISTER OPERATIONS
+#
+
+:ADDWF srcREG, D	is op6=0x07 & srcREG & D & destREGalu & pcWriteD					{
+	#  --00 0111 dfff ffff
+	local f:1 = srcREG;
+	local w:1 = W;
+	local r:1 = f + w;
+	destREGalu = r;
+	$(C) = carry(f, w);
+	$(DC) = carry(f << 4, w << 4);
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:ADDWFC srcREG, D	is op6=0x3D & srcREG & D & destREGalu & pcWriteD					{
+	#  --11 1101 dfff ffff
+	local f:1 = srcREG;
+	local w:1 = W;
+	local c:1 = $(C);
+	local r:1 = f + w + c;
+	destREGalu = r;
+	local s:2 = zext(f) + zext(w) + zext(c);
+	local ds:2 = zext(f & 0xF) + zext(w & 0xF) + zext(c);
+	$(C) = s > 0xFF;
+	$(DC) = ds > 0xF;
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:ANDWF srcREG, D	is op6=0x05 & srcREG & D & destREGalu & pcWriteD					{
+	#  --00 0101 dfff ffff
+	local r:1 = W & srcREG;
+	destREGalu = r;
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:ASRF srcREG, D		is op6=0x37 & srcREG & D & destREGalu & pcWriteD					{
+	#  --11 0111 dfff ffff
+	local f:1 = srcREG;
+	local r:1 = f s>> 1;
+	destREGalu = r;
+	$(C) = (f & 1) != 0;
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:LSLF srcREG, D		is op6=0x35 & srcREG & D & destREGalu & pcWriteD					{
+	#  --11 0101 dfff ffff
+	local f:1 = srcREG;
+	local r:1 = f << 1;
+	destREGalu = r;
+	$(C) = (f & 0x80) != 0;
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:LSRF srcREG, D		is op6=0x36 & srcREG & D & destREGalu & pcWriteD					{
+	#  --11 0110 dfff ffff
+	local f:1 = srcREG;
+	local r:1 = f >> 1;
+	destREGalu = r;
+	$(C) = (f & 1) != 0;
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:CLRF srcREG			is op6=0x01 & d=1 & srcREG & destREGalu & pcWriteF						{
+	#  --00 0001 1fff ffff
+	destREGalu = 0:1;
+	$(Z) = 1;
+	build pcWriteF;
+}
+
+:CLRW					is op12=0b000001000000 & mm			{
+	#  --00 0001 0000 00xx
+	W = 0:1;
+	$(Z) = 1;
+}
+
+:COMF srcREG, D		is op6=0x09 & srcREG & D & destREGalu & pcWriteD					{
+	#  --00 1001 dfff ffff
+	local r:1 = ~srcREG;
+	destREGalu = r;
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:DECF srcREG, D		is op6=0x03 & srcREG & D & destREGalu & pcWriteD					{
+	#  --00 0011 dfff ffff
+	local r:1 = srcREG - 1;
+	destREGalu = r;
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:INCF srcREG, D		is op6=0x0a & srcREG & D & destREGalu & pcWriteD					{
+	#  --00 1010 dfff ffff
+	local r:1 = srcREG + 1;
+	destREGalu = r;
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:IORWF srcREG, D		is op6=0x04 & srcREG & D & destREGalu & pcWriteD					{
+	#  --00 0100 dfff ffff
+	local r:1 = W | srcREG;
+	destREGalu = r;
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:MOVF srcREG, D		is op6=0x08 & srcREG & D & destREGalu & pcWriteD					{
+	#  --00 1000 dfff ffff
+	local r:1 = srcREG;
+	destREGalu = r;
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:MOVWF srcREG				is op6=0x00 & d=1 & srcREG & pcWriteF						{
+	#  --00 0000 1fff ffff
+	srcREG = W;
+	build pcWriteF;
+}
+
+:RLF srcREG, D		is op6=0x0d & srcREG & D & destREGalu & pcWriteD					{
+	#  --00 1101 dfff ffff
+	local f:1 = srcREG;
+	local c:1 = $(C);
+	local r:1 = (f << 1) | c;
+	destREGalu = r;
+	$(C) = (f & 0x80) != 0;
+	build pcWriteD;
+}
+
+:RRF srcREG, D		is op6=0x0c & srcREG & D & destREGalu & pcWriteD					{
+	#  --00 1100 dfff ffff
+	local f:1 = srcREG;
+	local c:1 = $(C);
+	local r:1 = (f >> 1) | (c << 7);
+	destREGalu = r;
+	$(C) = (f & 1) != 0;
+	build pcWriteD;
+}
+
+:SUBWF srcREG, D		is op6=0x02 & srcREG & D & destREGalu & pcWriteD					{
+	#  --00 0010 dfff ffff
+	# C and DC are borrow flags with reversed polarity: set when there is no borrow
+	local f:1 = srcREG;
+	local w:1 = W;
+	local r:1 = f - w;
+	destREGalu = r;
+	$(C) = (f >= w);
+	$(DC) = ((f & 0xF) >= (w & 0xF));
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:SUBWFB srcREG, D		is op6=0x3b & srcREG & D & destREGalu & pcWriteD {
+	#  --11 1011 dfff ffff
+	local f:1 = srcREG;
+	local w:1 = W;
+	local bor:1 = $(C) ^ 1;
+	local r:1 = f - w - bor;
+	destREGalu = r;
+	local s:2 = zext(w) + zext(bor);
+	local ds:2 = zext(w & 0xF) + zext(bor);
+	$(C) = zext(f) >= s;
+	$(DC) = zext(f & 0xF) >= ds;
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+:SWAPF srcREG, D		is op6=0x0e & srcREG & D & destREG & pcWriteD					{
+	#  --00 1110 dfff ffff
+	local f:1 = srcREG;
+	destREG = (f << 4) | (f >> 4);
+	build pcWriteD;
+}
+
+:XORWF srcREG, D		is op6=0x06 & srcREG & D & destREGalu & pcWriteD					{
+	#  --00 0110 dfff ffff
+	local r:1 = W ^ srcREG;
+	destREGalu = r;
+	$(Z) = (r == 0);
+	build pcWriteD;
+}
+
+#
+# BYTE-ORIENTED SKIP OPERATIONS
+#
+
+:DECFSZ srcREG, D		is op6=0x0b & srcREG & D & destREG & pcWriteD {
+	#  --00 1011 dfff ffff
+	local r:1 = srcREG - 1;
+	destREG = r;
+	build pcWriteD;
+	if (r == 0) goto inst_next2;
+}
+
+:INCFSZ srcREG, D		is op6=0x0f & srcREG & D & destREG & pcWriteD {
+	#  --00 1111 dfff ffff
+	local r:1 = srcREG + 1;
+	destREG = r;
+	build pcWriteD;
+	if (r == 0) goto inst_next2;
+}
+
+#
+# BIT-ORIENTED FILE REGISTER OPERATIONS
+#
+
+:BCF srcREG, bit			is op4=0x4 & srcREG & bit & pcWriteF							{
+	#  --01 00bb bfff ffff
+	local bitmask:1 = ~(1 << bit);
+	srcREG = srcREG & bitmask;
+	build pcWriteF;
+}
+
+:BCF STATUS, statusBit		is op4=0x4 & f7=0x3 & STATUS & statusBit & bit					{
+	local bitmask:1 = ~(1 << bit);
+	STATUS = STATUS & bitmask;
+}
+
+:BCF INTCON, intconBit		is op4=0x4 & f7=0xb & INTCON & intconBit & bit					{
+	local bitmask:1 = ~(1 << bit);
+	INTCON = INTCON & bitmask;
+}
+
+:BSF srcREG, bit			is op4=0x5 & srcREG & bit & pcWriteF							{
+	#  --01 01bb bfff ffff
+	local bitmask:1 = 1 << bit;
+	srcREG = srcREG | bitmask;
+	build pcWriteF;
+}
+
+:BSF STATUS, statusBit		is op4=0x5 & f7=0x3 & STATUS & statusBit & bit					{
+	local bitmask:1 = 1 << bit;
+	STATUS = STATUS | bitmask;
+}
+
+:BSF INTCON, intconBit		is op4=0x5 & f7=0xb & INTCON & intconBit & bit					{
+	local bitmask:1 = 1 << bit;
+	INTCON = INTCON | bitmask;
+}
+
+:BTFSC srcREG, bit		is op4=0x6 & srcREG & bit {
+	#  --01 10bb bfff ffff
+	local bitmask:1 = 1 << bit;
+	if ((srcREG & bitmask) == 0) goto inst_next2;
+}
+
+:BTFSC STATUS, statusBit	is op4=0x6 & f7=0x3 & STATUS & statusBit & bit {
+	local bitmask:1 = 1 << bit;
+	if ((STATUS & bitmask) == 0) goto inst_next2;
+}
+
+:BTFSC INTCON, intconBit	is op4=0x6 & f7=0xb & INTCON & intconBit & bit {
+	local bitmask:1 = 1 << bit;
+	if ((INTCON & bitmask) == 0) goto inst_next2;
+}
+
+:BTFSS srcREG, bit		is op4=0x7 & srcREG & bit {
+	#  --01 11bb bfff ffff
+	local bitmask:1 = 1 << bit;
+	if ((srcREG & bitmask) != 0) goto inst_next2;
+}
+
+:BTFSS STATUS, statusBit	is op4=0x7 & f7=0x3 & STATUS & statusBit & bit {
+	local bitmask:1 = 1 << bit;
+	if ((STATUS & bitmask) != 0) goto inst_next2;
+}
+
+:BTFSS INTCON, intconBit	is op4=0x7 & f7=0xb & INTCON & intconBit & bit {
+	local bitmask:1 = 1 << bit;
+	if ((INTCON & bitmask) != 0) goto inst_next2;
+}
+
+# Assembler pseudo-instructions (MPASM): a bit test on STATUS followed by a GOTO.
+# They decode only when the context register bit doPseudo is set.
+:BC absAddr11	is doPseudo=1 & op4=0x6 & b3=0 & f7=0x3 ; op3=0x5 & absAddr11 {
+	if ($(C) == 0) goto inst_next;
+	goto absAddr11;
+}
+
+:BNC absAddr11	is doPseudo=1 & op4=0x7 & b3=0 & f7=0x3 ; op3=0x5 & absAddr11 {
+	if ($(C) != 0) goto inst_next;
+	goto absAddr11;
+}
+
+:BZ absAddr11	is doPseudo=1 & op4=0x6 & b3=2 & f7=0x3 ; op3=0x5 & absAddr11 {
+	if ($(Z) == 0) goto inst_next;
+	goto absAddr11;
+}
+
+:BNZ absAddr11	is doPseudo=1 & op4=0x7 & b3=2 & f7=0x3 ; op3=0x5 & absAddr11 {
+	if ($(Z) != 0) goto inst_next;
+	goto absAddr11;
+}
+
+# SKPC skips when C is set (BTFSS STATUS,C), SKPNC when it is clear (BTFSC STATUS,C), likewise Z
+:SKPC is doPseudo=1 & op4=0x7 & b3=0 & f7=0x3 {
+	if ($(C) == 1) goto inst_next2;
+}
+
+:SKPNC is doPseudo=1 & op4=0x6 & b3=0 & f7=0x3 {
+	if ($(C) == 0) goto inst_next2;
+}
+
+:SKPZ is doPseudo=1 & op4=0x7 & b3=2 & f7=0x3 {
+	if ($(Z) == 1) goto inst_next2;
+}
+
+:SKPNZ is doPseudo=1 & op4=0x6 & b3=2 & f7=0x3 {
+	if ($(Z) == 0) goto inst_next2;
+}
+
+#
+# LITERAL OPERATIONS
+#
+
+:ADDLW imm8				is op6=0x3e & imm8								{
+	#  --11 1110 kkkk kkkk
+	local w:1 = W;
+	local k:1 = imm8;
+	W = w + k;
+	$(C) = carry(w, k);
+	$(DC) = carry(w << 4, k << 4);
+	$(Z) = (W == 0);
+}
+
+:ANDLW imm8				is op6=0x39 & imm8								{
+	#  --11 1001 kkkk kkkk
+	W = W & imm8;
+	$(Z) = (W == 0);
+}
+
+:IORLW imm8				is op6=0x38 & imm8								{
+	#  --11 1000 kkkk kkkk
+	W = W | imm8;
+	$(Z) = (W == 0);
+}
+
+:MOVLB imm6			is op8=0x05 & imm6 {
+	#  --00 0001 01kk kkkk
+	BSR = imm6;
+}
+
+:MOVLP imm7				is op7=0x63 & imm7 & k7 [ pcHi = (k7 >> 3) & 0xf; globalset(inst_next, pcHi); ] {
+	#  --11 0001 1kkk kkkk
+	PCLATH = imm7;
+}
+
+:MOVLW imm8				is op6=0x30 & imm8								{
+	#  --11 0000 kkkk kkkk
+	W = imm8;
+}
+
+:SUBLW imm8				is op6=0x3c & imm8								{
+	#  --11 1100 kkkk kkkk
+	local w:1 = W;
+	local k:1 = imm8;
+	W = k - w;
+	$(C) = (k >= w);
+	$(DC) = ((k & 0xF) >= (w & 0xF));
+	$(Z) = (W == 0);
+}
+
+:XORLW imm8				is op6=0x3a & imm8								{
+	#  --11 1010 kkkk kkkk
+	W = W ^ imm8;
+	$(Z) = (W == 0);
+}
+
+#
+# CONTROL OPERATIONS
+#
+
+:BRA relAddr9  is op5=0x19 & relAddr9 {
+	#  --11 001k kkkk kkkk
+	goto relAddr9;
+}
+
+:BRW 			is op14=0xb {
+	#  --00 0000 0000 1011 : PC = PC + 1 + W
+	local dest:2 = (inst_next >> 1) + zext(W);
+	goto [dest];
+}
+
+:CALL absAddr11			is op3=0x4 & absAddr11							{
+	#  --10 0kkk kkkk kkkk
+	local ret:2 = inst_next >> 1;
+	push(ret);
+	call absAddr11;
+}
+
+:CALLW				is op14=0x000a			{
+	#  --00 0000 0000 1010
+	local ret:2 = inst_next >> 1;
+	push(ret);
+	local dest:2 = (zext(PCLATH & 0x7F) << 8) | zext(W);
+	call [dest];
+}
+
+:GOTO absAddr11			is op3=0x5 & absAddr11							{
+	#  --10 1kkk kkkk kkkk
+	goto absAddr11;
+}
+
+:RETFIE					is op14=0x0009						{
+	#  --00 0000 0000 1001
+	INTCON = INTCON | 0x80;  # set INTCON.GIE
+	local retAddr:2 = 0;
+	pop(retAddr);
+	return [retAddr];
+}
+
+:RETLW imm8				is op6=0x34 & imm8								{
+	#  --11 0100 kkkk kkkk
+	W = imm8;
+	local retAddr:2 = 0;
+	pop(retAddr);
+	return [retAddr];
+}
+
+:RETURN					is op14=0x0008						{
+	#  --00 0000 0000 1000
+	local retAddr:2 = 0;
+	pop(retAddr);
+	return [retAddr];
+}
+
+#
+# INHERENT OPERATIONS
+#
+
+:CLRWDT					is op14=0x0064				{
+	#  --00 0000 0110 0100
+	clearWatchDogTimer();
+	$(TO) = 1;
+	$(PD) = 1;
+}
+
+:NOP					is op6=0 & d=0 & l5=0				{
+	#  --00 0000 0xx0 0000
+}
+
+# Not listed in the 153xx instruction set; decoded for compatibility with the PIC14E tools
+:OPTION					is op14=0x0062						{
+	#  --00 0000 0110 0010
+	option_write(W);
+}
+
+:RESET					is op14=0x0001 {
+	#  --00 0000 0000 0001
+	reset();
+	goto 0x0;
+}
+
+:SLEEP					is op14=0x0063				{
+	#  --00 0000 0110 0011
+	sleep();
+	$(TO) = 1;
+	$(PD) = 0;
+}
+
+:TRIS trisREG				is op9=0x3 & trisREG				{
+	#  --00 0000 0110 0fff
+	trisREG = W;
+}
+
+#
+# C-COMPILER OPTIMIZED
+#
+
+:ADDFSR fsrk, sk6	is op7=0x62 & fsrk & sk6 {
+	#  --11 0001 0nkk kkkk
+	fsrk = fsrk + sk6;
+}
+
+srcFSR: "++"fsr		is fsr & mm=0 { fsr = fsr + 1; addr:2 = fsr; export *[DATA]:1 addr; }
+srcFSR: "--"fsr		is fsr & mm=1 { fsr = fsr - 1; addr:2 = fsr; export *[DATA]:1 addr; }
+srcFSR: fsr"++"		is fsr & mm=2 { addr:2 = fsr; fsr = fsr + 1; export *[DATA]:1 addr; }
+srcFSR: fsr"--"		is fsr & mm=3 { addr:2 = fsr; fsr = fsr - 1; export *[DATA]:1 addr; }
+
+srcFSRk: sk6"["fsrk"]" is fsrk & sk6 {
+	addr:2 = fsrk + sk6; export *[DATA]:1 addr;
+}
+
+:MOVIW srcFSR			is op11=2 & srcFSR {
+	#  --00 0000 0001 0nmm
+	W = srcFSR;
+	$(Z) = (W == 0);
+}
+
+:MOVIW srcFSRk			is op7=0x7e & srcFSRk {
+	#  --11 1111 0nkk kkkk
+	W = srcFSRk;
+	$(Z) = (W == 0);
+}
+
+:MOVWI srcFSR			is op11=3 & srcFSR {
+	#  --00 0000 0001 1nmm
+	srcFSR = W;
+}
+
+:MOVWI srcFSRk			is op7=0x7f & srcFSRk {
+	#  --11 1111 1nkk kkkk
+	srcFSRk = W;
+}

@@ -1,0 +1,352 @@
+# Specification for the PicoBlaze KCPSM3 processor
+#
+# Known differences from actual KCPSM3:
+# - The program counter does not wrap at 10 bits (a 1K program space); addresses above 0x3FF exist
+# - The call stack is 31 entries deep in hardware; here the stack pointer wraps modulo 32
+# - STORE/FETCH use the low 6 bits of the address operand (64-byte scratchpad), as the hardware does
+# - Interrupts are not an instruction: Z_SAVED/C_SAVED stand for the flags saved at the interrupt
+
+@include "picoblaze_common.sinc"
+
+define token opcode(24)
+	opc=(12,17)
+	sX=(8,11)
+	sY=(4,7)
+	op0_3=(0,3)
+	kk=(0,7)
+	ins=(0,17)
+	aaa=(0,9)
+	cc=(10,11)
+;
+
+attach variables [ sX sY ] [ s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 sA sB sC sD sE sF ];
+
+# The disassembly-time address of the next instruction as a constant (an instruction address).
+# In p-code inst_next counts bytes (3 per instruction).
+nextAddr: n is epsilon [ n = inst_next; ] {
+	export *[const]:2 n;
+}
+
+macro push(v) {
+	*[stack_buffer]:2 SP = v;
+	SP = (SP + 1) & 0x1F;
+}
+
+macro pop(v) {
+	SP = (SP - 1) & 0x1F;
+	v = *[stack_buffer]:2 SP;
+}
+
+macro logicFlags(r) {
+	C = 0;
+	Z = (r == 0);
+}
+
+# Loading
+
+:LOAD sX, kk is opc=0x00 & sX & kk {
+	sX = kk:1;
+}
+:LOAD sX, sY is opc=0x01 & sX & sY & op0_3=0 {
+	sX = sY;
+}
+
+# Logical
+
+:AND sX, kk is opc=0x0A & sX & kk {
+	sX = sX & kk:1;
+	logicFlags(sX);
+}
+:AND sX, sY is opc=0x0B & sX & sY & op0_3=0 {
+	sX = sX & sY;
+	logicFlags(sX);
+}
+:OR sX, kk is opc=0x0C & sX & kk {
+	sX = sX | kk:1;
+	logicFlags(sX);
+}
+:OR sX, sY is opc=0x0D & sX & sY & op0_3=0 {
+	sX = sX | sY;
+	logicFlags(sX);
+}
+:XOR sX, kk is opc=0x0E & sX & kk {
+	sX = sX ^ kk:1;
+	logicFlags(sX);
+}
+:XOR sX, sY is opc=0x0F & sX & sY & op0_3=0 {
+	sX = sX ^ sY;
+	logicFlags(sX);
+}
+
+# Arithmetic: C is the carry out of an addition and the borrow of a subtraction
+
+:ADD sX, kk is opc=0x18 & sX & kk {
+	local a:1 = sX;
+	local b:1 = kk:1;
+	sX = a + b;
+	C = carry(a, b);
+	Z = (sX == 0);
+}
+:ADD sX, sY is opc=0x19 & sX & sY & op0_3=0 {
+	local a:1 = sX;
+	local b:1 = sY;
+	sX = a + b;
+	C = carry(a, b);
+	Z = (sX == 0);
+}
+:ADDCY sX, kk is opc=0x1A & sX & kk {
+	local t:2 = zext(sX) + zext(kk:1) + zext(C);
+	sX = t:1;
+	C = t > 0xFF;
+	Z = (sX == 0);
+}
+:ADDCY sX, sY is opc=0x1B & sX & sY & op0_3=0 {
+	local t:2 = zext(sX) + zext(sY) + zext(C);
+	sX = t:1;
+	C = t > 0xFF;
+	Z = (sX == 0);
+}
+:SUB sX, kk is opc=0x1C & sX & kk {
+	local a:1 = sX;
+	local b:1 = kk:1;
+	sX = a - b;
+	C = a < b;
+	Z = (sX == 0);
+}
+:SUB sX, sY is opc=0x1D & sX & sY & op0_3=0 {
+	local a:1 = sX;
+	local b:1 = sY;
+	sX = a - b;
+	C = a < b;
+	Z = (sX == 0);
+}
+:SUBCY sX, kk is opc=0x1E & sX & kk {
+	local a:1 = sX;
+	local b:2 = zext(kk:1) + zext(C);
+	sX = a - b:1;
+	C = zext(a) < b;
+	Z = (sX == 0);
+}
+:SUBCY sX, sY is opc=0x1F & sX & sY & op0_3=0 {
+	local a:1 = sX;
+	local b:2 = zext(sY) + zext(C);
+	sX = a - b:1;
+	C = zext(a) < b;
+	Z = (sX == 0);
+}
+
+# Test and compare (C is the odd parity of the AND, or the borrow of the subtraction)
+
+:TEST sX, kk is opc=0x12 & sX & kk {
+	local t:1 = sX & kk:1;
+	Z = (t == 0);
+	C = popcount(t) & 1;
+}
+:TEST sX, sY is opc=0x13 & sX & sY & op0_3=0 {
+	local t:1 = sX & sY;
+	Z = (t == 0);
+	C = popcount(t) & 1;
+}
+:COMPARE sX, kk is opc=0x14 & sX & kk {
+	local a:1 = sX;
+	local b:1 = kk:1;
+	Z = (a == b);
+	C = a < b;
+}
+:COMPARE sX, sY is opc=0x15 & sX & sY & op0_3=0 {
+	local a:1 = sX;
+	local b:1 = sY;
+	Z = (a == b);
+	C = a < b;
+}
+
+# Shift and rotate (opcode 0x20, the operation in the low byte)
+
+:SL0 sX is opc=0x20 & sX & kk=0x06 {
+	C = sX >> 7;
+	sX = sX << 1;
+	Z = (sX == 0);
+}
+:SL1 sX is opc=0x20 & sX & kk=0x07 {
+	C = sX >> 7;
+	sX = (sX << 1) | 1;
+	Z = 0;
+}
+:SLX sX is opc=0x20 & sX & kk=0x04 {
+	C = sX >> 7;
+	sX = (sX << 1) | (sX & 1);
+	Z = (sX == 0);
+}
+:SLA sX is opc=0x20 & sX & kk=0x00 {
+	local oldc:1 = C;
+	C = sX >> 7;
+	sX = (sX << 1) | oldc;
+	Z = (sX == 0);
+}
+:RL sX is opc=0x20 & sX & kk=0x02 {
+	local top:1 = sX >> 7;
+	sX = (sX << 1) | top;
+	C = top;
+	Z = (sX == 0);
+}
+:SR0 sX is opc=0x20 & sX & kk=0x0E {
+	C = sX & 1;
+	sX = sX >> 1;
+	Z = (sX == 0);
+}
+:SR1 sX is opc=0x20 & sX & kk=0x0F {
+	C = sX & 1;
+	sX = (sX >> 1) | 0x80;
+	Z = 0;
+}
+:SRX sX is opc=0x20 & sX & kk=0x0A {
+	C = sX & 1;
+	sX = (sX >> 1) | (sX & 0x80);
+	Z = (sX == 0);
+}
+:SRA sX is opc=0x20 & sX & kk=0x08 {
+	local oldc:1 = C;
+	C = sX & 1;
+	sX = (sX >> 1) | (oldc << 7);
+	Z = (sX == 0);
+}
+:RR sX is opc=0x20 & sX & kk=0x0C {
+	local low:1 = sX & 1;
+	sX = (sX >> 1) | (low << 7);
+	C = low;
+	Z = (sX == 0);
+}
+
+# Input and output: the ports are the memory of the port_in and port_out spaces
+
+:INPUT sX, kk is opc=0x04 & sX & kk {
+	sX = *[port_in]:1 kk:1;
+}
+:INPUT sX, sY is opc=0x05 & sX & sY & op0_3=0 {
+	sX = *[port_in]:1 sY;
+}
+:OUTPUT sX, kk is opc=0x2C & sX & kk {
+	*[port_out]:1 kk:1 = sX;
+}
+:OUTPUT sX, sY is opc=0x2D & sX & sY & op0_3=0 {
+	*[port_out]:1 sY = sX;
+}
+
+# Scratchpad memory (64 bytes: the address is the low 6 bits of the operand)
+
+:FETCH sX, kk is opc=0x06 & sX & kk {
+	local a:1 = kk:1 & 0x3F;
+	sX = *[scratchpad]:1 a;
+}
+:FETCH sX, sY is opc=0x07 & sX & sY & op0_3=0 {
+	local a:1 = sY & 0x3F;
+	sX = *[scratchpad]:1 a;
+}
+:STORE sX, kk is opc=0x2E & sX & kk {
+	local a:1 = kk:1 & 0x3F;
+	*[scratchpad]:1 a = sX;
+}
+:STORE sX, sY is opc=0x2F & sX & sY & op0_3=0 {
+	local a:1 = sY & 0x3F;
+	*[scratchpad]:1 a = sX;
+}
+
+# Interrupts
+
+:DISABLE "INTERRUPT" is ins=0x3C000 {
+	INT_ENABLE = 0;
+}
+:ENABLE "INTERRUPT" is ins=0x3C001 {
+	INT_ENABLE = 1;
+}
+:RETURNI "DISABLE" is ins=0x38000 {
+	local ret:2 = 0;
+	pop(ret);
+	INT_ENABLE = 0;
+	Z = Z_SAVED;
+	C = C_SAVED;
+	return [ret];
+}
+:RETURNI "ENABLE" is ins=0x38001 {
+	local ret:2 = 0;
+	pop(ret);
+	INT_ENABLE = 1;
+	Z = Z_SAVED;
+	C = C_SAVED;
+	return [ret];
+}
+
+# Jump, call and return. Conditional forms: opcode 0x35/0x31/0x2B, condition in bits 10-11
+
+jtgt: aaa is aaa { export *[rom]:2 aaa; }
+
+:JUMP jtgt is opc=0x34 & cc=0 & jtgt {
+	goto jtgt;
+}
+:JUMP "Z", jtgt is opc=0x35 & cc=0 & jtgt {
+	if (Z != 0) goto jtgt;
+}
+:JUMP "NZ", jtgt is opc=0x35 & cc=1 & jtgt {
+	if (Z == 0) goto jtgt;
+}
+:JUMP "C", jtgt is opc=0x35 & cc=2 & jtgt {
+	if (C != 0) goto jtgt;
+}
+:JUMP "NC", jtgt is opc=0x35 & cc=3 & jtgt {
+	if (C == 0) goto jtgt;
+}
+
+:CALL jtgt is opc=0x30 & cc=0 & jtgt & nextAddr {
+	push(nextAddr);
+	call jtgt;
+}
+:CALL "Z", jtgt is opc=0x31 & cc=0 & jtgt & nextAddr {
+	if (Z == 0) goto inst_next;
+	push(nextAddr);
+	call jtgt;
+}
+:CALL "NZ", jtgt is opc=0x31 & cc=1 & jtgt & nextAddr {
+	if (Z != 0) goto inst_next;
+	push(nextAddr);
+	call jtgt;
+}
+:CALL "C", jtgt is opc=0x31 & cc=2 & jtgt & nextAddr {
+	if (C == 0) goto inst_next;
+	push(nextAddr);
+	call jtgt;
+}
+:CALL "NC", jtgt is opc=0x31 & cc=3 & jtgt & nextAddr {
+	if (C != 0) goto inst_next;
+	push(nextAddr);
+	call jtgt;
+}
+
+:RETURN is opc=0x2A & aaa=0 & cc=0 {
+	local ret:2 = 0;
+	pop(ret);
+	return [ret];
+}
+:RETURN "Z" is opc=0x2B & cc=0 & aaa=0 {
+	if (Z == 0) goto inst_next;
+	local ret:2 = 0;
+	pop(ret);
+	return [ret];
+}
+:RETURN "NZ" is opc=0x2B & cc=1 & aaa=0 {
+	if (Z != 0) goto inst_next;
+	local ret:2 = 0;
+	pop(ret);
+	return [ret];
+}
+:RETURN "C" is opc=0x2B & cc=2 & aaa=0 {
+	if (C == 0) goto inst_next;
+	local ret:2 = 0;
+	pop(ret);
+	return [ret];
+}
+:RETURN "NC" is opc=0x2B & cc=3 & aaa=0 {
+	if (C != 0) goto inst_next;
+	local ret:2 = 0;
+	pop(ret);
+	return [ret];
+}

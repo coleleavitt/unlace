@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Mitsubishi MELPS 740 language definitions. The default id is the one the upstream pull
+     request (Ghidra #5012) used; Ghidra-Rare adds the WIT and WIT+MUL/DIV groups. -->
+<language_definitions>
+
+  <language processor="MELPS740"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.1"
+            slafile="melps740.sla"
+            processorspec="melps740.pspec"
+            id="MELPS740:LE:16:default">
+    <description>Mitsubishi MELPS-740 (M50740A/M50741/M50752/M50757/M50758: FST, SLW)</description>
+    <compiler name="default" spec="melps740.cspec" id="default"/>
+  </language>
+
+  <language processor="MELPS740"
+            endian="little"
+            size="16"
+            variant="wit"
+            version="1.1"
+            slafile="melps740_wit.sla"
+            processorspec="melps740.pspec"
+            id="MELPS740:LE:16:wit">
+    <description>Mitsubishi MELPS-740 (WIT, special page FFxx)</description>
+    <compiler name="default" spec="melps740.cspec" id="default"/>
+  </language>
+
+  <language processor="MELPS740"
+            endian="little"
+            size="16"
+            variant="muldiv"
+            version="1.1"
+            slafile="melps740_muldiv.sla"
+            processorspec="melps740.pspec"
+            id="MELPS740:LE:16:muldiv">
+    <description>Mitsubishi MELPS-740 (WIT, MUL, DIV: M37450 type)</description>
+    <compiler name="default" spec="melps740.cspec" id="default"/>
+  </language>
+</language_definitions>

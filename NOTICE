@@ -118,8 +118,43 @@ specs/Ghidra/Processors/F8 vendors the Fairchild F8 SLEIGH specification of
 aleph-void/ghidra-f8 (https://github.com/aleph-void/ghidra-f8), released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/H8 vendors the Hitachi H8/300, H8/300H, H8S SLEIGH specification of
+aleph-void/ghidra-h8-300 (https://github.com/aleph-void/ghidra-h8-300), a fork of shizmob/ghidra-h8-300, released under the
+WTFPL (Do What The F*ck You Want To Public License) (its license file is in that directory).
+
+specs/Ghidra/Processors/JieLi vendors the JieLi audio SoC SLEIGH specification of
+aleph-void/ghidra-jieli (https://github.com/aleph-void/ghidra-jieli), a fork of quarkslab/ghidra-jieli, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
+specs/Ghidra/Processors/M740 vendors the Mitsubishi MELPS 740 SLEIGH specification of
+aleph-void/ghidra-m740 (https://github.com/aleph-void/ghidra-m740), released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
+specs/Ghidra/Processors/MN102 vendors the Panasonic MN10200 SLEIGH specification of
+aleph-void/ghidra-mn102-lang (https://github.com/aleph-void/ghidra-mn102-lang), a fork of Pokechu22/ghidra-mn102-lang, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
+specs/Ghidra/Processors/MN103 vendors the Panasonic MN10300 (AM33) SLEIGH specification of
+aleph-void/ghidra-mn103-extension (https://github.com/aleph-void/ghidra-mn103-extension), a fork of michaelbrandi/ghidra-mn103-extension, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
+specs/Ghidra/Processors/PDK vendors the Padauk PDK (PMS/PFS) SLEIGH specification of
+aleph-void/ghidra-pdk (https://github.com/aleph-void/ghidra-pdk), a fork of CUB3D/ghidra-pdk, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
+specs/Ghidra/Processors/PIC16F153xx vendors the Microchip PIC16F153xx enhanced midrange SLEIGH specification of
+aleph-void/ghidra-pic16f153xx (https://github.com/aleph-void/ghidra-pic16f153xx), released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
+specs/Ghidra/Processors/PicoBlaze vendors the Xilinx PicoBlaze (KCPSM) SLEIGH specification of
+aleph-void/ghidra-picoblaze-kcpsm (https://github.com/aleph-void/ghidra-picoblaze-kcpsm), released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
+specs/Ghidra/Processors/MC68HC16 vendors the Motorola MC68HC16 SLEIGH specification of
+aleph-void/Ghidra-Processor-MC68HC16Z (https://github.com/aleph-void/Ghidra-Processor-MC68HC16Z), a fork of HausRummel/Ghidra-Processor-MC68HC16Z, released under the
 specs/Ghidra/Processors/GCDSP vendors the Nintendo GameCube DSP SLEIGH specification of
 aleph-void/ghidra-gcdsp-lang (https://github.com/aleph-void/ghidra-gcdsp-lang), a fork of Pokechu22/ghidra-gcdsp-lang, released under the
+||||||| e949085348
 Apache License, Version 2.0 (its license file is in that directory).
 
 kuna

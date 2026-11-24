@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+
+   <language processor="PDK13"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="pdk13.sla"
+            processorspec="pdk13.pspec"
+            id="pdk13:LE:16:default">
+    <description>Padauk PDK13 (13 bit code words; PMS150C / PMS15A)</description>
+    <compiler name="default" spec="pdk13.cspec" id="default"/>
+  </language>
+  
+   <language processor="PMS152"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="PMS152.sla"
+            processorspec="pdk14.pspec"
+            id="pms152:LE:16:default">
+    <description>Padauk PDK14 (14 bit code words; PMS152 and relatives)</description>
+    <compiler name="default" spec="pdk14.cspec" id="default"/>
+  </language>
+   <language processor="PMS132"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="PMS132.sla"
+            processorspec="pdk14.pspec"
+            id="pms132:LE:16:default">
+    <description>Padauk PDK14 (14 bit code words; PMS132 with multiplier and PWM)</description>
+    <compiler name="default" spec="pdk14.cspec" id="default"/>
+  </language>  
+  
+  
+  <language processor="PMS134"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="PMS134.sla"
+            processorspec="pdk15.pspec"
+            id="pms134:LE:16:default">
+    <description>Padauk PDK15 (15 bit code words; PMS133 / PMS134)</description>
+    <compiler name="default" spec="pdk15.cspec" id="default"/>
+  </language>
+  
+    <language processor="PMC884"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="PMC884.sla"
+            processorspec="PMC884.pspec"
+            id="pmc884:LE:16:default">
+    <description>Padauk PDK16 (16 bit code words; PMC884 multi-core FPPA)</description>
+    <compiler name="default" spec="pdk16.cspec" id="default"/>
+  </language>    
+    
+</language_definitions>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="PC"/>
+  <volatile outputop="output_port" inputop="input_port">
+    <range space="port_in" first="0x00" last="0xff"/>
+    <range space="port_out" first="0x00" last="0xff"/>
+  </volatile>
+  <default_symbols>
+    <symbol name="entry" address="rom:0000" entry="true"/>
+    <!-- the default interrupt vector: the last instruction of a 1K program memory -->
+    <symbol name="ISR" address="rom:03FF" entry="true"/>
+  </default_symbols>
+</processor_spec>

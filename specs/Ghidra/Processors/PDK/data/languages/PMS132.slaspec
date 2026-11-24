@@ -1,0 +1,8 @@
+# PMS132 (PMS132 and relatives, 14 bit code words): PDK14 instruction set.
+# Instruction patterns: pdk14_tok.sinc / pdk14_ops.sinc (generated, see tools/gen_pdk.py).
+# I/O registers: pms132_regs.sinc / pms132_attach.sinc (generated, see tools/gen_chips.py).
+@include "pdk_common.sinc"
+@include "pms132_regs.sinc"
+@include "pdk14_tok.sinc"
+@include "pms132_attach.sinc"
+@include "pdk14_ops.sinc"

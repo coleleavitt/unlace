@@ -1,0 +1,4 @@
+# Matsushita/Panasonic AM33-2 (MN10300 family with AM33 extensions and FPU).
+@define AM33 "1"
+@define AM33_2 "1"
+@include "mn103.sinc"

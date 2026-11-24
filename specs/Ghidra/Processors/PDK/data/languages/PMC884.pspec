@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="IP"/>
+
+  <default_symbols>
+    <symbol name="fppa0_reset" address="rom:0000" entry="true"/>
+    <symbol name="fppa1_reset" address="rom:0001"/>
+    <symbol name="fppa2_reset" address="rom:0002"/>
+    <symbol name="fppa3_reset" address="rom:0003"/>
+    <symbol name="fppa4_reset" address="rom:0004"/>
+    <symbol name="fppa5_reset" address="rom:0005"/>
+    <symbol name="fppa6_reset" address="rom:0006"/>
+    <symbol name="fppa7_reset" address="rom:0007"/>
+    <symbol name="interrupt_entry" address="rom:0010"/>
+  </default_symbols>
+</processor_spec>

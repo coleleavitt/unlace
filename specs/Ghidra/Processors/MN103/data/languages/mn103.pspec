@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Ref: https://github.com/NationalSecurityAgency/ghidra/blob/Ghidra_10.4_build/Ghidra/Framework/SoftwareModeling/data/languages/processor_spec.rxg -->
+<processor_spec>
+  <programcounter register="PC" />
+  <data_space space="ram" />
+
+  <register_data>
+    <register name="PSW" group="FLAGS" />
+    <register name="ZF" group="FLAGS" />
+    <register name="NF" group="FLAGS" />
+    <register name="CF" group="FLAGS" />
+    <register name="VF" group="FLAGS" />
+    <register name="mvptr" hidden="true" />
+    <register name="contextreg" hidden="true" />
+    <register name="loop_top" hidden="true" />
+    <register name="loop_valid" hidden="true" />
+  </register_data>
+
+  <!--
+    On-chip peripheral / control-register space.
+
+    The AM33/MN10300 core maps its memory-mapped I/O and on-chip peripherals
+    into the 0xc0000000-0xdfffffff window (the Linux `__SYSREG` accessors treat
+    every register in this range as `volatile`). Marking the range volatile
+    keeps the decompiler from caching or eliding repeated MMIO reads/writes,
+    which is what makes interrupt handlers and device drivers read correctly.
+    The exact peripheral layout above the CPU core block is chip-specific, so
+    only the range is declared here; individual chip peripherals can still be
+    labelled per-image.
+  -->
+  <volatile outputop="write" inputop="read">
+    <range space="ram" first="0xc0000000" last="0xdfffffff" />
+  </volatile>
+
+  <!--
+    Backing block for the AM33 CPU core register window so the named registers
+    below resolve and are navigable on any image. Uninitialized (no bytes), and
+    high enough that it never overlaps a normally-based code/data image. The
+    full volatile I/O window above is broader than this block on purpose: chip
+    peripherals outside the core block still get volatile treatment even though
+    their layout is not labelled here.
+  -->
+  <default_memory_blocks>
+    <memory_block name="cpu_regs" start_address="ram:0xc0000000" length="0x1000" initialized="false" />
+  </default_memory_blocks>
+
+  <default_symbols>
+    <symbol name="entry" address="0x00000000" entry="true" />
+
+    <!--
+      AM33 CPU core system registers (fixed architectural addresses from the
+      Linux `arch/mn10300/include/asm/cpu-regs.h` core block). These are common
+      to the MN10300/AM33 family, so labelling them by name makes CPU-control,
+      cache, MMU and interrupt-setup code self-documenting. TBR holds the trap
+      vector base; the IVARn registers hold maskable-interrupt handler
+      addresses; sISR/CPUM appear throughout interrupt entry/exit code.
+    -->
+    <symbol name="IVAR0" address="0xc0000000" />
+    <symbol name="IVAR1" address="0xc0000004" />
+    <symbol name="IVAR2" address="0xc0000008" />
+    <symbol name="IVAR3" address="0xc000000c" />
+    <symbol name="IVAR4" address="0xc0000010" />
+    <symbol name="IVAR5" address="0xc0000014" />
+    <symbol name="IVAR6" address="0xc0000018" />
+    <symbol name="CPUP" address="0xc0000020" />
+    <symbol name="TBR" address="0xc0000024" />
+    <symbol name="DCR" address="0xc0000030" />
+    <symbol name="DEAR" address="0xc0000038" />
+    <symbol name="CPUM" address="0xc0000040" />
+    <symbol name="sISR" address="0xc0000044" />
+    <symbol name="CPUREV" address="0xc0000050" />
+    <symbol name="CHCTR" address="0xc0000070" />
+    <symbol name="MMUCTR" address="0xc0000090" />
+    <symbol name="PIDR" address="0xc0000094" />
+    <symbol name="PTBR" address="0xc0000098" />
+    <symbol name="MMUFCR" address="0xc000009c" />
+    <symbol name="IPTEL" address="0xc00000a0" />
+    <symbol name="IPTEU" address="0xc00000a4" />
+    <symbol name="IPTEL2" address="0xc00000a8" />
+    <symbol name="DPTEL" address="0xc00000b0" />
+    <symbol name="DPTEU" address="0xc00000b4" />
+    <symbol name="DPTEL2" address="0xc00000b8" />
+    <symbol name="AAR" address="0xc0000a00" />
+    <symbol name="AAR2" address="0xc0000a04" />
+    <symbol name="ADR" address="0xc0000a08" />
+    <symbol name="ASR" address="0xc0000a0c" />
+    <symbol name="ICIVCR" address="0xc0000c00" />
+    <symbol name="ICIVMR" address="0xc0000c04" />
+    <symbol name="DCPGCR" address="0xc0000c10" />
+    <symbol name="DCPGMR" address="0xc0000c14" />
+  </default_symbols>
+</processor_spec>

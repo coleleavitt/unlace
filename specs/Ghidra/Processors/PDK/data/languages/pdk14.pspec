@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="IP"/>
+
+  <default_symbols>
+    <symbol name="reset" address="rom:0000" entry="true"/>
+    <symbol name="interrupt_entry" address="rom:0010"/>
+  </default_symbols>
+</processor_spec>

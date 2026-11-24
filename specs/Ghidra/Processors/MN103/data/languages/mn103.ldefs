@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+	<language id="mn10300:LE:32:default" processor="MN10300" endian="little" size="32"
+	          version="1.0" variant="default"
+	          slafile="mn103.sla" processorspec="mn103.pspec" manualindexfile="../manuals/mn103.idx">
+		<description>Matsushita/Panasonic MN10300 family, AM33-2 (AM33 extensions and FPU)</description>
+		<compiler name="default" spec="mn103.cspec" id="default"/>
+		<external_name tool="DWARF.register.mapping.file" name="mn103.dwarf"/>
+		<external_name tool="gnu" name="am33-2"/>
+	</language>
+	<language id="mn10300:LE:32:am33" processor="MN10300" endian="little" size="32"
+	          version="1.0" variant="am33"
+	          slafile="mn103_am33.sla" processorspec="mn103.pspec" manualindexfile="../manuals/mn103.idx">
+		<description>Matsushita/Panasonic AM33 (MN10300 with AM33 extensions, no FPU)</description>
+		<compiler name="default" spec="mn103_am33.cspec" id="default"/>
+		<external_name tool="DWARF.register.mapping.file" name="mn103.dwarf"/>
+		<external_name tool="gnu" name="am33"/>
+	</language>
+	<language id="mn10300:LE:32:mn10300" processor="MN10300" endian="little" size="32"
+	          version="1.0" variant="mn10300"
+	          slafile="mn103_mn10300.sla" processorspec="mn103.pspec" manualindexfile="../manuals/mn103.idx">
+		<description>Matsushita/Panasonic MN10300 (MN1030 core without AM33 extensions)</description>
+		<compiler name="default" spec="mn103_mn10300.cspec" id="default"/>
+		<external_name tool="DWARF.register.mapping.file" name="mn103.dwarf"/>
+		<external_name tool="gnu" name="mn10300"/>
+	</language>
+</language_definitions>

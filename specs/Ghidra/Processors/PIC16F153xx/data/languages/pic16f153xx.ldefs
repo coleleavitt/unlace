@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="PIC-16"
+            endian="little"
+            size="16"
+            variant="PIC-16F153XX"
+            version="1.0"
+            slafile="pic16f153xx.sla"
+            processorspec="pic16f153xx.pspec"
+            manualindexfile="../manuals/PIC-16F153xx.idx"
+            id="PIC-16:LE:16:PIC-16F153xx">
+    <description>PIC-16(L)F153XX</description>
+    <compiler name="default" spec="pic16f153xx.cspec" id="default"/>
+  </language>
+</language_definitions>

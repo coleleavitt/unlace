@@ -1,0 +1,442 @@
+# Specification for the PicoBlaze KCPSM6 processor
+# Implementation based on this spec: https://web.archive.org/web/20240817205135/https://www.eng.auburn.edu/~nelsovp/courses/elec4200/PicoBlaze/kcpsm6.pdf
+
+# Known differences from actual KCPSM6:
+# - Stack overflow is not checked (in hardware it causes a reset), the stack is not limited to 30 entries
+# - The program counter does not wrap at 12 bits
+# - The register bank in force at an instruction is a disassembly-time context (REGBANK A/B set it
+#   for the instructions that follow); interrupts, which switch banks in hardware, are not followed
+
+@include "picoblaze_common.sinc"
+
+define token opcode(24)
+	opc=(12,17)
+	sXa=(8,11)
+	sYa=(4,7)
+	sXb=(8,11)
+	sYb=(4,7)
+	op0_3=(0,3)
+	kk=(0,7)
+	kk2=(4,11)
+	p=(0,3)
+	ins=(0,17)
+	aaa=(0,11)
+	cc=(14,16)
+;
+
+define register offset=0x40 size=4 contextreg;
+define context contextreg
+	bank = (0,0)
+;
+
+attach variables [ sXa sYa ] [ s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 sA sB sC sD sE sF ];
+attach variables [ sXb sYb ] [ s0_b s1_b s2_b s3_b s4_b s5_b s6_b s7_b s8_b s9_b sA_b sB_b sC_b sD_b sE_b sF_b ];
+
+# The disassembly-time address of the next instruction as a constant (an instruction address).
+# In p-code inst_next counts bytes (3 per instruction).
+nextAddr: n is epsilon [ n = inst_next; ] {
+	export *[const]:2 n;
+}
+
+# Register operands in the register bank in force (context field bank)
+sX: sXa is bank=0 & sXa { export sXa; }
+sX: sXb is bank=1 & sXb { export sXb; }
+sY: sYa is bank=0 & sYa { export sYa; }
+sY: sYb is bank=1 & sYb { export sYb; }
+# The other bank's register sX (STAR)
+sXother: sXb is bank=0 & sXb { export sXb; }
+sXother: sXa is bank=1 & sXa { export sXa; }
+
+macro push(v) {
+	# In KCPSM6 stack overflow is a reset rather than a wraparound
+	*[stack_buffer]:2 SP = v;
+	SP = SP + 1;
+}
+
+macro pop(v) {
+	SP = SP - 1;
+	v = *[stack_buffer]:2 SP;
+}
+
+macro logicFlags(r) {
+	C = 0;
+	Z = (r == 0);
+}
+
+# Loading
+
+:LOAD sX, sY is opc=0x00 & sX & sY & op0_3=0 {
+	sX = sY;
+}
+:LOAD sX, kk is opc=0x01 & sX & kk {
+	sX = kk:1;
+}
+
+# STAR writes the register of the inactive bank
+:STAR sXother, sY is opc=0x16 & sXother & sY & op0_3=0 {
+	sXother = sY;
+}
+
+# Logical
+
+:AND sX, sY is opc=0x02 & sX & sY & op0_3=0 {
+	sX = sX & sY;
+	logicFlags(sX);
+}
+:AND sX, kk is opc=0x03 & sX & kk {
+	sX = sX & kk:1;
+	logicFlags(sX);
+}
+:OR sX, sY is opc=0x04 & sX & sY & op0_3=0 {
+	sX = sX | sY;
+	logicFlags(sX);
+}
+:OR sX, kk is opc=0x05 & sX & kk {
+	sX = sX | kk:1;
+	logicFlags(sX);
+}
+:XOR sX, sY is opc=0x06 & sX & sY & op0_3=0 {
+	sX = sX ^ sY;
+	logicFlags(sX);
+}
+:XOR sX, kk is opc=0x07 & sX & kk {
+	sX = sX ^ kk:1;
+	logicFlags(sX);
+}
+
+# Arithmetic: C is the carry out of an addition and the borrow of a subtraction.
+# The "CY" forms chain Z: it stays set only if it was set and the result is zero.
+
+:ADD sX, sY is opc=0x10 & sX & sY & op0_3=0 {
+	local a:1 = sX;
+	local b:1 = sY;
+	sX = a + b;
+	C = carry(a, b);
+	Z = (sX == 0);
+}
+:ADD sX, kk is opc=0x11 & sX & kk {
+	local a:1 = sX;
+	local b:1 = kk:1;
+	sX = a + b;
+	C = carry(a, b);
+	Z = (sX == 0);
+}
+:ADDCY sX, sY is opc=0x12 & sX & sY & op0_3=0 {
+	local t:2 = zext(sX) + zext(sY) + zext(C);
+	sX = t:1;
+	C = t > 0xFF;
+	Z = (sX == 0) & Z;
+}
+:ADDCY sX, kk is opc=0x13 & sX & kk {
+	local t:2 = zext(sX) + zext(kk:1) + zext(C);
+	sX = t:1;
+	C = t > 0xFF;
+	Z = (sX == 0) & Z;
+}
+:SUB sX, sY is opc=0x18 & sX & sY & op0_3=0 {
+	local a:1 = sX;
+	local b:1 = sY;
+	sX = a - b;
+	C = a < b;
+	Z = (sX == 0);
+}
+:SUB sX, kk is opc=0x19 & sX & kk {
+	local a:1 = sX;
+	local b:1 = kk:1;
+	sX = a - b;
+	C = a < b;
+	Z = (sX == 0);
+}
+:SUBCY sX, sY is opc=0x1A & sX & sY & op0_3=0 {
+	local a:1 = sX;
+	local b:2 = zext(sY) + zext(C);
+	sX = a - b:1;
+	C = zext(a) < b;
+	Z = (sX == 0) & Z;
+}
+:SUBCY sX, kk is opc=0x1B & sX & kk {
+	local a:1 = sX;
+	local b:2 = zext(kk:1) + zext(C);
+	sX = a - b:1;
+	C = zext(a) < b;
+	Z = (sX == 0) & Z;
+}
+
+# Test and compare (C is the odd parity of the AND, or the borrow of the subtraction)
+
+:TEST sX, sY is opc=0x0C & sX & sY & op0_3=0 {
+	local t:1 = sX & sY;
+	Z = (t == 0);
+	C = popcount(t) & 1;
+}
+:TEST sX, kk is opc=0x0D & sX & kk {
+	local t:1 = sX & kk:1;
+	Z = (t == 0);
+	C = popcount(t) & 1;
+}
+:TESTCY sX, sY is opc=0x0E & sX & sY & op0_3=0 {
+	local t:1 = sX & sY;
+	local oldc:1 = C;
+	Z = (t == 0) & Z;
+	C = (popcount(t) + oldc) & 1;
+}
+:TESTCY sX, kk is opc=0x0F & sX & kk {
+	local t:1 = sX & kk:1;
+	local oldc:1 = C;
+	Z = (t == 0) & Z;
+	C = (popcount(t) + oldc) & 1;
+}
+:COMPARE sX, sY is opc=0x1C & sX & sY & op0_3=0 {
+	local a:1 = sX;
+	local b:1 = sY;
+	Z = (a == b);
+	C = a < b;
+}
+:COMPARE sX, kk is opc=0x1D & sX & kk {
+	local a:1 = sX;
+	local b:1 = kk:1;
+	Z = (a == b);
+	C = a < b;
+}
+:COMPARECY sX, sY is opc=0x1E & sX & sY & op0_3=0 {
+	local a:1 = sX;
+	local b:2 = zext(sY) + zext(C);
+	Z = ((a - b:1) == 0) & Z;
+	C = zext(a) < b;
+}
+:COMPARECY sX, kk is opc=0x1F & sX & kk {
+	local a:1 = sX;
+	local b:2 = zext(kk:1) + zext(C);
+	Z = ((a - b:1) == 0) & Z;
+	C = zext(a) < b;
+}
+
+# Shift and rotate (opcode 0x14, the operation in the low byte)
+
+:SL0 sX is opc=0x14 & sX & kk=0x06 {
+	C = sX >> 7;
+	sX = sX << 1;
+	Z = (sX == 0);
+}
+:SL1 sX is opc=0x14 & sX & kk=0x07 {
+	C = sX >> 7;
+	sX = (sX << 1) | 1;
+	Z = 0;
+}
+:SLX sX is opc=0x14 & sX & kk=0x04 {
+	C = sX >> 7;
+	sX = (sX << 1) | (sX & 1);
+	Z = (sX == 0);
+}
+:SLA sX is opc=0x14 & sX & kk=0x00 {
+	local oldc:1 = C;
+	C = sX >> 7;
+	sX = (sX << 1) | oldc;
+	Z = (sX == 0);
+}
+:RL sX is opc=0x14 & sX & kk=0x02 {
+	local top:1 = sX >> 7;
+	sX = (sX << 1) | top;
+	C = top;
+	Z = (sX == 0);
+}
+:SR0 sX is opc=0x14 & sX & kk=0x0E {
+	C = sX & 1;
+	sX = sX >> 1;
+	Z = (sX == 0);
+}
+:SR1 sX is opc=0x14 & sX & kk=0x0F {
+	C = sX & 1;
+	sX = (sX >> 1) | 0x80;
+	Z = 0;
+}
+:SRX sX is opc=0x14 & sX & kk=0x0A {
+	C = sX & 1;
+	sX = (sX >> 1) | (sX & 0x80);
+	Z = (sX == 0);
+}
+:SRA sX is opc=0x14 & sX & kk=0x08 {
+	local oldc:1 = C;
+	C = sX & 1;
+	sX = (sX >> 1) | (oldc << 7);
+	Z = (sX == 0);
+}
+:RR sX is opc=0x14 & sX & kk=0x0C {
+	local low:1 = sX & 1;
+	sX = (sX >> 1) | (low << 7);
+	C = low;
+	Z = (sX == 0);
+}
+
+# The hardware build number of the KCPSM6 core is a property of the implementation
+define pcodeop hwbuild;
+
+:HWBUILD sX is opc=0x14 & sX & kk=0x80 {
+	sX = hwbuild();
+	C = 1;
+	Z = (sX == 0);
+}
+
+# Register bank: REGBANK sets the context for the instructions that follow
+
+:REGBANK "A" is ins=0x37000 [ bank = 0; globalset(inst_next, bank); ] {
+}
+:REGBANK "B" is ins=0x37001 [ bank = 1; globalset(inst_next, bank); ] {
+}
+
+# Input and output: the ports are the memory of the port_in and port_out spaces
+
+:INPUT sX, sY is opc=0x08 & sX & sY & op0_3=0 {
+	sX = *[port_in]:1 sY;
+}
+:INPUT sX, kk is opc=0x09 & sX & kk {
+	sX = *[port_in]:1 kk:1;
+}
+:OUTPUT sX, sY is opc=0x2C & sX & sY & op0_3=0 {
+	*[port_out]:1 sY = sX;
+}
+:OUTPUT sX, kk is opc=0x2D & sX & kk {
+	*[port_out]:1 kk:1 = sX;
+}
+:OUTPUTK kk2, p is opc=0x2B & kk2 & p {
+	local port:1 = p:1;
+	*[port_out]:1 port = kk2:1;
+}
+
+# Scratchpad memory
+
+:STORE sX, sY is opc=0x2E & sX & sY & op0_3=0 {
+	*[scratchpad]:1 sY = sX;
+}
+:STORE sX, kk is opc=0x2F & sX & kk {
+	*[scratchpad]:1 kk:1 = sX;
+}
+:FETCH sX, sY is opc=0x0A & sX & sY & op0_3=0 {
+	sX = *[scratchpad]:1 sY;
+}
+:FETCH sX, kk is opc=0x0B & sX & kk {
+	sX = *[scratchpad]:1 kk:1;
+}
+
+# Interrupts. When an interrupt is taken the hardware saves Z, C and the register bank and
+# disables interrupts; RETURNI restores the flags. The saving is not an instruction, so
+# Z_SAVED/C_SAVED stand for the flags at the point of the interrupt.
+
+:DISABLE "INTERRUPT" is ins=0x28000 {
+	INT_ENABLE = 0;
+}
+:ENABLE "INTERRUPT" is ins=0x28001 {
+	INT_ENABLE = 1;
+}
+:RETURNI "DISABLE" is ins=0x29000 {
+	local ret:2 = 0;
+	pop(ret);
+	INT_ENABLE = 0;
+	Z = Z_SAVED;
+	C = C_SAVED;
+	return [ret];
+}
+:RETURNI "ENABLE" is ins=0x29001 {
+	local ret:2 = 0;
+	pop(ret);
+	INT_ENABLE = 1;
+	Z = Z_SAVED;
+	C = C_SAVED;
+	return [ret];
+}
+
+# Jump, call and return. Conditional forms: the condition is in bits 14-16
+
+jtgt: aaa is aaa { export *[rom]:2 aaa; }
+
+# 0x22 JUMP, 0x32/0x36/0x3A/0x3E JUMP Z/NZ/C/NC
+:JUMP jtgt is opc=0x22 & jtgt {
+	goto jtgt;
+}
+:JUMP "Z", jtgt is opc=0x32 & jtgt {
+	if (Z != 0) goto jtgt;
+}
+:JUMP "NZ", jtgt is opc=0x36 & jtgt {
+	if (Z == 0) goto jtgt;
+}
+:JUMP "C", jtgt is opc=0x3A & jtgt {
+	if (C != 0) goto jtgt;
+}
+:JUMP "NC", jtgt is opc=0x3E & jtgt {
+	if (C == 0) goto jtgt;
+}
+
+# 0x20 CALL, 0x30/0x34/0x38/0x3C CALL Z/NZ/C/NC
+:CALL jtgt is opc=0x20 & jtgt & nextAddr {
+	push(nextAddr);
+	call jtgt;
+}
+:CALL "Z", jtgt is opc=0x30 & jtgt & nextAddr {
+	if (Z == 0) goto inst_next;
+	push(nextAddr);
+	call jtgt;
+}
+:CALL "NZ", jtgt is opc=0x34 & jtgt & nextAddr {
+	if (Z != 0) goto inst_next;
+	push(nextAddr);
+	call jtgt;
+}
+:CALL "C", jtgt is opc=0x38 & jtgt & nextAddr {
+	if (C == 0) goto inst_next;
+	push(nextAddr);
+	call jtgt;
+}
+:CALL "NC", jtgt is opc=0x3C & jtgt & nextAddr {
+	if (C != 0) goto inst_next;
+	push(nextAddr);
+	call jtgt;
+}
+
+# 0x25 RETURN, 0x31/0x35/0x39/0x3D RETURN Z/NZ/C/NC (the low 12 bits are zero)
+:RETURN is opc=0x25 & aaa=0 {
+	local ret:2 = 0;
+	pop(ret);
+	return [ret];
+}
+:RETURN "Z" is opc=0x31 & aaa=0 {
+	if (Z == 0) goto inst_next;
+	local ret:2 = 0;
+	pop(ret);
+	return [ret];
+}
+:RETURN "NZ" is opc=0x35 & aaa=0 {
+	if (Z != 0) goto inst_next;
+	local ret:2 = 0;
+	pop(ret);
+	return [ret];
+}
+:RETURN "C" is opc=0x39 & aaa=0 {
+	if (C == 0) goto inst_next;
+	local ret:2 = 0;
+	pop(ret);
+	return [ret];
+}
+:RETURN "NC" is opc=0x3D & aaa=0 {
+	if (C != 0) goto inst_next;
+	local ret:2 = 0;
+	pop(ret);
+	return [ret];
+}
+
+:"LOAD&RETURN" sX, kk is opc=0x21 & sX & kk {
+	sX = kk:1;
+	local ret:2 = 0;
+	pop(ret);
+	return [ret];
+}
+
+# Computed jump and call: the 12-bit address is sX[3:0]:sY
+:JUMP@ (sX, sY) is opc=0x26 & sX & sY & op0_3=0 {
+	local dest:2 = (zext(sX & 0x0F) << 8) | zext(sY);
+	goto [dest];
+}
+:CALL@ (sX, sY) is opc=0x24 & sX & sY & op0_3=0 & nextAddr {
+	local dest:2 = (zext(sX & 0x0F) << 8) | zext(sY);
+	push(nextAddr);
+	call [dest];
+}

@@ -954,18 +954,29 @@ fn msvc_saved_sp(
         && slot.is_some_and(|o| o < 0);
     if saves_sp {
         if let (Some(o), Some(v)) = (slot, value.and_then(Val::as_exact)) {
+            trace(|| format!("msvc: saved esp {v:#x} in slot {o:#x}"));
             state.3 = Some((o, v));
             return;
         }
+        trace(|| format!("msvc: esp stored to {at:?} as {value:?}, not placed"));
     }
     if let (Some((o, _)), Some(w)) = (state.3, slot) {
         if w < o + 4 && o < w + size as i64 {
+            trace(|| format!("msvc: saved esp slot {o:#x} overwritten"));
             state.3 = None;
             return;
         }
     }
     let unlinks = ins.get(1).is_some_and(|a| from_fs(a, regs, fs_temps))
         && !matches!(value, Some(Val::Stack { .. }));
+    if unlinks {
+        trace(|| {
+            format!(
+                "msvc: seh unlink, esp {:?}, saved {:?}",
+                state.0[SP], state.3
+            )
+        });
+    }
     if let (true, Some((_, saved))) = (unlinks, state.3) {
         if let Some(Val::Stack { lo, hi, own: false }) = state.0[SP] {
             if lo <= saved && saved <= hi && lo != hi {

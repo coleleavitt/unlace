@@ -22,7 +22,8 @@
 //! `64_32` (the subprogram `call` displacement) and the `ABS`/`NODYLD` data
 //! words. Generic
 //! absolute, relative, PLT-relative, and image-offset relocations support
-//! 8/16/32/64-bit fields. Application preserves REL implicit addends and object
+//! 8/16/32/64-bit fields; an s390x `*DBL` field (`PC32DBL`, `PLT32DBL`, ...)
+//! holds the displacement in halfwords. Application preserves REL implicit addends and object
 //! endianness, and returns a specific failure classification rather than
 //! partially writing a field that is unresolved, malformed, misaligned, outside
 //! its range or section, or dependent on a linker veneer or missing TOC.
@@ -1578,6 +1579,13 @@ fn generic(
         }
         _ => return Err(RelocationFailure::Unsupported),
     };
+    // s390x `*DBL` fields hold a halfword count: `(S + A - P) >> 1`.
+    let value = if matches!(reloc.encoding, RelocationEncoding::S390xDbl) {
+        require_aligned(value, 2)?;
+        value >> 1
+    } else {
+        value
+    };
     if matches!(
         reloc.kind,
         RelocationKind::Relative | RelocationKind::PltRelative
@@ -2633,6 +2641,48 @@ mod tests {
                 Some(toc),
             ),
             Err(RelocationFailure::InvalidEncoding)
+        );
+    }
+
+    #[test]
+    fn s390x_dbl_relocations_count_halfwords() {
+        // `larl %r2, .rodata` at 0x4000da: the field is at +2 and the addend 2.
+        let info = generic_reloc(
+            RelocationKind::Relative,
+            RelocationEncoding::S390xDbl,
+            32,
+            2,
+            false,
+        );
+        let spec = classify_info(Architecture::S390x, info).unwrap().unwrap();
+        let mut field = [0; 4];
+        apply_info(
+            spec, info, &mut field, false, 0x40_0700, 0x40_00dc, None, None,
+        )
+        .unwrap();
+        assert_eq!(field, 0x313u32.to_be_bytes());
+        assert_eq!(0x40_00da + 2 * 0x313, 0x40_0700);
+        assert_eq!(
+            apply_info(
+                spec, info, &mut field, false, 0x40_0701, 0x40_00dc, None, None
+            ),
+            Err(RelocationFailure::Misaligned)
+        );
+        let call = generic_reloc(
+            RelocationKind::PltRelative,
+            RelocationEncoding::S390xDbl,
+            32,
+            2,
+            false,
+        );
+        let spec = classify_info(Architecture::S390x, call).unwrap().unwrap();
+        apply_info(
+            spec, call, &mut field, false, 0x40_0150, 0x40_010e, None, None,
+        )
+        .unwrap();
+        assert_eq!(
+            0x40_010c + 2 * i64::from(i32::from_be_bytes(field)),
+            0x40_0150
         );
     }
 

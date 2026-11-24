@@ -13,6 +13,9 @@
 # (docs/processor-tests.md).
 
 [images]
+bpf_strlen = """
+b4000000ffffffff0400000001000000bf120000000000000f0200000000000071220000000000005602fbff000000009500000000000000
+"""
 xtensa_esp32s3_rom_divsf3 = """
 3621005012fa5023fa7032fab042fa3051fa30546a0063fa0072fab021fa60656a3051fa3000fa6082fa60546a30086a
 d071fa60656a00846a3031fa60346a60086a6022fa60636a00246af007fae067fa60027a4020fa1df0000000
@@ -4150,3 +4153,19 @@ forbid = ["halt_baddata"]
 test = "xtensa_esp32s3_rom_divsf3_decodes_the_divide_steps"
 address = "0x40056124"
 expect = ["div0_s(a1)", "return divn_s("]
+
+# eBPF -O2 str_len (#865): the loop counter is r0, the return register, and also indexes the
+# load. Upstream's onlyOpUse refuses a return trial at that load (the function prints void);
+# option retindexuse keeps it.
+[[family]]
+name = "ebpf_retindexuse"
+language = "eBPF:LE:64:default"
+base = "0"
+image = "bpf_strlen"
+args = ["--option", "retindexuse", "on"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "ebpf_retindexuse_counter_is_returned"
+address = "0x0"
+expect = ["return "]

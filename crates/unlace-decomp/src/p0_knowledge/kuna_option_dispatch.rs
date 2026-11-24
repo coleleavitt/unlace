@@ -256,6 +256,7 @@ kuna_options! { self, p1;
     "pairparam" => registered!(crate::kuna_borrowcompare::PairParams),
     "pairbranch" => registered!(crate::kuna_borrowcompare::PairBranch),
     "armpairparam" => registered!(crate::kuna_armpairparam::ArmPairParams),
+    "retindexuse" => registered!(crate::kuna_retindexuse::RetIndexUse),
     "narrowret" => registered!(crate::kuna_narrowret::NarrowRet),
     "regsigned" => registered!(crate::kuna_regnarrow::NarrowSigned),
     "narrowext" => {

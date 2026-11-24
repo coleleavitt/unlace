@@ -5,3 +5,4 @@
 
 pub mod fspec;
 pub mod kuna_armpairparam; // (kuna) unprototyped 64-bit parameters in an aligned register pair
+pub mod kuna_retindexuse; // (kuna) a return value that also indexes a load

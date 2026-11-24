@@ -115,3 +115,15 @@ Not ranked (niche or n/a): LX/LE and VxD naming (needs the LE loader, legacy), B
 DOS memory-model inference, `__vbaChkstk`/`__aFchkstk`, and the console/OS loaders
 (XBE, SNES, PalmOS, GEOS, NetWare, OS-9, QNX, RT-11, HP-UX SOM, Symbian, PharLap). Raw image plus
 `--target` already decompiles those.
+
+## 5. Addendum: debuginfo and loader plugins (2026-11-24)
+
+Full ranked table and sources: [debuginfo-loaders.md](debuginfo-loaders.md). Loader rows here that are not in sections 2 and 3:
+
+- **Mach-O ARM32 relocatable objects** (Thumb BR22, PAIR, SUBTRACTOR, ADDEND): missing. IDA macho `sub_1A920`, `sub_1B390`, `sub_1C760` (0x1A920, 0x1B390, 0x1C760). Only `ARM64_RELOC_BRANCH26` is applied (`crates/unlace-analysis/src/loader/reloc_apply.rs:427`).
+- **ECOFF** (MIPS): missing. IDA coff `sub_E4C0`, `sub_E6D0`, `sub_F470`. No ECOFF reader in `crates/`.
+- **COFF short-import members in `.lib` archives**: missing. IDA coff `sub_FAC0` (0xFAC0, "AR import header"). Archives are read only through `object::read::archive`.
+- **PE CHPE metadata and DVRT**: missing from the load-config reader (`crates/unlace-analysis/src/loader/peloadconfig.rs:53-55`). IDA only names them (pe `sub_17790`, 0x17790); a format gap, not an IDA-applied technique.
+- **Mach-O `.dSYM` lookup and UUID fat-slice choice**: missing; the top gap of this area (IDA dwarf `sub_C3770`, `sub_C3110`). See debuginfo-loaders.md row 1.
+
+Correction to the brief for `core__libclpx`: it is the COIN-OR Clp LP solver (about 3,300 `Clp`/`Coin` strings), not a C parser. That confirms the LP stack-solve row in section 3 (IDA links it for stack-pointer and purge solving).

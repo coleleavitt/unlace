@@ -720,26 +720,17 @@ impl KunaRegionIdentifier {
     fn sort_by_node_order(&self, nodes: &mut [KunaNodeId]) -> KunaResult<()> {
         // C++ `stable_sort` over the order pair; collect-and-check first so a
         // missing entry surfaces as an error (the C++ comparator throws).
+        // Each order is looked up once, and `slice::sort_by_key` is stable,
+        // matching the C++ `stable_sort`.
+        let mut keyed: Vec<((int4, int4), KunaNodeId)> = Vec::with_capacity(nodes.len());
         for &n in nodes.iter() {
-            self.order_of(n)?;
+            keyed.push((self.order_of(n)?, n));
         }
-        // `slice::sort_by` is a stable sort, matching the C++ `stable_sort`; the
-        // closure cannot return an error so we latch any (already pre-checked)
-        // missing-order lookup and surface it afterward.
-        let mut err: Option<KunaError> = None;
-        nodes.sort_by(|&a, &b| match (self.order_of(a), self.order_of(b)) {
-            (Ok(oa), Ok(ob)) => oa.cmp(&ob),
-            _ => {
-                err = Some(KunaError::lowlevel(
-                    "kuna regionid: node missing from node order",
-                ));
-                std::cmp::Ordering::Equal
-            }
-        });
-        match err {
-            Some(e) => Err(e),
-            None => Ok(()),
+        keyed.sort_by_key(|&(order, _)| order);
+        for (slot, (_, n)) in nodes.iter_mut().zip(keyed) {
+            *slot = n;
         }
+        Ok(())
     }
 
     /// `slice_graph` (+ self-loop hack) (C++ `sliceGraph`).

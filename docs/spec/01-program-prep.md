@@ -6916,6 +6916,14 @@ moves.
   every stack reference of the caller after the push was four bytes off, and its first
   stack argument read as its second. With the fixups the cookie word and its check leave
   the C, as `msvcstackguard` removes the x86 cookie.
+  The same pass names the MSVC 64-bit arithmetic helpers the `kuna_arithhelpers`
+  fixups target (`__allmul`, `__alldiv`, `__allrem`, `__alldvrm`, `__aulldiv`,
+  `__aullrem`, `__aulldvrm`, `__allshl`, `__allshr`, `__aullshr`) by their complete
+  instruction streams up to the last `ret`
+  (`crates/unlace-analysis/src/analyzers/callfixup/kuna_msvcarithsig.rs`); the
+  objects carry no relocation, so nothing is wildcarded. Without it a stripped
+  i386 PE prints each `long long` multiply, divide or shift as a call with four
+  32-bit words.
   On a 32-bit ARM image the pass likewise recognizes libgcc's Thumb-1 switch
   helpers (`__gnu_thumb1_case_uqi`, `_sqi`, `_uhi`, `_shi`, `_si`) by their
   instructions

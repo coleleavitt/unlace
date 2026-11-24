@@ -652,6 +652,8 @@ mod tests {
         /// `gopairreturns` remains explicit while aggregate ABI interactions across
         /// Go corpus sizes are evaluated for automatic selection.
         const UNEVALUATED: &[&str] = &[
+            // `ptrfromlocal` (Hex-Rays printer survey row 1) is measured in its own sweep.
+            "ptrfromlocal",
             // `charnum`, `constright` and `signeddec` (the Hex-Rays printer survey,
             // notes/ida-gap/hexrays-ctree-printer.md) print only; each is measured in its
             // own sweep before a preset or default decision.

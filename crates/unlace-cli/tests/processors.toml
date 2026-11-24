@@ -3422,7 +3422,6 @@ forbid = ["halt_baddata", "halt_missing"]
 test = "elfroute_sparc64_elf_chain"
 address = "chain"
 expect = ["scale7(", "+ 1"]
-xfail = "#756: the linked image marks the leaf scale7 no-return"
 
 [[family.function]]
 test = "elfroute_sparc64_elf_lookup"

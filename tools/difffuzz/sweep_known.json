@@ -1,16 +1,9 @@
 {
  "riscv64v/qemu": {
-  "_why": "riscv.rvv.sinc lifts every vector instruction to a user operation; docs/difffuzz.md (RISC-V vector) lists these four open classes: vset{i}vl{i} do not write vl/vtype, register groups written past vd, the old vd read under an undisturbed policy or vl = 0, and FP/fixed-point ops not writing fflags/vxsat.",
+  "_why": "riscv.rvv.sinc lifts vector instructions to user operations and, like the scalar F/D lift, leaves the accrued flags out: FP vector ops do not write fflags (fcsr) and fixed-point ops do not write vxsat (docs/difffuzz.md, RISC-V vector).",
   "missing-output": [
-   "vl",
-   "vtype",
    "fcsr",
-   "vxsat",
-   "v[0-9]",
-   "v[0-9][0-9]"
-  ],
-  "missing-input": [
-   "*"
+   "vxsat"
   ]
  }
 }

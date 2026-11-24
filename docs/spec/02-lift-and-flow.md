@@ -5333,6 +5333,36 @@ register group: the overlapping registers `v0m2`..`v30m2`, `v0m4`..`v28m4` and
 `v0m8`..`v24m8` (64, 128 and 256 bytes, operand subtables `vdm<n>` and `vs2m<n>`), and
 `vmv<n>r.v` lifts as a copy of the group (`vmv1r.v` as a register copy). A register number not
 a multiple of `n` is reserved and, as in LLVM, not decoded.
+
+The other operands are register groups too, of a size `vtype` decides, so `vtype` is tracked
+as context (`tools/gen_rvv_groups.py` generates the tables and the constructors).
+- **Context.** `vsetvli` and `vsetivli` set context fields from their immediate for the
+  instructions after them (`globalset(inst_next, ...)`, subtable `vtctx`): `vknown`, and
+  log2 of the group size of each operand class. The classes are `gk` for LMUL, `wk` for 2*LMUL,
+  and `e8k`..`e64k` for EEW/SEW*LMUL; the field is 0 for one register and when the vtype makes
+  the encoding reserved. `vsetvl`, whose vtype is a register, clears `vknown`. The context holds
+  from the `vsetvli` to the next one in address order. Compiled code sets vtype before each
+  strip-mined loop and after each call, so that matches execution there.
+- **Groups.** After each constructor there is one constructor per group shape, under a pattern
+  over those fields, whose operands are fixed-size subtables (`vd_k4a4` is a 4-register group at
+  a 4-aligned vd). The register file has an overlapping register for every run of 2..8
+  registers (`v8m2`, `v9_11`); a run past v31, which only a reserved segment encoding names,
+  reaches into unused register space.
+  - Data, index and destination groups are LMUL for most operands, 2*LMUL for widening results
+    and `.w` sources, and 2*LMUL for narrowing sources.
+  - Loads and stores use EEW/SEW*LMUL for their data, and indexed ones for their index.
+  - A segment access covers nf groups; with no known vtype it still writes its nf registers.
+  - Reduction, mask and scalar-move operands stay one register.
+  - A misaligned group at a known vtype is reserved and falls back to the single-register form.
+- **Old destination.** Every user operation that writes a vector register takes the old
+  destination (group) as its first input. Tail- or mask-undisturbed elements, and every element
+  when vl = 0, keep their old values.
+- **`vset*`.** `vsetvli`, `vsetivli` and `vsetvl` write `vl` (the user operation's result, also
+  in `rd`) and `vtype`. `vtype` is the immediate, or `rs2`, unless the vtype is reserved: then
+  `vill` is set. Reserved here means bits above 7 set, LMUL encoding 4, or SEW above 64. A
+  fractional LMUL with SEW > LMUL*ELEN is implementation-defined; QEMU accepts it, and so does
+  the lift. `vsetvli x0, x0` keeps `vl`.
+- **Not written.** The accrued flags (fflags, vxsat) are not written, as in the scalar F/D lift.
 Exercised by `unlace-cli/tests/riscv_vector.rs`: all 1258 encoding shapes
 against LLVM's names (`fixtures/riscv_vector/probe64.txt`) and LLVM-lowered
 vector functions (load/add/store, a reduction into a scalar, an FMA with a

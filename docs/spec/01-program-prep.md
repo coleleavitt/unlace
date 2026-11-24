@@ -14596,7 +14596,12 @@ What counts as "no valid fall-through" is the positive-evidence predicate of
 (DIV-92; formerly the `noreturn_discstrict` option, now simply how
 `noreturn_disc` reads a call site). A call with no fall-through address at all —
 a tail jump lowered to a call — is evidence: that is a property of the call
-instruction. For its *successor* only **positive** evidence counts: the successor
+instruction. A call whose p-code ends in a RETURN behind a CBRANCH to the next
+instruction has a fall-through there (`listing/classify.rs`; unlace#756): SPARC
+lifts `call` as `didrestore = 0; CALL f; if (didrestore == 0) goto next; RETURN`,
+the RETURN only for a callee that ran `restore` in its delay slot, and reading
+the last op alone made every SPARC call a terminal one, so any function with
+three callers in a linked image was concluded no-return. For its *successor* only **positive** evidence counts: the successor
 is data (outside every executable range, so the compiler emitted nothing there to
 fall into), or the successor is another function's entry (the compiler left the
 caller no tail at all). The legacy tally had a third arm ahead of those two — the

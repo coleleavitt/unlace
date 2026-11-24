@@ -3043,6 +3043,8 @@ image based there) is left out, since its contents are the image's own. Only
 accesses whose address the decompiler resolves are affected: a register
 reached through a pointer held in a structure or passed as an argument is not.
 
+A Mach-O image also carries its dependency list and run paths, read from the thin image's own load commands by `loader/macho_dylibs.rs`. Every `LC_LOAD_DYLIB`, `LC_LOAD_WEAK_DYLIB`, `LC_REEXPORT_DYLIB`, `LC_LAZY_LOAD_DYLIB` and `LC_LOAD_UPWARD_DYLIB` becomes a `Dylib` that keeps the command that named it, its install name and its current and compatibility versions; each `LC_RPATH` becomes a run path, kept as written. Both lists are in load-command order and are exposed by `ObjectLoadImage::macho_dependencies`. They are facts the file states, so no option gates them. The walk is bounded by the header's `sizeofcmds` and each command's `cmdsize`; a command that runs past the input ends it and an unterminated string is dropped. A fat file is peeled before the loader sees it, and any input that is not a thin Mach-O yields an empty list. A relocatable object names no dylib and carries none.
+
 ## 1.3 Loader markup
 
 Import naming exists because a CALL into a linkage stub carries no symbol: without

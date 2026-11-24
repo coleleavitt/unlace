@@ -203,6 +203,8 @@ switches. A jump into any other leaf, including the latch of a `while( true )`
 loop, keeps its goto. `off` restores the original collapse precedence and
 rendering.
 
+**`gotochain` — a goto to a label that only jumps on is retargeted.** `gotochain.rs (ActionGotoChain)` runs right after `taildup`, in the same `blockrecovery` group, with `gotochain off` (the default). For each statement list it looks at every adjacent pair `L; goto T;` where `L` is a copy leaf whose basic block holds only unconditional branches (so reaching `L` runs no statement). Each plain goto (`goto L;`, or the goto arm of an `if (c) goto L;`) that names `L` is retargeted to `T`, following chains transitively and declining a cycle. The new target gets the label flag on its front leaf, and `gotolabel::release_converted_labels` releases `L`'s label once no carrier still names it. Switch-case and multi-goto edges are not retargeted, so a label they name keeps its `label_N:`. The pass only changes which label a `goto` names; the statements and the control flow they reach are unchanged.
+
 **`gotosink` — backward gotos become loops; a jump over a run becomes an
 `if`.** `gotosink.rs (ActionGotoSink)` runs after the other
 blockrecovery passes that edit the tree (last before `paramcopyhoist`), with

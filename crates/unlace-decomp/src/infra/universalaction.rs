@@ -1828,6 +1828,10 @@ pub fn universal_sched_hooked(
             // targets labelled.
             act!(crate::gotoreduce::ActionGotoReduce::boxed("blockrecovery")),
             act!(crate::taildup::ActionTailDup::boxed("blockrecovery")),
+            // (unlace) goto-chain coalescing (option `gotochain`, default-OFF): a goto
+            // that names a label whose block is only another goto is retargeted to that
+            // goto's target, after the return-tail reductions and before the cross-jump ones.
+            act!(crate::gotochain::ActionGotoChain::boxed("blockrecovery")),
             // (unlace) angr `IfElseFlattener`: after the tree is final + goto
             // targets labelled (and after gotoreduce), drop the `else` arm of a
             // 3-component `if` whose true-clause terminates, re-parenting the

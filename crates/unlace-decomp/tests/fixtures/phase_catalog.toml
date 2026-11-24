@@ -2968,6 +2968,25 @@ tier = "transform"
 symptoms = ["if (c) goto label_N; ... label_N: where an if around the skipped statements would do", "label_N: ... if (c) goto label_N; where a do-while would do", "label_N: ... goto label_N; at the end of a statement run instead of a loop"]
 
 [[option]]
+option = "gotochain"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P8"
+subphase = "goto-quality"
+strength = "HARD"
+rewind = "P8"
+issue = "goto-chain-coalesce"
+summary = "Retarget a goto to a label whose block is only an unconditional goto. When a label leaf holds no statement (its block only branches) and is immediately followed in its statement list by `goto L2;`, every unstructured `goto L1;` and `if (c) goto L1;` that names it is rewritten to `goto L2;` (chains followed transitively, with a cycle guard). The new target is labelled, and the old label is released once no goto, switch case or multi-goto edge still names it. Only plain gotos are retargeted: switch-case and multi-goto edges keep their label, so the output stays valid C."
+use_when = "Off by default: the goto-to-goto rendering is upstream's. Set `on` when a function prints `label_A: goto label_B;` and several gotos reach `label_A` only to fall through to `label_B`; each such jump then names `label_B` directly and the middle label disappears. The original unlace `goto_coalesce` pass ran this on its HIR; this is the structured-tree port. Not yet measured on the datatest corpus: flip to `on` only after `make test` shows 0/675 movement for the default and a stage run confirms the labels it removes."
+example = "option gotochain on"
+source_decompiler = "unlace"
+inspiration = "original unlace goto_coalesce.rs (coalesce_goto_chains, run on the HIR); IDA Hex-Rays sample vds11 (goto L1 => goto L2)"
+change_kind = "structure-recovery"
+tier = "transform"
+symptoms = ["a goto label_A where label_A: is followed directly by goto label_B;", "a label whose only statement is a goto to another label", "two labels in a row, the first holding only a jump"]
+
+[[option]]
 option = "gotoreduce"
 values = ["off", "return", "on"]
 default = "on"

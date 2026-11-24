@@ -4463,7 +4463,7 @@ casts and the block structure they edit. In the one-shot tail, `startcleanup` an
 `mergerequired` and `markexplicit` high-variables, `outputprototype`, `namevars` and
 `setcasts` merge, `mapglobals` prototype, and `prototypewarnings` casts. Around them, `armfloatargs` and
 `returnselector` assert clean-up, `typevote` merge, `calltargettype` prototype, and
-the structure tail after `setcasts` (`postinc`, `taildup`, `crossjumprevert`,
+the structure tail after `setcasts` (`postinc`, `taildup`, `gotochain`, `crossjumprevert`,
 `dedupitetail`, `iteregion`, `iteboolean`, `gotosink`, `crossjumptail`,
 `guardedloop`, `paramcopyhoist`) casts. A pass that relies on an earlier phase states it with
 `debug_assert_settled!(fd, Fact)`, which checks only in debug builds and only for

@@ -258,6 +258,8 @@ Three tiers:
 | a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters | [`pairparam`](#pairparam----on--off-default-on) |
 | a long long parameter on 32-bit ARM prints as two int parameters in r0 and r1 or r2 and r3 | [`armpairparam`](#armpairparam----on--off-default-off) |
 | a 64-bit compare on 32-bit ARM prints as an SBORROW4 or CONCAT44 chain over two register parameters | [`armpairparam`](#armpairparam----on--off-default-off) |
+| a long long compare on i386 prints as branches over four int parameters that compare the high words before the low words | [`pairbranch`](#pairbranch----on--off-default-off) |
+| a long long equality prints as a0 == a2 && a1 == a3 over four int parameters | [`pairbranch`](#pairbranch----on--off-default-off) |
 | a signed char loaded with ldrsb is declared int | [`regsigned`](#regsigned----on--off-default-off) |
 | a short counter prints as int with (int)(short) casts at every use | [`regsigned`](#regsigned----on--off-default-off) |
 | an int local prints as long on x86-64 though every value is a movsxd | [`regsigned`](#regsigned----on--off-default-off) |
@@ -1916,6 +1918,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default: it changes the recovered prototype of every unprototyped 32-bit ARM function whose register pair a borrow, carry or two-word equality links (pairparam must be on). Turn it on for ARM32 firmware or libraries with 64-bit arithmetic where a long long parameter prints as two int parameters and its compare as an SBORROW4 or CONCAT44 chain. The pairing follows the input model's general register entries in order: the first word sits at an even position among them, as the AAPCS join align rule places a 64-bit value.
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option armpairparam on`
+
+### `pairbranch` -- on | off, default `off`
+
+- **Symptoms:** a long long compare on i386 prints as branches over four int parameters that compare the high words before the low words; a long long equality prints as a0 == a2 && a1 == a3 over four int parameters.
+- **What it does:** Join two adjacent input words into one 8-byte parameter when a 64-bit compare split across branches links them: an unsigned low-word compare with an ordered high-word compare in the one or two single-entry blocks above it (MSVC's cmp hi; jl; jg; cmp lo; jb), or a low-word equality with a high-word equality in the block directly above or below it.
+- **When to flip:** Off by default: two separate int parameters compared lexicographically or pairwise (if (x1 == x2 && y1 == y2) over adjacent parameters) compile to the same branches, so the join is a reading, not a fact. Turn it on for i386 MSVC binaries or ARM32 code with 64-bit arithmetic where a long long parameter prints as two int parameters and its compare as a chain of branches over the two words (a1 < a3, else a1 == a3 and a0 < a2; or a0 == a2 && a1 == a3). pairparam must be on; on 32-bit ARM register pairs also need armpairparam. A pair of zero tests is never joined, and neither is an equality with constants.
+- **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
+- **Example:** `option pairbranch on`
 
 ### `regsigned` -- on | off, default `off`
 

@@ -1,0 +1,1082 @@
+# Ethereum Virtual Machine bytecode (Cancun): every opcode through EIP-1153 (TLOAD/TSTORE),
+# EIP-5656 (MCOPY), EIP-3855 (PUSH0), EIP-4844 (BLOBHASH) and EIP-7516 (BLOBBASEFEE).
+# Written for unlace from the Ethereum Yellow Paper (appendix H) and the evm.codes opcode
+# reference. The operand stack lives in the evmstack space: SP addresses the top 32-byte
+# word and a push moves SP down by 32, so a PUSH followed by JUMP is a store and a load of
+# one stack slot, which heritage folds into a constant branch target. EVM memory and call
+# data are the mem and calldata spaces (byte addressed through the low 32 bits of the
+# offset); storage, transient storage, the environment, hashing, logs and calls are user-ops.
+
+define endian=big;
+define alignment=1;
+
+define space ram      type=ram_space      size=4 default;
+define space evmstack type=ram_space      size=4;
+define space mem      type=ram_space      size=4;
+define space calldata type=ram_space      size=4;
+define space register type=register_space size=4;
+
+define register offset=0x00 size=4 [ PC SP ];
+define register offset=0x20 size=32 [ RV ];
+define register offset=0x40 size=4 [ contextreg ];
+
+# pushrest: immediate bytes of a PUSH16..PUSH32 still to come. Such an instruction is
+# longer than SLEIGH's 16-byte limit, so it decodes as a head (opcode plus 15 bytes) and
+# one or two PUSHDATA continuations that shift the rest of the immediate into the top word.
+define context contextreg
+  pushrest = (0,4) noflow
+;
+
+define token opbyte(8)
+  op = (0,7)
+;
+define token imm1(8)
+  p1 = (0,7)
+;
+define token imm2(16)
+  p2 = (0,15)
+;
+define token imm3(24)
+  p3 = (0,23)
+;
+define token imm4(32)
+  p4 = (0,31)
+;
+define token imm5(40)
+  p5 = (0,39)
+;
+define token imm6(48)
+  p6 = (0,47)
+;
+define token imm7(56)
+  p7 = (0,55)
+;
+define token imm8(64)
+  p8 = (0,63)
+;
+define token tok_qa(64)
+  qa = (0,63)
+;
+define token tok_qb(64)
+  qb = (0,63)
+;
+define token tok_qc(64)
+  qc = (0,63)
+;
+
+macro push(v) {
+  SP = SP - 32;
+  *[evmstack]:32 SP = v;
+}
+
+macro pop(v) {
+  v = *[evmstack]:32 SP;
+  SP = SP + 32;
+}
+
+define pcodeop stop;
+define pcodeop exp;
+define pcodeop keccak256;
+define pcodeop address;
+define pcodeop balance;
+define pcodeop origin;
+define pcodeop caller;
+define pcodeop callvalue;
+define pcodeop calldatasize;
+define pcodeop calldatacopy;
+define pcodeop codesize;
+define pcodeop codecopy;
+define pcodeop gasprice;
+define pcodeop extcodesize;
+define pcodeop extcodecopy;
+define pcodeop returndatasize;
+define pcodeop returndatacopy;
+define pcodeop extcodehash;
+define pcodeop blockhash;
+define pcodeop coinbase;
+define pcodeop timestamp;
+define pcodeop number;
+define pcodeop prevrandao;
+define pcodeop gaslimit;
+define pcodeop chainid;
+define pcodeop selfbalance;
+define pcodeop basefee;
+define pcodeop blobhash;
+define pcodeop blobbasefee;
+define pcodeop sload;
+define pcodeop sstore;
+define pcodeop msize;
+define pcodeop gas;
+define pcodeop tload;
+define pcodeop tstore;
+define pcodeop mcopy;
+define pcodeop log0;
+define pcodeop log1;
+define pcodeop log2;
+define pcodeop log3;
+define pcodeop log4;
+define pcodeop create;
+define pcodeop evm_call;
+define pcodeop callcode;
+define pcodeop evm_return;
+define pcodeop delegatecall;
+define pcodeop create2;
+define pcodeop staticcall;
+define pcodeop revert;
+define pcodeop invalid;
+define pcodeop selfdestruct;
+
+:ADD is pushrest=0 & op=0x01 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  push(a + b);
+}
+:MUL is pushrest=0 & op=0x02 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  push(a * b);
+}
+:SUB is pushrest=0 & op=0x03 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  push(a - b);
+}
+:DIV is pushrest=0 & op=0x04 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  r:32 = 0;
+  if (b == 0) goto <done>;
+  r = a / b;
+<done>
+  push(r);
+}
+:SDIV is pushrest=0 & op=0x05 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  r:32 = 0;
+  if (b == 0) goto <done>;
+  r = a s/ b;
+<done>
+  push(r);
+}
+:MOD is pushrest=0 & op=0x06 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  r:32 = 0;
+  if (b == 0) goto <done>;
+  r = a % b;
+<done>
+  push(r);
+}
+:SMOD is pushrest=0 & op=0x07 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  r:32 = 0;
+  if (b == 0) goto <done>;
+  r = a s% b;
+<done>
+  push(r);
+}
+:ADDMOD is pushrest=0 & op=0x08 {
+  a:32 = 0; b:32 = 0; n:32 = 0;
+  pop(a); pop(b); pop(n);
+  r:32 = 0;
+  if (n == 0) goto <done>;
+  w:64 = (zext(a) + zext(b)) % zext(n);
+  r = w:32;
+<done>
+  push(r);
+}
+:MULMOD is pushrest=0 & op=0x09 {
+  a:32 = 0; b:32 = 0; n:32 = 0;
+  pop(a); pop(b); pop(n);
+  r:32 = 0;
+  if (n == 0) goto <done>;
+  w:64 = (zext(a) * zext(b)) % zext(n);
+  r = w:32;
+<done>
+  push(r);
+}
+:EXP is pushrest=0 & op=0x0a {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  r:32 = exp(a, b);
+  push(r);
+}
+:SIGNEXTEND is pushrest=0 & op=0x0b {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  r:32 = b;
+  if (a >= 31) goto <done>;
+  sh:32 = (31 - a) * 8;
+  r = (b << sh) s>> sh;
+<done>
+  push(r);
+}
+:LT is pushrest=0 & op=0x10 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  c:32 = zext(a < b);
+  push(c);
+}
+:GT is pushrest=0 & op=0x11 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  c:32 = zext(a > b);
+  push(c);
+}
+:SLT is pushrest=0 & op=0x12 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  c:32 = zext(a s< b);
+  push(c);
+}
+:SGT is pushrest=0 & op=0x13 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  c:32 = zext(a s> b);
+  push(c);
+}
+:EQ is pushrest=0 & op=0x14 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  c:32 = zext(a == b);
+  push(c);
+}
+:ISZERO is pushrest=0 & op=0x15 {
+  a:32 = 0;
+  pop(a);
+  c:32 = zext(a == 0);
+  push(c);
+}
+:AND is pushrest=0 & op=0x16 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  push(a & b);
+}
+:OR is pushrest=0 & op=0x17 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  push(a | b);
+}
+:XOR is pushrest=0 & op=0x18 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  push(a ^ b);
+}
+:NOT is pushrest=0 & op=0x19 {
+  a:32 = 0;
+  pop(a);
+  push(~a);
+}
+:BYTE is pushrest=0 & op=0x1a {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  r:32 = 0;
+  if (a >= 32) goto <done>;
+  r = (b >> ((31 - a) * 8)) & 0xff;
+<done>
+  push(r);
+}
+:SHL is pushrest=0 & op=0x1b {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  push(b << a);
+}
+:SHR is pushrest=0 & op=0x1c {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  push(b >> a);
+}
+:SAR is pushrest=0 & op=0x1d {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  push(b s>> a);
+}
+:STOP is pushrest=0 & op=0x00 {
+  stop();
+  return [0:4];
+}
+:KECCAK256 is pushrest=0 & op=0x20 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  r:32 = keccak256(a0, a1);
+  push(r);
+}
+:ADDRESS is pushrest=0 & op=0x30 {
+  r:32 = address();
+  push(r);
+}
+:BALANCE is pushrest=0 & op=0x31 {
+  a0:32 = 0;
+  pop(a0);
+  r:32 = balance(a0);
+  push(r);
+}
+:ORIGIN is pushrest=0 & op=0x32 {
+  r:32 = origin();
+  push(r);
+}
+:CALLER is pushrest=0 & op=0x33 {
+  r:32 = caller();
+  push(r);
+}
+:CALLVALUE is pushrest=0 & op=0x34 {
+  r:32 = callvalue();
+  push(r);
+}
+:CALLDATASIZE is pushrest=0 & op=0x36 {
+  r:32 = calldatasize();
+  push(r);
+}
+:CALLDATACOPY is pushrest=0 & op=0x37 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  calldatacopy(a0, a1, a2);
+}
+:CODESIZE is pushrest=0 & op=0x38 {
+  r:32 = codesize();
+  push(r);
+}
+:CODECOPY is pushrest=0 & op=0x39 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  codecopy(a0, a1, a2);
+}
+:GASPRICE is pushrest=0 & op=0x3a {
+  r:32 = gasprice();
+  push(r);
+}
+:EXTCODESIZE is pushrest=0 & op=0x3b {
+  a0:32 = 0;
+  pop(a0);
+  r:32 = extcodesize(a0);
+  push(r);
+}
+:EXTCODECOPY is pushrest=0 & op=0x3c {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  a3:32 = 0;
+  pop(a3);
+  extcodecopy(a0, a1, a2, a3);
+}
+:RETURNDATASIZE is pushrest=0 & op=0x3d {
+  r:32 = returndatasize();
+  push(r);
+}
+:RETURNDATACOPY is pushrest=0 & op=0x3e {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  returndatacopy(a0, a1, a2);
+}
+:EXTCODEHASH is pushrest=0 & op=0x3f {
+  a0:32 = 0;
+  pop(a0);
+  r:32 = extcodehash(a0);
+  push(r);
+}
+:BLOCKHASH is pushrest=0 & op=0x40 {
+  a0:32 = 0;
+  pop(a0);
+  r:32 = blockhash(a0);
+  push(r);
+}
+:COINBASE is pushrest=0 & op=0x41 {
+  r:32 = coinbase();
+  push(r);
+}
+:TIMESTAMP is pushrest=0 & op=0x42 {
+  r:32 = timestamp();
+  push(r);
+}
+:NUMBER is pushrest=0 & op=0x43 {
+  r:32 = number();
+  push(r);
+}
+:PREVRANDAO is pushrest=0 & op=0x44 {
+  r:32 = prevrandao();
+  push(r);
+}
+:GASLIMIT is pushrest=0 & op=0x45 {
+  r:32 = gaslimit();
+  push(r);
+}
+:CHAINID is pushrest=0 & op=0x46 {
+  r:32 = chainid();
+  push(r);
+}
+:SELFBALANCE is pushrest=0 & op=0x47 {
+  r:32 = selfbalance();
+  push(r);
+}
+:BASEFEE is pushrest=0 & op=0x48 {
+  r:32 = basefee();
+  push(r);
+}
+:BLOBHASH is pushrest=0 & op=0x49 {
+  a0:32 = 0;
+  pop(a0);
+  r:32 = blobhash(a0);
+  push(r);
+}
+:BLOBBASEFEE is pushrest=0 & op=0x4a {
+  r:32 = blobbasefee();
+  push(r);
+}
+:SLOAD is pushrest=0 & op=0x54 {
+  a0:32 = 0;
+  pop(a0);
+  r:32 = sload(a0);
+  push(r);
+}
+:SSTORE is pushrest=0 & op=0x55 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  sstore(a0, a1);
+}
+:MSIZE is pushrest=0 & op=0x59 {
+  r:32 = msize();
+  push(r);
+}
+:GAS is pushrest=0 & op=0x5a {
+  r:32 = gas();
+  push(r);
+}
+:TLOAD is pushrest=0 & op=0x5c {
+  a0:32 = 0;
+  pop(a0);
+  r:32 = tload(a0);
+  push(r);
+}
+:TSTORE is pushrest=0 & op=0x5d {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  tstore(a0, a1);
+}
+:MCOPY is pushrest=0 & op=0x5e {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  mcopy(a0, a1, a2);
+}
+:LOG0 is pushrest=0 & op=0xa0 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  log0(a0, a1);
+}
+:LOG1 is pushrest=0 & op=0xa1 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  log1(a0, a1, a2);
+}
+:LOG2 is pushrest=0 & op=0xa2 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  a3:32 = 0;
+  pop(a3);
+  log2(a0, a1, a2, a3);
+}
+:LOG3 is pushrest=0 & op=0xa3 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  a3:32 = 0;
+  pop(a3);
+  a4:32 = 0;
+  pop(a4);
+  log3(a0, a1, a2, a3, a4);
+}
+:LOG4 is pushrest=0 & op=0xa4 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  a3:32 = 0;
+  pop(a3);
+  a4:32 = 0;
+  pop(a4);
+  a5:32 = 0;
+  pop(a5);
+  log4(a0, a1, a2, a3, a4, a5);
+}
+:CREATE is pushrest=0 & op=0xf0 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  r:32 = create(a0, a1, a2);
+  push(r);
+}
+:CALL is pushrest=0 & op=0xf1 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  a3:32 = 0;
+  pop(a3);
+  a4:32 = 0;
+  pop(a4);
+  a5:32 = 0;
+  pop(a5);
+  a6:32 = 0;
+  pop(a6);
+  r:32 = evm_call(a0, a1, a2, a3, a4, a5, a6);
+  push(r);
+}
+:CALLCODE is pushrest=0 & op=0xf2 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  a3:32 = 0;
+  pop(a3);
+  a4:32 = 0;
+  pop(a4);
+  a5:32 = 0;
+  pop(a5);
+  a6:32 = 0;
+  pop(a6);
+  r:32 = callcode(a0, a1, a2, a3, a4, a5, a6);
+  push(r);
+}
+:DELEGATECALL is pushrest=0 & op=0xf4 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  a3:32 = 0;
+  pop(a3);
+  a4:32 = 0;
+  pop(a4);
+  a5:32 = 0;
+  pop(a5);
+  r:32 = delegatecall(a0, a1, a2, a3, a4, a5);
+  push(r);
+}
+:CREATE2 is pushrest=0 & op=0xf5 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  a3:32 = 0;
+  pop(a3);
+  r:32 = create2(a0, a1, a2, a3);
+  push(r);
+}
+:STATICCALL is pushrest=0 & op=0xfa {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  a2:32 = 0;
+  pop(a2);
+  a3:32 = 0;
+  pop(a3);
+  a4:32 = 0;
+  pop(a4);
+  a5:32 = 0;
+  pop(a5);
+  r:32 = staticcall(a0, a1, a2, a3, a4, a5);
+  push(r);
+}
+:CALLDATALOAD is pushrest=0 & op=0x35 {
+  a:32 = 0;
+  pop(a);
+  off:4 = a:4;
+  v:32 = *[calldata]:32 off;
+  push(v);
+}
+:POP is pushrest=0 & op=0x50 {
+  SP = SP + 32;
+}
+:MLOAD is pushrest=0 & op=0x51 {
+  a:32 = 0;
+  pop(a);
+  off:4 = a:4;
+  v:32 = *[mem]:32 off;
+  push(v);
+}
+:MSTORE is pushrest=0 & op=0x52 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  off:4 = a:4;
+  *[mem]:32 off = b;
+}
+:MSTORE8 is pushrest=0 & op=0x53 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  off:4 = a:4;
+  *[mem]:1 off = b:1;
+}
+:JUMP is pushrest=0 & op=0x56 {
+  a:32 = 0;
+  pop(a);
+  dest:4 = a:4;
+  goto [dest];
+}
+:JUMPI is pushrest=0 & op=0x57 {
+  a:32 = 0; b:32 = 0;
+  pop(a); pop(b);
+  dest:4 = a:4;
+  if (b == 0) goto inst_next;
+  goto [dest];
+}
+:PC is pushrest=0 & op=0x58 {
+  here:4 = inst_start;
+  v:32 = zext(here);
+  push(v);
+}
+:JUMPDEST is pushrest=0 & op=0x5b {
+}
+:PUSH0 is pushrest=0 & op=0x5f {
+  push(0:32);
+}
+:RETURN is pushrest=0 & op=0xf3 {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  evm_return(a0, a1);
+  return [0:4];
+}
+:REVERT is pushrest=0 & op=0xfd {
+  a0:32 = 0;
+  pop(a0);
+  a1:32 = 0;
+  pop(a1);
+  revert(a0, a1);
+  return [0:4];
+}
+:INVALID is pushrest=0 & op=0xfe {
+  invalid();
+  return [0:4];
+}
+:SELFDESTRUCT is pushrest=0 & op=0xff {
+  a0:32 = 0;
+  pop(a0);
+  selfdestruct(a0);
+  return [0:4];
+}
+:PUSH1 p1 is pushrest=0 & op=0x60; p1 {
+  v:32 = p1;
+  push(v);
+}
+:PUSH2 p2 is pushrest=0 & op=0x61; p2 {
+  v:32 = p2;
+  push(v);
+}
+:PUSH3 p3 is pushrest=0 & op=0x62; p3 {
+  v:32 = p3;
+  push(v);
+}
+:PUSH4 p4 is pushrest=0 & op=0x63; p4 {
+  v:32 = p4;
+  push(v);
+}
+:PUSH5 p5 is pushrest=0 & op=0x64; p5 {
+  v:32 = p5;
+  push(v);
+}
+:PUSH6 p6 is pushrest=0 & op=0x65; p6 {
+  v:32 = p6;
+  push(v);
+}
+:PUSH7 p7 is pushrest=0 & op=0x66; p7 {
+  v:32 = p7;
+  push(v);
+}
+:PUSH8 p8 is pushrest=0 & op=0x67; p8 {
+  v:32 = p8;
+  push(v);
+}
+:PUSH9 p1 qa is pushrest=0 & op=0x68; p1; qa {
+  v:32 = (zext(p1:1) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH10 p2 qa is pushrest=0 & op=0x69; p2; qa {
+  v:32 = (zext(p2:2) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH11 p3 qa is pushrest=0 & op=0x6a; p3; qa {
+  v:32 = (zext(p3:3) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH12 p4 qa is pushrest=0 & op=0x6b; p4; qa {
+  v:32 = (zext(p4:4) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH13 p5 qa is pushrest=0 & op=0x6c; p5; qa {
+  v:32 = (zext(p5:5) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH14 p6 qa is pushrest=0 & op=0x6d; p6; qa {
+  v:32 = (zext(p6:6) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH15 p7 qa is pushrest=0 & op=0x6e; p7; qa {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH16 p7 qa is pushrest=0 & op=0x6f; p7; qa [ pushrest = 1; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH17 p7 qa is pushrest=0 & op=0x70; p7; qa [ pushrest = 2; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH18 p7 qa is pushrest=0 & op=0x71; p7; qa [ pushrest = 3; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH19 p7 qa is pushrest=0 & op=0x72; p7; qa [ pushrest = 4; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH20 p7 qa is pushrest=0 & op=0x73; p7; qa [ pushrest = 5; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH21 p7 qa is pushrest=0 & op=0x74; p7; qa [ pushrest = 6; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH22 p7 qa is pushrest=0 & op=0x75; p7; qa [ pushrest = 7; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH23 p7 qa is pushrest=0 & op=0x76; p7; qa [ pushrest = 8; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH24 p7 qa is pushrest=0 & op=0x77; p7; qa [ pushrest = 9; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH25 p7 qa is pushrest=0 & op=0x78; p7; qa [ pushrest = 10; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH26 p7 qa is pushrest=0 & op=0x79; p7; qa [ pushrest = 11; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH27 p7 qa is pushrest=0 & op=0x7a; p7; qa [ pushrest = 12; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH28 p7 qa is pushrest=0 & op=0x7b; p7; qa [ pushrest = 13; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH29 p7 qa is pushrest=0 & op=0x7c; p7; qa [ pushrest = 14; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH30 p7 qa is pushrest=0 & op=0x7d; p7; qa [ pushrest = 15; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH31 p7 qa is pushrest=0 & op=0x7e; p7; qa [ pushrest = 16; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSH32 p7 qa is pushrest=0 & op=0x7f; p7; qa [ pushrest = 17; globalset(inst_next, pushrest); ] {
+  v:32 = (zext(p7:7) << 64) | zext(qa:8);
+  push(v);
+}
+:PUSHDATA p1 is pushrest=1 & p1 [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 8) | zext(p1:1);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p2 is pushrest=2 & p2 [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 16) | zext(p2:2);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p3 is pushrest=3 & p3 [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 24) | zext(p3:3);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p4 is pushrest=4 & p4 [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 32) | zext(p4:4);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p5 is pushrest=5 & p5 [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 40) | zext(p5:5);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p6 is pushrest=6 & p6 [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 48) | zext(p6:6);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p7 is pushrest=7 & p7 [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 56) | zext(p7:7);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p8 is pushrest=8 & p8 [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 64) | zext(p8:8);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p1 qa is pushrest=9 & p1; qa [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 72) | (zext(p1:1) << 64) | zext(qa:8);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p2 qa is pushrest=10 & p2; qa [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 80) | (zext(p2:2) << 64) | zext(qa:8);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p3 qa is pushrest=11 & p3; qa [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 88) | (zext(p3:3) << 64) | zext(qa:8);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p4 qa is pushrest=12 & p4; qa [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 96) | (zext(p4:4) << 64) | zext(qa:8);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p5 qa is pushrest=13 & p5; qa [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 104) | (zext(p5:5) << 64) | zext(qa:8);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p6 qa is pushrest=14 & p6; qa [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 112) | (zext(p6:6) << 64) | zext(qa:8);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p7 qa is pushrest=15 & p7; qa [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 120) | (zext(p7:7) << 64) | zext(qa:8);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p8 qa is pushrest=16 & p8; qa [ pushrest = 0; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 128) | (zext(p8:8) << 64) | zext(qa:8);
+  *[evmstack]:32 SP = v;
+}
+:PUSHDATA p8 qa is pushrest=17 & p8; qa [ pushrest = 1; globalset(inst_next, pushrest); ] {
+  v:32 = *[evmstack]:32 SP;
+  v = (v << 128) | (zext(p8:8) << 64) | zext(qa:8);
+  *[evmstack]:32 SP = v;
+}
+:DUP1 is pushrest=0 & op=0x80 {
+  v:32 = *[evmstack]:32 (SP + 0);
+  push(v);
+}
+:DUP2 is pushrest=0 & op=0x81 {
+  v:32 = *[evmstack]:32 (SP + 32);
+  push(v);
+}
+:DUP3 is pushrest=0 & op=0x82 {
+  v:32 = *[evmstack]:32 (SP + 64);
+  push(v);
+}
+:DUP4 is pushrest=0 & op=0x83 {
+  v:32 = *[evmstack]:32 (SP + 96);
+  push(v);
+}
+:DUP5 is pushrest=0 & op=0x84 {
+  v:32 = *[evmstack]:32 (SP + 128);
+  push(v);
+}
+:DUP6 is pushrest=0 & op=0x85 {
+  v:32 = *[evmstack]:32 (SP + 160);
+  push(v);
+}
+:DUP7 is pushrest=0 & op=0x86 {
+  v:32 = *[evmstack]:32 (SP + 192);
+  push(v);
+}
+:DUP8 is pushrest=0 & op=0x87 {
+  v:32 = *[evmstack]:32 (SP + 224);
+  push(v);
+}
+:DUP9 is pushrest=0 & op=0x88 {
+  v:32 = *[evmstack]:32 (SP + 256);
+  push(v);
+}
+:DUP10 is pushrest=0 & op=0x89 {
+  v:32 = *[evmstack]:32 (SP + 288);
+  push(v);
+}
+:DUP11 is pushrest=0 & op=0x8a {
+  v:32 = *[evmstack]:32 (SP + 320);
+  push(v);
+}
+:DUP12 is pushrest=0 & op=0x8b {
+  v:32 = *[evmstack]:32 (SP + 352);
+  push(v);
+}
+:DUP13 is pushrest=0 & op=0x8c {
+  v:32 = *[evmstack]:32 (SP + 384);
+  push(v);
+}
+:DUP14 is pushrest=0 & op=0x8d {
+  v:32 = *[evmstack]:32 (SP + 416);
+  push(v);
+}
+:DUP15 is pushrest=0 & op=0x8e {
+  v:32 = *[evmstack]:32 (SP + 448);
+  push(v);
+}
+:DUP16 is pushrest=0 & op=0x8f {
+  v:32 = *[evmstack]:32 (SP + 480);
+  push(v);
+}
+:SWAP1 is pushrest=0 & op=0x90 {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 32);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 32) = a;
+}
+:SWAP2 is pushrest=0 & op=0x91 {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 64);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 64) = a;
+}
+:SWAP3 is pushrest=0 & op=0x92 {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 96);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 96) = a;
+}
+:SWAP4 is pushrest=0 & op=0x93 {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 128);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 128) = a;
+}
+:SWAP5 is pushrest=0 & op=0x94 {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 160);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 160) = a;
+}
+:SWAP6 is pushrest=0 & op=0x95 {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 192);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 192) = a;
+}
+:SWAP7 is pushrest=0 & op=0x96 {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 224);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 224) = a;
+}
+:SWAP8 is pushrest=0 & op=0x97 {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 256);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 256) = a;
+}
+:SWAP9 is pushrest=0 & op=0x98 {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 288);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 288) = a;
+}
+:SWAP10 is pushrest=0 & op=0x99 {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 320);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 320) = a;
+}
+:SWAP11 is pushrest=0 & op=0x9a {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 352);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 352) = a;
+}
+:SWAP12 is pushrest=0 & op=0x9b {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 384);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 384) = a;
+}
+:SWAP13 is pushrest=0 & op=0x9c {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 416);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 416) = a;
+}
+:SWAP14 is pushrest=0 & op=0x9d {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 448);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 448) = a;
+}
+:SWAP15 is pushrest=0 & op=0x9e {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 480);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 480) = a;
+}
+:SWAP16 is pushrest=0 & op=0x9f {
+  a:32 = *[evmstack]:32 SP;
+  b:32 = *[evmstack]:32 (SP + 512);
+  *[evmstack]:32 SP = b;
+  *[evmstack]:32 (SP + 512) = a;
+}

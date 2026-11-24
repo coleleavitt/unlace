@@ -1264,6 +1264,83 @@ class Or1kHarness:
         return regs, (f & 1) | (cy & 1) << 1
 
 
+# ---------------------------------------------------------------- MicroBlaze (32-bit, either endianness)
+
+def mb_li32(r, v):
+    """imm hi; addik r,r0,lo."""
+    return [0xB0000000 | (v >> 16) & 0xFFFF, 0x30000000 | r << 21 | (v & 0xFFFF)]
+
+
+class MicroBlazeHarness:
+    """r1..r31 at 4*i, carry in at 128 and back at 132, marker at 136. The carry goes in with
+    addi -1 and comes back with addc; imm + braid reaches the instruction and its delay slot
+    restores the table register."""
+    qemu = ("qemu-microblaze", [])
+    machine = 189
+    big = True
+    elf32 = True
+    table_size = 144
+    marker_at = 136
+
+    def __init__(self):
+        self.s = 30
+        self.scratch_names = []
+
+    def choose_scratch(self, arch, regs, written):
+        for i in [30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 13, 11, 10, 9, 8, 4, 3, 2]:
+            n = arch.gprs[i - 1][0]
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.s = i
+                self.scratch_names = [n]
+                return True
+        return False
+
+    def _t(self):
+        return 3 if self.s != 3 else 4
+
+    def prologue(self, target):
+        s, t = self.s, self._t()
+        c = mb_li32(s, TABLES)
+        c += [0xE8000000 | t << 21 | s << 16 | 128, 0x20000000 | t << 21 | t << 16 | 0xFFFF]   # lwi; addi t,t,-1
+        for i in range(1, 32):
+            if i != s:
+                c.append(0xE8000000 | i << 21 | s << 16 | 4 * i)
+        c += [0xB0000000 | (target >> 16) & 0xFFFF, 0xB8180000 | (target & 0xFFFF),       # imm; braid
+              0xE8000000 | s << 21 | s << 16 | 4 * s]                                     # lwi (delay slot)
+        return words(c, self.big)
+
+    def epilogue(self, dumps, marker):
+        s, t = self.s, self._t()
+        c = mb_li32(s, OUT)
+        for i in range(1, 32):
+            if i != s:
+                c.append(0xF8000000 | i << 21 | s << 16 | 4 * i)
+        c += [0x08000000 | t << 21, 0xF8000000 | t << 21 | s << 16 | 132]                 # addc t,r0,r0
+        c += mb_li32(t, marker) + [0xF8000000 | t << 21 | s << 16 | (self.marker_at + (4 if self.big else 0))]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [0x30000000 | 12 << 21 | 4, 0x30000000 | 5 << 21 | 1] + mb_li32(6, base) + mb_li32(7, size) + [0xB9CC0008]
+        c += [0x30000000 | 12 << 21 | 1, 0x30000000 | 5 << 21, 0xB9CC0008]              # exit(0)
+        return words(c, self.big)
+
+    def table(self, arch, init, init_vec, flagword):
+        e = ">" if self.big else "<"
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs[:31], start=1):
+            struct.pack_into(e + "I", t, 4 * i, init.get(n, 0) & 0xFFFFFFFF)
+        struct.pack_into(e + "I", t, 128, flagword & 1)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        e = ">" if self.big else "<"
+        regs = {n: struct.unpack_from(e + "I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs[:31], start=1)}
+        return regs, struct.unpack_from(e + "I", out, 132)[0] & 1
+
+
+class MicroBlazeElHarness(MicroBlazeHarness):
+    qemu = ("qemu-microblazeel", [])
+    big = False
+
+
 HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
              "mipsr6": MipsR6Harness, "mips64r6": Mips64R6Harness, "nios2": Nios2Harness, "sh4": Sh4Harness,
              "ppc": lambda: PpcHarness(("qemu-ppc", ["-cpu", "7457"]), 20, True, False),
@@ -1271,7 +1348,7 @@ HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "r
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness, "hppa": HppaHarness, "alpha": AlphaHarness, "or1k": Or1kHarness}
+             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness, "hppa": HppaHarness, "alpha": AlphaHarness, "or1k": Or1kHarness, "microblaze": MicroBlazeHarness, "microblazeel": MicroBlazeElHarness}
 
 
 def qemu_path(name):

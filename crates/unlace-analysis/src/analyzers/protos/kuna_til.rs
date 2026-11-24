@@ -918,6 +918,19 @@ fn is_ident(s: &str) -> bool {
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+/// A type name spelled as a C identifier: IDA's anonymous-type names
+/// (`$<hash>`, `Outer::$<hash>`) become `_<hash>` and `Outer___<hash>`, the
+/// same way at the definition and at every reference.
+fn c_name(name: &str) -> Option<String> {
+    let s = name.replace("::", "__").replace('$', "_");
+    let s = if s.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("_{s}")
+    } else {
+        s
+    };
+    (is_ident(&s) && !RESERVED.contains(&s.as_str())).then_some(s)
+}
+
 /// Words the C grammar reserves, never a type or parameter name here.
 const RESERVED: &[&str] = &[
     "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else",
@@ -1041,14 +1054,12 @@ impl<'t> Renderer<'t> {
             }
             Kind::Ref(r) => {
                 let idx = self.resolve(r);
-                let name = match (&r.name, idx) {
+                let raw = match (&r.name, idx) {
                     (Some(n), _) => n.clone(),
                     (None, Some(i)) => self.til.types[i].name.clone(),
                     (None, None) => return None,
                 };
-                if !is_ident(&name) || RESERVED.contains(&name.as_str()) {
-                    return None;
-                }
+                let name = c_name(&raw)?;
                 let named = idx.map(|i| self.named(i));
                 match (&r.kind, named) {
                     (_, Some(Named::Struct)) | (Some(RefKind::Struct), None) => {
@@ -1338,8 +1349,10 @@ pub fn render(til: &Til, target: &str, ptr_size: u8) -> String {
     let mut seen = BTreeSet::new();
     for (idx, e) in til.types.iter().enumerate() {
         let Some(ty) = &e.ty else { continue };
-        if !is_ident(&e.name) || RESERVED.contains(&e.name.as_str()) || !seen.insert(e.name.clone())
-        {
+        let Some(name) = c_name(&e.name) else {
+            continue;
+        };
+        if !seen.insert(name.clone()) {
             continue;
         }
         match &ty.kind {
@@ -1348,15 +1361,15 @@ pub fn render(til: &Til, target: &str, ptr_size: u8) -> String {
                 if r.layout_of(idx, 0).is_none() {
                     continue;
                 }
-                if let Some(rec) = r.record_lines(&e.name, udt, union) {
+                if let Some(rec) = r.record_lines(&name, udt, union) {
                     lines.extend(rec);
                 }
             }
             Kind::Func(_) => {}
             Kind::Ref(rf) if rf.name.as_deref() == Some(e.name.as_str()) => {}
             _ => {
-                if let Some(text) = r.declare(ty, "", &e.name, "type", 0) {
-                    let line = format!("T {} *\t{text}", e.name);
+                if let Some(text) = r.declare(ty, "", &name, "type", 0) {
+                    let line = format!("T {name} *\t{text}");
                     if line.len() <= MAX_LINE {
                         lines.push(line);
                     }

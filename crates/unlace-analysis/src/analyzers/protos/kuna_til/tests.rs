@@ -201,3 +201,18 @@ fn malformed_libraries_are_refused_without_panicking() {
     bad[6] = 0x20;
     assert!(to_typelib(&bad, "t", 8).is_err());
 }
+
+#[test]
+fn anonymous_type_names_become_identifiers() {
+    assert_eq!(
+        super::c_name("$837407842DC9"),
+        Some("_837407842DC9".to_string())
+    );
+    assert_eq!(
+        super::c_name("_LARGE_INTEGER::$8374"),
+        Some("_LARGE_INTEGER___8374".to_string())
+    );
+    assert_eq!(super::c_name("pt"), Some("pt".to_string()));
+    assert_eq!(super::c_name("int"), None);
+    assert_eq!(super::c_name("std::vector<int>"), None);
+}

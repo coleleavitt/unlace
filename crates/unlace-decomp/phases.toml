@@ -3665,6 +3665,25 @@ tier = "transform"
 symptoms = "a strlen-like loop function prints void and its counter is declared with the return register's storage|a search loop that returns its index prints void on BPF or SASS"
 
 [[settable]]
+option = "carryuse"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P4"
+subphase = "output-prototype"
+strength = "HARD"
+rewind = "P4"
+issue = "unlace-carryuse"
+summary = "Keep a returned sum whose low word is also compared for its carry. Upstream's onlyOpUse (funcdata_varnode.cc:1851) refuses a RETURN trial whose value reaches a branch. A target with no carry flag adds a 64-bit value as two 32-bit adds and moves the carry with an unsigned compare of the low sum against one of its addends, often as a branch (Xtensa `add a2,a10,a8; bgeu a2,a8,1f; addi a3,a3,1`), so the low word of every such returned sum is refused and a function returning `a * b + (a >> 3)` or `f(x) + 7` as a `long long` printed `void`. With the option on, an `INT_LESS` or `INT_LESSEQUAL` between the walked value, when an `INT_ADD` defines it, and one of that add's inputs (the same Varnode or an equal constant) is the sum's carry test: `kuna_carryuse.rs` skips it in the walk for a RETURN trial, and every other use is scored as before."
+use_when = "Turn on when a function that returns a 64-bit sum on a 32-bit target without a carry flag (Xtensa, also any target whose compiler branches on the carry) prints `void` or returns only its low word. Leave off for upstream's scoring."
+example = "option carryuse on"
+source_decompiler = "kuna"
+inspiration = "Real-code sweep: Xtensa -O2 mul_wide (a * b + (a >> 3) through call8 __umulsidi3) printed void"
+change_kind = "analysis-enablement"
+tier = "analysis"
+symptoms = "a function returning a long long sum prints void on xtensa|a 64-bit add whose carry is a bgeu branch loses the return value|mul_wide returns void after call8 __umulsidi3"
+
+[[settable]]
 option = "regsigned"
 values = "on|off"
 default = "off"

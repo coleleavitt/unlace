@@ -5680,6 +5680,21 @@ register pair, and Thumb-2 widened nine `int` returns to `unsigned long long`
 and gave one `void` function a return, so the other targets keep upstream's
 test unless `on` is set.
 
+### (kuna) `carryuse` — a returned sum that is also tested for its carry
+
+`Funcdata::onlyOpUse` also refuses a RETURN trial whose value reaches a branch. A
+target with no carry flag adds a 64-bit value as two 32-bit adds and moves the carry
+with an unsigned compare of the low sum against one of its addends, on Xtensa as a
+branch (`add a2,a10,a8; bgeu a2,a8,1f; addi a3,a3,1`), so the low word of a returned
+64-bit sum is refused and `long long f(...) { return a * b + (a >> 3); }` prints
+`void`. With option `carryuse` (default `off`),
+`crates/unlace-middle/src/p4_calls/kuna_carryuse.rs (carry_test)` skips, for a
+RETURN trial only, an `INT_LESS` or `INT_LESSEQUAL` that compares the walked value,
+when an `INT_ADD` defines it, with one of that add's inputs (the same Varnode, or a
+constant of equal size and value). That compare is the sum's carry test, not a use
+that competes with the return, and the walk does not follow its boolean. Every other
+use, and every use on an argument trial, is scored as before.
+
 ### (kuna) `returnpair` — the register-pair return split
 
 Provenance: upstream issue GH-6990, implemented kuna-side

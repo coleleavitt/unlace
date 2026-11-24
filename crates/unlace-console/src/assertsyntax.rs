@@ -469,6 +469,44 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
                 decl: decl.to_string(),
             }
         }
+        "split" => {
+            let (at, tail) = take_token(rest);
+            let (func, at) = split_qualifier(at);
+            let (storage, tail) = take_token(tail);
+            if storage.is_empty() || !tail.is_empty() {
+                return Err(bad("split needs [<func>::]<addr> then <storage>"));
+            }
+            let addr = parse_vma(&at).ok_or_else(|| bad("split needs a hex <addr>"))?;
+            Body::Split {
+                func,
+                addr,
+                storage: storage.to_string(),
+            }
+        }
+        "map" => {
+            let (symbol, tail) = take_token(rest);
+            let (target, tail) = take_token(tail);
+            let (func, symbol) = split_qualifier(symbol);
+            if symbol.is_empty() || target.is_empty() || !tail.is_empty() {
+                return Err(bad(
+                    "map needs [<func>::]<symbol> then the <symbol> it maps onto",
+                ));
+            }
+            Body::Map {
+                func,
+                symbol,
+                target: target.to_string(),
+            }
+        }
+        "noprop" => {
+            let (at, tail) = take_token(rest);
+            let (func, at) = split_qualifier(at);
+            if at.is_empty() || !tail.is_empty() {
+                return Err(bad("noprop takes exactly [<func>::]<addr>"));
+            }
+            let addr = parse_vma(&at).ok_or_else(|| bad("noprop needs a hex <addr>"))?;
+            Body::NoProp { func, addr }
+        }
         "noreturn" => {
             let (func, tail) = take_token(rest);
             if func.is_empty() || !tail.is_empty() {
@@ -485,7 +523,7 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             return Err(format!(
                 "--assert {raw:?}: unknown directive {other:?} (want one of \
                  function, typedef, prototype, callproto, data, param, return, comment, flow, callee, \
-                 name, type, format, isolate, readonly, volatile, bytes, register, noreturn)"
+                 name, type, format, isolate, readonly, volatile, bytes, register, noreturn, split, map, noprop)"
             ));
         }
     };

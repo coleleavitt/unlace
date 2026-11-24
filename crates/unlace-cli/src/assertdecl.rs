@@ -256,6 +256,9 @@ pub(crate) fn console_form(d: &Directive, target: Option<&str>) -> Result<Consol
             Some(f) => return Err(unbindable(&f)),
             None => (Slot::Symbol, format!("isolate {symbol}")),
         },
+        Body::Split { .. } | Body::Map { .. } | Body::NoProp { .. } => {
+            return Err(unlace_console::assertions::unapplied(&d.body));
+        }
         Body::NoReturn { func } => (Slot::Program, format!("function noreturn {func}")),
     };
     Ok(ConsoleForm { slot, line })
@@ -284,6 +287,14 @@ mod tests {
 
     fn one(spec: &str) -> Directive {
         parse_one(spec).expect("parses")
+    }
+
+    #[test]
+    fn split_map_noprop_parse_and_are_reported_unapplied() {
+        for spec in ["split 0x1000 RDI", "map v2 v3", "noprop 0x1004"] {
+            let d = one(spec);
+            assert!(console_form(&d, Some("f")).is_err(), "{spec}");
+        }
     }
 
     #[test]

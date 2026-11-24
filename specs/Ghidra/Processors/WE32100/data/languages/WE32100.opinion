@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- No loader proposes this language: Ghidra's COFF loader does not know the AT&T WE32K machine types.
+     Import 3B2 images with the Raw Binary loader and select WE32100:BE:32:default. -->
+<opinions>
+</opinions>

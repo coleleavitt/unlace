@@ -209,6 +209,10 @@ specs/Ghidra/Processors/VMU vendors the Sega Dreamcast VMU (LC86K) SLEIGH specif
 aleph-void/Ghidra-VMU-Processor (https://github.com/aleph-void/Ghidra-VMU-Processor), a fork of RossMeikleham/Ghidra-VMU-Processor, released under the
 MIT License (its license file is in that directory).
 
+specs/Ghidra/Processors/WE32100 vendors the AT&T WE32100 SLEIGH specification of
+aleph-void/ghidra-we32100 (https://github.com/aleph-void/ghidra-we32100), a fork of fletto2/ghidra-we32100, released under the
+MIT License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

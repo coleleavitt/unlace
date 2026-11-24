@@ -1,0 +1,19 @@
+# WE 32100 Microprocessor SLEIGH specification
+#
+# References:
+#   - WE 32100 Microprocessor Information Manual, AT&T (Jan 1985)
+#   - SIMH 3B2 emulator (open-simh/simh, 3b2_cpu.c/h) by Seth Morabito
+#   - MAME WE32100 disassembler (we32100d.cpp) by AJR
+#
+# Architecture notes:
+#   - 32-bit big-endian CISC processor
+#   - Data memory accesses are big-endian and word-aligned
+#   - Instruction operand descriptors encode multi-byte immediates and
+#     displacements in LITTLE-ENDIAN byte order within the instruction stream
+#   - Variable-length instructions (1 to ~20 bytes)
+#   - Stack grows UPWARD (push: store at SP, then SP += size)
+#   - 16 registers: R0-R8 general, R9=FP, R10=AP, R11=PSW, R12=SP,
+#     R13=PCBP, R14=ISP, R15=PC
+
+define endian=big;
+@include "WE32100.sinc"

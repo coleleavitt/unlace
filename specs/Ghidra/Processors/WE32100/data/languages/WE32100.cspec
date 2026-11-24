@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- AT&T 3B2 System V C calling convention (as used by the AT&T and GNU compilers): arguments are pushed
+     on the stack (which grows up), CALL pushes the return PC and the caller's AP, makes AP point at the
+     first argument and RET restores SP from AP, so the callee pops the arguments.  The result is returned
+     in %r0 (%r1 holds the high word of 64-bit results).  SAVE/RESTORE preserve %r3-%r8 and %fp. -->
+<compiler_spec>
+  <data_organization>
+    <absolute_max_alignment value="0"/>
+    <machine_alignment value="4"/>
+    <default_alignment value="1"/>
+    <default_pointer_alignment value="4"/>
+    <pointer_size value="4"/>
+    <wchar_size value="4"/>
+    <short_size value="2"/>
+    <integer_size value="4"/>
+    <long_size value="4"/>
+    <long_long_size value="8"/>
+    <float_size value="4"/>
+    <double_size value="8"/>
+    <long_double_size value="8"/>
+    <size_alignment_map>
+      <entry size="1" alignment="1"/>
+      <entry size="2" alignment="2"/>
+      <entry size="4" alignment="4"/>
+      <entry size="8" alignment="4"/>
+    </size_alignment_map>
+  </data_organization>
+
+  <global>
+    <range space="ram"/>
+  </global>
+
+  <stackpointer register="sp" space="ram" growth="positive"/>
+
+  <returnaddress>
+    <varnode space="stack" offset="0xfffffff8" size="4"/>
+  </returnaddress>
+
+  <default_proto>
+    <prototype name="__cdecl" extrapop="unknown" stackshift="8">
+      <input>
+        <pentry minsize="1" maxsize="500" align="4">
+          <addr offset="0" space="stack"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="4">
+          <register name="r0"/>
+        </pentry>
+        <pentry minsize="5" maxsize="8">
+          <addr space="join" piece1="r0" piece2="r1"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="sp"/>
+        <register name="fp"/>
+        <register name="pcbp"/>
+        <register name="isp"/>
+        <register name="r3"/>
+        <register name="r4"/>
+        <register name="r5"/>
+        <register name="r6"/>
+        <register name="r7"/>
+        <register name="r8"/>
+      </unaffected>
+    </prototype>
+  </default_proto>
+</compiler_spec>

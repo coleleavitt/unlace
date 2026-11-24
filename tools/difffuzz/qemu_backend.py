@@ -560,6 +560,78 @@ class Sh4Harness:
         return regs, struct.unpack_from("<I", out, 92)[0] & 1
 
 
+# ---------------------------------------------------------------- Motorola 68040 (big endian, ELF32)
+
+class M68kHarness:
+    """D0..D7 at 4*i, A0..A7 at 32 + 4*i, CCR word in at 64 and out at 68, marker at 72. Data
+    registers load first (MOVE.L sets flags), then the address registers with MOVEA, then CCR,
+    then the table register; JMP (absolute) reaches the instruction."""
+    qemu = ("qemu-m68k", ["-cpu", "m68040"])
+    machine = 4
+    big = True
+    elf32 = True
+    table_size = 80
+    marker_at = 72
+
+    def __init__(self):
+        self.s = 6
+        self.scratch_names = ["A6"]
+
+    def choose_scratch(self, arch, regs, written):
+        names = [f"A{i}" for i in (6, 5, 4, 3, 2, 1, 0)]
+        for n in names:
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.s = int(n[1:])
+                self.scratch_names = [n]
+                return True
+        return False
+
+    @staticmethod
+    def l32(v):
+        return [(v >> 16) & 0xFFFF, v & 0xFFFF]
+
+    def prologue(self, target):
+        s = self.s
+        c = [0x207C | s << 9] + self.l32(TABLES)                                     # movea.l #TABLES,As
+        for i in range(8):
+            c += [0x2028 | i << 9 | s, 4 * i]                                       # move.l (4i,As),Di
+        for i in range(8):
+            if i != s:
+                c += [0x2068 | i << 9 | s, 32 + 4 * i]                              # movea.l (32+4i,As),Ai
+        c += [0x44E8 | s, 64]                                                        # move.w (64,As),ccr
+        c += [0x2068 | s << 9 | s, 32 + 4 * s]                                      # movea.l (..,As),As
+        c += [0x4EF9] + self.l32(target)                                             # jmp target
+        return halfwords(c, big=True)
+
+    def epilogue(self, dumps, marker):
+        s = self.s
+        c = [0x207C | s << 9] + self.l32(OUT)                                        # movea.l #OUT,As
+        c += [0x42E8 | s, 68]                                                        # move.w ccr,(68,As)
+        for i in range(8):
+            c += [0x2140 | s << 9 | i, 4 * i]                                       # move.l Di,(4i,As)
+        for i in range(8):
+            if i != s:
+                c += [0x2148 | s << 9 | i, 32 + 4 * i]                              # move.l Ai,(32+4i,As)
+        c += [0x217C | s << 9] + self.l32(marker) + [self.marker_at + 4]            # move.l #marker,(76,As)
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [0x203C] + self.l32(4) + [0x223C] + self.l32(1) + [0x243C] + self.l32(base) + [0x263C] + self.l32(size) + [0x4E40]
+        c += [0x203C] + self.l32(1) + [0x223C] + self.l32(0) + [0x4E40]             # exit(0)
+        return halfwords(c, big=True)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i in range(8):
+            struct.pack_into(">I", t, 4 * i, init.get(f"D{i}", 0) & 0xFFFFFFFF)
+        for i in range(8):
+            struct.pack_into(">I", t, 32 + 4 * i, init.get("SP" if i == 7 else f"A{i}", 0) & 0xFFFFFFFF)
+        struct.pack_into(">H", t, 64, flagword & 0x1F)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {f"D{i}": struct.unpack_from(">I", out, 4 * i)[0] for i in range(8)}
+        for i in range(8):
+            regs["SP" if i == 7 else f"A{i}"] = struct.unpack_from(">I", out, 32 + 4 * i)[0]
+        return regs, struct.unpack_from(">H", out, 68)[0] & 0x1F
 # ---------------------------------------------------------------- s390x
 
 def sz_llilf(r, v):
@@ -651,7 +723,7 @@ HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness}
+             "s390x": S390xHarness, "m68k": M68kHarness}
 
 
 def qemu_path(name):

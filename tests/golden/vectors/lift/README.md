@@ -39,6 +39,12 @@ unique-space offsets. The refreshed lines are the Rust runtime's output over
 specs compiled by `slacomp`, which reproduces the pinned C++ compiler's
 previous AArch64 digest on the previous sources.
 
+`readvolatile.txt` was refreshed for the 68000 lift corrections found by the
+difffuzz QEMU run (flags, shifts, MOVEM, bit fields). Its MOVE/CLR/RTE
+instructions and their operations are unchanged; only unique-space offsets
+moved. The new lines are the Rust runtime's output over `slacomp` specs, and the
+same capture over the previous sources reproduces the old fixture exactly.
+
 ## Regeneration
 
 ```bash

@@ -1862,8 +1862,11 @@ at the match (01 §1.4).
   itself is not recorded as stack-moving. Every reachable return
   has to agree. An indirect jump, an undecodable instruction, a call target
   that is an import's address-table slot, or a walk past its
-  2048-instruction budget states nothing. `int3` falls through and `ud2` ends
-  its path. Walks are cached on the architecture: one whose nested calls fit
+  2048-instruction budget states nothing. `int3` and `int1` end their path,
+  as their p-code does (`return [0:1]`): the walk never runs from the `int3`
+  padding after a call that does not return (MSVC's
+  `call _CxxThrowException; int3`) into the next function. `int imm8` falls
+  through, and `ud2` ends its path. Walks are cached on the architecture: one whose nested calls fit
   within the depth it was asked for is the answer at every greater depth, and
   one the depth limit cut short is kept per depth, so the answer never depends
   on which function asked first. The walks are dropped when an option they

@@ -24,6 +24,7 @@ pub mod address;
 pub mod cfmt;
 pub mod compression;
 pub mod crc32;
+pub mod env;
 pub mod error;
 pub mod filemanage;
 pub mod marshal;

@@ -71,6 +71,7 @@ pub mod memberbase;
 pub mod msvcthrow;
 pub mod namedglobals;
 pub mod narrowselector; // (unlace) a switch on a narrow expression casts it to its own width
+pub mod nonnullparamhint;
 pub mod oslog;
 pub mod paramrefdecl;
 pub mod partialaccess;

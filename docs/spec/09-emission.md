@@ -3399,6 +3399,10 @@ render as `/* ... */` lines above the prototype, user and warning types inside
 the body at the 20-column comment indent; a comment is marked emitted after
 printing so overlapping windows never repeat it.
 
+### Non-null parameter comments (`nonnullparam`)
+
+With `option nonnullparam on` the printer adds a `/* non-null: <p> is dereferenced before any branch */` comment above the first statement that dereferences a parameter in the entry block, before any conditional branch or indirect jump. The scan walks the function's live operations in address order, follows `COPY` chains from a parameter, and matches the parameter to the prototype input whose storage the varnode is (so a callee-saved register read on entry is skipped). It reports each parameter once. The comment is added to the print-time comment database only: it attaches to the statement that carries the operation and changes no printed code. The option is off by default, because the inference assumes the dereference traps on NULL. Implementation: `crates/unlace-emit/src/p9_emit/nonnullparamhint.rs`, hooked from `PrintC::setup_comments`.
+
 ## 9.5 Pointer & array notation
 
 **(unlace) arraynotation** — the second GH-558 decision (its registry row

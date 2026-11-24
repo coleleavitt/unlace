@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 
-from . import cfg
+from . import cfg, textmetrics
 from ..decbench import structscore as ss
 
 # name -> (higher_is_better, description). None: informational, no direction.
@@ -48,6 +48,12 @@ METRICS: dict[str, tuple[bool | None, str]] = {
     "lines": (None, "lines of C"),
     "recompiles": (True, "the function's definition has no compiler error in decompile-project's .c (--project)"),
     "global_type_trex": (True, "TRex score of a recovered global's type (--project; binary row)"),
+    "txt_flag_vars": (False, "variables carrying a condition flag in the printed C (flag-register comment, flag idiom or NZCV pack)"),
+    "txt_empty_blocks": (False, "`{}` bodies in the printed C"),
+    "txt_dead_stores": (False, "assignments to locals or parameters that are never read in the function (text)"),
+    "txt_leaked_temps": (False, "declarations the printer marks `// temp`"),
+    "txt_register_carriers": (False, "declarations tied to a machine register (`// rax`, `// reg?`)"),
+    "txt_raw_stack_accesses": (False, "`*(T *)(...)` dereferences addressed off the stack or frame pointer"),
     "null_deref_sites": (False, "`*(T *)(0LL)` literals in the C (text shape, no ground truth)"),
     "impossible_lvalue_sites": (False, "loads or stores whose address is a literal under 0x1000 in the C"),
     "lost_frame_offset_sites": (False, "stack-frame-relative addresses (rsp/rbp/sp/fp/bp +/-) left in the C as pointer arithmetic"),
@@ -241,6 +247,8 @@ def source_free(rec: dict) -> dict:
         out["leaked_temp_decls"] = float(leaked_temp_decls(code))
         out["stale_return_result"] = float(stale_return_results(code))
         out["lines"] = float(code.count("\n") + 1)
+        for name, value in textmetrics.measure(code).items():
+            out[f"txt_{name}"] = float(value)
         out["undefined_vars"] = float(sum(
             1 for v in rec.get("variables") or []
             if ss.parse_type(v.get("type") or "")["kind"] == "uncommitted"))

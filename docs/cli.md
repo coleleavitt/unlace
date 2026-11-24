@@ -1723,7 +1723,10 @@ arguments its header states:
 | PC BIOS / flash image | the last 16 bytes are a far jump to segment F000+, a near jump or a backward short jump (after `nop`/`wbinvd`) | `x86:LE:16:Real Mode` | the last 128 KiB below 1 MiB, entry F000:FFF0, `CS` tracked per 64 KiB segment; with `--target x86:LE:32:...` the whole flash ending at 4 GiB |
 
 A flat image whose processor the container does not state is probed for a
-Cortex-M vector table like a raw dump.
+Cortex-M vector table like a raw dump. With an `avr8:` `--target` and no
+`--entry`/`--addr`, a flat or raw image's AVR vector table (`jmp` or `rjmp` per vector from
+word 0, `unlace_analysis::loader::firmware::avrvectors`) gives the entries: the reset and
+interrupt handlers.
 
 **`--svd FILE`** imports a CMSIS-SVD device description
 (`unlace_analysis::loader::firmware::svd`): each peripheral becomes a structure

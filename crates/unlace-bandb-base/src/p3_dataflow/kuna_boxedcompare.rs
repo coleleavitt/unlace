@@ -2,14 +2,50 @@
 //! value is known to be 1. A NaN-boxed register read compares the upper half of the
 //! register with all ones; after a boxed write (`0xffffffff00000000 | zext(x)`), a boxed
 //! load or a join of such values that test is true, and folding it removes the canonical-NaN
-//! branch the unboxing would otherwise print.
+//! branch the unboxing would otherwise print. Under `fpargboxed` (RISC-V only) the upper half
+//! of an FP argument register on entry counts as all ones too, as the psABI requires a caller
+//! to NaN-box a float argument narrower than FLEN.
 
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{ActionGroupList, Rule};
-use crate::context::{OpId, VarnodeId};
+use crate::context::{OpId, SyscallFamily, VarnodeId};
+use crate::database::TranslateAccess;
 use crate::funcdata::Funcdata;
+
+crate::kuna_flag!(
+    /// (kuna `fpargboxed`) A RISC-V FP argument register on entry holds a NaN-boxed value: its
+    /// upper 32 bits are all ones.
+    FpArgBoxed,
+    "fpargboxed",
+    "NaN-boxed RISC-V FP arguments",
+    unset: false,
+    shipped: true
+);
+
+/// The upper-half ones a RISC-V FP argument register (`fa0`..`fa7`) carries on entry
+/// under `fpargboxed`, for an input varnode.
+fn boxed_argument(data: &Funcdata, vn: VarnodeId) -> u64 {
+    let Some(v) = data.vbank().get(vn) else {
+        return 0;
+    };
+    if !v.is_input() || v.get_size() != 8 {
+        return 0;
+    }
+    let arch = data.get_arch();
+    if arch.syscall_regs_family != Some(SyscallFamily::RiscV)
+        || !arch.kuna_options.get::<FpArgBoxed>().0
+    {
+        return 0;
+    }
+    let name = arch.get_register_name(v.get_space(), v.get_offset(), 8);
+    let argument = name
+        .strip_prefix("fa")
+        .and_then(|n| n.parse::<u32>().ok())
+        .is_some_and(|n| n < 8);
+    if argument { 0xffff_ffff_0000_0000 } else { 0 }
+}
 
 /// Bits of `vn` that are 1 on every path through bit operations, shifts by a constant,
 /// copies and joins; `budget` bounds the definitions visited.
@@ -24,6 +60,9 @@ fn known_ones(data: &Funcdata, vn: VarnodeId, budget: &mut u32) -> u64 {
     let mask = unlace_base::address::calc_mask(size);
     if v.is_constant() {
         return v.get_offset() & mask;
+    }
+    if v.is_input() {
+        return boxed_argument(data, vn) & mask;
     }
     if *budget == 0 {
         return 0;

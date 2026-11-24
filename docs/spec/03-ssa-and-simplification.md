@@ -3060,7 +3060,7 @@ type_match the declared width is what moves: a
 `uint8_t` counter or a byte read from a `uint8_t` field matches `char`, and an
 x86-64 `int` matches `int`; a local the source declares `int` or an enum but
 only ever loads from a byte field narrows too, and the binary cannot tell the
-two apart (`tests/stages/kuna-regnarrow.xml`, `kuna-regnarrow-x86.xml`).
+two apart (`tests/stages/kuna-regnarrow.toml`, `kuna-regnarrow-x86.xml`).
 
 ### (kuna) `regsigned` — a register local at the width its values are sign extended from
 
@@ -3126,7 +3126,7 @@ holds a sign-extended byte in a register is declared `char`, which the binary
 cannot tell apart. The net is small (a few perfect functions on ARM firmware,
 none on x86-64), and a narrowed value that a wider reader takes back gains a
 cast (`(long)(int)v` on AArch64), which is why the option stays off by default
-(`tests/stages/kuna-regsigned.xml`).
+(`tests/stages/kuna-regsigned.toml`).
 
 ## 3.4 Conditional execution
 
@@ -3888,7 +3888,11 @@ NaN-unboxing test of a RISC-V single- or half-precision register read, `SUB84(f 
 of such values. The proof is a bounded walk (64 definitions) that keeps the bits known to be 1
 through constants, `COPY`, `INT_ZEXT`, `INT_OR`, `INT_AND`, shifts by a constant, `PIECE`,
 `SUBPIECE` and `MULTIEQUAL` (every input must agree). An input, any other definition or an
-exhausted budget proves nothing, so a function's own parameters stay unproven. *Rewrite:* the
+exhausted budget proves nothing, except that under option `fpargboxed` (default on,
+RISC-V only) an FP argument register input (`fa0`..`fa7`, 8 bytes) has its upper 32 bits
+known as ones. The psABI passes a float argument narrower than FLEN NaN-boxed. Only those
+upper bits are claimed, so a test of a float's own bits is never folded, and a half-precision
+parameter's 48-bit test stays. *Rewrite:* the
 compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
 unboxing dies. Exact, so always on.
 

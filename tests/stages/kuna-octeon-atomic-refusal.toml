@@ -1,0 +1,34 @@
+# P2 Octeon review: GNU as -64 -march=octeon2 lai $8,($4), followed
+# by jr ra/nop. The old inherited restore changed SP and loaded registers.
+# LA instructions are unavailable on Octeon I and must stop decoding.
+# Original bytes, no vendor input. II/III semantics are tested separately.
+
+[image]
+arch = 'MIPS:BE:64:octeon:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'unsupported_atomic' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '7080409f03e0000800000000'
+
+[script]
+commands = [
+    'lo fu unsupported_atomic',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'Octeon atomic refusal: explicit bad-instruction halt'
+count = 1
+literal = 'halt_baddata()'
+
+[[match]]
+name = 'Octeon atomic refusal: no restore-derived memory reads'
+count = 0
+regex = '\*\(|\*a[0-9]|\*v[0-9]'

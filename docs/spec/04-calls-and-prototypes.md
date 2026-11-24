@@ -2740,7 +2740,7 @@ classified:
   tagged address and is left to the other rules, as is one made of the
   storage address alone. The rule is not applied to other AArch64 languages,
   where a 52-bit address space gives bits 48..51 to the address.
-  `tests/stages/kuna-pacmodifier-arg-a64e.xml` covers both forms of the
+  `tests/stages/kuna-pacmodifier-arg-a64e.toml` covers both forms of the
   modifier and the two controls.
 
   Dropping the entry leaves no hole in `x0..x7`. Only a register entry is
@@ -4986,7 +4986,7 @@ the extrapop unknown: there the callee's purge is read by `kuna_calleepurge.rs`
 `objc_msgSendSuper2_stret` senders are imports with no body to probe; on i386
 they pop the hidden result pointer like any struct-returning function, so a
 call to one (also through an `__imp_` slot) records 8, as IDA special-cases them
-(`kuna_calleeretpurge.rs (stret_purge)`, `tests/stages/kuna-objcstret-x86.xml`).
+(`kuna_calleeretpurge.rs (stret_purge)`, `tests/stages/kuna-objcstret-x86.toml`).
 `option calleeretpurge off` restores the model's extrapop.
 
 ### (kuna) `importvote` — an undeclared import takes what its callers pass
@@ -5932,7 +5932,7 @@ needs no such rule: the repair keeps the low half whenever the high one is not
 real anyway.
 
 `tests/stages/gh6990-returnpair.xml` keeps the SPARC function returning one
-register, and `tests/stages/kuna-ownreturn.xml` pins the ARM shapes, the `svc`
+register, and `tests/stages/kuna-ownreturn.toml` pins the ARM shapes, the `svc`
 control and a hand-written `__ashrdi3` shape; `unlace-cli/tests/own_register_returns.rs`
 compiles the ARM, Thumb and RISC-V 32 output back and runs it against the
 source. The same functions on a big-endian target keep both halves, in the
@@ -7983,11 +7983,11 @@ functions, most of them by inventing arguments. Each call site gets a
   what refuses the slot. A constant stack slot after an active register is
   unaffected (bzip2's `BZ2_bzWriteClose64(a,b,c,d,NULL,e,NULL)`).
 
-`tests/stages/kuna-passthrough-fwdchain-arm.xml` pins both ARM shapes and the
-`i9` case of `tests/stages/kuna-passthrough-fwdchain.xml` the IPA shape, each
-printing the empty call in both passes. `tests/stages/kuna-passthrough-anchor-arm.xml`
+`tests/stages/kuna-passthrough-fwdchain-arm.toml` pins both ARM shapes and the
+`i9` case of `tests/stages/kuna-passthrough-fwdchain.toml` the IPA shape, each
+printing the empty call in both passes. `tests/stages/kuna-passthrough-anchor-arm.toml`
 pins the canary wipe, the restored alignment slot and the floats kept across
-the call, and `tests/stages/kuna-passthrough-anchor-x86.xml` the frame locals.
+the call, and `tests/stages/kuna-passthrough-anchor-x86.toml` the frame locals.
 
 One trial is scored inactive before any of this, with the option on or off: the
 register an indirect call jumps through (`kuna_passthrough::is_call_target`:
@@ -8004,9 +8004,9 @@ hid the first. Inactive, it never anchors a hole fill and is dropped from the
 end of a list, but is still filled below a later argument, where the ABI's
 order makes it an argument: `fp(fp,x+1)` is `inc %rsi; jmp *%rdi`, and
 definitely-not-used would make `forceNoUse` drop the `x+1` with it
-(`tests/stages/kuna-passthrough-calltarget.xml`). An AArch64 `br`/`blr` reads
+(`tests/stages/kuna-passthrough-calltarget.toml`). An AArch64 `br`/`blr` reads
 its target through a copy into `pc`, so the rule does not arise there.
-`tests/stages/kuna-passthrough-fwdchain.xml` pins the four-argument tail jump
+`tests/stages/kuna-passthrough-fwdchain.toml` pins the four-argument tail jump
 and the `blr` form beside it, with the option off reproducing the empty call,
 and the three-argument control and the trailing-register control that move in
 neither pass.
@@ -8017,7 +8017,7 @@ import, `--option protoorder off`, and under `--option protoorder types` a
 callee in a recursive component, leave every call as the option-off run renders
 it. Under the default
 `cycles` a recursive callee states its list like any other, and this rule reads
-it on the same terms. `tests/stages/kuna-passthrough.xml` is the negative
+it on the same terms. `tests/stages/kuna-passthrough.toml` is the negative
 control for that clause (the console states no prototype); the positive witness
 is `crates/unlace-analysis/tests/fixtures/passthrough_x86_64` under
 `tests/cli/passthrough-gives-a-forwarding-function-its-parameter.json`, with a

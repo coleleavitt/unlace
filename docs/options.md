@@ -41,6 +41,9 @@ Three tiers:
 | v = x + 3; if (0 <= x) v = x; return v >> 2; where the source divides by 4 | [`pow2select`](#pow2select----on--off-default-on) |
 | a signed remainder by a power of two prints as a select between x & m and -(-x & m) | [`pow2select`](#pow2select----on--off-default-on) |
 | (x + ((unsigned)(x >> 31) >> 30)) >> 2 instead of x / 4 | [`pow2select`](#pow2select----on--off-default-on) |
+| v = NAN; if ((int)(x >> 0x20) == -1) v = x; around a float parameter on RISC-V | [`fpargboxed`](#fpargboxed----on--off-default-on) |
+| a RISC-V float function starts with one NAN test per float argument | [`fpargboxed`](#fpargboxed----on--off-default-on) |
+| an unused int variable named after fa0 or fa1 beside a float parameter | [`fpargboxed`](#fpargboxed----on--off-default-on) |
 | a < b or a == b printed as two tests where a <= b would do | [`cmpmerge`](#cmpmerge----on--off-default-off) |
 | a0 != a1 && !(a0 < a1) on floats | [`cmpmerge`](#cmpmerge----on--off-default-off) |
 | two branches in a row test the same value against neighbouring constants and jump to one place | [`cmpmerge`](#cmpmerge----on--off-default-off) |
@@ -628,8 +631,8 @@ Three tiers:
 | if (c) { return 1; } else { return 0; } where the source returns the comparison | [`boolreturn`](#boolreturn----on--off-default-off) |
 | a predicate function prints as an if/else of two constant returns | [`boolreturn`](#boolreturn----on--off-default-off) |
 | if (c) return 0; ... return 1; where the source has return a && b; | [`boolreturn`](#boolreturn----on--off-default-off) |
-| if (c) { ...long body... } else { abort(); } with the error path last | [`noretfirst`](#noretfirst----on--off-default-off) |
-| the main path of a function is nested in an if whose else only exits | [`noretfirst`](#noretfirst----on--off-default-off) |
+| if (c) { ...long body... } else { abort(); } with the error path last | [`noretfirst`](#noretfirst----on--off-default-on) |
+| the main path of a function is nested in an if whose else only exits | [`noretfirst`](#noretfirst----on--off-default-on) |
 | if (a) { if (b) { ... } } where the source wrote one if (a && b) | [`nestedand`](#nestedand----on--off-default-on) |
 | a chain of tests on one pointer prints as nested ifs with no else | [`nestedand`](#nestedand----on--off-default-on) |
 | if (c) { return a; } else { return b; } where the source returned c ? a : b | [`retternary`](#retternary----on--off-default-off) |
@@ -1419,6 +1422,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default: 0/675 datatest assertions move; four stage assertions that pinned the select (`kuna-storealias` #1/#2/#4, `kuna-globalvalue` #17, whose fixtures return `gi / 16`) now read the division. Flip off to see the select or shift the compiler emitted. Measured over 4,072 functions in ten x86-64 binaries (gcc/clang -O2 and gcc -O0 Lua 5.4.8 and bzip2 1.0.8, -O2 zlib, libexpat, libyaml): 15 functions change, ` / ` 142 -> 166, `if` statements 22,188 -> 22,163, lines 184,891 -> 184,802, e.g. bzip2 sendMTFValues `nBytes / 8` and fallbackSort `nblock / 32`. Near misses (a test other than the sign, a bias other than 2^k - 1, `-(-x & 7)` chosen only below -4) keep their select.
 - **Where / provenance:** P3/simplification-quiescence · kuna · transform · kuna-pow2select
 - **Example:** `option pow2select off`
+
+### `fpargboxed` -- on | off, default `on`
+
+- **Symptoms:** v = NAN; if ((int)(x >> 0x20) == -1) v = x; around a float parameter on RISC-V; a RISC-V float function starts with one NAN test per float argument; an unused int variable named after fa0 or fa1 beside a float parameter.
+- **What it does:** On RISC-V, take the upper 32 bits of an FP argument register (`fa0`..`fa7`) on entry as all ones: a NaN-boxed value. The RISC-V psABI's hardware floating-point calling convention passes a floating-point argument narrower than FLEN NaN-boxed, and every F/D/Zfh instruction that writes a single or half writes it boxed. A single- or half-precision read of an f register NaN-unboxes it: when the upper bits are not all ones the instruction reads the canonical NaN, so an exact lift (`riscv.zfa.sinc`, and `riscv.fd.sinc` with `--unbox exact`) prints `v = NAN; if ((int)(x >> 0x20) == -1) v = x;` around each read. `RuleBoxedCompare` (oppool1, `kuna_boxedcompare.rs`) folds that test whenever its known-ones walk proves the upper half all ones (a boxed write, a boxed load, a constant, a join of them); with this option the walk also counts an FP argument register input as boxed, so a function's own float parameters lose the test too. Only the 32 upper bits are claimed, so a test of a float's own bits (its exponent, a sign) is never folded; a half-precision parameter's 48-bit test is left alone. Inert on every other processor.
+- **When to flip:** On by default: the psABI guarantees it and compiled code never passes an unboxed float, so it only removes NaN-unboxing tests no ABI-conforming caller can fail. Flip off for hand-written assembly or a caller that may pass a raw bit pattern in an f register, to see every unboxing test of a parameter.
+- **Where / provenance:** P3/simplification-quiescence · kuna · presentation-default · unlace-fpargboxed
+- **Example:** `option fpargboxed off`
 
 ### `cmpmerge` -- on | off, default `off`
 
@@ -2740,11 +2751,11 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-boolreturn
 - **Example:** `option boolreturn on`
 
-### `noretfirst` -- on | off, default `off`
+### `noretfirst` -- on | off, default `on`
 
 - **Symptoms:** if (c) { ...long body... } else { abort(); } with the error path last; the main path of a function is nested in an if whose else only exits.
 - **What it does:** Print a guard clause that ends in a no-return call first, with the code that continues after it. In P8, when ruleBlockIfNoExit finds both arms of a two-way block terminal (a tie: each arm has in-degree 1 and no way out) and exactly one of them ends in a call to a function that does not return, that arm becomes the if body and the other arm (usually the function's own return) stays flat after the if: `if (p == NULL) { fprintf(...); abort(); } return p;` rather than `if (p != NULL) { return p; } fprintf(...); abort();`. Any other tie keeps the out-index order (or the layout order of `guardarm`). Then, C output only: when exactly one arm of an if/else never falls through (its structured block has no way out: it returns or calls a function that does not return), print that arm as the if's only body and the other arm after the if, so the code that continues is not nested in an else. When the arm that never falls through is the else, the condition prints negated, the way any flipped branch prints (`if (x < 5)` rather than `if (!(x >= 5))`). Only for an if that is a statement of a list (not part of a loop or if condition, not the else of another if), whose condition is a single leaf, and that does not print as a switch or an exception try. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function.
-- **When to flip:** Turn on to read guard clauses as the source likely wrote them: `if (p == NULL) { abort(); } use(p);` instead of `if (p != NULL) { use(p); } else { abort(); }`. Leave off for Ghidra's own arm order; both orders are the same object code.
+- **When to flip:** On by default. MEASURED on DecBench O2-noinline (257 binaries, 33,396 functions, mode auto): mean GED 10.673 -> 10.588, GED0 39.21% -> 40.51%, 739 functions better / 119 worse, 445 moved to GED 0 and 12 off it; the worse ones are mostly sources that write the returning arm first (`if (!x) return; ...; exit(1);`) or an if/else around the fatal call. Turn off for Ghidra's own arm order; both orders are the same object code.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-noretfirst
 - **Example:** `option noretfirst on`
 

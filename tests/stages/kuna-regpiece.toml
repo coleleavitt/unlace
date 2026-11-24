@@ -1,0 +1,54 @@
+# A value living only in a register piece no register name covers.
+#     sh_openpipe (gcc -O2):  mov rcx,rdi; call xpipe; test eax,eax
+#                             js done; ... done: ret
+# xpipe returns an int, so the call writes only eax, and the early return
+# hands back all of rax: the C reads the register's upper half, storage
+# register 0x4 (the upper half of rax), which no register name covers.
+# Naming routed such a high to the global `dat_<addr>` arm because the
+# register space is a processor space like ram, and the function printed
+# `return CONCAT44(dat_4,v1);` with nothing declaring `dat_4`.  A register
+# piece is now a local, declared with its storage.
+#
+# Stage: P6 variable naming (ActionNameVars).  A strict fix with no
+# option: #1 is the declared local, #2 the old global-looking name.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+readonly = true
+hex = '''
+8b05fa2f000089078b05f22f00008947048b05e92f0000c30f1f8400000000008b05da2f00
+0001f8c30f1f80000000004889f9e8c8ffffff85c078208b3fba40000000be01000000e8d3
+ffffff8b79048901e8c9ffffff89410431c0c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x404000'
+hex = '0000000000000000'
+
+[script]
+commands = [
+    'map function r0x401000 xpipe',
+    'map function r0x401020 mtf',
+    'parse line extern int4 xpipe(int4 *p);',
+    'parse line extern int4 mtf(int4 fd,int4 a,int4 b);',
+    'map function r0x401030 sh_openpipe',
+    'lo fu sh_openpipe',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'REGPIECE #1: the upper half of rax is a declared local'
+count = 1
+regex = '^  unsigned int v\d+; // register 0x4$'
+
+[[match]]
+name = 'REGPIECE #2: no global-looking register piece'
+count = 0
+literal = 'dat_4'

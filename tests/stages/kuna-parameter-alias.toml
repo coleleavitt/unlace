@@ -1,0 +1,60 @@
+# P0 prototype/symbol replay, P5 type seeding and P9 naming/declarations.
+# An authored MSABI function compares its incoming EDX parameter with 7 and 11,
+# then reuses EDX for the values 42 and 41 passed to sink. A usepoint-scoped
+# type/name assertion on the later definition must not replace the input.
+# Before the fix the assertion is accepted, but the comparisons read an
+# uninitialized v1 while the signature still declares property. No option is
+# needed for this correctness fix. The second rebuild checks persistence.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'probe' },
+    { space = 'ram', offset = '0x10002b', name = 'sink' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '''
+4883ec2883fa07740c83fa0b7516ba29000000eb05ba2a000000e80c000000
+4883c428c331c04883c428c389d0c3
+'''
+
+[script]
+commands = [
+    'parse line extern int4 MSABI probe(void *popup,int4 property);',
+    'parse line extern int4 MSABI sink(void *popup,int4 cleared);',
+    'lo fu probe',
+    'type varnode %EDX(0x10000e) int4 cleared_property',
+    'decompile',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'PARAMETER-ALIAS #1: the input stays in the signature'
+count = 1
+regex = '^int4 probe\(void \*popup,int4 property\)$'
+
+[[match]]
+name = 'PARAMETER-ALIAS #2: entry comparisons read the input'
+count = 2
+regex = 'if \(property != (7|0xb)\)'
+
+[[match]]
+name = 'PARAMETER-ALIAS #3: the later local retains both assigned values'
+count = 2
+regex = 'cleared_property = (0x29|0x2a);'
+
+[[match]]
+name = 'PARAMETER-ALIAS #4: the call reads the later local'
+count = 1
+literal = 'return sink(popup,cleared_property);'
+
+[[match]]
+name = 'PARAMETER-ALIAS #5: no detached entry local appears'
+count = 0
+regex = 'int4 (v[0-9]+|property_[0-9]+);'

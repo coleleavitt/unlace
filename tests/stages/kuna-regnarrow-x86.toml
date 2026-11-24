@@ -1,0 +1,48 @@
+# regnarrow on x86-64: an unsigned counter zero-extended in a 64-bit register.
+#     sum_bytes: xor eax,eax; xor edx,edx
+#            1:  movzx ecx,byte [rdi+rax]; add edx,ecx; add eax,1
+#                cmp eax,esi; jb 1b; mov eax,edx; ret
+# `add eax,1` writes the whole of rax as the zero extension of a 32-bit sum,
+# and the index reads all 64 bits, so the counter's web is rax and prints as
+# `unsigned long`.  Every value of it fits the low 4 bytes and can set bit
+# 31: it is an `unsigned int`, and the index reads its zero extension.
+#
+# Stage: P3 simplification quiescence.  P0 assertion: option regnarrow
+# on|off.  Pass 1 (default on) proves the fix (#1, #2); pass 2 (off) the
+# register-wide counter (#3).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+readonly = true
+hex = '31c031d20fb60c0701ca83c00139f072f389d0c3'
+
+[script]
+commands = [
+    'map function r0x401000 sum_bytes',
+    'lo fu sum_bytes',
+    'decompile',
+    'print C',
+    'option regnarrow off',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'REGNARROW-X86 #1: default counts in 32 bits'
+count = 1
+regex = '^    v1 \+= 1;$'
+
+[[match]]
+name = 'REGNARROW-X86 #2: default indexes with the 32-bit counter'
+count = 1
+literal = 'a0[v1]'
+
+[[match]]
+name = 'REGNARROW-X86 #3: off keeps the 64-bit register'
+count = 1
+literal = 'uint8 v2; // rax'

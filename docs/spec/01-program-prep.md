@@ -2172,8 +2172,8 @@ body (issue #1288); the note sends a PKLITE file to `unlace unpack`. Surfaces th
 need an `object::File` refuse an `MZ` input with a capability error, as they do
 a TE.
 
-(unlace) **PS-X EXE, N64 ROM, a.out, Amiga hunk, PEF and NE executables and
-OMF objects and libraries load from their own headers.** These containers hold code for processors unlace
+(unlace) **PS-X EXE, N64 ROM, a.out, Amiga hunk, PEF and NE executables,
+OMF objects and libraries, and Android boot images load from their own headers.** These containers hold code for processors unlace
 decodes, but the `object` crate reads none of them, so each was refused as an
 unknown format and had to be mapped by hand as a headerless image, which for
 the three relocatable ones is also wrong: a flat mapping leaves every
@@ -2252,6 +2252,15 @@ relocation program) is skipped and reported on stderr rather than guessed.
   of the first hunk, which must be code. An overlay tree ends the load with a
   note; a library or object unit (`HUNK_UNIT`) is not claimed. The language is
   `68000:BE:32:default`.
+- **Android boot image** (`androidboot.rs`): the `ANDROID!` magic, AOSP header
+  versions 0 to 2. The kernel is the module, based at `kernel_addr` and entered
+  at its first byte; its size is bounded by the module limit and it must fit the
+  32-bit address space. The language comes from the kernel's own header: an
+  arm64 `Image` (`ARM\x64` at 0x38) is `AARCH64:LE:64:v8A`, an ARM `zImage`
+  (0x016f2818 at 0x24) is `ARM:LE:32:v7`, and any other kernel is refused. The
+  ramdisk and second-stage loader are not mapped; each is named in a note. The
+  command line is not surfaced. A page size that is not a power of two, or a
+  kernel or ramdisk that runs past the file, is refused.
 - **PEF** (`pef.rs`): the tag `Joy!peff` with architecture `pwpc`; a CFM-68K
   fragment is refused. Each instantiated section (code, data,
   pattern-initialized data, constant) is placed in header order from
@@ -7909,7 +7918,11 @@ every other binary's pass list is byte-identical to before the pass existed):
   image's mapped bytes (16 MiB at least), charged per record and per string
   byte; a string read stops scanning where the budget left runs out, so a
   crafted section of one unterminated run costs no more than the budget
-  (`crates/unlace-analysis/src/analyzers/objc/sections.rs (read_cstr)`).
+  (`crates/unlace-analysis/src/analyzers/objc/sections.rs (read_cstr)`). A selector
+  spelled as a Swift-mangled name (`$s` or `_$s` prefix) is shown in the demangler's
+  name-only form (`main.hello()`), the form Swift class names take; a name outside
+  the demangler's coverage stays raw
+  (`crates/unlace-analysis/src/analyzers/objc/methods.rs (display_selector)`).
 
   Code never touches a selector string or a `class_t` directly, so naming those
   alone leaves every send unreadable: `objc_msgSend(obj, sel)` loads `sel` from a
@@ -9869,8 +9882,15 @@ both
   variable. On x86 the bytes a linker may rewrite when it relaxes the relocation
   are variable too: the opcode and ModRM in front of a `GOTPCRELX`, `GOT32X` or
   initial-exec TLS field, and the whole general-dynamic and local-dynamic TLS call
-  sequences. A relocation against a global name is recorded as a reference at the
-  field's offset. Functions with only a local symbol, names a compiler or
+  sequences. On x86-64 and i386 a `call`, `jmp` or `jcc` with a 32-bit displacement
+  whose target lies outside the function is variable too (one linker step that lays out
+  all the text leaves such a displacement with no relocation, and it changes with the
+  layout); the decoder is a length table for the compiler's encodings in
+  `crates/unlace-analysis/src/analyzers/flirt/flirtbranch.rs` and stops at the first
+  encoding it does not know (VEX and EVEX forms, for example), leaving the branches after
+  it fixed. A global name at such a branch's target, when one starts there, is recorded as
+  a reference at the displacement's offset, as a relocation against a global name is
+  recorded at the field's offset. Functions with only a local symbol, names a compiler or
   assembler made up (`.L` labels, mapping symbols, `.cold`/`.part.N`/`.isra.N`/`.constprop.N`
   clones, PC thunks, static-initialization stubs) and functions with fewer than
   four fixed bytes in their first 32 yield no pattern. A `.pat` line is the first
@@ -9895,6 +9915,16 @@ both
   under two names. The `.pat` is written unchanged, but `flirt make` lists each
   group of functions that share a pattern and CRC under different names as a
   `collision in` line on stderr before the `.sig` is built.
+- **FLIRT and type-library inspector** (`unlace flirt inspect`, read-only; no
+  option, no decompile reaches it;
+  `crates/unlace-analysis/src/analyzers/flirt/inspect.rs (summarize_sig)`,
+  `crates/unlace-analysis/src/analyzers/protos/til.rs` (`Til::parse`)): reads one IDA
+  `.sig` (magic `IDASGN`) or `.til` file and reports its header (for a
+  signature: library name, version, processor, file formats, flags, pattern
+  length, module count; for a type library: title, compiler, `int`/`bool`/
+  `enum`/`long double` sizes, pointer size, symbol and type counts) and the
+  first `--limit` names (default 20, `0` for all). It matches and writes
+  nothing. Any other file is refused with exit 1.
 - **Format strings** (`formatstring off|static|full`, default `static`;
   `crates/unlace-analysis/src/analyzers/formatstring/mod.rs`): what a
   `printf`/`scanf`-family call does with its variadic arguments is stated by its

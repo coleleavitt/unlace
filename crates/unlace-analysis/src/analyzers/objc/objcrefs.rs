@@ -211,7 +211,11 @@ pub(super) fn emit(
         let Some(sel_va) = img.rebase_ptr(va) else {
             continue;
         };
-        let Some(sel) = img.read_cstr(sel_va).filter(|s| !s.is_empty()) else {
+        let Some(sel) = img
+            .read_cstr(sel_va)
+            .filter(|s| !s.is_empty())
+            .map(super::methods::display_selector)
+        else {
             continue;
         };
         selectors.name(out, sel_va, &sel);
@@ -280,7 +284,11 @@ pub(super) fn emit(
                 let Some(sel_va) = img.rebase_ptr(selref_va) else {
                     continue;
                 };
-                let Some(sel) = img.read_cstr(sel_va).filter(|s| !s.is_empty()) else {
+                let Some(sel) = img
+                    .read_cstr(sel_va)
+                    .filter(|s| !s.is_empty())
+                    .map(super::methods::display_selector)
+                else {
                     continue;
                 };
                 selectors.name(out, sel_va, &sel);

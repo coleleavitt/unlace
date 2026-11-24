@@ -270,3 +270,51 @@ fn reporting_does_not_resolve_identical_names_at_two_entries() {
         );
     }
 }
+
+#[test]
+fn branch_out_of_a_function_is_variable_in_its_pattern() {
+    use object::write::{Object, StandardSection, Symbol, SymbolSection};
+    use object::{Architecture, BinaryFormat, Endianness, SymbolFlags, SymbolKind, SymbolScope};
+
+    // `f` calls `g` with a rel32 that depends on where the linker put `g`.
+    let object_with_callee_at = |callee: usize| {
+        let mut text = vec![0xCCu8; 0x80];
+        text[..16].copy_from_slice(&[
+            0x55, 0xE8, 0, 0, 0, 0, 0xC3, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
+        ]);
+        let disp = (callee as i64 - 6) as i32;
+        text[2..6].copy_from_slice(&disp.to_le_bytes());
+        text[callee] = 0xC3;
+        let mut obj = Object::new(BinaryFormat::Elf, Architecture::X86_64, Endianness::Little);
+        let section = obj.section_id(StandardSection::Text);
+        let f = obj.append_section_data(section, &text, 16);
+        for (name, value, size) in [(&b"f"[..], f, 16), (&b"g"[..], callee as u64, 1)] {
+            obj.add_symbol(Symbol {
+                name: name.to_vec(),
+                value,
+                size,
+                kind: SymbolKind::Text,
+                scope: SymbolScope::Linkage,
+                weak: false,
+                section: SymbolSection::Section(section),
+                flags: SymbolFlags::None,
+            });
+        }
+        obj.write().unwrap()
+    };
+    let pattern_of_f = |bytes: &[u8]| {
+        let object = flirtpat::patterns_from_object(bytes).unwrap();
+        object
+            .patterns
+            .into_iter()
+            .find(|p| p.publics.first().map(String::as_str) == Some("f"))
+            .unwrap()
+    };
+
+    let near = pattern_of_f(&object_with_callee_at(0x20)[..]);
+    let far = pattern_of_f(&object_with_callee_at(0x40)[..]);
+    assert_eq!(near.bytes, far.bytes);
+    assert_eq!(&near.bytes[..2], &[Some(0x55), Some(0xE8)]);
+    assert_eq!(&near.bytes[2..6], &[None::<u8>; 4]);
+    assert_eq!(near.refs, vec![(2, "g".to_string())]);
+}

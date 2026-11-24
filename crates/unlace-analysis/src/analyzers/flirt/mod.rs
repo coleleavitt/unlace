@@ -33,8 +33,10 @@
 //! directories).
 
 pub mod autotil;
+mod flirtbranch;
 pub mod flirtpat;
 pub mod flirtsig;
+pub mod inspect;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 

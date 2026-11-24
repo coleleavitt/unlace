@@ -1337,6 +1337,25 @@ switchreturn's incremental effect is precisely the wide tables. Flipped on
 by DIV-25 (incremental ablation on top of earlyreturn: +2 perfect, −107
 summed GED, 3:0 improved:regressed, zero regressions).
 
+### irreduciblesplit — controlled node splitting of irreducible loops (original unlace)
+
+`crates/unlace-structure/src/p8_structure/irreducible_split.rs (ActionIrreducibleSplit)`, option
+`irreduciblesplit` (default off). *Pattern:* a strongly connected region of the block graph with two
+or more entry blocks, such as the two-entry loop `0 -> 1, 0 -> 2, 1 -> 2, 2 -> 1`. No natural loop
+header dominates it, so the structurer prints it with a `goto`. *Detection:* an iterative Tarjan SCC
+over the top-level basic blocks; a region is irreducible when two or more of its blocks have an
+in-edge from outside it (or no in-edge at all). *Transform:* duplicate one entry block `e` for one
+external in-edge with `Funcdata::node_split_through` (the primitive `returndupcalls` drives): the copy
+keeps the entry's single out-edge and takes that external predecessor. The region loses an entry per
+split and becomes a natural loop once one is left. *Bounds/failure:* `e` must have exactly one out-edge
+and at least two in-edges; `node_split_through` refuses a conditional branch, a call, a tied output and
+a value read outside the block except through the successor's MULTIEQUALs, and such an entry is skipped
+for the next candidate. At most `MAX_IRREDUCIBLE_SPLITS` = 16 splits per function, each logged
+`irreduciblesplit:`. *Scope:* original unlace (`origin/master`, `unlace-struct/src/node_split.rs`)
+duplicates every multi-predecessor entry block, including entries with several out-edges; main has no
+primitive for that, so this port takes only the single-out-edge entries and leaves the rest goto-shaped.
+Off by default because the copy grows the code; the effect is not yet measured.
+
 ### loopbreak_recovery — `goto` → `break;` (Ghidra `scopeBreak`, angr-surfaced)
 
 `crates/unlace-structure/src/p8_structure/loopbreak_recovery.rs

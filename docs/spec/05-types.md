@@ -4539,3 +4539,20 @@ negative signed and large positive unsigned, with the side the vote chose. That
 witness is fixed by construction, not searched, and the dump changes no output.
 Searching the candidate widths for a witness, and explaining a choice made by
 another pass, are not yet done.
+
+### Signedness shadow solve (`typeshadow.rs`, measure only)
+
+`typeshadow::shadow` re-derives the signedness vote as a constraint solve. Every
+high carries a set of signedness facts: a signed comparison, division, remainder,
+arithmetic shift, `SEXT`, or carry intrinsic demands signed of the value it reads;
+an unsigned comparison, division, remainder, logical shift, or `ZEXT` demands unsigned.
+`COPY`, `MULTIEQUAL`, and same-width `+ - * & | ^ 2COMP NEGATE` join the highs of their
+operands and result, and each connected class takes the union of its facts. Unnamed
+highs take part in the solve, since they carry facts to the named highs they print into.
+
+The shadow compares each named high's class with `typeround::vote_for` and
+classifies the pair as `Agree`, `VoteVetoed`, `SolverMissed`, `VoteMissed`, or
+`Flip`. It changes no declaration and no output, and takes no option. A flip
+decision waits for a measurement of these counts over the corpus. Pointer-ness is
+not a lattice yet, so a pointer compared unsigned and offset by a signed index reads
+as `Conflict`.

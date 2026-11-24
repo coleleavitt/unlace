@@ -26,7 +26,7 @@ is neutral, one below the space's pointer lower bound is a field offset.
 | `decompiler/crates/kuna-decomp/src/substrate/context.rs` | the `ArchSeam` field the pass reads |
 | `decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs` | registration |
 | `decompiler/crates/kuna-decomp/phases.toml` | the `[[settable]]` row |
-| `tests/stages/kuna-ptrfromuse.xml` | the three-pass end-to-end test (11 assertions: one witness, three controls) |
+| `tests/stages/kuna-ptrfromuse.toml` | the three-pass end-to-end test (11 assertions: one witness, three controls) |
 | `docs/spec/05-types.md` | §5.2 prose, next to `ptrdepthcap` and `codescalar` |
 
 ## Order of work

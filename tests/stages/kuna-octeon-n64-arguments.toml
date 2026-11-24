@@ -1,0 +1,76 @@
+# Octeon review: P4 declared prototype storage. Strict ABI correction,
+# selected by the Octeon language; no heuristic/option. Original GCC 7.3
+# -march=octeon -mabi=64 -msoft-float -O2 bytes from
+# tests/fixtures/octeon-n64-arguments/arguments.c (build recipe alongside).
+# The old spec left get_four's a0_hi and both register floats' low words
+# undefined. The stack float must retain its different, high-byte padding.
+
+[image]
+arch = 'MIPS:BE:64:octeon:default'
+symbols = [
+    { space = 'ram', offset = '0x100020', name = 'get_four' },
+    { space = 'ram', offset = '0x100050', name = 'float_identity' },
+    { space = 'ram', offset = '0x100078', name = 'float_last' },
+    { space = 'ram', offset = '0x100080', name = 'float_stack' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100020'
+readonly = true
+hex = '67bdfff00004103f03e0000867bd0010'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100050'
+readonly = true
+hex = '03e0000800801025'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100078'
+readonly = true
+hex = '03e0000801601025'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100080'
+readonly = true
+hex = '03e000088fa20000'
+
+[script]
+commands = [
+    'parse line struct Four { unsigned int x; };',
+    'parse line extern unsigned int get_four(struct Four value);',
+    'parse line extern float float_identity(float value);',
+    'parse line extern float float_last(unsigned long p0, unsigned long p1, unsigned long p2, unsigned long p3, unsigned long p4, unsigned long p5, unsigned long p6, float value);',
+    'parse line extern float float_stack(unsigned long p0, unsigned long p1, unsigned long p2, unsigned long p3, unsigned long p4, unsigned long p5, unsigned long p6, unsigned long p7, float value);',
+    'lo fu get_four',
+    'decompile',
+    'print C',
+    'lo fu float_identity',
+    'decompile',
+    'print C',
+    'lo fu float_last',
+    'decompile',
+    'print C',
+    'lo fu float_stack',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'Octeon N64 #1 fixed struct field reaches return'
+count = 1
+literal = 'return value.x;'
+
+[[match]]
+name = 'Octeon N64 #2 first, last and stack float reach return'
+count = 3
+literal = 'return value;'
+
+[[match]]
+name = 'Octeon N64 #3 no uninitialized register-half return'
+count = 0
+regex = 'return v[0-9]+;'

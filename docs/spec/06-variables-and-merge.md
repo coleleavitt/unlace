@@ -1157,7 +1157,7 @@ not compile: a function returning the 64-bit `rax` after a call that wrote only
 such a high is a `vN` local declared with its storage (`// register 0x4`). The
 local is read but never assigned, as the binary reads the register's
 undefined upper half. Only register pieces change; real globals keep
-`dat_<addr>` (`tests/stages/kuna-regpiece.xml`).
+`dat_<addr>` (`tests/stages/kuna-regpiece.toml`).
 
 **A default name skips one a caller locked.** The `vN` allocator (and the
 `<prefix>Var<N>` arm under Ghidra names) used to hand out `v<base++>` without

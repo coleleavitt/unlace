@@ -1,0 +1,113 @@
+# kuna `pow2select`: clang selects with csel / csneg on AArch64.  Signed
+# `x / 4` is `v = x + 3; if (0 <= x) v = x; return v >> 2;` and `x % 8` is
+# `v = x & 7; if (0 <= -x) v = -(-x & 7);` (for `x % 2`, `-(x & 1)`).  With
+# the option on (the default) the division prints as `x / 4` and the
+# MULTIEQUAL of the remainder as `x % 8`, when the branch provably sends
+# every positive x to one input and every negative x to the other.
+#
+# Stage / sub-stage: P3 "simplification-quiescence", option
+# `pow2select on|off`.
+#
+# The bytes are the .text of crates/unlace-analysis/tests/fixtures/
+# pow2select.c built by clang 22.1 for aarch64-linux-gnu at -O2 (an object file),
+# placed at 0x100000.  near4 selects `-(-x & 7)` for x < -4 only, which is
+# not a remainder for x in -4..-1, and keeps its select.  Pass 1 is the
+# default, pass 2 `option pow2select off`.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'div4' },
+    { space = 'ram', offset = '0x100014', name = 'ldiv32' },
+    { space = 'ram', offset = '0x100028', name = 'mod8' },
+    { space = 'ram', offset = '0x10003c', name = 'mod2' },
+    { space = 'ram', offset = '0x10004c', name = 'near1' },
+    { space = 'ram', offset = '0x100060', name = 'near3' },
+    { space = 'ram', offset = '0x100074', name = 'near4' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+hex = '''
+080c00111f0000710841801a007d0213c0035fd6087c00911f0000f10841809a00fd4593c0035fd6e803006b09080012080900122045885ac0035fd608000012
+1f0000710055885ac0035fd6080c00111f14007108c0881a007d0213c0035fd6081c00111f0000710841801a007d0213c0035fd6e803004b090800121f100031
+0809001220a5885ac0035fd6
+'''
+
+[script]
+commands = [
+    'lo fu div4',
+    'decompile',
+    'print C',
+    'lo fu ldiv32',
+    'decompile',
+    'print C',
+    'lo fu mod8',
+    'decompile',
+    'print C',
+    'lo fu mod2',
+    'decompile',
+    'print C',
+    'lo fu near1',
+    'decompile',
+    'print C',
+    'lo fu near3',
+    'decompile',
+    'print C',
+    'lo fu near4',
+    'decompile',
+    'print C',
+    'option pow2select off',
+    'lo fu div4',
+    'decompile',
+    'print C',
+    'lo fu ldiv32',
+    'decompile',
+    'print C',
+    'lo fu mod8',
+    'decompile',
+    'print C',
+    'lo fu mod2',
+    'decompile',
+    'print C',
+    'lo fu near1',
+    'decompile',
+    'print C',
+    'lo fu near3',
+    'decompile',
+    'print C',
+    'lo fu near4',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'pow2select-aarch64 #1: x / 4 written as a csel prints as a division'
+count = 1
+regex = '^  return a0 / 4;$'
+
+[[match]]
+name = 'pow2select-aarch64 #2: the 64-bit x / 32 too'
+count = 1
+regex = '^  return a0 / 0x20;$'
+
+[[match]]
+name = 'pow2select-aarch64 #3: x % 8 written as a csneg prints as a remainder'
+count = 1
+regex = '^  return a0 % 8;$'
+
+[[match]]
+name = 'pow2select-aarch64 #4: x % 2 too'
+count = 1
+regex = '^  return a0 % 2;$'
+
+[[match]]
+name = 'pow2select-aarch64 #5: near4 keeps its select in both passes, mod8 only with the option off'
+count = 3
+literal = 'v1 = -(-a0 & 7);'
+
+[[match]]
+name = 'pow2select-aarch64 #6: near3 keeps its shift in both passes, div4 only with the option off'
+count = 3
+regex = '^  return v1 >> 2;$'

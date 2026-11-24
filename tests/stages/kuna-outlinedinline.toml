@@ -1,0 +1,82 @@
+# MachineOutliner fragments inlined into their callers
+# (`option outlinedinline on|off`, default on).
+#
+# Issue: clang's MachineOutliner moves instruction sequences that repeat
+# across functions into shared `OUTLINED_FUNCTION_<n>` fragments. A fragment
+# has no frame and reads and writes its caller's registers, so a caller
+# printed as opaque calls: `_OUTLINED_FUNCTION_0()` with no arguments where
+# the source added two parameters, and a tail call to a fragment in place of
+# the `exit(7)` the fragment makes.
+#
+# Stage / sub-stage: P2 inline-inject. The analysis commit flags each
+# function symbol named `OUTLINED_FUNCTION_<n>` inline
+# (`p2_lift/kuna_outlinedinline.rs`), so flow splices it into the caller; the
+# hard-model inliner keeps a fragment's own RETURN when the caller tail-calls
+# it or nothing follows the call.
+#
+# P0 assertion: `option outlinedinline on|off`, set after `load file` and
+# before the `read symbols` that commits the flags.
+#
+# The XML wrapper only supplies the harness architecture; both passes load
+# the plain arm64 `macho_arm64_outlined` fixture (see the fixtures README).
+#
+# Pass 1 (off) reproduces the BUG: `_sum2` returns
+# `_OUTLINED_FUNCTION_0() + 3` and `_bail` tail-calls `_OUTLINED_FUNCTION_1`.
+# Pass 2 (the default) is the FIX: `_sum2` returns `(a0 + a1) * 2 + 3` and
+# `_bail` calls `exit(7)`.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_arm64_outlined',
+    'option outlinedinline off',
+    'read symbols',
+    'load function _sum2',
+    'decompile',
+    'print C',
+    'load function _bail',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_arm64_outlined',
+    'read symbols',
+    'load function _sum2',
+    'decompile',
+    'print C',
+    'load function _bail',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'OUTLINEDINLINE #1: off calls the fragment'
+count = 1
+regex = 'return _OUTLINED_FUNCTION_0\(.*\) \+ 3;'
+
+[[match]]
+name = "OUTLINEDINLINE #2: on inlines the fragment's arithmetic"
+count = 1
+literal = 'return (a0 + a1) * 2 + 3;'
+
+[[match]]
+name = 'OUTLINEDINLINE #3: off tail-calls the fragment'
+count = 1
+literal = '_OUTLINED_FUNCTION_1('
+
+[[match]]
+name = 'OUTLINEDINLINE #4: on inlines the tail-called fragment'
+count = 1
+literal = 'exit(7);'

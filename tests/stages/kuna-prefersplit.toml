@@ -1,0 +1,146 @@
+# AArch64 scalar FP call delivered through a split q register.
+#
+# Stage: P3 heritage runs the compiler spec's <prefersplit> rows; P4
+# `protoorder` states a single-function drive's direct-callee types.
+# P0: `option protoorder off` reproduces the untyped caller; the default
+# states the callee prototype and types the split-register argument.
+#
+# The `ccw_helper`/`ccw_formatter` pair proves the split register and the
+# single-function bootstrap; `ccw_vector` keeps a real 16-byte vector whole;
+# `ccw_tagged` keeps a bit-inspecting address integer; `ccw_mixed` keeps a
+# mixed-width base a record; `ccw_array` keeps a dynamic double array a double
+# access.  `ccw_phi` selects the split value on two branches, so the call's
+# trial storage is what proves the bootstrap (not dominance); `ccw_ints`
+# touches a `q` register but passes only integers, so it must not trigger it.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/prefersplit_a64.o',
+    'read symbols',
+    'option protoorder off',
+    'load function ccw_entry',
+    'decompile',
+    'print C',
+    'option protoorder cycles',
+    'load function ccw_entry',
+    'decompile',
+    'print C',
+    'load function ccw_helper',
+    'decompile',
+    'print C',
+    'load function ccw_formatter',
+    'decompile',
+    'print C',
+    'load function ccw_vector',
+    'decompile',
+    'print C',
+    'load function ccw_tagged',
+    'decompile',
+    'print C',
+    'load function ccw_mixed',
+    'decompile',
+    'print C',
+    'load function ccw_array',
+    'decompile',
+    'print C',
+    'load function ccw_phi',
+    'decompile',
+    'print C',
+    'load function ccw_ints',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'split caller stays untyped with protoorder off'
+count = 1
+regex = '^void ccw_entry\(unsigned long \*a0,unsigned long a1\)'
+
+[[match]]
+name = 'split caller takes the callee type by default'
+count = 1
+regex = '^void ccw_entry\(float8 \*a0,unsigned long a1\)'
+
+[[match]]
+name = 'the split register delivers a scalar double parameter'
+count = 1
+regex = '^void ccw_helper\(float8 a0,uint8 \*a1\)'
+
+[[match]]
+name = 'the helper negates the shared double'
+count = 1
+literal = 'a0 = -a0;'
+
+[[match]]
+name = 'the helper forwards the double unchanged'
+count = 1
+literal = 'ccw_formatter(a0,a1);'
+
+[[match]]
+name = 'the whole-register object is gone'
+count = 0
+regex = '^void ccw_helper\(char a0\[16\]\)'
+
+[[match]]
+name = 'a full 16-byte vector parameter is not split'
+count = 1
+regex = '^void ccw_vector\(char a0\[16\]'
+
+[[match]]
+name = 'a tagged address does not become a float'
+count = 0
+regex = '^.*ccw_tagged\((double|float8)'
+
+[[match]]
+name = 'a mixed-width base stays a record, not a double pointer'
+count = 1
+regex = '^.*ccw_mixed\(struct_[0-9]+ \*a0\)'
+
+[[match]]
+name = 'the mixed record keeps its double field'
+count = 1
+literal = 'a0->field_0x0 != 0.0'
+
+[[match]]
+name = 'the mixed record keeps its short field'
+count = 1
+literal = 'a0->field_0x16'
+
+[[match]]
+name = 'a dynamic double array is a double access'
+count = 1
+regex = '\*\((double|float8) \*\)\(a0 \+ a1 \* 8\)'
+
+[[match]]
+name = 'a non-dominated split value is typed float8'
+count = 1
+literal = 'float8 v1; // d0'
+
+[[match]]
+name = 'the non-dominated value reaches the split callee'
+count = 1
+literal = 'ccw_helper(v1,a0,a2);'
+
+[[match]]
+name = 'a non-dominated split value is not left untyped'
+count = 0
+literal = 'unsigned long v1; // d0'
+
+[[match]]
+name = 'an integer call beside a q touch is unchanged'
+count = 1
+literal = 'ccw_intshelper(*a0,a1 + 1);'

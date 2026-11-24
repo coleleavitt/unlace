@@ -1,0 +1,121 @@
+# Objective-C message sends typed and resolved by their receiver
+# (`option objcrettype on|off`, `option objcresolve on|off`).
+#
+# Issue: a message send names its selector but not its method, and the
+# runtime entry points are typed once for every receiver. `-[Holder make]` of
+# the ARC fixture printed `objc_object *v1 = objc_alloc_init(_OBJC_CLASS_$_Base);
+# objc_msgSend(v1,sel_setInner_,objc_alloc_init(...));` - the alloc/init
+# result an `id`, the send an opaque runtime call although `-[Base setInner:]`
+# is a method of the image. `-[Holder innerCount]` of the types fixture sent
+# `objc_msgSend(self->inner,sel_count)` to an ivar typed `Base *` and
+# `objc_msgSend$inner(self)` to a `Holder *`.
+#
+# Fix: the ObjC analysis hands the engine its class table (own methods,
+# superclass, class_t and selector addresses; `p5_types/kuna_objcrettype.rs`).
+# P5 `TypeOpCall::getOutputLocal` answers for `alloc`/`new`/`objc_alloc*` on a
+# folded class reference with that class's pointer and for `init.../self/
+# retain/autorelease/copy` with the receiver's class (`objcrettype`); the P9
+# callee name of a send whose receiver's class is known is the method it
+# reaches, looked up along the superclass chain, and a second decompile
+# sends the CALL to that IMP (`FlowInfo::setup_call_specs` retarget), so
+# the call carries the method's prototype and `unlace xrefs` its edge
+# (`objcresolve`).
+#
+# Pass 1 (both off): `objc_object *v1`, `objc_msgSend(v1,sel_setInner_,...)`,
+# `objc_msgSend(self->inner,sel_count)`. Pass 2 (default): `Base *v1`,
+# `-[Base setInner:](v1,...)`, `-[Base count](self->inner,sel_count)`,
+# `-[Holder inner](...)`.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_arc_arm64',
+    'option objc on',
+    'option objcrettype off',
+    'option objcresolve off',
+    'read symbols',
+    'load addr 0x100000798',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_types_arm64',
+    'option objc on',
+    'option objcrettype off',
+    'option objcresolve off',
+    'read symbols',
+    'load addr 0x100000740',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_arc_arm64',
+    'option objc on',
+    'read symbols',
+    'load addr 0x100000798',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_types_arm64',
+    'option objc on',
+    'read symbols',
+    'load addr 0x100000740',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'OBJCRESOLVE #1: off, the alloc/init result is an id'
+count = 1
+literal = 'objc_object *v1; // x0 | x19'
+
+[[match]]
+name = 'OBJCRESOLVE #2: off, the send to it is the runtime entry point'
+count = 1
+literal = 'objc_msgSend(v1,sel_setInner_,'
+
+[[match]]
+name = 'OBJCRESOLVE #3: off, the send to a typed ivar is the runtime entry point'
+count = 1
+literal = 'objc_msgSend(self->inner,sel_count)'
+
+[[match]]
+name = 'OBJCRESOLVE #4: default, objc_alloc_init on the class reference returns Base *'
+count = 1
+literal = 'Base *v1; // x0 | x19'
+
+[[match]]
+name = 'OBJCRESOLVE #5: default, the send to the Base * goes to the method, with its prototype (self, SEL, Base *)'
+count = 1
+literal = '-[Base setInner:](v1,(objc_selector *)sel_setInner_,'
+
+[[match]]
+name = 'OBJCRESOLVE #6: default, the send to the typed ivar goes to the method'
+count = 1
+literal = '-[Base count](self->inner,(objc_selector *)sel_count)'
+
+[[match]]
+name = 'OBJCRESOLVE #7: default, the stub send to self goes to the method with self typed (no cast)'
+count = 1
+literal = '-[Holder inner](self)'
+
+[[match]]
+name = "OBJCRESOLVE #9: the retargeted call carries the method's declared argument type (its encoding's id)"
+count = 1
+literal = '-[Base setInner:](v1,(objc_selector *)sel_setInner_,(objc_object *)objc_alloc_init'
+
+[[match]]
+name = "OBJCRESOLVE #8: the getter's result (Base *, from its property) resolves its own send"
+count = 1
+literal = '-[Base count](v3,(objc_selector *)sel_count)'

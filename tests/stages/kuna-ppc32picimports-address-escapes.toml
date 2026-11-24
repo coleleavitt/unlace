@@ -1,0 +1,54 @@
+[image]
+arch = 'PowerPC:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '4e800020'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-literal.elf',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function check2',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-resolver.elf',
+    'option voidtailreturn off',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function 0x1004',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-store-halfword.elf',
+    'option voidtailreturn off',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function 0x1004',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'executable literal retains reachable return'
+count = 1
+literal = 'return 7;'
+
+[[match]]
+name = 'computed and stored interior entries retain returning calls'
+count = 2
+literal = 'return;'
+
+[[match]]
+name = 'escaped addresses acquire no terminal contract'
+count = 0
+regex = '__stack_chk_fail|no-return'

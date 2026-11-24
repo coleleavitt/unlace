@@ -5650,7 +5650,7 @@ left to fall through to.
 pre-SSA, registered after `gowritebarrier` in the same window. The `eor` and
 the `x30` read lose their only reader and die to dead-code elimination.
 `off` keeps the checks, to audit where the compiler authenticates. Pinned by
-`tests/stages/kuna-ptrauthtrap.xml` (two passes over the `macho_arm64e_auth`
+`tests/stages/kuna-ptrauthtrap.toml` (two passes over the `macho_arm64e_auth`
 fixture, one over `macho_arm64e_brk`, whose `brk #0xc470` and `brk #0xc472`
 traps sit behind a `w0` compare and an `x0` bit test and stay, and plain-AArch64
 bytechunks of the real check, the same compare, a `mov x30` forgery in the
@@ -5727,7 +5727,7 @@ clone keeps the fragment's own RETURN as the caller's. A fragment whose flow
 reaches unmapped memory, which happens in a dyld-cache extract when it
 tail-branches into another library, is not inlined and stays a call. The
 detection is name based, like IDA's: a stripped image keeps its fragments as
-calls. Pinned by `tests/stages/kuna-outlined.xml`.
+calls. Pinned by `tests/stages/kuna-outlined.toml`.
 
 ## 2.14 AArch64 system registers and Apple instructions
 

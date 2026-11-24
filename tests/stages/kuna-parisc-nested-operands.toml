@@ -1,0 +1,29 @@
+# Synthetic b,l 0x1234,%rp; nop; b,l 0xff0,%rp; nop; bv %r0(%rp); nop.
+
+[image]
+arch = 'pa-risc:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'two_calls' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = 'e840045808000240e85f1fc508000240e840c00008000240'
+
+[script]
+commands = [
+    'load function two_calls',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'nested PA-RISC operand: forward call target'
+count = 1
+literal = 'sub_1234();'
+
+[[match]]
+name = 'nested PA-RISC operand: backward call target'
+count = 1
+literal = 'sub_ff0();'

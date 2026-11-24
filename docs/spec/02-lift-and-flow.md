@@ -4202,6 +4202,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `GCDSP` | Nintendo GameCube DSP | `GCDSP:BE:16:default`, `GCDSP:BE:16:exact` | aleph-void/ghidra-gcdsp-lang (fork of Pokechu22/ghidra-gcdsp-lang) @ `4fc59950c6`, Apache-2.0 |
 ||||||| e949085348
 | `RadeonF32` | AMD Radeon F32 microengine | `F32:BE:64:default`, `F32:LE:64:default` | aleph-void/ghidra-radeon-f32 (fork of cyrozap/ghidra-radeon-f32) @ `104e93f7af`, Apache-2.0 |
+| `RL78` | Renesas RL78 | `RL78:LE:16:default`, `RL78:LE:16:S2` | aleph-void/ghidra-rl78 (fork of CUB3D/ghidra-rl78) @ `b870c6eaf0`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

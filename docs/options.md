@@ -993,10 +993,10 @@ Three tiers:
 | a DriverKit dext's metaclass globals render as dat_<addr> | [`osclassinfo`](#osclassinfo----on--off-default-on) |
 | a dext's class New functions are sub_<addr> | [`osclassinfo`](#osclassinfo----on--off-default-on) |
 | __osclassinfo records are unnamed data | [`osclassinfo`](#osclassinfo----on--off-default-on) |
-| a DriverKit _Dispatch prints as void C::_Dispatch(unsigned long a0,unsigned long *a1) | [`dextrpc`](#dextrpc----on--off-default-off) |
-| a dext's _Dispatch compares *(long *)IORPCMessageFromMach(...) against bare 64-bit hashes | [`dextrpc`](#dextrpc----on--off-default-off) |
-| a dext's M_Invoke results are dropped and _Dispatch returns nothing | [`dextrpc`](#dextrpc----on--off-default-off) |
-| a DriverKit init or M_Impl reads its ivars as ((long *)a0)[N] | [`dextrpc`](#dextrpc----on--off-default-off) |
+| a DriverKit _Dispatch prints as void C::_Dispatch(unsigned long a0,unsigned long *a1) | [`dextrpc`](#dextrpc----on--off-default-on) |
+| a dext's _Dispatch compares *(long *)IORPCMessageFromMach(...) against bare 64-bit hashes | [`dextrpc`](#dextrpc----on--off-default-on) |
+| a dext's M_Invoke results are dropped and _Dispatch returns nothing | [`dextrpc`](#dextrpc----on--off-default-on) |
+| a DriverKit init or M_Impl reads its ivars as ((long *)a0)[N] | [`dextrpc`](#dextrpc----on--off-default-on) |
 | a swift class method in a stripped app is named vtable#N.method | [`swiftobjcthunk`](#swiftobjcthunk----on--off-default-on) |
 | a swift property accessor prints as vtable#N.getter or vtable#N.setter | [`swiftobjcthunk`](#swiftobjcthunk----on--off-default-on) |
 | a call on a swift class instance prints the slot number instead of the method | [`swiftobjcthunk`](#swiftobjcthunk----on--off-default-on) |
@@ -3535,13 +3535,13 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · ida · new-analysis · kuna-osclassinfo
 - **Example:** `option osclassinfo off`
 
-### `dextrpc` -- on | off, default `off`
+### `dextrpc` -- on | off, default `on`
 
 - **Symptoms:** a DriverKit _Dispatch prints as void C::_Dispatch(unsigned long a0,unsigned long *a1); a dext's _Dispatch compares *(long *)IORPCMessageFromMach(...) against bare 64-bit hashes; a dext's M_Invoke results are dropped and _Dispatch returns nothing; a DriverKit init or M_Impl reads its ivars as ((long *)a0)[N].
 - **What it does:** DriverKit IORPC dispatch types for a dext (an arm64 Mach-O whose __osclassinfo the osclassinfo pass reads; inert unless osclassinfo is on). Every symbol the dext defines or imports named C::_Dispatch(C *, IORPC) (_ZN<n>C9_DispatchEPS_5IORPC), C::Dispatch(IORPC) (_ZN<n>C8DispatchE5IORPC) or X::M_Invoke(IORPC, OSMetaClassBase *, handler[, const OSMetaClass *]) gets its prototype by address: int return (kern_return_t), the IORPC as IORPC * (AAPCS64 passes the 24-byte struct by reference), self or this as C * for a class of the dext and void * otherwise. IORPCMessageFromMach gets IORPCMessage *(IORPCMessageMach *msg, bool reply). The types follow IORPC.h: IORPC {message, reply, sendSize, replySize} and IORPCMessage {msgid, flags, objectRefs}, msgid typed by an 8-byte enum IORPCMessageID whose values C_M_ID come from the class descriptions (the method-options table holds the n message ids of the methods the class implements, then n option words; the method-names table the n length-prefixed names in the same order; meta methods likewise; an id two classes list keeps the first name), so _Dispatch compares the message id against named constants. Each class becomes a struct C of its instanceSize: iig gives every class one C_IVars *ivars after its superclass, so ivars sits at instanceSize - 8, behind the superclass's struct as field super when the superclass is a class of the same dext whose size leaves room (else those bytes stay untyped). init, free and every M_Impl of a class get an unlocked C *this hint on x0, so this->ivars replaces ((long *)a0)[10]. A table that does not parse adds no ids, a class whose instanceSize is not a multiple of 8 gets no struct, and a type name the program already holds with another shape is left alone.
-- **When to flip:** Off by default. Turn on when reading a DriverKit extension: _Dispatch prints int C::_Dispatch(C *self, IORPC *rpc) with IORPCMessageFromMach(rpc->message,0)->msgid compared against C_M_ID names and return M_Invoke(...) instead of void with *a1 and bare 64-bit hashes, and init, free and the M_Impl methods read their instance variables through this->ivars. Symbol-driven like IDA's dku: a dext stripped of its C++ symbols gets only the enum and the class structs.
+- **When to flip:** On by default (unlace#581: 16 arm64e dexts of macOS 15.6.1, 626 of 4298 functions change, 0 errors, no time cost; it acts only on a dext whose __osclassinfo the osclassinfo pass reads). In a DriverKit extension _Dispatch prints int C::_Dispatch(C *self, IORPC *rpc) with IORPCMessageFromMach(rpc->message,0)->msgid compared against C_M_ID names and return M_Invoke(...) instead of void with *a1 and bare 64-bit hashes, and init, free and the M_Impl methods read their instance variables through this->ivars. Symbol-driven like IDA's dku: a dext stripped of its C++ symbols gets only the enum and the class structs.
 - **Where / provenance:** P1/external-refinement · ida · new-analysis · ida-driverkit
-- **Example:** `option dextrpc on`
+- **Example:** `option dextrpc off`
 
 ### `swiftobjcthunk` -- on | off, default `on`
 

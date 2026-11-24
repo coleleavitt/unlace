@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+    <properties>
+        <property key="addressesDoNotAppearDirectlyInCode" value="true"/>
+    </properties>
+    <programcounter register="pc"/>
+    <context_data>
+        <context_set space="ram">
+            <set name="PAIR_INSTRUCTION_FLAG" val="0" description="1 if LDL/LDR or SDL/SDR are a pair"/>
+        </context_set>
+    </context_data>
+    <register_data>
+        <register name="contextreg" hidden="true"/>
+        <register name="fsa" rename="sa"/>
+        <register name="vf0" vector_lane_sizes="4"/>
+        <register name="vf1" vector_lane_sizes="4"/>
+        <register name="vf2" vector_lane_sizes="4"/>
+        <register name="vf3" vector_lane_sizes="4"/>
+        <register name="vf4" vector_lane_sizes="4"/>
+        <register name="vf5" vector_lane_sizes="4"/>
+        <register name="vf6" vector_lane_sizes="4"/>
+        <register name="vf7" vector_lane_sizes="4"/>
+        <register name="vf8" vector_lane_sizes="4"/>
+        <register name="vf9" vector_lane_sizes="4"/>
+        <register name="vf10" vector_lane_sizes="4"/>
+        <register name="vf11" vector_lane_sizes="4"/>
+        <register name="vf12" vector_lane_sizes="4"/>
+        <register name="vf13" vector_lane_sizes="4"/>
+        <register name="vf14" vector_lane_sizes="4"/>
+        <register name="vf15" vector_lane_sizes="4"/>
+        <register name="vf16" vector_lane_sizes="4"/>
+        <register name="vf17" vector_lane_sizes="4"/>
+        <register name="vf18" vector_lane_sizes="4"/>
+        <register name="vf19" vector_lane_sizes="4"/>
+        <register name="vf20" vector_lane_sizes="4"/>
+        <register name="vf21" vector_lane_sizes="4"/>
+        <register name="vf22" vector_lane_sizes="4"/>
+        <register name="vf23" vector_lane_sizes="4"/>
+        <register name="vf24" vector_lane_sizes="4"/>
+        <register name="vf25" vector_lane_sizes="4"/>
+        <register name="vf26" vector_lane_sizes="4"/>
+        <register name="vf27" vector_lane_sizes="4"/>
+        <register name="vf28" vector_lane_sizes="4"/>
+        <register name="vf29" vector_lane_sizes="4"/>
+        <register name="vf30" vector_lane_sizes="4"/>
+        <register name="vf31" vector_lane_sizes="4"/>
+        <register name="vuACC" vector_lane_sizes="4"/>
+        
+        <register name="zero_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="at_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="v0_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="v1_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="a0_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="a1_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="a2_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="a3_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="t0_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="t1_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="t2_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="t3_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="t4_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="t5_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="t6_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="t7_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="s0_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="s1_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="s2_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="s3_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="s4_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="s5_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="s6_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="s7_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="t8_qw" vector_lane_sizes="1,2,4,8"/>
+        <register name="t9_qw" vector_lane_sizes="1,2,4,8"/>
+    </register_data>
+
+    <!-- EE hardware registers (formerly data/languages/mmio.sinc; references:
+         https://psi-rockin.github.io/ps2tek/ and the PCSX2 register list). Declared as labels rather
+         than SLEIGH symbols in the ram space: the SLEIGH symbols stopped Ghidra from creating references
+         to these addresses (upstream issue #93). -->
+    <default_symbols>
+        <!-- EE Timers -->
+        <symbol name="REG_RCNT0_COUNT" address="ram:0x10000000"/>
+        <symbol name="REG_RCNT0_MODE" address="ram:0x10000010"/>
+        <symbol name="REG_RCNT0_TARGET" address="ram:0x10000020"/>
+        <symbol name="REG_RCNT0_HOLD" address="ram:0x10000030"/>
+        <symbol name="REG_RCNT1_COUNT" address="ram:0x10000800"/>
+        <symbol name="REG_RCNT1_MODE" address="ram:0x10000810"/>
+        <symbol name="REG_RCNT1_TARGET" address="ram:0x10000820"/>
+        <symbol name="REG_RCNT1_HOLD" address="ram:0x10000830"/>
+        <symbol name="REG_RCNT2_COUNT" address="ram:0x10001000"/>
+        <symbol name="REG_RCNT2_MODE" address="ram:0x10001010"/>
+        <symbol name="REG_RCNT2_TARGET" address="ram:0x10001020"/>
+        <symbol name="REG_RCNT3_COUNT" address="ram:0x10001800"/>
+        <symbol name="REG_RCNT3_MODE" address="ram:0x10001810"/>
+        <symbol name="REG_RCNT3_TARGET" address="ram:0x10001820"/>
+        <!-- Image Processing Unit (IPU) -->
+        <symbol name="REG_IPU_CMD" address="ram:0x10002000"/> <!-- IPU Command -->
+        <symbol name="REG_IPU_CTRL" address="ram:0x10002010"/> <!-- IPU Control -->
+        <symbol name="REG_IPU_BP" address="ram:0x10002020"/> <!-- IPU bit pointer control -->
+        <symbol name="REG_IPU_TOP" address="ram:0x10002030"/> <!-- Top of bitsteam -->
+        <symbol name="REG_IPU_OUT_FIFO" address="ram:0x10007000"/> <!-- Out FIFO (read) -->
+        <symbol name="REG_IPU_IN_FIFO" address="ram:0x10007010"/> <!-- In FIFO (write) -->
+        <!-- Graphics Interface (GIF) -->
+        <symbol name="REG_GIF_CTRL" address="ram:0x10003000"/> <!-- Control register -->
+        <symbol name="REG_GIF_MODE" address="ram:0x10003010"/> <!-- Mode setting -->
+        <symbol name="REG_GIF_STAT" address="ram:0x10003020"/> <!-- Status -->
+        <symbol name="REG_GIF_TAG0" address="ram:0x10003040"/> <!-- Bits 0-31 of tag before -->
+        <symbol name="REG_GIF_TAG1" address="ram:0x10003050"/> <!-- Bits 32-63 of tag before -->
+        <symbol name="REG_GIF_TAG2" address="ram:0x10003060"/> <!-- Bits 64-95 of tag before -->
+        <symbol name="REG_GIF_TAG3" address="ram:0x10003070"/> <!-- Bits 96-127 of tag before -->
+        <symbol name="REG_GIF_CNT" address="ram:0x10003080"/> <!-- Transfer status counter -->
+        <symbol name="REG_GIF_P3CNT" address="ram:0x10003090"/> <!-- PATH3 transfer status counter -->
+        <symbol name="REG_GIF_P3TAG" address="ram:0x100030a0"/> <!-- Bits 0-31 of PATH3 tag when interrupted -->
+        <symbol name="REG_GIF_FIFO" address="ram:0x10006000"/>
+        <!-- VIF -->
+        <!-- Some of the sizes may be wrong. -->
+        <symbol name="REG_VIF0_STAT" address="ram:0x10003800"/>
+        <symbol name="REG_VIF0_FBRST" address="ram:0x10003810"/>
+        <symbol name="REG_VIF0_ERR" address="ram:0x10003820"/>
+        <symbol name="REG_VIF0_MARK" address="ram:0x10003830"/>
+        <symbol name="REG_VIF0_CYCLE" address="ram:0x10003840"/>
+        <symbol name="REG_VIF0_MODE" address="ram:0x10003850"/>
+        <symbol name="REG_VIF0_NUM" address="ram:0x10003860"/>
+        <symbol name="REG_VIF0_MASK" address="ram:0x10003870"/>
+        <symbol name="REG_VIF0_CODE" address="ram:0x10003880"/>
+        <symbol name="REG_VIF0_ITOPS" address="ram:0x10003890"/>
+        <symbol name="REG_VIF0_ITOP" address="ram:0x100038d0"/>
+        <symbol name="REG_VIF0_TOP" address="ram:0x100038e0"/>
+        <symbol name="REG_VIF0_ROW0" address="ram:0x10003900"/>
+        <symbol name="REG_VIF0_ROW1" address="ram:0x10003910"/>
+        <symbol name="REG_VIF0_ROW2" address="ram:0x10003920"/>
+        <symbol name="REG_VIF0_ROW3" address="ram:0x10003930"/>
+        <symbol name="REG_VIF0_COL0" address="ram:0x10003940"/>
+        <symbol name="REG_VIF0_COL1" address="ram:0x10003950"/>
+        <symbol name="REG_VIF0_COL2" address="ram:0x10003960"/>
+        <symbol name="REG_VIF0_COL3" address="ram:0x10003970"/>
+        <symbol name="REG_VIF1_STAT" address="ram:0x10003c00"/>
+        <symbol name="REG_VIF1_FBRST" address="ram:0x10003c10"/>
+        <symbol name="REG_VIF1_ERR" address="ram:0x10003c20"/>
+        <symbol name="REG_VIF1_MARK" address="ram:0x10003c30"/>
+        <symbol name="REG_VIF1_CYCLE" address="ram:0x10003c40"/>
+        <symbol name="REG_VIF1_MODE" address="ram:0x10003c50"/>
+        <symbol name="REG_VIF1_NUM" address="ram:0x10003c60"/>
+        <symbol name="REG_VIF1_MASK" address="ram:0x10003c70"/>
+        <symbol name="REG_VIF1_CODE" address="ram:0x10003c80"/>
+        <symbol name="REG_VIF1_ITOPS" address="ram:0x10003c90"/>
+        <symbol name="REG_VIF1_BASE" address="ram:0x10003ca0"/>
+        <symbol name="REG_VIF1_OFST" address="ram:0x10003cb0"/>
+        <symbol name="REG_VIF1_TOPS" address="ram:0x10003cc0"/>
+        <symbol name="REG_VIF1_ITOP" address="ram:0x10003cd0"/>
+        <symbol name="REG_VIF1_TOP" address="ram:0x10003ce0"/>
+        <symbol name="REG_VIF1_ROW0" address="ram:0x10003d00"/>
+        <symbol name="REG_VIF1_ROW1" address="ram:0x10003d10"/>
+        <symbol name="REG_VIF1_ROW2" address="ram:0x10003d20"/>
+        <symbol name="REG_VIF1_ROW3" address="ram:0x10003d30"/>
+        <symbol name="REG_VIF1_COL0" address="ram:0x10003d40"/>
+        <symbol name="REG_VIF1_COL1" address="ram:0x10003d50"/>
+        <symbol name="REG_VIF1_COL2" address="ram:0x10003d60"/>
+        <symbol name="REG_VIF1_COL3" address="ram:0x10003d70"/>
+        <symbol name="REG_VIF0_FIFO" address="ram:0x10004000"/>
+        <symbol name="REG_VIF1_FIFO" address="ram:0x10005000"/>
+        <!-- DMA Controller (DMAC) -->
+        <!-- Channel 0 -->
+        <symbol name="REG_DMAC_0_VIF0_CHCR" address="ram:0x10008000"/> <!-- Channel control -->
+        <symbol name="REG_DMAC_0_VIF0_MADR" address="ram:0x10008010"/> <!-- Channel address -->
+        <symbol name="REG_DMAC_0_VIF0_QWC" address="ram:0x10008020"/> <!-- Quadword count -->
+        <symbol name="REG_DMAC_0_VIF0_TADR" address="ram:0x10008030"/> <!-- Channel tag address -->
+        <symbol name="REG_DMAC_0_VIF0_ASR0" address="ram:0x10008040"/> <!-- Channel saved tag address -->
+        <symbol name="REG_DMAC_0_VIF0_ASR1" address="ram:0x10008050"/> <!-- Channel saved tag address -->
+        <!-- Channel 1 -->
+        <symbol name="REG_DMAC_1_VIF1_CHCR" address="ram:0x10009000"/> <!-- Channel control -->
+        <symbol name="REG_DMAC_1_VIF1_MADR" address="ram:0x10009010"/> <!-- Channel address -->
+        <symbol name="REG_DMAC_1_VIF1_QWC" address="ram:0x10009020"/> <!-- Quadword count -->
+        <symbol name="REG_DMAC_1_VIF1_TADR" address="ram:0x10009030"/> <!-- Channel tag address -->
+        <symbol name="REG_DMAC_1_VIF1_ASR0" address="ram:0x10009040"/> <!-- Channel saved tag address -->
+        <symbol name="REG_DMAC_1_VIF1_ASR1" address="ram:0x10009050"/> <!-- Channel saved tag address -->
+        <!-- Channel 2 -->
+        <symbol name="REG_DMAC_2_GIF_CHCR" address="ram:0x1000a000"/> <!-- Channel control -->
+        <symbol name="REG_DMAC_2_GIF_MADR" address="ram:0x1000a010"/> <!-- Channel address -->
+        <symbol name="REG_DMAC_2_GIF_QWC" address="ram:0x1000a020"/> <!-- Quadword count -->
+        <symbol name="REG_DMAC_2_GIF_TADR" address="ram:0x1000a030"/> <!-- Channel tag address -->
+        <symbol name="REG_DMAC_2_GIF_ASR0" address="ram:0x1000a040"/> <!-- Channel saved tag address -->
+        <symbol name="REG_DMAC_2_GIF_ASR1" address="ram:0x1000a050"/> <!-- Channel saved tag address -->
+        <!-- Channel 3 -->
+        <symbol name="REG_DMAC_3_IPU_FROM_CHCR" address="ram:0x1000b000"/> <!-- Channel control -->
+        <symbol name="REG_DMAC_3_IPU_FROM_MADR" address="ram:0x1000b010"/> <!-- Channel address -->
+        <symbol name="REG_DMAC_3_IPU_FROM_QWC" address="ram:0x1000b020"/> <!-- Quadword count -->
+        <symbol name="REG_DMAC_3_IPU_FROM_TADR" address="ram:0x1000b030"/> <!-- Channel tag address -->
+        <!-- Channel 4 -->
+        <symbol name="REG_DMAC_4_IPU_TO_CHCR" address="ram:0x1000b400"/> <!-- Channel control -->
+        <symbol name="REG_DMAC_4_IPU_TO_MADR" address="ram:0x1000b410"/> <!-- Channel address -->
+        <symbol name="REG_DMAC_4_IPU_TO_QWC" address="ram:0x1000b420"/> <!-- Quadword count -->
+        <symbol name="REG_DMAC_4_IPU_TO_TADR" address="ram:0x1000b430"/> <!-- Channel tag address -->
+        <!-- Channel 5 -->
+        <symbol name="REG_DMAC_5_SIF0_CHCR" address="ram:0x1000c000"/> <!-- Channel control -->
+        <symbol name="REG_DMAC_5_SIF0_MADR" address="ram:0x1000c010"/> <!-- Channel address -->
+        <symbol name="REG_DMAC_5_SIF0_QWC" address="ram:0x1000c020"/> <!-- Quadword count -->
+        <symbol name="REG_DMAC_5_SIF0_TADR" address="ram:0x1000c030"/> <!-- Channel tag address -->
+        <!-- Channel 6 -->
+        <symbol name="REG_DMAC_6_SIF1_CHCR" address="ram:0x1000c400"/> <!-- Channel control -->
+        <symbol name="REG_DMAC_6_SIF1_MADR" address="ram:0x1000c410"/> <!-- Channel address -->
+        <symbol name="REG_DMAC_6_SIF1_QWC" address="ram:0x1000c420"/> <!-- Quadword count -->
+        <symbol name="REG_DMAC_6_SIF1_TADR" address="ram:0x1000c430"/> <!-- Channel tag address -->
+        <!-- Channel 7 -->
+        <symbol name="REG_DMAC_7_SIF2_CHCR" address="ram:0x1000c800"/> <!-- Channel control -->
+        <symbol name="REG_DMAC_7_SIF2_MADR" address="ram:0x1000c810"/> <!-- Channel address -->
+        <symbol name="REG_DMAC_7_SIF2_QWC" address="ram:0x1000c820"/> <!-- Quadword count -->
+        <symbol name="REG_DMAC_7_SIF2_TADR" address="ram:0x1000c830"/> <!-- Channel tag address -->
+        <!-- Channel 8 -->
+        <symbol name="REG_DMAC_8_SPR_FROM_CHCR" address="ram:0x1000d000"/> <!-- Channel control -->
+        <symbol name="REG_DMAC_8_SPR_FROM_MADR" address="ram:0x1000d010"/> <!-- Channel address -->
+        <symbol name="REG_DMAC_8_SPR_FROM_QWC" address="ram:0x1000d020"/> <!-- Quadword count -->
+        <symbol name="REG_DMAC_8_SPR_FROM_TADR" address="ram:0x1000d030"/> <!-- Channel tag address -->
+        <symbol name="REG_DMAC_8_SPR_FROM_SADR" address="ram:0x1000d080"/> <!-- Channel scratchpad address -->
+        <!-- Channel 9 -->
+        <symbol name="REG_DMAC_9_SPR_TO_CHCR" address="ram:0x1000d400"/> <!-- Channel control -->
+        <symbol name="REG_DMAC_9_SPR_TO_MADR" address="ram:0x1000d410"/> <!-- Channel address -->
+        <symbol name="REG_DMAC_9_SPR_TO_QWC" address="ram:0x1000d420"/> <!-- Quadword count -->
+        <symbol name="REG_DMAC_9_SPR_TO_TADR" address="ram:0x1000d430"/> <!-- Channel tag address -->
+        <symbol name="REG_DMAC_9_SPR_TO_SADR" address="ram:0x1000d480"/> <!-- Channel scratchpad address -->
+        <symbol name="REG_DMAC_CTRL" address="ram:0x1000e000"/> <!-- DMAC control -->
+        <symbol name="REG_DMAC_STAT" address="ram:0x1000e010"/> <!-- DMAC interrupt status -->
+        <symbol name="REG_DMAC_PCR" address="ram:0x1000e020"/> <!-- DMAC priority control -->
+        <symbol name="REG_DMAC_SQWC" address="ram:0x1000e030"/> <!-- DMAC skip quadword -->
+        <symbol name="REG_DMAC_RBSR" address="ram:0x1000e040"/> <!-- DMAC ringbuffer size -->
+        <symbol name="REG_DMAC_RBOR" address="ram:0x1000e050"/> <!-- DMAC ringbuffer offset -->
+        <symbol name="REG_DMAC_STADR" address="ram:0x1000e060"/> <!-- DMAC stall address -->
+        <symbol name="REG_DMAC_ENABLER" address="ram:0x1000f520"/> <!-- DMAC disabled status -->
+        <symbol name="REG_DMAC_ENABLEW" address="ram:0x1000f590"/> <!-- DMAC disable -->
+        <!-- Interrupt Controller (INTC) -->
+        <symbol name="REG_INTC_STAT" address="ram:0x1000f000"/> <!-- Interrupt status -->
+        <symbol name="REG_INTC_MASK" address="ram:0x1000f010"/> <!-- Interrupt mask -->
+        <!-- SIO -->
+        <!-- Some of the sizes may be wrong. -->
+        <symbol name="REG_SIO_LCR" address="ram:0x1000f100"/>
+        <symbol name="REG_SIO_LSR" address="ram:0x1000f110"/>
+        <symbol name="REG_SIO_IER" address="ram:0x1000f120"/>
+        <symbol name="REG_SIO_ISR" address="ram:0x1000f130"/>
+        <symbol name="REG_SIO_FCR" address="ram:0x1000f140"/>
+        <symbol name="REG_SIO_BGR" address="ram:0x1000f150"/>
+        <symbol name="REG_SIO_TXFIFO" address="ram:0x1000f180"/>
+        <symbol name="REG_SIO_RXFIFO" address="ram:0x1000f1c0"/>
+        <!-- Subsystem Interface (SIF) -->
+        <symbol name="REG_SIF_MSCOM" address="ram:0x1000f200"/> <!-- EE->IOP communication -->
+        <symbol name="REG_SIF_SMCOM" address="ram:0x1000f210"/> <!-- IOP->EE communication -->
+        <symbol name="REG_SIF_MSFLAG" address="ram:0x1000f220"/> <!-- EE->IOP flags -->
+        <symbol name="REG_SIF_SMFLAG" address="ram:0x1000f230"/> <!-- IOP->EE flags -->
+        <symbol name="REG_SIF_CONTROL" address="ram:0x1000f240"/> <!-- Control register -->
+        <symbol name="REG_SIF_F250" address="ram:0x1000f250"/>
+        <symbol name="REG_SIF_F260" address="ram:0x1000f260"/>
+        <symbol name="REG_SIF_F300" address="ram:0x1000f300"/>
+        <symbol name="REG_SIF_F380" address="ram:0x1000f380"/>
+        <!-- MCH -->
+        <symbol name="REG_MCH_RICM" address="ram:0x1000f430"/>
+        <symbol name="REG_MCH_DRD" address="ram:0x1000f440"/>
+        <!-- Privileged GS registers -->
+        <symbol name="REG_GS_PMODE" address="ram:0x12000000"/> <!-- various PCRTC controls -->
+        <symbol name="REG_GS_SMODE1" address="ram:0x12000010"/>
+        <symbol name="REG_GS_SMODE2" address="ram:0x12000020"/>
+        <symbol name="REG_GS_SRFSH" address="ram:0x12000030"/>
+        <symbol name="REG_GS_SYNCH1" address="ram:0x12000040"/>
+        <symbol name="REG_GS_SYNCH2" address="ram:0x12000050"/>
+        <symbol name="REG_GS_SYNCV" address="ram:0x12000060"/>
+        <symbol name="REG_GS_DISPFB1" address="ram:0x12000070"/> <!-- display buffer for output circuit 1 -->
+        <symbol name="REG_GS_DISPLAY1" address="ram:0x12000080"/> <!-- output circuit 1 control -->
+        <symbol name="REG_GS_DISPFB2" address="ram:0x12000090"/> <!-- display buffer for output circuit 2 -->
+        <symbol name="REG_GS_DISPLAY2" address="ram:0x120000a0"/> <!-- output circuit 2 control -->
+        <symbol name="REG_GS_EXTBUF" address="ram:0x120000b0"/>
+        <symbol name="REG_GS_EXTDATA" address="ram:0x120000c0"/>
+        <symbol name="REG_GS_EXTWRITE" address="ram:0x120000d0"/>
+        <symbol name="REG_GS_BGCOLOR" address="ram:0x120000e0"/> <!-- background color -->
+        <symbol name="REG_GS_CSR" address="ram:0x12001000"/> <!-- control register -->
+        <symbol name="REG_GS_IMR" address="ram:0x12001010"/> <!-- GS interrupt control -->
+        <symbol name="REG_GS_BUSDIR" address="ram:0x12001040"/> <!-- transfer direction -->
+        <symbol name="REG_GS_SIGLBLID" address="ram:0x12001080"/> <!-- signal -->
+    </default_symbols>
+
+    <default_memory_blocks>
+	<!--
+		//    start        end       bytes   description
+		// 0x00000000 - 0x01E84800 32000000 (main ram cached)
+		// 0x20000000 - 0x21E84800 32000000 (main ram uncached)
+		// 0x30100000 - 0x31E905C0 31000000 (main ram uncached & accelerated)
+		// 0x1C000000 - 0x1E000000 02000000 (iop ram)
+		// 0x1FC00000 - 0x1FFD0900 04000000 (BIOS/rom0 uncached)
+		// 0x9FC00000 - 0x9FFD0900 04000000 (BIOS/rom09 cached)
+		// 0xBFC00000 - 0xBFFD0900 04000000 (BIOS/rom0b uncached)
+
+		//	KUSEG: 00000000h-7FFFFFFFh User segment
+		//	KSEG0: 80000000h-9FFFFFFFh Kernel segment 0
+		//	KSEG1: A0000000h-BFFFFFFFh Kernel segment 1
+	-->
+		<memory_block name="registers.io"   start_address="0x10000000" length="0x00010000"    initialized="false" mode="rwv"/>
+		<memory_block name="vu0.code"       start_address="0x11000000" length="0x00001000"    initialized="false" mode="rwx"/>
+		<memory_block name="vu0.data"       start_address="0x11004000" length="0x00001000"    initialized="false" mode="rw"/>
+		<memory_block name="vu1.code"       start_address="0x11008000" length="0x00004000"    initialized="false" mode="rwx"/>
+		<memory_block name="vu1.data"       start_address="0x1100C000" length="0x00004000"    initialized="false" mode="rw"/>
+		<memory_block name="registers.gs"   start_address="0x12000000" length="0x00002000"    initialized="false" mode="rwv"/>
+		<memory_block name="scratchpad"     start_address="0x70000000" length="0x00004000"    initialized="false" mode="rw"/>
+		<memory_block name="iop_ram"        start_address="0x1C000000" length="0x02000000"    initialized="false" mode="rwx"/>
+		<memory_block name="rom0"           start_address="0x1FC00000" length="0x04000000"    initialized="false" mode="r"/>
+    </default_memory_blocks>
+</processor_spec>

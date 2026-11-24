@@ -1866,3 +1866,46 @@ expect = [
     "sub_4f4();",
     "sub_514();",
 ]
+
+# The Toshiba TLCS-870/C language decompiles routines assembled with the AS
+# macro assembler's TLCS-870/C target.
+[[family]]
+name = "tlcs870c"
+language = "TLCS870C:LE:16:default"
+base = "0xe000"
+fixture = "crates/unlace-cli/tests/fixtures/tlcs870c/funcs.bin"
+forbid = ["baddata"]
+
+# add a,5; cmp a,10h; jr nz; ld (80h),a; ret
+[[family.function]]
+test = "tlcs870c_add_compare_store"
+address = "0xe000"
+expect = [
+    "dat_80 = a0 + '\\x05';",
+    "return 0x10;",
+]
+
+# ld wa,(80h); add wa,bc; ld (82h),wa (source and destination prefixes)
+[[family.function]]
+test = "tlcs870c_word_add"
+address = "0xe020"
+expect = [
+    "dat_82 = dat_80 + a0;",
+]
+
+# ld a,7; call f1; inc a
+[[family.function]]
+test = "tlcs870c_call"
+address = "0xe040"
+expect = [
+    "return sub_e000(7) + '\\x01';",
+]
+
+# cmp a,c; jr sge (prefixed condition); ld a,c
+[[family.function]]
+test = "tlcs870c_signed_max"
+address = "0xe060"
+expect = [
+    "if (a0 < a1)",
+    "a0 = a1;",
+]

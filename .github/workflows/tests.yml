@@ -152,6 +152,15 @@ jobs:
       - name: parity -- datatest and stage corpora vs their baselines
         run: cargo test --release -p unlace-harness --test parity
 
+      # Each corpus file's wall time and outcome, slowest first (parity.rs writes it).
+      - name: Upload the parity times
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-times
+          path: target/parity-times.json
+          if-no-files-found: warn
+
       - name: Save the .sla cache
         if: always() && steps.sla.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v4

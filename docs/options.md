@@ -706,6 +706,9 @@ Three tiers:
 | go interface method calls print as anonymous indirect calls through tab + 0x18 | [`goitabcalls`](#goitabcalls----on--off-default-on) |
 | a go function taking an interface shows no method names at its calls | [`goitabcalls`](#goitabcalls----on--off-default-on) |
 | go itab dispatch renders as code pointer arithmetic | [`goitabcalls`](#goitabcalls----on--off-default-on) |
+| a go function that defers prints raw runtime.deferproc calls with no sign of the defer | [`godefer`](#godefer----on--off-default-off) |
+| a go function with recover() in a deferred closure does not say it recovers | [`godefer`](#godefer----on--off-default-off) |
+| a deferred call's target is not named where the function starts | [`godefer`](#godefer----on--off-default-off) |
 | nested if per call result where the source has one if (a && b && c) | [`condcallpush`](#condcallpush----on--off-default-on) |
 | an x86 test of a call result is not folded into the && chain with its neighbours | [`condcallpush`](#condcallpush----on--off-default-on) |
 | condfold on and --mode aggressive do not fold a chain of call-result tests | [`condcallpush`](#condcallpush----on--off-default-on) |
@@ -3104,6 +3107,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default: Go interface calls print by method name where the table's interface is known (DWARF interface formals, fields of typed structs and pointer or value receivers, type assertion results and, in a stripped binary, interface parameters a caller passes a static itab for); a call whose table is not traced prints as before. Measured on a stripped go1.26 binary: 446 of 1,326 itab call sites named, no wrong name in a 43-pair source check, no time or memory cost. Flip off to see the raw itab slot loads, or to keep the DWARF interface formal as one untyped pair. Non-Go binaries are byte-identical either way.
 - **Where / provenance:** P1/external-refinement · unlace · type-inference · unlace-25-go-interface-calls
 - **Example:** `option goitabcalls off`
+
+### `godefer` -- on | off, default `off`
+
+- **Symptoms:** a go function that defers prints raw runtime.deferproc calls with no sign of the defer; a go function with recover() in a deferred closure does not say it recovers; a deferred call's target is not named where the function starts.
+- **What it does:** (unlace `godefer`) Name the Go defer chain in a function's header comment. Go lowers `defer f(args)` on its non-open-coded path into `runtime.deferproc(siz, fn)` at the registration and `runtime.deferreturn` at exit, and `recover()` into `runtime.gorecover`. With the option on, a function on a Go image that calls `runtime.deferproc` gets header comment lines: `Go defer chain detected` (or `Go panic recovery: defer/recover chain detected` when it also calls `runtime.gorecover`), then one `defer <name>(...)` line per distinct constant funcval (the symbol's name, else `sub_<addr>`), `defer <opaque funcval>(...)` when a funcval is not a constant, and `recover()`. The registration and unwind calls print as before.
+- **When to flip:** Off by default: the header comment adds lines above the function, so a diff against the default output shows them. Turn on for a Go binary to see which functions defer and whether they recover, without reading the runtime calls. Open-coded defers (Go 1.14 and later, which keep a deferBits byte and inline the deferred call) call no deferproc and get no line.
+- **Where / provenance:** P9/warning-style · unlace · opt-in-tool · unlace-1280-go-defer
+- **Example:** `option godefer on`
 
 ### `condcallpush` -- on | off, default `on`
 

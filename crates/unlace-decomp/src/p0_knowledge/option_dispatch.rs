@@ -588,6 +588,7 @@ unlace_options! { self, p1;
     "dwarfnocall" => registered!(crate::analysisgates::Dwarfnocall),
     "godwarfsig" => registered!(crate::analysisgates::Godwarfsig),
     "goitabcalls" => registered!(crate::goitabcalls::GoItabCalls),
+    "godefer" => registered!(crate::godefer::GoDefer),
     "nonnullparam" => registered!(crate::nonnullparam::NonNullParam),
     "cppsig" => registered!(crate::cppsig::CppSigMode),
     "cppclassargs" => registered!(crate::cppsig::CppClassArgs),

@@ -5480,9 +5480,10 @@ moves.
   file's entry also carries a comment naming its kinds (`module kind
   COMBINED_PEIM_DRIVER`, `module kind COMBINED_MM_DXE`). Without this option, a PEIM
   and a standalone MM module keep the names the index gives them (see below), and every other entry keeps
-  `_ModuleEntryPoint`. The walk still
-  seeds a PEI or DXE core's parameters from the phase the index's kind gives
-  (PEI or DXE), so only the entry's name and prototype follow the file type.
+  `_ModuleEntryPoint`. With the option on, the walk also
+  seeds a core's parameters from its file type: a DXE core's HobStart and a PEI
+  core's SecCoreData and PpList are `VOID *`. Other modules keep the phase's
+  table types (PEI or DXE).
 
   The pass then follows the service tables through the code
   (`crates/unlace-analysis/src/analyzers/uefi/flow.rs (Walk)`). It

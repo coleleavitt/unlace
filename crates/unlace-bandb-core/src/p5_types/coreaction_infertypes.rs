@@ -898,6 +898,23 @@ fn build_localtypes(data: &mut Funcdata) {
                 }
             }
         };
+        // (kuna `ptrfromlocal`) The same use evidence for a pointer-width value a call returns
+        // or a load reads, over a vote that is still unknown.  See `kuna_ptrfromuse`.
+        let ct = if from_seed
+            || ct.get_metatype() != type_metatype::TYPE_UNKNOWN
+            || !data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_ptrfromuse::PtrFromLocal>()
+                .0
+        {
+            ct
+        } else {
+            match crate::kuna_ptrfromuse::pointer_from_local_use(data, vn) {
+                Some(cand) if crate::kuna_ptrfromuse::folds_over(&cand, &ct) => cand,
+                _ => ct,
+            }
+        };
         // (kuna `charptr`) A pointer the program only ever uses on characters is a
         // `char *`.  The evidence -- a callee's DECLARED `char *` parameter, a
         // byte-only dereference, a string constant -- is collected by an explicit

@@ -7613,6 +7613,25 @@ tier = "analysis"
 symptoms = "objc_msgSend$setFoo:() renders with no argument although the caller sets one|objc_msgSend$setAlpha: shows 0x3ff0000000000000 instead of 1.0|objc_msgSend$setFrame: passes one word where a CGRect was built|a framework method's stub returns undefined16 or unsigned long instead of its declared type|CFStringGetLength() or another imported framework C function renders with no argument|a tail call to an imported C function prints dispatch_async_f(); with no arguments|an imported C function's struct pointer argument has no field names"
 
 [[settable]]
+option = "sdktypes"
+values = "<directory>|off"
+default = "off"
+destructive = false
+phase = "P1"
+subphase = "external-refinement"
+strength = "HARD"
+rewind = "P1"
+issue = "unlace-sdktypes"
+summary = "Mach-O only: type the C functions an image imports, and the records, enums and typedefs they name, from the SDK the image was built against, read by a real preprocessor and the --types reader. The value is the SDK root (`.../iPhoneOS16.5.sdk`). The CLI writes a temporary header that includes the umbrella header of every framework the image links (LC_LOAD_DYLIB; `<CoreFoundation/CoreFoundation.h>`, `<Security/Security.h>`) and every `usr/include` header outside `c++/` that spells an imported name before a `(` (`<dispatch/dispatch.h>`, `<os/log.h>`, `<sqlite3.h>`), runs the preprocessor over it (the --types-cpp command, else `clang`, with `-E -x c -isysroot <root> -target <arch>-apple-<os>` added where the command does not give them; the OS from LC_BUILD_VERSION or LC_VERSION_MIN_*, else the SDK's name), and leaves out each include the preprocessor's diagnostics trace back to before running it again. Objective-C `@interface`/`@protocol` bodies and `@class` lines are blanked; the rest goes through the --types reader, where Clang's nullability qualifiers are dropped and a block pointer is the object pointer the caller passes. Every record, enum and typedef becomes a `typedef` directive and the declaration of each imported function a `prototype` directive (`CFIndex CFArrayGetCount(CFArrayRef theArray)`), ahead of the run's --types and --assert directives, which still win; a function the objcsdk reader also types takes this declaration. The declarations are reported as one stderr line (prototypes and types applied, declarations not read) and are not rows of `assertions[]`. Needs the preprocessor on PATH; nothing derived from the headers is written anywhere."
+use_when = "Off (default). On a Mach-O whose SDK you have, point it at that SDK to see framework calls with their declared types and parameter names (`CFArrayCreateMutable(CFAllocatorRef allocator, CFIndex capacity, CFArrayCallBacks *callBacks)`, `CFRange` by value) where objcsdk's own reader gives `__CFArray *` and spread words. Costs one preprocessor run and a few thousand declarations per run."
+example = "unlace decompile ./trustd SecTrustEvaluateWithError --option sdktypes ~/sdks/iPhoneOS16.5.sdk"
+source_decompiler = "unlace"
+inspiration = "IDA's per-SDK type libraries (iphoneos/macosx .til) built from the SDK headers; here the user's SDK and preprocessor stand in"
+change_kind = "analysis-enablement"
+tier = "analysis"
+symptoms = "an imported CoreFoundation call prints __CFArray * and long where the SDK says CFArrayRef and CFIndex|imported framework functions have parameters a0, a1 instead of their declared names|a CFRange or other by-value SDK struct argument prints as two separate words"
+
+[[settable]]
 option = "swiftmetadata"
 values = "on|off"
 default = "on"

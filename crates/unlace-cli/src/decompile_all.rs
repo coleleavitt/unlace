@@ -1173,7 +1173,11 @@ pub(crate) fn pool_config<'a>(
 /// rejection is always spoken, on both surfaces.
 pub(crate) fn report_rejected_assertions(outcomes: &[unlace_console::assertions::Outcome]) -> bool {
     let mut any = false;
+    report_sdk_declarations(outcomes);
     for outcome in outcomes.iter().filter(|o| o.status == "rejected") {
+        if unlace_console::kuna_cheader::sdk_origin(&outcome.directive).is_some() {
+            continue;
+        }
         let reason = outcome.detail.as_deref().unwrap_or("no reason given");
         let reason = reason.lines().next().unwrap_or(reason);
         if let Some(declaration) = unlace_console::kuna_cheader::origin(&outcome.directive) {
@@ -2881,10 +2885,41 @@ fn function_json(
 }
 
 /// The per-directive report (`unlace_console::assertions::Outcome`).
+/// One line for the `sdktypes` declarations of the run: how many applied and
+/// how many the C grammar declined, with the first of those. They are runtime
+/// input rather than the caller's directives, so they are not listed one by one.
+fn report_sdk_declarations(outcomes: &[unlace_console::assertions::Outcome]) {
+    let sdk: Vec<_> = outcomes
+        .iter()
+        .filter(|o| unlace_console::kuna_cheader::sdk_origin(&o.directive).is_some())
+        .collect();
+    if sdk.is_empty() {
+        return;
+    }
+    let rejected: Vec<_> = sdk.iter().filter(|o| o.status == "rejected").collect();
+    let prototypes = sdk
+        .iter()
+        .filter(|o| o.status != "rejected" && o.kind == "prototype")
+        .count();
+    let mut line = format!(
+        "note: --option sdktypes: {prototypes} prototypes and {} types applied, {} declarations not read",
+        sdk.len() - rejected.len() - prototypes,
+        rejected.len()
+    );
+    if let Some(first) = rejected.first() {
+        let reason = first.detail.as_deref().unwrap_or("no reason given");
+        let reason = reason.lines().next().unwrap_or(reason);
+        let at = unlace_console::kuna_cheader::sdk_origin(&first.directive).unwrap_or_default();
+        line.push_str(&format!(" (first: {at}: {reason})"));
+    }
+    eprintln!("{line}");
+}
+
 fn assertions_json(outcomes: &[unlace_console::assertions::Outcome]) -> Json {
     Json::Array(
         outcomes
             .iter()
+            .filter(|o| unlace_console::kuna_cheader::sdk_origin(&o.directive).is_none())
             .map(|o| {
                 Json::Object(vec![
                     ("directive".into(), Json::Str(o.directive.clone())),
@@ -3688,7 +3723,14 @@ pub(crate) fn parse_args_with_filters(
         stored.append(&mut assertions);
         assertions = stored;
     }
-    let assertions = crate::assertdecl::with_types(&types, types_cpp.as_deref(), assertions)?;
+    let sdk = crate::kuna_sdktypes::directives(
+        &binary,
+        &options,
+        slice.as_deref(),
+        target.as_deref(),
+        types_cpp.as_deref(),
+    )?;
+    let assertions = crate::assertdecl::with_types(&types, types_cpp.as_deref(), sdk, assertions)?;
     if filters.rust_signature_manifest.is_some() {
         if apply_rust_signatures.is_some() {
             return Err(

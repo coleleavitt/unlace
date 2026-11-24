@@ -37,6 +37,7 @@ mod interior;
 mod jobs;
 mod jsonfmt;
 mod kuna_allocrelease;
+mod kuna_sdktypes;
 mod limits;
 mod loadtime;
 mod lumina;

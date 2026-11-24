@@ -718,6 +718,13 @@ kuna_options! { self, p1;
             None => "Objective-C SDK headers off".to_string(),
         })
     },
+    "sdktypes" => {
+        let path = crate::kuna_sdktypes::parse_option_value(p1).map_err(KunaError::parse)?;
+        Ok(match path {
+            Some(p) => format!("SDK C declarations read from {}", p.display()),
+            None => "SDK C declarations off".to_string(),
+        })
+    },
     "iokitclasses" => registered!(crate::kuna_analysisgates::IokitClasses),
     "xnutables" => registered!(crate::kuna_analysisgates::Xnutables),
     "osclassinfo" => registered!(crate::kuna_analysisgates::Osclassinfo),

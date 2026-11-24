@@ -1,0 +1,225 @@
+# SLEIGH specification for the Motorola MC88100 (88000 family).
+# Written for unlace from the MC88100 RISC Microprocessor User's Manual
+# (Motorola, 2nd ed., 1990): integer, bit-field, load/store, flow control and
+# the SFU1 floating-point instructions on the general registers.
+
+define endian=big;
+define alignment=4;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0x000 size=4 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 ];
+define register offset=0x000 size=8 [ r0r1 r2r3 r4r5 r6r7 r8r9 r10r11 r12r13 r14r15 r16r17 r18r19 r20r21 r22r23 r24r25 r26r27 r28r29 r30r31 ];
+define register offset=0x004 size=8 [ r1r2 r3r4 r5r6 r7r8 r9r10 r11r12 r13r14 r15r16 r17r18 r19r20 r21r22 r23r24 r25r26 r27r28 r29r30 ];
+define register offset=0x100 size=4 [ PC PSR FPCR FPSR ];
+define register offset=0x110 size=1 [ CY ];
+
+define token instr(32)
+  op6=(26,31)
+  rd=(21,25) rdp=(21,25) b5=(21,25) m5=(21,25) m5lo=(21,24)
+  s1=(16,20) rs1p=(16,20) rs1f=(16,20)
+  imm16=(0,15) d16=(0,15) signed
+  d26=(0,25) signed
+  sub6=(10,15) cio=(8,9) sc=(9,9) usr=(8,8) lo8=(0,7)
+  s2=(0,4) rs2p=(0,4) rs2f=(0,4)
+  w5=(5,9) o5=(0,4) vec9=(0,8)
+  crsub=(11,15) crn=(5,10)
+  fop=(11,15) t1=(9,10) t2=(7,8) td=(5,6)
+;
+
+attach variables [ rd rs1f rs2f ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 ];
+attach variables [ rdp rs1p rs2p ] [ r0r1 r1r2 r2r3 r3r4 r4r5 r5r6 r6r7 r7r8 r8r9 r9r10 r10r11 r11r12 r12r13 r13r14 r14r15 r15r16 r16r17 r17r18 r18r19 r19r20 r20r21 r21r22 r22r23 r23r24 r24r25 r25r26 r26r27 r27r28 r28r29 r29r30 r30r31 _ ];
+
+define pcodeop trap_vector;
+define pcodeop trap_bound;
+define pcodeop rte_return;
+define pcodeop ldcr;
+define pcodeop stcr;
+define pcodeop fldcr;
+define pcodeop fstcr;
+
+# r0 always reads as zero.
+rs1: rs1f is rs1f { export rs1f; }
+rs1: "r0" is rs1f & s1=0 { export 0:4; }
+rs2: rs2f is rs2f { export rs2f; }
+rs2: "r0" is rs2f & s2=0 { export 0:4; }
+
+rel26: addr is d26 [ addr = inst_start + d26 * 4; ] { export *:4 addr; }
+rel16: addr is d16 [ addr = inst_start + d16 * 4; ] { export *:4 addr; }
+
+# Integer arithmetic and logic
+:add rd, rs1, imm16 is op6=28 & rd & rs1 & imm16 { local b:4 = imm16; local a:4 = rs1; rd = a + b; }
+:add rd, rs1, rs2 is op6=0x3d & sub6=28 & cio=0 & lo8 & rd & rs1 & rs2 { local b:4 = rs2; local a:4 = rs1; rd = a + b; }
+:addu rd, rs1, imm16 is op6=24 & rd & rs1 & imm16 { local b:4 = imm16; local a:4 = rs1; rd = a + b; }
+:addu rd, rs1, rs2 is op6=0x3d & sub6=24 & cio=0 & lo8 & rd & rs1 & rs2 { local b:4 = rs2; local a:4 = rs1; rd = a + b; }
+:sub rd, rs1, imm16 is op6=29 & rd & rs1 & imm16 { local b:4 = imm16; local a:4 = rs1; rd = a - b; }
+:sub rd, rs1, rs2 is op6=0x3d & sub6=29 & cio=0 & lo8 & rd & rs1 & rs2 { local b:4 = rs2; local a:4 = rs1; rd = a - b; }
+:subu rd, rs1, imm16 is op6=25 & rd & rs1 & imm16 { local b:4 = imm16; local a:4 = rs1; rd = a - b; }
+:subu rd, rs1, rs2 is op6=0x3d & sub6=25 & cio=0 & lo8 & rd & rs1 & rs2 { local b:4 = rs2; local a:4 = rs1; rd = a - b; }
+:mul rd, rs1, imm16 is op6=27 & rd & rs1 & imm16 { local b:4 = imm16; local a:4 = rs1; rd = a * b; }
+:mul rd, rs1, rs2 is op6=0x3d & sub6=27 & cio=0 & lo8 & rd & rs1 & rs2 { local b:4 = rs2; local a:4 = rs1; rd = a * b; }
+:div rd, rs1, imm16 is op6=30 & rd & rs1 & imm16 { local b:4 = imm16; local a:4 = rs1; rd = a s/ b; }
+:div rd, rs1, rs2 is op6=0x3d & sub6=30 & cio=0 & lo8 & rd & rs1 & rs2 { local b:4 = rs2; local a:4 = rs1; rd = a s/ b; }
+:divu rd, rs1, imm16 is op6=26 & rd & rs1 & imm16 { local b:4 = imm16; local a:4 = rs1; rd = a / b; }
+:divu rd, rs1, rs2 is op6=0x3d & sub6=26 & cio=0 & lo8 & rd & rs1 & rs2 { local b:4 = rs2; local a:4 = rs1; rd = a / b; }
+:add.co rd, rs1, rs2 is op6=0x3d & sub6=28 & cio=1 & rd & rs1 & rs2 { local a:4 = rs1; local b:4 = rs2; CY = carry(a, b); rd = a + b; }
+:add.ci rd, rs1, rs2 is op6=0x3d & sub6=28 & cio=2 & rd & rs1 & rs2 { rd = rs1 + rs2 + zext(CY); }
+:add.cio rd, rs1, rs2 is op6=0x3d & sub6=28 & cio=3 & rd & rs1 & rs2 { local a:4 = rs1; local b:4 = rs2; local c:4 = zext(CY); local t:4 = a + b; CY = carry(a, b) || carry(t, c); rd = t + c; }
+:addu.co rd, rs1, rs2 is op6=0x3d & sub6=24 & cio=1 & rd & rs1 & rs2 { local a:4 = rs1; local b:4 = rs2; CY = carry(a, b); rd = a + b; }
+:addu.ci rd, rs1, rs2 is op6=0x3d & sub6=24 & cio=2 & rd & rs1 & rs2 { rd = rs1 + rs2 + zext(CY); }
+:addu.cio rd, rs1, rs2 is op6=0x3d & sub6=24 & cio=3 & rd & rs1 & rs2 { local a:4 = rs1; local b:4 = rs2; local c:4 = zext(CY); local t:4 = a + b; CY = carry(a, b) || carry(t, c); rd = t + c; }
+:sub.co rd, rs1, rs2 is op6=0x3d & sub6=29 & cio=1 & rd & rs1 & rs2 { local a:4 = rs1; local b:4 = rs2; CY = a >= b; rd = a - b; }
+:sub.ci rd, rs1, rs2 is op6=0x3d & sub6=29 & cio=2 & rd & rs1 & rs2 { rd = rs1 + ~rs2 + zext(CY); }
+:sub.cio rd, rs1, rs2 is op6=0x3d & sub6=29 & cio=3 & rd & rs1 & rs2 { local a:4 = rs1; local b:4 = ~rs2; local c:4 = zext(CY); local t:4 = a + b; CY = carry(a, b) || carry(t, c); rd = t + c; }
+:subu.co rd, rs1, rs2 is op6=0x3d & sub6=25 & cio=1 & rd & rs1 & rs2 { local a:4 = rs1; local b:4 = rs2; CY = a >= b; rd = a - b; }
+:subu.ci rd, rs1, rs2 is op6=0x3d & sub6=25 & cio=2 & rd & rs1 & rs2 { rd = rs1 + ~rs2 + zext(CY); }
+:subu.cio rd, rs1, rs2 is op6=0x3d & sub6=25 & cio=3 & rd & rs1 & rs2 { local a:4 = rs1; local b:4 = ~rs2; local c:4 = zext(CY); local t:4 = a + b; CY = carry(a, b) || carry(t, c); rd = t + c; }
+
+macro cmpvec(dst, a, b) {
+  dst = (zext(a == b) << 2) | (zext(a != b) << 3) | (zext(a s> b) << 4) | (zext(a s<= b) << 5)
+      | (zext(a s< b) << 6) | (zext(a s>= b) << 7) | (zext(a > b) << 8) | (zext(a <= b) << 9)
+      | (zext(a < b) << 10) | (zext(a >= b) << 11);
+}
+:cmp rd, rs1, imm16 is op6=0x1f & rd & rs1 & imm16 { local a:4 = rs1; local b:4 = imm16; local v:4 = 0; cmpvec(v, a, b); rd = v; }
+:cmp rd, rs1, rs2 is op6=0x3d & sub6=0x1f & cio=0 & rd & rs1 & rs2 { local a:4 = rs1; local b:4 = rs2; local v:4 = 0; cmpvec(v, a, b); rd = v; }
+
+:and rd, rs1, imm16 is op6=0x10 & rd & rs1 & imm16 { rd = rs1 & (0xffff0000 | imm16); }
+:and.u rd, rs1, imm16 is op6=0x11 & rd & rs1 & imm16 { rd = rs1 & ((imm16 << 16) | 0xffff); }
+:mask rd, rs1, imm16 is op6=0x12 & rd & rs1 & imm16 { rd = rs1 & imm16; }
+:mask.u rd, rs1, imm16 is op6=0x13 & rd & rs1 & imm16 { rd = rs1 & (imm16 << 16); }
+:xor rd, rs1, imm16 is op6=0x14 & rd & rs1 & imm16 { rd = rs1 ^ imm16; }
+:xor.u rd, rs1, imm16 is op6=0x15 & rd & rs1 & imm16 { rd = rs1 ^ (imm16 << 16); }
+:or rd, rs1, imm16 is op6=0x16 & rd & rs1 & imm16 { rd = rs1 | imm16; }
+:or.u rd, rs1, imm16 is op6=0x17 & rd & rs1 & imm16 { rd = rs1 | (imm16 << 16); }
+:and rd, rs1, rs2 is op6=0x3d & sub6=0x10 & cio=0 & rd & rs1 & rs2 { rd = rs1 & rs2; }
+:and.c rd, rs1, rs2 is op6=0x3d & sub6=0x11 & cio=0 & rd & rs1 & rs2 { rd = rs1 & ~rs2; }
+:xor rd, rs1, rs2 is op6=0x3d & sub6=0x14 & cio=0 & rd & rs1 & rs2 { rd = rs1 ^ rs2; }
+:xor.c rd, rs1, rs2 is op6=0x3d & sub6=0x15 & cio=0 & rd & rs1 & rs2 { rd = rs1 ^ ~rs2; }
+:or rd, rs1, rs2 is op6=0x3d & sub6=0x16 & cio=0 & rd & rs1 & rs2 { rd = rs1 | rs2; }
+:or.c rd, rs1, rs2 is op6=0x3d & sub6=0x17 & cio=0 & rd & rs1 & rs2 { rd = rs1 | ~rs2; }
+
+# Bit fields: immediate W5<O5> (op 0x3c) or the same packed in rs2 (op 0x3d); width 0 means 32.
+bfw: w5 is w5 { local w:4 = w5; w = w + (zext(w == 0) * 32); export w; }
+bfo: o5 is o5 { local o:4 = o5; export o; }
+macro bfmask(m, w) { m = (0xffffffff >> (32 - w)); }
+:clr rd, rs1, bfw^"<"^bfo^">" is op6=0x3c & sub6=0x20 & rd & rs1 & bfw & bfo { local m:4 = 0; bfmask(m, bfw); rd = rs1 & ~(m << bfo); }
+:set rd, rs1, bfw^"<"^bfo^">" is op6=0x3c & sub6=0x22 & rd & rs1 & bfw & bfo { local m:4 = 0; bfmask(m, bfw); rd = rs1 | (m << bfo); }
+:ext rd, rs1, bfw^"<"^bfo^">" is op6=0x3c & sub6=0x24 & rd & rs1 & bfw & bfo { local t:4 = rs1 << (32 - bfw - bfo); rd = t s>> (32 - bfw); }
+:extu rd, rs1, bfw^"<"^bfo^">" is op6=0x3c & sub6=0x26 & rd & rs1 & bfw & bfo { local t:4 = rs1 << (32 - bfw - bfo); rd = t >> (32 - bfw); }
+:mak rd, rs1, bfw^"<"^bfo^">" is op6=0x3c & sub6=0x28 & rd & rs1 & bfw & bfo { local m:4 = 0; bfmask(m, bfw); rd = (rs1 & m) << bfo; }
+:rot rd, rs1, "<"^o5^">" is op6=0x3c & sub6=0x2a & rd & rs1 & o5 { local a:4 = rs1; rd = (a >> o5) | (a << (32 - o5)); }
+macro bfreg(w, o, r) { w = (r >> 5) & 0x1f; w = w + (zext(w == 0) * 32); o = r & 0x1f; }
+:clr rd, rs1, rs2 is op6=0x3d & sub6=0x20 & cio=0 & rd & rs1 & rs2 { local w:4 = 0; local o:4 = 0; bfreg(w, o, rs2); local m:4 = 0; bfmask(m, w); rd = rs1 & ~(m << o); }
+:set rd, rs1, rs2 is op6=0x3d & sub6=0x22 & cio=0 & rd & rs1 & rs2 { local w:4 = 0; local o:4 = 0; bfreg(w, o, rs2); local m:4 = 0; bfmask(m, w); rd = rs1 | (m << o); }
+:ext rd, rs1, rs2 is op6=0x3d & sub6=0x24 & cio=0 & rd & rs1 & rs2 { local w:4 = 0; local o:4 = 0; bfreg(w, o, rs2); local t:4 = rs1 << (32 - w - o); rd = t s>> (32 - w); }
+:extu rd, rs1, rs2 is op6=0x3d & sub6=0x26 & cio=0 & rd & rs1 & rs2 { local w:4 = 0; local o:4 = 0; bfreg(w, o, rs2); local t:4 = rs1 << (32 - w - o); rd = t >> (32 - w); }
+:mak rd, rs1, rs2 is op6=0x3d & sub6=0x28 & cio=0 & rd & rs1 & rs2 { local w:4 = 0; local o:4 = 0; bfreg(w, o, rs2); local m:4 = 0; bfmask(m, w); rd = (rs1 & m) << o; }
+:rot rd, rs1, rs2 is op6=0x3d & sub6=0x2a & cio=0 & rd & rs1 & rs2 { local a:4 = rs1; local o:4 = rs2 & 0x1f; rd = (a >> o) | (a << (32 - o)); }
+:ff1 rd, rs2 is op6=0x3d & sub6=0x3a & cio=0 & rd & rs2 { local v:4 = rs2; rd = (31 - lzcount(v)) + (zext(v == 0) * 33); }
+:ff0 rd, rs2 is op6=0x3d & sub6=0x3b & cio=0 & rd & rs2 { local v:4 = ~rs2; rd = (31 - lzcount(v)) + (zext(v == 0) * 33); }
+
+# Loads and stores: rs1 + zero-extended imm16, rs1 + rs2, or rs1[rs2] scaled by the size.
+:ld rd, rs1, imm16 is op6=5 & rd & rs1 & imm16 { local ea:4 = rs1 + imm16; rd = *:4 ea; }
+:ld rd, rs1, rs2 is op6=0x3d & sub6=5 & sc=0 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2; rd = *:4 ea; }
+:ld rd, rs1[rs2] is op6=0x3d & sub6=5 & sc=1 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2 * 4; rd = *:4 ea; }
+:st rd, rs1, imm16 is op6=9 & rd & rs1 & imm16 { local ea:4 = rs1 + imm16; *:4 ea = rd; }
+:st rd, rs1, rs2 is op6=0x3d & sub6=9 & sc=0 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2; *:4 ea = rd; }
+:st rd, rs1[rs2] is op6=0x3d & sub6=9 & sc=1 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2 * 4; *:4 ea = rd; }
+:ld.h rd, rs1, imm16 is op6=6 & rd & rs1 & imm16 { local ea:4 = rs1 + imm16; rd = sext(*:2 ea); }
+:ld.h rd, rs1, rs2 is op6=0x3d & sub6=6 & sc=0 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2; rd = sext(*:2 ea); }
+:ld.h rd, rs1[rs2] is op6=0x3d & sub6=6 & sc=1 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2 * 2; rd = sext(*:2 ea); }
+:st.h rd, rs1, imm16 is op6=10 & rd & rs1 & imm16 { local ea:4 = rs1 + imm16; *:2 ea = rd:2; }
+:st.h rd, rs1, rs2 is op6=0x3d & sub6=10 & sc=0 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2; *:2 ea = rd:2; }
+:st.h rd, rs1[rs2] is op6=0x3d & sub6=10 & sc=1 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2 * 2; *:2 ea = rd:2; }
+:ld.b rd, rs1, imm16 is op6=7 & rd & rs1 & imm16 { local ea:4 = rs1 + imm16; rd = sext(*:1 ea); }
+:ld.b rd, rs1, rs2 is op6=0x3d & sub6=7 & sc=0 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2; rd = sext(*:1 ea); }
+:ld.b rd, rs1[rs2] is op6=0x3d & sub6=7 & sc=1 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2 * 1; rd = sext(*:1 ea); }
+:st.b rd, rs1, imm16 is op6=11 & rd & rs1 & imm16 { local ea:4 = rs1 + imm16; *:1 ea = rd:1; }
+:st.b rd, rs1, rs2 is op6=0x3d & sub6=11 & sc=0 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2; *:1 ea = rd:1; }
+:st.b rd, rs1[rs2] is op6=0x3d & sub6=11 & sc=1 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2 * 1; *:1 ea = rd:1; }
+:ld.hu rd, rs1, imm16 is op6=2 & rd & rs1 & imm16 { local ea:4 = rs1 + imm16; rd = zext(*:2 ea); }
+:ld.hu rd, rs1, rs2 is op6=0x3d & sub6=2 & sc=0 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2; rd = zext(*:2 ea); }
+:ld.hu rd, rs1[rs2] is op6=0x3d & sub6=2 & sc=1 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2 * 2; rd = zext(*:2 ea); }
+:ld.bu rd, rs1, imm16 is op6=3 & rd & rs1 & imm16 { local ea:4 = rs1 + imm16; rd = zext(*:1 ea); }
+:ld.bu rd, rs1, rs2 is op6=0x3d & sub6=3 & sc=0 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2; rd = zext(*:1 ea); }
+:ld.bu rd, rs1[rs2] is op6=0x3d & sub6=3 & sc=1 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2 * 1; rd = zext(*:1 ea); }
+:ld.d rdp, rs1, imm16 is op6=4 & rdp & rs1 & imm16 { local ea:4 = rs1 + imm16; rdp = *:8 ea; }
+:ld.d rdp, rs1, rs2 is op6=0x3d & sub6=4 & sc=0 & rdp & rs1 & rs2 { local ea:4 = rs1 + rs2; rdp = *:8 ea; }
+:ld.d rdp, rs1[rs2] is op6=0x3d & sub6=4 & sc=1 & rdp & rs1 & rs2 { local ea:4 = rs1 + rs2 * 8; rdp = *:8 ea; }
+:st.d rdp, rs1, imm16 is op6=8 & rdp & rs1 & imm16 { local ea:4 = rs1 + imm16; *:8 ea = rdp; }
+:st.d rdp, rs1, rs2 is op6=0x3d & sub6=8 & sc=0 & rdp & rs1 & rs2 { local ea:4 = rs1 + rs2; *:8 ea = rdp; }
+:st.d rdp, rs1[rs2] is op6=0x3d & sub6=8 & sc=1 & rdp & rs1 & rs2 { local ea:4 = rs1 + rs2 * 8; *:8 ea = rdp; }
+:xmem rd, rs1, imm16 is op6=1 & rd & rs1 & imm16 { local ea:4 = rs1 + imm16; local t:4 = *:4 ea; *:4 ea = rd; rd = t; }
+:xmem.bu rd, rs1, imm16 is op6=0 & rd & rs1 & imm16 { local ea:4 = rs1 + imm16; local t:1 = *:1 ea; *:1 ea = rd:1; rd = zext(t); }
+:xmem rd, rs1, rs2 is op6=0x3d & sub6=1 & sc=0 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2; local t:4 = *:4 ea; *:4 ea = rd; rd = t; }
+:xmem rd, rs1[rs2] is op6=0x3d & sub6=1 & sc=1 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2 * 4; local t:4 = *:4 ea; *:4 ea = rd; rd = t; }
+:xmem.bu rd, rs1, rs2 is op6=0x3d & sub6=0 & sc=0 & rd & rs1 & rs2 { local ea:4 = rs1 + rs2; local t:1 = *:1 ea; *:1 ea = rd:1; rd = zext(t); }
+:lda.d rd, rs1[rs2] is op6=0x3d & sub6=0xc & sc=1 & rd & rs1 & rs2 { rd = rs1 + rs2 * 8; }
+:lda rd, rs1[rs2] is op6=0x3d & sub6=0xd & sc=1 & rd & rs1 & rs2 { rd = rs1 + rs2 * 4; }
+:lda.h rd, rs1[rs2] is op6=0x3d & sub6=0xe & sc=1 & rd & rs1 & rs2 { rd = rs1 + rs2 * 2; }
+:lda.b rd, rs1[rs2] is op6=0x3d & sub6=0xf & sc=1 & rd & rs1 & rs2 { rd = rs1 + rs2; }
+
+# Flow control; the .n forms execute the next instruction (delay slot).
+:br rel26 is op6=0x30 & rel26 { goto rel26; }
+:br.n rel26 is op6=0x31 & rel26 { delayslot(1); goto rel26; }
+:bsr rel26 is op6=0x32 & rel26 { r1 = inst_next; call rel26; }
+:bsr.n rel26 is op6=0x33 & rel26 { r1 = inst_next + 4; delayslot(1); call rel26; }
+:bb0 b5, rs1, rel16 is op6=0x34 & b5 & rs1 & rel16 { local t:4 = (rs1 >> b5) & 1; if (t == 0) goto rel16; }
+:bb0.n b5, rs1, rel16 is op6=0x35 & b5 & rs1 & rel16 { local t:4 = (rs1 >> b5) & 1; delayslot(1); if (t == 0) goto rel16; }
+:bb1 b5, rs1, rel16 is op6=0x36 & b5 & rs1 & rel16 { local t:4 = (rs1 >> b5) & 1; if (t != 0) goto rel16; }
+:bb1.n b5, rs1, rel16 is op6=0x37 & b5 & rs1 & rel16 { local t:4 = (rs1 >> b5) & 1; delayslot(1); if (t != 0) goto rel16; }
+cnd: m5 is m5 & rs1 { local v:4 = rs1; local mm:4 = m5; local c:1 = ((mm & 1) != 0 && v s> 0) || ((mm & 2) != 0 && v == 0) || ((mm & 4) != 0 && v == 0x80000000) || ((mm & 8) != 0 && v s< 0 && v != 0x80000000); export c; }
+cnd: "gt0" is m5=1 & rs1 { local v:4 = rs1; local c:1 = v s> 0; export c; }
+cnd: "eq0" is m5=2 & rs1 { local v:4 = rs1; local c:1 = v == 0; export c; }
+cnd: "ge0" is m5=3 & rs1 { local v:4 = rs1; local c:1 = v s>= 0; export c; }
+cnd: "lt0" is m5=12 & rs1 { local v:4 = rs1; local c:1 = v s< 0; export c; }
+cnd: "ne0" is m5=13 & rs1 { local v:4 = rs1; local c:1 = v != 0; export c; }
+cnd: "le0" is m5=14 & rs1 { local v:4 = rs1; local c:1 = v s<= 0; export c; }
+:bcnd cnd, rs1, rel16 is op6=0x3a & cnd & rs1 & rel16 { if (cnd) goto rel16; }
+:bcnd.n cnd, rs1, rel16 is op6=0x3b & cnd & rs1 & rel16 { local c:1 = cnd; delayslot(1); if (c) goto rel16; }
+:jmp rs2f is op6=0x3d & sub6=0x30 & cio=0 & rs2f & s2=1 { return [r1]; }
+:jmp rs2f is op6=0x3d & sub6=0x30 & cio=0 & rs2f { goto [rs2f]; }
+:jmp.n rs2f is op6=0x3d & sub6=0x31 & cio=0 & rs2f & s2=1 { local t:4 = r1; delayslot(1); return [t]; }
+:jmp.n rs2f is op6=0x3d & sub6=0x31 & cio=0 & rs2f { local t:4 = rs2f; delayslot(1); goto [t]; }
+:jsr rs2f is op6=0x3d & sub6=0x32 & cio=0 & rs2f { local t:4 = rs2f; r1 = inst_next; call [t]; }
+:jsr.n rs2f is op6=0x3d & sub6=0x33 & cio=0 & rs2f { local t:4 = rs2f; r1 = inst_next + 4; delayslot(1); call [t]; }
+
+# Traps
+:tb0 b5, rs1, vec9 is op6=0x3c & sub6=0x34 & b5 & rs1 & vec9 { if (((rs1 >> b5) & 1) != 0) goto <skip>; trap_vector(vec9:2); <skip> }
+:tb1 b5, rs1, vec9 is op6=0x3c & sub6=0x36 & b5 & rs1 & vec9 { if (((rs1 >> b5) & 1) == 0) goto <skip>; trap_vector(vec9:2); <skip> }
+:tcnd cnd, rs1, vec9 is op6=0x3c & sub6=0x3a & cnd & rs1 & vec9 { if (!cnd) goto <skip>; trap_vector(vec9:2); <skip> }
+:tbnd rs1, imm16 is op6=0x3e & rd=0 & rs1 & imm16 { if (rs1 <= imm16) goto <skip>; trap_bound(); <skip> }
+:tbnd rs1, rs2 is op6=0x3d & sub6=0x3e & cio=0 & rd=0 & rs1 & rs2 { if (rs1 <= rs2) goto <skip>; trap_bound(); <skip> }
+:rte is op6=0x3d & sub6=0x3f & cio=0 { local t:4 = rte_return(); return [t]; }
+
+# Control registers (SFU0) and floating-point control registers (SFU1)
+:ldcr rd, "cr"^crn is op6=0x20 & crsub=0x08 & rd & crn { rd = ldcr(crn:1); }
+:stcr rs1, "cr"^crn is op6=0x20 & crsub=0x10 & rs1 & crn { stcr(crn:1, rs1); }
+:xcr rd, rs1, "cr"^crn is op6=0x20 & crsub=0x18 & rd & rs1 & crn { local t:4 = ldcr(crn:1); stcr(crn:1, rs1); rd = t; }
+:fldcr rd, "fcr"^crn is op6=0x20 & crsub=0x09 & rd & crn { rd = fldcr(crn:1); }
+:fstcr rs1, "fcr"^crn is op6=0x20 & crsub=0x11 & rs1 & crn { fstcr(crn:1, rs1); }
+:fxcr rd, rs1, "fcr"^crn is op6=0x20 & crsub=0x19 & rd & rs1 & crn { local t:4 = fldcr(crn:1); fstcr(crn:1, rs1); rd = t; }
+
+# SFU1 floating point on the general registers: size 0 single (rN), 1 double (rN:rN+1).
+fa: rs1f is t1=0 & rs1f { local v:8 = float2float(rs1f); export v; }
+fa: rs1p is t1=1 & rs1p { export rs1p; }
+fb: rs2f is t2=0 & rs2f { local v:8 = float2float(rs2f); export v; }
+fb: rs2p is t2=1 & rs2p { export rs2p; }
+:fadd.s rd, fa, fb is op6=0x21 & fop=5 & td=0 & rd & fa & fb { local r:8 = fa f+ fb; rd = float2float(r); }
+:fadd.d rdp, fa, fb is op6=0x21 & fop=5 & td=1 & rdp & fa & fb { rdp = fa f+ fb; }
+:fsub.s rd, fa, fb is op6=0x21 & fop=6 & td=0 & rd & fa & fb { local r:8 = fa f- fb; rd = float2float(r); }
+:fsub.d rdp, fa, fb is op6=0x21 & fop=6 & td=1 & rdp & fa & fb { rdp = fa f- fb; }
+:fmul.s rd, fa, fb is op6=0x21 & fop=0 & td=0 & rd & fa & fb { local r:8 = fa f* fb; rd = float2float(r); }
+:fmul.d rdp, fa, fb is op6=0x21 & fop=0 & td=1 & rdp & fa & fb { rdp = fa f* fb; }
+:fdiv.s rd, fa, fb is op6=0x21 & fop=14 & td=0 & rd & fa & fb { local r:8 = fa f/ fb; rd = float2float(r); }
+:fdiv.d rdp, fa, fb is op6=0x21 & fop=14 & td=1 & rdp & fa & fb { rdp = fa f/ fb; }
+:fcmp rd, fa, fb is op6=0x21 & fop=7 & rd & fa & fb {
+  local a:8 = fa; local b:8 = fb;
+  rd = (zext(a f== b) << 2) | (zext(a f!= b) << 3) | (zext(a f> b) << 4) | (zext(a f<= b) << 5) | (zext(a f< b) << 6) | (zext(a f>= b) << 7);
+}
+:flt.s rd, rs2 is op6=0x21 & fop=4 & td=0 & rd & rs2 { rd = int2float(rs2); }
+:flt.d rdp, rs2 is op6=0x21 & fop=4 & td=1 & rdp & rs2 { rdp = int2float(rs2); }
+:int rd, fb is op6=0x21 & fop=9 & rd & fb { local r:8 = round(fb); rd = trunc(r); }
+:nint rd, fb is op6=0x21 & fop=10 & rd & fb { local r:8 = round(fb); rd = trunc(r); }
+:trnc rd, fb is op6=0x21 & fop=11 & rd & fb { rd = trunc(fb); }

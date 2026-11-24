@@ -18,6 +18,8 @@ mod huc6280;
 mod kr1878_raw;
 #[path = "m6800_family.rs"]
 mod m6800_family;
+#[path = "m88k_raw.rs"]
+mod m88k_raw;
 #[path = "mep.rs"]
 mod mep;
 #[path = "mips_elf_selection.rs"]

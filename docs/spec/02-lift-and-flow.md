@@ -4289,7 +4289,23 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `SH` | Renesas SuperH SH-2E/SH-3/SH-3E/SH-4A | `sh3:BE:32:default`, `sh3:LE:32:default`, `sh3e:BE:32:default`, `sh3e:LE:32:default`, `sh2e:BE:32:default` | aleph-void/ghidra-sh (fork of will07c5/ghidra-sh) @ `31c6ca03e9`, MIT |
 | `M32R` | Renesas (Mitsubishi) M32R, M32RX, M32R2 | `M32R:BE:32:default` | written for unlace from the M32R software manuals and binutils CGEN `m32r.cpu` (semantics only); decode checked against `m32r-elf-objdump` 2.43.1, Apache-2.0 |
 | `PDP11` | DEC PDP-11 (base set, EIS, MFPS/MTPS) | `PDP-11:LE:16:default` | written for unlace from the DEC PDP-11 handbooks, Apache-2.0 |
+| `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | written for unlace from the Moxie architecture page and the binutils opcode table |
+| `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | written for unlace from the FT32 documentation and the binutils opcode table |
+| `M88000` | Motorola 88000 (MC88100) | `88000:BE:32:default` | written for unlace from the MC88100 User's Manual, Apache-2.0 |
 <!-- vendor-rows -->
+
+### Motorola 88000 (#98)
+
+`specs/Ghidra/Processors/M88000` is a SLEIGH module written for unlace from the
+MC88100 RISC Microprocessor User's Manual (no prior SLEIGH existed):
+`88000:BE:32:default`. `cmp` writes the manual's condition bit vector, which
+`bb0`/`bb1` test, so a compare-and-branch folds into a C comparison; the
+`.n` forms of br, bsr, bb0, bb1, bcnd, jmp and jsr carry a one-instruction
+delay slot; r0 reads as zero; doubles live in register pairs. The cspec follows
+the 88open BCS (arguments r2-r9, result r2, return address r1, stack r31).
+Exercised by `unlace-cli/tests/m88k_raw.rs` (hand-assembled add, signed max,
+absolute load and delay-slot call routines decompile to the expected C).
+
 
 ### DEC PDP-11 (#98)
 

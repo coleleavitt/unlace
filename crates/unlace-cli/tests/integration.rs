@@ -34,6 +34,8 @@ mod kr1878_raw;
 mod lanai_raw;
 #[path = "lua54.rs"]
 mod lua54;
+#[path = "m32c_raw.rs"]
+mod m32c_raw;
 #[path = "m32r_raw.rs"]
 mod m32r_raw;
 #[path = "m6800_family.rs"]
@@ -44,8 +46,6 @@ mod m88k_raw;
 mod mep;
 #[path = "meta_raw.rs"]
 mod meta_raw;
-#[path = "v60.rs"]
-mod v60;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "moxie_raw.rs"]
@@ -56,6 +56,8 @@ mod nios2_raw;
 mod pdp11_raw;
 #[path = "rabbit_raw.rs"]
 mod rabbit_raw;
+#[path = "v60.rs"]
+mod v60;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;

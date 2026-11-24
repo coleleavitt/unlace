@@ -1,0 +1,124 @@
+#
+# Renesas M32C/80 Series
+#
+# Written for unlace (#98) from the Renesas M32C/80 Series Software Manual
+# (REJ09B0319-0100). The M32C/80 instruction set is the M16C/80 one plus the
+# 32-bit multiply and divide (MUL.L, MULU.L, DIV.L, DIVU.L, DIVX.L) and the
+# non-carry shifts (SHANC.L, SHLNC.L); this file adds those to the M16C/80
+# specification it includes.
+#
+
+@include "M16C_80.slaspec"
+
+with: phase=1 {
+
+##### MUL.L / MULU.L #####
+
+# MUL.L src, R2R0
+:MUL.L dst5L, R2R0                   is b0_0007=0x1; ((b1_0407=0x8 & b1_size_0=1; b2_0005=0x1f) ... & $(DST5L)) & R2R0 {
+    R2R0 = R2R0 * dst5L;
+}
+
+:MUL.L dst5Ax, R2R0                  is b0_0007=0x1; ((b1_0407=0x8 & b1_size_0=1; b2_0005=0x1f) & $(DST5AX)) & R2R0 {
+    R2R0 = R2R0 * zext(dst5Ax);
+}
+
+# MULU.L src, R2R0
+:MULU.L dst5L, R2R0                  is b0_0007=0x1; ((b1_0407=0x8 & b1_size_0=1; b2_0005=0x0f) ... & $(DST5L)) & R2R0 {
+    R2R0 = R2R0 * dst5L;
+}
+
+:MULU.L dst5Ax, R2R0                 is b0_0007=0x1; ((b1_0407=0x8 & b1_size_0=1; b2_0005=0x0f) & $(DST5AX)) & R2R0 {
+    R2R0 = R2R0 * zext(dst5Ax);
+}
+
+##### DIV.L / DIVU.L / DIVX.L #####
+# The quotient goes to R2R0; the remainder is not kept. O is set for a zero divisor,
+# which leaves R2R0 undefined.
+
+:DIV.L dst5L                         is b0_0007=0x1; (b1_0407=0xa & b1_size_0=1; b2_0005=0x1f) ... & $(DST5L) {
+    d:4 = dst5L;
+    $(OVERFLOW) = (d == 0);
+    R2R0 = R2R0 s/ d;
+}
+
+:DIV.L dst5Ax                        is b0_0007=0x1; (b1_0407=0xa & b1_size_0=1; b2_0005=0x1f) & $(DST5AX) {
+    d:4 = zext(dst5Ax);
+    $(OVERFLOW) = (d == 0);
+    R2R0 = R2R0 s/ d;
+}
+
+:DIVU.L dst5L                        is b0_0007=0x1; (b1_0407=0xa & b1_size_0=1; b2_0005=0x0f) ... & $(DST5L) {
+    d:4 = dst5L;
+    $(OVERFLOW) = (d == 0);
+    R2R0 = R2R0 / d;
+}
+
+:DIVU.L dst5Ax                       is b0_0007=0x1; (b1_0407=0xa & b1_size_0=1; b2_0005=0x0f) & $(DST5AX) {
+    d:4 = zext(dst5Ax);
+    $(OVERFLOW) = (d == 0);
+    R2R0 = R2R0 / d;
+}
+
+:DIVX.L dst5L                        is b0_0007=0x1; (b1_0407=0xa & b1_size_0=1; b2_0005=0x2f) ... & $(DST5L) {
+    d:4 = dst5L;
+    $(OVERFLOW) = (d == 0);
+    R2R0 = R2R0 s/ d;
+}
+
+:DIVX.L dst5Ax                       is b0_0007=0x1; (b1_0407=0xa & b1_size_0=1; b2_0005=0x2f) & $(DST5AX) {
+    d:4 = zext(dst5Ax);
+    $(OVERFLOW) = (d == 0);
+    R2R0 = R2R0 s/ d;
+}
+
+##### SHANC.L / SHLNC.L #####
+# Shift by a signed immediate (positive: left, negative: right) without touching C.
+
+:SHANC.L srcSimm8, dst5L             is ((b1_0407=0xc & b1_size_0=0; b2_0005=0x21) ... & $(DST5L)); srcSimm8 {
+    shift:1 = srcSimm8;
+    val:4 = dst5L;
+    tmp:4 = val << shift;
+    if (shift s> 0) goto <done>;
+    shift = -shift;
+    tmp = val s>> shift;
+    <done>
+    dst5L = tmp;
+    setResultFlags(tmp);
+}
+
+:SHANC.L srcSimm8, dst5Ax            is ((b1_0407=0xc & b1_size_0=0; b2_0005=0x21) & $(DST5AX)); srcSimm8 {
+    shift:1 = srcSimm8;
+    val:4 = zext(dst5Ax);
+    tmp:4 = val << shift;
+    if (shift s> 0) goto <done>;
+    shift = -shift;
+    tmp = val s>> shift;
+    <done>
+    dst5Ax = tmp:3;
+}
+
+:SHLNC.L srcSimm8, dst5L             is ((b1_0407=0x8 & b1_size_0=0; b2_0005=0x21) ... & $(DST5L)); srcSimm8 {
+    shift:1 = srcSimm8;
+    val:4 = dst5L;
+    tmp:4 = val << shift;
+    if (shift s> 0) goto <done>;
+    shift = -shift;
+    tmp = val >> shift;
+    <done>
+    dst5L = tmp;
+    setResultFlags(tmp);
+}
+
+:SHLNC.L srcSimm8, dst5Ax            is ((b1_0407=0x8 & b1_size_0=0; b2_0005=0x21) & $(DST5AX)); srcSimm8 {
+    shift:1 = srcSimm8;
+    val:4 = zext(dst5Ax);
+    tmp:4 = val << shift;
+    if (shift s> 0) goto <done>;
+    shift = -shift;
+    tmp = val >> shift;
+    <done>
+    dst5Ax = tmp:3;
+}
+
+} # end phase=1

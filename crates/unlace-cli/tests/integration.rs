@@ -10,6 +10,8 @@ mod chip8;
 mod common;
 #[path = "epiphany_raw.rs"]
 mod epiphany_raw;
+#[path = "evm.rs"]
+mod evm;
 #[path = "frv_raw.rs"]
 mod frv_raw;
 #[path = "clipper_raw.rs"]
@@ -46,6 +48,9 @@ mod nios2_raw;
 mod pdp11_raw;
 #[path = "moxie_raw.rs"]
 mod moxie_raw;
+#[path = "rabbit_raw.rs"]
+mod rabbit_raw;
+
 #[path = "return_branch_cli.rs"]
 mod return_branch_cli;
 #[path = "riscv_bitmanip.rs"]
@@ -80,6 +85,8 @@ mod sbpf;
 mod sparc_prologue_start;
 #[path = "stm8_raw.rs"]
 mod stm8_raw;
+#[path = "tlcs90_raw.rs"]
+mod tlcs90_raw;
 #[path = "tricore_tc18.rs"]
 mod tricore_tc18;
 #[path = "upd7725.rs"]
@@ -106,12 +113,15 @@ mod aarch64_sme;
 mod i4004_raw;
 #[path = "s2650_raw.rs"]
 mod s2650_raw;
+mod sam8_raw;
 #[path = "cdp1802_raw.rs"]
 mod cdp1802_raw;
 #[path = "scmp_raw.rs"]
 mod scmp_raw;
 #[path = "tms9900_raw.rs"]
 mod tms9900_raw;
+#[path = "x86_apx.rs"]
+mod x86_apx;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

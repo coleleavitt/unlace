@@ -417,6 +417,27 @@ go1.22 hello-world (1,544 functions): functions with recovered parameters
 544 → 992, functions reading a never-assigned register local 853 → 501, zero
 failures either way.
 
+(kuna) **A 32-bit Delphi PE composes the `:borlanddelphi` compiler field**
+(`crates/unlace-analysis/src/loadimage_object.rs (language_id_for)`, option
+`delphiabi on|off`, default off, carried as the `KUNA_DELPHIABI` loadtime
+environment gate, the `goabi` pattern). The vendored `x86delphi.cspec` makes
+Delphi's `register` convention the default model: the first three arguments
+in EAX, EDX and ECX, the rest on the stack, the callee popping them, EAX the
+return. Under the PE's `windows` model those three registers are scratch, so a
+method loses `Self` and its first arguments and a call through a VMT slot
+prints with none. The override fires only on an I386 PE that holds the
+`TObject` class name and at least two VMTs under one layout
+(`crates/unlace-analysis/src/analyzers/delphi/mod.rs (is_delphi_image)`, the
+`delphi` pass's own detection); every other image composes the same id as
+before, and `elf_language_ids` enumerates the Delphi id so the
+resolves-in-the-DB gate proves it vendored. The whole image takes the model,
+so a `stdcall` callback or `cdecl` helper is read with register arguments.
+Measured with `--option delphi on` on two Inno Setup stubs (344 and 919
+decompiled functions): functions with parameters 207 → 272 and 619 → 801,
+functions reading a never-assigned register 166 → 147 and 575 → 441, calls
+printed with an empty argument list 621 → 110 and 2,245 → 914, zero failures
+either way.
+
 On AMD64 ELF with `goabi auto`, the Go function-table pass
 (`crates/unlace-analysis/src/analyzers/pclntab/kuna_goabi0.rs`)
 compares the original defined text symbols with the pclntab entries. A

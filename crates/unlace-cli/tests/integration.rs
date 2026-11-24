@@ -74,6 +74,8 @@ mod riscv_zfh;
 mod romp_raw;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
+#[path = "sbpf.rs"]
+mod sbpf;
 #[path = "sparc_prologue_start.rs"]
 mod sparc_prologue_start;
 #[path = "stm8_raw.rs"]
@@ -98,6 +100,8 @@ mod x86_amx;
 mod aarch64_rme;
 #[path = "aarch64_sve2.rs"]
 mod aarch64_sve2;
+#[path = "aarch64_sme.rs"]
+mod aarch64_sme;
 #[path = "i4004_raw.rs"]
 mod i4004_raw;
 #[path = "s2650_raw.rs"]

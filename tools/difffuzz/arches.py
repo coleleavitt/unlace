@@ -670,6 +670,10 @@ class Mips64R6(MsaCsr, Mips64):
     def ignored(self, mnemonic, operands, state):
         if re.match(r"^d?(div|mod)u?$", mnemonic):
             return {"*"} if re.search(r"\$zero$", operands) else set()
+        # MSA floating point: the p-code does not raise MSACSR's Cause/Flags bits, and the double
+        # FMADD/FMSUB are not fused in p-code.
+        if re.match(r"^f[a-z_]+\.[hwd]$", mnemonic):
+            return {"*"} if re.match(r"^fm(add|sub)\.d$", mnemonic) else {"MSACSR"}
         return set()
 
 

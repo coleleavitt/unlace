@@ -38,5 +38,8 @@ fn blackfin_hardware_loop_decompiles() {
 #[test]
 fn blackfin_call_with_register_arguments_decompiles() {
     let out = decompile("0x1010");
-    assert!(out.contains("sub_1000(5,7) + 1"), "R0/R1 arguments and the R0 result: {out}");
+    assert!(
+        out.contains("sub_1000(5,7) + 1"),
+        "R0/R1 arguments and the R0 result: {out}"
+    );
 }

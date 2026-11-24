@@ -32,13 +32,22 @@ fn sam8_add_compare_store_decompiles() {
         stdout.contains("dat_c0 = dat_30 + 5"),
         "SRP #C0 puts R0 at C0h and the add folds: {stdout}"
     );
-    assert!(stdout.contains("10 <= dat_c0"), "the borrow test survives: {stdout}");
+    assert!(
+        stdout.contains("10 <= dat_c0"),
+        "the borrow test survives: {stdout}"
+    );
     assert!(stdout.contains("dat_41 = 7"), "the store to 41h: {stdout}");
 }
 
 #[test]
 fn sam88rcri_fixed_working_registers_decompile() {
     let stdout = decompile("SAM88RCRI:BE:16:default", "0x102");
-    assert!(stdout.contains("dat_c0 = dat_30 + 5"), "R0 is C0h: {stdout}");
-    assert!(stdout.contains("dat_40 = dat_c0"), "the store to 40h: {stdout}");
+    assert!(
+        stdout.contains("dat_c0 = dat_30 + 5"),
+        "R0 is C0h: {stdout}"
+    );
+    assert!(
+        stdout.contains("dat_40 = dat_c0"),
+        "the store to 40h: {stdout}"
+    );
 }

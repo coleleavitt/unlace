@@ -1,0 +1,157 @@
+# SLEIGH specification for the National Semiconductor SC/MP (ISP-8A/500, INS8060 SC/MP II)
+#
+# Written from the National SC/MP Technical Description (1976) and the INS8060
+# data sheet. The program counter P0 is incremented before each fetch, so while
+# an instruction executes P0 holds the address of its last byte: a PC-relative
+# address is the address of the displacement byte plus the displacement, and a
+# transfer lands one byte past its effective address. Pointer arithmetic wraps
+# inside the 4 KiB page (the high four address bits never change). A
+# displacement of -128 in a memory-reference instruction selects E instead.
+
+define endian=little;
+define alignment=1;
+
+define space ram      type=ram_space      size=2 default;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=2 [ PC P0 P1 P2 P3 ];
+define register offset=0x10 size=1 [ AC E CY OV SRX ];
+
+define token op8 (8)
+	op    = (0,7)
+	opH5  = (3,7)
+	opH6  = (2,7)
+	mbit  = (2,2)
+	ptr   = (0,1)
+	preg  = (0,1)
+;
+
+define token b8 (8)
+	disp  = (0,7) signed
+	dispu = (0,7)
+	dsign = (7,7)
+	imm8  = (0,7)
+;
+
+attach variables [ preg ] [ P0 P1 P2 P3 ];
+
+define pcodeop halt;
+define pcodeop delay;
+define pcodeop serial_io;
+
+macro pageAdd(res, base, off) {
+	res = (base & 0xF000) | ((base + off) & 0x0FFF);
+}
+
+macro binAdd(v, ci) {
+	local s:2 = zext(AC) + zext(v) + zext(ci);
+	local r:1 = s:1;
+	OV = ((AC ^ r) & (v ^ r) & 0x80) != 0;
+	CY = (s >> 8) != 0;
+	AC = r;
+}
+
+macro decAdd(v) {
+	local lo:1 = (AC & 0xF) + (v & 0xF) + CY;
+	lo = lo + (6 * (lo > 9));
+	local hi:1 = (AC >> 4) + (v >> 4) + (lo >> 4);
+	hi = hi + (6 * (hi > 9));
+	CY = hi > 15;
+	AC = (hi << 4) | (lo & 0xF);
+}
+
+# memory operand: PC-relative, pointer-relative, auto-indexed
+eam: a is mbit=0 & ptr=0 ; disp [ a = ((inst_start + 1) & 0xF000) | ((inst_start + 1 + disp) & 0x0FFF); ] { export *:1 a; }
+eam: "E(PC)" is mbit=0 & ptr=0 ; dispu=0x80 { local b:2 = inst_start + 1; local e:2; pageAdd(e, b, sext(E)); export *:1 e; }
+eam: disp^"("^preg^")" is mbit=0 & preg ; disp { local e:2; pageAdd(e, preg, disp); export *:1 e; }
+eam: "E("^preg^")" is mbit=0 & preg ; dispu=0x80 { local e:2; pageAdd(e, preg, sext(E)); export *:1 e; }
+eam: "@"^disp^"("^preg^")" is mbit=1 & preg & ptr!=0 ; disp & dsign=1 { pageAdd(preg, preg, disp); export *:1 preg; }
+eam: "@"^disp^"("^preg^")" is mbit=1 & preg & ptr!=0 ; disp & dsign=0 { local e:2 = preg; pageAdd(preg, preg, disp); export *:1 e; }
+eam: "@E("^preg^")" is mbit=1 & preg & ptr!=0 ; dispu=0x80 {
+	local n:2;
+	pageAdd(n, preg, sext(E));
+	local pre:2 = zext(E s< 0);
+	local e:2 = preg + (pre * (n - preg));
+	preg = n;
+	export *:1 e;
+}
+
+# transfer target: P0 = EA, the next fetch is from EA + 1
+jt: a is ptr=0 ; disp [ a = ((inst_start + 1) & 0xF000) | ((inst_start + 2 + disp) & 0x0FFF); ] { export *:1 a; }
+jtp: disp^"("^preg^")" is preg ; disp { local t:2; pageAdd(t, preg, disp + 1); export t; }
+
+:LD eam is (opH5=0x18) ... & eam { AC = eam; }
+:LDI "#"^imm8 is op=0xC4 ; imm8 { AC = imm8:1; }
+:ST eam is (opH5=0x19) ... & eam { eam = AC; }
+:AND eam is (opH5=0x1a) ... & eam { AC = AC & eam; }
+:ANI "#"^imm8 is op=0xD4 ; imm8 { AC = AC & imm8:1; }
+:OR eam is (opH5=0x1b) ... & eam { AC = AC | eam; }
+:ORI "#"^imm8 is op=0xDC ; imm8 { AC = AC | imm8:1; }
+:XOR eam is (opH5=0x1c) ... & eam { AC = AC ^ eam; }
+:XRI "#"^imm8 is op=0xE4 ; imm8 { AC = AC ^ imm8:1; }
+:DAD eam is (opH5=0x1d) ... & eam { local m:1 = eam; decAdd(m); }
+:DAI "#"^imm8 is op=0xEC ; imm8 { local m:1 = imm8:1; decAdd(m); }
+:ADD eam is (opH5=0x1e) ... & eam { local m:1 = eam; binAdd(m, CY); }
+:ADI "#"^imm8 is op=0xF4 ; imm8 { local m:1 = imm8:1; binAdd(m, CY); }
+:CAD eam is (opH5=0x1f) ... & eam { local m:1 = ~eam; binAdd(m, CY); }
+:CAI "#"^imm8 is op=0xFC ; imm8 { local m:1 = ~imm8:1; binAdd(m, CY); }
+:ILD eam is (opH6=0x2A) ... & eam { eam = eam + 1; AC = eam; }
+:DLD eam is (opH6=0x2E) ... & eam { eam = eam - 1; AC = eam; }
+:JMP jt is (opH6=0x24 & ptr=0) ... & jt { goto jt; }
+:JMP jtp is (opH6=0x24 & ptr!=0) ... & jtp { goto [jtp]; }
+:JP jt is (opH6=0x25 & ptr=0) ... & jt { if (AC s< 0) goto inst_next; goto jt; }
+:JP jtp is (opH6=0x25 & ptr!=0) ... & jtp { if (AC s< 0) goto inst_next; goto [jtp]; }
+:JZ jt is (opH6=0x26 & ptr=0) ... & jt { if (AC != 0) goto inst_next; goto jt; }
+:JZ jtp is (opH6=0x26 & ptr!=0) ... & jtp { if (AC != 0) goto inst_next; goto [jtp]; }
+:JNZ jt is (opH6=0x27 & ptr=0) ... & jt { if (AC == 0) goto inst_next; goto jt; }
+:JNZ jtp is (opH6=0x27 & ptr!=0) ... & jtp { if (AC == 0) goto inst_next; goto [jtp]; }
+:DLY "#"^imm8 is op=0x8F ; imm8 { delay(AC, imm8:1); AC = 0xFF; }
+
+:XPAL P0 is op=0x30 & P0 {
+	local s:2 = inst_start;
+	local n:2 = (s & 0xFF00) | zext(AC);
+	AC = s:1;
+	local t:2;
+	pageAdd(t, n, 1);
+	goto [t];
+}
+:XPAL preg is opH6=0x0C & preg & ptr!=0 { local t:1 = AC; AC = preg:1; preg = (preg & 0xFF00) | zext(t); }
+:XPAH P0 is op=0x34 & P0 {
+	local s:2 = inst_start;
+	local n:2 = (s & 0x00FF) | (zext(AC) << 8);
+	AC = s(1);
+	local t:2;
+	pageAdd(t, n, 1);
+	goto [t];
+}
+:XPAH preg is opH6=0x0D & preg & ptr!=0 { local t:1 = AC; AC = preg(1); preg = (preg & 0x00FF) | (zext(t) << 8); }
+:XPPC P0 is op=0x3C & P0 { }
+:XPPC preg is opH6=0x0F & preg & ptr!=0 {
+	local t:2 = preg;
+	preg = inst_start;
+	local d:2;
+	pageAdd(d, t, 1);
+	call [d];
+}
+
+:HALT is op=0x00 { halt(); }
+:XAE is op=0x01 { local t:1 = AC; AC = E; E = t; }
+:CCL is op=0x02 { CY = 0; }
+:SCL is op=0x03 { CY = 1; }
+:DINT is op=0x04 { SRX = SRX & 0xF7; }
+:IEN is op=0x05 { SRX = SRX | 0x08; }
+:CSA is op=0x06 { AC = (CY << 7) | (OV << 6) | (SRX & 0x3F); }
+:CAS is op=0x07 { CY = AC >> 7; OV = (AC >> 6) & 1; SRX = (SRX & 0x30) | (AC & 0x0F); }
+:NOP is op=0x08 { }
+:SIO is op=0x19 { E = serial_io(E); }
+:SR is op=0x1C { AC = AC >> 1; }
+:SRL is op=0x1D { AC = (AC >> 1) | (CY << 7); }
+:RR is op=0x1E { AC = (AC >> 1) | (AC << 7); }
+:RRL is op=0x1F { local c:1 = AC & 1; AC = (AC >> 1) | (CY << 7); CY = c; }
+:LDE is op=0x40 { AC = E; }
+:ANE is op=0x50 { AC = AC & E; }
+:ORE is op=0x58 { AC = AC | E; }
+:XRE is op=0x60 { AC = AC ^ E; }
+:DAE is op=0x68 { local m:1 = E; decAdd(m); }
+:ADE is op=0x70 { local m:1 = E; binAdd(m, CY); }
+:CAE is op=0x78 { local m:1 = ~E; binAdd(m, CY); }

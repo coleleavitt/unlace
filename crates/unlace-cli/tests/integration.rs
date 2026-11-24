@@ -80,6 +80,8 @@ mod i4004_raw;
 mod s2650_raw;
 #[path = "cdp1802_raw.rs"]
 mod cdp1802_raw;
+#[path = "scmp_raw.rs"]
+mod scmp_raw;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

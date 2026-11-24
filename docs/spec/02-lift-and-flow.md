@@ -4525,8 +4525,15 @@ directly to it; with no recorded start (a loop set up in another function, or th
 `SA0`/`SA1` writes) it keeps the indirect branch through `SA0`/`SA1`. A packet that ends
 both loops at once keeps the indirect form.
 
-Not modelled: Epiphany (its loop registers are written with `movts`, not named by one
-instruction) and StarCore `DOEN`/`DOSETUP` (not decoded).
+Epiphany names no loop in one instruction either: `movts ls`, `movts le` and `movts lc` write
+the loop start, the last loop instruction and the count from registers. `mov` and `movt` of a
+constant record the register and value in flowing context; `movts ls` from that register keeps
+the value, and `movts le` from it marks the instruction at its value with the kept start, so
+the root constructor adds the count-down-and-branch there as above (the test is `LC != 0`
+after the decrement). A write to that register by another instruction in between is not
+tracked; a loop register written from any other value marks nothing.
+
+Not modelled: StarCore `DOEN`/`DOSETUP` (not decoded).
 
 ### Vendored community processor modules (#98)
 

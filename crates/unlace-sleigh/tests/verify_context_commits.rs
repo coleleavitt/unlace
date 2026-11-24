@@ -7,7 +7,9 @@
 //! each way, and the agreement of the whole corpus with a `globalset` count over
 //! each language's own source closure (`.slaspec` plus every `.sinc` it
 //! `@include`s, transitively). Zero occurrences must mean `false`, and any
-//! occurrence must mean `true`, for all 357 vendored languages.
+//! occurrence must mean `true`, for all 358 vendored languages.
+||||||| 8b7cb4c36e
+//! occurrence must mean `true`, for all 358 vendored languages.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -188,7 +190,9 @@ const SOME_TRUE: &[&str] = &["PIC", "M16C", "x86"];
 #[test]
 fn context_commits_agree_with_the_globalset_sources() {
     let corpus = vendored_sla();
-    assert_eq!(corpus.len(), 357, "the vendored language corpus changed");
+    assert_eq!(corpus.len(), 358, "the vendored language corpus changed");
+||||||| 8b7cb4c36e
+    assert_eq!(corpus.len(), 358, "the vendored language corpus changed");
 
     let mut answers: Vec<(String, String, bool, usize)> = Vec::new();
     for (processor, name, path) in &corpus {

@@ -47,9 +47,9 @@ use crate::args::take_value as take;
 use crate::callgraph::CallGraph;
 use crate::jobs;
 use crate::jsonfmt::{Json, dumps_indent2};
+use crate::loadtime::is_loadtime_gate;
 #[cfg(test)]
 use crate::loadtime::last_option_value;
-use crate::loadtime::{apply_to_process as apply_loadtime_env, is_loadtime_gate};
 use crate::paths;
 
 /// Parsed `decompile-all` / `functions` arguments (the two share a loader;
@@ -1954,20 +1954,10 @@ fn load_program_with_rust_profiles(
         .map_err(|_| format!("binary not found: {}", args.binary))?
         .to_string_lossy()
         .into_owned();
-    // Load-time loader gates are read by `bootstrap_from_object` itself, so they
-    // must be exported BEFORE it runs (the same gates `unlace decompile` threads to
-    // the subprocess env). Keep the restoration guard alive through runtime
-    // option recording too: the bridged options update their env again inside
-    // `set_unlace_option` and must not leak into a later load.
+    // The load-time gates the loader reads (the same ones `unlace decompile`
+    // hands its console child): the program loads with them and keeps them for
+    // its commit and decompiles.
     let inventory = defaults.functions_inventory() && args.apply_rust_signatures.is_none();
-    let _loadtime_env = apply_loadtime_env(
-        &args.options,
-        args.slice.as_deref(),
-        jobs::decode_lanes(args),
-        inventory,
-    );
-    // The program keeps the same settings as its load options, so its commit and
-    // its decompiles read them after the guard above restores the environment.
     let load_options = unlace_decomp::loadoptions::LoadOptions {
         go_version: None,
         ..crate::loadtime::load_options(

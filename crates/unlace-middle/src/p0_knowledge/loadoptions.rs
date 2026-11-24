@@ -45,6 +45,8 @@ pub const SWIFTTYPES_ENV: &str = "UNLACE_SWIFTTYPES";
 pub const DWARFSCOPES_ENV: &str = "UNLACE_DWARFSCOPES";
 /// Carries `dwarfenumtypedef` to the DWARF type mapper, which runs at `load file`.
 pub const DWARFENUMTYPEDEF_ENV: &str = "UNLACE_DWARFENUMTYPEDEF";
+/// The decode lanes the discovery walk runs (`--jobs`); unset is one.
+pub const DECODE_JOBS_ENV: &str = "UNLACE_DECODE_JOBS";
 /// The `--slice` fat Mach-O slice override.
 pub const MACHO_SLICE_ENV: &str = "UNLACE_MACHO_SLICE";
 /// The external `.pdb` file to apply.
@@ -136,6 +138,8 @@ pub struct LoadOptions {
     pub dwarfscopes: bool,
     /// `dwarfenumtypedef`: name an anonymous DWARF enumeration after its typedef.
     pub dwarfenumtypedef: bool,
+    /// The discovery walk's decode lanes (`--jobs`); `None` runs one.
+    pub decode_jobs: Option<usize>,
 }
 
 impl Default for LoadOptions {
@@ -175,6 +179,7 @@ impl Default for LoadOptions {
             ruststdsigs: RustStdSigs::Off,
             dwarfscopes: true,
             dwarfenumtypedef: true,
+            decode_jobs: None,
         }
     }
 }
@@ -229,6 +234,7 @@ impl LoadOptions {
             ruststdsigs: read::ruststdsigs(vars),
             dwarfscopes: read::dwarfscopes(vars),
             dwarfenumtypedef: read::dwarfenumtypedef(vars),
+            decode_jobs: read::decode_jobs(vars),
         }
     }
 
@@ -603,6 +609,10 @@ pub mod read {
             .is_ok_and(|value| matches!(value.as_str(), "off" | "0" | "false"))
     }
 
+    pub fn decode_jobs(v: &Vars<'_>) -> Option<usize> {
+        v.var(DECODE_JOBS_ENV).ok()?.trim().parse::<usize>().ok()
+    }
+
     /// The `"<maj>.<min>"` release in `UNLACE_GOVERSION`; `None` when it is
     /// unset or unparsable.
     pub fn go_version(v: &Vars<'_>) -> Option<(u16, u16)> {
@@ -751,6 +761,10 @@ pub mod env {
 
     pub fn go_version() -> Option<(u16, u16)> {
         read::go_version(&Vars::process())
+    }
+
+    pub fn decode_jobs() -> Option<usize> {
+        read::decode_jobs(&Vars::process())
     }
 }
 

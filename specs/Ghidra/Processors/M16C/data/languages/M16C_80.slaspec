@@ -978,7 +978,7 @@ with: phase=1 {
 }
 
 # (3) ADD.B:G #simm4, dst
-:ADD^".B:G" srcSimm4, dst5B          is (b1_0507=0x7 & b1_size_4=0 & b1_size_0=0; b2_0405=3 & srcSimm4) ... & $(DST5B) {
+:ADD^".B:Q" srcSimm4, dst5B          is (b1_0507=0x7 & b1_size_4=0 & b1_size_0=0; b2_0405=3 & srcSimm4) ... & $(DST5B) {
     tmp:1 = dst5B;
     setAddFlags(tmp, srcSimm4);
     tmp = tmp + srcSimm4;
@@ -987,7 +987,7 @@ with: phase=1 {
 }
 
 # (3) ADD.B:G #simm4, Ax
-:ADD^".B:G" srcSimm4, dst5Ax         is (b1_0507=0x7 & b1_d5=0x0 & b1_size_4=0 & b1_size_0=0; b2_0405=3 & srcSimm4) & $(DST5AX) {
+:ADD^".B:Q" srcSimm4, dst5Ax         is (b1_0507=0x7 & b1_d5=0x0 & b1_size_4=0 & b1_size_0=0; b2_0405=3 & srcSimm4) & $(DST5AX) {
     tmp:1 = dst5Ax:1;
     setAddFlags(tmp, srcSimm4);
     tmp = tmp + srcSimm4;
@@ -3494,7 +3494,7 @@ popRegList: "( "^popRegR0^")"  is popRegR0 { build popRegR0; }
 }
 
 # (1) PUSH.W #imm
-:PUSH.B srcImm16                     is b1_0007=0xaf; srcImm16 {
+:PUSH.W srcImm16                     is b1_0007=0xaf; srcImm16 {
     push2(srcImm16);
 }
 

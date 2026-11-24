@@ -1,0 +1,19 @@
+<dwarf>
+		<register_mapping dwarf="0" ghidra="r0" auto_count="16"/>
+		<register_mapping dwarf="16" ghidra="RL0"/>
+		<register_mapping dwarf="17" ghidra="RH0"/>
+		<register_mapping dwarf="18" ghidra="RL1"/>
+		<register_mapping dwarf="19" ghidra="RH1"/>
+		<register_mapping dwarf="20" ghidra="RL2"/>
+		<register_mapping dwarf="21" ghidra="RH2"/>
+		<register_mapping dwarf="22" ghidra="RL3"/>
+		<register_mapping dwarf="23" ghidra="RH3"/>
+		<register_mapping dwarf="24" ghidra="RL4"/>
+		<register_mapping dwarf="25" ghidra="RH4"/>
+		<register_mapping dwarf="26" ghidra="RL5"/>
+		<register_mapping dwarf="27" ghidra="RH5"/>
+		<register_mapping dwarf="28" ghidra="RL6"/>
+		<register_mapping dwarf="29" ghidra="RH6"/>
+		<register_mapping dwarf="30" ghidra="RL7"/>
+		<register_mapping dwarf="31" ghidra="RH7"/>
+</dwarf>

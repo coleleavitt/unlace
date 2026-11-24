@@ -1,0 +1,7 @@
+<opinions>
+    <!-- EM_C166 (116): the ELF machine number of the Infineon/Siemens C166 family. The C167CS language is the
+         superset of the C167CR one (second CAN module), so ELF files select it. e_flags carry no variant. -->
+    <constraint loader="Executable and Linking Format (ELF)" compilerSpecID="tasking">
+        <constraint primary="116" processor="Infineon C167CS" endian="little" size="16" variant="C167CS" />
+    </constraint>
+</opinions>

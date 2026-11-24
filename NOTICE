@@ -102,6 +102,10 @@ specs/Ghidra/Processors/R8C vendors the Renesas M16C/20 and R8C/Tiny SLEIGH spec
 AlexDev-TH/ghidra-r8c (https://github.com/AlexDev-TH/ghidra-r8c), released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/C166 vendors the Infineon C166 / XC166, ST10 SLEIGH specification of
+aleph-void/c166-ghidra-module (https://github.com/aleph-void/c166-ghidra-module), a fork of keyhana/c166-ghidra-module, released under the
+MIT License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

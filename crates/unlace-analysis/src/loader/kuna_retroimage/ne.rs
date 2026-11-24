@@ -71,7 +71,7 @@ pub fn probe(bytes: &[u8]) -> bool {
 }
 
 /// A Pascal string (length byte, then the bytes) at `at`.
-fn pascal(file: &Bytes, at: u64) -> Option<&[u8]> {
+fn pascal<'a>(file: &Bytes<'a>, at: u64) -> Option<&'a [u8]> {
     let len = file.u8(at)?;
     file.slice(at + 1, u64::from(len))
 }

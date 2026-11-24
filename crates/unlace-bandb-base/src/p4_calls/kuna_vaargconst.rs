@@ -363,13 +363,26 @@ pub fn rewrite(data: &mut Funcdata) {
     if !enabled(data) || data.get_heritage_pass() != 0 {
         return;
     }
-    let id = data.get_arch().get_description().to_string();
-    if !id.starts_with("x86:LE:64") || crate::kuna_fastfailnoreturn::archid_is_windows(&id) {
+    let arch = data.get_arch();
+    if arch.windows_cspec || arch.image_windows_user {
         return;
     }
-    let Some(spv) = data.get_arch().get_register_varnode(b"RSP").ok() else {
+    let Some(spv) = arch
+        .manage()
+        .get_stack_space()
+        .and_then(|s| s.get_spacebase(0).ok())
+    else {
         return;
     };
+    if spv.offset != 0x20
+        || spv.size != 8
+        || !arch
+            .manage()
+            .get_default_code_space()
+            .is_some_and(|c| c.get_addr_size() == 8)
+    {
+        return;
+    }
     let Some(sp_space) = spv.space.clone() else {
         return;
     };

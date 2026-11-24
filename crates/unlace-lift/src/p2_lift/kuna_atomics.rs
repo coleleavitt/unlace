@@ -2343,7 +2343,7 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         .map(|i| ops[i])
         .collect();
     let at_load = at_load?;
-    let order = c11_order(data, ops);
+    let order = c11_order(data, &ops);
     let (builtin, operands) = spelled(builtin, &operands, width, msvc_spelling(data), order, |e| {
         buildable(&at_load, e, true)
     });
@@ -2606,7 +2606,7 @@ fn fold_pair_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         return None;
     }
     let prefix = prefix?;
-    let order = c11_order(data, ops);
+    let order = c11_order(data, &ops);
     let (builtin, operands) = spelled(
         builtin,
         &[operand],

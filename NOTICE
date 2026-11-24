@@ -94,6 +94,10 @@ specs/Ghidra/Processors/A29K vendors the AMD Am29000 SLEIGH specification of
 aleph-void/ghidra_a29k (https://github.com/aleph-void/ghidra_a29k), a fork of mumbel/ghidra_a29k, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/uPD78xx vendors the NEC 78K0 / 78K0S / 78K4 (uPD78xx) SLEIGH specification of
+aleph-void/ghidra-upd78xx (https://github.com/aleph-void/ghidra-upd78xx), released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

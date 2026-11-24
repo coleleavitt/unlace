@@ -1,0 +1,1744 @@
+# sleigh specification file for NEC uPD78 series
+
+
+################################################################
+# Machine definitions                                          #
+################################################################
+
+define endian=little;
+define alignment=1;
+define space ram      type=ram_space      size=2  default;
+define space register type=register_space size=1;
+
+################################################################
+# Registers                                                    #
+################################################################
+
+
+define register offset=0x00 size=1 [ A V C B E D L H EAL EAH];
+define register offset=0x00 size=2 [ VA  BC  DE  HL  EA];
+define register offset=0x10 size=1 [ A_ V_ C_ B_ E_ D_ L_ H_ EAL_ EAH_]; # Alternate registers
+define register offset=0x10 size=2 [ VA_   BC_   DE_   HL_   EA_      ]; # Alternate registers
+define register offset=0x20 size=2 [ PC SP];
+
+# Flag bits
+
+# The program status word (bit 7 = 0, Z, SK, HC, L1, L0, bit 1 = 0, CY) is not a register:
+# each flag is a register of its own (0 or 1), which keeps the decompiler output readable. The
+# status byte exists only on the stack, where SOFTI and the interrupts push it and RETI pops it.
+define register offset=0x30 size=1 [ CY Z HC SK L0 L1 ];
+@define CY_flag     "CY"  # C: Carry
+@define L0_flag     "L0"  # stacked MVI L / LXI H (group B)
+@define L1_flag     "L1"  # stacked MVI A (group A)
+@define HC_flag     "HC"  # HC: Half carry
+@define SK_flag     "SK"  # SK: Skip flag, skips the next instruction
+@define Z_flag      "Z"   # Z: Zero
+
+# Control registers
+define register offset=0x40 size=1 [PORTA PORTB PORTC PORTD PORTF MA MB MC MCC MF MM TM0 TM1 TMM ETMM EOM ANM CR0 CR1 CR2 CR3 TXB RXB SMH SML MKH MKL ZCM]; # Mode control registers
+# 16-bit control registers
+define register offset=0x60 size=2 [ETM0 ETM1 ECNT ECPT]; # 16bit mode control registers
+
+# Interrupt flags
+define register offset=0xA0 size=1 [NMI FT0 FT1 F1 F2 FE0 FE1 FEIN FAD FSR FST ER OV AN4 AN5 AN6 AN7 SB];
+
+define register offset=0xF0 size=4 contextreg;
+define context contextreg
+    # Set on an instruction that the preceding instruction may skip, so that the
+    # SK flag check is emitted for it. The call instructions set it on their
+    # fall-through, since the next instruction is the one that would be skipped 
+    # in the case that a RETS instruction was executed.
+    possibleSkip = (0,0) noflow
+;
+
+################################################################
+# Tokens                                                       #
+################################################################
+
+define token opbyte (8)
+    op0_7   = (0,7)
+    op0_3   = (0,3)
+    op0_4   = (0,4)
+    op1_7   = (1,7)
+    op2_7   = (2,7)
+    op3_6   = (3,6)
+    op3_7   = (3,7)
+    op4_7   = (4,7)
+    op5_7   = (5,7)
+    op6_7   = (6,7)
+
+    r_0_2   = (0,2)
+    r1_0_2  = (0,2)
+    r2_0_1  = (0,1)
+
+    rpa_0_2  = (0,2)
+    rpa1_0_1 = (0,1)
+    rpa2_0_2 = (0,2)
+    rpa3_0_3 = (0,3)
+
+    rp_4_5  = (4,5)
+    rp1_0_2 = (0,2)
+    rp2_4_6 = (4,6)
+    rp3_0_1 = (0,1)
+
+    srl_0_4  = (0,4)
+    srr_0_4  = (0,4)
+    sr2l_0_2 = (0,2)
+    sr2h_0_2 = (0,2)
+    sr3_0    = (0,0)
+    sr4_0    = (0,0)
+
+    cr_0_1  = (0,1)
+
+    fah_0_2 = (0,2)
+
+    ta_0_4     = (0,4)
+    jdisp1_0_5 = (0,5) signed
+
+    f_0_2   = (0,2)
+    irf_0_4 = (0,4)
+
+    bit_0   = (0,0)
+    bit_1   = (1,1)
+    bit_2   = (2,2)
+    bit_3   = (3,3)
+    bit_4   = (4,4)
+    bit_5   = (5,5)
+    bit_7   = (7,7)
+
+    bits0_2 = (0,2)
+;
+
+define token data8 (8)
+   imm8  = (0,7)
+   val8  = (0,7)
+   sign8 = (7,7)
+   simm8 = (0,7) signed
+;
+
+define token data16 (16)
+   imm16  = (0,15)
+   sign16 = (15,15)
+   simm16 = (0,15) signed
+;
+
+# Working register offset
+define token waAddr (8)
+    waAddr8 = (0,7)
+;
+
+################################################################
+# Variable tables                                              #
+################################################################
+
+attach variables [ r_0_2 ]  [ V   A   B C D E H L]; # r
+attach variables [ r1_0_2 ] [ EAH EAL B C D E H L]; # r1
+attach variables [ r2_0_1 ] [ V A B C]; # r2
+
+attach variables [ rp_4_5 ] [ SP BC DE HL]; # rp
+
+# sr: the special registers MOV sr,A can write (the low 5 bits of the S5..S0 code; ZCM is S5..S0 = 101000)
+attach variables [ srl_0_4 ] [ PORTA PORTB PORTC PORTD _ PORTF MKH MKL ANM SMH SML EOM ETMM TMM _ _ MM MCC MA MB MC _ _ MF TXB _ TM0 TM1 _ _ _ _ ]; # SR low
+# sr1: the special registers MOV A,sr1 can read (RXB is read-only, TXB write-only)
+attach variables [ srr_0_4 ] [ PORTA PORTB PORTC PORTD _ PORTF MKH MKL ANM SMH _ EOM _ TMM _ _ _ _ _ _ _ _ _ _ _ RXB _ _ _ _ _ _ ]; # SR1 low
+attach variables [ cr_0_1 ] [ CR0 CR1 CR2 CR3 ]; # cr registers
+attach variables [ sr2l_0_2 ] [ PORTA PORTB PORTC PORTD _ PORTF MKH MKL]; # sr2 low
+attach variables [ sr2h_0_2 ] [ ANM SMH _ EOM _ TMM _ _]; # sr2 high
+attach variables [ sr3_0 ] [ ETM0 ETM1]; # sr3
+attach variables [ sr4_0 ] [ ECNT ECPT]; # sr4
+
+################################################################
+# Psuedo Instructions                                          #
+################################################################
+
+define pcodeop disableMaskableInterrupts;
+define pcodeop enableMaskableInterrupts;
+define pcodeop halt;
+define pcodeop stop;
+
+################################################################
+# Macros                                                       #
+################################################################
+
+# Flag behaviour follows Table 3-2 of the uPD78C1x user's manual: arithmetic sets Z, HC and CY;
+# logical operations only Z; the skip tests also SK; INR/DCR set Z, HC and SK but leave CY alone.
+# HC is the carry out of bit 3 (borrow into bit 3 for a subtraction; also for 16-bit operations).
+# Operands are copied first, so a macro may be given a register, a memory operand or a constant.
+
+macro add(op1, op2) {
+    local x:1 = op1;
+    local y:1 = op2;
+    $(CY_flag) = carry(x, y);
+    $(HC_flag) = (((x & 0xf) + (y & 0xf)) & 0x10) != 0;
+    local r:1 = x + y;
+    op1 = r;
+    $(Z_flag) = (r == 0);
+}
+
+# op1 = op1 + op2 + CY
+macro adc(op1, op2) {
+    local x:1 = op1;
+    local y:1 = op2;
+    local c:1 = $(CY_flag);
+    local w:2 = zext(x) + zext(y) + zext(c);
+    $(CY_flag) = w > 0xff;
+    $(HC_flag) = ((x & 0xf) + (y & 0xf) + c) > 0xf;
+    local r:1 = w:1;
+    op1 = r;
+    $(Z_flag) = (r == 0);
+}
+
+# op1 = op1 + op2, skip if no carry
+macro addNC(op1, op2) {
+    add(op1, op2);
+    $(SK_flag) = ($(CY_flag) == 0);
+}
+
+macro sub(op1, op2) {
+    local x:1 = op1;
+    local y:1 = op2;
+    $(CY_flag) = x < y;
+    $(HC_flag) = (x & 0xf) < (y & 0xf);
+    local r:1 = x - y;
+    op1 = r;
+    $(Z_flag) = (r == 0);
+}
+
+# op1 = op1 - op2 - CY
+macro sbb(op1, op2) {
+    local x:1 = op1;
+    local y:1 = op2;
+    local c:1 = $(CY_flag);
+    local xw:2 = zext(x);
+    local yw:2 = zext(y) + zext(c);
+    $(CY_flag) = xw < yw;
+    $(HC_flag) = (x & 0xf) < ((y & 0xf) + c);
+    local r:1 = x - y - c;
+    op1 = r;
+    $(Z_flag) = (r == 0);
+}
+
+# op1 = op1 - op2, skip if no borrow
+macro subNB(op1, op2) {
+    sub(op1, op2);
+    $(SK_flag) = ($(CY_flag) == 0);
+}
+
+macro and(op1, op2) {
+    local r = op1 & op2;
+    op1 = r;
+    $(Z_flag) = (r == 0);
+}
+
+macro or(op1, op2) {
+    local r = op1 | op2;
+    op1 = r;
+    $(Z_flag) = (r == 0);
+}
+
+macro xor(op1, op2) {
+    local r = op1 ^ op2;
+    op1 = r;
+    $(Z_flag) = (r == 0);
+}
+
+# The comparisons compute op1 - op2 (op1 - op2 - 1 for GT) only for its flags.
+# GT: skip if no borrow, i.e. op1 > op2
+macro gt(op1, op2) {
+    local x:1 = op1;
+    local y:1 = op2;
+    $(CY_flag) = x <= y;
+    $(HC_flag) = (x & 0xf) <= (y & 0xf);
+    local r:1 = x - y - 1;
+    $(Z_flag) = (r == 0);
+    $(SK_flag) = x > y;
+}
+
+# LT: skip if borrow, i.e. op1 < op2
+macro lt(op1, op2) {
+    local x:1 = op1;
+    local y:1 = op2;
+    $(CY_flag) = x < y;
+    $(HC_flag) = (x & 0xf) < (y & 0xf);
+    $(Z_flag) = (x == y);
+    $(SK_flag) = x < y;
+}
+
+macro ne(op1, op2) {
+    local x:1 = op1;
+    local y:1 = op2;
+    $(CY_flag) = x < y;
+    $(HC_flag) = (x & 0xf) < (y & 0xf);
+    $(Z_flag) = (x == y);
+    $(SK_flag) = x != y;
+}
+
+macro eq(op1, op2) {
+    local x:1 = op1;
+    local y:1 = op2;
+    $(CY_flag) = x < y;
+    $(HC_flag) = (x & 0xf) < (y & 0xf);
+    $(Z_flag) = (x == y);
+    $(SK_flag) = x == y;
+}
+
+# ON: skip if the logical product is not zero, OFF: skip if it is zero
+macro on(op1, op2) {
+    local r = op1 & op2;
+    $(Z_flag) = (r == 0);
+    $(SK_flag) = (r != 0);
+}
+
+macro off(op1, op2) {
+    local r = op1 & op2;
+    $(Z_flag) = (r == 0);
+    $(SK_flag) = (r == 0);
+}
+
+# INR / DCR: skip on carry / borrow; CY is not affected
+macro inr(op) {
+    local x:1 = op;
+    local r:1 = x + 1;
+    op = r;
+    $(HC_flag) = (x & 0xf) == 0xf;
+    $(Z_flag) = (r == 0);
+    $(SK_flag) = (x == 0xff);
+}
+
+macro dcr(op) {
+    local x:1 = op;
+    local r:1 = x - 1;
+    op = r;
+    $(HC_flag) = (x & 0xf) == 0;
+    $(Z_flag) = (r == 0);
+    $(SK_flag) = (x == 0);
+}
+
+# Decimal adjust (manual 14.6.10): +06 when the low digit is above 9 or HC is set, +60 when the
+# high digit is above 9 (above 8 after a low-digit correction that carries), or CY is set.
+macro daa() {
+    local a:1 = A;
+    local lo:1 = a & 0xf;
+    local hi:1 = a >> 4;
+    local cy:1 = $(CY_flag);
+    local hc:1 = $(HC_flag);
+    local lowfix:1 = (hc != 0) || (lo > 9);
+    local hifix:1 = (cy != 0) || (hi > 9) || ((hc == 0) && (lo > 9) && (hi == 9));
+    local adj:1 = (zext(lowfix) * 0x06) + (zext(hifix) * 0x60);
+    local r:1 = a + adj;
+    A = r;
+    $(Z_flag) = (r == 0);
+    $(HC_flag) = (lo + (adj & 0xf)) > 0xf;
+    $(CY_flag) = hifix;
+}
+
+macro push16(val16) {
+    SP = SP - 2;
+    *:2 SP = val16;
+}
+
+macro pop16(ret16) {
+    ret16 = *:2 SP;
+    SP = SP + 2;
+}
+
+# PSW as it appears on the stack: 0 Z SK HC L1 L0 0 CY
+macro psw_byte(val8) {
+    val8 = (Z << 6) | (SK << 5) | (HC << 4) | (L1 << 3) | (L0 << 2) | CY;
+}
+
+macro psw_restore(val8) {
+    CY = val8 & 1;
+    L0 = (val8 >> 2) & 1;
+    L1 = (val8 >> 3) & 1;
+    HC = (val8 >> 4) & 1;
+    SK = (val8 >> 5) & 1;
+    Z = (val8 >> 6) & 1;
+}
+
+macro push8(val8) {
+    SP = SP - 1;
+    *:1 SP = val8;
+}
+
+macro pop8(ret8) {
+    ret8 = *:1 SP;
+    SP = SP + 1;
+}
+
+# 16-bit operations (EA with a register pair). HC is the carry out of bit 3, as for 8 bits.
+macro add16(op1, op2) {
+    local x:2 = op1;
+    local y:2 = op2;
+    $(CY_flag) = carry(x, y);
+    $(HC_flag) = (((x & 0xf) + (y & 0xf)) & 0x10) != 0;
+    local r:2 = x + y;
+    op1 = r;
+    $(Z_flag) = (r == 0);
+}
+
+macro adc16(op1, op2) {
+    local x:2 = op1;
+    local y:2 = op2;
+    local c:2 = zext($(CY_flag));
+    local w:4 = zext(x) + zext(y) + zext(c);
+    $(CY_flag) = w > 0xffff;
+    $(HC_flag) = ((x & 0xf) + (y & 0xf) + c) > 0xf;
+    local r:2 = w:2;
+    op1 = r;
+    $(Z_flag) = (r == 0);
+}
+
+macro sub16(op1, op2) {
+    local x:2 = op1;
+    local y:2 = op2;
+    $(CY_flag) = x < y;
+    $(HC_flag) = (x & 0xf) < (y & 0xf);
+    local r:2 = x - y;
+    op1 = r;
+    $(Z_flag) = (r == 0);
+}
+
+macro sbb16(op1, op2) {
+    local x:2 = op1;
+    local y:2 = op2;
+    local c:2 = zext($(CY_flag));
+    local xw:4 = zext(x);
+    local yw:4 = zext(y) + zext(c);
+    $(CY_flag) = xw < yw;
+    $(HC_flag) = (x & 0xf) < ((y & 0xf) + c);
+    local r:2 = x - y - c;
+    op1 = r;
+    $(Z_flag) = (r == 0);
+}
+
+macro gt16(op1, op2) {
+    local x:2 = op1;
+    local y:2 = op2;
+    $(CY_flag) = x <= y;
+    $(HC_flag) = (x & 0xf) <= (y & 0xf);
+    local r:2 = x - y - 1;
+    $(Z_flag) = (r == 0);
+    $(SK_flag) = x > y;
+}
+
+macro lt16(op1, op2) {
+    local x:2 = op1;
+    local y:2 = op2;
+    $(CY_flag) = x < y;
+    $(HC_flag) = (x & 0xf) < (y & 0xf);
+    $(Z_flag) = (x == y);
+    $(SK_flag) = x < y;
+}
+
+macro ne16(op1, op2) {
+    local x:2 = op1;
+    local y:2 = op2;
+    $(CY_flag) = x < y;
+    $(HC_flag) = (x & 0xf) < (y & 0xf);
+    $(Z_flag) = (x == y);
+    $(SK_flag) = x != y;
+}
+
+macro eq16(op1, op2) {
+    local x:2 = op1;
+    local y:2 = op2;
+    $(CY_flag) = x < y;
+    $(HC_flag) = (x & 0xf) < (y & 0xf);
+    $(Z_flag) = (x == y);
+    $(SK_flag) = x == y;
+}
+
+################################################################
+# Memory addresses and values                                  #
+################################################################
+
+Mem8: (imm16)     is imm16    { export *:1 imm16; }
+Mem16: (imm16)    is imm16    { export *:2 imm16; }
+Addr16: imm16     is imm16    { export *:1 imm16; }
+
+################################################################
+# Working register addresses                                   #
+################################################################
+
+waMem8: (V+waAddr8)  is V & waAddr8 {
+    local hi:2 = zext(V);
+    local ptr:2 = (hi << 8) + waAddr8;
+    export *:1 ptr;
+}
+
+################################################################
+# Relative jump destinations                                   #
+################################################################
+
+RelAddr6:       loc is jdisp1_0_5           [ loc = inst_next + jdisp1_0_5; ]       { export *:1 loc; }
+RelAddr8_pos:   loc is imm8                 [ loc = inst_next + imm8; ]             { export *:1 loc; }
+RelAddr8_neg:   loc is imm8                 [ loc = inst_next - 256 + imm8; ]       { export *:1 loc; }
+faAddr:         faloc is fah_0_2; imm8      [ faloc = 0x800+(fah_0_2 << 8)+imm8; ]  {export *:1 faloc;}
+
+################################################################
+# Register pairs and register pair pointers                    #
+################################################################
+
+# r2 without V
+r2_: r2_0_1 is (bit_0 != 0 | bit_1 != 0) & r2_0_1 { export r2_0_1; }
+# r2 without V in second byte of mul/div/rotates:
+r2_48: r2_0_1 is op0_7 = 0x48; (bit_0 != 0 | bit_1 != 0) & r2_0_1 { export r2_0_1; }
+
+rp1: VA is rp1_0_2 = 0x0 & VA { export VA; }
+rp1: BC is rp1_0_2 = 0x1 & BC { export BC; }
+rp1: DE is rp1_0_2 = 0x2 & DE { export DE; }
+rp1: HL is rp1_0_2 = 0x3 & HL { export HL; }
+rp1: EA is rp1_0_2 = 0x4 & EA { export EA; }
+
+rp2: SP is rp2_4_6 = 0x0 & SP { export SP; }
+rp2: BC is rp2_4_6 = 0x1 & BC { export BC; }
+rp2: DE is rp2_4_6 = 0x2 & DE { export DE; }
+# HL (3) is the LXI H instruction below, which carries the stacking flag
+rp2: EA is rp2_4_6 = 0x4 & EA { export EA; }
+
+rp3: BC is rp3_0_1 = 0x1 & BC { export BC; }
+rp3: DE is rp3_0_1 = 0x2 & DE { export DE; }
+rp3: HL is rp3_0_1 = 0x3 & HL { export HL; }
+# For 0x74 ... instructions addressing rp3
+rp3_: rp3 is op0_7 = 0x74; rp3_0_1 != 0 & rp3 { export rp3; }
+
+# Register pair pointers
+rpa: (BC) is rpa_0_2 = 0x1 & BC                         { export *:1 BC; }
+rpa: (DE) is rpa_0_2 = 0x2 & DE                         { export *:1 DE; }
+rpa: (HL) is rpa_0_2 = 0x3 & HL                         { export *:1 HL; }
+rpa: (DE+) is rpa_0_2 = 0x4 & DE                        { tmp = DE; DE = DE+1; export *:1 tmp; }
+rpa: (HL+) is rpa_0_2 = 0x5 & HL                        { tmp = HL; HL = HL+1; export *:1 tmp; }
+rpa: (DE-) is rpa_0_2 = 0x6 & DE                        { tmp = DE; DE = DE-1; export *:1 tmp; }
+rpa: (HL-) is rpa_0_2 = 0x7 & HL                        { tmp = HL; HL = HL-1; export *:1 tmp; }
+
+rpa1: (BC) is rpa1_0_1 = 0x1 & BC                       { export *:1 BC; }
+rpa1: (DE) is rpa1_0_1 = 0x2 & DE                       { export *:1 DE; }
+rpa1: (HL) is rpa1_0_1 = 0x3 & HL                       { export *:1 HL; }
+
+rpa2: (BC) is rpa2_0_2 = 0x1 & bit_7 = 0 & BC           { export *:1 BC; }
+rpa2: (DE) is rpa2_0_2 = 0x2 & bit_7 = 0 & DE           { export *:1 DE; }
+rpa2: (HL) is rpa2_0_2 = 0x3 & bit_7 = 0 & HL           { export *:1 HL; }
+rpa2: (DE+) is rpa2_0_2 = 0x4 & bit_7 = 0 & DE          { tmp = DE; DE= DE+1; export *:1 tmp;}
+rpa2: (HL+) is rpa2_0_2 = 0x5 & bit_7 = 0 & HL          { tmp = HL; HL= HL+1; export *:1 tmp;}
+rpa2: (DE-) is rpa2_0_2 = 0x6 & bit_7 = 0 & DE          { tmp = DE; DE= DE-1; export *:1 tmp;}
+rpa2: (HL-) is rpa2_0_2 = 0x7 & bit_7 = 0 & HL          { tmp = HL; HL= HL-1; export *:1 tmp;}
+rpa2: (HL+A) is rpa2_0_2 = 0x4 & bit_7 = 1 & HL & A     { ptr:2 = HL + zext(A); export *:1 ptr;}
+rpa2: (HL+B) is rpa2_0_2 = 0x5 & bit_7 = 1 & HL & B     { ptr:2 = HL + zext(B); export *:1 ptr;}
+rpa2: (HL+EA) is rpa2_0_2 = 0x6 & bit_7 = 1 & HL & EA   { ptr:2 = HL+EA; export *:1 ptr;}
+
+rpa3: (DE) is rpa3_0_3 = 0x2 & DE                       { export *:2 DE; }
+rpa3: (HL) is rpa3_0_3 = 0x3 & HL                       { export *:2 HL; }
+rpa3: (DE++) is rpa3_0_3 = 0x4 & DE                     { tmp:2 = DE; DE = DE + 2; export *:2 tmp; }
+rpa3: (HL++) is rpa3_0_3 = 0x5 & HL                     { tmp:2 = HL; HL = HL + 2; export *:2 tmp; }
+rpa3: (HL+A) is rpa3_0_3 = 0xc & HL & A                 { ptr:2 = HL + zext(A); export *:2 ptr; }
+rpa3: (HL+B) is rpa3_0_3 = 0xd & HL & B                 { ptr:2 = HL + zext(B); export *:2 ptr; }
+rpa3: (HL+EA) is rpa3_0_3 = 0xe & HL & EA               { ptr:2 = HL + EA; export *:2 ptr; }
+
+# Flags
+flag: "CY" is f_0_2 = 0x2 { f:1 = $(CY_flag); export f; }
+flag: "HC" is f_0_2 = 0x3 { f:1 = $(HC_flag); export f; }
+flag: "Z"  is f_0_2 = 0x4 { f:1 = $(Z_flag); export f; }
+
+# Interrupt request flags
+irf: FT0    is irf_0_4 = 0x1 & FT0  { export FT0; }
+irf: FT1    is irf_0_4 = 0x2 & FT1  { export FT1; }
+irf: F1     is irf_0_4 = 0x3 & F1   { export F1; }
+irf: F2     is irf_0_4 = 0x4 & F2   { export F2; }
+irf: FE0    is irf_0_4 = 0x5 & FE0  { export FE0; }
+irf: FE1    is irf_0_4 = 0x6 & FE1  { export FE1; }
+irf: FEIN   is irf_0_4 = 0x7 & FEIN { export FEIN; }
+irf: FAD    is irf_0_4 = 0x8 & FAD  { export FAD; }
+irf: FSR    is irf_0_4 = 0x9 & FSR  { export FSR; }
+irf: FST    is irf_0_4 = 0xa & FST  { export FST; }
+irf: ER     is irf_0_4 = 0xb & ER   { export ER; }
+irf: OV     is irf_0_4 = 0xc & OV   { export OV; }
+irf: AN4    is irf_0_4 = 0x10 & AN4 { export AN4; }
+irf: AN5    is irf_0_4 = 0x11 & AN5 { export AN5; }
+irf: AN6    is irf_0_4 = 0x12 & AN6 { export AN6; }
+irf: AN7    is irf_0_4 = 0x13 & AN7 { export AN7; }
+irf: SB     is irf_0_4 = 0x14 & SB  { export SB; }
+
+################################################################
+# 14.6.1 8-bit data transfer instructions                      #
+################################################################
+
+# An instruction that follows a skip instruction (or the return address of a call: RETS skips the
+# instruction after the call) is not executed when SK is set. SOFTI is never skipped.
+:^instruction is possibleSkip=1 & op0_7 != 0x72 & instruction [ possibleSkip=0; ] {
+    local skipped:1 = $(SK_flag);
+    $(SK_flag) = 0;
+    if (skipped != 0) goto inst_next;
+    build instruction;
+}
+
+ins: "MOV" r1_0_2, A is op3_7=0x3 & r1_0_2 & A {
+    r1_0_2 = A;
+}
+
+ins: "MOV" A, r1_0_2 is op3_7=0x1 & r1_0_2 & A {
+    A = r1_0_2;
+}
+
+ins: "MOV" srl_0_4, A is op0_7 = 0x4D & A; op6_7 = 0x3 & srl_0_4 & bit_5=0 {
+    srl_0_4 = A;
+}
+
+# S5..S0 = 101000. ZCM (zero-cross mode) is the one special register outside the 5-bit table.
+ins: "MOV" ZCM, A is op0_7 = 0x4D & A; op0_7 = 0xE8 & ZCM {
+    ZCM = A;
+}
+
+ins: "MOV" A, srr_0_4 is op0_7 = 0x4C; op6_7 = 0x3 & srr_0_4 & bit_5=0 & A {
+    A = srr_0_4;
+}
+
+# CR0..CR3 (A/D conversion results, read-only): S5..S0 = 1000nn
+ins: "MOV" A, cr_0_1 is op0_7 = 0x4C; op2_7 = 0x38 & cr_0_1 & A {
+    A = cr_0_1;
+}
+
+ins: "MOV" r_0_2, Mem8 is op0_7 = 0x70; op3_7 = 0xD & r_0_2; Mem8 {
+    r_0_2 = Mem8;
+}
+
+ins: "MOV" Mem8, r_0_2 is op0_7 = 0x70; op3_7 = 0xF & r_0_2; Mem8 {
+    Mem8 = r_0_2;
+}
+
+ins: "MVI" r_0_2, imm8 is op3_7 = 0xd & bits0_2 != 1 & bits0_2 != 7 & r_0_2; imm8 {
+    r_0_2 = imm8;
+}
+
+ins: "MVI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x00 & sr2l_0_2; imm8 {
+    sr2l_0_2 = imm8;
+}
+
+ins: "MVI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x10 & sr2h_0_2; imm8 {
+    sr2h_0_2 = imm8;
+}
+
+ins: "MVIW" waMem8, val8 is op0_7 = 0x71; waMem8; val8 {
+    waMem8 = val8;
+}
+
+ins: "MVIX" rpa1, imm8 is op2_7 = 0x12 & rpa1; imm8 {
+    rpa1 = imm8;
+}
+
+ins: "STAW" waMem8 is op0_7 = 0x63; waMem8 {
+    waMem8 = A;
+}
+
+ins: "LDAW" waMem8 is op0_7 = 0x1; waMem8 {
+    A = waMem8;
+}
+
+
+ins: "STAX" rpa2 is op3_6 = 0x7 & rpa2_0_2 != 0x0 & rpa2 {
+    rpa2 = A;
+}
+
+ins: "STAX" (DE+imm8) is op0_7 = 0xbb; imm8 & DE {
+    ptr = DE + imm8;
+    *:1 ptr = A;
+}
+
+ins: "STAX" (HL+imm8) is op0_7 = 0xbf; imm8 & HL {
+    ptr = HL + imm8;
+    *:1 ptr = A;
+}
+
+ins: "LDAX" rpa2 is op3_6 = 0x5 & rpa2_0_2 != 0x0 & rpa2 {
+    A = rpa2;
+}
+
+ins: "LDAX" (DE+imm8) is op0_7 = 0xab; imm8 & DE {
+    local ptr = DE + imm8;
+    A = *:1 ptr;
+}
+
+ins: "LDAX" (HL+imm8) is op0_7 = 0xaf; imm8 & HL {
+    local ptr = HL + imm8;
+    A = *:1 ptr;
+}
+
+ins: "EXX" is op0_7 = 0x11 {
+    local tmp:2 = BC;
+    BC = BC_;
+    BC_ = tmp;
+    tmp = DE;
+    DE = DE_;
+    DE_ = tmp;
+    tmp = HL;
+    HL = HL_;
+    HL_ = tmp;
+}
+
+ins: "EXA" is op0_7 = 0x10 {
+    local tmp:2 = VA;
+    VA = VA_;
+    VA_ = tmp;
+    tmp = EA;
+    EA = EA_;
+    EA_ = tmp;
+}
+
+ins: "EXH" is op0_7 = 0x50 {
+    local tmp:2 = HL;
+    HL = HL_;
+    HL_ = tmp;
+}
+
+ins: "BLOCK" is op0_7 = 0x31 {
+    <loopstart>
+    *:1 DE = *:1 HL;
+    DE = DE + 1;
+    HL = HL + 1;
+    C = C - 1;
+    if (C != 0xff) goto <loopstart>;
+}
+
+################################################################
+# 14.6.2 16-bit data transfer instructions                     #
+################################################################
+
+ins: "DMOV" rp3, EA is op2_7 = 0x2d & rp3_0_1 != 0x0 & rp3 & EA {
+    rp3 = EA;
+}
+
+ins: "DMOV" EA, rp3 is op2_7 = 0x29 & rp3_0_1 != 0x0 & rp3 & EA {
+    EA = rp3;
+}
+
+ins: "DMOV" sr3_0, EA is op0_7 = 0x48; op1_7 = 0x69 & sr3_0 & EA {
+    sr3_0 = EA;
+}
+
+ins: "DMOV" EA, sr4_0 is op0_7 = 0x48; op1_7 = 0x60 & sr4_0 & EA {
+    EA = sr4_0;
+}
+
+ins: "SBCD" Mem16 is op0_7 = 0x70; op0_7 = 0x1e; Mem16 {
+    Mem16 = BC;
+}
+
+ins: "SDED" Mem16 is op0_7 = 0x70; op0_7 = 0x2e; Mem16 {
+    Mem16 = DE;
+}
+
+ins: "SHLD" Mem16 is op0_7 = 0x70; op0_7 = 0x3e; Mem16 {
+    Mem16 = HL;
+}
+
+ins: "SSPD" Mem16 is op0_7 = 0x70; op0_7 = 0x0e; Mem16 {
+    Mem16 = SP;
+}
+
+ins: "STEAX" rpa3 is op0_7 = 0x48; op4_7 = 0x9 & rpa3 {
+    rpa3 = EA;
+}
+
+ins: "STEAX" (DE+imm8) is op0_7 = 0x48; op0_7 = 0x9b; imm8 & DE {
+    ptr = DE + imm8;
+    *:2 ptr = EA;
+}
+
+ins: "STEAX" (HL+imm8) is op0_7 = 0x48; op0_7 = 0x9f; imm8 & HL {
+    ptr = HL + imm8;
+    *:2 ptr = EA;
+}
+
+ins: "LBCD" Mem16 is op0_7 = 0x70; op0_7 = 0x1f; Mem16 {
+    BC = Mem16;
+}
+
+ins: "LDED" Mem16 is op0_7 = 0x70; op0_7 = 0x2f; Mem16 {
+    DE = Mem16;
+}
+
+ins: "LHLD" Mem16 is op0_7 = 0x70; op0_7 = 0x3f; Mem16 {
+    HL = Mem16;
+}
+
+ins: "LSPD" Mem16 is op0_7 = 0x70; op0_7 = 0x0f; Mem16 {
+    SP = Mem16;
+}
+
+ins: "LDEAX" rpa3 is op0_7 = 0x48; op4_7 = 0x8 & rpa3 {
+    EA = rpa3;
+}
+
+ins: "LDEAX" (DE+imm8) is op0_7 = 0x48; op0_7 = 0x8b; imm8 & DE {
+    local ptr = DE + imm8;
+    EA = *:2 ptr;
+}
+
+ins: "LDEAX" (HL+imm8) is op0_7 = 0x48; op0_7 = 0x8f; imm8 & HL {
+    local ptr = HL + imm8;
+    EA = *:2 ptr;
+}
+
+ins: "PUSH" rp1 is op3_7 = 0x16 & rp1 & rp1_0_2 < 0x5 {
+    push16(rp1);
+}
+
+ins: "POP" rp1 is op3_7 = 0x14 & rp1 & rp1_0_2 < 0x5 {
+    pop16(rp1);
+}
+
+ins: "LXI" rp2, imm16 is op0_3 = 0x4 & bit_7 = 0 & rp2 & rp2_4_6 < 0x5; imm16 {
+    rp2 = imm16;
+}
+
+ins: "TABLE" is op0_7 = 0x48; op0_7 = 0xa8 {
+    # C <- (PC+3+A), B <- (PC+4+A), PC being the address of the TABLE instruction
+    local ptr:2 = inst_start + 3 + zext(A);
+    BC = *:2 ptr;
+}
+
+################################################################
+# 14.6.3 8-bit operation instructions (Register)               #
+################################################################
+
+ins: "ADD" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x18 & r_0_2 & A {
+    add(A, r_0_2);
+}
+
+ins: "ADD" r_0_2, A is op0_7 = 0x60; op3_7 = 0x08 & r_0_2 & A {
+    add(r_0_2, A);
+}
+
+ins: "ADC" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x1a & r_0_2 & A {
+    adc(A, r_0_2);
+}
+
+ins: "ADC" r_0_2, A is op0_7 = 0x60; op3_7 = 0x0a & r_0_2 & A {
+    adc(r_0_2, A);
+}
+
+# Add, skip if no carry
+ins: "ADDNC" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x14 & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    addNC(A, r_0_2);
+}
+
+ins: "ADDNC" r_0_2, A is op0_7 = 0x60; op3_7 = 0x04 & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    addNC(r_0_2, A);
+}
+
+ins: "SUB" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x1c & r_0_2 & A {
+    sub(A, r_0_2);
+}
+
+ins: "SUB" r_0_2, A is op0_7 = 0x60; op3_7 = 0x0c & r_0_2 & A {
+    sub(r_0_2, A);
+}
+
+ins: "SBB" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x1e & r_0_2 & A {
+    sbb(A, r_0_2);
+}
+
+ins: "SBB" r_0_2, A is op0_7 = 0x60; op3_7 = 0x0e & r_0_2 & A {
+    sbb(r_0_2, A);
+}
+
+# Substract, skip if no borrow
+ins: "SUBNB" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x16 & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    subNB(A, r_0_2);
+}
+
+ins: "SUBNB" r_0_2, A is op0_7 = 0x60; op3_7 = 0x06 & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    subNB(r_0_2, A);
+}
+
+ins: "ANA" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x11 & r_0_2 & A {
+    and(A, r_0_2);
+}
+
+ins: "ANA" r_0_2, A is op0_7 = 0x60; op3_7 = 0x01 & r_0_2 & A {
+    and(r_0_2, A);
+}
+
+ins: "ORA" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x13 & r_0_2 & A {
+    or(A, r_0_2);
+}
+
+ins: "ORA" r_0_2, A is op0_7 = 0x60; op3_7 = 0x03 & r_0_2 & A {
+    or(r_0_2, A);
+}
+
+ins: "XRA" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x12 & r_0_2 & A {
+    xor(A, r_0_2);
+}
+
+ins: "XRA" r_0_2, A is op0_7 = 0x60; op3_7 = 0x02 & r_0_2 & A {
+    xor(r_0_2, A);
+}
+
+ins: "GTA" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x15 & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    gt(A, r_0_2);
+}
+
+ins: "GTA" r_0_2, A is op0_7 = 0x60; op3_7 = 0x05 & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    gt(r_0_2, A);
+}
+
+ins: "LTA" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x17 & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    lt(A, r_0_2);
+}
+
+ins: "LTA" r_0_2, A is op0_7 = 0x60; op3_7 = 0x07 & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    lt(r_0_2, A);
+}
+
+ins: "NEA" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x1d & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    ne(A, r_0_2);
+}
+
+ins: "NEA" r_0_2, A is op0_7 = 0x60; op3_7 = 0x0d & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    ne(r_0_2, A);
+}
+
+ins: "EQA" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x1f & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    eq(A, r_0_2);
+}
+
+ins: "EQA" r_0_2, A is op0_7 = 0x60; op3_7 = 0x0f & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    eq(r_0_2, A);
+}
+
+ins: "ONA" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x19 & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    on(A, r_0_2);
+}
+
+ins: "OFFA" A, r_0_2 is op0_7 = 0x60; op3_7 = 0x1b & r_0_2 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    off(A, r_0_2);
+}
+
+################################################################
+# 14.6.8-bit operation instructions (Memory)                   #
+################################################################
+
+ins: "ADDX" rpa is op0_7 = 0x70; op3_7 = 0x18 & rpa_0_2 != 0 & rpa {
+    add(A, rpa);
+}
+
+ins: "ADCX" rpa is op0_7 = 0x70; op3_7 = 0x1a & rpa_0_2 != 0 & rpa {
+    adc(A, rpa);
+}
+
+ins: "ADDNCX" rpa is op0_7 = 0x70; op3_7 = 0x14 & rpa_0_2 != 0 & rpa [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    addNC(A, rpa);
+}
+
+ins: "SUBX" rpa is op0_7 = 0x70; op3_7 = 0x1c & rpa_0_2 != 0 & rpa {
+    sub(A, rpa);
+}
+
+ins: "SBBX" rpa is op0_7 = 0x70; op3_7 = 0x1e & rpa_0_2 != 0 & rpa {
+    sbb(A, rpa);
+}
+
+ins: "SUBNBX" rpa is op0_7 = 0x70; op3_7 = 0x16 & rpa_0_2 != 0 & rpa [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    subNB(A, rpa);
+}
+
+ins: "ANAX" rpa is op0_7 = 0x70; op3_7 = 0x11 & rpa_0_2 != 0 & rpa {
+    and(A, rpa);
+}
+
+ins: "ORAX" rpa is op0_7 = 0x70; op3_7 = 0x13 & rpa_0_2 != 0 & rpa {
+    or(A, rpa);
+}
+
+ins: "XRAX" rpa is op0_7 = 0x70; op3_7 = 0x12 & rpa_0_2 != 0 & rpa {
+    xor(A, rpa);
+}
+
+ins: "GTAX" rpa is op0_7 = 0x70; op3_7 = 0x15 & rpa_0_2 != 0 & rpa [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    gt(A, rpa);
+}
+
+ins: "LTAX" rpa is op0_7 = 0x70; op3_7 = 0x17 & rpa_0_2 != 0 & rpa [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    lt(A, rpa);
+}
+
+ins: "NEAX" rpa is op0_7 = 0x70; op3_7 = 0x1d & rpa_0_2 != 0 & rpa [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    ne(A, rpa);
+}
+
+ins: "EQAX" rpa is op0_7 = 0x70; op3_7 = 0x1f & rpa_0_2 != 0 & rpa [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    eq(A, rpa);
+}
+
+ins: "ONAX" rpa is op0_7 = 0x70; op3_7 = 0x19 & rpa_0_2 != 0 & rpa [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    on(A, rpa);
+}
+
+ins: "OFFAX" rpa is op0_7 = 0x70; op3_7 = 0x1b & rpa_0_2 != 0 & rpa [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    off(A, rpa);
+}
+
+################################################################
+# 14.6.5 Immediate data operation instructions                 #
+################################################################
+
+ins: "ADI" A, imm8 is op0_7 = 0x46; imm8 & A {
+    add(A, imm8);
+}
+
+ins: "ADI" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x08 & r_0_2; imm8 {
+    add(r_0_2, imm8);
+}
+
+ins: "ADI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x08 & sr2l_0_2; imm8 {
+    add(sr2l_0_2, imm8);
+}
+
+ins: "ADI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x18 & sr2h_0_2; imm8 {
+    add(sr2h_0_2, imm8);
+}
+
+ins: "ACI" A, imm8 is op0_7 = 0x56; imm8 & A {
+    adc(A, imm8);
+}
+
+ins: "ACI" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x0a & r_0_2; imm8 {
+    adc(r_0_2, imm8);
+}
+
+ins: "ACI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x0a & sr2l_0_2; imm8 {
+    adc(sr2l_0_2, imm8);
+}
+
+ins: "ACI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x1a & sr2h_0_2; imm8 {
+    adc(sr2h_0_2, imm8);
+}
+
+ins: "ADINC" A, imm8 is op0_7 = 0x26; imm8 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    addNC(A, imm8);
+}
+
+ins: "ADINC" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x04 & r_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    addNC(r_0_2, imm8);
+}
+
+ins: "ADINC" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x04 & sr2l_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    addNC(sr2l_0_2, imm8);
+}
+
+ins: "ADINC" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x14 & sr2h_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    addNC(sr2h_0_2, imm8);
+}
+
+ins: "SUI" A, imm8 is op0_7 = 0x66; imm8 & A {
+    sub(A, imm8);
+}
+
+ins: "SUI" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x0c & r_0_2; imm8 {
+    sub(r_0_2, imm8);
+}
+
+ins: "SUI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x0c & sr2l_0_2; imm8 {
+    sub(sr2l_0_2, imm8);
+}
+
+ins: "SUI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x1c & sr2h_0_2; imm8 {
+    sub(sr2h_0_2, imm8);
+}
+
+ins: "SBI" A, imm8 is op0_7 = 0x76; imm8 & A {
+    sbb(A, imm8);
+}
+
+ins: "SBI" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x0e & r_0_2; imm8 {
+    sbb(r_0_2, imm8);
+}
+
+ins: "SBI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x0e & sr2l_0_2; imm8 {
+    sbb(sr2l_0_2, imm8);
+}
+
+ins: "SBI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x1e & sr2h_0_2; imm8 {
+    sbb(sr2h_0_2, imm8);
+}
+
+ins: "SUINB" A, imm8 is op0_7 = 0x36; imm8 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    subNB(A, imm8);
+}
+
+ins: "SUINB" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x06 & r_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    subNB(r_0_2, imm8);
+}
+
+ins: "SUINB" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x06 & sr2l_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    subNB(sr2l_0_2, imm8);
+}
+
+ins: "SUINB" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x16 & sr2h_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    subNB(sr2h_0_2, imm8);
+}
+
+ins: "ANI" A, imm8 is op0_7 = 0x07; imm8 & A {
+    and(A, imm8);
+}
+
+ins: "ANI" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x01 & r_0_2; imm8 {
+    and(r_0_2, imm8);
+}
+
+ins: "ANI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x01 & sr2l_0_2; imm8 {
+    and(sr2l_0_2, imm8);
+}
+
+ins: "ANI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x11 & sr2h_0_2; imm8 {
+    and(sr2h_0_2, imm8);
+}
+
+ins: "ORI" A, imm8 is op0_7 = 0x17; imm8 & A {
+    or(A, imm8);
+}
+
+ins: "ORI" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x03 & r_0_2; imm8 {
+    or(r_0_2, imm8);
+}
+
+ins: "ORI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x03 & sr2l_0_2; imm8 {
+    or(sr2l_0_2, imm8);
+}
+
+ins: "ORI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x13 & sr2h_0_2; imm8 {
+    or(sr2h_0_2, imm8);
+}
+
+ins: "XRI" A, imm8 is op0_7 = 0x16; imm8 & A {
+    xor(A, imm8);
+}
+
+ins: "XRI" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x02 & r_0_2; imm8 {
+    xor(r_0_2, imm8);
+}
+
+ins: "XRI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x02 & sr2l_0_2; imm8 {
+    xor(sr2l_0_2, imm8);
+}
+
+ins: "XRI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x12 & sr2h_0_2; imm8 {
+    xor(sr2h_0_2, imm8);
+}
+
+ins: "GTI" A, imm8 is op0_7 = 0x27; imm8 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    gt(A, imm8);
+}
+
+ins: "GTI" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x05 & r_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    gt(r_0_2, imm8);
+}
+
+ins: "GTI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x05 & sr2l_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    gt(sr2l_0_2, imm8);
+}
+
+ins: "GTI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x15 & sr2h_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    gt(sr2h_0_2, imm8);
+}
+
+ins: "LTI" A, imm8 is op0_7 = 0x37; imm8 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    lt(A, imm8);
+}
+
+ins: "LTI" r_0_2, imm8 is op0_7 =0x74; op3_7 = 0x07 & r_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    lt(r_0_2, imm8);
+}
+
+ins: "LTI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x07 & sr2l_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    lt(sr2l_0_2, imm8);
+}
+
+ins: "LTI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x17 & sr2h_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    lt(sr2h_0_2, imm8);
+}
+
+ins: "NEI" A, imm8 is op0_7 = 0x67; imm8 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    ne(A, imm8);
+}
+
+ins: "NEI" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x0d & r_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    ne(r_0_2, imm8);
+}
+
+ins: "NEI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x0d & sr2l_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    ne(sr2l_0_2, imm8);
+}
+
+ins: "NEI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x1d & sr2h_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    ne(sr2h_0_2, imm8);
+}
+
+ins: "EQI" A, imm8 is op0_7 = 0x77; imm8 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    eq(A, imm8);
+}
+
+ins: "EQI" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x0f & r_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    eq(r_0_2, imm8);
+}
+
+ins: "EQI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x0f & sr2l_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    eq(sr2l_0_2, imm8);
+}
+
+ins: "EQI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x1f & sr2h_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    eq(sr2h_0_2, imm8);
+}
+
+ins: "ONI" A, imm8 is op0_7 = 0x47; imm8 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    on(A, imm8);
+}
+
+ins: "ONI" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x09 & r_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    on(r_0_2, imm8);
+}
+
+ins: "ONI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x09 & sr2l_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    on(sr2l_0_2, imm8);
+}
+
+ins: "ONI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x19 & sr2h_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    on(sr2h_0_2, imm8);
+}
+
+ins: "OFFI" A, imm8 is op0_7 = 0x57; imm8 & A [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    off(A, imm8);
+}
+
+ins: "OFFI" r_0_2, imm8 is op0_7 = 0x74; op3_7 = 0x0b & r_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    off(r_0_2, imm8);
+}
+
+ins: "OFFI" sr2l_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x0b & sr2l_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    off(sr2l_0_2, imm8);
+}
+
+ins: "OFFI" sr2h_0_2, imm8 is op0_7 = 0x64; op3_7 = 0x1b & sr2h_0_2; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    off(sr2h_0_2, imm8);
+}
+
+################################################################
+# 14.6.6 Working register operation instructions               #
+################################################################
+
+ins: "ADDW" waMem8 is op0_7 = 0x74; op0_7 = 0xc0; waMem8 {
+    add(A, waMem8);
+}
+
+ins: "ADCW" waMem8 is op0_7 = 0x74; op0_7 = 0xd0; waMem8 {
+    adc(A, waMem8);
+}
+
+ins: "ADDNCW" waMem8 is op0_7 = 0x74; op0_7 = 0xa0; waMem8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    addNC(A, waMem8);
+}
+
+ins: "SUBW" waMem8 is op0_7 = 0x74; op0_7 = 0xe0; waMem8 {
+    sub(A, waMem8);
+}
+
+ins: "SBBW" waMem8 is op0_7 = 0x74; op0_7 = 0xf0; waMem8 {
+    sbb(A, waMem8);
+}
+
+ins: "SUBNBW" waMem8 is op0_7 = 0x74; op0_7 = 0xb0; waMem8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    subNB(A, waMem8);
+}
+
+ins: "ANAW" waMem8 is op0_7 = 0x74; op0_7 = 0x88; waMem8 {
+    and(A, waMem8);
+}
+
+ins: "ORAW" waMem8 is op0_7 = 0x74; op0_7 = 0x98; waMem8 {
+    or(A, waMem8);
+}
+
+ins: "XRAW" waMem8 is op0_7 = 0x74; op0_7 = 0x90; waMem8 {
+    xor(A, waMem8);
+}
+
+ins: "GTAW" waMem8 is op0_7 = 0x74; op0_7 = 0xa8; waMem8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    gt(A, waMem8);
+}
+
+ins: "LTAW" waMem8 is op0_7 = 0x74; op0_7 = 0xb8; waMem8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    lt(A, waMem8);
+}
+
+ins: "NEAW" waMem8 is op0_7 = 0x74; op0_7 = 0xe8; waMem8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    ne(A, waMem8);
+}
+
+ins: "EQAW" waMem8 is op0_7 = 0x74; op0_7 = 0xf8; waMem8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    eq(A, waMem8);
+}
+
+ins: "ONAW" waMem8 is op0_7 = 0x74; op0_7 = 0xc8; waMem8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    on(A, waMem8);
+}
+
+ins: "OFFAW" waMem8 is op0_7 = 0x74; op0_7 = 0xd8; waMem8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    off(A, waMem8);
+}
+
+ins: "ANIW" waMem8, imm8 is op0_7 = 0x05; waMem8; imm8 {
+    and(waMem8, imm8);
+}
+
+ins: "ORIW" waMem8, imm8 is op0_7 = 0x15; waMem8; imm8 {
+    or(waMem8, imm8);
+}
+
+ins: "GTIW" waMem8, imm8 is op0_7 = 0x25; waMem8; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    gt(waMem8, imm8);
+}
+
+ins: "LTIW" waMem8, imm8 is op0_7 = 0x35; waMem8; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    lt(waMem8, imm8);
+}
+
+ins: "NEIW" waMem8, imm8 is op0_7 = 0x65; waMem8; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    ne(waMem8, imm8);
+}
+
+ins: "EQIW" waMem8, imm8 is op0_7 = 0x75; waMem8; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    eq(waMem8, imm8);
+}
+
+ins: "ONIW" waMem8, imm8 is op0_7 = 0x45; waMem8; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    on(waMem8, imm8);
+}
+
+ins: "OFFIW" waMem8, imm8 is op0_7 = 0x55; waMem8; imm8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    off(waMem8, imm8);
+}
+
+################################################################
+# 14.6.7 16-bit operation instructions                         #
+################################################################
+
+ins: "EADD" EA, r2_ is op0_7 = 0x70; op2_7 = 0x10 & r2_ & EA {
+    local tmp:2 = zext(r2_);
+    add16(EA, tmp);
+}
+
+ins: "DADD" EA, rp3_ is rp3_ & ... op2_7 = 0x31 & EA {
+    add16(EA, rp3_);
+}
+
+ins: "DADC" EA, rp3_ is rp3_ & ... op2_7 = 0x35 & EA {
+    adc16(EA, rp3_);
+}
+
+ins: "DADDNC" EA, rp3_ is rp3_ & ... op2_7 = 0x29 & EA [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    add16(EA, rp3_);
+    $(SK_flag) = $(CY_flag) == 0;
+}
+
+ins: "ESUB" EA, r2_ is op0_7 = 0x70; op2_7 = 0x18 & r2_ & EA {
+    local tmp:2 = zext(r2_);
+    sub16(EA, tmp);
+}
+
+ins: "DSUB" EA, rp3_ is rp3_ & ... op2_7 = 0x39 & EA {
+    sub16(EA, rp3_);
+}
+
+ins: "DSBB" EA, rp3_ is rp3_ & ... op2_7 = 0x3d & EA {
+    sbb16(EA, rp3_);
+}
+
+ins: "DSUBNB" EA, rp3_ is rp3_ & ... op2_7 = 0x2d & EA [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    sub16(EA, rp3_);
+    $(SK_flag) = $(CY_flag) == 0;
+}
+
+ins: "DAN" EA, rp3_ is rp3_ & ... op2_7 = 0x23 & EA {
+    and(EA, rp3_);
+}
+
+ins: "DOR" EA, rp3_ is rp3_ & ... op2_7 = 0x27 & EA {
+    or(EA, rp3_);
+}
+
+ins: "DXR" EA, rp3_ is rp3_ & ... op2_7 = 0x25 & EA {
+    xor(EA, rp3_);
+}
+
+ins: "DGT" EA, rp3_ is rp3_ & ... op2_7 = 0x2b & EA [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    gt16(EA, rp3_);
+}
+
+ins: "DLT" EA, rp3_ is rp3_ & ... op2_7 = 0x2f & EA [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    lt16(EA, rp3_);
+}
+
+ins: "DNE" EA, rp3_ is rp3_ & ... op2_7 = 0x3b & EA [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    ne16(EA, rp3_);
+}
+
+ins: "DEQ" EA, rp3_ is rp3_ & ... op2_7 = 0x3f & EA [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    eq16(EA, rp3_);
+}
+
+ins: "DON" EA, rp3_ is rp3_ & ... op2_7 = 0x33 & EA [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    on(EA, rp3_);
+}
+
+ins: "DOFF" EA, rp3_ is rp3_ & ... op2_7 = 0x37 & EA [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    off(EA, rp3_);
+}
+
+################################################################
+# 14.6.8 Multiplication / division instructions                #
+################################################################
+
+ins: "MUL" r2_48 is r2_48 & ... op2_7 = 0x0b {
+    EA = zext(A) * zext(r2_48);
+}
+
+ins: "DIV" r2_48 is r2_48 & ... op2_7 = 0x0f {
+    local divisor:2 = zext(r2_48);
+    local dividend:2 = EA;
+    EA = dividend / divisor;
+    local rem:2 = dividend % divisor;
+    r2_48 = rem:1;
+}
+
+################################################################
+# 14.6.9 Increment / decrement instructions                    #
+################################################################
+
+ins: "INR" r2_ is op2_7 = 0x10 & r2_ [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    inr(r2_);
+}
+
+ins: "INRW" waMem8 is op0_7 = 0x20; waMem8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    inr(waMem8);
+}
+
+ins: "INX" rp_4_5 is op0_3 = 0x2 & op6_7 = 0x0 & rp_4_5 {
+    rp_4_5 = rp_4_5 + 1;
+}
+
+ins: "INX" EA is op0_7 = 0xa8 & EA {
+    EA = EA + 1;
+}
+
+ins: "DCR" r2_ is op2_7 = 0x14 & r2_ [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    dcr(r2_);
+}
+
+ins: "DCRW" waMem8 is op0_7 = 0x30; waMem8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    dcr(waMem8);
+}
+
+ins: "DCX" rp_4_5 is op0_3 = 0x3 & op6_7 = 0x0 & rp_4_5 {
+    rp_4_5 = rp_4_5 - 1;
+}
+
+ins: "DCX" EA is op0_7 = 0xa9 & EA {
+    EA = EA - 1;
+}
+
+################################################################
+# 14.6.10 Other instructions                                   #
+################################################################
+
+ins: "DAA" is op0_7 = 0x61 {
+    daa();
+}
+
+ins: "STC" is op0_7 = 0x48; op0_7 = 0x2b {
+    $(CY_flag) = 1;
+}
+
+ins: "CLC" is op0_7 = 0x48; op0_7 = 0x2a {
+    $(CY_flag) = 0;
+}
+
+ins: "NEGA" is op0_7 = 0x48; op0_7 = 0x3a {
+    A = -A;
+}
+
+################################################################
+# 14.6.11 Rotation / shift instructions                        #
+################################################################
+
+ins: "RLD" is op0_7 = 0x48; op0_7 = 0x38 {
+    local val:1 = *:1 HL;
+    nibA:1 = A & 0x0f;
+    nibM:1 = val >> 4;
+    *:1 HL = (val << 4) | nibA;
+    A = (A & 0xf0) | nibM;
+}
+
+ins: "RRD" is op0_7 = 0x48; op0_7 = 0x39 {
+    local val:1 = *:1 HL;
+    nibA:1 = A & 0x0f;
+    nibM:1 = val & 0x0f;
+    *:1 HL = (val >> 4) | (nibA << 4);
+    A = (A & 0xf0) | nibM;
+}
+
+ins: "RLL" r2_48 is r2_48 & ... op2_7 = 0x0d {
+    local nextCY:1 = r2_48 >> 7;
+    r2_48 = (r2_48 << 1) | $(CY_flag);
+    $(CY_flag) = nextCY;
+}
+
+ins: "RLR" r2_48 is r2_48 & ... op2_7 = 0x0c {
+    local nextCY:1 = r2_48 & 1;
+    r2_48 = (r2_48 >> 1) | ($(CY_flag) << 7);
+    $(CY_flag) = nextCY;
+}
+
+ins: "SLL" r2_48 is r2_48 & ... op2_7 = 0x09 {
+    $(CY_flag) = r2_48 >> 7;
+    r2_48 = r2_48 << 1;
+}
+
+ins: "SLR" r2_48 is r2_48 & ... op2_7 = 0x08 {
+    $(CY_flag) = r2_48 & 1;
+    r2_48 = r2_48 >> 1;
+}
+
+ins: "SLLC" r2_48 is r2_48 & ... op2_7 = 0x01 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    $(CY_flag) = r2_48 >> 7;
+    r2_48 = r2_48 << 1;
+    $(SK_flag) = $(CY_flag);
+}
+
+ins: "SLRC" r2_48 is r2_48 & ... op2_7 = 0x00 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    $(CY_flag) = r2_48 & 1;
+    r2_48 = r2_48 >> 1;
+    $(SK_flag) = $(CY_flag);
+}
+
+ins: "DRLL" EA is op0_7 = 0x48; op0_7 = 0xb4 & EA {
+    local nextCY:1 = EA[15,1];
+    EA = (EA << 1) | zext($(CY_flag));
+    $(CY_flag) = nextCY;
+}
+
+ins: "DRLR" EA is op0_7 = 0x48; op0_7 = 0xb0 & EA {
+    local nextCY:1 = EA[0,1];
+    EA = (EA >> 1) | (zext($(CY_flag)) << 15);
+    $(CY_flag) = nextCY;
+}
+
+ins: "DSLL" EA is op0_7 = 0x48; op0_7 = 0xa4 & EA {
+    $(CY_flag) = EA[15,1];
+    EA = EA << 1;
+}
+
+ins: "DSLR" EA is op0_7 = 0x48; op0_7 = 0xa0 & EA {
+    $(CY_flag) = EA[0,1];
+    EA = EA >> 1;
+}
+
+################################################################
+# 14.6.12 Jump instructions                                    #
+################################################################
+
+ins: "JMP" Addr16 is op0_7 = 0x54; Addr16 {
+    goto Addr16;
+}
+
+ins: "JB" is op0_7 = 0x21 {
+    goto [BC];
+}
+
+ins: "JR" RelAddr6 is op6_7 = 0x3 & RelAddr6 {
+    goto RelAddr6;
+}
+
+ins: "JRE" RelAddr8_pos is op0_7 = 0x4e; RelAddr8_pos {
+    goto RelAddr8_pos;
+}
+
+ins: "JRE" RelAddr8_neg is op0_7 = 0x4f; RelAddr8_neg {
+    goto RelAddr8_neg;
+}
+
+ins: "JEA" is op0_7 = 0x48; op0_7 = 0x28 {
+    goto [EA];
+}
+
+################################################################
+# 14.6.13 Call instructions                                    #
+################################################################
+
+ins: "CALL" Addr16 is op0_7 = 0x40; Addr16 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    local tmp:2 = inst_next;
+    push16(tmp);
+    call Addr16;
+}
+
+ins: "CALB" is op0_7 = 0x48; op0_7 = 0x29 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    local tmp:2 = inst_next;
+    push16(tmp);
+    call [BC];
+}
+
+ins: "CALF" faAddr is op3_7 = 0x0f ... & faAddr [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    local tmp:2 = inst_next;
+    push16(tmp);
+    call faAddr;
+}
+
+ins: "CALT" loc is op5_7 = 0x4 & ta_0_4 [ loc = 0x0080 + (ta_0_4 << 1); possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    local tmp:2 = inst_next;
+    local ptr:2 = 0x0080 + (ta_0_4 << 1);
+    local dest = *:2 ptr;
+    push16(tmp);
+    call [dest];
+}
+
+# The 87AD series pushes the address of the next instruction (the uCOM-87 pushed its own address).
+:SOFTI is op0_7 = 0x72 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    local tmp:2 = inst_next;
+    local psw:1 = 0;
+    psw_byte(psw);
+    push8(psw);
+    push16(tmp);
+    $(SK_flag) = 0;
+    $(L1_flag) = 0;
+    $(L0_flag) = 0;
+    call 0x0060;
+}
+
+################################################################
+# 14.6.14 Return instructions                                  #
+################################################################
+
+ins: "RET" is op0_7 = 0xb8 {
+    local tmp:2 = 0;
+    pop16(tmp);
+    return [tmp];
+}
+
+ins: "RETS" is op0_7 = 0xb9 {
+    local tmp:2 = 0;
+    pop16(tmp);
+    $(SK_flag) = 1;
+    return [tmp];
+}
+
+ins: "RETI" is op0_7 = 0x62 {
+    local tmp:2 = 0;
+    pop16(tmp);
+    local psw:1 = 0;
+    pop8(psw);
+    psw_restore(psw);
+    return [tmp];
+}
+
+################################################################
+# 14.6.15 Skip instructions                                    #
+################################################################
+
+ins: "BIT" bits0_2, waMem8 is op3_7 = 0x0b & bits0_2; waMem8 [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    local wa:1 = waMem8;
+    local mask:1 = 1 << bits0_2;
+    $(SK_flag) = (wa & mask) != 0;
+}
+
+ins: "SK" flag is op0_7 = 0x48; op3_7 = 0x1 & flag [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    $(SK_flag) = flag;
+}
+
+ins: "SKN" flag is op0_7 = 0x48; op3_7 = 0x3 & flag [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    $(SK_flag) = !flag;
+}
+
+# SKIT / SKNIT also reset the tested request flag, except NMI.
+ins: "SKIT" NMI is op0_7 = 0x48; op0_4 = 0x0 & op5_7 = 0x2 & NMI [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    $(SK_flag) = NMI != 0;
+}
+
+ins: "SKIT" irf is op0_7 = 0x48; op5_7 = 0x2 & irf [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    local f:1 = irf;
+    $(SK_flag) = f != 0;
+    irf = 0;
+}
+
+ins: "SKNIT" NMI is op0_7 = 0x48; op0_4 = 0x0 & op5_7 = 0x3 & NMI [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    $(SK_flag) = NMI == 0;
+}
+
+ins: "SKNIT" irf is op0_7 = 0x48; op5_7 = 0x3 & irf [ possibleSkip = 1; globalset(inst_next,possibleSkip); ] {
+    local f:1 = irf;
+    $(SK_flag) = f == 0;
+    irf = 0;
+}
+
+
+################################################################
+# 14.6.16 CPU control instructions                             #
+################################################################
+
+ins: "NOP" is op0_7 = 0x00 {
+}
+
+ins: "EI" is op0_7 = 0xaa {
+    enableMaskableInterrupts();
+}
+
+ins: "DI" is op0_7 = 0xba {
+    disableMaskableInterrupts();
+}
+
+ins: "HLT" is op0_7 = 0x48; op0_7 = 0x3b {
+    halt();
+}
+
+ins: "STOP" is op0_7 = 0x48; op0_7 = 0xbb {
+    stop();
+}
+
+################################################################
+# Root constructors: stacking flags L1/L0                      #
+################################################################
+
+# Every instruction clears the stacking flags L1 and L0 (and SK, unless it is a skip instruction);
+# only MVI A, MVI L and LXI H below set them. The skip flag is cleared by the skipped-instruction
+# wrapper above and assigned by the skip instructions themselves.
+:^ins is ins {
+    $(L1_flag) = 0;
+    $(L0_flag) = 0;
+    build ins;
+}
+
+# Group A / group B stacking (manual 14.7): when MVI A,byte follows MVI A,byte (L1 set), or MVI L,byte /
+# LXI H,word follow each other (L0 set), only the first one of the sequence has any effect.
+:MVI A, imm8 is op0_7 = 0x69 & A; imm8 {
+    local stacked:1 = $(L1_flag);
+    $(L1_flag) = 1;
+    $(L0_flag) = 0;
+    if (stacked != 0) goto inst_next;
+    A = imm8;
+}
+
+:MVI L, imm8 is op0_7 = 0x6f & L; imm8 {
+    local stacked:1 = $(L0_flag);
+    $(L0_flag) = 1;
+    $(L1_flag) = 0;
+    if (stacked != 0) goto inst_next;
+    L = imm8;
+}
+
+:LXI HL, imm16 is op0_7 = 0x34 & HL; imm16 {
+    local stacked:1 = $(L0_flag);
+    $(L0_flag) = 1;
+    $(L1_flag) = 0;
+    if (stacked != 0) goto inst_next;
+    HL = imm16;
+}
+

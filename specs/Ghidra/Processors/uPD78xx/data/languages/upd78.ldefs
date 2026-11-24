@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="upd78"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="upd78.sla"
+            processorspec="upd78.pspec"
+            id="upd78:LE:16:default">
+    <description>NEC uPD78C1x (uCOM-87AD: uPD78C10, C11, C12, C14, C17, C18)</description>
+    <compiler name="default" spec="upd78.cspec" id="default"/>
+  </language>
+</language_definitions>

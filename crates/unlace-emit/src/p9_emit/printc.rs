@@ -6096,10 +6096,8 @@ impl PrintC {
         // `option iteboolean on`.
         // (unlace `itaniumeh`) Inside a `try` whose pad this edge also reaches,
         // the edge is the try's own: print the call and the normal path only.
-        if self.eh_open_pad.is_some()
-            && self.is_eh_if(fd, blk)
-            && self.eh_if_target(fd, blk) == self.eh_open_pad
-        {
+        let open_pad = self.open_try_pad(fd, blk);
+        if open_pad.is_some() && self.is_eh_if(fd, blk) && self.eh_if_target(fd, blk) == open_pad {
             let size = fd.sblocks_ref().block(blk).get_size();
             let cond = fd.sblocks_ref().block(blk).get_block(0);
             self.context.push_mod();
@@ -6110,7 +6108,7 @@ impl PrintC {
             self.context.pop_mod();
             for k in 1..size {
                 let sub = fd.sblocks_ref().block(blk).get_block(k);
-                if self.eh_pad_start(fd, sub) != self.eh_open_pad {
+                if self.eh_pad_start(fd, sub) != open_pad {
                     let b = self.emit.begin_block(0);
                     self.emit_block(fd, arch, sub);
                     self.emit.end_block(b);

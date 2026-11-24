@@ -5927,10 +5927,15 @@ rewrite, `ctree_rewrite` turns each `if` on an `eh_unwinding()` exceptional edge
 that prints as `try { ... } catch (..) { ... }` (`itaniumeh`: one arm starts at a
 landing pad, or the call the edge follows names the pad) into a `Try` statement
 holding the condition block, the arm inside the `try`, the pad and the handler arm;
-`emit_block_if` prints that statement, and no later rewrite folds it. The `if`
-whose edge is the enclosing `try`'s own (printed as its call and normal path
-only) is still decided while printing, since it depends on the `try` being printed
-around it. The tree lives in
+`emit_block_if` prints that statement, and no later rewrite folds it. A list's `try` form (an exceptional-edge `if` whose normal path never
+falls through, followed by the landing pad that starts the rest of the list) is
+recorded on the list's sequence as a `ListTry` (`eh_list_try_match`); only part
+of a list (the rest of a switch arm or goto block) is matched while printing. The
+`if` whose edge is the enclosing `try`'s own (printed as its call and normal
+path only) is found from the tree: `open_try_pad` walks the block's parents to
+the nearest `Try` statement or list `try` form whose normal path holds it
+(printing descends only into a block's components, so that is the `try` printed
+around it). The tree lives in
 `crates/unlace-ctree/src`: `unlace_ctree` holds the statement and expression
 arenas and the tree's maturity (`built`, `statements`, `rewritten`, `final`,
 which only rises), and `unlace_ctreebuild::build` makes one statement per

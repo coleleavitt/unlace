@@ -6933,6 +6933,35 @@ every other binary's pass list is byte-identical to before the pass existed):
   exactly what a search per class would. A search per class is
   `O(classes × image)`: `torch_cpu.dll` (31,623 type descriptors in 309 MB) did
   not finish loading in 30 minutes that way.
+
+  With `vtabletypes` on (the default), a second pass
+  (`crates/unlace-analysis/src/analyzers/rtti/kuna_msvcvtabletypes.rs (facts)`)
+  runs the same recovery on its own, whatever `rtti` says, and reports the classes
+  in the shape the typed Itanium vtables use (chapter 05). Each
+  CompleteObjectLocator gives its class, the `offset` of the subobject its vftable
+  serves, and the class's whole hierarchy: every BaseClassDescriptor's class, its
+  displacement `mdisp`, and whether it is, or lies in, a virtual base (`pdisp` is
+  not -1). A vftable at offset 0 is the class's own; one at a nonzero offset serves
+  the non-virtual bases at that displacement, the most derived of them first; one
+  serving a virtual base (no non-virtual base sits at its offset) serves none. A
+  class is typed with the slots of its own vftable, and for each slot the function
+  there and every function the vftables serving it in derived classes hold at the
+  same slot; a class the image never instantiates (an abstract base) has no vftable
+  of its own and takes the slots every serving vftable shares. A slot is named
+  after the method a symbol names (`?area@Square@@...` is `area`; `??1` is
+  `dtor`; `??_G` and `??_E`, the scalar and vector deleting destructors, are
+  `deleting_dtor`), else `vfn_<i>`. A class whose structure name two classes
+  share is not typed. Each non-virtual base at a nonzero displacement is reported
+  for embedding. The pass also reports, for every function a vftable holds, the
+  class its `this` points to: MSVC calls a virtual method with `this` pointing at
+  the subobject the vftable serves (an override reached through a secondary base's
+  vftable takes the base's subobject), so it is the first class that vftable
+  serves; a function several vftables hold takes the nearest class that is, in
+  every one of them, that class or one of its bases at offset 0, and a function
+  that also sits in a vftable serving a virtual base, or whose holders share no
+  such class (identical-code folding, `_purecall`), is left untyped. Finally it
+  reports each vftable whose first class was typed, with the `rtti` label of
+  that address, and every vftable's slot words.
 - **(kuna) Itanium RTTI** (`itaniumrtti`, ELF and Mach-O, on by default and inert elsewhere;
   `crates/unlace-analysis/src/analyzers/rtti/kuna_itaniumrtti.rs`): the
   GCC/Clang counterpart of the pass above, and a capability with **no Ghidra

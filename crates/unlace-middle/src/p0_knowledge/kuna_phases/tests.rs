@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_335() {
-    assert_eq!(kuna_num_settables(), 335);
-    assert_eq!(SETTABLE_TABLE.len(), 335);
+fn settable_count_is_336() {
+    assert_eq!(kuna_num_settables(), 336);
+    assert_eq!(SETTABLE_TABLE.len(), 336);
 }
 
 #[test]
-fn tier_counts_are_69_core_166_transform_100_analysis() {
+fn tier_counts_are_69_core_167_transform_100_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_69_core_166_transform_100_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (69, 166, 100));
+    assert_eq!((core, transform, analysis), (69, 167, 100));
 }
 
 #[test]
@@ -1285,7 +1285,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `typemerge`; its P6 row sits after `indirectonly`.
     // +1 for `flownames`; its P6 row sits beside `contextnames`.
     // +1 for `honestgaps`; its P2 row.
-    assert_eq!(json.matches("},\n").count(), 328);
+    // +1 for `phiarm`; its P6 row sits after `typemerge`.
+    assert_eq!(json.matches("},\n").count(), 329);
 }
 
 #[test]

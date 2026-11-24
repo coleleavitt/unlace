@@ -130,6 +130,7 @@ unlace_options! { self, p1;
     "returnbranch" => registered!(crate::returnbranch::ReturnBranch),
     "globalarrayanchor" => registered!(crate::globalarrayanchor::GlobalArrayAnchor),
     "opaquepredicate" => registered!(crate::coreoptions::OpaquePredicate),
+    "opaqueoffset" => registered!(crate::coreoptions::OpaqueOffset),
     "callresultuse" => registered!(crate::callresultuse::CallResultUse),
     "signedness" => registered!(crate::typeround::SignPolicy),
     "retsplitglobal" => registered!(crate::coreoptions::RetSplitGlobal),

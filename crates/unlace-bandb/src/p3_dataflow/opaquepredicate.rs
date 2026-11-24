@@ -414,13 +414,17 @@ impl Rule for RuleOpaquePredicate {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data
+        let predicate_on = data
             .get_arch()
             .unlace_options
             .get::<crate::coreoptions::OpaquePredicate>()
-            .on
-            || data.is_jumptable_recovery_on()
-        {
+            .on;
+        let offset_on = data
+            .get_arch()
+            .unlace_options
+            .get::<crate::coreoptions::OpaqueOffset>()
+            .0;
+        if (!predicate_on && !offset_on) || data.is_jumptable_recovery_on() {
             return 0;
         }
         if data
@@ -428,6 +432,9 @@ impl Rule for RuleOpaquePredicate {
             .get(op)
             .is_some_and(|o| o.code() == OpCode::CPUI_CBRANCH)
         {
+            if !predicate_on {
+                return 0;
+            }
             let decided = data
                 .obank()
                 .get(op)
@@ -441,7 +448,15 @@ impl Rule for RuleOpaquePredicate {
                 .expect("RuleOpaquePredicate: opSetInput");
             return 1;
         }
-        let Some(result) = constant_result(data, op) else {
+        let mut proven = if predicate_on {
+            constant_result(data, op)
+        } else {
+            None
+        };
+        if proven.is_none() && offset_on {
+            proven = crate::opaqueoffset::prove(data, op);
+        }
+        let Some(result) = proven else {
             return 0;
         };
         let out = data.obank().get(op).and_then(|o| o.get_out());

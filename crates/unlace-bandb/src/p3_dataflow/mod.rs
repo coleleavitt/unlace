@@ -16,6 +16,7 @@ pub mod leafmemory;
 pub mod narrowload; // (unlace) a narrow LOAD keeps its own width
 pub mod opaquedomain;
 pub mod opaqueglobals;
+pub mod opaqueoffset;
 pub mod opaquepredicate;
 pub mod pairrefine;
 pub mod repframecopy;

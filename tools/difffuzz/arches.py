@@ -1461,7 +1461,7 @@ class ObjdumpDis:
             text = m.group(3).strip()
             if off % self.width or not text or text.startswith(("(bad)", ".word", ".long", ".byte", ".short", "#")):
                 continue
-            mn, _, ops = text.partition(" ")
+            mn, ops = (re.split(r"\s+", text, maxsplit=1) + [""])[:2]
             got[off // self.width] = (mn, ops.strip())
         for i, r in enumerate(todo):
             self.cache[r] = got.get(i)
@@ -1548,4 +1548,43 @@ class Hppa(ObjdumpArch):
         return True
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa())}
+ALPHA_DENY = re.compile(
+    r"^(br|bsr|b[a-z]+|fb[a-z]+|jmp|jsr|ret|jsr_coroutine|call_pal|callsys|halt|imb|bpt|bugchk|rduniq|wruniq|"
+    r"pal.*|hw_.*|mb|wmb|trapb|excb|rpcc|rc|rs|fetch.*|ecb|wh64.*|implver|amask|ld[lq]_l|st[lq]_c|"
+    r"f.*|cpys.*|mt_fpcr|mf_fpcr|itof.*|ftoi.*|sqrt.*|cvt.*|add[sgtf].*|sub[sgtf].*|mul[sgtf].*|div[sgtf].*|"
+    r"cmp[gt].*|ld[sgtf]|st[sgtf]|nop|unop|fnop|.*\.\.\.)$"
+)
+
+
+class Alpha(ObjdumpArch):
+    """Alpha (21264, Digital UNIX names) integer instructions against qemu-alpha -cpu ev67
+    (--oracle qemu), decoded by binutils. Branches, PALcode, barriers, locked memory and
+    floating-point instructions are not generated."""
+    name = "alpha"
+    lang = "21264:LE:64:unix"
+    elf_machine = 0x9026
+    elf64 = True
+    until = (1 << 64) - 1
+    big = False
+    pc = "PC"
+    gprs = [(n, None) for n in ["v0", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "s0", "s1", "s2", "s3",
+                                "s4", "s5", "FP", "a0", "a1", "a2", "a3", "a4", "a5", "t8", "t9", "t10", "t11",
+                                "ra", "pv", "at", "GP", "SP"]]
+    pc_const = None
+    deny = ALPHA_DENY
+    objdump_machine = "alpha"
+
+    def unicorn(self):
+        raise NotImplementedError("alpha runs with --oracle qemu")
+
+    def draw(self, rng):
+        # mostly integer operates (0x10..0x13, 0x1c) and integer loads/stores
+        op = rng.choice([0x10] * 40 + [0x11] * 40 + [0x12] * 40 + [0x13] * 20 + [0x1C] * 40 +
+                        [0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x28, 0x29, 0x2C, 0x2D])
+        return ((op << 26) | rng.getrandbits(26)).to_bytes(4, "little")
+
+    def addr_ok(self, a):
+        return Arch.addr_ok(self, a)
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha())}

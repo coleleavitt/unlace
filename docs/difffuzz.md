@@ -136,6 +136,13 @@ afterwards. The register file is unchanged.
   bytes and its ,M form modifies the base register (after the store, QEMU's reading), not the
   source; a short-displacement store whose source is the modified base stores the old value.
   Seeds 4 and 5, 3000 encodings each: 6205 and 6293 matches, no mismatches.
+- Alpha (`--arch alpha`, `21264:LE:64:unix`, `--oracle qemu` with `qemu-alpha -cpu ev67` from
+  QEMU 8.2), decoded by the binutils `objdump` (`ObjdumpArch`, see PA-RISC). The table register is
+  loaded last and a BR reaches the instruction (no delay slots); segments are widened to 8 KiB.
+  The generator favours the integer operate opcodes (0x10..0x13, 0x1c: BWX, CIX, MVI) over loads
+  and stores. Not generated: branches, PALcode, barriers, RPCC, locked loads/stores, IMPLVER,
+  AMASK and floating point. Seeds 4 and 5, 3000 encodings each: 7191 and 7252 matches, no
+  mismatches; the SLEIGH integer lifts needed no fix.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

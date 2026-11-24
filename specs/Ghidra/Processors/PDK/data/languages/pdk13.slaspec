@@ -1,0 +1,8 @@
+# pdk13 (PMS150C and relatives, 13 bit code words): PDK13 instruction set.
+# Instruction patterns: pdk13_tok.sinc / pdk13_ops.sinc (generated, see tools/gen_pdk.py).
+# I/O registers: pdk13_regs.sinc / pdk13_attach.sinc (generated, see tools/gen_chips.py).
+@include "pdk_common.sinc"
+@include "pdk13_regs.sinc"
+@include "pdk13_tok.sinc"
+@include "pdk13_attach.sinc"
+@include "pdk13_ops.sinc"

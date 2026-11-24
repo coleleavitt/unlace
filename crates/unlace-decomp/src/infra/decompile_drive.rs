@@ -3383,11 +3383,10 @@ pub fn print_c_prototype(arch: &mut Architecture, fd: &Funcdata) -> String {
 /// `int8`, `float8`, …, spelled per standard C — 8-byte integers always use
 /// `long long` so the text is data-model independent) plus the fixed Ghidra
 /// `undefined` family block (`undefined`, `undefined1..8` — 3/5/6/7 mapped to
-/// the next larger unsigned integer with a sizeof note — and `undefined16/32`
-/// as byte-array structs).  `bool` is covered by `#include <stdbool.h>`, and
-/// `va_list`/`va_start`/`va_arg` by `#include <stdarg.h>`;
 /// the next larger unsigned integer with a sizeof note — `undefined16` as
 /// `unsigned __int128` where the compiler has it, and `undefined16/32` otherwise
+/// as byte-array structs).  `bool` is covered by `#include <stdbool.h>`, and
+/// `va_list`/`va_start`/`va_arg` by `#include <stdarg.h>`;
 /// `char`/`void` are real C and emit nothing.
 pub fn print_c_recompile_prelude(arch: &Architecture) -> String {
     use crate::dtype::type_metatype::*;

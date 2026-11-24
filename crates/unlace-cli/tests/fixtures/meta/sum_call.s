@@ -1,0 +1,25 @@
+	.text
+sum:
+	MOV	D0Re0,#0
+	CMP	D1Ar1,#0
+	BLE	2f
+1:
+	GETD	D0Ar6,[D0Ar2++]
+	ADD	D0Re0,D0Re0,D0Ar6
+	SUB	D1Ar1,D1Ar1,#1
+	CMP	D1Ar1,#0
+	BGT	1b
+2:
+	MOV	PC,D1RtP
+	.global callit
+callit:
+	MSETL	[A0StP++],D0FrT,D0.5
+	MOV	D0.5,D1Ar1
+	CALLR	D1RtP,sum
+	ADD	D0Re0,D0Re0,D0.5
+	MOVT	D1Ar1,#0x1234
+	ADD	D1Ar1,D1Ar1,#0x5678
+	SETD	[A1GbP+#8],D1Ar1
+	GETD	D0.6,[A0StP+#-16]
+	MGETL	D0FrT,D0.5,[A0StP++]
+	MOV	PC,D1RtP

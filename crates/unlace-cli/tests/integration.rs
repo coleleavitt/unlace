@@ -40,6 +40,8 @@ mod m6800_family;
 mod m88k_raw;
 #[path = "mep.rs"]
 mod mep;
+#[path = "meta_raw.rs"]
+mod meta_raw;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "nios2_raw.rs"]

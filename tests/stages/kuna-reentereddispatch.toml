@@ -1,0 +1,175 @@
+[image]
+arch = 'MIPS:BE:64:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '03e0000800000000'
+
+# kuna constselectjump reentry: a dispatcher loop jumps through one register,
+# and each step's code loads the next step's address and jumps back to the
+# dispatch. Flow recovers the dispatch's first target before the code that
+# re-enters it is decoded, so upstream keeps a one-entry table and drops every
+# later step's store. P2 flow / switch-model; P0 assertion `option
+# constselectjump`. Original GNU N32/N64 fixtures (tests/fixtures/
+# indirect-dispatch/) dispatch through $31 (with returnbranch) and through
+# ordinary $9, re-enter directly, before the dispatch, through a second
+# indirect jump, and reach the caller's return early or through a conditional
+# branch. Pass 1 (`off`) keeps only the first store; pass 2 (the default
+# `reentry`) retries the dispatches the new edges reach and keeps every store,
+# the loop and a defined default for the caller's return. The CLI companion
+# indirect_dispatch.rs executes the emitted C against the stores at O0/O2.
+
+[script]
+commands = [
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon-32addr:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-n32-r31-2.bin',
+    'function bounds 0x400000 0x40003c as reentry_n32_r31_2',
+    'map prototype 0x400000 void reentry_n32_r31_2(unsigned int seed, unsigned int *output);',
+    'option constselectjump off',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon-32addr:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-n32-r31-4.bin',
+    'function bounds 0x400000 0x40006c as reentry_n32_r31_4',
+    'map prototype 0x400000 void reentry_n32_r31_4(unsigned int seed, unsigned int *output);',
+    'option constselectjump off',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r31-2.bin',
+    'function bounds 0x400000 0x40003c as reentry_64_r31_2',
+    'map prototype 0x400000 void reentry_64_r31_2(unsigned int seed, unsigned int *output);',
+    'option constselectjump off',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r31-4.bin',
+    'function bounds 0x400000 0x40006c as reentry_64_r31_4',
+    'map prototype 0x400000 void reentry_64_r31_4(unsigned int seed, unsigned int *output);',
+    'option constselectjump off',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r9-2.bin',
+    'function bounds 0x400000 0x40003c as reentry_64_r9_2',
+    'map prototype 0x400000 void reentry_64_r9_2(unsigned int seed, unsigned int *output);',
+    'option constselectjump off',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r31-2-early.bin',
+    'function bounds 0x400000 0x400054 as reentry_64_r31_2_early',
+    'map prototype 0x400000 void reentry_64_r31_2_early(unsigned int seed, unsigned int *output);',
+    'option constselectjump off',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r31-2-condreturn.bin',
+    'function bounds 0x400000 0x400048 as reentry_64_r31_2_condreturn',
+    'map prototype 0x400000 void reentry_64_r31_2_condreturn(unsigned int seed, unsigned int *output);',
+    'option constselectjump off',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r31-2-indirect-reentry.bin',
+    'function bounds 0x400000 0x400044 as reentry_64_r31_2_indirect_reentry',
+    'map prototype 0x400000 void reentry_64_r31_2_indirect_reentry(unsigned int seed, unsigned int *output);',
+    'option constselectjump off',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon-32addr:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-n32-r31-2.bin',
+    'function bounds 0x400000 0x40003c as reentry_n32_r31_2',
+    'map prototype 0x400000 void reentry_n32_r31_2(unsigned int seed, unsigned int *output);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon-32addr:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-n32-r31-4.bin',
+    'function bounds 0x400000 0x40006c as reentry_n32_r31_4',
+    'map prototype 0x400000 void reentry_n32_r31_4(unsigned int seed, unsigned int *output);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r31-2.bin',
+    'function bounds 0x400000 0x40003c as reentry_64_r31_2',
+    'map prototype 0x400000 void reentry_64_r31_2(unsigned int seed, unsigned int *output);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r31-4.bin',
+    'function bounds 0x400000 0x40006c as reentry_64_r31_4',
+    'map prototype 0x400000 void reentry_64_r31_4(unsigned int seed, unsigned int *output);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r9-2.bin',
+    'function bounds 0x400000 0x40003c as reentry_64_r9_2',
+    'map prototype 0x400000 void reentry_64_r9_2(unsigned int seed, unsigned int *output);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r31-2-early.bin',
+    'function bounds 0x400000 0x400054 as reentry_64_r31_2_early',
+    'map prototype 0x400000 void reentry_64_r31_2_early(unsigned int seed, unsigned int *output);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r31-2-condreturn.bin',
+    'function bounds 0x400000 0x400048 as reentry_64_r31_2_condreturn',
+    'map prototype 0x400000 void reentry_64_r31_2_condreturn(unsigned int seed, unsigned int *output);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw MIPS:BE:64:octeon:default 0x400000 0x400000 tests/fixtures/indirect-dispatch/reentry-64-r31-2-indirect-reentry.bin',
+    'function bounds 0x400000 0x400044 as reentry_64_r31_2_indirect_reentry',
+    'map prototype 0x400000 void reentry_64_r31_2_indirect_reentry(unsigned int seed, unsigned int *output);',
+    'lo fu 0x400000',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'reentereddispatch #1: both passes keep the first store'
+count = 16
+literal = '*output = seed;'
+
+[[match]]
+name = 'reentereddispatch #2: only reentry keeps the second store'
+count = 8
+literal = 'output[1] = seed;'
+
+[[match]]
+name = 'reentereddispatch #3: reentry reaches the third and fourth stores'
+count = 4
+regex = 'output\[[23]\] = seed;'
+
+[[match]]
+name = 'reentereddispatch #4: the caller return is a defined default case'
+count = 7
+literal = 'default:'
+
+[[match]]
+name = 'reentereddispatch #5: no dispatch is left incomplete or undefined'
+count = 0
+regex = 'more targets|uninitialized|could not be normalized|overlaps decoded'

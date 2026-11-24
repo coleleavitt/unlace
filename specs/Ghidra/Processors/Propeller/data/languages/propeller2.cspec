@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<compiler_spec>
+  <data_organization>
+    <absolute_max_alignment value="0" />
+    <machine_alignment value="4" />
+    <default_alignment value="1" />
+    <default_pointer_alignment value="4" />
+    <pointer_size value="4" />
+    <char_size value="1" />
+    <short_size value="2" />
+    <integer_size value="4" />
+    <long_size value="4" />
+    <long_long_size value="8" />
+    <float_size value="4" />
+    <double_size value="8" />
+    <size_alignment_map>
+      <entry size="1" alignment="1" />
+      <entry size="2" alignment="2" />
+      <entry size="4" alignment="4" />
+    </size_alignment_map>
+  </data_organization>
+  <global>
+    <range space="hub"/>
+    <range space="lut"/>
+    <range space="cog"/>
+  </global>
+  <stackpointer register="SP" space="hub"/>
+  <returnaddress>
+    <register name="RA"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="__pasm2" extrapop="0" stackshift="0">
+      <input>
+      </input>
+      <output>
+      </output>
+      <unaffected>
+        <register name="SP"/>
+      </unaffected>
+      <killedbycall>
+        <register name="res"/>
+        <register name="cf"/>
+        <register name="zf"/>
+      </killedbycall>
+    </prototype>
+  </default_proto>
+</compiler_spec>

@@ -1,0 +1,86 @@
+# Synthetic scalar ABI slots inside the eight-byte physical GPRs.
+
+[image]
+arch = 'PowerPC:BE:32:e500'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'constant_call' },
+    { space = 'ram', offset = '0x1100', name = 'arithmetic_call' },
+    { space = 'ram', offset = '0x1200', name = 'call_result' },
+    { space = 'ram', offset = '0x1300', name = 'conditional_call' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '7c6c1b787d8903a6386000074e800420'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1100'
+readonly = true
+hex = '7c6c1b787d8903a6386400074e800420'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1200'
+readonly = true
+hex = '9421fff07c0802a6900100147c6c1b787c8323787d8903a64e800421800100147c0803a638210010386300014e800020'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1300'
+readonly = true
+hex = '9421ffe07c0802a67c6903a67ca32b7893c100187c9e237893e1001c7cbf2b78900100244e8004212c0300007fe3fb7841820020800100247fc903a683e1001c83c10018382100207c0803a64e8004208001002483c1001883e1001c382100207c0803a64e800020'
+
+[script]
+commands = [
+    'option calloverlap off',
+    'lo fu constant_call',
+    'decompile',
+    'print C',
+    'option calloverlap auto',
+    'lo fu constant_call',
+    'decompile',
+    'print C',
+    'lo fu arithmetic_call',
+    'decompile',
+    'print C',
+    'lo fu call_result',
+    'decompile',
+    'print C',
+    'lo fu conditional_call',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'e500 slots #1: off loses the constant argument'
+count = 1
+literal = '(*a0)()'
+
+[[match]]
+name = 'e500 slots #2: auto keeps the constant argument'
+count = 1
+literal = '(*a0)(7)'
+
+[[match]]
+name = 'e500 slots #3: auto keeps an arithmetic argument'
+count = 1
+literal = '(*a0)(a1 + 7)'
+
+[[match]]
+name = 'e500 slots #4: auto defines the call result'
+count = 1
+literal = 'return (*a0)(a1) + 1;'
+
+[[match]]
+name = 'e500 slots #5: auto keeps the non-tail return'
+count = 1
+literal = 'return a2;'
+
+[[match]]
+name = "e500 slots #6: auto keeps the other arm's argument and result"
+count = 1
+literal = 'return (*a1)(a2);'

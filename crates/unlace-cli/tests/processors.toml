@@ -13,6 +13,18 @@
 # (docs/processor-tests.md).
 
 [images]
+m7700 = """
+c964009003a9640060eaeaeaeaeaeaeaa934122000001869010060eaeaeaeaea89c200f8a97f8d4000d860eaeaeaeaea
+"""
+s1c88 = """
+31e502cc11f8ffffb005b103f0f380f8b0000391f5fdf8ff
+"""
+s1c6200 = """
+0a8103030e0f0fdf0fff0fff0fff0fff0e030e1404000c010fdf0fff0fff0fff0f440a810f5b0fdf
+"""
+kvx_wide = """
+0000d08f40f300e100e208e06ae259811a0900809d5915899a118908
+"""
 v60_long = """
 2d80fe2000000008000000fe2400000004000000cacdcdcdcdcdcdcdcdcdcdcd
 0010000000200000
@@ -88,6 +100,17 @@ x86_64_avx512_base = """
 x86_32_avx10 = """
 c5fb1044240431c062f1ff082f84240c0000000f97c0c3
 """
+x86_64_issue548 = """
+b8ffffffff0fbdc7c3cccccccccccccc486601f8c3cccccccccccccccccc
+cccc406663c7c3
+"""
+
+ppc_xenon_vmx128 = """
+100018cb102020cb14400c1a1462049a106029cb4e800020
+"""
+x86_64_avx512_disp8 = """
+62f27d4878470162f17e487f06c5f877c3
+"""
 
 [[family]]
 name = "blackfin"
@@ -122,6 +145,48 @@ fixture = "crates/unlace-cli/tests/fixtures/c28x/addb_lret.bin"
 [[family.function]]
 test = "c28x_add_immediate_and_return_decompiles"
 address = "0x8000"
+
+# The native C-SKY ABIv2 language decompiles code built with csky-elf-as -mcpu=ck810:
+# a load/accumulate loop closed by a 32-bit bnez, a push/bsr/pop call, and the
+# C-flag compares feeding inct and bf.
+[[family]]
+name = "csky"
+language = "CSKY:LE:32:v2"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/sum_call_cmp.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_load_loop_decompiles"
+address = "0x8000"
+expect = [
+    "v1 += *a0++;",  # ld.w, addu and the pointer increment
+    "} while (a1);",  # bnez closes the loop
+    "dat_20000000 = v1;",  # movih + st.w
+]
+
+[[family.function]]
+test = "csky_call_with_register_arguments_decompiles"
+address = "0x801c"
+expect = [
+    "return sub_8018(7,5) << 2;",  # r0/r1 arguments, bsr, and pop returning through lr
+]
+
+[[family.function]]
+test = "csky_c_flag_compares_decompile"
+address = "0x802a"
+expect = [
+    "if (a0 < a1)",  # cmplt sets C, inct consumes it
+    "a0 = a1;",
+]
+
+[[family.function]]
+test = "csky_unsigned_compare_branch_decompiles"
+address = "0x8032"
+expect = [
+    "if (a0 <= 99)",  # cmphsi + bf
+    "return 99;",
+]
 
 # The native RCA CDP1802 language (SCRT variant) decompiles a raw image: a
 # store-increment loop through R1 closed by BNZ, returning with SEP R5.
@@ -685,6 +750,57 @@ expect = [
     "return 0;",  # the fall-back path
 ]
 
+# The Rabbit 4000 / 5000 and 6000 languages (the 7F-prefixed register ALU,
+# BCDE/JKHL, the PW-PZ pointer registers) decompile hand-assembled routines.
+[[family]]
+name = "rabbit4000"
+language = ["Rabbit4000:LE:16:default", "Rabbit6000:LE:16:default"]
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/rabbit4000/funcs.bin"
+forbid = ["baddata"]
+
+# ld jkhl,(0x8000); ld bcde,(0x8004); add jkhl,bcde; ld (0x8008),jkhl; ret
+[[family.function]]
+test = "rabbit4000_32bit_add"
+address = "0x1000"
+expect = [
+    "dat_8008 = dat_8000 + dat_8004;",
+]
+
+# ldl px,0x8000; ld a,(px+2): a long logical pointer folds to the global
+[[family.function]]
+test = "rabbit4000_pointer_register_load"
+address = "0x1010"
+expect = [
+    "return dat_8002;",
+]
+
+# 7F 7D / 7F 87 / 7F 6F: LD A,L; ADD A,A; LD L,A behind the 7F prefix
+[[family.function]]
+test = "rabbit4000_prefixed_alu"
+address = "0x1020"
+expect = [
+    "return a0 * '\\x02';",
+]
+
+# cp hl,5; jr gt: the new signed conditions
+[[family.function]]
+test = "rabbit4000_cp_hl_jr_gt"
+address = "0x1030"
+expect = [
+    "if (6 <= a0)",
+    "return 5;",
+]
+
+# ldl px,0x8000; ld a,l; add a,(px+2) (49 page)
+[[family.function]]
+test = "rabbit6000_pointer_alu"
+address = "0x1050"
+language = "Rabbit6000:LE:16:default"
+expect = [
+    "return a0 + dat_8002;",
+]
+
 # The NXP S12Z language decompiles a hand-assembled add/compare/store routine.
 [[family]]
 name = "s12z"
@@ -882,6 +998,39 @@ test = "stm8_add_and_store_decompiles_in_both_memory_models"
 address = "0x8000"
 expect = [
     "10",  # the store to $10 survives
+]
+
+# The native TILEPro language decompiles bundles built with tilepro-linux-gnu-as:
+# a load/accumulate loop closed by bnz with a store, a register swap inside one
+# bundle (parallel reads), and a jal with register arguments.
+[[family]]
+name = "tilepro"
+language = "TILEPRO:LE:32:default"
+base = "0x10000"
+fixture = "crates/unlace-cli/tests/fixtures/tilepro/sum_swap_call.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "tilepro_load_loop_decompiles"
+address = "0x10000"
+expect = [
+    "v1 += *a0++;",  # lw + add with the post-incremented pointer
+    "} while (a1);",  # bnz closes the loop
+    "dat_1000 = v1;",  # moveli + sw
+]
+
+[[family.function]]
+test = "tilepro_parallel_swap_decompiles"
+address = "0x10040"
+expect = [
+    "return a1 - a0;",  # { move r0, r1 ; move r1, r0 } swaps before the sub
+]
+
+[[family.function]]
+test = "tilepro_call_with_register_arguments_decompiles"
+address = "0x10050"
+expect = [
+    "return sub_10040(7,5) << 2;",  # r0/r1 arguments, jal, and the r0 result
 ]
 
 # The native TILE-Gx language decompiles a raw image of hand-assembled bundles:
@@ -1432,6 +1581,71 @@ expect = [
     "*a2->field_0x0 = v4;",
 ]
 
+[[family]]
+name = "amdgpu_gfx10"
+language = "AMDGPU:LE:64:GFX10"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1030_kernels.bin"
+
+# `fixtures/amdgpu/gfx900_kernels.cl` built for gfx1030 (wave32): `scale` guards the store
+# with v_cmp + s_and_saveexec_b32 + s_cbranch_execz on EXEC_LO, `sum` is the scalar loop.
+[[family.function]]
+test = "amdgpu_gfx10_guarded_store_decompiles"
+address = "0x0"
+expect = [
+    "if (a5 < a2->field_0x14)",
+    "* 3 + a2->field_0x10;",
+]
+
+[[family.function]]
+test = "amdgpu_gfx10_scalar_loop_decompiles"
+address = "0x100"
+expect = [
+    "while (v5) {",
+    "v4 = *(int *)CONCAT44(v3,v2) + v4;",
+    "*a2->field_0x0 = v4;",
+]
+
+[[family]]
+name = "amdgpu_gfx11"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_kernels.bin"
+
+# The same kernels built for gfx1100 (RDNA3 opcodes, s_load_b32/global_load_b32 names).
+[[family.function]]
+test = "amdgpu_gfx11_guarded_store_decompiles"
+address = "0x0"
+expect = [
+    "if (a5 < a0->field_0x14)",
+    "* 3 + a0->field_0x10;",
+]
+
+[[family.function]]
+test = "amdgpu_gfx11_scalar_loop_decompiles"
+address = "0x100"
+expect = [
+    "while (v5) {",
+    "*a0->field_0x0 = v4;",
+]
+
+[[family]]
+name = "amdgpu_gfx11_vopd"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_vopd.bin"
+
+# `fixtures/amdgpu/gfx1100_vopd.cl` at -O3: float math the compiler pairs into four VOPD
+# (v_dual_*) instructions; both halves read their sources before either writes.
+[[family.function]]
+test = "amdgpu_gfx11_vopd_decompiles"
+address = "0x0"
+expect = [
+    "v3 = v6 - v5;",
+    "*(float *)(v2 + 8) = v4 + v4;",
+    "v6 = v5 + 1.0f;",
+]
+
 # The CPython 3.12 bytecode language decompiles a function's co_code from a raw image:
 # fast locals become parameters and variables, the value stack folds away, and objects,
 # names and operators are named user-ops (fixtures from `fixtures/cpython/source.py`).
@@ -1518,6 +1732,23 @@ expect = [
     "a1 + a0 * 8",  # ld.xs scales the index
 ]
 
+# A seven-syllable (28-byte) KVX bundle: ret, addd with a 64-bit immediate and
+# make with a 64-bit immediate, each taking two extension syllables at the tail.
+[[family]]
+name = "kvx_wide"
+language = "KVX:LE:64:kv3-1"
+base = "0x0"
+image = "kvx_wide"
+args = ["--addr"]
+forbid = ["halt_baddata", "invalid_syllable"]
+
+[[family.function]]
+test = "kvx_bundle_longer_than_16_bytes_decompiles"
+address = "0x0"
+expect = [
+    "return a0 + 0x123456789abcd;",  # the triple-syllable addd in a 28-byte bundle
+]
+
 # AVX10.2 in 32-bit x86: vcomxsd sets OF SF ZF PF CF so that seta is an ordered greater-than
 # (vmovsd xmm0,[esp+4]; xor eax,eax; vcomxsd xmm0,[esp+12]; seta al; ret).
 [[family]]
@@ -1530,3 +1761,366 @@ image = "x86_32_avx10"
 test = "x86_32_vcomxsd_is_an_ordered_compare"
 address = "0x0"
 expect = ["return a1 < a0;"]
+
+# #548: BSR with a zero source leaves its destination, a REX before another prefix is ignored,
+# and MOVSXD r16, r/m32 (mov eax,-1; bsr eax,edi; ret | 48 66 add ax,di; ret | 40 66 movsxd ax,edi; ret).
+[[family]]
+name = "x86_64_issue548"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_issue548"
+
+[[family.function]]
+test = "x86_bsr_zero_source_keeps_the_destination"
+address = "0x0"
+expect = ["return 0xffffffff;"]
+
+[[family.function]]
+test = "x86_rex_before_a_prefix_is_ignored"
+address = "0x10"
+expect = ["return v1 + a0;"]
+
+[[family.function]]
+test = "x86_movsxd_r16_decodes"
+address = "0x20"
+expect = ["return a0;"]
+
+# The native StarCore SC140 language decompiles raw images assembled by hand from
+# the manual's encoding tables: an add, a compare and conditional branch, a
+# two-word-prefix execution set with a high-bank register and a post-increment
+# load, an indexed load and a call.
+[[family]]
+name = "starcore"
+language = "StarCore:LE:32:SC140"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/starcore/sets.bin"
+args = ["--addr"]
+forbid = ["halt_baddata", "invalid_word"]
+
+[[family.function]]
+test = "starcore_add_returns_the_sum"
+address = "0x0"
+expect = ["return a0 + a1;"]
+
+[[family.function]]
+test = "starcore_prefixed_set_loads_through_r0"
+address = "0xc"
+expect = [
+    "*a2",  # MOVE.W (R0)+ reads the third argument
+]
+
+[[family.function]]
+test = "starcore_indexed_load_decompiles"
+address = "0x18"
+expect = [
+    "[4]",  # (R0+8) is the fifth word
+]
+
+[[family.function]]
+test = "starcore_call_decompiles"
+address = "0x1e"
+expect = [
+    "sub_6() + 1",  # BSR and the D0 result
+]
+
+[[family]]
+name = "starcore_max"
+language = "StarCore:LE:32:SC140"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/starcore/max.bin"
+args = ["--addr"]
+forbid = ["halt_baddata", "invalid_word"]
+
+[[family.function]]
+test = "starcore_compare_and_branch_select_the_maximum"
+address = "0x0"
+expect = [
+    "a0 = a1;",  # BT skips the TFR when D0 > D1
+    "return a0;",
+]
+
+# The Xbox 360 Xenon language decodes VMX128: two lvx128 loads into vr64/vr65, vaddfp128,
+# vmulfp128 and an stvx128 store (encoded from Xenia's VX128 formats, blr from powerpc-elf-as).
+[[family]]
+name = "ppc_xenon_vmx128"
+language = "PowerPC:BE:64:Xenon"
+base = "0x82000000"
+image = "ppc_xenon_vmx128"
+
+[[family.function]]
+test = "xenon_vmx128_vector_math_decompiles"
+address = "0x82000000"
+expect = [
+    "void sub_82000000(unsigned int a0,unsigned int a1,unsigned int a2)",
+    "*(char (*)[16])(a2 & 0xfffffff0) = vmx128_vmulfp(vmx128_vaddfp(",
+]
+# The S1C6200 (E0C6200) language decompiles 12-bit instructions in big-endian words, assembled
+# by hand from the core manual: a carry-tested add, a caller that CALLs it within the page,
+# and an add bracketed by SDF/RDF, which decodes with the decimal adjustment.
+[[family]]
+name = "s1c6200"
+language = "S1C6200:BE:16:default"
+base = "0x0"
+image = "s1c6200"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s1c6200_add_with_carry_test_decompiles"
+address = "0x0"
+expect = [
+    "if (v1 <= 0xf)",  # JP NC tests the carry out of ADD A,B
+    "return 0xf;",
+]
+
+[[family.function]]
+test = "s1c6200_call_within_the_page_decompiles"
+address = "0x8"
+expect = ["sub_0(3,4)"]
+
+[[family.function]]
+test = "s1c6200_decimal_mode_add_is_adjusted"
+address = "0x10"
+expect = ["9 < v1"]
+
+# AVX-512 Disp8*N from LLVM's CD8_Scale: vpbroadcastb zmm0, [rdi + 1] has N=1 (the base spec used 4).
+[[family]]
+name = "x86_64_avx512_disp8"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_avx512_disp8"
+
+[[family.function]]
+test = "x86_vpbroadcastb_disp8_is_not_scaled"
+address = "0x0"
+expect = ["((unsigned char *)a0)[1]"]
+
+# The Propeller 2 language decompiles flexspin (-2 -O1 --fcache=0) hub-execution output of
+# fixtures/propeller2/flexspin_hub.c: conditional (if_b/if_ae) arithmetic after a cmps, a
+# loop with rdlong, and a caller passing arguments through cog registers.
+[[family]]
+name = "propeller2"
+language = "propeller2:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/propeller2/flexspin_hub.bin"
+
+[[family.function]]
+test = "propeller2_conditional_arithmetic_decompiles"
+address = "0x4f4"
+expect = [
+    "if (dat_fc <= dat_f8)",
+    "dat_ec = dat_f8 * 3;",
+    "dat_ec = dat_fc + dat_ec;",
+]
+
+[[family.function]]
+test = "propeller2_hub_loop_decompiles"
+address = "0x514"
+expect = [
+    "for (dat_f4 = 0; dat_f4 < dat_fc; dat_f4 = dat_f4 + 1) {",
+    "dat_f0 += *dat_ec;",
+]
+
+[[family.function]]
+test = "propeller2_calls_decompile"
+address = "0x548"
+expect = [
+    "dat_f8 = 1;",
+    "sub_4f4();",
+    "sub_514();",
+]
+
+# The S1C88 language decompiles routines hand-assembled from the core manual's instruction
+# list: a compare and JRS NC with EX A,B (absolute difference), a caller using CARS, and
+# an ADD A,[HL] / INC HL / DJR NZ byte-sum loop.
+[[family]]
+name = "s1c88"
+language = "S1C88:LE:16:default"
+base = "0x0"
+image = "s1c88"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s1c88_compare_and_exchange_decompiles"
+address = "0x0"
+expect = [
+    "if (a0 < a1)",  # CP A,B then JRS NC skips EX A,B
+    "return v1 - a1;",
+]
+
+[[family.function]]
+test = "s1c88_cars_call_decompiles"
+address = "0x8"
+expect = ["sub_0(5,3)"]
+
+[[family.function]]
+test = "s1c88_djr_loop_sums_bytes"
+address = "0x10"
+expect = [
+    "v1 += *v2++;",  # ADD A,[HL] and INC HL in the DJR NZ body
+    "while (a1)",
+]
+
+# The Toshiba TLCS-870/C language decompiles routines assembled with the AS
+# macro assembler's TLCS-870/C target.
+[[family]]
+name = "tlcs870c"
+language = "TLCS870C:LE:16:default"
+base = "0xe000"
+fixture = "crates/unlace-cli/tests/fixtures/tlcs870c/funcs.bin"
+forbid = ["baddata"]
+
+# add a,5; cmp a,10h; jr nz; ld (80h),a; ret
+[[family.function]]
+test = "tlcs870c_add_compare_store"
+address = "0xe000"
+expect = [
+    "dat_80 = a0 + '\\x05';",
+    "return 0x10;",
+]
+
+# ld wa,(80h); add wa,bc; ld (82h),wa (source and destination prefixes)
+[[family.function]]
+test = "tlcs870c_word_add"
+address = "0xe020"
+expect = [
+    "dat_82 = dat_80 + a0;",
+]
+
+# ld a,7; call f1; inc a
+[[family.function]]
+test = "tlcs870c_call"
+address = "0xe040"
+expect = [
+    "return sub_e000(7) + '\\x01';",
+]
+
+# cmp a,c; jr sge (prefixed condition); ld a,c
+[[family.function]]
+test = "tlcs870c_signed_max"
+address = "0xe060"
+expect = [
+    "if (a0 < a1)",
+    "a0 = a1;",
+]
+
+[[family]]
+name = "lua51_loop"
+language = "Lua:LE:32:5.1"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/lua5x/loop_51.bin"
+
+# `fixtures/lua5x/loop.lua` main chunk from luac 5.1.5: FORPREP/FORLOOP, MOD + EQ + JMP,
+# CONCAT, SETTABLE, GETGLOBAL and CALL.
+[[family.function]]
+test = "lua51_loop_decompiles"
+address = "0x0"
+expect = [
+    "v4 = luaForStep(v4,K1);",
+    "if (!luaForLoop(v4,v1,K1)) break;",
+    "v3 = luaAdd(v3,v4);",
+    "luaSetTable(v2,K3,luaConcat(v3,K4));",
+    "return v3;",
+    "v1 = luaGetGlobal(K5);",
+]
+
+[[family]]
+name = "lua51_loadnil"
+language = "Lua:LE:32:5.1"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/lua5x/loadnil_51.bin"
+
+# `fixtures/lua5x/loadnil.lua` (luac 5.1.5): LOADNIL 1 3 clears r1..r3 (5.1 counts to
+# register B), then LT + JMP.
+[[family.function]]
+test = "lua51_loadnil_decompiles"
+address = "0x0"
+expect = [
+    "v2 = luaNil();",
+    "v3 = luaNil();",
+    "v2 = luaMul(v1,K1);",
+]
+
+[[family]]
+name = "lua52_loop"
+language = "Lua:LE:32:5.2"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/lua5x/loop_52.bin"
+
+# `fixtures/lua5x/loop.lua` from luac 5.2.4: as 5.1 with GETTABUP on _ENV and JMP A.
+[[family.function]]
+test = "lua52_loop_decompiles"
+address = "0x0"
+expect = [
+    "v4 = luaForStep(v4,K1);",
+    "if (!luaForLoop(v4,v1,K1)) break;",
+    "v3 = luaAdd(v3,v4);",
+    "luaSetTable(v2,K3,luaConcat(v3,K4));",
+    "return v3;",
+    "v1 = luaGetTable(U0,K5);",
+]
+
+[[family]]
+name = "lua53_loop"
+language = "Lua:LE:32:5.3"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/lua5x/loop_53.bin"
+
+# `fixtures/lua5x/loop.lua` from luac 5.3.6 (5.3 opcode numbering).
+[[family.function]]
+test = "lua53_loop_decompiles"
+address = "0x0"
+expect = [
+    "v4 = luaForStep(v4,K1);",
+    "if (!luaForLoop(v4,v1,K1)) break;",
+    "v3 = luaAdd(v3,v4);",
+    "luaSetTable(v2,K3,luaConcat(v3,K4));",
+    "return v3;",
+    "v1 = luaGetTable(U0,K5);",
+]
+
+[[family]]
+name = "lua53_bitops"
+language = "Lua:LE:32:5.3"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/lua5x/bitops_53.bin"
+
+# `fixtures/lua5x/bitops.lua` (luac 5.3.6): BAND, BOR, SHL, SHR, BXOR, IDIV and BNOT.
+[[family.function]]
+test = "lua53_bitops_decompile"
+address = "0x0"
+expect = [
+    "v1 & K0",
+    "luaIDiv(",
+    "return ~(",
+]
+
+# The 7700 Family language decompiles routines hand-assembled from the software manual's
+# instruction pages: a 16-bit compare and BCC clamp, a JSR caller, and an 8-bit store
+# after SEM and LDT (data bank 0).
+[[family]]
+name = "m7700"
+language = "M7700:LE:24:default"
+base = "0x0"
+image = "m7700"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "m7700_compare_and_branch_clamps"
+address = "0x0"
+expect = [
+    "if (a0 <= 99)",  # CMP A,#100 then BCC skips LDA A,#100
+    "return 100;",
+]
+
+[[family.function]]
+test = "m7700_jsr_call_decompiles"
+address = "0x10"
+expect = ["return sub_0(0x1234) + 1;"]
+
+[[family.function]]
+test = "m7700_sem_store_is_one_byte"
+address = "0x20"
+expect = ["dat_40 = 0x7f;"]

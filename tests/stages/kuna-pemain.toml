@@ -1,0 +1,56 @@
+# The PE user-entry naming.
+#
+# The XML wrapper only provides the harness architecture. The pass clears
+# it and loads the stripped in-tree MinGW PE fixture through the CLI's own
+# loader. Its `__tmainCRTStartup` stores `envp` into msvcrt's `__initenv`
+# through `.refptr.__imp___initenv` and then calls `main(argc, argv, envp)`
+# at 0x140001592 (the unstripped twin `pe_imports.exe` names it there).
+#
+# Before the pass the CRT startup called the program's own entry as one
+# more `sub_<addr>`, so nothing in the inventory said where the program
+# starts. The pass names that callee `main`, at the call site and at its
+# own definition.
+# The first argument is a variable: the startup reads `dat_14000c028` into
+# ecx before it stores `__initenv` through `.refptr.__imp___initenv`, and
+# passes that register to main (`option indexaliasguard`).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/pe_imports_stripped.exe',
+    'read symbols',
+    'load function sub_1400011a0',
+    'decompile',
+    'print C',
+    'load function main',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'PEMAIN #1: the CRT startup never calls the program entry as an anonymous sub'
+count = 0
+regex = '= sub_140001592\(v\d+,dat_14000c020\);'
+
+[[match]]
+name = 'PEMAIN #2: the call site names main'
+count = 1
+regex = '= main\(v\d+,dat_14000c020\);'
+
+[[match]]
+name = 'PEMAIN #3: main is defined under its name'
+count = 1
+literal = 'unsigned long long main(unsigned int a0)'

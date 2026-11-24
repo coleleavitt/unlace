@@ -1,0 +1,24 @@
+# Synthetic rldic r3,r3,2,30; blr.
+
+[image]
+arch = 'PowerPC:BE:64:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'rotate_mask' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '786317884e800020'
+
+[script]
+commands = [
+    'load function rotate_mask',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'nested PPC operand: full rotation and mask'
+count = 1
+literal = 'return (uint8)a0 << 2;'

@@ -1,0 +1,50 @@
+# Authored predicated pointer loads. A call kills r1, but the old value
+# cannot reach the load guarded by validity and the pending byte.
+
+[image]
+arch = 'ARM:LE:32:v5t:default'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 'candidate' },
+    { space = 'ram', offset = '0x10030', name = 'valid' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+readonly = true
+hex = '10402de90040a0e1080000eb000050e3041094150000d115000050130100000a040091e51080bde80000a0e31080bde8000050e3000090151eff2fe1'
+
+[script]
+commands = [
+    'map prototype valid unsigned int valid(unsigned int *entity)',
+    'map prototype candidate unsigned int candidate(unsigned int *entity)',
+    'lo fu candidate',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CONDITIONAL REGISTER #1: no artificial undefined transfer'
+count = 0
+regex = '^  v[0-9]+ = v[0-9]+;'
+
+[[match]]
+name = 'CONDITIONAL REGISTER #2: the validity call remains'
+count = 1
+literal = 'valid(entity)'
+
+[[match]]
+name = 'CONDITIONAL REGISTER #3: the guarded pointer definition remains'
+count = 1
+literal = '= (char *)entity[1];'
+
+[[match]]
+name = 'CONDITIONAL REGISTER #4: the pending-byte load remains'
+count = 1
+regex = '= \*v[0-9]+;'
+
+[[match]]
+name = 'CONDITIONAL REGISTER #5: the guarded word return remains'
+count = 1
+regex = 'return \*\(uint4 \*\)&v[0-9]+\[4\];'

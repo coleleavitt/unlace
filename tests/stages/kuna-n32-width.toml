@@ -1,0 +1,81 @@
+# Original GCC 7.3 N32 instructions from tests/fixtures/mips-n32-stack/width.c.
+# Integer consumers are inferred; physical-SP probes also lock their return.
+
+[image]
+arch = 'MIPS:BE:64:octeon-32addr:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'compare_bits' },
+    { space = 'ram', offset = '0x100018', name = 'return_bits' },
+    { space = 'ram', offset = '0x100030', name = 'add_bits' },
+    { space = 'ram', offset = '0x100048', name = 'sp_high' },
+    { space = 'ram', offset = '0x100058', name = 'sp_full' },
+    { space = 'ram', offset = '0x100068', name = 'sp_and_stack' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '000410007085202adc42000003e000080082102d000000000004180000801025dc63000003e00008fca30000000000000085202d000410007086202adc42000003e000080082102d03a0102503e000080002103e0000000003a0102503e00008000000000000000003a01025dfa300000002103e03e000080043102d00000000'
+
+[script]
+commands = [
+    'option ctypes on',
+    'lo fu compare_bits',
+    'decompile',
+    'print C',
+    'lo fu return_bits',
+    'decompile',
+    'print C',
+    'lo fu add_bits',
+    'decompile',
+    'print C',
+    'parse line extern unsigned long long sp_high(void);',
+    'lo fu sp_high',
+    'decompile',
+    'print C',
+    'parse line extern unsigned long long sp_full(void);',
+    'lo fu sp_full',
+    'decompile',
+    'print C',
+    'parse line extern unsigned long long sp_and_stack(unsigned long long a,unsigned long long b,unsigned long long c,unsigned long long d,unsigned long long e,unsigned long long f,unsigned long long g,unsigned long long h,unsigned long long ninth);',
+    'lo fu sp_and_stack',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'N32 width: inferred comparison keeps both 64-bit inputs'
+count = 1
+literal = 'compare_bits(long long a0,long long a1)'
+
+[[match]]
+name = 'N32 width: inferred raw return retains 64 bits'
+count = 1
+literal = 'unsigned long long return_bits(unsigned long long a0,'
+
+[[match]]
+name = 'N32 width: inferred address arithmetic keeps 64 bits'
+count = 1
+literal = 'add_bits(long long a0,long long a1,long long a2)'
+
+[[match]]
+name = 'N32 width: physical SP high bytes remain inputs'
+count = 3
+literal = '// sp_hi'
+
+[[match]]
+name = 'N32 width: full SP contains both physical halves'
+count = 1
+literal = 'CONCAT44('
+
+[[match]]
+name = 'N32 width: physical SP and stack argument coexist'
+count = 1
+literal = 'return v1 + ninth;'
+
+[[match]]
+name = 'N32 width: high SP read is never invented zero'
+count = 0
+literal = 'return 0;'

@@ -1,0 +1,48 @@
+[image]
+arch = 'PowerPC:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '4e800020'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-base-spill.elf',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function check',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-ctr-decrement.elf',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function check2',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'callee overwritten PIC base retains caller return'
+count = 1
+literal = 'return 7;'
+
+[[match]]
+name = 'counted PIC transfer retains tail caller return'
+count = 1
+regex = [
+    '^  \(\*dat_3004\)\(\); // jump-as-call$',
+    '^\}$',
+]
+
+[[match]]
+name = 'spill and CTR effects acquire no terminal contract'
+count = 0
+regex = '__stack_chk_fail|no-return'

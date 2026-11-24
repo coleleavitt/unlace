@@ -570,7 +570,7 @@ So the residual exposure is precise: a parameter used *only* to subscript an
 unnamed byte-element table would be declined (nothing tells the walk it is a
 base, but nothing gives it a base either), and a parameter used both as such a
 subscript and as a real memory base is typed on the strength of the second use.
-`tests/stages/kuna-ptrfromuse.xml` pins both grades, as `globalindex` and
+`tests/stages/kuna-ptrfromuse.toml` pins both grades, as `globalindex` and
 `blindindex`.
 
 The candidate is **folded** into `get_local_type`'s result by
@@ -1110,7 +1110,7 @@ table is passed as its address). A global
 the header declines as
 read at two types is compiled at the pointer that comment lists, so a
 disagreement cannot hide behind a guessed declaration.
-`tests/stages/kuna-elemptr.xml` pins the witnesses, the three controls (a
+`tests/stages/kuna-elemptr.toml` pins the witnesses, the three controls (a
 record walked by a stride, a pointer read at two widths, the length), the byte
 step and the first-element read in both passes, the narrow load (pass 1 is
 upstream's widened read), and an element returned from the register its address
@@ -1279,7 +1279,7 @@ variable. `--option boolbyte off` restores the upstream fold exactly - the
 candidate is never offered and the printer arm is not consulted - which is the
 ablation to reach for when a `bool` declaration is in question.
 
-`tests/stages/kuna-boolbyte.xml` pins the witness, the five refusals - a byte
+`tests/stages/kuna-boolbyte.toml` pins the witness, the five refusals - a byte
 that is also widened and added, a byte tested for its low bit, a byte stored
 through a pointer, a stack byte set to 0 and then filled by a callee, and a byte
 parameter copied into a slot a callee is handed the address of - and both
@@ -1384,7 +1384,7 @@ one type, three functions change a declaration count: two split a `char` byte
 or pointer from an unrelated `unsigned char` value that had shared its
 declaration, and one joins two `char *` locals. Every changed comparison was
 checked by compiling both forms and evaluating them over all 256 byte values.
-`tests/stages/kuna-charbyte.xml` pins the witness, the `unsigned char *` and
+`tests/stages/kuna-charbyte.toml` pins the witness, the `unsigned char *` and
 unsigned-compare controls, the `0xe9` comparison, and a pointer that is
 `char *` only because `strlen` takes one.
 
@@ -1481,7 +1481,7 @@ register, so a store through a pointer loaded from the TEB
 (`mov eax,fs:[0x18]; mov [eax],esp`) is typed as `teb->Self->ExceptionList = ...`.
 And `auto` needs the loader fact, which only the object loader writes, so it never
 fires in the Ghidra front-end; `on` does. Exercised by
-`tests/stages/kuna-pebnames.xml`, `tests/stages/kuna-pebnames-x86.xml` (both
+`tests/stages/kuna-pebnames.toml`, `tests/stages/kuna-pebnames-x86.toml` (both
 with near misses that must not gain a name, and x86 SEH and MSVC C++ EH frames that
 must render exactly as with the option off) and
 `crates/unlace-console/tests/verify_pebnames.rs`.
@@ -1660,7 +1660,7 @@ also holds a keymap entry's function is now typed as that function pointer and
 indexed. The cost is gcc's incompatible-pointer-type warnings, 247 to 312: a
 function whose recovered prototype differs from the DWARF type of the slot it
 is passed to was passed to a `void *` before, and gcc 14 and later reject that
-by default. Exercised by `tests/stages/kuna-calltargettype.xml` (gcc -O1 and clang
+by default. Exercised by `tests/stages/kuna-calltargettype.toml` (gcc -O1 and clang
 -O2 builds of a table dispatch, a local holding a table entry, a record's
 callback, a local called with two arities, a local that receives a function's
 address, a local handed to `qsort`, a float held in `xmm0` as an integer, and a
@@ -2256,7 +2256,7 @@ IDA both emit and adds 35 in 14 (`docs/features/fieldtype/record.json`). It stay
 because of the ledger below: a reader shares a record only on exact field-type
 agreement, so a field one reader re-types moves which record another reader is
 answered with (`docs/features/fieldtype/default-on-evaluation.md`).
-`tests/stages/kuna-fieldtype.xml` pins both passes, including the index and the
+`tests/stages/kuna-fieldtype.toml` pins both passes, including the index and the
 merged number as controls, and the compiled round trip in `decompile_all_cli.rs`
 checks the printed C computes what the binary does.
 
@@ -3020,8 +3020,8 @@ one operand of a CALLOTHER whose user op has one of these names the float of
 the Varnode's width, as they do for `FLOAT_ROUND`
 (`crates/unlace-bandb-base/src/p5_types/kuna_roundingops.rs
 (output_type, input_type)`). The user-op ids are resolved by name once per
-program, and a width the processor has no float format for (AArch64 half
-precision) keeps the untyped default. Such a CALLOTHER is a pure function of
+program, and a width the processor has no float format for (by default anything but
+the 2-, 4- and 8-byte IEEE formats) keeps the untyped default. Such a CALLOTHER is a pure function of
 its operand, so dead-code removal deletes it once its result is unused
 instead of keeping it as a call statement (`is_pure_call`, read by
 `crates/unlace-emit/src/p9_emit/coreaction_render.rs

@@ -419,4 +419,18 @@
     <external_name tool="IDA-PRO" name="ppc"/>
     <external_name tool="DWARF.register.mapping.file" name="ppc.dwarf"/>
   </language>
+  <language processor="PowerPC"
+            endian="big"
+            size="32"
+            variant="Xenon"
+            version="1.7"
+            slafile="ppc_64_xenon_be.sla"
+            processorspec="ppc_64.pspec"
+            manualindexfile="../manuals/PowerPC.idx"
+            id="PowerPC:BE:64:Xenon">
+    <description>Xbox 360 Xenon: PowerPC 64-bit big endian w/AltiVec, VMX128 and 32 bit addressing</description>
+    <truncate_space space="ram" size="4"/>
+    <compiler name="default" spec="ppc_64_32.cspec" id="default"/>
+    <external_name tool="DWARF.register.mapping.file" name="ppc.dwarf"/>
+  </language>
 </language_definitions>

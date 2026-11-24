@@ -6,9 +6,9 @@
 //! prototype MODEL -- the evidence write being a register the convention names
 //! among them -- are pinned end to end, against a
 //! real architecture and with an `endbr64; ret` negative control, by
-//! `tests/stages/kuna-calleeretpreserves.xml`. The end-to-end witness -- an MSVC `/GS` `main` returning its cookie
+//! `tests/stages/kuna-calleeretpreserves.toml`. The end-to-end witness -- an MSVC `/GS` `main` returning its cookie
 //! check instead of the zero it set -- lives in
-//! `tests/stages/kuna-calleeretpreserves.xml` and
+//! `tests/stages/kuna-calleeretpreserves.toml` and
 //! `tests/cli/main-returns-invented-cookie.json`.
 
 use super::*;

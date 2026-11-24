@@ -9,7 +9,7 @@
 //! - `option gowritebarrier off`: the same function renders the thunk call.
 //!
 //! The hermetic matcher logic is pinned by the `kuna_gowritebarrier` unit
-//! tests and `tests/stages/kuna-gowritebarrier.xml`; this gate is the
+//! tests and `tests/stages/kuna-gowritebarrier.toml`; this gate is the
 //! detection-driven `auto` path over a genuine Go image (the
 //! `verify_go_morestack` pattern, same hermetic build recipe).
 

@@ -1,0 +1,74 @@
+# kuna calleeretpurge: an i386 struct-returning callee pops its hidden pointer.
+#
+# Built with clang -m32 -O1 -fomit-frame-pointer from
+#     struct S{int a,b,c;};
+#     __attribute__((noinline)) struct S f(int x){struct S s={x,x+1,x+2};return s;}
+#     __attribute__((noinline)) void h(int *p){ *p += 3; }
+#     int g(int y){int loc[4]; loc[0]=y; h(loc); struct S s=f(y); loc[1]=s.a; h(loc+1);
+#                  struct S t=f(loc[0]+s.c); h(loc+2); return loc[1]+t.b+loc[0]+loc[2];}
+#
+# f ends `ret $4` (i386 SysV: the callee pops the hidden return pointer), and g
+# re-reserves the popped slot with `sub esp,4` after each call to f.
+# x86gcc.cspec states extrapop=4 for every call, so with the option off every
+# stack reference after a call to f drifts by 4: loc[0], loc[1] and loc[2] all
+# read as `v2[0]`, s.c reads the wrong slot.  With the option on, f's decoded
+# `ret $4` gives the call extrapop 8 and each loc[i] is its own slot.
+#
+# Stage: P4 callee prototype stack contract, option calleeretpurge off|on.
+# Pass 1 (off) pins the bug, pass 2 (on, the default) pins the fix.
+
+[image]
+arch = 'x86:LE:32:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x8049000', name = 'f' },
+    { space = 'ram', offset = '0x8049020', name = 'h' },
+    { space = 'ram', offset = '0x8049030', name = 'g' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x8049000'
+hex = '8b4424048b4c240889088d510189500483c102894808c204000f1f80000000008b442404830003c30f1f8400000000005683ec388b742440897424108d442410890424e8d8ffffff897424048d442420890424e8a8ffffff83ec048b4424208d4c241489442414890c24e8b1ffffff8b44242803442410894424048d44242c890424e879ffffff83ec048d442418890424e88affffff8b44243003442414034424100344241883c4385ec3'
+
+[script]
+commands = [
+    'option calleeretpurge off',
+    'lo fu g',
+    'decompile',
+    'print C',
+    'option calleeretpurge on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CALLEERETPURGE #1: off, loc[1] and loc[2] collapse onto loc[0]'
+count = 1
+regex = [
+    '^  h\(v2\);$',
+    '^  f\(v3,v1\);$',
+    '^  v2\[0\] = v7;$',
+    '^  h\(v2\);$',
+]
+
+[[match]]
+name = 'CALLEERETPURGE #2: on, loc[1] is its own slot, assigned from s.a'
+count = 1
+regex = [
+    '^  v4 = v3\[0\];$',
+    '^  h\(&v4\);$',
+]
+
+[[match]]
+name = 'CALLEERETPURGE #3: on, loc[2] is its own slot'
+count = 1
+regex = [
+    '^  h\(v6\);$',
+    '^  return v8 \+ v4 \+ v2 \+ v6\[0\];$',
+]
+
+[[match]]
+name = 'CALLEERETPURGE #4: on, the second f gets loc[0] + s.c'
+count = 1
+regex = '^  f\(v5,v7 \+ v2\);$'

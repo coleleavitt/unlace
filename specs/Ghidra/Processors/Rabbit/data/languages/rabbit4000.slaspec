@@ -1,0 +1,5 @@
+# Rabbit 4000 / 5000: the Rabbit 3000A set, with LD r,g and the 8-bit ALU on a
+# register or (HL) behind the 7F prefix, plus the 4000 additions.
+@define R3000A ""
+@define R4000 ""
+@include "rabbit.sinc"

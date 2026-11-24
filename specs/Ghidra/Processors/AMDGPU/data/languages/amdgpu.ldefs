@@ -12,4 +12,26 @@
     <compiler name="default" spec="amdgcn.cspec" id="default"/>
     <external_name tool="gnu" name="amdgcn"/>
   </language>
+  <language processor="AMDGPU"
+            endian="little"
+            size="64"
+            variant="GFX10"
+            version="1.0"
+            slafile="amdgcn_gfx10.sla"
+            processorspec="amdgcn.pspec"
+            id="AMDGPU:LE:64:GFX10">
+    <description>AMD RDNA 1/2 (gfx10) shader ISA, wave32, one-lane lift</description>
+    <compiler name="default" spec="amdgcn.cspec" id="default"/>
+  </language>
+  <language processor="AMDGPU"
+            endian="little"
+            size="64"
+            variant="GFX11"
+            version="1.0"
+            slafile="amdgcn_gfx11.sla"
+            processorspec="amdgcn.pspec"
+            id="AMDGPU:LE:64:GFX11">
+    <description>AMD RDNA 3 (gfx11) shader ISA, wave32, one-lane lift</description>
+    <compiler name="default" spec="amdgcn.cspec" id="default"/>
+  </language>
 </language_definitions>

@@ -116,7 +116,8 @@ reading what the compiler recorded about the source rather than guessing from
 the callee.
 
 **`noretfirst` — the no-return arm as the clause.** `option noretfirst on`
-(default off) breaks the same tie by the arms' exits instead, and before
+(default on since issue #8's DecBench O2-noinline A/B: mean GED 10.673 -> 10.588,
+GED0 39.21% -> 40.51%, 739 functions better and 119 worse) breaks the same tie by the arms' exits instead, and before
 `guardarm` looks at it: of the two eligible arms, the one whose exit leaf ends
 in an artificial no-return halt that follows a call (`ExitLeafFacts::is_noreturn_call`:
 the `op_mark_halt` no-return bit, with a `CALL`/`CALLIND` earlier in the block, or,
@@ -124,7 +125,10 @@ for a halt in a block of its own, at the end of every predecessor) becomes the c
 function's own `return` stays flat after the `if` (`if (!p) fatal(); return
 p;`). A halt `funcboundflow` plants where a branch's own fall-through reached
 the next function's entry follows no call, so it does not count (taken as the
-clause, it printed an empty `if` body). When both arms or neither end in a no-return call, the tie falls through
+clause, it printed an empty `if` body). Nor does a call to `__stack_chk_fail`
+(any name containing `stack_chk_fail`): the compiler adds that check, so the
+source has no `if` whose order the tie-break could recover, and on DecBench
+O2-noinline taking that arm first made 29 functions worse and 5 better. When both arms or neither end in a no-return call, the tie falls through
 to `guardarm` or the out-index order. This is the predicate `guardarm`
 rejects for unoptimized code (`make-prime-list xalloc`); on optimized code,
 where layout no longer follows the source, it is the better signal, and it is
@@ -527,7 +531,7 @@ the re-analysed functions. At `2`, eight functions change and gotos rise by
 four, but the affected functions are large enough that the second analysis
 costs +8% (grep) and +26% (libselinux) of whole-binary time. `off` makes
 `record_hits`, the seed and the budget clamp inert, so the output is
-byte-identical to the uncapped form. Witness: `tests/stages/kuna-condstmts.xml`.
+byte-identical to the uncapped form. Witness: `tests/stages/kuna-condstmts.toml`.
 
 **Goto selection (the pathological case).** When the cascade stalls with more
 than one component live, `blockaction.rs (CollapseStructure::select_goto)`
@@ -1575,8 +1579,9 @@ also leaves it alone.
 The one call may also be a CALLIND, in either form of the block. Its target is
 an input like any other, so a block whose paths set different function
 pointers qualifies through the target as well as through the arguments. Each
-clone gets its own copy of the call spec, and after the split each path calls
-through its own pointer, which `ActionDeindirect` can then turn into a direct
+clone gets its own copy of the call spec (a CALLIND clone registers no fspec
+handle, as a CALLIND's spec has no entry address to name and its target is the
+pointer itself), and after the split each path calls through its own pointer, which `ActionDeindirect` can then turn into a direct
 call when that pointer is a known function.
 
 ### orchain — the split that must not happen (decbench)
@@ -1858,7 +1863,7 @@ decompiled C plus the disassembly, chose a region, and applied the option — ou
 **0 of 15**, on cases selected so that a DWARF-confirmed inlined callee spanning at
 least two whole basic blocks existed in every one. Two of those failures were the
 pass emitting wrong C (both fixed, and pinned by
-`tests/stages/kuna-outline-proto.xml`); the rest were correct declines against two
+`tests/stages/kuna-outline-proto.toml`); the rest were correct declines against two
 classes v1 cannot take at all:
 
 * **Multi-exit inlines.** The compiler routinely fuses a callee's return-value

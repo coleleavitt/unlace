@@ -1,0 +1,351 @@
+# Rabbit 4000 / 5000 additions: the 32-bit registers BCDE and JKHL (with JK),
+# the 32-bit pointer registers PW PX PY PZ, HTR and the 16-bit LXPC, and the
+# instructions that use them. Included by rabbit.sinc under @define R4000.
+# Written from the Rabbit Family of Microprocessors Instruction Reference
+# Manual (019-0098); encodings cross-checked against z88dk's r4k test table.
+
+define register offset=0x50 size=2 [ JK JK_ ];
+define register offset=0x54 size=4 [ T32 ];
+define register offset=0x58 size=2 [ LXPC ];
+define register offset=0x5a size=1 [ HTR ];
+define register offset=0x60 size=4 [ PW PX PY PZ PW_ PX_ PY_ PZ_ ];
+
+define token r4byte (8)
+  q0_8 = (0,7)
+  qhi2 = (6,7)
+  qmid2 = (4,5)
+  qlo4 = (0,3)
+  qlo3 = (0,2)
+  qpd  = (6,7)
+  qps  = (4,5)
+  qpsa = (4,5)
+  qpda = (6,7)
+  qrr  = (6,7)
+  qrr4 = (4,5)
+  qcc  = (3,5)
+  r6m  = (2,3)
+  qp01 = (0,1)
+;
+
+define token data24 (24)
+  imm24 = (0,23)
+;
+define token data16x (16)
+  imm16x = (0,15)
+  imm16s = (0,15) signed
+;
+define token data32 (32)
+  imm32 = (0,31)
+;
+
+attach variables [ qpd qps ] [ PW PX PY PZ ];
+attach variables [ qpda qpsa ] [ PW_ PX_ PY_ PZ_ ];
+attach variables [ qp01 ] [ PW PX PY PZ ];
+attach variables [ qrr qrr4 ] [ BC DE IX IY ];
+
+define pcodeop convc;
+define pcodeop convd;
+define pcodeop block_copy;
+define pcodeop block_copy_reverse;
+define pcodeop cbm;
+define pcodeop exp_exchange;
+define pcodeop fsyscall;
+define pcodeop sbox;
+define pcodeop ibox;
+define pcodeop set_system_protect;
+define pcodeop set_user_protect;
+define pcodeop sysret;
+
+@define N4 "pfx=0 & p7f=0 & "
+
+# A pointer-register address is physical unless its upper 16 bits are all
+# ones, which makes it a long logical address (the low 16 bits, through the MMU).
+macro pld(d, p) {
+  if ((p >> 16) == 0xffff) goto <logical>;
+  local pa:3 = p:3; d = *[phys] pa; goto <done>;
+<logical>
+  local la:2 = p:2; d = *[ram] la;
+<done>
+}
+macro pst(p, v) {
+  if ((p >> 16) == 0xffff) goto <logical>;
+  local pa:3 = p:3; *[phys] pa = v; goto <done>;
+<logical>
+  local la:2 = p:2; *[ram] la = v;
+<done>
+}
+
+macro getBCDE(v) { v = (zext(BC) << 16) | zext(DE); }
+macro setBCDE(v) { BC = v(2); DE = v:2; }
+macro getJKHL(v) { v = (zext(JK) << 16) | zext(HL); }
+macro setJKHL(v) { JK = v(2); HL = v:2; }
+macro setBCDE_(v) { BC_ = v(2); DE_ = v:2; }
+macro setJKHL_(v) { JK_ = v(2); HL_ = v:2; }
+
+wBCDE: is altd=0 { setBCDE(T32); }
+wBCDE: is altd=1 { setBCDE_(T32); }
+wJKHL: is altd=0 { setJKHL(T32); }
+wJKHL: is altd=1 { setJKHL_(T32); }
+
+# 32-bit register operands (ALTD selects the alternate set as destination)
+sBCDE: "BCDE" is epsilon { local v:4 = 0; getBCDE(v); export v; }
+sJKHL: "JKHL" is epsilon { local v:4 = 0; getJKHL(v); export v; }
+dpd: qpd      is altd=0 & qpd { export qpd; }
+dpd: qpd^"'"  is altd=1 & qpd & qpda { export qpda; }
+dps: qps      is altd=0 & qps { export qps; }
+dps: qps^"'"  is altd=1 & qps & qpsa { export qpsa; }
+
+pdisp: "+"^simm8 is sign8=0 & simm8 { export *[const]:4 simm8; }
+pdisp: simm8     is sign8=1 & simm8 { export *[const]:4 simm8; }
+spn: "(SP+"^imm8^")" is imm8 { local a:2 = SP + imm8; export a; }
+lmn: "("^imm24^")" is imm24 { export *[const]:3 imm24; }
+klmn: imm32 is imm32 { export *[const]:4 imm32; }
+
+r4fcc: "NZ"  is qcc=0 { local t:1 = Z_flag == 0; export t; }
+r4fcc: "Z"   is qcc=1 { local t:1 = Z_flag != 0; export t; }
+r4fcc: "NC"  is qcc=2 { local t:1 = C_flag == 0; export t; }
+r4fcc: "C"   is qcc=3 { local t:1 = C_flag != 0; export t; }
+r4fcc: "GT"  is qcc=4 { local t:1 = (Z_flag == 0) && (S_flag == LV_flag); export t; }
+r4fcc: "GTU" is qcc=5 { local t:1 = (C_flag == 0) && (Z_flag == 0); export t; }
+r4fcc: "LT"  is qcc=6 { local t:1 = S_flag != LV_flag; export t; }
+r4fcc: "V"   is qcc=7 { local t:1 = LV_flag != 0; export t; }
+rel16: reloc is imm16s [ reloc = (inst_next + imm16s) & 0xffff; ] { export *[ram]:1 reloc; }
+
+r4cc: "GT"  is qcc=4 { local t:1 = (Z_flag == 0) && (S_flag == LV_flag); export t; }
+r4cc: "GTU" is qcc=5 { local t:1 = (C_flag == 0) && (Z_flag == 0); export t; }
+r4cc: "LT"  is qcc=6 { local t:1 = S_flag != LV_flag; export t; }
+r4cc: "V"   is qcc=7 { local t:1 = LV_flag != 0; export t; }
+
+macro rotFlags32(r) {
+  resultFlags(r);
+  LV_flag = (r & 0xF0000000) != 0;
+}
+
+# Loads and stores through the pointer registers
+:LD dA,"("^qps^pdisp^")" is $(N4) qhi2=2 & qps & qlo4=0xD & dA ; pdisp { local a:4 = qps + pdisp; local v:1 = 0; pld(v, a); dA = v; }
+:LD "("^qps^pdisp^")","A" is $(N4) qhi2=2 & qps & qlo4=0xE ; pdisp { local a:4 = qps + pdisp; pst(a, A); }
+:LD dA,"("^qps^"+HL)" is $(N4) qhi2=2 & qps & qlo4=0xB & dA { local a:4 = qps + zext(HL); local v:1 = 0; pld(v, a); dA = v; }
+:LD "("^qps^"+HL)","A" is $(N4) qhi2=2 & qps & qlo4=0xC { local a:4 = qps + zext(HL); pst(a, A); }
+:LD dHL,"("^qps^pdisp^")" is $(N4) qhi2=2 & qps & qlo4=5 & dHL ; pdisp { local a:4 = qps + pdisp; local v:2 = 0; pld(v, a); dHL = v; }
+:LD "("^qps^pdisp^")","HL" is $(N4) qhi2=2 & qps & qlo4=6 ; pdisp { local a:4 = qps + pdisp; pst(a, HL); }
+:LD dHL,"("^qps^"+BC)" is $(NP) op0_8=0xED ; qhi2=0 & qps & qlo4=6 & dHL { local a:4 = qps + zext(BC); local v:2 = 0; pld(v, a); dHL = v; }
+:LD "("^qps^"+BC)","HL" is $(NP) op0_8=0xED ; qhi2=0 & qps & qlo4=7 { local a:4 = qps + zext(BC); pst(a, HL); }
+# 6D page: pointer-register loads, stores and address arithmetic
+:LD qrr,"("^qps^pdisp^")" is $(NP) op0_8=0x6D ; qrr & qps & qlo4=0 ; pdisp { local a:4 = qps + pdisp; local v:2 = 0; pld(v, a); qrr = v; }
+:LD "("^qps^pdisp^")",qrr is $(NP) op0_8=0x6D ; qrr & qps & qlo4=1 ; pdisp { local a:4 = qps + pdisp; pst(a, qrr); }
+:LD qrr,"("^qps^"+HL)" is $(NP) op0_8=0x6D ; qrr & qps & qlo4=2 { local a:4 = qps + zext(HL); local v:2 = 0; pld(v, a); qrr = v; }
+:LD "("^qps^"+HL)",qrr is $(NP) op0_8=0x6D ; qrr & qps & qlo4=3 { local a:4 = qps + zext(HL); pst(a, qrr); }
+:LD dpd,qps^"+IX" is $(NP) op0_8=0x6D ; dpd & qps & qlo4=4 { dpd = qps + zext(IX); }
+:LD dpd,qps^"+IY" is $(NP) op0_8=0x6D ; dpd & qps & qlo4=5 { dpd = qps + zext(IY); }
+:LD dpd,qps^"+DE" is $(NP) op0_8=0x6D ; dpd & qps & qlo4=6 { dpd = qps + zext(DE); }
+:LD dpd,qps is $(NP) op0_8=0x6D ; dpd & qps & qlo4=7 { dpd = qps; }
+:LD dpd,"("^qps^pdisp^")" is $(NP) op0_8=0x6D ; dpd & qps & qlo4=8 ; pdisp { local a:4 = qps + pdisp; local v:4 = 0; pld(v, a); dpd = v; }
+:LD "("^qps^pdisp^")",qpd is $(NP) op0_8=0x6D ; qpd & qps & qlo4=9 ; pdisp { local a:4 = qps + pdisp; pst(a, qpd); }
+:LD dpd,"("^qps^"+HL)" is $(NP) op0_8=0x6D ; dpd & qps & qlo4=0xA { local a:4 = qps + zext(HL); local v:4 = 0; pld(v, a); dpd = v; }
+:LD "("^qps^"+HL)",qpd is $(NP) op0_8=0x6D ; qpd & qps & qlo4=0xB { local a:4 = qps + zext(HL); pst(a, qpd); }
+:LD dpd,qps^pdisp is $(NP) op0_8=0x6D ; dpd & qps & qlo4=0xC ; pdisp { dpd = qps + pdisp; }
+:LD dpd,qps^"+HL" is $(NP) op0_8=0x6D ; dpd & qps & qlo4=0xE { dpd = qps + zext(HL); }
+# ED page: pointer registers
+:LD dps,"(HTR+HL)" is $(NP) op0_8=0xED ; qhi2=0 & dps & qlo4=1 [ ] { local a:2 = (zext(HTR) << 8) + HL; dps = *[ram]:4 a; }
+:LDL dps,spn is $(NP) op0_8=0xED ; qhi2=0 & dps & qlo4=3 ; spn { local v:2 = *[ram]:2 spn; dps = 0xffff0000 | zext(v); }
+:LD dps,spn is $(NP) op0_8=0xED ; qhi2=0 & dps & qlo4=4 ; spn { dps = *[ram]:4 spn; }
+:LD spn,qps is $(NP) op0_8=0xED ; qhi2=0 & qps & qlo4=5 ; spn { *[ram]:4 spn = qps; }
+:LDF dps,lmn is $(NP) op0_8=0xED ; qhi2=0 & dps & qlo4=8 ; lmn { dps = *[phys]:4 lmn; }
+:LDF lmn,qps is $(NP) op0_8=0xED ; qhi2=0 & qps & qlo4=9 ; lmn { *[phys]:4 lmn = qps; }
+:LDF qrr4,lmn is $(NP) op0_8=0xED ; qhi2=0 & qrr4 & qlo4=0xA ; lmn { qrr4 = *[phys]:2 lmn; }
+:LDF lmn,qrr4 is $(NP) op0_8=0xED ; qhi2=0 & qrr4 & qlo4=0xB ; lmn { *[phys]:2 lmn = qrr4; }
+:LD dps,klmn is $(NP) op0_8=0xED ; qhi2=0 & dps & qlo4=0xC ; klmn { dps = klmn; }
+:LDL dps,imm16 is $(NP) op0_8=0xED ; qhi2=0 & dps & qlo4=0xD ; imm16 { dps = 0xffff0000 | imm16; }
+:CONVC qps is $(NP) op0_8=0xED ; qhi2=0 & qps & qlo4=0xE { qps = convc(qps); }
+:CONVD qps is $(NP) op0_8=0xED ; qhi2=0 & qps & qlo4=0xF { qps = convd(qps); }
+:POP dps is $(NP) op0_8=0xED ; qhi2=3 & dps & qlo4=1 { dps = *[ram]:4 SP; SP = SP + 4; }
+:PUSH qps is $(NP) op0_8=0xED ; qhi2=3 & qps & qlo4=5 { SP = SP - 4; *[ram]:4 SP = qps; }
+# DD / FD page: BCDE (DD) and JKHL (FD)
+:LD "BCDE",qps is wBCDE & pfx=1 & qhi2=3 & qps & qlo4=0xD { local v:4 = qps; T32 = v; build wBCDE; }
+:LD dps,"BCDE" is pfx=1 & qhi2=2 & dps & qlo4=0xD { local v:4 = 0; getBCDE(v); dps = v; }
+:LD "BCDE","("^qps^pdisp^")" is wBCDE & pfx=1 & qhi2=0 & qps & qlo4=0xE ; pdisp { local a:4 = qps + pdisp; local v:4 = 0; pld(v, a); T32 = v; build wBCDE; }
+:LD "("^qps^pdisp^")","BCDE" is pfx=1 & qhi2=0 & qps & qlo4=0xF ; pdisp { local a:4 = qps + pdisp; local v:4 = 0; getBCDE(v); pst(a, v); }
+:LD "BCDE","("^qps^"+HL)" is wBCDE & pfx=1 & qhi2=0 & qps & qlo4=0xC { local a:4 = qps + zext(HL); local v:4 = 0; pld(v, a); T32 = v; build wBCDE; }
+:LD "("^qps^"+HL)","BCDE" is pfx=1 & qhi2=0 & qps & qlo4=0xD { local a:4 = qps + zext(HL); local v:4 = 0; getBCDE(v); pst(a, v); }
+:LD "BCDE","(HL)" is wBCDE & pfx=1 & q0_8=0x1A { local v:4 = *[ram]:4 HL; T32 = v; build wBCDE; }
+:LD "(HL)","BCDE" is pfx=1 & q0_8=0x1B { local v:4 = 0; getBCDE(v); *[ram]:4 HL = v; }
+:LD "BCDE","(IX"^sdisp^")" is wBCDE & pfx=1 & q0_8=0xCE ; sdisp { local a:2 = IX + sdisp; local v:4 = *[ram]:4 a; T32 = v; build wBCDE; }
+:LD "BCDE","(IY"^sdisp^")" is wBCDE & pfx=1 & q0_8=0xDE ; sdisp { local a:2 = IY + sdisp; local v:4 = *[ram]:4 a; T32 = v; build wBCDE; }
+:LD "(IX"^sdisp^")","BCDE" is pfx=1 & q0_8=0xCF ; sdisp { local a:2 = IX + sdisp; local v:4 = 0; getBCDE(v); *[ram]:4 a = v; }
+:LD "(IY"^sdisp^")","BCDE" is pfx=1 & q0_8=0xDF ; sdisp { local a:2 = IY + sdisp; local v:4 = 0; getBCDE(v); *[ram]:4 a = v; }
+:LD "BCDE",spn is wBCDE & pfx=1 & q0_8=0xEE ; spn { local v:4 = *[ram]:4 spn; T32 = v; build wBCDE; }
+:LD spn,"BCDE" is pfx=1 & q0_8=0xEF ; spn { local v:4 = 0; getBCDE(v); *[ram]:4 spn = v; }
+:LD "BCDE","(SP+HL)" is wBCDE & pfx=1 & q0_8=0xFE { local a:2 = SP + HL; local v:4 = *[ram]:4 a; T32 = v; build wBCDE; }
+:LD "(SP+HL)","BCDE" is pfx=1 & q0_8=0xFF { local a:2 = SP + HL; local v:4 = 0; getBCDE(v); *[ram]:4 a = v; }
+:LDF "BCDE",lmn is wBCDE & pfx=1 & q0_8=0x0A ; lmn { local v:4 = *[phys]:4 lmn; T32 = v; build wBCDE; }
+:LDF lmn,"BCDE" is pfx=1 & q0_8=0x0B ; lmn { local v:4 = 0; getBCDE(v); *[phys]:4 lmn = v; }
+:PUSH "BCDE" is pfx=1 & q0_8=0xF5 { local v:4 = 0; getBCDE(v); SP = SP - 4; *[ram]:4 SP = v; }
+:POP "BCDE" is wBCDE & pfx=1 & q0_8=0xF1 { local v:4 = *[ram]:4 SP; SP = SP + 4; T32 = v; build wBCDE; }
+:NEG "BCDE" is wBCDE & pfx=1 & q0_8=0x4D { local v:4 = 0; getBCDE(v); local r:4 = -v; C_flag = v != 0; LV_flag = sborrow(0:4, v); resultFlags(r); T32 = r; build wBCDE; }
+:TEST "BCDE" is pfx=1 & q0_8=0x5C { local v:4 = 0; getBCDE(v); resultFlags(v); LV_flag = 0; C_flag = 0; }
+:RLC "1,BCDE" is wBCDE & pfx=1 & q0_8=0x48 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RLC "2,BCDE" is wBCDE & pfx=1 & q0_8=0x49 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RLC "4,BCDE" is wBCDE & pfx=1 & q0_8=0x4b { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RRC "1,BCDE" is wBCDE & pfx=1 & q0_8=0x58 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RRC "2,BCDE" is wBCDE & pfx=1 & q0_8=0x59 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RRC "4,BCDE" is wBCDE & pfx=1 & q0_8=0x5b { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RL "1,BCDE" is wBCDE & pfx=1 & q0_8=0x68 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RL "2,BCDE" is wBCDE & pfx=1 & q0_8=0x69 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RL "4,BCDE" is wBCDE & pfx=1 & q0_8=0x6b { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RR "1,BCDE" is wBCDE & pfx=1 & q0_8=0x78 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RR "2,BCDE" is wBCDE & pfx=1 & q0_8=0x79 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RR "4,BCDE" is wBCDE & pfx=1 & q0_8=0x7b { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:SLA "1,BCDE" is wBCDE & pfx=1 & q0_8=0x88 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = v << 1; C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:SLA "2,BCDE" is wBCDE & pfx=1 & q0_8=0x89 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:SLA "4,BCDE" is wBCDE & pfx=1 & q0_8=0x8b { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:SRA "1,BCDE" is wBCDE & pfx=1 & q0_8=0x98 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = v s>> 1; C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:SRA "2,BCDE" is wBCDE & pfx=1 & q0_8=0x99 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = v s>> 1; C_flag = (v & 1) != 0; v = r; r = v s>> 1; C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:SRA "4,BCDE" is wBCDE & pfx=1 & q0_8=0x9b { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = v s>> 1; C_flag = (v & 1) != 0; v = r; r = v s>> 1; C_flag = (v & 1) != 0; v = r; r = v s>> 1; C_flag = (v & 1) != 0; v = r; r = v s>> 1; C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:SLL "1,BCDE" is wBCDE & pfx=1 & q0_8=0xa8 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = v << 1; C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:SLL "2,BCDE" is wBCDE & pfx=1 & q0_8=0xa9 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:SLL "4,BCDE" is wBCDE & pfx=1 & q0_8=0xab { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:SRL "1,BCDE" is wBCDE & pfx=1 & q0_8=0xb8 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = v >> 1; C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:SRL "2,BCDE" is wBCDE & pfx=1 & q0_8=0xb9 { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = v >> 1; C_flag = (v & 1) != 0; v = r; r = v >> 1; C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:SRL "4,BCDE" is wBCDE & pfx=1 & q0_8=0xbb { local v:4 = 0; getBCDE(v); local r:4 = v; v = r; r = v >> 1; C_flag = (v & 1) != 0; v = r; r = v >> 1; C_flag = (v & 1) != 0; v = r; r = v >> 1; C_flag = (v & 1) != 0; v = r; r = v >> 1; C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RLC "8,BCDE" is wBCDE & pfx=1 & q0_8=0x4F { local v:4 = 0; getBCDE(v); local r:4 = (v << 8) | (v >> 24); C_flag = (r & 1) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RRC "8,BCDE" is wBCDE & pfx=1 & q0_8=0x5F { local v:4 = 0; getBCDE(v); local r:4 = (v >> 8) | (v << 24); C_flag = (r >> 31) != 0; rotFlags32(r); T32 = r; build wBCDE; }
+:RLB "A,BCDE" is wBCDE & pfx=1 & q0_8=0x6F { local v:4 = 0; getBCDE(v); local r:4 = (v << 8) | zext(A); A = v(3); rotFlags32(r); T32 = r; build wBCDE; }
+:RRB "A,BCDE" is wBCDE & pfx=1 & q0_8=0x7F { local v:4 = 0; getBCDE(v); local r:4 = (v >> 8) | (zext(A) << 24); A = v:1; rotFlags32(r); T32 = r; build wBCDE; }
+:CALL "(IX)" is pfx=1 & q0_8=0xEA { push16(&:2 inst_next); call [IX]; }
+:TEST "IX" is pfx=1 & q0_8=0x4C { local v:2 = IX; resultFlags(v); LV_flag = 0; C_flag = 0; }
+:LDL dps,"DE" is pfx=1 & qhi2=2 & dps & qlo4=0xF { dps = 0xffff0000 | zext(DE); }
+:LDL dps,"IX" is pfx=1 & qhi2=2 & dps & qlo4=0xC { dps = 0xffff0000 | zext(IX); }
+:LD dA,"(IX+A)" is pfx=1 & q0_8=0x06 & dA { local a:2 = IX + zext(A); dA = *[ram]:1 a; }
+:LD "JKHL",qps is wJKHL & pfx=2 & qhi2=3 & qps & qlo4=0xD { local v:4 = qps; T32 = v; build wJKHL; }
+:LD dps,"JKHL" is pfx=2 & qhi2=2 & dps & qlo4=0xD { local v:4 = 0; getJKHL(v); dps = v; }
+:LD "JKHL","("^qps^pdisp^")" is wJKHL & pfx=2 & qhi2=0 & qps & qlo4=0xE ; pdisp { local a:4 = qps + pdisp; local v:4 = 0; pld(v, a); T32 = v; build wJKHL; }
+:LD "("^qps^pdisp^")","JKHL" is pfx=2 & qhi2=0 & qps & qlo4=0xF ; pdisp { local a:4 = qps + pdisp; local v:4 = 0; getJKHL(v); pst(a, v); }
+:LD "JKHL","("^qps^"+HL)" is wJKHL & pfx=2 & qhi2=0 & qps & qlo4=0xC { local a:4 = qps + zext(HL); local v:4 = 0; pld(v, a); T32 = v; build wJKHL; }
+:LD "("^qps^"+HL)","JKHL" is pfx=2 & qhi2=0 & qps & qlo4=0xD { local a:4 = qps + zext(HL); local v:4 = 0; getJKHL(v); pst(a, v); }
+:LD "JKHL","(HL)" is wJKHL & pfx=2 & q0_8=0x1A { local v:4 = *[ram]:4 HL; T32 = v; build wJKHL; }
+:LD "(HL)","JKHL" is pfx=2 & q0_8=0x1B { local v:4 = 0; getJKHL(v); *[ram]:4 HL = v; }
+:LD "JKHL","(IX"^sdisp^")" is wJKHL & pfx=2 & q0_8=0xCE ; sdisp { local a:2 = IX + sdisp; local v:4 = *[ram]:4 a; T32 = v; build wJKHL; }
+:LD "JKHL","(IY"^sdisp^")" is wJKHL & pfx=2 & q0_8=0xDE ; sdisp { local a:2 = IY + sdisp; local v:4 = *[ram]:4 a; T32 = v; build wJKHL; }
+:LD "(IX"^sdisp^")","JKHL" is pfx=2 & q0_8=0xCF ; sdisp { local a:2 = IX + sdisp; local v:4 = 0; getJKHL(v); *[ram]:4 a = v; }
+:LD "(IY"^sdisp^")","JKHL" is pfx=2 & q0_8=0xDF ; sdisp { local a:2 = IY + sdisp; local v:4 = 0; getJKHL(v); *[ram]:4 a = v; }
+:LD "JKHL",spn is wJKHL & pfx=2 & q0_8=0xEE ; spn { local v:4 = *[ram]:4 spn; T32 = v; build wJKHL; }
+:LD spn,"JKHL" is pfx=2 & q0_8=0xEF ; spn { local v:4 = 0; getJKHL(v); *[ram]:4 spn = v; }
+:LD "JKHL","(SP+HL)" is wJKHL & pfx=2 & q0_8=0xFE { local a:2 = SP + HL; local v:4 = *[ram]:4 a; T32 = v; build wJKHL; }
+:LD "(SP+HL)","JKHL" is pfx=2 & q0_8=0xFF { local a:2 = SP + HL; local v:4 = 0; getJKHL(v); *[ram]:4 a = v; }
+:LDF "JKHL",lmn is wJKHL & pfx=2 & q0_8=0x0A ; lmn { local v:4 = *[phys]:4 lmn; T32 = v; build wJKHL; }
+:LDF lmn,"JKHL" is pfx=2 & q0_8=0x0B ; lmn { local v:4 = 0; getJKHL(v); *[phys]:4 lmn = v; }
+:PUSH "JKHL" is pfx=2 & q0_8=0xF5 { local v:4 = 0; getJKHL(v); SP = SP - 4; *[ram]:4 SP = v; }
+:POP "JKHL" is wJKHL & pfx=2 & q0_8=0xF1 { local v:4 = *[ram]:4 SP; SP = SP + 4; T32 = v; build wJKHL; }
+:NEG "JKHL" is wJKHL & pfx=2 & q0_8=0x4D { local v:4 = 0; getJKHL(v); local r:4 = -v; C_flag = v != 0; LV_flag = sborrow(0:4, v); resultFlags(r); T32 = r; build wJKHL; }
+:TEST "JKHL" is pfx=2 & q0_8=0x5C { local v:4 = 0; getJKHL(v); resultFlags(v); LV_flag = 0; C_flag = 0; }
+:RLC "1,JKHL" is wJKHL & pfx=2 & q0_8=0x48 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RLC "2,JKHL" is wJKHL & pfx=2 & q0_8=0x49 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RLC "4,JKHL" is wJKHL & pfx=2 & q0_8=0x4b { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | (v >> 31); C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RRC "1,JKHL" is wJKHL & pfx=2 & q0_8=0x58 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RRC "2,JKHL" is wJKHL & pfx=2 & q0_8=0x59 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RRC "4,JKHL" is wJKHL & pfx=2 & q0_8=0x5b { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (v << 31); C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RL "1,JKHL" is wJKHL & pfx=2 & q0_8=0x68 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RL "2,JKHL" is wJKHL & pfx=2 & q0_8=0x69 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RL "4,JKHL" is wJKHL & pfx=2 & q0_8=0x6b { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; v = r; r = (v << 1) | zext(C_flag); C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RR "1,JKHL" is wJKHL & pfx=2 & q0_8=0x78 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RR "2,JKHL" is wJKHL & pfx=2 & q0_8=0x79 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RR "4,JKHL" is wJKHL & pfx=2 & q0_8=0x7b { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; v = r; r = (v >> 1) | (zext(C_flag) << 31); C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:SLA "1,JKHL" is wJKHL & pfx=2 & q0_8=0x88 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = v << 1; C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:SLA "2,JKHL" is wJKHL & pfx=2 & q0_8=0x89 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:SLA "4,JKHL" is wJKHL & pfx=2 & q0_8=0x8b { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:SRA "1,JKHL" is wJKHL & pfx=2 & q0_8=0x98 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = v s>> 1; C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:SRA "2,JKHL" is wJKHL & pfx=2 & q0_8=0x99 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = v s>> 1; C_flag = (v & 1) != 0; v = r; r = v s>> 1; C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:SRA "4,JKHL" is wJKHL & pfx=2 & q0_8=0x9b { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = v s>> 1; C_flag = (v & 1) != 0; v = r; r = v s>> 1; C_flag = (v & 1) != 0; v = r; r = v s>> 1; C_flag = (v & 1) != 0; v = r; r = v s>> 1; C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:SLL "1,JKHL" is wJKHL & pfx=2 & q0_8=0xa8 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = v << 1; C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:SLL "2,JKHL" is wJKHL & pfx=2 & q0_8=0xa9 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:SLL "4,JKHL" is wJKHL & pfx=2 & q0_8=0xab { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; v = r; r = v << 1; C_flag = (v >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:SRL "1,JKHL" is wJKHL & pfx=2 & q0_8=0xb8 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = v >> 1; C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:SRL "2,JKHL" is wJKHL & pfx=2 & q0_8=0xb9 { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = v >> 1; C_flag = (v & 1) != 0; v = r; r = v >> 1; C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:SRL "4,JKHL" is wJKHL & pfx=2 & q0_8=0xbb { local v:4 = 0; getJKHL(v); local r:4 = v; v = r; r = v >> 1; C_flag = (v & 1) != 0; v = r; r = v >> 1; C_flag = (v & 1) != 0; v = r; r = v >> 1; C_flag = (v & 1) != 0; v = r; r = v >> 1; C_flag = (v & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RLC "8,JKHL" is wJKHL & pfx=2 & q0_8=0x4F { local v:4 = 0; getJKHL(v); local r:4 = (v << 8) | (v >> 24); C_flag = (r & 1) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RRC "8,JKHL" is wJKHL & pfx=2 & q0_8=0x5F { local v:4 = 0; getJKHL(v); local r:4 = (v >> 8) | (v << 24); C_flag = (r >> 31) != 0; rotFlags32(r); T32 = r; build wJKHL; }
+:RLB "A,JKHL" is wJKHL & pfx=2 & q0_8=0x6F { local v:4 = 0; getJKHL(v); local r:4 = (v << 8) | zext(A); A = v(3); rotFlags32(r); T32 = r; build wJKHL; }
+:RRB "A,JKHL" is wJKHL & pfx=2 & q0_8=0x7F { local v:4 = 0; getJKHL(v); local r:4 = (v >> 8) | (zext(A) << 24); A = v:1; rotFlags32(r); T32 = r; build wJKHL; }
+:CALL "(IY)" is pfx=2 & q0_8=0xEA { push16(&:2 inst_next); call [IY]; }
+:TEST "IY" is pfx=2 & q0_8=0x4C { local v:2 = IY; resultFlags(v); LV_flag = 0; C_flag = 0; }
+:LDL dps,"HL" is pfx=2 & qhi2=2 & dps & qlo4=0xF { dps = 0xffff0000 | zext(HL); }
+:LDL dps,"IY" is pfx=2 & qhi2=2 & dps & qlo4=0xC { dps = 0xffff0000 | zext(IY); }
+:LD dA,"(IY+A)" is pfx=2 & q0_8=0x06 & dA { local a:2 = IY + zext(A); dA = *[ram]:1 a; }
+
+# Unprefixed 16- and 32-bit additions (opcodes freed by moving LD r,g and the ALU to 7F)
+:LD "BC","HL" is $(N4) q0_8=0x91 { BC = HL; }
+:LD "DE","HL" is $(N4) q0_8=0xB1 { DE = HL; }
+:LD dHL,"BC" is $(N4) q0_8=0x81 & dHL { dHL = BC; }
+:LD dHL,"DE" is $(N4) q0_8=0xA1 & dHL { dHL = DE; }
+:LD dHL,"LXPC" is $(N4) q0_8=0x9F & dHL { dHL = LXPC; }
+:LD "LXPC","HL" is $(N4) q0_8=0x97 { LXPC = HL & 0x0fff; }
+:LD "JK",imm16 is $(N4) q0_8=0xA9 ; imm16 { JK = imm16; }
+:LD "JK",mAbs2 is $(N4) q0_8=0x99 ; mAbs2 { JK = mAbs2; }
+:LD mAbs2,"JK" is $(N4) q0_8=0x89 ; mAbs2 { mAbs2 = JK; }
+:LD "BCDE",aAbs is $(N4) wBCDE & q0_8=0x93 ; aAbs { local v:4 = *[ram]:4 aAbs; T32 = v; build wBCDE; }
+:LD aAbs,"BCDE" is $(N4) q0_8=0x83 ; aAbs { local v:4 = 0; getBCDE(v); *[ram]:4 aAbs = v; }
+:LD "BCDE",simm8 is $(N4) wBCDE & q0_8=0xa3 ; simm8 { local v:4 = sext(simm8:1); T32 = v; build wBCDE; }
+:LD "JKHL",aAbs is $(N4) wJKHL & q0_8=0x94 ; aAbs { local v:4 = *[ram]:4 aAbs; T32 = v; build wJKHL; }
+:LD aAbs,"JKHL" is $(N4) q0_8=0x84 ; aAbs { local v:4 = 0; getJKHL(v); *[ram]:4 aAbs = v; }
+:LD "JKHL",simm8 is $(N4) wJKHL & q0_8=0xa4 ; simm8 { local v:4 = sext(simm8:1); T32 = v; build wJKHL; }
+:LDF dA,lmn is $(N4) q0_8=0x9A & dA ; lmn { dA = *[phys]:1 lmn; }
+:LDF lmn,"A" is $(N4) q0_8=0x8A ; lmn { *[phys]:1 lmn = A; }
+:LDF dHL,lmn is $(N4) q0_8=0x92 & dHL ; lmn { dHL = *[phys]:2 lmn; }
+:LDF lmn,"HL" is $(N4) q0_8=0x82 ; lmn { *[phys]:2 lmn = HL; }
+:LD dHL,"(SP+HL)" is $(NP) op0_8=0xED ; q0_8=0xFE & dHL { local a:2 = SP + HL; dHL = *[ram]:2 a; }
+:LD dA,"HTR" is $(NP) op0_8=0xED ; q0_8=0x50 & dA { dA = HTR; }
+:LD "HTR","A" is $(NP) op0_8=0xED ; q0_8=0x40 { HTR = A; }
+:ADD dHL,"JK" is $(N4) q0_8=0x65 & dHL { local a:2 = HL; local b:2 = JK; C_flag = carry(a, b); LV_flag = scarry(a, b); local r:2 = a + b; resultFlags(r); dHL = r; }
+:SUB dHL,"JK" is $(N4) q0_8=0x45 & dHL { local a:2 = HL; local b:2 = JK; C_flag = a < b; LV_flag = sborrow(a, b); local r:2 = a - b; resultFlags(r); dHL = r; }
+:SUB dHL,"DE" is $(N4) q0_8=0x55 & dHL { local a:2 = HL; local b:2 = DE; C_flag = a < b; LV_flag = sborrow(a, b); local r:2 = a - b; resultFlags(r); dHL = r; }
+:XOR dHL,"DE" is $(N4) q0_8=0x54 & dHL { local r:2 = HL ^ DE; logic16(r); dHL = r; }
+:CP "HL",simm8 is $(N4) q0_8=0x48 ; simm8 { local a:2 = HL; local b:2 = sext(simm8:1); C_flag = a < b; LV_flag = sborrow(a, b); local r:2 = a - b; resultFlags(r); }
+:CP "HL","DE" is $(NP) op0_8=0xED ; q0_8=0x48 { local a:2 = HL; local b:2 = DE; C_flag = a < b; LV_flag = sborrow(a, b); local r:2 = a - b; resultFlags(r); }
+:TEST "HL" is $(N4) q0_8=0x4C { resultFlags(HL); LV_flag = 0; C_flag = 0; }
+:TEST "BC" is $(NP) op0_8=0xED ; q0_8=0x4C { resultFlags(BC); LV_flag = 0; C_flag = 0; }
+:NEG dHL is $(N4) q0_8=0x4D & dHL { local v:2 = HL; local r:2 = -v; C_flag = v != 0; LV_flag = sborrow(0:2, v); resultFlags(r); dHL = r; }
+:CLR dHL is $(N4) q0_8=0xBF & dHL { dHL = 0; }
+:MULU is $(N4) q0_8=0xA7 { local p:4 = zext(BC) * zext(DE); HL = p(2); BC = p:2; }
+:RL "HL" is $(N4) q0_8=0x42 { local v:2 = HL; local r:2 = v; r = (v << 1) | zext(C_flag); C_flag = (v >> 15) != 0; rotFlags16(r); HL = r; }
+:RL "BC" is $(N4) q0_8=0x62 { local v:2 = BC; local r:2 = v; r = (v << 1) | zext(C_flag); C_flag = (v >> 15) != 0; rotFlags16(r); BC = r; }
+:RLC "BC" is $(N4) q0_8=0x60 { local v:2 = BC; local r:2 = v; r = (v << 1) | (v >> 15); C_flag = (v >> 15) != 0; rotFlags16(r); BC = r; }
+:RLC "DE" is $(N4) q0_8=0x50 { local v:2 = DE; local r:2 = v; r = (v << 1) | (v >> 15); C_flag = (v >> 15) != 0; rotFlags16(r); DE = r; }
+:RRC "BC" is $(N4) q0_8=0x61 { local v:2 = BC; local r:2 = v; r = (v >> 1) | (v << 15); C_flag = (v & 1) != 0; rotFlags16(r); BC = r; }
+:RRC "DE" is $(N4) q0_8=0x51 { local v:2 = DE; local r:2 = v; r = (v >> 1) | (v << 15); C_flag = (v & 1) != 0; rotFlags16(r); DE = r; }
+:RR "BC" is $(N4) q0_8=0x63 { local v:2 = BC; local r:2 = v; r = (v >> 1) | (zext(C_flag) << 15); C_flag = (v & 1) != 0; rotFlags16(r); BC = r; }
+:EX "BC","HL" is $(N4) q0_8=0xB3 { local t:2 = BC; BC = HL; HL = t; }
+:EX "JK","HL" is $(N4) q0_8=0xB9 { local t:2 = JK; JK = HL; HL = t; }
+:EX "BCDE","JKHL" is $(N4) q0_8=0xB4 { local t:2 = BC; BC = JK; JK = t; t = DE; DE = HL; HL = t; }
+:EX "BC'","HL" is $(NP) op0_8=0xED ; q0_8=0x74 { local t:2 = BC_; BC_ = HL; HL = t; }
+:EX "JK'","HL" is $(NP) op0_8=0xED ; q0_8=0x7C { local t:2 = JK_; JK_ = HL; HL = t; }
+:ADD "JKHL","BCDE" is $(NP) wJKHL & op0_8=0xED ; q0_8=0xc6 { local a:4 = 0; getJKHL(a); local b:4 = 0; getBCDE(b); local r:4 = 0; r = a + b; C_flag = carry(a, b); resultFlags(r); T32 = r; build wJKHL; }
+:SUB "JKHL","BCDE" is $(NP) wJKHL & op0_8=0xED ; q0_8=0xd6 { local a:4 = 0; getJKHL(a); local b:4 = 0; getBCDE(b); local r:4 = 0; r = a - b; C_flag = a < b; LV_flag = sborrow(a, b); resultFlags(r); T32 = r; build wJKHL; }
+:AND "JKHL","BCDE" is $(NP) wJKHL & op0_8=0xED ; q0_8=0xe6 { local a:4 = 0; getJKHL(a); local b:4 = 0; getBCDE(b); local r:4 = 0; r = a & b; C_flag = 0; resultFlags(r); T32 = r; build wJKHL; }
+:OR "JKHL","BCDE" is $(NP) wJKHL & op0_8=0xED ; q0_8=0xf6 { local a:4 = 0; getJKHL(a); local b:4 = 0; getBCDE(b); local r:4 = 0; r = a | b; C_flag = 0; resultFlags(r); T32 = r; build wJKHL; }
+:XOR "JKHL","BCDE" is $(NP) wJKHL & op0_8=0xED ; q0_8=0xee { local a:4 = 0; getJKHL(a); local b:4 = 0; getBCDE(b); local r:4 = 0; r = a ^ b; C_flag = 0; resultFlags(r); T32 = r; build wJKHL; }
+:CP "JKHL","BCDE" is $(NP) op0_8=0xED ; q0_8=0x58 { local a:4 = 0; getJKHL(a); local b:4 = 0; getBCDE(b); local r:4 = a - b; C_flag = a < b; LV_flag = sborrow(a, b); resultFlags(r); }
+:FLAG r4fcc,dHL is $(NP) op0_8=0xED ; r4fcc & qlo3=4 & ((qhi2=3 & qcc<4) | (qhi2=2 & qcc>3)) & dHL { dHL = zext(r4fcc); }
+# Control flow
+:JR r4cc,rel8 is $(N4) qhi2=2 & r4cc & qlo3=0 ; rel8 { if (r4cc) goto rel8; }
+:JP r4cc,abs16 is $(N4) qhi2=2 & r4cc & qlo3=2 ; abs16 { if (r4cc) goto abs16; }
+:JRE rel16 is $(N4) q0_8=0x98 ; rel16 { goto rel16; }
+:JRE r4fcc,rel16 is $(NP) op0_8=0xED ; r4fcc & qlo3=3 & ((qhi2=3 & qcc<4) | (qhi2=2 & qcc>3)) ; rel16 { if (r4fcc) goto rel16; }
+:DWJNZ rel8 is $(NP) op0_8=0xED ; q0_8=0x10 ; rel8 { local b:2 = BC - 1; BC = b; if (b != 0) goto rel8; }
+:CALL "(HL)" is $(NP) op0_8=0xED ; q0_8=0xEA { push16(&:2 inst_next); call [HL]; }
+:PUSH imm16 is $(NP) op0_8=0xED ; q0_8=0xA5 ; imm16 { push16(imm16:2); }
+:LLJP imm16x,abs16 is $(N4) q0_8=0x87 ; abs16 ; imm16x { LXPC = imm16x & 0x0fff; goto abs16; }
+:LLJP r4fcc,imm16x,abs16 is $(NP) op0_8=0xED ; r4fcc & qlo3=2 & ((qhi2=3 & qcc<4) | (qhi2=2 & qcc>3)) ; abs16 ; imm16x { if (!r4fcc) goto inst_next; LXPC = imm16x & 0x0fff; goto abs16; }
+:LLCALL imm16x,abs16 is $(N4) q0_8=0x8F ; abs16 ; imm16x { push16(LXPC); push16(&:2 inst_next); LXPC = imm16x & 0x0fff; call abs16; }
+:LLCALL "(JKHL)" is $(NP) op0_8=0xED ; q0_8=0xFA { push16(LXPC); push16(&:2 inst_next); LXPC = JK & 0x0fff; call [HL]; }
+:LLRET is $(NP) op0_8=0xED ; q0_8=0x8B { local t:2 = 0; pop16(t); pop16(LXPC); return [t]; }
+# System, block and table instructions
+:CBM imm8 is $(NP) op0_8=0xED ; q0_8=0x00 ; imm8 { cbm(imm8:1); }
+:COPY is $(NP) op0_8=0xED ; q0_8=0x80 { block_copy(PX, PY, BC); BC = 0; }
+:COPYR is $(NP) op0_8=0xED ; q0_8=0x88 { block_copy_reverse(PX, PY, BC); BC = 0; }
+:EXP is $(NP) op0_8=0xED ; q0_8=0xD9 { exp_exchange(); }
+:FSYSCALL is $(NP) op0_8=0xED ; q0_8=0x55 { push16(&:2 inst_next); fsyscall(); }
+:SBOX dA is $(NP) op0_8=0xED ; q0_8=0x02 & dA { dA = sbox(A); }
+:IBOX dA is $(NP) op0_8=0xED ; q0_8=0x12 & dA { dA = ibox(A); }
+:SETSYSP imm16 is $(NP) op0_8=0xED ; q0_8=0xB1 ; imm16 { set_system_protect(imm16:2); }
+:SETUSRP imm16 is $(NP) op0_8=0xED ; q0_8=0xB5 ; imm16 { set_user_protect(imm16:2); }
+:SYSRET is $(NP) op0_8=0xED ; q0_8=0x83 { local t:2 = sysret(); return [t]; }

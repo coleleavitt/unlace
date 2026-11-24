@@ -1,0 +1,42 @@
+[image]
+arch = 'PowerPC:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '4e800020'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-tail-callback.elf',
+    'option voidtailreturn off',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function 0x1004',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-local-alias.elf',
+    'option voidtailreturn off',
+    'read symbols',
+    'option ppc32picimports on',
+    'load function 0x1004',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'tail callbacks and clobbered stack aliases retain returning continuations'
+count = 2
+literal = 'return;'
+
+[[match]]
+name = 'caller contexts do not inherit another callers terminal identity'
+count = 0
+regex = '__stack_chk_fail|no-return'

@@ -1259,13 +1259,13 @@ define pcodeop vpmovqd_avx512vl ;
 	ZmmReg2 = zext(XmmResult);
 }
 
-:VPMOVQD m128^XmmOpMask32, XmmReg1 is $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0) & XmmOpMask32; byte=0x35; XmmReg1 ... & m128
+:VPMOVQD m64^XmmOpMask32, XmmReg1 is $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0) & XmmOpMask32; byte=0x35; XmmReg1 ... & m64
 [ evexD8Type = 1; evexTType = 9; ] # (TupleType HVM)
 {
 	XmmResult = vpmovqd_avx512vl( XmmReg1 );
-	XmmMask = m128;
+	XmmMask = zext(m64);
 	build XmmOpMask32;
-	m128 = XmmResult;
+	m64 = XmmResult[0,64];
 }
 
 # VPMOVQD/VPMOVSQD/VPMOVUSQD 5-414 PAGE 2238 LINE 115108

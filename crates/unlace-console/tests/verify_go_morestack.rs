@@ -10,7 +10,7 @@
 //!   `runtime.morestack_noctxt` call survives into the C.
 //!
 //! The hermetic matcher logic is pinned by the `kuna_gomorestack` unit tests
-//! and `tests/stages/kuna-gomorestack.xml` (no `go` needed); this gate is the
+//! and `tests/stages/kuna-gomorestack.toml` (no `go` needed); this gate is the
 //! detection-driven `auto` path over a genuine Go image. Built at runtime in
 //! an isolated temp dir (the `verify_go_pclntab` pattern), guarded on `go`
 //! being on PATH; an installed compiler must build the fixture successfully.

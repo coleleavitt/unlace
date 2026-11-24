@@ -4110,7 +4110,7 @@ The always-on core, in pass order (`passes.rs (passes_for)`):
   last two path components and the position (`panic_loc_src_main_rs_10_5`),
   so the call prints `&panic_loc_tiny_rs_15_9`. The file name is also a
   bounded string fact of exact length. Pinned by
-  `tests/stages/kuna-panicloc.xml`.
+  `tests/stages/kuna-panicloc.toml`.
 - **Wide strings** (`widestrings`, the `StringsAnalyzer` `allCharWidths` arm,
   `crates/unlace-analysis/src/analyzers/strings/kuna_widestrings.rs
   (scan_wide_strings)`): the same matcher over 2-byte little-endian code units —
@@ -7461,7 +7461,7 @@ every other binary's pass list is byte-identical to before the pass existed):
   come from replaying the bind opcodes
   (`loader/format/macho/dyldinfo.rs (resolve_dyld_info_binds)`), which keeps
   no addend, so the anchor is accepted on the name alone. Pinned by
-  `tests/stages/kuna-itaniumrtti-macho.xml` and its `-classic` twin.
+  `tests/stages/kuna-itaniumrtti-macho.toml` and its `-classic` twin.
 - **Objective-C** (`objc`, Mach-O-only, on by default and inert elsewhere;
   `crates/unlace-analysis/src/analyzers/objc/mod.rs`): walk
   `__objc_classlist` → `class_t` → `class_ro_t` → method lists (both absolute and
@@ -7569,7 +7569,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     takes only the arguments the call site shows, so a receiver the caller
     never moved (its own incoming `x0`) is not listed:
     `v1 = objc_msgSend$length();`. A strict fix, no option;
-    `tests/stages/kuna-objcstubagree.xml` pins it.
+    `tests/stages/kuna-objcstubagree.toml` pins it.
 
   The rebase slots of the three ref sections are also reported constant
   (`AnalysisOutput::const_ranges`). dyld fills them once before any code runs
@@ -7839,7 +7839,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     of the selector's stub and then of `objc_msgSend` (at most 512), reading the
     retargets back. A method's `self`/`_cmd` parameter names are never adopted
     for the caller's variables. A selector no class of the chain declares keeps
-    the runtime entry point. The stage test `tests/stages/kuna-objcresolve.xml`
+    the runtime entry point. The stage test `tests/stages/kuna-objcresolve.toml`
     runs both fixtures with the options off and on; `unlace-cli`'s
     `xrefs_objc_resolved` test asks both directions.
 
@@ -7879,7 +7879,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     init…]` returns that class, and a super send is never retargeted either,
     since its first argument is the `objc_super`. On a 390-function sample of
     a 72 MB iOS app this resolves 88 more sends (64 to 152) and types 13 more
-    locals as class pointers (108 to 121); `tests/stages/kuna-objcsdksend.xml`
+    locals as class pointers (108 to 121); `tests/stages/kuna-objcsdksend.toml`
     runs a fixture that sends to an imported class with `objcresolve` and
     `objcrettype` off and on.
 
@@ -8010,7 +8010,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     through a slot or a jump out of `__text` may be another function's: a block
     built past one has no known creator, is named
     `block_<invoke>_block_invoke`, and types no frame; its invoke is typed all
-    the same. `tests/stages/kuna-objcblocksx86.xml` runs
+    the same. `tests/stages/kuna-objcblocksx86.toml` runs
     `macho_objc_blocks_x86_64` and `macho_objc_blocks2_x86_64` with `objc` off
     and on.
 
@@ -8054,7 +8054,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     Foundation out of an iOS 16.4 arm64e cache: 3,979 `objc_msgSend$<sel>` stubs
     named (none before), every selector, class, super and protocol reference
     slot named (6,050, 566, 481 and 33), `self` and `_cmd` typed on its methods.
-    `tests/stages/kuna-dyldcacheobjc.xml` runs the two synthetic caches of
+    `tests/stages/kuna-dyldcacheobjc.toml` runs the two synthetic caches of
     `dyld_cache_objc.py`, one with the header and one with only the
     `objc_opt_t`.
   - **SDK C prototypes** (`objcsdk`, kuna, the C half of the same directory,
@@ -8630,7 +8630,7 @@ both
   (`kuna_arm64evcall.rs (object_at)`): when it is a metaclass object, the
   commit resolves the call to the one method that metaclass's own vtable
   holds in the slot, so `X::gMetaClass.alloc()` is a direct call.
-  Stage test: `tests/stages/kuna-iokitcxx.xml` (the typed classes, `names`
+  Stage test: `tests/stages/kuna-iokitcxx.toml` (the typed classes, `names`
   against `on`).
 - **XNU data tables** (kuna, `xnutables`, the same XNU images, default-on;
   `crates/unlace-analysis/src/analyzers/iokit/tables.rs`): three kinds

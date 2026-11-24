@@ -9,7 +9,7 @@
 //   - `live`: off/auto/always against the ArchContext source-language fact.
 //   - `ActionGoWriteBarrier::apply` and `match_guarded_cold_call` are inert on
 //     a function with no calls (the end-to-end fold is pinned by
-//     `tests/stages/kuna-gowritebarrier.xml` and the unlace-console
+//     `tests/stages/kuna-gowritebarrier.toml` and the unlace-console
 //     `verify_go_writebarrier` gate over a real Go build).
 
 use super::*;

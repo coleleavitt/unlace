@@ -2934,7 +2934,7 @@ across blocks from an input at the entry, and its lanes, being unique storage,
 become temporaries read by four MULTIEQUALs. The function used to fail with
 `laned register split failed part way: Free varnode has multiple descendants`;
 it now decompiles without that split
-(`tests/stages/kuna-lanedivide-freefanout.xml`). This is a correctness repair
+(`tests/stages/kuna-lanedivide-freefanout.toml`). This is a correctness repair
 with no option.
 
 When `SplitDatatype` divides a constant, `kuna_constantbytes.rs` extracts
@@ -3060,7 +3060,7 @@ type_match the declared width is what moves: a
 `uint8_t` counter or a byte read from a `uint8_t` field matches `char`, and an
 x86-64 `int` matches `int`; a local the source declares `int` or an enum but
 only ever loads from a byte field narrows too, and the binary cannot tell the
-two apart (`tests/stages/kuna-regnarrow.xml`, `kuna-regnarrow-x86.xml`).
+two apart (`tests/stages/kuna-regnarrow.toml`, `kuna-regnarrow-x86.xml`).
 
 ### (kuna) `regsigned` — a register local at the width its values are sign extended from
 
@@ -3126,7 +3126,7 @@ holds a sign-extended byte in a register is declared `char`, which the binary
 cannot tell apart. The net is small (a few perfect functions on ARM firmware,
 none on x86-64), and a narrowed value that a wider reader takes back gains a
 cast (`(long)(int)v` on AArch64), which is why the option stays off by default
-(`tests/stages/kuna-regsigned.xml`).
+(`tests/stages/kuna-regsigned.toml`).
 
 ## 3.4 Conditional execution
 
@@ -3166,7 +3166,7 @@ may simply not be linked yet. `condexe.rs (ConditionalExecution::build_heritage_
 records that per space from `Funcdata::num_heritage_passes`, as upstream. Most
 such ops fall to dead-code removal first. They still reach the test when the
 space's dead-code delay outlasts its heritage delay (the console
-`deadcode delay` command, `tests/stages/kuna-condexe-heritage.xml`), and on
+`deadcode delay` command, `tests/stages/kuna-condexe-heritage.toml`), and on
 ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 (u-boot `env_attr_lookup`) now collapses into the guarded block.
 `condexe.rs (RuleOrPredicate)` (oppool1, group
@@ -3179,7 +3179,10 @@ ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 runs right after `ActionConditionalExe` in the same group. A join block J
 qualifies when it ends in a CBRANCH, holds only MULTIEQUALs followed by
 integer and boolean ops it can evaluate, and every value it defines is read
-only inside J. For each in edge whose MULTIEQUAL inputs are constants (looking
+only inside J. No MULTIEQUAL of J may read a value J defines: such a value is
+carried around a loop back into J (a loop counter tested at the loop head), and
+a moved edge would skip the step that computes it, leaving the counter defined
+only in terms of itself. For each in edge whose MULTIEQUAL inputs are constants (looking
 through COPYs), `kuna_phithread.rs (decided_target)` evaluates J's ops and
 the branch (honouring the boolean flip). When the branch is decided, the edge
 is moved past J onto the taken successor T (`Funcdata::switch_edge`): J's
@@ -3656,10 +3659,10 @@ Floats, saturating and sign-extended lanes are not matched, and neither is a
 vector loop the compiler also unrolled (two vector iterations per trip with an
 odd-trip epilogue, clang 14's x86-64 `-O2`/`-O3` default) nor any gcc 11 shape
 measured.
-`tests/stages/kuna-devectorize.xml` runs the byte-sum witness in both passes
+`tests/stages/kuna-devectorize.toml` runs the byte-sum witness in both passes
 (off: the guard, eight accumulators, fold and remainder loop; on: one
 `do { v1 += bytes[v2]; ... } while (length != v2)`);
-`tests/stages/kuna-devectorize-effects.xml` keeps the vector arm of two
+`tests/stages/kuna-devectorize-effects.toml` keeps the vector arm of two
 hand-written sums whose exits disagree on a global store.
 
 **Inline string lengths** (`option strlenscan`, default **on**) —
@@ -3875,6 +3878,23 @@ mask lost its reaching definition at a shared label, so the scan loop read a
 stale earlier compare; a constant pointer is left to `RuleLoadVarnode`, which
 also resolves the spacebase-placeholder tail that a bare COPY would drop; a
 free pointer is declined. Always on (DIV-158).
+
+**boxedcompare** —
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_boxedcompare.rs
+(RuleBoxedCompare)`, oppool1, fires on `INT_EQUAL`/`INT_NOTEQUAL`. *Pattern:* one operand is
+the all-ones constant of its size, and every bit of the other is known to be 1. This is the
+NaN-unboxing test of a RISC-V single- or half-precision register read, `SUB84(f >> 32, 0) ==
+0xffffffff`, after a boxed write (`0xffffffff00000000 | zext(x)`), a boxed constant, or a loop join
+of such values. The proof is a bounded walk (64 definitions) that keeps the bits known to be 1
+through constants, `COPY`, `INT_ZEXT`, `INT_OR`, `INT_AND`, shifts by a constant, `PIECE`,
+`SUBPIECE` and `MULTIEQUAL` (every input must agree). An input, any other definition or an
+exhausted budget proves nothing, except that under option `fpargboxed` (default on,
+RISC-V only) an FP argument register input (`fa0`..`fa7`, 8 bytes) has its upper 32 bits
+known as ones. The psABI passes a float argument narrower than FLEN NaN-boxed. Only those
+upper bits are claimed, so a test of a float's own bits is never folded, and a half-precision
+parameter's 48-bit test stays. *Rewrite:* the
+compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
+unboxing dies. Exact, so always on.
 
 **x87truncate** —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_x87truncate.rs
@@ -4595,9 +4615,14 @@ multiplier too wide means no proof and no rewrite.
 The replacement is applied only when it has fewer ops than the tree and 64
 pseudo-random full-width evaluations agree with it. The new ops go before the
 root, and the root becomes a `COPY` of the result; dead-code elimination removes
-the old tree. Pinned by `tests/stages/kuna-mba.xml` (two leaves) and
-`tests/stages/kuna-mba-groups.xml` (a four-leaf group, six leaves in three
-groups, and the polynomial) and `tests/stages/kuna-mba-solve.xml` (constant
+the old tree. A tree with a leaf (or a reused subtree) that is still a free
+varnode, one heritage has not reached, is left alone: a free varnode keeps its
+single reader, so no new op can read it, and a rewrite to a bare leaf would
+leave the root a `COPY` with no input
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_mba.rs (replace)`; CoreADI32.dll
+under `mba on` panicked in `RuleTermOrder` this way). Pinned by `tests/stages/kuna-mba.toml` (two leaves) and
+`tests/stages/kuna-mba-groups.toml` (a four-leaf group, six leaves in three
+groups, and the polynomial) and `tests/stages/kuna-mba-solve.toml` (constant
 operands, a shared complement, a complemented sum, a leaf plus a boolean term,
 bit logic alone). A subtree of the replacement that the old tree already
 computes reuses that varnode. Not done: a narrower op under a zero extension
@@ -4729,7 +4754,14 @@ corpus hung against `collect_terms`. On `libCoreADI.so` (19 functions found)
 `egraph` changes 3 functions, one of them beyond `mba`:
 `(-((~a0 | 0x4cee331d) + (a0 | 0xb311cce2)) - 2 ^ 0x53a5c4e9) * K` becomes
 `(a0 ^ 0x1f4bf7f4) * K`. `/usr/bin/patchelf` (332 functions) and
-`/usr/bin/bzip2` (84) are unchanged, at the same CPU time within noise.
+`/usr/bin/bzip2` (84) are unchanged, but on 00d4db1c62 the patchelf run executes
+26.9% more instructions with the option on (144.6G vs 114.0G, pinned to one
+core, two runs each), all of it saturations that find nothing. Since then the
+rule remembers, per function, each tree it saturated without a replacement
+(its fingerprint, op count and budget) and does not saturate it again when
+the pool revisits the op. On d963789525, with that memo, the patchelf run
+executes 7.6% more instructions with the option on (122.6G vs 114.0G),
+and the corpus results and the outputs above are the same as without it.
 
 Example: `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, one substitution
 applied to the result of another, becomes `(x | y) + z`: the seed folds the

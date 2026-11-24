@@ -1,0 +1,255 @@
+# A pointer the binary stores to a global and keeps using from its register
+# is dereferenced through its own variable, not through the global (P3
+# kuna_pointeestorekeep, P6 kuna_pointeevalue; GitHub issue #767).
+#
+# Merge joins a register value with the global it is copied to.  The joined
+# value then prints as a read of the global, and a dereference through it
+# takes the global's pointee type.  For
+#
+#     char *gc;
+#     int p_int(int *p, int k) { int *q = p + k; gc = (char *)q; return q[1] + q[2]; }
+#
+# kuna used to print `gc = &a0[a1]; return gc[2] + gc[1];`.  kuna never
+# declares the global, so a reader who gives `gc` its real type reads two
+# bytes and gets 0 where the binary returns 9; a `struct rec *` global made
+# `return gr[3] + *gr;` add two records, and a `void *` global made
+# `gv[1] * 3` not compile.  RulePropagateCopy keeps the store's COPY where the
+# binary makes it when a marker would take it, and Merge refuses the
+# copy-shadow join, so the value keeps its own variable and type.  A load of
+# the global the binary makes after the store stays a load: g_alias stores
+# through a pointer that may point at gi before reading gi[1], and kuna used
+# to print `return (&a0[a1])[1];`.  g_reload, g_before, g_write, g_diff,
+# g_twice, g_old and g_branch also read the value from its register; a load
+# of the global after a store through a pointer still reads the global,
+# g_twice keeps the value it loaded between two such stores in a variable of
+# its own, g_old still reads the global's earlier value, and g_branch stores
+# in both arms of a branch.
+#
+# Every assertion below fails on the unfixed tree, and #9 to #15 fail on a
+# tree that keeps the value apart without keeping those loads.  The wrapper only supplies
+# the harness architecture (`load file` needs one).  The pass loads
+# globalpointee_gcc_O2_x86_64 and globalpointee_gcc_O0_x86_64 (built from
+# globalpointee_x86_64.c beside them).
+# At -O2 the binary loads q[1] and q[2] before it stores q to the global,
+# and those loads keep variables of their own ahead of the store
+# (`option indexaliasguard global`, issue #792): #3 and #4 check the -O0
+# build, #16 and #17 the -O2 one.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/globalpointee_gcc_O2_x86_64',
+    'read symbols',
+    'load function p_int',
+    'decompile',
+    'print C',
+    'load function r_char',
+    'decompile',
+    'print C',
+    'load function r_long',
+    'decompile',
+    'print C',
+    'load function r_void',
+    'decompile',
+    'print C',
+    'load function w_short',
+    'decompile',
+    'print C',
+    'load function m_call',
+    'decompile',
+    'print C',
+    'load function m_join',
+    'decompile',
+    'print C',
+    'load function g_alias',
+    'decompile',
+    'print C',
+    'load function g_reload',
+    'decompile',
+    'print C',
+    'load function g_before',
+    'decompile',
+    'print C',
+    'load function g_write',
+    'decompile',
+    'print C',
+    'load function g_diff',
+    'decompile',
+    'print C',
+    'load function g_twice',
+    'decompile',
+    'print C',
+    'load function g_old',
+    'decompile',
+    'print C',
+    'load function g_branch',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/globalpointee_gcc_O0_x86_64',
+    'read symbols',
+    'load function p_int',
+    'decompile',
+    'print C',
+    'load function r_long',
+    'decompile',
+    'print C',
+    'load function w_short',
+    'decompile',
+    'print C',
+    'load function m_call',
+    'decompile',
+    'print C',
+    'load function g_alias',
+    'decompile',
+    'print C',
+    'load function g_reload',
+    'decompile',
+    'print C',
+    'load function g_before',
+    'decompile',
+    'print C',
+    'load function g_write',
+    'decompile',
+    'print C',
+    'load function g_diff',
+    'decompile',
+    'print C',
+    'load function g_twice',
+    'decompile',
+    'print C',
+    'load function g_old',
+    'decompile',
+    'print C',
+    'load function g_branch',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'globalpointee #1: no stored pointer is indexed or dereferenced through a global'
+count = 0
+regex = '(\bg[clrsv]\[|\*g[clrsv]\b)'
+
+[[match]]
+name = 'globalpointee #2: the int pointer is stored to gc from its own variable'
+count = 5
+regex = '^  +gc = a0;'
+
+[[match]]
+name = 'globalpointee #3: the ints are read through the value'
+count = 1
+literal = 'return a0[2] + a0[1];'
+
+[[match]]
+name = 'globalpointee #4: the longs are read through the value, not the record global'
+count = 1
+literal = 'return a0[3] + *a0;'
+
+[[match]]
+name = 'globalpointee #5: the shorts are written through the value, not the long global'
+count = 2
+literal = 'a0[3] = a2 * 2;'
+
+[[match]]
+name = 'globalpointee #6: the store before a call stays where the binary makes it'
+count = 1
+literal = [
+    'gc = a0;',
+    'touch();',
+]
+
+[[match]]
+name = 'globalpointee #7: the load after a store that may alias the global stays a load'
+count = 2
+literal = 'return gi[1];'
+
+[[match]]
+name = 'globalpointee #8: the chars are read through the value, not the int global'
+count = 1
+literal = 'return (int4)a0[1] + (int4)a0[5];'
+
+[[match]]
+name = 'globalpointee #9: the load after a store through a pointer reads the global, the value its register'
+count = 2
+literal = [
+    'v1 = (&a0[a1])[2];',
+    '*a2 = (unsigned long)a0;',
+    'return v1 + gi[1];',
+]
+
+[[match]]
+name = 'globalpointee #10: a value read before its store keeps its register, the load after the pointer store reads the global'
+count = 2
+literal = [
+    'v1 = (&a0[a1])[3];',
+    'gi = &a0[a1];',
+    '*a2 = (unsigned long)a0;',
+    'return v1 + gi[1];',
+]
+
+[[match]]
+name = 'globalpointee #11: the load after a store through another pointer reads the global'
+count = 2
+regex = [
+    '\*a2 = a3;',
+    'return (v1|a0\[1\]) \+ \*gi;',
+]
+
+[[match]]
+name = 'globalpointee #12: a load not used as an address after a pointer store reads the global'
+count = 2
+regex = [
+    '\*a2 = a0;',
+    'return (\(gd - a0\) \+ \(int8\)v2|\(int8\)v1 \+ \(gd - a0\));',
+]
+
+[[match]]
+name = 'globalpointee #13: a load between two pointer stores keeps its own variable'
+count = 2
+literal = [
+    'v2 = gi;',
+    '*a3 = ',
+]
+
+[[match]]
+name = 'globalpointee #14: the load after a pointer store reads the global while its earlier value is read too'
+count = 2
+regex = [
+    'v1 = \(&a0\[a1\]\)\[2\];',
+    '\*a2 = \(unsigned long\)a0;',
+    'return (\*v2 \+ gi\[1\] \+ v1|v1 \+ gi\[1\] \+ \*v2);',
+]
+
+[[match]]
+name = 'globalpointee #15: a pointer stored in both arms keeps its variable, the load after the pointer store reads the global'
+count = 2
+literal = [
+    'v1 = v2[1];',
+    '*a2 = a0;',
+    'return v1 + *gi;',
+]
+
+[[match]]
+name = 'globalpointee #16: at -O2 the ints are read through the value before it is stored to gc'
+count = 1
+literal = [
+    'v1 = a0[2];',
+    'v2 = a0[1];',
+    'gc = a0;',
+    'return v1 + v2;',
+]
+
+[[match]]
+name = 'globalpointee #17: at -O2 the longs are read through the value before it is stored to gr'
+count = 1
+literal = [
+    'v1 = a0[3];',
+    'v2 = *a0;',
+    'gr = a0;',
+    'return v1 + v2;',
+]

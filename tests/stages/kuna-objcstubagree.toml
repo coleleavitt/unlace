@@ -1,0 +1,84 @@
+# Objective-C selector stubs typed only from agreeing declarations
+# (with `option objc on`; a strict fix, no option of its own).
+#
+# Issue: one `objc_msgSend$<sel>` stub serves every receiver of its
+# selector, but it took its prototype from whatever declaration the image
+# held. A protocol declaring `- (double)length` typed `objc_msgSend$length`
+# as returning a double for every sender, so after `[name length]` on a
+# string (an integer in x0) x0 read as dead and the next call lost every
+# argument: `objc_msgSend$length(a0); if (check())` where the caller passes
+# four.
+#
+# Stage / sub-stage: P1 external-refinement.
+# `analyzers/objc/kuna_objcrefs.rs` `Selectors::stub_encoding` types a stub
+# from the image's agreed spelling only when the SDK headers (`objcsdk`),
+# when they spell the selector, agree on the register classes of its return
+# and arguments, and a floating-point return only a protocol declares (no
+# class or category of the image implements it) needs that confirmation.
+#
+# The fixture is `macho_objc_stubagree.m`: protocol `Measured` declares
+# `-(double)length` with no implementer, class `Ruler` implements
+# `-(double)tag`, and `validate` sends `length` and `tag` to a `Str` (whose
+# methods return integers) through stubs, each result passed to `check` with
+# three more arguments.
+#
+# Pass 1 (`objc on`): the protocol-only selector leaves its stub untyped and
+# the send's result reaches the next call, `check(v1,a2,1,"empty name")`;
+# `tag`, implemented here as a double and unknown without headers, still
+# types its stub.
+# Pass 2 (`objcsdk` on the hand-written `objc_sdk/Widget.h`, which declares
+# an NSInteger `tag`) drops the disagreeing `tag` prototype too:
+# `check(objc_msgSend$tag(a1),a2,2,"bad tag")`.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_stubagree_arm64',
+    'option objc on',
+    'read symbols',
+    'load function _validate',
+    'decompile',
+    'print C',
+    'option objcsdk crates/unlace-analysis/tests/fixtures/objc_sdk',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_stubagree_arm64',
+    'option objc on',
+    'read symbols',
+    'load function _validate',
+    'decompile',
+    'print C',
+    'option objcsdk off',
+    'quit',
+]
+
+[[match]]
+name = 'OBJCSTUBAGREE #1: a protocol-only double return does not type the stub'
+count = 0
+literal = 'if (check())'
+
+[[match]]
+name = "OBJCSTUBAGREE #2: the send's integer result reaches the next call"
+count = 2
+literal = 'if (check(v1,a2,1,"empty name"))'
+
+[[match]]
+name = 'OBJCSTUBAGREE #3: an implemented double tag types the stub without headers'
+count = 1
+literal = 'objc_msgSend$tag(a1);'
+
+[[match]]
+name = 'OBJCSTUBAGREE #4: headers declaring an integer tag drop the double prototype'
+count = 1
+literal = 'check(objc_msgSend$tag(a1),a2,2,"bad tag"); // tail-call'

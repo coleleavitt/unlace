@@ -175,3 +175,23 @@ for a later fix. libcrypto.so.3 `.text` changes only at the 63 VPBROADCASTQ
 from a GPR; `decompile-all /usr/bin/ls` is unchanged. Exercised by
 `unlace-cli/tests/x86_avx10.rs` (`base_fixes.elf`) and the `x86_64_avx512_base`
 row of `processors.toml`.
+
+## AVX-512 Disp8*N and operand fixes (`avx512.sinc`, `avx512_manual.sinc`)
+
+`tools/x86_avx512_sweep.py` assembles every EVEX record of LLVM's AVX-512 TableGen predicates
+(memory forms by default, `--forms reg` for the register forms) and compares unlace's listing
+with `llvm-objdump`; `--base-specs` splits the differences into fixed and regressed. With it:
+
+- 134 constructors got the tuple context LLVM's `CD8_Scale` gives (Disp8*N): the sub-vector
+  broadcasts, inserts and extracts (`vbroadcast[fi]32x2/32x4/64x2/32x8/64x4`,
+  `vinsert*`/`vextract*`), `vpmov[sz]x` (quarter and eighth vector), `vpexpand`/`vpcompress`
+  b/w, `vpbroadcastb/w`, `vpinsr`/`vpextr` b/w/d/q, the scalar FP16 arithmetic, compares and
+  conversions, and `vcvtss2(u)si`.
+- `vpalignr` and the scalar `vgetmant`/`vreduce`/`vrndscale` forms that lacked it print and pass
+  their immediate; `vcvtdq2pd xmm` reads a qword (`{1to2}`), `vcvtpd2dq` from ymm writes xmm,
+  `vpmovqd` to memory stores a qword.
+
+Checked: of the 350 memory-form records that differed after #580, 342 now match and none of the
+6660 regressed; the 8 left are `vfpclassph/sh`, which print the class names where LLVM prints the
+immediate. The register-form sweep still differs on 806 records, nearly all the {sae}/{rc}
+rounding forms (the base spec has no EVEX.b register constructors), left for later.

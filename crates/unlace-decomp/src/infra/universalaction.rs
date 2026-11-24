@@ -668,6 +668,11 @@ pub fn universal_sched_hooked(
             crate::kuna_constspaceload::RuleConstSpaceLoad::with_group("analysis")
         ),
         rrow!(
+            "boxedcompare",
+            "analysis",
+            crate::kuna_boxedcompare::RuleBoxedCompare::new("analysis")
+        ),
+        rrow!(
             "x87truncate",
             "analysis",
             crate::kuna_x87truncate::RuleX87Truncate::new("analysis")

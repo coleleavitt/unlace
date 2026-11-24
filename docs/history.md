@@ -369,3 +369,18 @@ table above: a frozen index, not a register anything is added to.
 - **Region structurer** (`region-structurer-roadmap.md`, `regions.md`): the angr
   Phoenix/SAILR structurer roadmap that became DIV-12/DIV-14; deep goto-win schemas
   remain deferred.
+
+- **Apple-support port plan** (`notes/apple-port-from-unlace.md`, 2026-10-29, deleted 2026-11-24): the plan to
+  port Apple support from the earlier unlace research decompiler into this engine, one PR per item, each behind a
+  named option with a stage test and a spec chapter. The Apple loaders and analyzers it listed now live in
+  `unlace-analysis`; the current list is in [status.md](status.md).
+- **dyld shared cache proposal** (`notes/proposal-dyld-cache.md`, 2026-10-29, deleted 2026-11-24): open one
+  image at a time at its cache addresses. A modern cache is split across a main file, sub-caches and a
+  `.symbols` file, so one image's segments can sit in several files; the loader reads them as one set
+  (`loader/dyldcache/`).
+- **DEX loader proposal** (`notes/proposal-dex.md`, deleted 2026-11-24): a `.dex` file was only reachable as raw
+  Dalvik bytecode, with no names or prototypes. The loader tier now reads `.dex` directly
+  (`loadimage_dex.rs`); `tests/stages/dex.toml` holds its stage tests.
+- **egraph verdict** (`notes/egraph.md`, closed research track, deleted 2026-11-24): `egraph` stays opt-in. It is
+  useful on obfuscated code together with `mba`; on ordinary compiler output it costs more than 2% time and does
+  not improve the output overall. The option row in `phases.toml` carries the same verdict.

@@ -21,6 +21,7 @@ hand), **evidence** (a dated measurement or report behind a decision; not update
 | Crate layout and the split's decisions | `notes/crate-architecture.md` § 8 | `CLAUDE.md` table (summary) |
 | Open work | GitHub issues on coleleavitt/unlace | handoff files (none are kept in the tree) |
 | Provenance of the port | `LICENSE`, `NOTICE`, `docs/history.md` | |
+| Supported formats, architectures by tier, output languages, front ends, experimental features | `docs/status.md` | `README.md`, `CLAUDE.md` (link only) |
 
 ## docs/
 
@@ -34,7 +35,8 @@ hand), **evidence** (a dated measurement or report behind a decision; not update
 | `devcontainer.md` | current | `.devcontainer/` |
 | `difffuzz.md` | current | lifter differential fuzzing |
 | `ghidra-integration.md` | current | Ghidra front-end and wire protocol |
-| `history.md` | archive (provenance) | do not trim |
+| `status.md` | current | the support list: formats, architectures by tier, output languages, front ends, experimental. Owner of that list |
+| `history.md` | archive (provenance) | do not trim; its last section holds short summaries of deleted plans |
 | `improvement-pipeline.md`, `re-pipeline.md` | current | the agent pipelines; `tools/pipeline/` writes `docs/features/<slug>/` bundles |
 | `missing-ghidra-analyses.md` | current | analyzer gap vs Ghidra |
 | `modes.md` | current | `--mode` presets |
@@ -64,7 +66,6 @@ hand), **evidence** (a dated measurement or report behind a decision; not update
 |---|---|---|
 | `crate-architecture.md` | current (§8) + evidence (§1-7) | owner of the crate split's outcome; absorbed the root `HANDOFF.md` (#1037) |
 | `doc-inventory.md` | current | this file |
-| `apple-port-from-unlace.md`, `proposal-dyld-cache.md`, `proposal-dex.md` | archive | 2026-10 plans, implemented or superseded |
 | `ida-gaps.md` | current | the prioritised IDA gap list; `ida-atomics`, `ida-com`, `ida-msvc-eh`, `ida-pdb`, `ida-typelib-pe`, `ida-unmerge`, `ida-hexrays-rules` deepen its rows (evidence) |
 | `ida-gap/` | evidence | 2026-11-24 area surveys extending `ida-gaps.md` |
 | `ida-module-survey.md`, `ida-apple-mechanisms.md`, `ida-limits.md`, `perplexity-26.46-gaps.md` | evidence | 2026-11-21/22 surveys; `ida-gaps.md` supersedes their gap lists |
@@ -72,11 +73,11 @@ hand), **evidence** (a dated measurement or report behind a decision; not update
 | `option-firing-audit.md`, `flip-audit.md` | evidence | 2026-11-24 measurements |
 | `real-code-sweep.md`, `real-firmware-sweep.md`, `robustness-sweep.md` | evidence | 2026-11-24 sweeps; their issues are on GitHub |
 | `perf-profile.md`, `aif-gap-performance.md`, `compact-unwind-measurement.md` | evidence | |
-| `egraph.md` | archive | closed research track |
 | `declared-callback-declarators.md`, `rootfix-float-abi-boundaries.md`, `syscall-memory-order.md` | evidence | per-fix analyses |
 
 ## Removed in this pass
 
+- Docs cleanup (2026-11-24): `notes/apple-port-from-unlace.md`, `notes/proposal-dyld-cache.md`, `notes/proposal-dex.md` and `notes/egraph.md` (archive) deleted; each durable decision is a short bullet in `docs/history.md` § Retired campaign notes. `docs/status.md` added as the owner of the support list. `tests/stages/dex.toml` still names `notes/proposal-dex.md` in a comment.
 - Root `HANDOFF.md` (40 KB session handoff): durable parts moved to `notes/crate-architecture.md` § 8 and
   `docs/spec/02-lift-and-flow.md` (itaniumeh limits); the rest was session state (#1037).
 - `docs/features/`: 5,695 files (about 220 MB) of nested round evidence, verifier Cargo projects, logs,

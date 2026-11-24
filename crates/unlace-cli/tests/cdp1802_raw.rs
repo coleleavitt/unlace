@@ -25,6 +25,12 @@ fn cdp1802_fill_loop_decompiles() {
     assert!(!lower.contains("unimplemented"), "{stdout}");
     assert!(!lower.contains("bad instruction"), "{stdout}");
     assert!(!lower.contains("halt_baddata"), "{stdout}");
-    assert!(stdout.contains("(char *)0x1000"), "R1 is built from PHI/PLO: {stdout}");
-    assert!(stdout.contains("do {"), "the BNZ loop is recovered: {stdout}");
+    assert!(
+        stdout.contains("(char *)0x1000"),
+        "R1 is built from PHI/PLO: {stdout}"
+    );
+    assert!(
+        stdout.contains("do {"),
+        "the BNZ loop is recovered: {stdout}"
+    );
 }

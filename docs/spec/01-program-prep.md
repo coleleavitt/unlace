@@ -1094,7 +1094,8 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   This lets existing tail-call recovery resolve a named external destination
   and preserve its delay-slot arguments. The relocation encoder handles generic
   absolute, relative, PLT-relative, and image-offset fields at 8/16/32/64 bits in
-  the object's byte order, plus the instruction fields and ABI formulas for ARM
+  the object's byte order (an s390x `*DBL` field, `PC32DBL`/`PLT32DBL` and their
+  16-bit forms, holds `(S + A - P) >> 1` and rejects an odd value), plus the instruction fields and ABI formulas for ARM
   `CALL`/`JUMP24`/Thumb branches/`REL32`/`PREL31`, AArch64 branch/page/low-12
   forms, PowerPC `REL24`/`PLTREL24`/`LOCAL24PC`/`ADDR24` calls (32- and 64-bit;
   a `-fPIC` object's `PLTREL24` addend locates the caller's `.got2` for the
@@ -1253,7 +1254,9 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   untouched and reported as requiring a linker veneer instead of being encoded
   as a branch in the wrong instruction set. Untyped and undefined targets do
   not infer state from their synthetic slot address. AArch64 branch, page, and
-  low-12 relocations preserve the instruction's opcode/register fields, while
+  low-12 relocations preserve the instruction's opcode/register fields, and
+  read and write the instruction little-endian in a big-endian object too
+  (A64 code is little-endian in every image; only data follows `EI_DATA`), while
   PowerPC64 `REL24` and TOC-family relocations preserve big-endian instruction
   layout and DS-form low bits. SPARC `WDISP30` and `WPLT30` rewrite the 30-bit
   word displacement of a `call`, computing `S + A - P` modulo 2³² so a call

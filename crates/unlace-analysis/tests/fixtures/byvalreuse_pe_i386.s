@@ -14,9 +14,9 @@
 #                     release in the epilogue, spans the local.
 #   nested:           f(g(0), t): t is copied first, but the next call is g.
 #   stray:            the __cdecl callee nf ends in a call that does not
-#                     return (through a pointer, so the walk cannot tell),
-#                     and its walk runs on through the int3 padding into the
-#                     __stdcall neighbour ng's ret 0x20.
+#                     return (through a pointer, so the walk cannot tell);
+#                     the walk must stop at the int3 padding, not run on into
+#                     the __stdcall neighbour ng's ret 0x20.
 #   quit:             a __stdcall callee qtake (ret 0x20) whose other path ends
 #                     in exit: its pop is proven only while exit is known not
 #                     to return (`noreturn_known`), and the walk is taken again

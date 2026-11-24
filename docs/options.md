@@ -278,6 +278,8 @@ Three tiers:
 | a 64-bit compare on 32-bit ARM prints as an SBORROW4 or CONCAT44 chain over two register parameters | [`armpairparam`](#armpairparam----on--off-default-off) |
 | a long long compare on i386 prints as branches over four int parameters that compare the high words before the low words | [`pairbranch`](#pairbranch----on--off-default-off) |
 | a long long equality prints as a0 == a2 && a1 == a3 over four int parameters | [`pairbranch`](#pairbranch----on--off-default-off) |
+| a strlen-like loop function prints void and its counter is declared with the return register's storage | [`retindexuse`](#retindexuse----on--off-default-off) |
+| a search loop that returns its index prints void on BPF or SASS | [`retindexuse`](#retindexuse----on--off-default-off) |
 | a signed char loaded with ldrsb is declared int | [`regsigned`](#regsigned----on--off-default-off) |
 | a short counter prints as int with (int)(short) casts at every use | [`regsigned`](#regsigned----on--off-default-off) |
 | an int local prints as long on x86-64 though every value is a movsxd | [`regsigned`](#regsigned----on--off-default-off) |
@@ -2006,6 +2008,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default: two separate int parameters compared lexicographically or pairwise (if (x1 == x2 && y1 == y2) over adjacent parameters) compile to the same branches, so the join is a reading, not a fact. Turn it on for i386 MSVC binaries or ARM32 code with 64-bit arithmetic where a long long parameter prints as two int parameters and its compare as a chain of branches over the two words (a1 < a3, else a1 == a3 and a0 < a2; or a0 == a2 && a1 == a3). pairparam must be on; on 32-bit ARM register pairs also need armpairparam. A pair of zero tests is never joined, and neither is an equality with constants or a word the function dereferences.
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option pairbranch on`
+
+### `retindexuse` -- on | off, default `off`
+
+- **Symptoms:** a strlen-like loop function prints void and its counter is declared with the return register's storage; a search loop that returns its index prints void on BPF or SASS.
+- **What it does:** Keep a RETURN trial whose value also indexes a load. Funcdata::onlyOpUse (funcdata_varnode.cc:1851) refuses a return-register trial when any LOAD reads through a value derived from it, taking the register for a pointer the function was handed; a loop counter left in the return register falls to the same test whenever the loop indexes memory with it (while (s[n]) n++; return n; on BPF and SASS prints void). With the option on, a LOAD whose address is the walked value plus a value the walk did not reach (a base pointer, constant offsets folded) is an index use and does not refuse the trial.
+- **When to flip:** Off by default: a scratch register that indexes a loop and is left in the return register of a void function becomes a return value too. Turn it on for BPF or SASS code, or any target whose return register is also the natural loop counter, when a counting function (strlen-like, a search that returns its index) prints void and its counter is declared with the return register's storage.
+- **Where / provenance:** P4/output-prototype · kuna · new-analysis · unlace-865
+- **Example:** `option retindexuse on`
 
 ### `regsigned` -- on | off, default `off`
 

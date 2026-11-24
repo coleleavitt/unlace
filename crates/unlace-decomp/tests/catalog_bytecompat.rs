@@ -81,9 +81,9 @@ fn fixture_has_no_current_field() {
 // Every row carries the tier field appended after change_kind.
 // ... and the symptoms array appended after tier (C3).
 fn fixture_has_all_362_settables() {
-    assert_eq!(FIXTURE.matches("\"option\": ").count(), 369);
-    assert_eq!(FIXTURE.matches("\"tier\": ").count(), 369);
-    assert_eq!(FIXTURE.matches("\"symptoms\": ").count(), 369);
+    assert_eq!(FIXTURE.matches("\"option\": ").count(), 370);
+    assert_eq!(FIXTURE.matches("\"tier\": ").count(), 370);
+    assert_eq!(FIXTURE.matches("\"symptoms\": ").count(), 370);
 }
 
 #[test]

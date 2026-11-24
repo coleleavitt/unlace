@@ -178,6 +178,8 @@ declare_hooks! {
     callresultuse_scoring_return: fn(&Funcdata, OpId, VarnodeId) -> bool;
     /// `kuna_exclusivearguse::access_cannot_reach_call`.
     exclusivearguse_access_cannot_reach_call: fn(&Funcdata, OpId, OpId, VarnodeId) -> bool;
+    /// `kuna_retindexuse::index_only_load`.
+    retindexuse_index_only_load: fn(&Funcdata, OpId, OpId, VarnodeId) -> bool;
     /// `kuna_exclusivecallret::applies`.
     exclusivecallret_applies: fn(&Funcdata, OpId, &ParamTrial) -> bool;
     /// `kuna_exclusivecallret::skips_use`.

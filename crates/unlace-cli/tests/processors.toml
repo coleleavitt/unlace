@@ -307,6 +307,61 @@ expect = [
     "a0 = a1;",  # movt
 ]
 
+# C-SKY DSP (CSKY:LE:32:v2) built with csky-elf-as -mcpu=ck810: the hi:lo multiply
+# and multiply-accumulate forms read back with mflo/mfhi.
+[[family]]
+name = "csky_dsp"
+language = "CSKY:LE:32:v2"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/dsp.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_dsp_multiply_accumulate_decompiles"
+address = "0x8000"
+expect = [
+    "return a0 * a1 + a2 * a3;",  # muls + mulsa + mflo
+]
+
+[[family.function]]
+test = "csky_dsp_unsigned_high_word_decompiles"
+address = "0x800e"
+expect = [
+    "(unsigned long long)a0 * a1 >> 0x20",  # mulu + mfhi
+]
+
+# C-SKY DSP-enhance (CSKY:LE:32:v2) built with csky-elf-as -mcpu=ck804e: a post-increment
+# ldbi.w loop, max.s32, and a SIMD byte add.
+[[family]]
+name = "csky_edsp"
+language = "CSKY:LE:32:v2"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/edsp.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_edsp_post_increment_load_loop_decompiles"
+address = "0x8000"
+expect = [
+    "v1 = *a0++;",  # ldbi.w
+    "} while (a1);",
+]
+
+[[family.function]]
+test = "csky_edsp_max_decompiles"
+address = "0x8012"
+expect = [
+    "if (a0 <= a1)",  # max.s32
+    "a0 = a1;",
+]
+
+[[family.function]]
+test = "csky_edsp_simd_byte_add_decompiles"
+address = "0x8018"
+expect = [
+    "return padd_8(a0,a1);",  # named lane operation
+]
+
 # The native RCA CDP1802 language (SCRT variant) decompiles a raw image: a
 # store-increment loop through R1 closed by BNZ, returning with SEP R5.
 [[family]]

@@ -36,7 +36,7 @@ const MAX_STEPS: usize = 128;
 /// rewrite or a retry-loop fold got before it declined.
 macro_rules! trace {
     ($($arg:tt)*) => {
-        if std::env::var_os("KUNA_ATOMICS_TRACE").is_some() {
+        if unlace_base::env::var_os("UNLACE_ATOMICS_TRACE").is_some() {
             eprintln!("atomics: {}", format_args!($($arg)*));
         }
     };

@@ -272,7 +272,7 @@ pub fn run_region_structurer(
     } else {
         Vec::new()
     };
-    if std::env::var_os("KUNA_RS_DEBUG").is_some() {
+    if unlace_base::env::var_os("UNLACE_RS_DEBUG").is_some() {
         eprintln!("[rs] structure -> ok={ok} flips={}", flips.len());
     }
     Ok((ok, flips))
@@ -767,7 +767,7 @@ impl<'a> RegionStructurer<'a> {
                 return Ok(false);
             }
             if self.has_stranded_component() {
-                if std::env::var_os("KUNA_RS_DEBUG").is_some() {
+                if unlace_base::env::var_os("UNLACE_RS_DEBUG").is_some() {
                     eprintln!(
                         "[rs] STRANDED: {} components remain (round {rounds})",
                         self.size()
@@ -831,7 +831,7 @@ impl<'a> RegionStructurer<'a> {
             }
             // Nothing matched and >1 node remains and no edge to virtualize:
             // an un-virtualizable knot.  Report failure (caller falls back).
-            if std::env::var_os("KUNA_RS_DEBUG").is_some() {
+            if unlace_base::env::var_os("UNLACE_RS_DEBUG").is_some() {
                 let n = self.size();
                 eprintln!("[rs] STUCK: {n} components remain (round {rounds})");
                 for i in 0..n.min(12) {
@@ -1416,7 +1416,7 @@ impl<'a> RegionStructurer<'a> {
             &switch_case_edges,
         );
         self.switch_case_edges = switch_case_edges;
-        if std::env::var_os("KUNA_RS_DEBUG").is_some() {
+        if unlace_base::env::var_os("UNLACE_RS_DEBUG").is_some() {
             eprintln!(
                 "[rs]   SWITCH FOLDED #{} ({} cases, exit={})",
                 self.graph.block(bl).get_index(),
@@ -1521,7 +1521,7 @@ impl<'a> RegionStructurer<'a> {
         // back-edge whose own loop body contains no *other* (still-live) loop head
         // (so we structure inside-out, matching CollapseStructure's depth order).
         let heads = self.collect_loop_heads();
-        let dbg = std::env::var_os("KUNA_RS_DEBUG").is_some();
+        let dbg = unlace_base::env::var_os("UNLACE_RS_DEBUG").is_some();
         if dbg && self.loop_refine {
             // One-shot dump of the region identifier's cyclic loop projection.
             static DUMPED: std::sync::atomic::AtomicBool =
@@ -1946,7 +1946,7 @@ impl<'a> RegionStructurer<'a> {
         // switch, and not an interior-goto target (a continue-goto already aimed at
         // it would make a head-tested loop malformed; an inf-loop is fine, but we
         // only fold the exit edge here and let the inf-loop rule run later).
-        let dbg = std::env::var_os("KUNA_RS_DEBUG").is_some();
+        let dbg = unlace_base::env::var_os("UNLACE_RS_DEBUG").is_some();
         let hb = self.graph.block(head);
         if hb.size_out() != 2 || hb.is_switch_out() {
             if dbg {
@@ -2215,7 +2215,7 @@ impl<'a> RegionStructurer<'a> {
                 }
             }
         }
-        let dbg = std::env::var_os("KUNA_RS_DEBUG").is_some();
+        let dbg = unlace_base::env::var_os("UNLACE_RS_DEBUG").is_some();
         if members.len() < 2 {
             return Ok(false); // body did not stay multi-membered — not this path
         }
@@ -2449,7 +2449,7 @@ impl<'a> RegionStructurer<'a> {
         // when the head has no RI loop — e.g. a loop only the structural marker
         // sees).  A live component is "in the body" when its front-leaf address is
         // in the RI body set.
-        let dbg = std::env::var_os("KUNA_RS_DEBUG").is_some();
+        let dbg = unlace_base::env::var_os("UNLACE_RS_DEBUG").is_some();
         let (in_body, exit_addrs): (
             std::collections::BTreeSet<BlockId>,
             Option<std::collections::BTreeSet<uintb>>,

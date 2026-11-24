@@ -4424,3 +4424,16 @@ test = "pic18_classic_access_bank"
 address = "0x0"
 language = "PIC-18:LE:24:PIC-18"
 expect = ["CCP3CON = 5;", "dat_1 = 5;"]
+
+# The shipped default `bpf` applies retindexuse on eBPF without the option.
+[[family]]
+name = "ebpf_retindexuse_default"
+language = "eBPF:LE:64:default"
+base = "0"
+image = "bpf_strlen"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "ebpf_retindexuse_default_counter_is_returned"
+address = "0x0"
+expect = ["return "]

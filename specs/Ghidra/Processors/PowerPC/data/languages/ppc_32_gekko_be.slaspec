@@ -1,0 +1,15 @@
+# SLA specification file for the IBM Gekko / Broadway (PowerPC 750CL with
+# paired singles): 32-bit big endian, no AltiVec.
+
+@define ENDIAN "big"
+
+@define REGISTER_SIZE "4"
+
+@define EATRUNC "ea"
+
+@define CTR_OFFSET "32"
+
+@define PAIRED_SINGLE "1"
+
+@include "ppc_common.sinc"
+@include "paired_single.sinc"

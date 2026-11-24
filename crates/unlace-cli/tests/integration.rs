@@ -71,6 +71,8 @@ mod cdp1802_raw;
 mod i4004_raw;
 #[path = "nova_raw.rs"]
 mod nova_raw;
+#[path = "ppc_gekko.rs"]
+mod ppc_gekko;
 #[path = "ppc_spe2.rs"]
 mod ppc_spe2;
 #[path = "return_branch_cli.rs"]

@@ -17,7 +17,10 @@
 //! object they built) is `C::C`. One that does not, and that a function in
 //! `C`'s own vftable calls (the scalar or vector deleting destructor), is
 //! `C::~C`, and so is that calling slot when it is the only one (the name a
-//! symbol table gives an Itanium deleting destructor too). Either way, and
+//! symbol table gives an Itanium deleting destructor too). A slot of `C`'s
+//! own vftable that inlined the destructor instead (it stores `C`'s vftable
+//! before any call) and tests bit 0 of its flags argument, the `delete this`
+//! request, is that deleting destructor too. Either way, and
 //! also when neither name applies (a helper storing the vftable into the
 //! object it is passed), the function's `this` is `C *`:
 //! the object it stores `C`'s vftable into is a `C`. A function the symbol
@@ -108,10 +111,6 @@ pub fn run(ctx: &AnalysisCtx) -> AnalysisOutput {
             candidates.insert(entry);
         }
     }
-    if candidates.is_empty() {
-        return out;
-    }
-
     let model = if is64 {
         ctx.arch.default_fp()
     } else {
@@ -128,16 +127,25 @@ pub fn run(ctx: &AnalysisCtx) -> AnalysisOutput {
     // destructor.
     let mut called_by_slots: Vec<HashSet<u64>> = vec![HashSet::new(); list.len()];
     let mut walked_slots: HashMap<u64, Vec<u64>> = HashMap::new();
+    // A slot that inlined its destructor stores the vftable itself.
+    let mut inlined: BTreeMap<u64, usize> = BTreeMap::new();
     for (i, (_, c)) in list.iter().enumerate() {
         for t in c.tables.iter().filter(|t| t.offset == 0) {
             for &g in &t.vt.slots {
-                let calls = walked_slots
-                    .entry(g)
-                    .or_insert_with(|| walker.walk(g, &owner_of, MAX_DTOR_INSNS).calls);
-                called_by_slots[i].extend(calls.iter().copied());
+                if !walked_slots.contains_key(&g) {
+                    let walk = walker.walk(g, &owner_of, MAX_DTOR_INSNS);
+                    if let Some(owner) = inlined_deleting_dtor(&walk, &owner_of, &vtables)
+                        && tests_delete_flag(&code, g, is64)
+                    {
+                        inlined.insert(g, owner);
+                    }
+                    walked_slots.insert(g, walk.calls);
+                }
+                called_by_slots[i].extend(walked_slots[&g].iter().copied());
             }
         }
     }
+    let mut named: HashSet<u64> = HashSet::new();
 
     for entry in candidates {
         let walk = walker.walk(entry, &owner_of, MAX_INSNS);
@@ -173,6 +181,7 @@ pub fn run(ctx: &AnalysisCtx) -> AnalysisOutput {
             deleting.dedup();
             if let [g] = deleting[..]
                 && !named_already(ctx, g)
+                && named.insert(g)
             {
                 out.symbols.push(SymFact {
                     addr: g,
@@ -195,7 +204,59 @@ pub fn run(ctx: &AnalysisCtx) -> AnalysisOutput {
             out.cpp_vtables.this_types.push((entry, class));
         }
     }
+    for (g, c) in inlined {
+        if !named.contains(&g) && !named_already(ctx, g) {
+            out.symbols.push(SymFact {
+                addr: g,
+                name: dtor_name(&vtables[c].name),
+                kind: SymKind::Function,
+            });
+        }
+    }
     out
+}
+
+/// The class a vftable slot is the deleting destructor of when it inlined the
+/// destructor: it stores that class's offset-0 vftable through `this` before
+/// any call (each other store its own or a base's, as a destructor stores the
+/// vftables of its bases on the way down) and does not return `this`.
+fn inlined_deleting_dtor(
+    walk: &super::kuna_itaniumctors::Walk,
+    owner_of: &HashMap<u64, (usize, bool)>,
+    vtables: &[ClassVtables],
+) -> Option<usize> {
+    let first = walk.stores.first()?;
+    if first.after_call || walk.returns_this {
+        return None;
+    }
+    let c = owning_class(&pairs(walk.stores.iter()), owner_of, vtables)?;
+    (owner_of.get(&first.vptr) == Some(&(c, true))).then_some(c)
+}
+
+/// How far into a slot the test of the deleting destructor's flags may sit.
+const MAX_FLAG_TEST_DISTANCE: usize = 0x100;
+
+/// Whether the function at `entry` tests bit 0 of its flags argument, the
+/// `delete this` request of an MSVC scalar or vector deleting destructor:
+/// `test byte ptr [ebp+8], 1` or `[esp+n]` on x86, `test dl, 1` (or the
+/// `bl`/`dil` copy of it) or a frame copy on x64.
+fn tests_delete_flag(code: &[(u64, &[u8])], entry: u64, is64: bool) -> bool {
+    let Some(bytes) = code.iter().find_map(|&(base, data)| {
+        let off = usize::try_from(entry.checked_sub(base)?).ok()?;
+        let end = off.checked_add(MAX_FLAG_TEST_DISTANCE)?.min(data.len());
+        data.get(off..end)
+    }) else {
+        return false;
+    };
+    let windows = |n: usize| bytes.windows(n);
+    let stack = windows(5).any(|w| w[0] == 0xf6 && w[1] == 0x44 && w[2] == 0x24 && w[4] == 0x01);
+    if is64 {
+        stack
+            || windows(3).any(|w| w == [0xf6, 0xc2, 0x01] || w == [0xf6, 0xc3, 0x01])
+            || windows(4).any(|w| w == [0x40, 0xf6, 0xc7, 0x01])
+    } else {
+        stack || windows(4).any(|w| w == [0xf6, 0x45, 0x08, 0x01])
+    }
 }
 
 /// Every executable section's address and bytes.
@@ -274,6 +335,24 @@ fn vftable_references(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The `delete this` flag test of an MSVC deleting destructor, found from
+    /// the slot's entry; a function without one is not taken for one.
+    #[test]
+    fn deleting_destructor_flag_tests() {
+        // mov dword ptr [esi], vftable; ... test byte ptr [ebp+8], 1; je
+        let x86 = [
+            0x55, 0x8b, 0xec, 0x56, 0x8b, 0xf1, 0xc7, 0x06, 0xa4, 0x2d, 0x02, 0x10, 0xf6, 0x45,
+            0x08, 0x01, 0x74, 0x09,
+        ];
+        assert!(tests_delete_flag(&[(0x1000, &x86)], 0x1000, false));
+        assert!(!tests_delete_flag(&[(0x1000, &x86[..12])], 0x1000, false));
+        // mov ebx, edx; ... test bl, 1
+        let x64 = [0x8b, 0xda, 0x48, 0x8b, 0xf9, 0xf6, 0xc3, 0x01, 0x74, 0x0a];
+        assert!(tests_delete_flag(&[(0x2000, &x64)], 0x2000, true));
+        assert!(!tests_delete_flag(&[(0x2000, &x64)], 0x2000, false));
+        assert!(!tests_delete_flag(&[(0x2000, &x64)], 0x3000, true));
+    }
 
     #[test]
     fn call_targets_follow_rel32() {

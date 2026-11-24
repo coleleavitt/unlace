@@ -127,6 +127,87 @@ pub(super) fn commit(
     Ok(renamed)
 }
 
+/// (kuna `nullsubs`) Whether the function at `vma` is empty: after at most one
+/// instruction that emits no p-code (`endbr64`, `bti`), its first instruction is
+/// a return that does nothing else. A return's own stack and link-register work
+/// (`LOAD`, `INT_ADD`, `INT_AND`, `COPY` into the program counter) is allowed,
+/// except on a delay-slot target (MIPS, SPARC), where those ops would be the slot's
+/// instruction and the return must be alone.
+fn is_nullsub(arch: &Architecture, code_space: &Rc<AddrSpace>, vma: u64) -> bool {
+    use unlace_num::opcodes::OpCode;
+    let delay_slots = ["MIPS:", "sparc:"]
+        .iter()
+        .any(|p| arch.archid.starts_with(p));
+    let mut at = vma;
+    for _ in 0..2 {
+        let Ok(insn) = unlace_analysis::listing::decode::decode_one(
+            arch.translate(),
+            at,
+            code_space,
+            false,
+            false,
+        ) else {
+            return false;
+        };
+        if insn.ops.is_empty() {
+            at = at.wrapping_add(insn.len as u64);
+            continue;
+        }
+        let Some((last, rest)) = insn.ops.split_last() else {
+            return false;
+        };
+        return last.opcode == OpCode::CPUI_RETURN
+            && (if delay_slots {
+                rest.is_empty()
+            } else {
+                rest.iter().all(|op| {
+                    matches!(
+                        op.opcode,
+                        OpCode::CPUI_LOAD
+                            | OpCode::CPUI_INT_ADD
+                            | OpCode::CPUI_INT_AND
+                            | OpCode::CPUI_COPY
+                    )
+                })
+            });
+    }
+    false
+}
+
+/// (kuna `nullsubs`) Rename every discovered entry still named by a placeholder
+/// whose body is a bare return (see [`is_nullsub`]) `nullsub_<addr>`, keeping the
+/// placeholder's address spelling (`sub_401000` becomes `nullsub_401000`), IDA's
+/// `AF_NULLSUB`. A name already in use is left alone.
+pub(super) fn name_nullsubs(
+    prog: &mut ConsoleProgram,
+    code_space: &Rc<AddrSpace>,
+    entries: &[u64],
+) -> KunaResult<()> {
+    let mut names: Vec<(SymbolId, Address, String)> = Vec::new();
+    for &vma in entries {
+        let addr = Address::new(Rc::clone(code_space), vma);
+        let Some((sid, _)) = prog.arch().symboltab.find_function_across_scopes(&addr) else {
+            continue;
+        };
+        let current = prog.arch().symboltab.symbol(sid).get_name().to_string();
+        if !is_generic_placeholder_name(&current) || !is_nullsub(prog.arch(), code_space, vma) {
+            continue;
+        }
+        let Some((_, digits)) = current.split_once('_') else {
+            continue;
+        };
+        names.push((sid, addr, format!("nullsub_{digits}")));
+    }
+    for (sid, addr, name) in names {
+        if name_taken(prog, &name) {
+            continue;
+        }
+        prog.arch_mut().symboltab.rename_symbol(sid, &name)?;
+        prog.register_symbol(&name, addr);
+    }
+    Ok(())
+}
+
 /// Every `renamed` thunk of `jumps` takes what its chain's target carries for a
 /// call to it: the parked prototype and the bound prototype model (each only where the
 /// thunk has none of its own), and the target's Swift `self` classification. A

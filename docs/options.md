@@ -769,6 +769,9 @@ Three tiers:
 | many sub_<addr> functions that end in _Unwind_Resume() | [`ehcold`](#ehcold----on--off-default-on) |
 | a stripped c++ binary's function list is full of cleanup fragments from .text.unlikely | [`ehcold`](#ehcold----on--off-default-on) |
 | a function that starts by reading an undefined rbx and frees buffers before _Unwind_Resume | [`ehcold`](#ehcold----on--off-default-on) |
+| many sub_<addr> functions that are a single ud2 at the start of .text | [`functails`](#functails----on--off-default-off) |
+| a function jumps to sub_<addr> for its error path instead of showing it | [`functails`](#functails----on--off-default-off) |
+| a gcc .cold part is listed as its own function | [`functails`](#functails----on--off-default-off) |
 | an mfc window class's message handlers are missing from the function list | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
 | a function in an mfc image spans several handlers that a message map names | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
 | IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
@@ -1348,6 +1351,8 @@ Three tiers:
 | avx-512 arithmetic prints as vaddps_avx512f | [`avxintrinsics`](#avxintrinsics----on--off-default-on) |
 | a global one function accessed whole prints as unrelated dat_ names in another | [`mapglobalsyms`](#mapglobalsyms----on--off-default-off) |
 | later functions do not see the DAT_ symbol an earlier decompile created, unlike upstream decomp_dbg sessions | [`mapglobalsyms`](#mapglobalsyms----on--off-default-off) |
+| calls to empty functions read as sub_<addr>() like any other | [`nullsubs`](#nullsubs----on--off-default-off) |
+| a virtual table slot points at a function that only returns | [`nullsubs`](#nullsubs----on--off-default-off) |
 | an untyped MIPS32 big-endian producer loses its low return word despite a declared 64-bit consumer | [`callwide`](#callwide----on--off-default-off) |
 | producer and caller disagree about a complete big-endian eight-byte integer return | [`callwide`](#callwide----on--off-default-off) |
 | a long long return on a big-endian 32-bit target prints CONCAT44 with the low word first | [`bejoin`](#bejoin----off--evidence--callers--on-default-callers) |
@@ -3141,6 +3146,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · ida95-22-ehcold
 - **Example:** `--option ehcold off`
 
+### `functails` -- on | off, default `off`
+
+- **Symptoms:** many sub_<addr> functions that are a single ud2 at the start of .text; a function jumps to sub_<addr> for its error path instead of showing it; a gcc .cold part is listed as its own function.
+- **What it does:** Keep every single-owner .cold part out of the function list, as IDA keeps a function tail (AF_FTAIL, append_func_tail). GCC's hot/cold split moves a function's unlikely blocks (ud2 traps, error paths, the cleanups ehcold already takes) into .text.unlikely, each with its own FDE; the FDE oracle listed each as a function, so each was listed and decompiled on its own beside the owner that already decodes it. With the option on, an FDE body with no function symbol at its start, targeted by no direct call, entered by direct jmp/jcc rel32 only from ONE other FDE body (its owner), laid out before that owner and starting off the 16-byte function alignment contributes no entries: the commit drops every discovered entry inside it, its start included. ehcold is the landing-pad case of the same rule. x86/x86-64 ELF only.
+- **When to flip:** Off by default. Turn it on for a gcc -O2 x86-64 ELF whose function list carries many small sub_<addr> fragments at the start of .text that only one function jumps to (a lone ud2, an error call), so they stop crowding the function list. On IDA 9.5's own databases of its loaders, the IDA tail chunks kuna lists as functions drop from 9/51/4/18 to 2/12/0/5 (pe/elf/coff/dex.so), and one function IDA keeps is lost (pe.so 0x62fe). The owners print the same C: their flow already decoded the parts. Leave it off to list and decompile the cold parts on their own.
+- **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · ida-gap-kernel-autoanalysis-1
+- **Example:** `--option functails on`
+
 ### `mfcmsgmap` -- on | off, default `on`
 
 - **Symptoms:** an mfc window class's message handlers are missing from the function list; a function in an mfc image spans several handlers that a message map names; IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour.
@@ -4344,6 +4357,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Off by default: the output of a function then depends on which functions were decompiled before it in the same session. Turn on to get upstream's session behaviour: a global a first function read as 8 bytes stays one 8-byte object, so a later function's 4-byte access to its upper half prints as a piece of it (dat_x._4_4_) instead of a separate dat_<addr+4>.
 - **Where / provenance:** P9/naming-policy · ghidra · presentation-default · kuna-mapglobals-dat-symbols
 - **Example:** `option mapglobalsyms on`
+
+### `nullsubs` -- on | off, default `off`
+
+- **Symptoms:** calls to empty functions read as sub_<addr>() like any other; a virtual table slot points at a function that only returns.
+- **What it does:** Name a placeholder function whose body is a bare return nullsub_<addr>, IDA's AF_NULLSUB. After at most one instruction that emits no p-code (endbr64, bti), the first instruction must be a return doing nothing but its own stack and link-register work (on MIPS and SPARC, where those ops would be a delay slot's, the return alone). The placeholder's address spelling is kept (sub_401000 becomes nullsub_401000); a function with a real name, or whose new name is taken, is left alone.
+- **When to flip:** Off by default. Turn it on to tell empty callbacks, stubbed-out hooks and no-op virtual functions apart from code at a glance: calls to them read nullsub_<addr>(), as in IDA: on IDA 9.5's own databases of its pe/elf/coff/dex loaders it names the same 8/41/2/4 functions IDA names nullsub_.
+- **Where / provenance:** P1/code-data-partition · kuna · presentation-default · ida-gap-kernel-autoanalysis-5
+- **Example:** `--option nullsubs on`
 
 ### `callwide` -- on | off, default `off`
 

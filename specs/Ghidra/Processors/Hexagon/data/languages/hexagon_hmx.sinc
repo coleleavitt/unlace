@@ -1,0 +1,88 @@
+# Qualcomm Hexagon HMX (matrix extension), FP16 instruction set (V68/V73, V81 HMX PRM).
+# Encodings from the Hexagon HMX PRM 80-N2040-62 and LLVM HexagonDepInstrInfo.td (M8_*).
+# HMX state (accumulators, convert state, bias sets, activation/weight buffers in VTCM) is
+# not modelled as registers: each instruction passes its decoded address and control fields
+# to a named pcodeop. Activation and weight instructions share one packet and together form
+# the multiply.
+
+define pcodeop hmx_activation_hf;
+define pcodeop hmx_activation_hf_deep;
+define pcodeop hmx_activation_hf_single;
+define pcodeop hmx_weight_hf;
+define pcodeop hmx_weight_hf_deep;
+define pcodeop hmx_bias_load;
+define pcodeop hmx_bias_store;
+define pcodeop hmx_cvt_hf_acc;
+define pcodeop hmx_cvt_store;
+define pcodeop hmx_clracc_hf;
+
+# activation.hf = mxmem(Rs32,Rt32)[:deep|:single]
+#    1  0  0  1  0  0  1  0  0  0  0  s  s  s  s  s  P  P  0  t  t  t  t  t  1  1  1  0  0  1  0  0
+
+:activation.hf "= mxmem("^rs5^","^rt5^")" EndPacket	is iclass=9 & op2127=0x10 & op13=0 & op0007=0xe4 & rs5 & rt5 & $(END_PACKET) {
+	hmx_activation_hf(rs5 & 0xfffff800, rs5 & 0x7ff, rt5);
+	build EndPacket;
+}
+
+:activation.hf "= mxmem("^rs5^","^rt5^"):deep" EndPacket	is iclass=9 & op2127=0x10 & op13=0 & op0007=0xe2 & rs5 & rt5 & $(END_PACKET) {
+	hmx_activation_hf_deep(rs5 & 0xfffff800, rs5 & 0x7ff, rt5);
+	build EndPacket;
+}
+
+:activation.hf "= mxmem("^rs5^","^rt5^"):single" EndPacket	is iclass=9 & op2127=0x10 & op13=0 & op0007=0xf8 & rs5 & rt5 & $(END_PACKET) {
+	hmx_activation_hf_single(rs5 & 0xfffff800, rs5 & 0x7ff, rt5);
+	build EndPacket;
+}
+
+# weight.hf = mxmem(Rs32,Rt32)[:deep]
+#    1  0  0  1  0  0  1  0  0  0  0  s  s  s  s  s  P  P  1  t  t  t  t  t  1  1  1  0  1  1  1  1
+
+:weight.hf "= mxmem("^rs5^","^rt5^")" EndPacket	is iclass=9 & op2127=0x10 & op13=1 & op0007=0xef & rs5 & rt5 & $(END_PACKET) {
+	hmx_weight_hf(rs5 & 0xffffff80, (rs5 >> 5) & 1, rt5 & 0xffffff80);
+	build EndPacket;
+}
+
+:weight.hf "= mxmem("^rs5^","^rt5^"):deep" EndPacket	is iclass=9 & op2127=0x10 & op13=1 & op0007=0xf4 & rs5 & rt5 & $(END_PACKET) {
+	hmx_weight_hf_deep(rs5 & 0xffffff80, (rs5 >> 5) & 1, rt5 & 0xffffff80);
+	build EndPacket;
+}
+
+# bias = mxmem2(Rs32)
+#    1  0  0  1  0  0  1  0  0  0  0  s  s  s  s  s  P  P  0  0  0  0  1  1  1  1  1  1  1  1  1  0
+
+:bias "= mxmem2("^rs5^")" EndPacket	is iclass=9 & op2127=0x10 & op0013=0x3fe & rs5 & $(END_PACKET) {
+	hmx_bias_load(rs5 & 0xffffff00, rs5 & 3);
+	build EndPacket;
+}
+
+# mxmem2(Rs32) = bias
+#    1  0  1  0  0  1  1  0  1  1  1  s  s  s  s  s  P  P  0  0  0  0  0  0  0  0  0  1  0  1  1  0
+
+:mxmem2 "("^rs5^") = bias" EndPacket	is iclass=10 & op2127=0x37 & op0013=0x16 & rs5 & $(END_PACKET) {
+	hmx_bias_store(rs5 & 0xffffff00, rs5 & 3);
+	build EndPacket;
+}
+
+# cvt.hf = acc(Rs32)
+#    1  0  1  0  0  1  1  0  1  1  1  s  s  s  s  s  P  P  0  1  1  0  1  0  0  0  0  1  0  0  0  0
+
+:cvt.hf "= acc("^rs5^")" EndPacket	is iclass=10 & op2127=0x37 & op0013=0x1a10 & rs5 & $(END_PACKET) {
+	hmx_cvt_hf_acc((rs5 >> 12) & 3, rs5 & 0xfff);
+	build EndPacket;
+}
+
+# mxmem(Rs32,Rt32) = cvt
+#    1  0  1  0  0  1  1  0  1  1  1  s  s  s  s  s  P  P  0  t  t  t  t  t  0  0  0  1  1  0  0  0
+
+:mxmem "("^rs5^","^rt5^") = cvt" EndPacket	is iclass=10 & op2127=0x37 & op13=0 & op0007=0x18 & rs5 & rt5 & $(END_PACKET) {
+	hmx_cvt_store(rs5 & 0xfffff800, rt5);
+	build EndPacket;
+}
+
+# mxclracc.hf
+#    1  0  1  0  0  1  1  0  1  1  1  0  0  0  0  0  P  P  0  0  0  0  0  0  0  0  0  1  0  0  1  1
+
+:mxclracc.hf EndPacket	is iclass=10 & op2127=0x37 & op1620=0 & op0013=0x13 & $(END_PACKET) {
+	hmx_clracc_hf();
+	build EndPacket;
+}

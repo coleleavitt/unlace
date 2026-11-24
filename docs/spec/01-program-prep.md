@@ -9482,7 +9482,7 @@ including `0x140028d1c` in `CrackVM-V2.exe`, which was four bytes into the
 `MOV RAX,[RSP+0x28]` that opens the function the vtable slot names.
 
 (kuna) **The load configuration lists address-taken functions outright**
-(`decompiler/crates/kuna-analysis/src/loader/kuna_peloadconfig.rs
+(`crates/unlace-analysis/src/loader/kuna_peloadconfig.rs
 (function_starts)`). `IMAGE_LOAD_CONFIG_DIRECTORY` (data directory 10) carries
 two tables of function starts. An image linked with `/guard:cf` has the Control
 Flow Guard function table, `GuardCFFunctionTable`/`GuardCFFunctionCount`: one

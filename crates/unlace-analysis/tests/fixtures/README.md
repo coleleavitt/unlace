@@ -2614,6 +2614,12 @@ for t in x86_64:x86_64-pc-windows-msvc i386:i686-pc-windows-msvc; do
 done
 ```
 
+`fpo_i386.exe` + `fpo_i386.pdb` (from `fpo_i386.c`, recipe in its header) is an
+i386 `/O2 /Oy` build: `sum_buf` omits the frame pointer (`S_FRAMEPROC` names
+`VFRAME` for locals and parameters; `n`, `k` at `$T0+4`, `$T0+8`; `buf` spilled in
+eight pieces at descending addresses), `aligned` realigns its frame (locals off
+`$T0`, parameters off `EBP`).
+
 `pdb_bitfields.pdb` (from `pdb_bitfields.cpp`, recipe in its header; only the `.pdb`
 is vendored) holds one struct of bitfields: TPI `0x1002` forward-references `Flags`,
 `0x1006` is its field list (`a:3`, `b:5` in an `unsigned` at 0, `c:9` in an

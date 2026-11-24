@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="S1C88"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="s1c88.sla"
+            processorspec="s1c88.pspec"
+            id="S1C88:LE:16:default">
+    <description>Seiko Epson S1C88 8-bit core (MODEL0/1 flat 64 KB addressing; Pokemon mini CPU)</description>
+    <compiler name="default" spec="s1c88.cspec" id="default"/>
+  </language>
+</language_definitions>

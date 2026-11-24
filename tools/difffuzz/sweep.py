@@ -64,10 +64,7 @@ def available(arch, oracle, objdump):
         if not shutil.which(objdump):
             return f"no {objdump}"
         arch = "riscv64"
-    try:
-        import arches
-    except ImportError as e:
-        return f"cannot import arches ({e})"
+    import arches
     if arch not in arches.ARCHES:
         return "unknown arch"
     if oracle in ("qemu", "native"):
@@ -134,6 +131,11 @@ def main():
     ap.add_argument("--known", default=str(KNOWN), help="accepted finding classes per configuration")
     args = ap.parse_args()
     args.known = json.loads(Path(args.known).read_text()) if args.known and Path(args.known).exists() else {}
+    try:
+        import arches  # noqa: F401  (needs capstone and unicorn: run with the difffuzz venv's python)
+    except ImportError as e:
+        print(f"sweep: cannot import tools/difffuzz/arches.py ({e}); run it with the difffuzz venv's python", file=sys.stderr)
+        sys.exit(2)
     configs = [c for c in CONFIGS if not args.only or re.search(args.only, f"{c[0]}/{c[1]}")]
     with tempfile.TemporaryDirectory() as tmp, concurrent.futures.ThreadPoolExecutor(args.jobs) as ex:
         rows = list(ex.map(lambda c: run(c[0], c[1], args, tmp), configs))

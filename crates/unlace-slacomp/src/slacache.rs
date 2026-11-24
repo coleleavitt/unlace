@@ -23,21 +23,12 @@
 //!   as new as its `.slaspec` and every include is used as is (a `SLEIGHHOME` or
 //!   `--sleighpath` directory of prebuilt images, or an in-tree build). A `.sla` with no
 //!   `.slaspec` beside it is always used as is.
-//! - **Uncompressed images.** A `.sla` is a zlib stream, and inflating it is a fixed cost of
-//!   every process that loads the language. [`read_image`] keeps beside the cache an
-//!   uncompressed copy of each image it reads (`<cache>/<lang>-<id>.slr`, the same packed
-//!   payload behind a `slu` header, `unlace_sleigh::slaformat::raw_sla_image`), named by a
-//!   hash of the compiler fingerprint and the `.sla`'s canonical path, size and modification
-//!   time, and returns that copy, so only the first process to read an image inflates it. The
-//!   decoder takes either form and decodes the same elements from both. `UNLACE_SLA_RAW=0`
-//!   turns the copy off (the compressed `.sla` is read as before), for A/B measurement.
 
 use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
 use crate::slgh_compile::SleighCompile;
@@ -295,62 +286,6 @@ fn resolve(sla: &Path) -> io::Result<PathBuf> {
 /// `.sla` path.
 pub fn read_sla(sla: impl AsRef<Path>) -> io::Result<Vec<u8>> {
     fs::read(sla_path(sla)?)
-}
-
-/// The environment switch for uncompressed images: `0` makes [`read_image`] read the
-/// compressed `.sla` (see the module docs).
-pub const RAW_IMAGE_ENV: &str = "UNLACE_SLA_RAW";
-
-/// Does [`read_image`] use uncompressed images (`$UNLACE_SLA_RAW` is not `0`)?
-pub fn raw_images_enabled() -> bool {
-    std::env::var_os(RAW_IMAGE_ENV).is_none_or(|v| v != "0")
-}
-
-/// The image to decode for an already-resolved `.sla` path (from [`sla_path`] or a
-/// `build_spec_file`): its uncompressed copy when [`raw_images_enabled`] (made on first use),
-/// else, or when no copy can be made, the file's own bytes. Both decode identically.
-pub fn read_image(sla: impl AsRef<Path>) -> io::Result<Vec<u8>> {
-    let sla = sla.as_ref();
-    if raw_images_enabled()
-        && let Some(image) = raw_image_in(&cache_dir(), sla)
-    {
-        return Ok(image);
-    }
-    fs::read(sla)
-}
-
-/// The uncompressed copy of `sla` in `dir`, written there on first use (best effort);
-/// `None` when `sla` cannot be read or is not a valid compressed image.
-pub fn raw_image_in(dir: &Path, sla: &Path) -> Option<Vec<u8>> {
-    static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
-    let (len, nanos) = signature(sla)?;
-    let stem = sla.file_stem()?.to_string_lossy().into_owned();
-    let full = fs::canonicalize(sla).unwrap_or_else(|_| sla.to_path_buf());
-    let id = fnv(FNV_OFFSET, COMPILER_FINGERPRINT.as_bytes());
-    let id = fnv(id, full.to_string_lossy().as_bytes());
-    let id = fnv(id, format!("\t{len}\t{nanos}").as_bytes());
-    let raw = dir.join(format!("{stem}-{id:016x}.slr"));
-    if let Ok(image) = fs::read(&raw)
-        && unlace_sleigh::slaformat::is_sla_raw_format(&image).is_some()
-    {
-        return Some(image);
-    }
-    let packed = fs::read(sla).ok()?;
-    let image = unlace_sleigh::slaformat::raw_sla_image(&packed).ok()?;
-    if fs::create_dir_all(dir).is_ok() {
-        let temp = dir.join(format!(
-            ".{stem}.{}.{}.slr.tmp",
-            std::process::id(),
-            TEMP_SEQ.fetch_add(1, Ordering::Relaxed)
-        ));
-        if fs::write(&temp, &image)
-            .and_then(|()| fs::rename(&temp, &raw))
-            .is_err()
-        {
-            let _ = fs::remove_file(&temp);
-        }
-    }
-    Some(image)
 }
 
 /// Every `.slaspec` under `dir`, recursively, sorted.

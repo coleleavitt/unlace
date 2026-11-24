@@ -5009,11 +5009,13 @@ argument when the op has no result. The table covers:
 The element-pair conversions are named from the element pair, as IDA 9.5's
 avxlifter names them (`vpmovsxbw` → `_mm256_cvtepi8_epi16`, `vpmovzxdq` →
 `_mm256_cvtepu32_epi64`; the width comes from the result). The truncating and
-saturating narrowings are named from the AVX-512F and AVX-512BW forms only
+saturating narrowings take their width from the source operand, not the result:
+the AVX-512F and AVX-512BW forms always read a 512-bit source
 (`vpmovdb_avx512f` → `_mm512_cvtepi32_epi8`, `vpmovusdw` →
-`_mm512_cvtusepi32_epi16`), because those forms always read a 512-bit source;
-the VL forms read a 128- or 256-bit source under the same name and stay as
-SLEIGH prints them. The float conversions (`vcvt*`) are not named yet: their
+`_mm512_cvtusepi32_epi16`), and the VL forms read a 128- or 256-bit source under
+one SLEIGH name, so the printer passes the widest input's size (`intrinsic_sized`)
+and they print as `_mm_cvtepi32_epi8` (xmm source) or `_mm256_cvtepi32_epi8`
+(ymm source). The VL mask forms take the same prefix. The float conversions (`vcvt*`) are not named yet: their
 source and result differ in element kind, and the kind table gives one kind per
 user-op, so a name would mistype one operand.
 

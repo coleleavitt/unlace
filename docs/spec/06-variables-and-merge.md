@@ -1053,10 +1053,16 @@ non-constant value returns, through the folded copies and casts; a function
 whose returns name two different locals names neither. A counter outranks
 every library kind but a library call's result (a counter passed as `read`'s
 `nbytes` stays `i`; `len = strlen(s)` counted down stays `len`), and `result`
-is the weakest evidence. Evidence an option prints
+ranks below a counter, a loop bound and an array base rank below it, and the local's type is the weakest evidence of all. Evidence an option prints
 is preferred to library evidence that is decided only so a directive can name
 a local, so with `libcnames` off a returned `open` descriptor still prints
-`result`. The option is off by default because it renames locals that other
+`result`. A loop bound and an array base (`contextnames`, the same option) are evidence
+too: the local an integer compare pits against a counter, through the same folded
+copies, casts, extensions and integer arithmetic, is named `len` (`i < len`, `i != n`),
+and the pointer local a `LOAD` or `STORE` address adds a counter-derived index to,
+through a `PTRADD` or an `INT_ADD`, is named `buf` (`buf[i]`). Neither is a loop
+counter, so neither moves a counter's name; a bound or base that is also a counter,
+or a local that is not a pointer, names nothing. The option is off by default because it renames locals that other
 features' stage assertions and CLI tests spell as `vN`.
 
 **A local is named from the fields and the type it meets (`flownames`,

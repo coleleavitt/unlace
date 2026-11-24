@@ -1,7 +1,7 @@
 //! (unlace `retroimage`) Loaders for executable and object containers the
 //! `object` crate does not read: PlayStation PS-X EXE, Nintendo 64 ROM,
 //! BSD/SunOS/Linux a.out, AmigaDOS hunk load files, classic Mac OS PEF, the
-//! Win16/OS/2 1.x New Executable and OMF objects and libraries.
+//! Win16/OS/2 1.x New Executable, OMF objects and libraries, and Android boot images.
 //!
 //! Each parser turns its header into one [`RetroImage`]: a relocated,
 //! contiguous memory module at a base address, the language that decodes it,
@@ -17,6 +17,7 @@ use object::SectionKind;
 use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_sleigh::loadimage::section_flags;
 
+pub mod androidboot;
 pub mod aout;
 pub mod hunk;
 pub mod n64;
@@ -99,6 +100,7 @@ pub fn is_retro_image(prefix: &[u8]) -> bool {
         || aout::probe(prefix)
         || ne::probe(prefix)
         || omf::probe(prefix)
+        || androidboot::probe(prefix)
 }
 
 /// Parse `bytes` as the container [`is_retro_image`] recognized.
@@ -117,6 +119,8 @@ pub fn parse(filename: &str, bytes: &[u8]) -> UnlaceResult<RetroImage> {
         ne::parse(filename, bytes)
     } else if omf::probe(bytes) {
         omf::parse(filename, bytes)
+    } else if androidboot::probe(bytes) {
+        androidboot::parse(filename, bytes)
     } else {
         Err(UnlaceError::lowlevel(format!(
             "File: {filename} : not a recognized executable container"
@@ -139,6 +143,8 @@ pub fn retro_language_ids() -> Vec<&'static str> {
         ne::LANGUAGE,
         omf::LANGUAGE16,
         omf::LANGUAGE32,
+        androidboot::LANGUAGE_ARM64,
+        androidboot::LANGUAGE_ARM32,
     ];
     ids.extend(aout::MACHINES.iter().map(|machine| machine.language));
     ids.sort_unstable();

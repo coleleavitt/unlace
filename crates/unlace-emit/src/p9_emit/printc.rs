@@ -9396,7 +9396,13 @@ impl PrintC {
                     .and_then(|v| fd.vbank().get(v))
                     .map(|v| v.get_size())
                     .unwrap_or(0);
-                if let Some((intr, args)) = crate::avxintrin::intrinsic(&nm, size) {
+                let src = (nin >= 2)
+                    .then(|| fd.obank().get(op).and_then(|o| o.get_in(nin - 1)))
+                    .flatten()
+                    .and_then(|v| fd.vbank().get(v))
+                    .map(|v| v.get_size())
+                    .unwrap_or(0);
+                if let Some((intr, args)) = crate::avxintrin::intrinsic_sized(&nm, size, src) {
                     if args.len() == order.len() {
                         nm = intr;
                         order = args.iter().map(|&a| a as int4 + 1).collect();

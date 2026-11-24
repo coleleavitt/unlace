@@ -101,6 +101,10 @@ The RISC-V entry includes the Zcmp/Zcmt constructors (`riscv.zc.sinc`), the
 with `slacomp`, which reproduces the previous RISC-V digest on the unmodified
 sources.
 
+The TriCore entry was regenerated with `slacomp` for the PSW.V and SHA carry fix (#563).
+`slacomp` reproduces the old digest (`d7aa54fe`) on the sources before the TC1.8 language
+(96dde146df), which moved `tricore.sinc` lines without updating this entry.
+
 `xml_ops.xml` is the same pinned C++ compiler's `-y` output for
 `snips/xml_ops.slaspec`. The CLI test compares XML output byte-for-byte in both
 single-file and recursive modes, including the `BUILD` and `INT_ADD` opcode

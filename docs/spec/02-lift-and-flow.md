@@ -4257,6 +4257,22 @@ each of these was a bad instruction. Exercised by
 images whose C is checked (`div64` is a 64-bit division of the register
 pairs, `shuffle` with 0x1b is `bswap`, `itodf` a `(double)` cast). Gaps
 are listed in `specs/Ghidra/Processors/tricore/README.md`.
+
+### TriCore overflow and carry flags (#563)
+
+The 32-bit integer arithmetic of every TriCore language sets PSW.V from the exact
+result: each constructor computes the result in 64 bits (sign-extended operands,
+zero-extended for the `.u` forms) and `vflags`/`vflagsu` set V when it does not fit
+in 32 bits, with AV from bits 31 and 30 of the stored result. Before, V was the
+result's sign bit. The saturating forms clamp that exact value (`ssov32`,
+`suov32a`, `suov32s`); `msubs`/`msubs.u` multiply (they subtracted), `csubn`
+subtracts when D[d] is zero, `cadd`/`caddn`/`csub`/`csubn` leave the flags alone when
+their condition is false, `subc` takes its carry from D[a] + ~D[b] + C, and the
+`madd.q`/`msub.q`/`mul.q` 32x16 and 32x32 products are no longer truncated to 32
+bits before the shift. `sha` sets C to the OR of the bits shifted out (the top
+`count` bits left, the low `-count` bits right); `shas` leaves C alone. The 64-bit
+(E register) multiply-accumulate forms set V from the add's signed overflow (unsigned
+carry for `madds.u`). Checked with `tools/difffuzz` against Unicorn.
 ### AArch64 SVE2 and SVE2.1 (#98)
 
 `specs/Ghidra/Processors/AARCH64/data/languages/AARCH64_sve2.sinc` decodes

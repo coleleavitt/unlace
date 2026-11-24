@@ -269,6 +269,10 @@ specs/Ghidra/Processors/Z8 vendors the Zilog Z8 SLEIGH module Z8 of
 Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
 License (its license files are in that directory).
 
+specs/Ghidra/Processors/ST9 vendors the STMicro ST9 / ST9+ SLEIGH module ST9 of
+Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
+License (its license files are in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

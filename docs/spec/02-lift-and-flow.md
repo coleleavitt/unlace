@@ -4499,6 +4499,17 @@ shifts), SWAP, TSTNULL, MUL/MULU HL,DE and the ALTS/ALTSD prefixes (ALTS sources
 modelled). Every single-instruction line of z88dk's r4k and r6k tables decodes to the
 same instruction. Exercised by the `rabbit4000` row of `unlace-cli/tests/processors.toml`.
 
+### Toshiba TLCS-870/C (#98)
+
+`TLCS870C:LE:16:default` (`specs/Ghidra/Processors/TLCS870/data/languages/tlcs870c.slaspec`)
+is the TMP86 core: the TLCS-870 mnemonics with a new encoding, seven 16-bit registers and the
+SF/VF flags. Instructions are an optional prefix (source memory E0-E7/D4-D7/4F, destination
+memory F0-F7/54-57, register E8-EF) and a second opcode byte; each prefix group is its own
+subtable so the decoder resolves the second byte. Encodings follow Toshiba's TLCS-870/C
+instruction-set excerpt and were checked against the 4,212 encodings of the AS assembler's
+TLCS-870/C test (two AS deviations from the manual are corrected; see the README). Exercised
+by the `tlcs870c` row of `unlace-cli/tests/processors.toml`.
+
 ### IBM ROMP (#98)
 
 `specs/Ghidra/Processors/ROMP` is a SLEIGH module written for unlace from the IBM
@@ -4687,6 +4698,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `MIPS` (MIPS-3D, SmartMIPS) | MIPS64 with MIPS-3D, MIPS32 with SmartMIPS (pre-R6 languages) | existing `MIPS:*:64:*` and `MIPS:*:32:*` pre-R6 languages | binutils MIPS opcode table (MIPS-3D/SmartMIPS rows), MIPS-3D (MD00099) and SmartMIPS ASE specifications; checked against `mips-elf-objdump` 2.43.1 | `unlace-cli/tests/mips_ase.rs` |
 | `NFP` | Netronome NFP-6xxx flow-processor microengine (ME v2.8, 8 contexts) | `NFP:LE:32:ME28` | binutils `opcodes/nfp-dis.c` and `include/opcode/nfp.h` field layouts; checked against binutils objdump (`elf64-nfp`) | `unlace-cli/tests/nfp_raw.rs` |
 | `TLCS870` | Toshiba TLCS-870 (TMP87xx) | `TLCS870:LE:16:default` | Toshiba TLCS-870 data books; MAME tlcs870 (BSD-3) | `unlace-cli/tests/processors.toml` (`tlcs870`) |
+| `TLCS870` (870/C) | Toshiba TLCS-870/C (TMP86xx) | `TLCS870C:LE:16:default` | Toshiba TLCS-870/C Series Instruction Set (INST-1..23, 1999); encodings checked against the AS assembler's TLCS-870/C test table | `unlace-cli/tests/processors.toml` (`tlcs870c`) |
 | `MMIX` | Knuth MMIX | `MMIX:BE:64:default` | MMIXware (Knuth), binutils `mmix` opcode table, GCC `config/mmix` ABI | `unlace-cli/tests/processors.toml` (`mmix`) |
 | `Z8000` | Zilog Z8002 (non-segmented), Z8001 (segmented) | `Z8002:BE:16:default`, `Z8001:BE:32:segmented` | Zilog Z8000 CPU Technical Manual + PLZ/ASM manual; MAME z8000 (BSD-3) cross-check; tgtakaoka/libasm (Apache-2.0) | `unlace-cli/tests/processors.toml` (`z8000`) |
 | `Z380` | Zilog Z380 (Native/Extended, Word/Long Word, DDIR W/LW/IB/IW) | `Z380:LE:32:default` | Zilog Z380 User's Manual DC-8297-03 (Appendix C opcode tables); flag macros adapted from the in-repo Z80 module | `unlace-cli/tests/processors.toml` (`z380`) |

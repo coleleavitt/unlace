@@ -4,8 +4,10 @@
   <data_organization>
     <pointer_size value="4"/>
     <integer_size value="4"/>
-    <short_size value="4"/>
     <long_size value="4"/>
+    <float_size value="4"/>
+    <double_size value="4"/>
+    <long_double_size value="8"/>
   </data_organization>
   <global>
     <range space="ram"/>

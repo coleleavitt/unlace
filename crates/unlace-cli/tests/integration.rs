@@ -118,6 +118,8 @@ mod sam8_raw;
 mod cdp1802_raw;
 #[path = "scmp_raw.rs"]
 mod scmp_raw;
+#[path = "tms320c3x_raw.rs"]
+mod tms320c3x_raw;
 #[path = "tms9900_raw.rs"]
 mod tms9900_raw;
 #[path = "x86_apx.rs"]

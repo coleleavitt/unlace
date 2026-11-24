@@ -245,7 +245,17 @@ impl AnalysisPass for SwiftMetadataPass {
                         .filter(|s| s.kind() == object::SymbolKind::Text && s.is_definition())
                         .filter_map(|s| Some((s.address(), s.name().ok()?.to_string())))
                         .collect();
-                    kuna_swiftcall::bind(&types, regs, &symbols, &import_calls, &mut out);
+                    let callers = if ctx
+                        .arch
+                        .kuna_options
+                        .get::<unlace_decomp::kuna_analysisgates::Swiftcallers>()
+                        .0
+                    {
+                        kuna_swiftcall::runtime_callers(ctx.file, ctx.bytes, &import_calls)
+                    } else {
+                        Vec::new()
+                    };
+                    kuna_swiftcall::bind(&types, regs, &symbols, &import_calls, &callers, &mut out);
                     out.swift_types.async_imports =
                         kuna_swiftcall::async_imports(imports.values().map(String::as_str));
                 }

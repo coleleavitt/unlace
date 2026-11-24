@@ -1,3 +1,0 @@
-prototype byte_load uint1 byte_load(int8*p,int8 i)
-prototype unsigned_load uint8 unsigned_load(int8*p,int8 i)
-prototype byte_store void byte_store(int8*p,int8 i,uint1 v)

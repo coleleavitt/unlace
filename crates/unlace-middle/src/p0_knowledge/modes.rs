@@ -675,6 +675,8 @@ mod tests {
             "phiarm",
             // `calleesaved` (issue #20) landed without a corpus sweep.
             "calleesaved",
+            // `swiftcallers` lands unmeasured; its Toyota/Perplexity sweep decides.
+            "swiftcallers",
             // `calleeargsmsvc` landed on hand-built MSVC-shape fixtures only.
             "calleeargsmsvc",
             // Landed with fixture measurements only: `funcchunks` changes only FID's

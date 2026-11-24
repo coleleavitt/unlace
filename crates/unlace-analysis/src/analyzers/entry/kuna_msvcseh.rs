@@ -376,9 +376,10 @@ fn x86_splice(
 /// the try level in `[ebp-4]` too, so the regions come from the same stores,
 /// between the function start (outside every level) and its first filter or
 /// handler block (at most 16 KiB). A region at level `n` gets one call-site
-/// record into record `n`'s `__except` block, which lies in the function and is
-/// entered with the stack pointer the block restores itself. `__finally` levels
-/// (a termination routine the runtime calls) are left out.
+/// record per level from `n` out through its enclosing levels, innermost first:
+/// an `__except` block (in the function, entered with the stack pointer the
+/// block restores itself) or a `__finally` routine, which the runtime calls, so
+/// it is a cleanup pad whose `ret` ends the path.
 fn x86_seh_splice(code: &[(u64, &[u8])], func: u64, scopes: &[SehScope], out: &mut AnalysisOutput) {
     let Some(&(base, data)) = code
         .iter()
@@ -404,28 +405,72 @@ fn x86_seh_splice(code: &[(u64, &[u8])], func: u64, scopes: &[SehScope], out: &m
     let body = &data[(func - base) as usize..(end - base) as usize];
     let mut states = vec![(func, -1)];
     states.extend(x86_state_stores(body, func));
+    let mut finals = FxHashSet::<u64>::default();
     for (lo, hi, level) in super::kuna_msvcfuncinfo::state_regions(&states, func, end) {
-        let Some(SehScope {
-            kind: SehKind::Except { filter, handler },
-            ..
-        }) = scopes.get(level as usize)
-        else {
-            continue;
-        };
-        let f = match filter {
-            Filter::Code(a) => format!("filter {a:#x}"),
-            Filter::Constant(c) => constant_filter(*c),
-        };
-        out.eh_call_sites.push(EhCallSite {
-            start: lo,
-            end: hi,
-            pad: *handler,
-            clauses: vec![EhClause::Catch {
-                selector: 1,
-                type_name: Some(format!("__except ({f})")),
-            }],
-        });
+        for scope in x86_level_chain(scopes, level as usize) {
+            let (pad, clause) = match scope.kind {
+                SehKind::Except { filter, handler } => {
+                    let f = match filter {
+                        Filter::Code(a) => format!("filter {a:#x}"),
+                        Filter::Constant(c) => constant_filter(c),
+                    };
+                    let clause = EhClause::Catch {
+                        selector: 1,
+                        type_name: Some(format!("__except ({f})")),
+                    };
+                    (handler, clause)
+                }
+                SehKind::Finally { handler } => {
+                    let Some(fend) = x86_routine_end(data, base, handler) else {
+                        continue;
+                    };
+                    if finals.insert(handler) {
+                        out.msvc_funclets.push(MsvcFunclet {
+                            pad: handler,
+                            frame_reg: None,
+                            frame_offset: 0,
+                            returns: Vec::new(),
+                            x86: true,
+                            cleanup_end: Some(fend),
+                        });
+                    }
+                    (handler, EhClause::Cleanup)
+                }
+            };
+            out.msvc_eh_sites.push(EhCallSite {
+                start: lo,
+                end: hi,
+                pad,
+                clauses: vec![clause],
+            });
+        }
     }
+}
+
+/// The scope record at `level` and every level enclosing it, innermost first.
+pub fn x86_level_chain(scopes: &[SehScope], level: usize) -> Vec<&SehScope> {
+    let mut chain = Vec::new();
+    let mut at = Some(level);
+    while let Some(n) = at {
+        let Some(scope) = scopes.get(n) else {
+            break;
+        };
+        if chain.len() > scopes.len() {
+            break;
+        }
+        chain.push(scope);
+        at = scope.enclosing.map(|e| e as usize).filter(|&e| e < n);
+    }
+    chain
+}
+
+/// The end (after its first `ret`) of the x86 `__finally` routine at `start`,
+/// within 1 KiB.
+fn x86_routine_end(data: &[u8], base: u64, start: u64) -> Option<u64> {
+    let off = start.checked_sub(base)? as usize;
+    let window = data.get(off..(off + 0x400).min(data.len()))?;
+    let ret = window.iter().position(|&b| b == 0xC3)?;
+    Some(start + ret as u64 + 1)
 }
 
 /// `(address after the store, state)` for each x86 EH state store in `code`
@@ -798,6 +843,32 @@ mod tests {
         assert_eq!(
             x86_handler_returns(&handler, 0x401200, 0x401000, 0x401200),
             vec![(0x401206, 0x401040)]
+        );
+    }
+
+    #[test]
+    fn x86_levels_chain_outward() {
+        let scope = |enclosing: Option<u32>, handler: u64| SehScope {
+            range: None,
+            enclosing,
+            kind: SehKind::Finally { handler },
+        };
+        let scopes = [
+            scope(None, 0x10),
+            scope(Some(0), 0x20),
+            scope(Some(1), 0x30),
+        ];
+        let chain: Vec<u64> = x86_level_chain(&scopes, 2)
+            .iter()
+            .map(|s| match s.kind {
+                SehKind::Finally { handler } => handler,
+                _ => 0,
+            })
+            .collect();
+        assert_eq!(chain, vec![0x30, 0x20, 0x10]);
+        assert_eq!(
+            x86_routine_end(&[0x90, 0x90, 0xC3], 0x1000, 0x1000),
+            Some(0x1003)
         );
     }
 

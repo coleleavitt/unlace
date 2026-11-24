@@ -5164,8 +5164,13 @@ between the function start and its first filter or handler block, at most
 16 KiB. A region at level `n` gets one record into scope record `n`'s `__except`
 block, which lies in the function and restores the stack pointer itself, so it
 is an ordinary pad, printed `__except (filter 0x401050)` or by its constant
-filter's name. An enclosing level's handler is not chained, and x86
-`__finally` routines (called by the runtime) are not spliced.
+filter's name. The region also gets a record for each enclosing level, out to
+the outermost (`x86_level_chain`; a record's enclosing level is always a lower
+one), so the edges test the innermost handler first and the next one when it
+declines. A `__finally` level is a routine the runtime calls: it is a cleanup
+pad (ESP down by 4) whose extent runs to its first `ret` byte within 1 KiB, and
+that `ret` ends the path. These records are MSVC records (`msvc_sites`), which
+take one edge per pad on the first call of a region.
 
 ## 2.13 VEX zero-upper writes and per-lane vector p-code
 

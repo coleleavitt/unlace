@@ -158,6 +158,7 @@ hex = 'c3'
 
 [script]
 commands = [
+    'option atomics off',
     'option sourcelang go',
     'option outlang go',
     'map prototype add32_new int4 add32_new(int4 *p,int4 d);',

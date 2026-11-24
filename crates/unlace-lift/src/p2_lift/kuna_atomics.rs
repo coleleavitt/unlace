@@ -606,6 +606,44 @@ struct Plan {
     operands: Vec<Expr>,
     reads: BTreeMap<Site, Read>,
     accumulator: Option<(Storage, Option<Storage>)>,
+    /// The register pair (high, low) a 16-byte compare-exchange (`cmpxchg16b`,
+    /// `cmpxchg8b`) compares and, on failure, receives `Old` in, and the
+    /// storage holding `Old` at its store.
+    pair_accumulator: Option<(Storage, Storage, Storage)>,
+}
+
+/// `e` read as `ZEXT(hi) << 8 * half | ZEXT(lo)` over two registers of `width / 2`
+/// bytes: the expected value a register-pair compare-exchange builds.
+fn pair_halves(e: &Expr, width: i32) -> Option<(Storage, Storage)> {
+    let half = width / 2;
+    let Expr::Op(OpCode::CPUI_INT_OR, w, args) = e else {
+        return None;
+    };
+    if *w != width || args.len() != 2 {
+        return None;
+    }
+    let zext = |e: &Expr| match e {
+        Expr::Op(OpCode::CPUI_INT_ZEXT, w, a) if *w == width && a.len() == 1 => match a[0] {
+            Expr::Start(s) if s.size == half => Some(s),
+            _ => None,
+        },
+        _ => None,
+    };
+    let shifted = |e: &Expr| match e {
+        Expr::Op(OpCode::CPUI_INT_LEFT, w, a) if *w == width && a.len() == 2 => match a[1] {
+            Expr::Const(k, _) if k == 8 * half as u64 => zext(&a[0]),
+            _ => None,
+        },
+        _ => None,
+    };
+    for (h, l) in [(&args[0], &args[1]), (&args[1], &args[0])] {
+        if let (Some(hi), Some(lo)) = (shifted(h), zext(l)) {
+            if !hi.overlaps(lo) {
+                return Some((hi, lo));
+            }
+        }
+    }
+    None
 }
 
 fn plan(eval: &Eval) -> Option<Plan> {
@@ -624,6 +662,7 @@ fn plan(eval: &Eval) -> Option<Plan> {
             operands: vec![operand],
             reads,
             accumulator: None,
+            pair_accumulator: None,
         });
     }
     if ends.len() != 2 || stored.has_old() {
@@ -655,11 +694,35 @@ fn plan(eval: &Eval) -> Option<Plan> {
         }
         _ => None,
     };
+    let half = eval.width / 2;
+    let piece = |k: i32| {
+        Expr::Op(
+            OpCode::CPUI_SUBPIECE,
+            half,
+            vec![Expr::Old, Expr::Const(k as u64, 4)],
+        )
+    };
+    let pair_accumulator = match (accumulator, eval.access, store.store_state.as_ref()) {
+        (None, Access::Pointer(_), Some(state)) => {
+            pair_halves(&expected, eval.width).and_then(|(hi, lo)| {
+                let source = state
+                    .iter()
+                    .find(|(_, v)| **v == Expr::Old)
+                    .map(|(k, _)| *k)?;
+                (other.state.get(&hi) == Some(&piece(half))
+                    && other.state.get(&lo) == Some(&piece(0))
+                    && !state.keys().any(|k| k.overlaps(hi) || k.overlaps(lo)))
+                .then_some((hi, lo, source))
+            })
+        }
+        _ => None,
+    };
     Some(Plan {
         builtin: BUILTIN_ATOMIC_COMPARE_SWAP,
         operands: vec![expected, stored.clone()],
         reads,
         accumulator,
+        pair_accumulator,
     })
 }
 
@@ -1181,6 +1244,13 @@ fn apply(
     (first_load, store, width, envelope): (usize, usize, i32, Option<(usize, usize)>),
 ) -> Option<OpId> {
     let (atomic, store_op) = (ops[first_load], ops[store]);
+    let pair = plan.pair_accumulator.and_then(|(hi, lo, source)| {
+        let value = fd.obank().get(store_op)?.get_in(2)?;
+        let def = fd.vbank().get(value)?.get_def()?;
+        let at = ops.iter().position(|&o| o == def)?;
+        let only_store = fd.vbank().get(value)?.descend_iter().all(|o| o == store_op);
+        (at > first_load && at < store && only_store).then_some((hi, lo, source, def))
+    });
     let mut builder = Builder {
         state,
         before: atomic,
@@ -1250,7 +1320,20 @@ fn apply(
             let addr = Address::new(space(fd, acc.space)?, acc.offset);
             fd.new_varnode_out(acc.size, &addr, store_op).ok()?;
         }
-        (None, Access::Pointer(_)) => neutralize(fd, store_op, value, width)?,
+        (None, Access::Pointer(_)) => match pair {
+            Some((hi, lo, source, def)) => {
+                for (op, dest, offset) in [(def, lo, 0u64), (store_op, hi, hi.size as u64)] {
+                    let input = builder.varnode(fd, source)?;
+                    let k = fd.new_constant(4, offset);
+                    fd.op_unset_output(op);
+                    fd.op_set_opcode_code(op, OpCode::CPUI_SUBPIECE);
+                    fd.op_set_all_input(op, &[input, k]).ok()?;
+                    let addr = Address::new(space(fd, dest.space)?, dest.offset);
+                    fd.new_varnode_out(dest.size, &addr, op).ok()?;
+                }
+            }
+            None => neutralize(fd, store_op, value, width)?,
+        },
         (None, Access::Direct(_)) => {}
     }
     if let Some((lock, unlock)) = envelope {

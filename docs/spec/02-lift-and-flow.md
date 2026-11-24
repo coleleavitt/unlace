@@ -61,7 +61,11 @@ the instruction writes are still computed from `Old`. On the success path of
 an x86 `cmpxchg`, where the accumulator equals `Old`, the store's op is reused
 to assign `Old` to the accumulator, so both paths agree on it; the branch then
 only decides the upper half of `RAX` after a 32-bit `cmpxchg`, which hardware
-zero-extends only on failure. A 32-bit `xadd` or `xchg` on x86-64 ends with
+zero-extends only on failure. `cmpxchg8b`/`cmpxchg16b` compare and, on
+failure, refill a register pair (`EDX:EAX`, `RDX:RAX`) from `Old`'s halves; on
+its success path the op that built the new value and the store become those
+same two `SUBPIECE`s of `Old` (`Plan::pair_accumulator`), so both paths agree
+and the C no longer re-tests `expected != result` to copy the halves back. A 32-bit `xadd` or `xchg` on x86-64 ends with
 `RAX = ZEXT(EAX)` after `UNLOCK()` (the hardware clear of the upper half);
 an instruction with no branch whose ops after the envelope are only such
 register-into-containing-register zero-extensions is rewritten without them,

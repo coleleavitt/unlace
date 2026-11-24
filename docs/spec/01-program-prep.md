@@ -9650,6 +9650,13 @@ both
   names are IDA scripts, not functions) and one whose header file-type mask
   excludes the binary's format are never loaded, so pointing the variable at all
   of a `sig/` tree loads only the libraries that can apply.
+  The applicable files are applied in an order that puts the C runtime of the image's compiler first:
+  a `.comment` record that names GCC or clang (`GCC: (GNU) 15.2.0`, `clang version 18.1.3`; not
+  an image with a `rustc version` record) selects the files whose name or header library name
+  is that compiler's runtime (libgcc, libstdc++; compiler-rt, libc++) (`analyzers/flirt/cruntime.rs`).
+  The order does not change the arbitration, which scores candidates rather than taking the first. When
+  signature files were given and none is that runtime, the pass reports the compiler and its release on stderr.
+  A signature header records no release, so a release mismatch inside the family is not reported.
   With `flirttil on` (default off) the type libraries that the `ids` and `idsnames` files
   beside the applicable signatures name are read as sources of the `typelib` option: a line
   `<signature> <library>` autoloads `<library>.til`, from beside the `.sig` or from

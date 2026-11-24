@@ -31,6 +31,7 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uint4, uintb};
+use unlace_num::opcodes::OpCode;
 
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
@@ -214,6 +215,7 @@ pub fn match_dispatch(bytes: &[u8], jmp: uintb, len: usize) -> Option<RawTable> 
 #[derive(Debug, Clone, Default)]
 pub struct JumpModelRaw {
     dests: Vec<uintb>,
+    indop: Option<OpId>,
 }
 
 impl JumpModel for JumpModelRaw {
@@ -233,6 +235,7 @@ impl JumpModel for JumpModelRaw {
         _maxtablesize: uint4,
     ) -> UnlaceResult<bool> {
         self.dests.clear();
+        self.indop = Some(indop);
         Ok(raw_destinations(fd, indop).is_some_and(|d| {
             self.dests = d;
             true
@@ -273,23 +276,32 @@ impl JumpModel for JumpModelRaw {
 
     fn build_labels(
         &self,
-        _fd: &mut Funcdata,
+        fd: &mut Funcdata,
         addresstable: &mut [Address],
         label: &mut Vec<uintb>,
         _orig: &dyn JumpModel,
     ) -> UnlaceResult<()> {
-        for i in 0..addresstable.len() {
-            label.push(i as uintb);
+        match self.indop.and_then(|op| switch_index(&*fd, op)) {
+            Some((_, offset, mask)) => {
+                for i in 0..addresstable.len() {
+                    label.push((i as uintb).wrapping_add(offset) & mask);
+                }
+            }
+            None => label.extend(addresstable.iter().map(Address::get_offset)),
         }
         Ok(())
     }
 
     fn fold_in_normalization(
         &mut self,
-        _fd: &mut Funcdata,
-        _indop: OpId,
+        fd: &mut Funcdata,
+        indop: OpId,
     ) -> UnlaceResult<Option<VarnodeId>> {
-        Ok(None)
+        let Some((switchvn, _, _)) = switch_index(fd, indop) else {
+            return Ok(None);
+        };
+        fd.op_set_input(indop, switchvn, 0)?;
+        Ok(Some(switchvn))
     }
 
     fn fold_in_guards(&mut self, _fd: &mut Funcdata, _jump: &mut JumpTable) -> UnlaceResult<bool> {
@@ -331,16 +343,19 @@ fn raw_destinations(fd: &Funcdata, indop: OpId) -> Option<Vec<uintb>> {
     }
     let jmp = at.get_offset();
     const BACK: uintb = 40;
-    let mut bytes = Vec::with_capacity(BACK as usize + 4);
-    let start = jmp.checked_sub(BACK)?;
-    for off in start..jmp + 4 {
-        bytes.push(
-            arch.get_load_image_value(&Address::new(Rc::clone(&spc), off), 1)
-                .ok()? as u8,
-        );
-    }
+    let byte = |off: uintb| {
+        arch.get_load_image_value(&Address::new(Rc::clone(&spc), off), 1)
+            .ok()
+            .map(|b| b as u8)
+    };
+    let mut bytes: Vec<u8> = (1..=BACK)
+        .map_while(|back| byte(jmp.checked_sub(back)?))
+        .collect();
+    bytes.reverse();
+    let back = bytes.len();
+    bytes.extend((0..4).map_while(|i| byte(jmp.checked_add(i)?)));
     let found = (2..=4).find_map(|len| {
-        let slice = &bytes[..(BACK as usize + len)];
+        let slice = bytes.get(..back + len)?;
         match_dispatch(slice, jmp, len)
     })?;
     let mut dests = Vec::with_capacity(found.rows as usize);
@@ -356,6 +371,108 @@ fn raw_destinations(fd: &Funcdata, indop: OpId) -> Option<Vec<uintb>> {
     }
     let distinct: std::collections::BTreeSet<_> = dests.iter().collect();
     (distinct.len() >= 2).then_some(dests)
+}
+
+/// The defining op of `vn`, when it is written.
+fn def(fd: &Funcdata, vn: VarnodeId) -> Option<OpId> {
+    fd.vbank().get(vn).filter(|v| v.is_written())?.get_def()
+}
+
+/// The non-constant inputs of `op`.
+fn free_inputs(fd: &Funcdata, op: OpId) -> Vec<VarnodeId> {
+    let Some(o) = fd.obank().get(op) else {
+        return Vec::new();
+    };
+    (0..o.num_input())
+        .filter_map(|i| o.get_in(i))
+        .filter(|&vn| fd.vbank().get(vn).is_some_and(|v| !v.is_constant()))
+        .collect()
+}
+
+/// The constant input `slot` of `op`.
+fn const_in(fd: &Funcdata, op: OpId, slot: int4) -> Option<uintb> {
+    let vn = fd.obank().get(op)?.get_in(slot)?;
+    let v = fd.vbank().get(vn)?;
+    v.is_constant().then(|| v.get_offset())
+}
+
+/// The pointer a LOAD in the destination expression `vn` reads through.
+fn find_load(fd: &Funcdata, vn: VarnodeId, depth: u32) -> Option<VarnodeId> {
+    let op = def(fd, vn)?;
+    let o = fd.obank().get(op)?;
+    match o.code() {
+        OpCode::CPUI_LOAD => o.get_in(1),
+        OpCode::CPUI_INT_ADD
+        | OpCode::CPUI_INT_SEXT
+        | OpCode::CPUI_INT_ZEXT
+        | OpCode::CPUI_COPY
+            if depth > 0 =>
+        {
+            free_inputs(fd, op)
+                .into_iter()
+                .find_map(|i| find_load(fd, i, depth - 1))
+        }
+        _ => None,
+    }
+}
+
+/// The index scaled by 4 in the table pointer `vn`.
+fn find_scaled(fd: &Funcdata, vn: VarnodeId, depth: u32) -> Option<VarnodeId> {
+    let op = def(fd, vn)?;
+    let o = fd.obank().get(op)?;
+    match o.code() {
+        OpCode::CPUI_INT_MULT if const_in(fd, op, 1) == Some(4) => free_inputs(fd, op).pop(),
+        OpCode::CPUI_INT_LEFT if const_in(fd, op, 1) == Some(2) => free_inputs(fd, op).pop(),
+        OpCode::CPUI_PTRADD if const_in(fd, op, 2) == Some(4) => {
+            o.get_in(1).filter(|&i| free_inputs(fd, op).contains(&i))
+        }
+        OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRSUB | OpCode::CPUI_COPY if depth > 0 => {
+            free_inputs(fd, op)
+                .into_iter()
+                .find_map(|i| find_scaled(fd, i, depth - 1))
+        }
+        _ => None,
+    }
+}
+
+/// The switch variable of the dispatch at `indop` in the current data flow:
+/// the varnode the table row is read with, less any zero extension and any
+/// constant added to it. Row `i` is taken when it holds `(i + offset) & mask`.
+fn switch_index(fd: &Funcdata, indop: OpId) -> Option<(VarnodeId, uintb, uintb)> {
+    let dest = fd.obank().get(indop)?.get_in(0)?;
+    let ptr = find_load(fd, dest, 4)?;
+    let mut idx = find_scaled(fd, ptr, 4)?;
+    while let Some(op) = def(fd, idx).filter(|&op| {
+        fd.obank()
+            .get(op)
+            .is_some_and(|o| o.code() == OpCode::CPUI_INT_ZEXT)
+    }) {
+        idx = fd.obank().get(op)?.get_in(0)?;
+    }
+    let mut offset: uintb = 0;
+    if let Some(op) = def(fd, idx) {
+        let code = fd.obank().get(op)?.code();
+        let base = free_inputs(fd, op);
+        if let ([base], Some(c)) = (base.as_slice(), const_in(fd, op, 1)) {
+            match code {
+                OpCode::CPUI_INT_ADD => {
+                    offset = c.wrapping_neg();
+                    idx = *base;
+                }
+                OpCode::CPUI_INT_SUB => {
+                    offset = c;
+                    idx = *base;
+                }
+                _ => {}
+            }
+        }
+    }
+    let v = fd.vbank().get(idx)?;
+    if v.is_constant() {
+        return None;
+    }
+    let mask = unlace_base::address::calc_mask(v.get_size());
+    Some((idx, offset & mask, mask))
 }
 
 /// The `rawswitch` model of `table`'s jump at `indirect`, when the option is on.

@@ -3190,12 +3190,26 @@ dispatch: `cmp $N,%idx; ja default`, `lea table(%rip),%base` (before or after
 the pair), `movslq (%base,%idx,4),%dst`, `add %base,%dst`, `jmp *%dst` (with
 `notrack` or a REX prefix). The table's `N + 1` rows are offsets from its start;
 each target must lie within `0xffff` of the jump and there must be two distinct
-targets, else nothing is installed. The case labels are the row indices. This is
-IDA's idiom matcher, and it is what the data flow cannot give when the index is a
-constant on the only path into the dispatch: zlib's `inflateBack` sets
-`state->mode` just before `switch (state->mode)` and gcc threads each case to the
-next, so the value-range models see one value and the other cases were never
-decoded (`tests/stages/rawswitch.toml`).
+targets, else nothing is installed. The window reads at most 40 bytes back and
+stops at the first unmapped byte, so a dispatch near the start of the image still
+matches. This is IDA's idiom matcher, and it is what the data flow cannot give
+when the index is a constant on the only path into the dispatch: zlib's
+`inflateBack` sets `state->mode` just before `switch (state->mode)` and gcc
+threads each case to the next, so the value-range models see one value and the
+other cases were never decoded (`tests/stages/rawswitch.toml`).
+
+The labels are given on the whole function, once every case is decoded. When a
+value-range model now recovers the table and its own rows are the matched rows in
+order, it labels them as its own original (`JumpTable::recover_labels`), so the
+cases that loop back to the dispatch with a new index give the switch its real
+values (`tests/stages/rawswitch-loop.toml`: labels 5..8 over a `mode - 5`
+index); when its rows differ, the trivial model labels by address. When no model
+recovers it, the table keeps `JumpModelRaw` (`JumpTable::recover_model` matches
+the instructions again and requires the same rows): the switch variable is the
+varnode the row is read with (the `* 4` index of the LOAD the destination adds,
+less a zero extension and a constant added to it), the BRANCHIND reads it
+directly, and row `i` is labelled `i` minus that constant. An index that is
+still a constant there leaves the jump's input alone and labels by address.
 
 **Model 0 — the jump-assist user-op** (`jumpassist.rs
 (JumpModelAssisted)`, C++ `JumpAssisted`, `option jumpassist`, default on).

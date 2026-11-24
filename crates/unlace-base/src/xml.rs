@@ -2360,7 +2360,8 @@ mod tests {
         // and aarch64-fcmp-nan / an unordered AArch64 FCMP takes the processor's signed conditions
         // and loader-name-localalias / gcc's f.localalias does not name f
         // and valist-declared / the promoted va_list ap is declared
-        assert_eq!(count, 1030, "corpus file count drifted");
+        // and rawswitch-loop / a matched table whose cases loop back with a loaded index is labelled by it
+        assert_eq!(count, 1033, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

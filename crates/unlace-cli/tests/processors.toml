@@ -685,6 +685,57 @@ expect = [
     "return 0;",  # the fall-back path
 ]
 
+# The Rabbit 4000 / 5000 and 6000 languages (the 7F-prefixed register ALU,
+# BCDE/JKHL, the PW-PZ pointer registers) decompile hand-assembled routines.
+[[family]]
+name = "rabbit4000"
+language = ["Rabbit4000:LE:16:default", "Rabbit6000:LE:16:default"]
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/rabbit4000/funcs.bin"
+forbid = ["baddata"]
+
+# ld jkhl,(0x8000); ld bcde,(0x8004); add jkhl,bcde; ld (0x8008),jkhl; ret
+[[family.function]]
+test = "rabbit4000_32bit_add"
+address = "0x1000"
+expect = [
+    "dat_8008 = dat_8000 + dat_8004;",
+]
+
+# ldl px,0x8000; ld a,(px+2): a long logical pointer folds to the global
+[[family.function]]
+test = "rabbit4000_pointer_register_load"
+address = "0x1010"
+expect = [
+    "return dat_8002;",
+]
+
+# 7F 7D / 7F 87 / 7F 6F: LD A,L; ADD A,A; LD L,A behind the 7F prefix
+[[family.function]]
+test = "rabbit4000_prefixed_alu"
+address = "0x1020"
+expect = [
+    "return a0 * '\\x02';",
+]
+
+# cp hl,5; jr gt: the new signed conditions
+[[family.function]]
+test = "rabbit4000_cp_hl_jr_gt"
+address = "0x1030"
+expect = [
+    "if (6 <= a0)",
+    "return 5;",
+]
+
+# ldl px,0x8000; ld a,l; add a,(px+2) (49 page)
+[[family.function]]
+test = "rabbit6000_pointer_alu"
+address = "0x1050"
+language = "Rabbit6000:LE:16:default"
+expect = [
+    "return a0 + dat_8002;",
+]
+
 # The NXP S12Z language decompiles a hand-assembled add/compare/store routine.
 [[family]]
 name = "s12z"

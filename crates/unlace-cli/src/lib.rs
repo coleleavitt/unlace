@@ -175,7 +175,7 @@ fn usage() {
     eprintln!(
         "usage: unlace <{names}> ...\n\
          \n\
-         LLM agents: run `unlace install-skill` once.  It installs the kuna skill -- how to drive\n\
+         LLM agents: run `unlace install-skill` once.  It installs the unlace skill -- how to drive\n\
          this CLI well, embedded in the binary, no network -- for Claude Code, Codex and OpenCode\n\
          (`--dir DIR` for other agents).  `unlace install-skill --print` shows it without installing.\n\
          \n\

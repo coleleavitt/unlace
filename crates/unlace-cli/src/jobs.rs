@@ -677,7 +677,8 @@ fn run_pool_with(
 ) -> Result<Retries, String> {
     let workers = report.workers;
     let total = targets.len();
-    let exe = std::env::current_exe().map_err(|e| format!("cannot locate the kuna binary: {e}"))?;
+    let exe =
+        std::env::current_exe().map_err(|e| format!("cannot locate the unlace binary: {e}"))?;
     if let Some(table) = phase.table {
         session.write_table(table)?;
     }

@@ -389,6 +389,7 @@ kuna_options! { self, p1;
     "itaniumeh" => registered!(crate::kuna_itaniumeh::ItaniumEh),
     "vexzeroupper" => registered!(crate::kuna_coreoptions::VexZeroUpper),
     "vectorabi" => registered!(crate::kuna_coreoptions::VectorAbi),
+    "syscallnames" => registered!(crate::kuna_syscallnames::SyscallNames),
     "neonintrin" => registered!(crate::kuna_neonintrin::NeonIntrin),
     "lanefuse" => registered!(crate::kuna_coreoptions::LaneFuse),
     "strcodelen" => registered!(crate::kuna_analysisgates::Strcodelen),

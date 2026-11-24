@@ -46,6 +46,8 @@ pub mod kuna_passhooks;
 pub mod kuna_printhandle;
 pub mod kuna_regioneval;
 pub mod kuna_specnames;
+pub mod kuna_syscallnames; // (kuna `syscallnames`) ARM and AArch64 system calls by name
+pub mod kuna_syscalltables; // (kuna `syscallnames`) generated system-call number tables
 pub mod kuna_typequal; // (kuna) C type qualifiers on their own type layer
 pub mod op;
 pub mod pcodeinject;

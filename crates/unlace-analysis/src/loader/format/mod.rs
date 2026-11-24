@@ -14,6 +14,7 @@ pub mod coff;
 pub mod elf;
 pub mod elf_userland;
 pub mod macho;
+pub mod macho_userland; // (kuna `syscallregs`) a Darwin user-space Mach-O
 pub mod pe;
 pub mod wasm;
 

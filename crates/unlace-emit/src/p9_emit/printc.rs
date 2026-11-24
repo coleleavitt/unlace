@@ -9276,9 +9276,10 @@ impl PrintC {
             return;
         }
         if display == 0 {
-            if let Some((name, args)) =
-                userop.and_then(|u| neon_spelling(fd, arch, op, u.get_name()))
-            {
+            let named = userop
+                .and_then(|u| syscall_spelling(fd, arch, op, u.get_name()))
+                .or_else(|| userop.and_then(|u| neon_spelling(fd, arch, op, u.get_name())));
+            if let Some((name, args)) = named {
                 self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
                 self.push_atom(&Atom::with_op(
                     name,
@@ -18463,4 +18464,41 @@ fn neon_constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
     }
     let src = fd.vbank().get(def.get_in(0)?)?;
     src.is_constant().then(|| src.get_offset())
+}
+
+/// (kuna `syscallnames`) The name of the ARM or AArch64 system call `op` makes,
+/// and the arguments it prints, when `syscallregs` gave it a constant number.
+fn syscall_spelling(
+    fd: &Funcdata,
+    arch: &Architecture,
+    op: OpId,
+    name: &[u8],
+) -> Option<(String, Vec<VarnodeId>)> {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_syscallnames::SyscallNames>()
+        .0
+        || !matches!(name, b"CallSupervisor" | b"software_interrupt")
+    {
+        return None;
+    }
+    let o = fd.obank().get(op)?;
+    if o.num_input() < 3 {
+        return None;
+    }
+    let imm = fd
+        .vbank()
+        .get(o.get_in(1)?)
+        .filter(|v| v.is_constant())?
+        .get_offset();
+    let number = o.get_in(2)?;
+    let value = neon_constant(fd, number)?;
+    let size = fd.vbank().get(number)?.get_size();
+    let (call, count) =
+        crate::kuna_syscallnames::name_for(std::str::from_utf8(name).ok()?, imm, value, size)?;
+    let mut args: Vec<VarnodeId> = (3..o.num_input()).filter_map(|i| o.get_in(i)).collect();
+    if let Some(n) = count {
+        args.truncate(n as usize);
+    }
+    Some((call, args))
 }

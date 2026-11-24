@@ -433,6 +433,21 @@ fn mips_floor(data: &Funcdata, op: OpId, number: &(Address, int4)) -> usize {
         .unwrap_or(MIPS_UNKNOWN_ARGS)
 }
 
+/// How many argument registers an ARM or AArch64 system call at `op` reads at
+/// least: the table's count for its constant number (`kuna_syscallnames`), so a
+/// wrapper that hands its own parameters to the kernel in place keeps them.
+fn arm_floor(
+    data: &Funcdata,
+    op: OpId,
+    number: &(Address, int4),
+    family: SyscallFamily,
+) -> Option<usize> {
+    let value = constant_at(data, op, &number.0, number.1)?;
+    let imm = immediate(data, op)?;
+    let (_, count) = crate::kuna_syscallnames::name_for(family.userop(), imm, value, number.1)?;
+    count.map(usize::from)
+}
+
 /// The registers the call at `op` reads: the number register, then each
 /// argument register in order up to the first one the function does not write
 /// on every path to it. Nothing when the number register is not written so.
@@ -451,8 +466,13 @@ fn read_set(data: &Funcdata, op: OpId, regs: &SyscallStorage) -> Vec<(Address, i
         return Vec::new();
     }
     let mut count = args.iter().take_while(written).count();
-    if regs.family == SyscallFamily::Mips {
-        let floor = mips_floor(data, op, number).min(args.len());
+    let floor = match regs.family {
+        SyscallFamily::Mips => Some(mips_floor(data, op, number)),
+        SyscallFamily::Arm | SyscallFamily::AArch64 => arm_floor(data, op, number, regs.family),
+        _ => None,
+    };
+    if let Some(floor) = floor {
+        let floor = floor.min(args.len());
         while count < floor
             && reaches_without_call(data, op, &args[count].0, args[count].1, regs, true)
         {
@@ -465,8 +485,33 @@ fn read_set(data: &Funcdata, op: OpId, regs: &SyscallStorage) -> Vec<(Address, i
         .collect()
 }
 
+/// The immediate of the system-call instruction at `op` (`svc #imm`).
+fn immediate(data: &Funcdata, op: OpId) -> Option<u64> {
+    let o = data.obank().get(op)?;
+    let v = data.vbank().get(o.get_in(1)?)?;
+    v.is_constant().then(|| v.get_offset())
+}
+
+/// Darwin's arm64 `svc #0x80` takes the number in `x16`, not Linux's `x8`.
+fn darwin_storage(data: &Funcdata, regs: &SyscallStorage) -> Option<SyscallStorage> {
+    let lookup = data.get_arch().manage().register_lookup()?;
+    let st = lookup.probe_register("x16")?;
+    let mut inputs = regs.inputs.clone();
+    *inputs.first_mut()? = (Address::new(st.space.clone()?, st.offset), st.size as int4);
+    Some(SyscallStorage {
+        family: regs.family,
+        result: regs.result.clone(),
+        inputs,
+        error: regs.error.clone(),
+    })
+}
+
 /// Give one matched `CALLOTHER` its register effects.
 fn rewrite(data: &mut Funcdata, op: OpId, regs: &SyscallStorage) -> KunaResult<()> {
+    let darwin = (regs.family == SyscallFamily::AArch64 && immediate(data, op) == Some(0x80))
+        .then(|| darwin_storage(data, regs))
+        .flatten();
+    let regs = darwin.as_ref().unwrap_or(regs);
     let reads = read_set(data, op, regs);
     let base = data.obank().get(op).map(|o| o.num_input()).unwrap_or(1);
     for (i, (addr, size)) in reads.iter().enumerate() {

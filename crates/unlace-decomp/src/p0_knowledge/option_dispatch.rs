@@ -115,6 +115,7 @@ unlace_options! { self, p1;
     "returnpair" => registered!(crate::returnpair::ReturnSingle),
     "retpairpaths" => registered!(crate::returnuncomputed::RetPairPaths),
     "bitidioms" => registered!(crate::bitidioms::BitIdioms),
+    "minmax" => registered!(crate::minmax::MinMax),
     "satmul" => registered!(crate::satmul::SatMul),
     "helperroles" => registered!(crate::helperrole::HelperRoles),
     "dynalloca" => registered!(crate::dynalloca::DynAlloca),

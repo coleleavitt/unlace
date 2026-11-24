@@ -191,6 +191,10 @@ pub const BUILTIN_LABS: uint4 = 0x1000001e;
 pub const BUILTIN_STRCPY: uint4 = 0x1000001f;
 /// (unlace) Built-in id for `va_arg` (`vaarg`).
 pub const BUILTIN_VAARG: uint4 = 0x10000020;
+/// (unlace) Built-in id for `min`, the smaller of two signed values (`minmax`).
+pub const BUILTIN_MIN: uint4 = 0x10000021;
+/// (unlace) Built-in id for `max`, the larger of two signed values (`minmax`).
+pub const BUILTIN_MAX: uint4 = 0x10000022;
 /// (unlace) Built-in id for `saturated_mul`, a multiply that yields all-ones on
 /// overflow (`satmul`).
 pub const BUILTIN_SATURATED_MUL: uint4 = 0x10000038;
@@ -1515,6 +1519,10 @@ impl UserOpManage {
                     Some(Rc::clone(&int_type)),
                     &[Some(int_type)],
                 )
+            }
+            BUILTIN_MIN | BUILTIN_MAX => {
+                let name: &[u8] = if i == BUILTIN_MIN { b"min" } else { b"max" };
+                UserPcodeOp::new_unspecialized(name, i as int4)
             }
             BUILTIN_BITREV => UserPcodeOp::new_unspecialized(b"bitreverse", BUILTIN_BITREV as int4),
             BUILTIN_VAARG => UserPcodeOp::new_unspecialized(b"va_arg", BUILTIN_VAARG as int4),

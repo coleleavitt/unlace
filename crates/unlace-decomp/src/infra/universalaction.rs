@@ -723,6 +723,11 @@ pub fn universal_sched_hooked(
             crate::bitidioms::RuleIntAbs::new("analysis")
         ),
         rrow!(
+            "minmax",
+            "analysis",
+            crate::minmax::RuleMinMax::new("analysis")
+        ),
+        rrow!(
             "satmul",
             "analysis",
             crate::satmul::RuleSaturatedMul::new("analysis")

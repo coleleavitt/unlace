@@ -3577,6 +3577,21 @@ outcome reaches. A `CALLOTHER` is inserted after the merge block's
 no-overflow outcome, a threshold that is not `(2^W - 1) / c`, or a guard over
 other factors is left alone.
 
+**minmax** (unlace) —
+`crates/unlace-bandb-base/src/p3_dataflow/minmax.rs (RuleMinMax)`, group `analysis`
+(`option minmax`, default off). A compiler lowers `a < b ? a : b` without a branch
+to the sign of `d = a - b`: `s = d >> (W - 1)` is arithmetic, all ones when `d` is
+negative, so `b + (d & s)` is `min(a, b)` and `a - (d & s)` is `max(a, b)`. The rule
+fires on an `INT_ADD` with one input `d & s` (either order) whose other input is the
+subtrahend `b` of `d = a - b`, and on an `INT_SUB` whose second input is `d & s` and
+whose first input is the minuend `a`. `s` must be `INT_SRIGHT(d, W - 1)` of the same
+`d` with a constant amount. The op becomes `CALLOTHER(BUILTIN_MIN or BUILTIN_MAX, a, b)`
+in place, so every reader of its output keeps its value; `d` and `s` are left to
+dead-code removal. The builtins are signed (`BUILTIN_MIN` / `BUILTIN_MAX`, printed as
+`min` / `max`): the sign of `d` decides the choice, so the result is the signed min or
+max only when `a - b` does not overflow, which is why the option defaults off. Not yet
+exercised by a stage test.
+
 **alloca** (unlace) — `crates/unlace-bandb-base/src/p3_dataflow/alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word the same instruction just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). A load and a store from two instructions are not a probe: another store can change the slot between them, so the second store restores an earlier value. CPython's `r = []; ...; return r` lost its return value this way, because `STORE_FAST r` pops the slot that `LOAD_FAST r` later pushes back into. It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/alloca.toml`.
 
 **cancelbytearithmetic** (repipe `cancelling-byte-arithmetic-splits`) —

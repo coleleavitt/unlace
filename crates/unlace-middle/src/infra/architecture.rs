@@ -3446,6 +3446,9 @@ impl Architecture {
             userops.register_builtin(BUILTIN_VAARG, &adapter)?;
             // (unlace satmul) the overflow-saturating multiply before operator new[].
             userops.register_builtin(crate::userop::BUILTIN_SATURATED_MUL, &adapter)?;
+            // (unlace minmax) the branch-free min and max, printed as min(a, b) and max(a, b).
+            userops.register_builtin(crate::userop::BUILTIN_MIN, &adapter)?;
+            userops.register_builtin(crate::userop::BUILTIN_MAX, &adapter)?;
             // (unlace kernelbug) the Linux `__bug_table` trap statements.
             userops.register_builtin(BUILTIN_KERNEL_BUG, &adapter)?;
             userops.register_builtin(BUILTIN_KERNEL_WARN, &adapter)?;

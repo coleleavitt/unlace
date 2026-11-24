@@ -6967,6 +6967,14 @@ every other binary's pass list is byte-identical to before the pass existed):
   spellings, so it holds whether the harvest or DWARF built the layout. A name
   the harvest marked ambiguous, whose descriptors disagree, or that already
   carries a facet gets none.
+  When the chain of offsets ends at the function's own receiver, which needs
+  no type at all, the receiver supplies the struct: in a pointer method
+  `pkg.(*T).M` (the name a stripped binary keeps in its pclntab) the x86-64
+  input in `RAX`, directly or through copies, is the receiver, so a LOAD at
+  a constant offset from it reads `pkg.T`'s field there, and `pkg.T`'s
+  facet names the interface
+  (`crates/unlace-emit/src/p9_emit/kuna_goitabcall.rs (receiver_field_interface)`;
+  top-level fields only, a generic receiver is refused).
   A type assertion's result is the third source
   (`crates/unlace-emit/src/p9_emit/kuna_goitabcall.rs (asserted_interface)`):
   the output of a call to `runtime.typeAssert` whose first argument is a

@@ -7918,7 +7918,11 @@ every other binary's pass list is byte-identical to before the pass existed):
   image's mapped bytes (16 MiB at least), charged per record and per string
   byte; a string read stops scanning where the budget left runs out, so a
   crafted section of one unterminated run costs no more than the budget
-  (`crates/unlace-analysis/src/analyzers/objc/sections.rs (read_cstr)`).
+  (`crates/unlace-analysis/src/analyzers/objc/sections.rs (read_cstr)`). A selector
+  spelled as a Swift-mangled name (`$s` or `_$s` prefix) is shown in the demangler's
+  name-only form (`main.hello()`), the form Swift class names take; a name outside
+  the demangler's coverage stays raw
+  (`crates/unlace-analysis/src/analyzers/objc/methods.rs (display_selector)`).
 
   Code never touches a selector string or a `class_t` directly, so naming those
   alone leaves every send unreadable: `objc_msgSend(obj, sel)` loads `sel` from a

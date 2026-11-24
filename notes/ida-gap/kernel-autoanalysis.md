@@ -116,3 +116,8 @@ member and RTTI typing (#8, #19), `AF_PROCPTR` (#9), fixups (#13), xrefs (#21).
   function that only one other function jumps to). The owners print the same C as before.
 - **#5, `nullsubs`** (default off): unlace names the same 8/41/2/4 functions IDA names `nullsub_` on the four
   loaders.
+
+
+## Deepened 2026-11-24
+
+[libida-autoanalysis.md](libida-autoanalysis.md) covers the auto-analysis driver and its fourteen queues, the undo journal and rollback, the processor-hook dispatch for switches and instruction analysis, the noret.cfg rule file, the user-pinned stack-pointer points, the FLIRT type-library autoload, and the mapping of IDA's analysis.* settings to unlace options. Its ranked missing items are the type-library autoload, the user-pinned SP points, the no-return rename rules, the FLIRT tail-byte skip (to be verified), and the undo journal.

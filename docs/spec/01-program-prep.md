@@ -7505,7 +7505,25 @@ every other binary's pass list is byte-identical to before the pass existed):
   or two that are not neighbours — and none of that class's slots is named. A
   deleting destructor that only tail-calls `operator delete` (clang drops a
   complete destructor's dead stores from it) cannot be told from an ordinary method,
-  so such a class keeps its slot names. A destructor takes only `this`, while a
+  so such a class keeps its slot names, unless its base says where they are. GCC
+  writes the destructor slots of an abstract class as two null words: its vtable is
+  only installed while a derived object is built or destroyed, when neither is called
+  through it. A primary vtable that walks to no slot because its first two words are
+  0, neither covered by a dynamic relocation, followed by a method (code, or an
+  imported slot such as `__cxa_pure_virtual`), is such a class's
+  (`kuna_itaniumrtti.rs (null_dtor_pair)`); the class keeps that vptr and has a
+  virtual destructor at slot 0. Under single inheritance a class's primary vtable
+  extends its base's, so a class whose own slots show no destructor, on a single
+  inheritance chain (every two ancestors one the other's), takes its `D1` and `D0`
+  from the slots of the nearest ancestor whose destructors are known (from the null
+  pair or the shapes above): both slots its own, not the ancestor's entries, holding
+  two different functions no other class's slots hold
+  (`kuna_itaniumctors.rs (inherited_destructor_slots)`). That names the destructors a
+  GCC `-O2` build drops every vptr store from (a final class whose destructor only
+  frees members) and those that store only the vptr of the base destructor they
+  inlined: apfs-fuse's `PLString`, `PLInteger`, `PLData`, `PLDict` and `PLArray`
+  under the abstract `PLObject`, and `BTreeNodeVar`/`BTreeNodeFix` under `BTreeNode`.
+  A destructor takes only `this`, while a
   virtual method returning its own class by value builds the result in a return
   slot passed as its first parameter, reads its own `this` from the second, and
   hands the slot's address back, so its first store is the class's vptr through

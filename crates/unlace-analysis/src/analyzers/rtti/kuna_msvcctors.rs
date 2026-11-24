@@ -88,6 +88,7 @@ pub fn run(ctx: &AnalysisCtx) -> AnalysisOutput {
                 .collect(),
             primary_slots: Vec::new(),
             vptrs: Vec::new(),
+            null_dtor_pair: false,
         })
         .collect();
     let mut owner_of: HashMap<u64, (usize, bool)> = HashMap::new();

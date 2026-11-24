@@ -699,6 +699,16 @@ latent = false
 exposure = "(unlace) option cstringconst -> PrintC::push_vn_explicit_ir pointer and call-argument arms + unlace_cstringconst::literal_char"
 
 [[subphase]]
+name = "global-string-name"
+phase = "P9"
+decision = "an unnamed global whose bytes are a C string: its address or its string label"
+assertion = "stringglobalnames on|off"
+strength = "HARD"
+rewind = "P9"
+latent = false
+exposure = "(unlace) option stringglobalnames -> unlace_emit::stringglobalnames::global_name, used by PrintC and the project header"
+
+[[subphase]]
 name = "type-definition-preamble"
 phase = "P9"
 decision = "print the definitions of the composite/enum/typedef types a function's C names above it vs the bare function document"
@@ -1595,6 +1605,25 @@ symptoms = "a short string literal argument prints as a hex integer like 0x28abe
 live_field = "cstring_const"
 live_true = "on"
 live_false = "off"
+
+[[settable]]
+option = "stringglobalnames"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "global-string-name"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-1282-string-global-names"
+summary = "Name an unnamed global whose bytes are a C string after the string, as IDA does: a global holding `\"hello world\"` prints as `&aHelloWorld` where unlace prints `&dat_<addr>`, and the `decompile-project` header declares it under the same name. The label capitalises the words of the text, drops every non-alphanumeric byte, and reads `aEmpty` when nothing is left. The text is the printable run from the global's address up to a NUL, at least two bytes long and holding a letter or digit, read from the loaded image. Two globals holding the same text share one name; the printer does not uniquify them, which is why the option is off by default. Inert unless the option is on, so 0/675 datatest assertions move."
+use_when = "Off by default: the label is IDA's naming, not the program's, and two globals with the same text collide. Flip on when reading output next to IDA, or when a string's use site is easier to follow by its text than by its address."
+example = "option stringglobalnames on"
+source_decompiler = "ida"
+inspiration = "IDA names a string global after its text (aHelloWorld, aS, aEmpty) and prints the name at every use; an LLM reading the output gets the string's meaning from the name."
+change_kind = "presentation-default"
+tier = "core"
+symptoms = "a global used by address prints as dat_2b080 where the string it holds says what the use is|a format string or message is only reachable as &dat_<addr> and the reader must look the bytes up|the same string global appears as dat_<addr> in one function and under its text in IDA"
 
 [[settable]]
 option = "charnum"
@@ -5747,6 +5776,25 @@ symptoms = "the same local declared once although many HighVariables share the s
 live_field = "dedup_var_decls"
 live_true = "on"
 live_false = "off"
+
+[[settable]]
+option = "renumberlocals"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "naming-policy"
+strength = "HARD"
+rewind = "P9"
+issue = "hexrays-renumber-locals"
+summary = "Renumber the synthetic locals the naming pass spells v<N> from v1 in the order the printer collects them, so a function's default-named locals read v1, v2, ... with no gaps, the way Hex-Rays numbers them. Names that are not v<N> (parameters, recovered names, stack names) are unchanged, and a spelling another identifier of the function already holds is skipped. The renamed spelling is applied to every declaration and body reference of the local."
+use_when = "Off by default: renumbering is a readability choice, not a fix, so the default keeps the naming pass's numbering, which records the order the decompiler met each local. Turn it on to read a function whose synthetic locals have gaps (v3, v7, v12) as a compact v1..vK list. The order is the collection order of the declarations, which tracks first appearance but is not a body walk, and a synthetic name the declaration list drops keeps its spelling. The Hex-Rays sole-returned-local rule (result) and the argument-register carrier rule are not implemented yet."
+example = "option renumberlocals on"
+source_decompiler = "unlace"
+inspiration = "archived unlace printer lvar_names.rs (number_synthetic_locals): Hex-Rays numbers synthetic locals v1, v2, ... in first-appearance order"
+change_kind = "readability"
+tier = "core"
+symptoms = "synthetic locals print as v7, v12 with gaps where Hex-Rays would print v1, v2|a function's default-named locals are numbered by the naming pass rather than read as a compact list"
 
 [[settable]]
 option = "noreturn_known"

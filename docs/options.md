@@ -1202,6 +1202,9 @@ Three tiers:
 | a void * chosen between two string literals prints as &dat_<addr> | [`cstringconst`](#cstringconst----on--off-default-on) |
 | an argument of a call through an untyped function pointer is an address into __cstring | [`cstringconst`](#cstringconst----on--off-default-on) |
 | a call argument prints as the integer value of a string's address in a dylib | [`cstringconst`](#cstringconst----on--off-default-on) |
+| a global used by address prints as dat_2b080 where the string it holds says what the use is | [`stringglobalnames`](#stringglobalnames----on--off-default-off) |
+| a format string or message is only reachable as &dat_<addr> and the reader must look the bytes up | [`stringglobalnames`](#stringglobalnames----on--off-default-off) |
+| the same string global appears as dat_<addr> in one function and under its text in IDA | [`stringglobalnames`](#stringglobalnames----on--off-default-off) |
 | full-line WARNING banner comments clutter the output | [`warnstyle`](#warnstyle----inline--banner-default-inline) |
 | warning text wanted inline at the end of the statement it describes | [`warnstyle`](#warnstyle----inline--banner-default-inline) |
 | terse warning slugs unwanted; full upstream warning text needed | [`warnstyle`](#warnstyle----inline--banner-default-inline) |
@@ -4160,6 +4163,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **Where / provenance:** P9/string-literal-section-constant · unlace · presentation-default · unlace-cstringconst
 - **Example:** `option cstringconst off`
 
+### `stringglobalnames` -- on | off, default `off`
+
+- **Symptoms:** a global used by address prints as dat_2b080 where the string it holds says what the use is; a format string or message is only reachable as &dat_<addr> and the reader must look the bytes up; the same string global appears as dat_<addr> in one function and under its text in IDA.
+- **What it does:** Name an unnamed global whose bytes are a C string after the string, as IDA does: a global holding `"hello world"` prints as `&aHelloWorld` where unlace prints `&dat_<addr>`, and the `decompile-project` header declares it under the same name. The label capitalises the words of the text, drops every non-alphanumeric byte, and reads `aEmpty` when nothing is left. The text is the printable run from the global's address up to a NUL, at least two bytes long and holding a letter or digit, read from the loaded image. Two globals holding the same text share one name; the printer does not uniquify them, which is why the option is off by default. Inert unless the option is on, so 0/675 datatest assertions move.
+- **When to flip:** Off by default: the label is IDA's naming, not the program's, and two globals with the same text collide. Flip on when reading output next to IDA, or when a string's use site is easier to follow by its text than by its address.
+- **Where / provenance:** P9/global-string-name · ida · presentation-default · unlace-1282-string-global-names
+- **Example:** `option stringglobalnames on`
+
 ### `warnstyle` -- inline | banner, default `inline`
 
 - **Symptoms:** full-line WARNING banner comments clutter the output; warning text wanted inline at the end of the statement it describes; terse warning slugs unwanted; full upstream warning text needed; warning style needs to match upstream ghidra for diffing.
@@ -4495,6 +4506,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default (DIV-7): a stack slot is declared once even when many same-named scalar HighVariables share it (e.g. x86_64/cvs main, where the per-high rendering repeats `int4 option_index; // stack - 0x3c` ~200x), including when two live ranges of the slot recovered different types and so rendered two differently-typed declarations of one name -- invalid C (DIV-52). Set OFF to restore the one-declaration-per-high rendering.
 - **Where / provenance:** P9/naming-policy · angr · presentation-default · angr-duplicate-decls
 - **Example:** `option dedupvardecls off`
+
+### `renumberlocals` -- on | off, default `off`
+
+- **Symptoms:** synthetic locals print as v7, v12 with gaps where Hex-Rays would print v1, v2; a function's default-named locals are numbered by the naming pass rather than read as a compact list.
+- **What it does:** Renumber the synthetic locals the naming pass spells v<N> from v1 in the order the printer collects them, so a function's default-named locals read v1, v2, ... with no gaps, the way Hex-Rays numbers them. Names that are not v<N> (parameters, recovered names, stack names) are unchanged, and a spelling another identifier of the function already holds is skipped. The renamed spelling is applied to every declaration and body reference of the local.
+- **When to flip:** Off by default: renumbering is a readability choice, not a fix, so the default keeps the naming pass's numbering, which records the order the decompiler met each local. Turn it on to read a function whose synthetic locals have gaps (v3, v7, v12) as a compact v1..vK list. The order is the collection order of the declarations, which tracks first appearance but is not a body walk, and a synthetic name the declaration list drops keeps its spelling. The Hex-Rays sole-returned-local rule (result) and the argument-register carrier rule are not implemented yet.
+- **Where / provenance:** P9/naming-policy · unlace · readability · hexrays-renumber-locals
+- **Example:** `option renumberlocals on`
 
 ### `vexzeroupper` -- on | off, default `on`
 

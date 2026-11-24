@@ -2343,7 +2343,9 @@ mod tests {
         // and kuna-dex-javasync / DEX synchronized blocks and finally clauses (option javasync)
         // and kuna-llscfold-arm + kuna-llscfold-a64-pair / ARM rotated compare-exchange and
         // ldrexd/strexd, ldaxp/stlxp doubleword retry loops fold (option llscfold)
-        assert_eq!(count, 1009, "corpus file count drifted");
+        // and kuna-boolreturn-default / constant-return predicates print as one return (option boolreturn)
+        // and jt871-struct-field-index-across-call / a switch index read from a struct passed to a call stays a switch
+        assert_eq!(count, 1011, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

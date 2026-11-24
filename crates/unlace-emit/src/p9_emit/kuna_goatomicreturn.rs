@@ -287,9 +287,8 @@ pub fn plan(fd: &Funcdata, arch: &Architecture) -> Option<Plan> {
     } else {
         return None;
     };
-    let stored_load = load(fd, proof, loaded, &mut used, target, space)?;
-    if stored_load == proof.old_load
-        || !signed(&fd.vn_type_read_facing(delta, sum), proof.width)
+    load(fd, proof, loaded, &mut used, target, space)?;
+    if !signed(&fd.vn_type_read_facing(delta, sum), proof.width)
         || !signed(parameter_type(fd, delta)?, proof.width)
         || fd.vbank().get(delta)?.get_size() != proof.width
     {

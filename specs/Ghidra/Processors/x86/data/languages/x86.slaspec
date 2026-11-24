@@ -25,6 +25,7 @@ with : lockprefx=0 {
 @include "pclmulqdq.sinc"
 @include "gfni_vaes.sinc"
 @include "avx_ne_convert.sinc"
+@include "amd_xop.sinc"
 @include "mpx.sinc"
 @include "lzcnt.sinc"
 @include "bmi1.sinc"

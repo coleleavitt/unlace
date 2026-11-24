@@ -741,6 +741,12 @@ Three tiers:
 | many sub_<addr> functions that end in _Unwind_Resume() | [`ehcold`](#ehcold----on--off-default-on) |
 | a stripped c++ binary's function list is full of cleanup fragments from .text.unlikely | [`ehcold`](#ehcold----on--off-default-on) |
 | a function that starts by reading an undefined rbx and frees buffers before _Unwind_Resume | [`ehcold`](#ehcold----on--off-default-on) |
+| an mfc window class's message handlers are missing from the function list | [`mfcmsgmap`](#mfcmsgmap----on--off-default-off) |
+| a function in an mfc image spans several handlers that a message map names | [`mfcmsgmap`](#mfcmsgmap----on--off-default-off) |
+| IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour | [`mfcmsgmap`](#mfcmsgmap----on--off-default-off) |
+| an msvc i386 image lists far fewer functions than IDA | [`msvcptrentry`](#msvcptrentry----on--off-default-off) |
+| a function in an msvc i386 c++ image spans several of IDA's functions | [`msvcptrentry`](#msvcptrentry----on--off-default-off) |
+| a vtable slot or callback in a 32-bit dll is not in the function list | [`msvcptrentry`](#msvcptrentry----on--off-default-off) |
 | a tail jump to an undeclared import drops an argument the function passes through | [`importvote`](#importvote----on--off-default-on) |
 | a forwarder to a library function prints void and no return | [`importvote`](#importvote----on--off-default-on) |
 | return helper() with fewer arguments than the other calls to helper pass | [`importvote`](#importvote----on--off-default-on) |
@@ -1136,6 +1142,10 @@ Three tiers:
 | stg, st2g or stzg leave no trace in the output of MTE-hardened AArch64 code | [`acleintrinsics`](#acleintrinsics----on--off-default-on) |
 | DataMemoryBarrier(2,3) or DataSynchronizationBarrier(3,3,0) where the source called __dmb or __dsb | [`acleintrinsics`](#acleintrinsics----on--off-default-on) |
 | WaitForInterrupt() or Yield() where the source called __wfi or __yield | [`acleintrinsics`](#acleintrinsics----on--off-default-on) |
+| a 160-bit or 256-bit constant prints as a chain of zext732/zext832 shifts and ors | [`wideconst`](#wideconst----on--off-default-on) |
+| an evm address mask prints as ((zext732(0xffffffffffffff) << 0x40  | [`wideconst`](#wideconst----on--off-default-on) |
+|  ...) | [`wideconst`](#wideconst----on--off-default-on) |
+| an event topic hash spans several lines of shifted pieces | [`wideconst`](#wideconst----on--off-default-on) |
 | invalidInstructionException() after a call in a stripped rust or clang binary | [`trapaftercall`](#trapaftercall----on--off-default-on) |
 | a panic helper call is not marked no-return | [`trapaftercall`](#trapaftercall----on--off-default-on) |
 | ud2 after a call is printed as a jump-as-call | [`trapaftercall`](#trapaftercall----on--off-default-on) |
@@ -3021,6 +3031,22 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · ida95-22-ehcold
 - **Example:** `--option ehcold off`
 
+### `mfcmsgmap` -- on | off, default `off`
+
+- **Symptoms:** an mfc window class's message handlers are missing from the function list; a function in an mfc image spans several handlers that a message map names; IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour.
+- **What it does:** On a 32-bit PE, list the handlers of every MFC message map as functions. An MFC window class routes messages through a static AFX_MSGMAP in .rdata (pfnGetBaseMap, lpEntries) whose AFX_MSGMAP_ENTRY array (nMessage, nCode, nID, nLastID, nSig, pfn; 24 bytes each, ending in an all-zero entry) names each handler. The handlers are reached only through that table, so no entry oracle or direct-call walk finds them and each was folded into the function before it. A table is read only where the base relocations vouch for it: lpEntries and the pfnGetBaseMap word before it are relocated, pfnGetBaseMap points into code, the entries lie in a non-executable section, and every entry's pfn is a relocated pointer into code with nMessage below 0x10000 and nSig below 0x100. The handlers are walked as roots, so their callees are found too.
+- **When to flip:** Off by default. Turn it on for MFC applications and DLLs built with MSVC for i386, where window-message handlers (OnPaint, OnCommand handlers) are missing from the function list and their code is folded into the function before them. Measured on PEGRP32F.dll: 29 maps, 198 handlers, every one an IDA 9.5 function start, 194 of them missing before.
+- **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · holley-i386-ptrdisc
+- **Example:** `--option mfcmsgmap on`
+
+### `msvcptrentry` -- on | off, default `off`
+
+- **Symptoms:** an msvc i386 image lists far fewer functions than IDA; a function in an msvc i386 c++ image spans several of IDA's functions; a vtable slot or callback in a 32-bit dll is not in the function list.
+- **What it does:** On a 32-bit PE, make every executable address a base-relocated word points at a function entry when its bytes are an MSVC frame prologue (push ebp; mov ebp,esp as 55 8B EC, or 8B FF 55 8B EC with the hot-patch prefix). Vtable slots, MFC tables, callbacks pushed for the Win32 API and thread procedures are reached only through such pointers, so the walk never found them and each was folded into the function before it. The relocation table lists every pointer word in code and data. The prologue test keeps out the address-taken labels that are not functions: MSVC's own (switch targets, catch continuations, SEH handlers) start with no frame, and GCC/MinGW encode mov ebp,esp as 89 E5, so their SJLJ landing pads never match. The targets are walked as roots, so their callees are found too.
+- **When to flip:** Off by default. Turn it on for MSVC-built 32-bit C++ and MFC images with frame pointers, where many functions IDA lists are missing and a function spans several of IDA's. Measured on PEGRP32F.dll: 1,255 targets, all IDA 9.5 function starts, 452 missing before; walked as roots they reach 2,082 of the 2,455 starts that were missing. No false start on USBCAN-Driver, CP210xManufacturing or SLABHIDDevice. It finds nothing in code built with frame-pointer omission.
+- **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · holley-i386-ptrdisc
+- **Example:** `--option msvcptrentry on`
+
 ### `importvote` -- on | off, default `on`
 
 - **Symptoms:** a tail jump to an undeclared import drops an argument the function passes through; a forwarder to a library function prints void and no return; return helper() with fewer arguments than the other calls to helper pass.
@@ -3856,6 +3882,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default on AArch64 and inert on every other target: the output names the intrinsic the source called, and a pointer that was tagged is the result of a call instead of an unchanged copy. Flip off to read barriers and hints under their SLEIGH instruction names with the domain and type operands separate, or to read MTE-hardened code (for example a stack-tagging build, which tags every address-taken local) as if the core had no tags.
 - **Where / provenance:** P9/naming-policy · kuna · correctness-fix · kuna-acleintrinsics
 - **Example:** `option acleintrinsics off`
+
+### `wideconst` -- on | off, default `on`
+
+- **Symptoms:** a 160-bit or 256-bit constant prints as a chain of zext732/zext832 shifts and ors; an evm address mask prints as ((zext732(0xffffffffffffff) << 0x40 ;  ...); an event topic hash spans several lines of shifted pieces.
+- **What it does:** Print a constant wider than 64 bits that the lifter assembled from pieces as one hexadecimal literal. A Varnode constant holds at most 64 bits, so a wider value stays an expression tree: EVM's `PUSH20`/`PUSH32` lift as a 7-byte and an 8-byte immediate plus continuation bytes, and the 160-bit address mask printed as `((ZEXT732(0xffffffffffffff) << 0x40 | ZEXT832(0xffffffffffffffff)) << 0x28 | ZEXT532(0xffffffffff))` and an event topic as a four-line chain. `kuna_wideconst.rs` evaluates, at a `<<` or `|` whose output is wider than eight bytes (up to 32), the tree of constants, `ZEXT`s, constant left shifts and `|`s below it, through implied Varnodes only, exactly in 256-bit arithmetic, and the printer emits `0xffffffffffffffffffffffffffffffffffffffff` in its place. A `CONCAT` of two words (a Go or Swift pair) is a pair, not a number, and keeps its form.
+- **When to flip:** On by default: 0/675 datatest assertions and 0 stage assertions move (no other corpus builds a constant wider than 64 bits from shifts). Flip off to see the pieces the lifter built the constant from.
+- **Where / provenance:** P9/literal-format · kuna · presentation-default · unlace-wide-constant-literal
+- **Example:** `option wideconst off`
 
 ### `trapaftercall` -- on | off, default `on`
 

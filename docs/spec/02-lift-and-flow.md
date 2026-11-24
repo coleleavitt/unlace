@@ -4170,6 +4170,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 |---|---|---|---|
 | `SM83` | Sharp SM83 (Game Boy LR35902) | `SM83:LE:16:default` | aleph-void/ghidra-sm83 (fork of minorum/ghidra-sm83) @ `617689a194`, Apache-2.0 |
 | `VAX` | DEC VAX | `vax:LE:32:default` | kkaempf/ghidra-vax @ `d3655d8c99`, Apache-2.0 |
+| `i960` | Intel i960 | `i960:LE:32:default`, `i960:LEBE:32:lebe` | aleph-void/ghidra-i960 @ `1b84289e7f`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

@@ -38,6 +38,10 @@ specs/Ghidra/Processors/VAX vendors the DEC VAX SLEIGH specification of
 kkaempf/ghidra-vax (https://github.com/kkaempf/ghidra-vax), released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/i960 vendors the Intel i960 SLEIGH specification of
+aleph-void/ghidra-i960 (https://github.com/aleph-void/ghidra-i960), released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

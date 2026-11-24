@@ -1,0 +1,86 @@
+# containerof: a pointer stepped back from a struct member to its struct prints as
+# container_of(p, S, m).  Each function is gcc -O2 `lea rax,[rdi-K]; ret` for
+# `return container_of(p, S, m);` with p a `list_head *`:
+#   owner  @ 0x1000 : item,  node at 0x10   (PTRADD p,-1,16)
+#   owner2 @ 0x1010 : item2, node at 0x18   (PTRSUB(PTRADD p,-2,16), 8)
+#   owner3 @ 0x1020 : outer, in.node at 0x10 (a member of a nested struct)
+# Pass 1 (default, containerof off) keeps the cast of the pointer arithmetic; pass 2
+# (containerof on, an ELF image) prints container_of.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'owner' },
+    { space = 'ram', offset = '0x1010', name = 'owner2' },
+    { space = 'ram', offset = '0x1020', name = 'owner3' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '488d47f0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1010'
+readonly = true
+hex = '488d47e8c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1020'
+readonly = true
+hex = '488d47f0c3'
+
+[script]
+commands = [
+    'parse line struct list_head { list_head *next; list_head *prev; };',
+    'parse line struct item { int4 id; int4 pad; int8 val; list_head node; };',
+    'parse line struct item2 { int4 a; int4 pad; int8 b; int8 c; list_head node; };',
+    'parse line struct inner { int8 y; list_head node; };',
+    'parse line struct outer { int4 x; int4 pad; inner in; };',
+    'parse line extern item *owner(list_head *p);',
+    'parse line extern item2 *owner2(list_head *p);',
+    'parse line extern outer *owner3(list_head *p);',
+    'lo fu owner',
+    'decompile',
+    'print C',
+    'lo fu owner2',
+    'decompile',
+    'print C',
+    'lo fu owner3',
+    'decompile',
+    'print C',
+    'option containerof on',
+    'lo fu owner',
+    'decompile',
+    'print C',
+    'lo fu owner2',
+    'decompile',
+    'print C',
+    'lo fu owner3',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CONTAINEROF #1: off prints the cast of the pointer arithmetic'
+count = 1
+literal = 'return (item *)&p[-1];'
+
+[[match]]
+name = 'CONTAINEROF #2: on prints container_of for a PTRADD step'
+count = 1
+literal = 'return container_of(p,item,node);'
+
+[[match]]
+name = 'CONTAINEROF #3: on sums a PTRSUB of a PTRADD (node at 0x18)'
+count = 1
+literal = 'return container_of(p,item2,node);'
+
+[[match]]
+name = 'CONTAINEROF #4: on finds a member of a nested struct by its type'
+count = 1
+literal = 'return container_of(p,outer,in.node);'

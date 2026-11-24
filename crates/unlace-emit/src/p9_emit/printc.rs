@@ -9874,6 +9874,9 @@ impl PrintC {
             self.op_go_cast(fd, arch, op);
             return;
         }
+        if self.push_container_of(fd, arch, op) {
+            return;
+        }
         if self.options.bytearray_c
             && self
                 .stmt_op

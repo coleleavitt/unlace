@@ -1455,6 +1455,25 @@ tier = "core"
 symptoms = "the emitted C contains a member named like `._4_2_` or `._0_8_`|a variable is read as `v1._6_1_` and the text does not compile|a 16-byte register pair returns as `v1._0_16_`|a libc record such as `stat` is read as `v3._24_4_`"
 
 [[settable]]
+option = "containerof"
+values = "on|container_of|containing_record|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "pointer-notation"
+strength = "HARD"
+rewind = "P9"
+issue = "ida-gap-containerof"
+summary = "Print a pointer stepped back from a struct member to the start of the struct as the container macro: `(item *)&p[-1]` prints `container_of(p, item, node)`. The pattern is a CAST to `S *` of an expression the printer would inline, made of constant steps from a pointer `p` (PTRADD with a constant index, PTRSUB, INT_ADD of a constant, INT_SUB, CAST, COPY), whose bytes sum to `-K` with `0 < K < sizeof(S)`. `S` must be a named, complete struct with a member that starts `K` bytes in. When `p` points to a struct, that member's type must be `p`'s pointee, found through nested struct members as a dotted path (`container_of(p, outer, in.node)`), so a step that lands inside some other member does not fire. `on` spells it `CONTAINING_RECORD` on a Windows image (a Windows compiler spec or a Windows user-mode PE) and `container_of` elsewhere, `container_of` and `containing_record` fix the spelling. C output only; only the CAST's rendering changes."
+use_when = "Turn on to read intrusive-list and embedded-member code (Linux `list_head`/`work_struct` callbacks, Windows `LIST_ENTRY`) the way the source wrote it, when the binary's types (DWARF, PDB, a header) name the container struct. Leave off for the raw pointer arithmetic."
+example = "option containerof on"
+source_decompiler = "ida"
+inspiration = "Hex-Rays prints a pointer minus a member offset of a known struct as CONTAINING_RECORD (notes/ida-gap/hexrays-ctree-printer.md, row 9)"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "(item *)&p[-1] where the source has container_of(p, struct item, node)|a list or embedded-member pointer is cast to its struct with a negative index or offset|CONTAINING_RECORD(Entry, T, Links) prints as (T *)((char *)Entry - 0x10)"
+
+[[settable]]
 option = "postinc"
 values = "on|off"
 default = "on"

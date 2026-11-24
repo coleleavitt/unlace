@@ -1379,6 +1379,7 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "flirt-sig",
+ "memchr",
  "object",
  "regex",
  "serde",

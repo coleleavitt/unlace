@@ -111,11 +111,11 @@ fn step(fd: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, OpId, i64)> {
     let at = |i| op.get_in(i);
     let (base, delta) = match op.code() {
         OpCode::CPUI_PTRADD if op.num_input() == 3 => {
-            let (index, isize) = constant(fd, at(1)?)?;
+            let (index, width) = constant(fd, at(1)?)?;
             let (elem, _) = constant(fd, at(2)?)?;
             (
                 at(0)?,
-                signed(index, isize).checked_mul(i64::try_from(elem).ok()?)?,
+                signed(index, width).checked_mul(i64::try_from(elem).ok()?)?,
             )
         }
         OpCode::CPUI_PTRSUB if op.num_input() == 2 => {

@@ -7548,8 +7548,10 @@ every other binary's pass list is byte-identical to before the pass existed):
   second parameter (`kuna_itaniumctors.rs (built_after_base)`). Every helper above
   stores a class's own vptr alone or, inlining a destructor, the class's and then
   its bases', and a class with no base gives no order to read. GCC `-O2` keeps
-  apfs-fuse's `DeviceDMG::DeviceDMG`, `BTreeNodeVar::BTreeNodeVar(BTree &, ...)`
-  and `PLArray::PLArray` out of line in that shape. The class of a member that
+  apfs-fuse's `DeviceDMG::DeviceDMG` (a call to `Device::Device` passed `this`,
+  then its own vptr) and `BTreeNodeVar::BTreeNodeVar(BTree &, ...)` (the inlined
+  `BTreeNode` vptr first) out of line in that shape; `PLArray::PLArray`, whose
+  inlined base stores nothing, stays unnamed. The class of a member that
   is itself built from a base (`Holder`'s first member a `Derived`) shows the same
   order, and its constructor is then named `Derived::Derived`. A
   `this` the function stores to a second frame slot is an inlined callee's

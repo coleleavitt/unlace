@@ -518,7 +518,13 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
 
     // Externs (undefined referenced symbols) live in a synthetic area above the
     // laid-out sections — the angr extern-object analog.  Allocated on demand.
-    let mut extern_cursor = align_up(cursor.wrapping_add(0x1000), 0x1000);
+    // On a 16-bit machine the area follows the sections directly: AVR's
+    // `rcall` reaches 4 KiB, and a page gap would put every libcall out of reach.
+    let mut extern_cursor = if reloc_base(file) == RELOC_BASE {
+        align_up(cursor.wrapping_add(0x1000), 0x1000)
+    } else {
+        align_up(cursor.wrapping_add(0x10), 0x10)
+    };
     let mut extern_of: HashMap<SymbolIndex, u64> = HashMap::new();
     let mut extern_order: Vec<(SymbolIndex, u64)> = Vec::new();
     let mut common_allocator = super::kuna_commonalloc::CommonAllocator::new(

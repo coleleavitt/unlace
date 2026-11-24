@@ -822,6 +822,15 @@ fn listing_consumer_passes(arch: &Architecture) -> Vec<(bool, Box<dyn AnalysisPa
                     && unlace_decomp::kuna_armfloatargs::applies(arch)),
             Box::new(crate::formatstring::kuna_fmtstatic::FormatStringStaticPass),
         ),
+        // (kuna `goitabcalls`) Interface parameters of a stripped Go binary,
+        // typed from the static itabs its callers pass (call edges and `LEA`
+        // data edges of the Listing).
+        (
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_goitabcalls::GoItabCalls>()
+                .0,
+            Box::new(crate::gotypes::kuna_itabargs::GoItabArgsPass),
+        ),
     ]
 }
 
@@ -2440,7 +2449,8 @@ mod tests {
                 ("fid", false),
                 ("itaniumrtti", true),
                 ("flirt", false),
-                ("formatstring", false)
+                ("formatstring", false),
+                ("goitabargs", false)
             ]
         );
 

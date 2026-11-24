@@ -1,0 +1,62 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_fmt_args_x86_64',
+    'read symbols',
+    'option setlanguage rust-language',
+    'option rustfmt off',
+    'load function decimal_lf',
+    'decompile',
+    'print C',
+    'option rustfmt on',
+    'print C',
+    'load function reorder',
+    'decompile',
+    'print C',
+    'load function signed_lf',
+    'decompile',
+    'print C',
+    'load function reject_trait',
+    'decompile',
+    'print C',
+    'load function reject_clobber',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'primitive print off and clobbered descriptors keep runtime sink'
+count = 2
+literal = 'std::io::stdio::_print('
+
+[[match]]
+name = 'exponent trait recovers with its static specification'
+count = 1
+regex = '\bprint!\("\{:e\}".*\*const u64'
+
+[[match]]
+name = 'primitive decimal recovers newline'
+count = 1
+regex = '\bprintln!\("\{\}"'
+
+[[match]]
+name = 'primitive repeated indices preserve order'
+count = 1
+regex = '\bprintln!\("\{0\} \{1\} \{0\}"'
+
+[[match]]
+name = 'primitive signed stderr retains signed type'
+count = 1
+regex = 'eprintln!\("\{\}".*\*const i64'

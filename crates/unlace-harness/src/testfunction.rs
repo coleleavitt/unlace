@@ -47,6 +47,8 @@ use std::rc::Rc;
 
 use regex::Regex;
 
+use crate::stagetoml::{PatternLine, StageMatch, StageTest, escape_literal};
+
 use unlace_base::types::{int4, uint4};
 use unlace_base::xml::{DocumentStorage, Element};
 
@@ -221,6 +223,38 @@ impl FunctionTestProperty {
         })
     }
 
+    /// A property from a TOML stage assertion: regex lines compile as a `<stringmatch>` line
+    /// does, literal lines as their escaped text.
+    pub fn from_stage(m: &StageMatch) -> TestResult<FunctionTestProperty> {
+        let pattern = m
+            .lines
+            .iter()
+            .map(|l| match l {
+                PatternLine::Regex(p) => compile_pattern(p),
+                PatternLine::Literal(s) => compile_pattern(&escape_literal(s)),
+            })
+            .collect::<TestResult<Vec<Regex>>>()?;
+        Ok(FunctionTestProperty {
+            minimum_match: m.min,
+            maximum_match: m.max,
+            name: m.name.clone(),
+            pattern,
+            patnum: 0,
+            count: 0,
+        })
+    }
+
+    /// The property as text: name, count range and each compiled line (`describe`).
+    fn describe(&self, out: &mut String) {
+        out.push_str(&format!(
+            "match {:?} min={} max={}\n",
+            self.name, self.minimum_match, self.maximum_match
+        ));
+        for p in &self.pattern {
+            out.push_str(&format!("  line {:?}\n", p.as_str()));
+        }
+    }
+
     /// Test-only constructor: a single-line property over a raw regex string.
     #[cfg(test)]
     fn from_parts(name: &str, min: int4, max: int4, raw_lines: &[&str]) -> FunctionTestProperty {
@@ -323,6 +357,8 @@ pub struct FunctionTestCollection {
     /// Whether `<binaryimage>` produced a usable program (C++ `buildProgram`
     /// sets `dcp->conf`).
     saw_program: bool,
+    /// The loaded `<binaryimage>` element, kept for [`describe`](Self::describe).
+    image: Option<Rc<Element>>,
     /// The SLEIGH spec search roots (C++ `SleighArchitecture::specpaths`).
     /// `build_program` resolves the architecture against these; the binary
     /// supplies them (from `-sleighpath`/`SLEIGHHOME`).
@@ -351,6 +387,7 @@ impl FunctionTestCollection {
             num_tests_applied: 0,
             num_tests_succeeded: 0,
             saw_program: false,
+            image: None,
             spec_roots,
         }
     }
@@ -385,6 +422,7 @@ impl FunctionTestCollection {
         self.expected_errors.clear();
         self.test_list.clear();
         self.saw_program = false;
+        self.image = None;
         self.console.reset();
     }
 
@@ -437,6 +475,7 @@ impl FunctionTestCollection {
     /// `Architecture`.  An init failure raises the C++ `IfaceExecutionError`
     /// shape, so the file-level `Error executing <f>` path stays byte-faithful.
     fn build_program(&mut self, bi: &Rc<Element>) -> TestResult<()> {
+        self.image = Some(Rc::clone(bi));
         // C++ requires the "arch" attribute (the loader reads it); a missing one
         // is the init failure the `catch(LowlevelError &)` arm would surface.
         let arch_id = bi.get_attribute_value("arch").map_err(|e| {
@@ -469,6 +508,12 @@ impl FunctionTestCollection {
     /// root tag (`decompilertest` vs the unsupported `binaryimage` old form).
     pub fn load_test(&mut self, filename: &str) -> TestResult<()> {
         self.file_name = filename.to_string();
+        if filename.ends_with(".toml") {
+            let text = std::fs::read_to_string(filename)
+                .map_err(|e| TestError::Parse(format!("Unable to open {filename}: {e}")))?;
+            let stage = StageTest::parse(&text).map_err(TestError::Parse)?;
+            return self.restore_stage(&stage);
+        }
         let mut store = DocumentStorage::new();
         let doc = store
             .open_document(filename)
@@ -529,6 +574,64 @@ impl FunctionTestCollection {
             ));
         }
         Ok(())
+    }
+
+    /// A TOML stage test: the same program, commands and properties an XML file yields.
+    pub fn restore_stage(&mut self, stage: &StageTest) -> TestResult<()> {
+        for (com, expected) in &stage.commands {
+            self.commands.push(com.clone());
+            self.expected_errors.push(*expected);
+        }
+        for m in &stage.matches {
+            self.test_list.push(FunctionTestProperty::from_stage(m)?);
+        }
+        let mut store = DocumentStorage::new();
+        let doc = store
+            .parse_document(stage.image_xml.as_bytes())
+            .map_err(|e| TestError::Parse(e.explain().to_string()))?;
+        let bi = doc.get_root().clone();
+        store.register_tag(&bi);
+        self.build_program(&bi)
+    }
+
+    /// The loaded test as text, for comparing two spellings of one test: each command, each
+    /// property and the load image (byte chunks with their whitespace dropped, then symbols).
+    pub fn describe(&self) -> String {
+        let mut out = String::new();
+        for (com, expected) in self.commands.iter().zip(&self.expected_errors) {
+            out.push_str(&format!("com {com:?} expecterror={expected}\n"));
+        }
+        for t in &self.test_list {
+            t.describe(&mut out);
+        }
+        if let Some(bi) = &self.image {
+            let attr = |el: &Element, n: &str| {
+                el.get_attribute_value(n)
+                    .map(|v| String::from_utf8_lossy(v).into_owned())
+                    .ok()
+            };
+            out.push_str(&format!("image arch={:?}\n", attr(bi, "arch")));
+            for kind in ["bytechunk", "symbol"] {
+                for el in bi.get_children().iter().filter(|e| e.get_name() == kind) {
+                    let mut line = format!("  {kind}");
+                    for a in ["space", "offset", "readonly", "name"] {
+                        if let Some(v) = attr(el, a) {
+                            line.push_str(&format!(" {a}={v:?}"));
+                        }
+                    }
+                    let body: String = String::from_utf8_lossy(el.get_content())
+                        .chars()
+                        .filter(|c| !c.is_ascii_whitespace())
+                        .collect();
+                    if !body.is_empty() {
+                        line.push_str(&format!(" {body}"));
+                    }
+                    out.push_str(&line);
+                    out.push('\n');
+                }
+            }
+        }
+        out
     }
 
     /// C++ `restoreXmlOldForm`: the legacy binaryimage-comment format, which the
@@ -755,6 +858,61 @@ pub fn run_test_files(test_files: &[String], out: &mut String) -> int4 {
     run_test_files_with_specs(test_files, &[], out)
 }
 
+/// One test file's run: its results text, the summary lines it adds to `Failures:`, and its
+/// assertion totals.
+#[derive(Debug, Clone, Default)]
+pub struct FileRun {
+    pub file: String,
+    pub output: String,
+    pub failures: Vec<String>,
+    pub applied: int4,
+    pub succeeded: int4,
+}
+
+/// Run each file in turn through one collection (the loop of [`run_test_files_with_specs`]),
+/// keeping every file's results apart.
+pub fn run_test_files_each(test_files: &[String], spec_roots: &[String]) -> Vec<FileRun> {
+    let mut collection = FunctionTestCollection::with_spec_roots(spec_roots.to_vec());
+    let mut runs = Vec::with_capacity(test_files.len());
+    for file in test_files {
+        collection.clear();
+        let mut run = FileRun {
+            file: file.clone(),
+            ..FileRun::default()
+        };
+        match collection.load_test(file) {
+            Ok(()) => {
+                run.output = collection.run_tests(&mut run.failures);
+                run.applied = collection.get_tests_applied();
+                run.succeeded = collection.get_tests_succeeded();
+            }
+            // C++ `catch(IfaceParseError &err)`: Error parsing <f>: <msg>
+            Err(TestError::Parse(msg)) => {
+                let fs = format!("Error parsing {file}: {msg}");
+                run.output = format!("{fs}\n");
+                run.failures.push(fs);
+            }
+            // C++ `catch(IfaceExecutionError &err)`: Error executing <f>: <msg>
+            Err(TestError::Execution(msg)) => {
+                let fs = format!("Error executing {file}: {msg}");
+                run.output = format!("{fs}\n");
+                run.failures.push(fs);
+            }
+        }
+        runs.push(run);
+    }
+    runs
+}
+
+/// Load one test file without running it and describe it ([`FunctionTestCollection::describe`]).
+pub fn describe_test_file(file: &str) -> Result<String, String> {
+    let mut collection = FunctionTestCollection::new();
+    collection.load_test(file).map_err(|e| match e {
+        TestError::Parse(m) | TestError::Execution(m) => m,
+    })?;
+    Ok(collection.describe())
+}
+
 /// Like [`run_test_files`] but with the SLEIGH spec search roots the
 /// `<binaryimage>` architecture is resolved against (the `decomp_test_dbg`
 /// `-sleighpath <dir>` / `SLEIGHHOME` value).  The plain [`run_test_files`]
@@ -767,34 +925,12 @@ pub fn run_test_files_with_specs(
     let mut total_tests_applied = 0i32;
     let mut total_tests_succeeded = 0i32;
     let mut failures: Vec<String> = Vec::new();
-    let mut collection = FunctionTestCollection::with_spec_roots(spec_roots.to_vec());
-
-    for file in test_files {
-        collection.clear();
-        match collection.load_test(file) {
-            Ok(()) => {
-                let results = collection.run_tests(&mut failures);
-                out.push_str(&results);
-                total_tests_applied += collection.get_tests_applied();
-                total_tests_succeeded += collection.get_tests_succeeded();
-            }
-            // C++ `catch(IfaceParseError &err)`: Error parsing <f>: <msg>
-            Err(TestError::Parse(msg)) => {
-                let fs = format!("Error parsing {file}: {msg}");
-                out.push_str(&fs);
-                out.push('\n');
-                failures.push(fs);
-            }
-            // C++ `catch(IfaceExecutionError &err)`: Error executing <f>: <msg>
-            Err(TestError::Execution(msg)) => {
-                let fs = format!("Error executing {file}: {msg}");
-                out.push_str(&fs);
-                out.push('\n');
-                failures.push(fs);
-            }
-        }
+    for run in run_test_files_each(test_files, spec_roots) {
+        out.push_str(&run.output);
+        total_tests_applied += run.applied;
+        total_tests_succeeded += run.succeeded;
+        failures.extend(run.failures);
     }
-
     out.push('\n');
     out.push_str(&format!("Total tests applied = {total_tests_applied}\n"));
     out.push_str(&format!("Total passing tests = {total_tests_succeeded}\n"));

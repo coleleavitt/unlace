@@ -1,0 +1,107 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/function_pointer_namespaces_x86_64',
+    'read symbols',
+    'parse line extern unsigned long foreign_address(void);',
+    'parse line extern unsigned long nested_address(void);',
+    'parse line extern unsigned long right_address(void);',
+    'parse line extern unsigned long global_shadow(unsigned long target);',
+    'parse line extern unsigned long scope_shadow(unsigned long left);',
+    'parse line extern unsigned long interior_address(void);',
+    'parse line extern unsigned long data_address(void);',
+    'option namespacestrategy none',
+    'load function foreign_address',
+    'decompile',
+    'print C',
+    'option namespacestrategy minimal',
+    'print C',
+    'load function nested_address',
+    'decompile',
+    'print C',
+    'load function right_address',
+    'decompile',
+    'print C',
+    'load function global_shadow',
+    'decompile',
+    'print C',
+    'load function scope_shadow',
+    'decompile',
+    'print C',
+    'load function left::same_address',
+    'decompile',
+    'print C',
+    'load function right::cross_address',
+    'decompile',
+    'print C',
+    'option namespacestrategy all',
+    'load function left::same_address',
+    'decompile',
+    'print C',
+    'load function global_shadow',
+    'decompile',
+    'print C',
+    'load function interior_address',
+    'decompile',
+    'print C',
+    'load function data_address',
+    'decompile',
+    'print C',
+    'option namespacestrategy none',
+    'print C',
+    'load function interior_address',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'none and same-scope minimal use the bare function'
+count = 2
+regex = 'return (\(uint8\))?target;'
+
+[[match]]
+name = 'foreign cross-scope and all same-scope addresses qualify'
+count = 3
+regex = 'return (\(uint8\))?left::target;'
+
+[[match]]
+name = 'nested namespace address'
+count = 1
+literal = 'return (uint8)left::deep::target;'
+
+[[match]]
+name = 'other namespace address'
+count = 1
+literal = 'return (uint8)right::target;'
+
+[[match]]
+name = 'global root survives local shadow under minimal and all'
+count = 2
+literal = 'return (uint8)::target;'
+
+[[match]]
+name = 'namespace root survives local namespace-name shadow'
+count = 1
+literal = 'return (uint8)::left::target;'
+
+[[match]]
+name = 'interior address remains explicit under either policy'
+count = 2
+literal = 'return 0x1151;'
+
+[[match]]
+name = 'data address is unchanged under either policy'
+count = 2
+literal = 'return (uint8)&_ZN4left4dataE;'

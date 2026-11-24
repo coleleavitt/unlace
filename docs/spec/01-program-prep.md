@@ -6303,7 +6303,7 @@ moves.
   actual lowercase hash follows it. The reduced-name pass keeps that component,
   and the Rust fallback keeps it when the demangler would elide it under
   alternate formatting. An accepted LLVM suffix still follows the demangler's
-  existing suffix rules. `tests/stages/ghangr-rust-uppercase-legacy-hash.xml`
+  existing suffix rules. `tests/stages/ghangr-rust-uppercase-legacy-hash.toml`
   pins these spellings and ordinary Itanium, MSVC, legacy and v0 names.
 
   A legacy Rust name with an LLVM import suffix still goes to the Rust

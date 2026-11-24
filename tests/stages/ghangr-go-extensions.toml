@@ -1,0 +1,63 @@
+[image]
+arch = 'x86:LE:64:default:golang'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'index' },
+    { space = 'ram', offset = '0x100020', name = 'sign_scale' },
+    { space = 'ram', offset = '0x100040', name = 'zero_scale' },
+    { space = 'ram', offset = '0x100060', name = 'less_delta' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'd0eb480fbecb488d04c8488d4040c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100020'
+readonly = true
+hex = '480fbecb488d04c8488d4040c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100040'
+readonly = true
+hex = '0fb6cb488d04c8488d4040c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100060'
+readonly = true
+hex = '4839c30f97c10fb6c94829c8c3'
+
+[script]
+commands = [
+    'option outlang go',
+    'parse line extern long index(long a, unsigned char b);',
+    'parse line extern long sign_scale(long a, unsigned char b);',
+    'parse line extern long zero_scale(long a, unsigned char b);',
+    'parse line extern unsigned long less_delta(unsigned long a, unsigned long b);',
+    'lo fu index',
+    'decompile',
+    'print C',
+    'lo fu sign_scale',
+    'decompile',
+    'print C',
+    'lo fu zero_scale',
+    'decompile',
+    'print C',
+    'lo fu less_delta',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Go widening before scaled signed arithmetic'
+count = 2
+literal = 'int64(int8('
+
+[[match]]
+name = 'Go boolean widening has an explicit zero or one value'
+count = 1
+literal = 'return a - func(value bool) uint64 { if value { return 1 }; return 0 }(a < b)'

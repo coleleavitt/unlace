@@ -1,0 +1,53 @@
+# Compiled from tests/fixtures/go-aarch64-stack-stride/scalars.go with Go 1.27.2.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:golang'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'TwoSpills' },
+    { space = 'ram', offset = '0x100100', name = 'LastRegister' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'e10740f922f07dd3410001cbe20b40f92000028bc0035fd60000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100100'
+readonly = true
+hex = 'e1f17dd321000fcbe20740f92000028bc0035fd6000000000000000000000000'
+
+[script]
+commands = [
+    'option sourcelang go',
+    'option outlang go',
+    'map prototype TwoSpills int8 TwoSpills(int8 a0,int8 a1,int8 a2,int8 a3,int8 a4,int8 a5,int8 a6,int8 a7,int8 a8,int8 a9,int8 a10,int8 a11,int8 a12,int8 a13,int8 a14,int8 a15,int8 x,int8 y);',
+    'map prototype LastRegister int8 LastRegister(int8 a0,int8 a1,int8 a2,int8 a3,int8 a4,int8 a5,int8 a6,int8 a7,int8 a8,int8 a9,int8 a10,int8 a11,int8 a12,int8 a13,int8 a14,int8 x,int8 y);',
+    'load function TwoSpills',
+    'decompile',
+    'print C',
+    'print raw',
+    'load function LastRegister',
+    'decompile',
+    'print C',
+    'print raw',
+    'option sourcelang auto',
+    'option outlang c-language',
+]
+
+[[match]]
+name = 'Go AArch64 consecutive signed eight-byte arguments both use their declared stack names'
+count = 2
+regex = '^  return x \* 7 \+ y$'
+
+[[match]]
+name = 'Go AArch64 two scalar spills enter at adjacent stack words'
+count = 1
+regex = '^0x00100010:[[:xdigit:]]+:[[:space:]]+.* \+ s0x00000010\(i\)$'
+
+[[match]]
+name = 'Go AArch64 the previous scalar still uses the last argument register'
+count = 1
+regex = '^0x00100104:[[:xdigit:]]+:[[:space:]]+.* = x15\(i\) \* #0x7$'

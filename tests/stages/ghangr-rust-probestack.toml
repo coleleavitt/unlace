@@ -1,0 +1,145 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_probestack_x86_64',
+    'option rustprobestack off',
+    'read symbols',
+    'parse line extern uint4 probe_page(uint4 x);',
+    'load function probe_page',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_observes_r11(uint4 x);',
+    'load function probe_observes_r11',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_saved_rbp(uint4 x);',
+    'load function probe_saved_rbp',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_probestack_x86_64',
+    'option rustprobestack auto',
+    'read symbols',
+    'parse line extern uint4 probe_page(uint4 x);',
+    'load function probe_page',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_tail(uint4 x);',
+    'load function probe_tail',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_pages(uint4 x);',
+    'load function probe_pages',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_observes_r11(uint4 x);',
+    'load function probe_observes_r11',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_zero(uint4 x);',
+    'load function probe_zero',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_one(uint4 x);',
+    'load function probe_one',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_page_r11(uint4 x);',
+    'load function probe_page_r11',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_plus_one(uint4 x);',
+    'load function probe_plus_one',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_pages_r11(uint4 x);',
+    'load function probe_pages_r11',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_saved_rbp(uint4 x);',
+    'load function probe_saved_rbp',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_return_slot(uint4 x);',
+    'load function probe_return_slot',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_side_effect(uint4 x);',
+    'load function probe_side_effect',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_observes_flags(uint4 x);',
+    'load function probe_observes_flags',
+    'decompile',
+    'print C',
+    'parse line extern uint4 probe_unknown(uint4 x);',
+    'load function probe_unknown',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_probestack_buffer_x86_64',
+    'option rustprobestack auto',
+    'read symbols',
+    'parse line extern uint4 probe_buffer(uint4 x);',
+    'parse line extern uint4 fill_probe_page(uint1 *out,uint4 x);',
+    'load function probe_buffer',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'off and unverified flag/frame calls remain'
+count = 5
+literal = '__rust_probestack();'
+
+[[match]]
+name = 'ordinary effectful helper remains'
+count = 1
+literal = 'not_a_probe('
+
+[[match]]
+name = 'page frame values preserved'
+count = 4
+literal = 'return x + 7;'
+
+[[match]]
+name = 'live residual eight recovered'
+count = 1
+literal = 'return x + 8;'
+
+[[match]]
+name = 'full-page residuals recovered'
+count = 2
+literal = 'return x + 0x1000;'
+
+[[match]]
+name = 'single-byte residuals recovered'
+count = 2
+literal = 'return x + 1;'
+
+[[match]]
+name = 'zero residual and saved RBP preserved'
+count = 2
+literal = 'return x;'
+
+[[match]]
+name = 'return slot preserved'
+count = 1
+literal = 'return 1;'
+
+[[match]]
+name = 'transient helper spill leaves the complete caller buffer'
+count = 1
+literal = 'v1 [4096];'

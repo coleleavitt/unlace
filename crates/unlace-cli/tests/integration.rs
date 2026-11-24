@@ -48,6 +48,8 @@ mod w65816_raw;
 mod x86_amx;
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
+#[path = "i4004_raw.rs"]
+mod i4004_raw;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

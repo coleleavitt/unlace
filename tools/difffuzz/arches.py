@@ -1459,7 +1459,7 @@ class ObjdumpDis:
                 continue
             off = int(m.group(1), 16)
             text = m.group(3).strip()
-            if off % self.width or not text or text.startswith(("(bad)", ".word", ".long", ".byte", ".short", "#")):
+            if off % self.width or not text or text.startswith(("(bad)", ".word", ".long", ".byte", ".short", "#", "*unknown*")):
                 continue
             mn, ops = (re.split(r"\s+", text, maxsplit=1) + [""])[:2]
             got[off // self.width] = (mn, ops.strip())
@@ -1587,4 +1587,54 @@ class Alpha(ObjdumpArch):
         return Arch.addr_ok(self, a)
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha())}
+OR1K_DENY = re.compile(
+    r"^(l\.j|l\.jal|l\.jr|l\.jalr|l\.bf|l\.bnf|l\.sys|l\.trap|l\.rfe|l\.mtspr|l\.mfspr|l\.[cmp]sync|l\.cust\d|"
+    r"lf\..*|lv\..*|l\.nop|l\.lwa|l\.swa|l\.mac.*|l\.msb.*|l\.muld.*|l\.extw[sz])$"
+)
+
+
+class Or1k(ObjdumpArch):
+    """OpenRISC 1000 (ORBIS32) against qemu-or1k (--oracle qemu), decoded by binutils. F and CY
+    are compared; OV is not (user mode cannot read SR). Jumps, branches, system, SPR, MAC,
+    atomic and floating-point instructions are not generated."""
+    name = "or1k"
+    lang = "OpenRISC:BE:32:default"
+    elf_machine = 92
+    big = True
+    pc = "pc"
+    gprs = [(f"r{i}", None) for i in range(1, 32)]
+    pc_const = None
+    flags_reg = "sr"
+    flag_bits = {"F": 0, "CY": 1, "OV": 2}
+    deny = OR1K_DENY
+    objdump_machine = "or1k"
+
+    def unicorn(self):
+        raise NotImplementedError("or1k runs with --oracle qemu")
+
+    def fix_flags(self, word):
+        return word & ~4                      # the harness leaves OV clear
+
+    ALU = [0x000, 0x001, 0x002, 0x003, 0x004, 0x005, 0x306, 0x30B, 0x309, 0x30A, 0x008, 0x048, 0x088, 0x0C8,
+           0x00E, 0x00F, 0x10F, 0x00C, 0x04C, 0x08C, 0x0CC, 0x00D, 0x04D]
+    SF = [0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0xA, 0xB, 0xC, 0xD]
+
+    def draw(self, rng):
+        k, w = rng.random(), rng.getrandbits(32)
+        regs = w & 0x03FFF800
+        if k < 0.4:
+            w = 0xE0000000 | regs | rng.choice(self.ALU)                       # register ALU (0x38)
+        elif k < 0.55:
+            w = 0xE4000000 | rng.choice(self.SF) << 21 | (w & 0x1FF800)        # l.sf* (0x39)
+        elif k < 0.65:
+            w = 0xB8000000 | regs & ~0x7FF | (w & 0xFF)                       # shifts by immediate (0x2e)
+        elif k < 0.75:
+            w = 0xBC000000 | rng.choice(self.SF) << 21 | (w & 0x1FFFFF)       # l.sf*i (0x2f)
+        return w.to_bytes(4, "big")
+
+    def ignored(self, mnemonic, operands, state):
+        # QEMU 8.2 takes l.mulu's carry from a signed multiply
+        return {"OV", "CY"} if mnemonic == "l.mulu" else {"OV"}
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k())}

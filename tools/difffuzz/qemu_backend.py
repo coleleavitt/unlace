@@ -1179,6 +1179,91 @@ class AlphaHarness:
         return {n: struct.unpack_from("<Q", out, 8 * i)[0] for i, (n, _) in enumerate(arch.gprs)}, 0
 
 
+# ---------------------------------------------------------------- OpenRISC 1000 (32-bit, big endian)
+
+def or_li32(r, v):
+    """l.movhi r,hi; l.ori r,r,lo."""
+    return [0x18000000 | r << 21 | (v >> 16) & 0xFFFF, 0xA8000000 | r << 21 | r << 16 | (v & 0xFFFF)]
+
+
+def or_lwz(d, a, off):
+    return 0x84000000 | d << 21 | a << 16 | (off & 0xFFFF)
+
+
+def or_sw(b, a, off):
+    return 0xD4000000 | ((off >> 11) & 0x1F) << 21 | a << 16 | b << 11 | (off & 0x7FF)
+
+
+class Or1kHarness:
+    """r1..r31 at 4*i; F and CY in at 128/132 and back at 136/140; marker at 144. F is set with
+    l.sfne, CY with l.addi -1 (which leaves OV clear); CY reads back with l.addc and F with
+    l.cmov. OV cannot be read from user mode. The l.j delay slot restores the table register.
+    qemu-or1k does not hold r0 at zero, so the epilogue clears it first; r0 is not compared."""
+    qemu = ("qemu-or1k", [])
+    machine = 92
+    big = True
+    elf32 = True
+    seg_align = 0x2000
+    table_size = 152
+    marker_at = 144
+
+    def __init__(self):
+        self.s = 30
+        self.scratch_names = []
+
+    def choose_scratch(self, arch, regs, written):
+        for i in range(30, 0, -1):
+            n = arch.gprs[i - 1][0]
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.s = i
+                self.scratch_names = [n]
+                return True
+        return False
+
+    def _t(self):
+        return 3 if self.s != 3 else 4
+
+    def prologue(self, target):
+        s, t = self.s, self._t()
+        c = or_li32(s, TABLES)
+        c += [or_lwz(t, s, 128), 0xE4200000 | t << 16]                        # l.sfne t,r0
+        c += [or_lwz(t, s, 132), 0x9C000000 | t << 21 | t << 16 | 0xFFFF]     # l.addi t,t,-1
+        for i in range(1, 32):
+            if i != s:
+                c.append(or_lwz(i, s, 4 * i))
+        here = PROLOGUE + 4 * len(c)
+        c += [((target - here) >> 2) & 0x3FFFFFF, or_lwz(s, s, 4 * s)]          # l.j target; l.lwz (delay slot)
+        return words(c, True)
+
+    def epilogue(self, dumps, marker):
+        s, t = self.s, self._t()
+        u = 5 if 5 not in (s, t) else 6
+        c = [0x18000000]                                                       # l.movhi r0,0: qemu-or1k lets r0 be written
+        c += or_li32(s, OUT)
+        for i in range(1, 32):
+            if i != s:
+                c.append(or_sw(i, s, 4 * i))
+        c += [0xE0000001 | t << 21, or_sw(t, s, 140)]                           # l.addc t,r0,r0
+        c += [0x9C000000 | u << 21 | 1, 0xE000000E | t << 21 | u << 16, or_sw(t, s, 136)]  # l.addi u,r0,1; l.cmov t,u,r0
+        c += or_li32(t, marker) + [or_sw(t, s, self.marker_at + 4)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [0x9C000000 | 11 << 21 | 64, 0x9C000000 | 3 << 21 | 1] + or_li32(4, base) + or_li32(5, size) + [0x20000001]
+        c += [0x9C000000 | 11 << 21 | 93, 0x9C000000 | 3 << 21, 0x20000001]     # exit(0)
+        return words(c, True)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs[:31], start=1):
+            struct.pack_into(">I", t, 4 * i, init.get(n, 0) & 0xFFFFFFFF)
+        struct.pack_into(">II", t, 128, flagword & 1, (flagword >> 1) & 1)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {n: struct.unpack_from(">I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs[:31], start=1)}
+        f, cy = struct.unpack_from(">II", out, 136)
+        return regs, (f & 1) | (cy & 1) << 1
+
+
 HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
              "mipsr6": MipsR6Harness, "mips64r6": Mips64R6Harness, "nios2": Nios2Harness, "sh4": Sh4Harness,
              "ppc": lambda: PpcHarness(("qemu-ppc", ["-cpu", "7457"]), 20, True, False),
@@ -1186,7 +1271,7 @@ HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "r
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness, "hppa": HppaHarness, "alpha": AlphaHarness}
+             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness, "hppa": HppaHarness, "alpha": AlphaHarness, "or1k": Or1kHarness}
 
 
 def qemu_path(name):

@@ -143,6 +143,16 @@ afterwards. The register file is unchanged.
   and stores. Not generated: branches, PALcode, barriers, RPCC, locked loads/stores, IMPLVER,
   AMASK and floating point. Seeds 4 and 5, 3000 encodings each: 7191 and 7252 matches, no
   mismatches; the SLEIGH integer lifts needed no fix.
+- OpenRISC 1000 (`--arch or1k`, `OpenRISC:BE:32:default`, `--oracle qemu` with `qemu-or1k` from
+  QEMU 8.2), decoded by the binutils `objdump` (`ObjdumpArch`). F is set with `l.sfne` and read
+  with `l.cmov`, CY set with `l.addi -1` and read with `l.addc`; OV cannot be read from user mode
+  and is not compared. The `l.j` delay slot restores the table register; qemu-or1k lets r0 be
+  written, so the epilogue clears it first (r0 is not compared); segments are widened to 8 KiB.
+  The generator draws the register ALU, set-flag and shift-immediate forms with their reserved
+  bits clear. Not generated: jumps, branches, system, SPR, MAC, atomic, FP and vector
+  instructions, and `l.extws`/`l.extwz` (QEMU lacks them). QEMU 8.2 takes `l.mulu`'s carry from
+  a signed multiply, so CY is not compared there. Seed 6, 3000 encodings: 8803 matches, no
+  mismatches; the SLEIGH lifts needed no fix.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

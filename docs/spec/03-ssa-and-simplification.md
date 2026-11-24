@@ -3315,6 +3315,8 @@ repeated null checks. Folding a test the compiler duplicated into two
 predecessors can decide one copy only, which can leave a goto where the
 copies used to merge.
 
+**Stack-address equality** (`option addrcompare`, default **off**) -- `crates/unlace-bandb-base/src/p3_dataflow/addrcompare.rs (addrcompare_apply)`, run from `ActionRangeFold` ahead of the range folds, so the action schedule is unchanged. For each `INT_EQUAL` or `INT_NOTEQUAL` whose two inputs are stack addresses of one spacebase value (the spacebase itself, or `PTRSUB`/`INT_ADD` of it with a constant), the offsets are compared modulo the operand size: matching offsets give the equality true, differing offsets false, and the comparison becomes `COPY` of that boolean. Ordering comparisons are not folded, since their result depends on wrap-around of the frame base; neither are addresses from different bases or global addresses, which are not classified yet.
+
 ## 3.5 unlace peephole rewrites
 
 Unlace-added transforms live beside the upstream rules, each resolving an

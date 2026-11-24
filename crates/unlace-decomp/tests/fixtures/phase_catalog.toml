@@ -422,6 +422,25 @@ tier = "transform"
 symptoms = ["an inner test that an outer test already decides is printed", "if (x < 10) { if (x > 20) ... } keeps the dead branch", "x & 0xff kept on a value an earlier range check bounds below 256", "a range check repeated inside the branch of the same check"]
 
 [[option]]
+option = "addrcompare"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace#1168"
+summary = "Fold an equality test between two stack addresses of one frame. Each address is the function's spacebase value, or a PTRSUB or INT_ADD of it with a constant, so both are one frame base plus a constant, and they are equal exactly when their offsets agree modulo the operand size. The == or != then becomes the constant it always has, and ActionDeterminedBranch removes a branch on it. Ordering comparisons, and addresses from different bases or global addresses, are not folded."
+use_when = "Off by default: no datatest or real-binary measurement has run for this rule yet, so the default is not flipped. Flip on to see whether a test of two distinct local objects' addresses (IDA's optimize-away-address-comparisons) still prints as a live compare. The fold decides only tests whose outcome the frame fixes, so a function with no such compare is unchanged."
+example = "option addrcompare on"
+source_decompiler = "unlace"
+inspiration = "IDA Pro option optimize_away_address_comparisons (Optimize away address comparisons): folds comparisons between the addresses of distinct stack or global objects; this rule takes the stack equality half that the frame proves"
+change_kind = "transform"
+tier = "transform"
+symptoms = ["if (&a == &b) on two distinct locals prints as a live pointer test", "a != test of two stack addresses keeps a compare the frame already decides", "a pointer test between two local arrays prints as a live compare"]
+
+[[option]]
 option = "pow2select"
 values = ["on", "off"]
 default = "on"

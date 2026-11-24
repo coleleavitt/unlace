@@ -4,6 +4,7 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod addcarrychain;
+pub mod addrcompare;
 pub mod alloca; // (unlace) a dynamic stack allocation becomes alloca(size)
 pub mod arraystride;
 pub mod bitidioms;

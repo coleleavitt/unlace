@@ -22,6 +22,30 @@ pub(super) fn code() -> Vec<u8> {
     c
 }
 
+fn pattern(bytes: &[u8], publics: &[&str]) -> flirtpat::FuncPattern {
+    flirtpat::FuncPattern {
+        bytes: bytes.iter().map(|b| Some(*b)).collect(),
+        publics: publics.iter().map(|s| s.to_string()).collect(),
+        refs: Vec::new(),
+    }
+}
+
+#[test]
+fn pattern_collisions_group_functions_that_share_a_pattern_but_not_a_name() {
+    let body = [0x55u8, 0x48, 0x89, 0xe5, 0x90, 0x90];
+    let unrelated = [0x31u8, 0xc0, 0xc3, 0x90, 0x90, 0x90];
+    let patterns = vec![
+        pattern(&body, &["alpha"]),
+        pattern(&body, &["beta"]),
+        pattern(&body, &["alpha"]),
+        pattern(&unrelated, &["gamma"]),
+    ];
+    assert_eq!(
+        flirtpat::pattern_collisions(&patterns),
+        vec![vec!["alpha".to_string(), "beta".to_string()]]
+    );
+}
+
 #[test]
 fn parses_the_header_and_the_one_module() {
     let s = tiny();

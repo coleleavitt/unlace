@@ -7,12 +7,15 @@
 //!
 //! The patterns come from `unlace_analysis::flirt::flirtpat` and the `.sig`
 //! tree from `unlace_analysis::flirt::flirtsig`. Functions the `.sig` cannot
-//! tell apart are listed on stderr and left out of it.
+//! tell apart are listed on stderr and left out of it. Name collisions in the
+//! `.pat` itself are listed on stderr too; the `.pat` is written unchanged.
 
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use unlace_analysis::flirt::flirtpat::{FuncPattern, Target, patterns_from_object, write_pat};
+use unlace_analysis::flirt::flirtpat::{
+    FuncPattern, Target, pattern_collisions, patterns_from_object, write_pat,
+};
 use unlace_analysis::flirt::flirtsig::build_sig;
 
 use crate::args::take_value;
@@ -120,6 +123,12 @@ fn make(argv: &[String]) -> Result<(), (i32, String)> {
     })?;
     std::fs::write(&out, write_pat(&lib.patterns))
         .map_err(|e| (1, format!("cannot write {out}: {e}")))?;
+    for names in pattern_collisions(&lib.patterns) {
+        eprintln!(
+            "unlace flirt make: collision in {out}: {} share a pattern and CRC but differ in name",
+            names.join(", ")
+        );
+    }
     eprintln!(
         "unlace flirt make: wrote {out} ({} pattern(s))",
         lib.patterns.len()

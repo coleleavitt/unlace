@@ -11,7 +11,9 @@
 # decompiles at its cache address (asserts #1-#2, each matched once in the
 # whole script). caller_entry reads the same in both passes: its island call
 # stays named (assert #3) and libcaller's local symbols are still read from
-# the .symbols file (assert #4).
+# the .symbols file (assert #4). exporttrie is off, as in kuna-dyldcrossrefs (with it
+# on the island call reads callee_entry); before, the test passed only after a
+# file that had turned exporttrie off in the same process.
 
 [image]
 arch = 'AARCH64:LE:64:v8A'
@@ -27,6 +29,7 @@ hex = 'c0035fd6'
 
 [script]
 commands = [
+    'option exporttrie off',
     'option dyldimage /usr/lib/libcaller.dylib',
     'clear architecture',
     'load file crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e',

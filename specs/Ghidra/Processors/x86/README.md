@@ -193,5 +193,23 @@ with `llvm-objdump`; `--base-specs` splits the differences into fixed and regres
 
 Checked: of the 350 memory-form records that differed after #580, 342 now match and none of the
 6660 regressed; the 8 left are `vfpclassph/sh`, which print the class names where LLVM prints the
-immediate. The register-form sweep still differs on 806 records, nearly all the {sae}/{rc}
-rounding forms (the base spec has no EVEX.b register constructors), left for later.
+immediate. The register forms are in the next section.
+
+## AVX-512 {sae} and embedded rounding (`ia.sinc`, `avx512_round.sinc`)
+
+An EVEX register form with EVEX.b=1 is a 512-bit (or scalar) operation whose L'L holds the
+rounding mode. A pre-parse in `ia.sinc` (all but the 16-bit language) sees EVEX.b=1 with
+ModRM.mod=3 and EVEX.U=1, keeps L'L in `evexRcMode`, sets `evexRcOn` and decodes again with
+L'L=10, so the 512-bit constructors match; `avx512Rc` prints `{rn-sae}`..`{rz-sae}` from
+`evexRcMode`. `tools/gen_x86_avx512_round.py` writes `avx512_round.sinc`: for each of LLVM's 301
+EVEX.b register records outside AVX10.2 and APX, a copy of the matching register constructor of
+`avx512.sinc`, `avx512_manual.sinc` or `avx10_2.sinc` with `evexRcOn=1`, the register-or-memory
+operand narrowed to the register, and `{sae}` or the rounding mode printed where LLVM prints it.
+The AVX10.2 rounding forms (`avx10Rc`) read `evexRcMode` too. Also fixed on the way: VPEXTRB to a
+GPR named the ModRM.reg register, VPCOMPRESSD/Q 512-bit register forms decoded as 128-bit, VMOVW
+to and from a GPR printed a 16-bit register (LLVM: r32, or r64 with EVEX.W).
+
+Checked with `tools/x86_avx512_sweep.py --forms reg`: of the 806 register-form records that
+differed from `llvm-objdump`, 798 match and none regressed (the 8 left are the `vfpclassph/sh` class
+names); the memory-form sweep, every AVX10.2 record in 64- and 32-bit mode, libcrypto.so.3 and
+32-bit libc.so.6 `.text`, and `decompile-all /usr/bin/ls` are unchanged.

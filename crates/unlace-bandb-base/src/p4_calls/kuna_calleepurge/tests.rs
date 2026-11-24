@@ -257,7 +257,24 @@ fn int3_is_neither_a_return_nor_a_call() {
     ];
     let s = step(&ops, &f.regs, State::at_entry());
     assert_eq!((s.ret, s.call), (None, None));
-    assert!(s.falls_through);
+    assert!(s.interrupt && !s.falls_through);
+}
+
+#[test]
+fn int_imm8_falls_through() {
+    let f = fx();
+    let intloc = vn(&f.tmp, 0x80, 4);
+    let ops = vec![
+        (
+            OpCode::CPUI_CALLOTHER,
+            Some(intloc.clone()),
+            vec![f.c(5), vn(&f.cst, 0x2e, 1)],
+        ),
+        (OpCode::CPUI_CALLIND, None, vec![intloc]),
+    ];
+    let s = step(&ops, &f.regs, State::at_entry());
+    assert_eq!((s.ret, s.call), (None, None));
+    assert!(s.interrupt && s.falls_through);
 }
 
 #[test]

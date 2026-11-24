@@ -3150,17 +3150,17 @@ define pcodeop vpcmpgtq_avx512f ;
 
 # PEXTRB/PEXTRD/PEXTRQ 4-274 PAGE 1394 LINE 72334
 @ifdef IA64
-:VPEXTRB Reg32, XmmReg1, imm8  is $(LONGMODE_ON) & $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0x14; XmmReg1 & mod=3 & Reg32 & Reg64; imm8
+:VPEXTRB Rmr32, XmmReg1, imm8  is $(LONGMODE_ON) & $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0x14; XmmReg1 & mod=3 & Rmr32 & Rmr64; imm8
 {
 	local tmp = XmmReg1 >> (imm8*8);
-	Reg64 = zext(tmp[0,8]);
+	Rmr64 = zext(tmp[0,8]);
 }
 @endif
 
-:VPEXTRB Reg32, XmmReg1, imm8  is $(LONGMODE_OFF) & $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0x14; XmmReg1 & mod=3 & Reg32; imm8
+:VPEXTRB Rmr32, XmmReg1, imm8  is $(LONGMODE_OFF) & $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0x14; XmmReg1 & mod=3 & Rmr32; imm8
 {
 	local tmp = XmmReg1 >> (imm8*8);
-	Reg32 = zext(tmp[0,8]);
+	Rmr32 = zext(tmp[0,8]);
 }
 
 :VPEXTRB m8, XmmReg1, imm8  is $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG); byte=0x14; XmmReg1 ... & m8; imm8
@@ -10840,7 +10840,7 @@ define pcodeop vpcmpuw_avx512bw ;
 
 # VPCOMPRESSD 5-351 PAGE 2175 LINE 111873
 define pcodeop vpcompressd_avx512vl ;
-:VPCOMPRESSD XmmReg2^XmmOpMask32, XmmReg1  is $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & XmmOpMask32; byte=0x8B; XmmReg1 & mod=3 & XmmReg2 & ZmmReg2
+:VPCOMPRESSD XmmReg2^XmmOpMask32, XmmReg1  is $(EVEX_NONE) & $(VEX_L128) & evexLp=0 & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & XmmOpMask32; byte=0x8B; XmmReg1 & mod=3 & XmmReg2 & ZmmReg2
 [ evexD8Type = 1; evexTType = 3; ] # (TupleType T1S)
 {
 	XmmResult = vpcompressd_avx512vl( XmmReg1 );
@@ -10859,7 +10859,7 @@ define pcodeop vpcompressd_avx512vl ;
 }
 
 # VPCOMPRESSD 5-351 PAGE 2175 LINE 111875
-:VPCOMPRESSD YmmReg2^YmmOpMask32, YmmReg1  is $(EVEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & YmmOpMask32; byte=0x8B; YmmReg1 & mod=3 & YmmReg2 & ZmmReg2
+:VPCOMPRESSD YmmReg2^YmmOpMask32, YmmReg1  is $(EVEX_NONE) & $(VEX_L256) & evexLp=0 & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & YmmOpMask32; byte=0x8B; YmmReg1 & mod=3 & YmmReg2 & ZmmReg2
 [ evexD8Type = 1; evexTType = 3; ] # (TupleType T1S)
 {
 	YmmResult = vpcompressd_avx512vl( YmmReg1 );
@@ -10890,7 +10890,7 @@ define pcodeop vpcompressd_avx512f ;
 
 # VPCOMPRESSQ 5-353 PAGE 2177 LINE 111970
 define pcodeop vpcompressq_avx512vl ;
-:VPCOMPRESSQ XmmReg2^XmmOpMask64, XmmReg1  is $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W1) & XmmOpMask64; byte=0x8B; XmmReg1 & mod=3 & XmmReg2 & ZmmReg2
+:VPCOMPRESSQ XmmReg2^XmmOpMask64, XmmReg1  is $(EVEX_NONE) & $(VEX_L128) & evexLp=0 & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W1) & XmmOpMask64; byte=0x8B; XmmReg1 & mod=3 & XmmReg2 & ZmmReg2
 [ evexD8Type = 1; evexTType = 3; ] # (TupleType T1S)
 {
 	XmmReg2 = vpcompressq_avx512vl( XmmReg1 );
@@ -10909,7 +10909,7 @@ define pcodeop vpcompressq_avx512vl ;
 }
 
 # VPCOMPRESSQ 5-353 PAGE 2177 LINE 111972
-:VPCOMPRESSQ YmmReg2^YmmOpMask64, YmmReg1  is $(EVEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W1) & YmmOpMask64; byte=0x8B; YmmReg1 & mod=3 & YmmReg2 & ZmmReg2
+:VPCOMPRESSQ YmmReg2^YmmOpMask64, YmmReg1  is $(EVEX_NONE) & $(VEX_L256) & evexLp=0 & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W1) & YmmOpMask64; byte=0x8B; YmmReg1 & mod=3 & YmmReg2 & ZmmReg2
 [ evexD8Type = 1; evexTType = 3; ] # (TupleType T1S)
 {
 	YmmResult = vpcompressq_avx512vl( YmmReg1 );
@@ -16232,19 +16232,46 @@ define pcodeop vmovsh_avx512fp16 ;
 
 # VMOVW 5-410 PAGE 2234 LINE 122642
 define pcodeop vmovw_avx512fp16 ;
-:VMOVW XmmReg1, rm16 is $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_MAP5) & $(VEX_WIG); byte=0x6E; (XmmReg1 & ZmmReg1) ... & rm16
+:VMOVW XmmReg1, m16 is $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_MAP5) & $(VEX_WIG); byte=0x6E; (XmmReg1 & ZmmReg1) ... & m16
 [ evexD8Type = 1; evexTType = 2; ] # (Disp8*N = 2, from LLVM CD8_Scale)
 {
-	local tmp:2 = rm16 ;
+	local tmp:2 = m16;
 	ZmmReg1 = zext(tmp);
 }
 
+:VMOVW XmmReg1, Rmr32 is $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_MAP5) & $(VEX_W0); byte=0x6E; mod=3 & XmmReg1 & ZmmReg1 & Rmr32
+{
+	local tmp:2 = Rmr32:2;
+	ZmmReg1 = zext(tmp);
+}
+
+@ifdef IA64
+:VMOVW XmmReg1, Rmr64 is $(LONGMODE_ON) & $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_MAP5) & $(VEX_W1); byte=0x6E; mod=3 & XmmReg1 & ZmmReg1 & Rmr64
+{
+	local tmp:2 = Rmr64:2;
+	ZmmReg1 = zext(tmp);
+}
+@endif
+
 # VMOVW 5-410 PAGE 2234 LINE 122644
-:VMOVW rm16, XmmReg1 is $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_MAP5) & $(VEX_WIG); byte=0x7E; XmmReg1 ... & rm16
+:VMOVW m16, XmmReg1 is $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_MAP5) & $(VEX_WIG); byte=0x7E; XmmReg1 ... & m16
 [ evexD8Type = 1; evexTType = 2; ] # (Disp8*N = 2, from LLVM CD8_Scale)
 {
-	rm16 = XmmReg1(0);
+	m16 = XmmReg1[0,16];
 }
+
+:VMOVW Rmr32, XmmReg1 is $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_MAP5) & $(VEX_W0); byte=0x7E; mod=3 & XmmReg1 & Rmr32 & check_Rmr32_dest
+{
+	Rmr32 = zext(XmmReg1[0,16]);
+	build check_Rmr32_dest;
+}
+
+@ifdef IA64
+:VMOVW Rmr64, XmmReg1 is $(LONGMODE_ON) & $(EVEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_MAP5) & $(VEX_W1); byte=0x7E; mod=3 & XmmReg1 & Rmr64
+{
+	Rmr64 = zext(XmmReg1[0,16]);
+}
+@endif
 
 # VMULPH 5-411 PAGE 2235 LINE 122691
 define pcodeop vmulph_avx512fp16 ;

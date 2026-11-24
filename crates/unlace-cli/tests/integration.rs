@@ -50,6 +50,8 @@ mod riscv_crypto;
 mod riscv_hints;
 #[path = "riscv_vector.rs"]
 mod riscv_vector;
+#[path = "riscv_xthead.rs"]
+mod riscv_xthead;
 #[path = "riscv_zabha.rs"]
 mod riscv_zabha;
 #[path = "riscv_zacas.rs"]

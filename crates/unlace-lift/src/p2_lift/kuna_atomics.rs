@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::space::AddrSpace;
+use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -192,10 +192,17 @@ impl Eval<'_> {
                     ..s
                 })
             }
-            Expr::Op(OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT, _, ref args)
-                if k == 0 && args[0].size(self.width) == size =>
+            Expr::Op(code @ (OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT), _, ref args)
+                if k == 0 =>
             {
-                args[0].clone()
+                let inner = args[0].size(self.width);
+                if inner == size {
+                    args[0].clone()
+                } else if inner > size {
+                    self.subpiece(args[0].clone(), 0, size)
+                } else {
+                    Expr::Op(code, size, vec![args[0].clone()])
+                }
             }
             Expr::Op(
                 code @ (OpCode::CPUI_INT_ADD
@@ -218,11 +225,22 @@ impl Eval<'_> {
     }
 
     fn build(&self, code: OpCode, size: i32, mut args: Vec<Expr>) -> Expr {
-        if let Some(v) = fold(code, &args) {
-            return Expr::Const(v & mask(size), size);
+        if size <= 8 {
+            if let Some(v) = fold(code, &args) {
+                return Expr::Const(v & mask(size), size);
+            }
         }
         match code {
             OpCode::CPUI_COPY => args.swap_remove(0),
+            OpCode::CPUI_INT_ADD
+            | OpCode::CPUI_INT_SUB
+            | OpCode::CPUI_INT_OR
+            | OpCode::CPUI_INT_XOR
+                if matches!(args.get(1), Some(Expr::Const(0, _)))
+                    && args[0].size(self.width) == size =>
+            {
+                args.swap_remove(0)
+            }
             OpCode::CPUI_SUBPIECE => match args.get(1) {
                 Some(Expr::Const(k, _)) => {
                     let k = *k;
@@ -396,22 +414,61 @@ impl Eval<'_> {
     }
 }
 
-/// The value of `code` over constant `args`, for the few operations a
-/// monitor's constant result flows through.
+/// `v`, a value of `size` bytes, sign-extended.
+fn sext(v: u64, size: i32) -> i64 {
+    let shift = 64 - 8 * size.clamp(1, 8) as u32;
+    ((v << shift) as i64) >> shift
+}
+
+/// The value of `code` over constant `args` of at most 8 bytes, for the
+/// operations a monitor's constant result and the status test after it (an
+/// ARM `cmp` and its flags) flow through. The caller masks it to the output.
 fn fold(code: OpCode, args: &[Expr]) -> Option<u64> {
     let mut values = Vec::with_capacity(args.len());
+    let mut size = 0;
     for a in args {
-        let Expr::Const(v, _) = a else { return None };
+        let Expr::Const(v, s) = a else { return None };
+        if *s > 8 {
+            return None;
+        }
+        if values.is_empty() {
+            size = *s;
+        }
         values.push(*v);
     }
     let a = *values.first()?;
     let b = values.get(1).copied();
+    let wide = |b: u64| {
+        let sum = sext(a.wrapping_add(b) & mask(size), size);
+        let diff = sext(a.wrapping_sub(b) & mask(size), size);
+        (sext(a, size), sext(b, size), sum, diff)
+    };
     Some(match code {
         OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT => a,
+        OpCode::CPUI_INT_SEXT => sext(a, size) as u64,
         OpCode::CPUI_BOOL_NEGATE => u64::from(a == 0),
         OpCode::CPUI_INT_NEGATE => !a,
+        OpCode::CPUI_INT_2COMP => a.wrapping_neg(),
         OpCode::CPUI_INT_EQUAL => u64::from(a == b?),
         OpCode::CPUI_INT_NOTEQUAL => u64::from(a != b?),
+        OpCode::CPUI_INT_LESS => u64::from(a < b?),
+        OpCode::CPUI_INT_LESSEQUAL => u64::from(a <= b?),
+        OpCode::CPUI_INT_SLESS => u64::from(sext(a, size) < sext(b?, size)),
+        OpCode::CPUI_INT_SLESSEQUAL => u64::from(sext(a, size) <= sext(b?, size)),
+        OpCode::CPUI_INT_ADD => a.wrapping_add(b?),
+        OpCode::CPUI_INT_SUB => a.wrapping_sub(b?),
+        OpCode::CPUI_INT_MULT => a.wrapping_mul(b?),
+        OpCode::CPUI_INT_CARRY => u64::from((a.wrapping_add(b?) & mask(size)) < a),
+        OpCode::CPUI_INT_SCARRY => {
+            let (x, y, sum, _) = wide(b?);
+            u64::from((x < 0) == (y < 0) && (sum < 0) != (x < 0))
+        }
+        OpCode::CPUI_INT_SBORROW => {
+            let (x, y, _, diff) = wide(b?);
+            u64::from((x < 0) != (y < 0) && (diff < 0) != (x < 0))
+        }
+        OpCode::CPUI_INT_LEFT => a.checked_shl(u32::try_from(b?).ok()?).unwrap_or(0),
+        OpCode::CPUI_INT_RIGHT => a.checked_shr(u32::try_from(b?).ok()?).unwrap_or(0),
         OpCode::CPUI_BOOL_AND | OpCode::CPUI_INT_AND => a & b?,
         OpCode::CPUI_BOOL_OR | OpCode::CPUI_INT_OR => a | b?,
         OpCode::CPUI_BOOL_XOR | OpCode::CPUI_INT_XOR => a ^ b?,
@@ -421,13 +478,34 @@ fn fold(code: OpCode, args: &[Expr]) -> Option<u64> {
 
 /// `Old == E` for a branch condition `cond` that went `taken`.
 fn equality(cond: &Expr, taken: bool) -> Option<Expr> {
+    equality_of(cond, taken, &Expr::Old)
+}
+
+/// `target == E` for a branch condition `cond` that went `taken`, with `E`
+/// independent of `Old`. A flag tested against 1 or 0 (`if (ZF == 1)`) is
+/// the comparison that set it.
+fn equality_of(cond: &Expr, taken: bool, target: &Expr) -> Option<Expr> {
     let (code, args) = match cond {
-        Expr::Op(OpCode::CPUI_BOOL_NEGATE, _, args) => return equality(&args[0], !taken),
+        Expr::Op(OpCode::CPUI_BOOL_NEGATE, _, args) => {
+            return equality_of(&args[0], !taken, target);
+        }
         Expr::Op(code @ (OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL), _, args) => {
             (*code, args)
         }
         _ => return None,
     };
+    if let (
+        flag @ Expr::Op(
+            OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL | OpCode::CPUI_BOOL_NEGATE,
+            1,
+            _,
+        ),
+        Expr::Const(c @ (0 | 1), 1),
+    ) = (&args[0], &args[1])
+    {
+        let same = (code == OpCode::CPUI_INT_EQUAL) == (*c == 1);
+        return equality_of(flag, taken == same, target);
+    }
     if taken != (code == OpCode::CPUI_INT_EQUAL) {
         return None;
     }
@@ -435,9 +513,12 @@ fn equality(cond: &Expr, taken: bool) -> Option<Expr> {
     if let (Expr::Op(OpCode::CPUI_INT_SUB, _, diff), Expr::Const(0, _)) = (a, b) {
         (a, b) = (&diff[0], &diff[1]);
     }
-    match (a, b) {
-        (Expr::Old, e) | (e, Expr::Old) if !e.has_old() => Some(e.clone()),
-        _ => None,
+    if a == target && !b.has_old() {
+        Some(b.clone())
+    } else if b == target && !a.has_old() {
+        Some(a.clone())
+    } else {
+        None
     }
 }
 
@@ -661,11 +742,22 @@ impl Builder<'_> {
         for a in args {
             inputs.push(self.emit(fd, a)?);
         }
+        self.insert(fd, *code, &inputs, *size)
+    }
+
+    /// A new op `code` over `inputs` in front of `before`, and its output.
+    fn insert(
+        &mut self,
+        fd: &mut Funcdata,
+        code: OpCode,
+        inputs: &[VarnodeId],
+        size: int4,
+    ) -> Option<VarnodeId> {
         let at = fd.obank().get(self.before)?.get_addr().clone();
         let op = fd.new_op(inputs.len() as i32, at);
-        fd.op_set_opcode_code(op, *code);
-        fd.op_set_all_input(op, &inputs).ok()?;
-        let out = fd.new_unique_out(*size, op).ok()?;
+        fd.op_set_opcode_code(op, code);
+        fd.op_set_all_input(op, inputs).ok()?;
+        let out = fd.new_unique_out(size, op).ok()?;
         fd.obank_mut().insert_before_dead(op, self.before);
         if self.first == self.before {
             self.first = op;
@@ -765,8 +857,13 @@ pub fn rewrite(fd: &mut Funcdata, ops: &[OpId]) -> Option<OpId> {
         }
         envelope = Some((first, last));
     }
-    let (access, first_load, store, width) = access(fd, ops, envelope.is_some())?;
-    if !matches!(width, 1 | 2 | 4 | 8) {
+    let Some((access, first_load, store, width)) = access(fd, ops, envelope.is_some()) else {
+        return match envelope {
+            None => pair(fd, ops, &userops),
+            Some(_) => None,
+        };
+    };
+    if !matches!(width, 1 | 2 | 4 | 8 | 16) {
         return None;
     }
     let first_load = match access {
@@ -792,13 +889,11 @@ pub fn rewrite(fd: &mut Funcdata, ops: &[OpId]) -> Option<OpId> {
         value_home,
     };
     let mut plan = plan(&eval)?;
+    if width == 16 && plan.builtin != BUILTIN_ATOMIC_COMPARE_SWAP {
+        return None;
+    }
     let state = prefix_state(&eval, first_load)?;
-    let branches = ops.iter().any(|&id| {
-        fd.obank()
-            .get(id)
-            .is_some_and(|o| matches!(o.code(), OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH))
-    });
-    let new_ops = !branches && matches!(access, Access::Pointer(_));
+    let new_ops = !branches_to_end(fd, ops) && matches!(access, Access::Pointer(_));
     (plan.builtin, plan.operands) = spelled(
         plan.builtin,
         &plan.operands,
@@ -824,6 +919,205 @@ pub fn rewrite(fd: &mut Funcdata, ops: &[OpId]) -> Option<OpId> {
         &state,
         (first_load, store, width, envelope),
     )
+}
+
+/// Whether a relative branch of the instruction `ops` targets its end. New
+/// ops get sequence numbers after the instruction's last op, where such a
+/// branch would find them instead of the next instruction.
+fn branches_to_end(fd: &Funcdata, ops: &[OpId]) -> bool {
+    ops.iter().enumerate().any(|(i, &id)| {
+        let Some(o) = fd.obank().get(id) else {
+            return true;
+        };
+        if !matches!(o.code(), OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH) {
+            return false;
+        }
+        match o.get_in(0).and_then(|v| is_constant(fd, v)) {
+            Some((offset, _)) => i as i64 + i64::from(offset as i32) >= ops.len() as i64,
+            None => false,
+        }
+    })
+}
+
+/// (kuna `atomics`) A compare-and-swap of a register pair (AArch64 `casp` on
+/// X registers): two LOADs of `w` bytes at `p` and `p + w`, a branch past
+/// the stores unless each half equals its expected value, and two STOREs of
+/// values independent of the location to the same addresses. It becomes one
+/// `__sync_val_compare_and_swap` on the `2w`-byte location, its result split
+/// back into the two loaded halves; the stores become dead copies.
+fn pair(fd: &mut Funcdata, ops: &[OpId], userops: &AtomicUserops) -> Option<OpId> {
+    let code = |i: usize| fd.obank().get(ops[i]).map(|o| o.code());
+    let loads: Vec<usize> = (0..ops.len())
+        .filter(|&i| code(i) == Some(OpCode::CPUI_LOAD))
+        .collect();
+    let stores: Vec<usize> = (0..ops.len())
+        .filter(|&i| code(i) == Some(OpCode::CPUI_STORE))
+        .collect();
+    let (&[l0, l1], &[s0, s1]) = (&loads[..], &stores[..]) else {
+        return None;
+    };
+    if l1 >= s0 || branches_to_end(fd, ops) {
+        return None;
+    }
+    let w = storage(fd, fd.obank().get(ops[l0])?.get_out()?)?.size;
+    if !matches!(w, 4 | 8) || storage(fd, fd.obank().get(ops[l1])?.get_out()?)?.size != w {
+        return None;
+    }
+    let width = 2 * w;
+    let pointer = storage(fd, fd.obank().get(ops[l0])?.get_in(1)?)?;
+    let eval = Eval {
+        fd,
+        ops,
+        userops,
+        width,
+        access: Access::Pointer(pointer),
+        first_load: l0,
+        store: s0,
+        old_home: None,
+        value_home: None,
+    };
+    let big = fd
+        .get_arch()
+        .manage()
+        .get_default_data_space()
+        .is_some_and(|sp| sp.is_big_endian());
+    let (k0, k1) = if big { (w as u64, 0) } else { (0, w as u64) };
+    let mut path = Path {
+        pc: 0,
+        state: BTreeMap::new(),
+        conds: Vec::new(),
+        stored: None,
+        old_writes: Vec::new(),
+        store_state: None,
+    };
+    let mut reads = BTreeMap::new();
+    let (mut base, mut prefix) = (None, None);
+    let mut values = Vec::new();
+    let mut conds = Vec::new();
+    for index in 0..ops.len() {
+        let op = eval.op(index)?;
+        match op.code() {
+            OpCode::CPUI_LOAD => {
+                let at = eval.read(&path.state, op.get_in(1)?)?;
+                let out = storage(fd, op.get_out()?)?;
+                let half = if index == l0 {
+                    prefix = Some(path.state.clone());
+                    base = Some(at);
+                    k0
+                } else {
+                    let base = base.as_ref()?;
+                    let size = base.size(width);
+                    let next = Expr::Op(
+                        OpCode::CPUI_INT_ADD,
+                        size,
+                        vec![base.clone(), Expr::Const(w as u64, size)],
+                    );
+                    if at != next {
+                        return None;
+                    }
+                    k1
+                };
+                let value = eval.subpiece(Expr::Old, half, w);
+                Eval::write(&mut path.state, out, value);
+            }
+            OpCode::CPUI_STORE => {
+                let at = eval.read(&path.state, op.get_in(1)?)?;
+                let value = eval.read(&path.state, op.get_in(2)?)?;
+                if value.has_old() || value.size(width) != w {
+                    return None;
+                }
+                values.push((at, value));
+            }
+            OpCode::CPUI_CBRANCH => {
+                let (offset, _) = is_constant(fd, op.get_in(0)?)?;
+                let target = index as i64 + i64::from(offset as i32);
+                if index < l1 || index > s0 || target <= s1 as i64 {
+                    return None;
+                }
+                conds.push(eval.read(&path.state, op.get_in(1)?)?);
+            }
+            OpCode::CPUI_CALLOTHER => {
+                let id = is_constant(fd, op.get_in(0)?)?.0 as u32;
+                if op.get_out().is_some() || !userops.ordering.contains(&id) {
+                    return None;
+                }
+            }
+            OpCode::CPUI_BRANCH
+            | OpCode::CPUI_CALL
+            | OpCode::CPUI_CALLIND
+            | OpCode::CPUI_BRANCHIND
+            | OpCode::CPUI_RETURN
+            | OpCode::CPUI_MULTIEQUAL
+            | OpCode::CPUI_INDIRECT => return None,
+            _ => eval.generic(&mut path, index, &mut reads)?,
+        }
+    }
+    let base = base?;
+    let size = base.size(width);
+    let next = Expr::Op(
+        OpCode::CPUI_INT_ADD,
+        size,
+        vec![base.clone(), Expr::Const(w as u64, size)],
+    );
+    let [(a0, v0), (a1, v1)] = &values[..] else {
+        return None;
+    };
+    let [c0, c1] = &conds[..] else {
+        return None;
+    };
+    if *a0 != base || *a1 != next {
+        return None;
+    }
+    let (lo, hi) = (
+        eval.subpiece(Expr::Old, k0, w),
+        eval.subpiece(Expr::Old, k1, w),
+    );
+    let (e0, e1) = match (equality_of(c0, false, &lo), equality_of(c1, false, &hi)) {
+        (Some(e0), Some(e1)) => (e0, e1),
+        _ => (equality_of(c1, false, &lo)?, equality_of(c0, false, &hi)?),
+    };
+    let join = |first: &Expr, second: &Expr| {
+        let (high, low) = if big {
+            (first, second)
+        } else {
+            (second, first)
+        };
+        Expr::Op(OpCode::CPUI_PIECE, width, vec![high.clone(), low.clone()])
+    };
+    let prefix = prefix?;
+    let (builtin, operands) = spelled(
+        BUILTIN_ATOMIC_COMPARE_SWAP,
+        &[join(&e0, &e1), join(v0, v1)],
+        width,
+        msvc_spelling(fd),
+        |e| buildable(&prefix, e, true),
+    );
+    if !buildable(&prefix, &base, true) || !operands.iter().all(|e| buildable(&prefix, e, true)) {
+        return None;
+    }
+    let mut builder = Builder {
+        state: &prefix,
+        before: ops[l0],
+        first: ops[0],
+    };
+    let mut inputs = vec![fd.new_constant(4, u64::from(builtin))];
+    inputs.push(builder.emit(fd, &base)?);
+    for operand in &operands {
+        inputs.push(builder.emit(fd, operand)?);
+    }
+    let old = builder.insert(fd, OpCode::CPUI_CALLOTHER, &inputs, width)?;
+    let old = storage(fd, old)?;
+    for (load, k) in [(l0, k0), (l1, k1)] {
+        let source = builder.varnode(fd, old)?;
+        let offset = fd.new_constant(4, k);
+        fd.op_set_opcode_code(ops[load], OpCode::CPUI_SUBPIECE);
+        fd.op_set_all_input(ops[load], &[source, offset]).ok()?;
+    }
+    for store in [s0, s1] {
+        let value = fd.obank().get(ops[store])?.get_in(2)?;
+        neutralize(fd, ops[store], value, w)?;
+    }
+    Some(builder.first)
 }
 
 fn apply(
@@ -976,7 +1270,7 @@ fn spelled(
 /// The atomic builtins of `data`, which access memory through their address
 /// operand: `kuna_memoryguard` guards memory across them as across a call.
 pub fn memory_ops(data: &Funcdata) -> Vec<OpId> {
-    if !data.get_arch().atomic_userops.enabled() {
+    if !data.get_arch().atomic_userops.builtins() {
         return Vec::new();
     }
     data.obank()
@@ -1214,6 +1508,63 @@ fn quiet_exit(data: &Funcdata, h: BlockId, x: BlockId) -> bool {
         })
 }
 
+/// Whether no storage in `suspects`, values the folded loop computes from a
+/// register it also writes (and so would compute differently after a retry),
+/// can be read after the loop: each is a temporary, or is written before it is
+/// read on the straight-line path from the exit block `b` (at most four
+/// blocks), or is a one-byte flag still unread where that path calls,
+/// returns or jumps away.
+fn dead_after(data: &Funcdata, mut b: BlockId, suspects: &[Storage]) -> bool {
+    let mut live: Vec<Storage> = suspects
+        .iter()
+        .copied()
+        .filter(|s| {
+            !space(data, s.space).is_some_and(|sp| sp.get_type() == spacetype::IPTR_INTERNAL)
+        })
+        .collect();
+    for _ in 0..4 {
+        if live.is_empty() {
+            return true;
+        }
+        for op in block_ops(data, b) {
+            let Some(o) = data.obank().get(op) else {
+                return false;
+            };
+            for slot in 0..o.num_input() {
+                let read = o.get_in(slot).and_then(|v| storage(data, v));
+                if read.is_some_and(|r| live.iter().any(|l| l.overlaps(r))) {
+                    return false;
+                }
+            }
+            if matches!(
+                o.code(),
+                OpCode::CPUI_CALL
+                    | OpCode::CPUI_CALLIND
+                    | OpCode::CPUI_RETURN
+                    | OpCode::CPUI_BRANCHIND
+            ) {
+                return live.iter().all(|l| l.size == 1);
+            }
+            if let Some(out) = o.get_out().and_then(|v| storage(data, v)) {
+                live.retain(|l| {
+                    !(l.space == out.space
+                        && out.offset <= l.offset
+                        && l.offset + l.size as u64 <= out.offset + out.size as u64)
+                });
+            }
+            if live.is_empty() {
+                return true;
+            }
+        }
+        let fb = data.bblocks_ref().block(b);
+        if fb.size_out() != 1 {
+            return false;
+        }
+        b = fb.get_out(0);
+    }
+    live.is_empty()
+}
+
 fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
     let (pass, status) = data.get_arch().atomic_userops.monitor?;
     let (h, s, f) = loop_blocks(data, p)?;
@@ -1250,7 +1601,10 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         return None;
     };
     let pass_at = (head.len()..p_end).find(|&i| callother(i) == Some(pass))?;
-    let status_at = (p_end..p_end + s_ops.len()).find(|&i| callother(i) == Some(status))?;
+    let status_at = match status {
+        Some(status) => Some((p_end..p_end + s_ops.len()).find(|&i| callother(i) == Some(status))?),
+        None => None,
+    };
     if first_load >= pass_at
         || (h != p && first_load >= head.len())
         || !(p_end..p_end + s_ops.len()).contains(store)
@@ -1259,17 +1613,11 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
     }
     let load = data.obank().get(ops[first_load])?;
     let write = data.obank().get(ops[*store])?;
-    let pointer = storage(data, load.get_in(1)?)?;
-    if storage(data, write.get_in(1)?)? != pointer {
-        return None;
-    }
+    let (load_at, store_at) = (load.get_in(1)?, write.get_in(1)?);
+    let monitored = data.obank().get(ops[pass_at])?.get_in(1)?;
+    let pointer = storage(data, load_at)?;
     let width = storage(data, load.get_out()?)?.size;
-    let monitored = data
-        .obank()
-        .get(ops[pass_at])?
-        .get_in(1)
-        .and_then(|v| storage(data, v));
-    if !matches!(width, 1 | 2 | 4 | 8) || monitored != Some(pointer) {
+    if !matches!(width, 1 | 2 | 4 | 8) {
         return None;
     }
     let eval = Eval {
@@ -1292,18 +1640,30 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         store_state: None,
     };
     let mut reads = BTreeMap::new();
-    let mut at_load = None;
+    let (mut at_load, mut address, mut h_state) = (None, None, None);
     let (mut h_cond, mut p_cond) = (None, None);
     let cond_of = |b: BlockId| data.obank().get(data.bb_op_tail(b)?)?.get_in(1);
     for index in 0..ops.len() {
         if index == head.len() && h != p {
             h_cond = Some(eval.read(&path.state, cond_of(h)?)?);
+            h_state = Some(path.state.clone());
         }
         if index == p_end {
             p_cond = Some(eval.read(&path.state, cond_of(p)?)?);
         }
         if index == first_load {
             at_load = Some(path.state.clone());
+            address = Some(eval.read(&path.state, load_at)?);
+        }
+        let through = match index {
+            i if i == *store => Some(store_at),
+            i if i == pass_at => Some(monitored),
+            _ => None,
+        };
+        if let Some(vn) = through {
+            if eval.read(&path.state, vn)? != *address.as_ref()? {
+                return None;
+            }
         }
         let op = eval.op(index)?;
         match op.code() {
@@ -1311,7 +1671,7 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
             OpCode::CPUI_STORE => eval.store(&mut path, index)?,
             OpCode::CPUI_CALLOTHER => {
                 let id = callother(index)?;
-                if id == pass || id == status {
+                if id == pass || Some(id) == status {
                     let out = storage(data, op.get_out()?)?;
                     Eval::write(
                         &mut path.state,
@@ -1337,10 +1697,12 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
     let (Some(Expr::Const(pc, _)), Expr::Const(fc, _)) = (p_cond, &f_cond) else {
         return None;
     };
-    if successor(data, p, pc != 0)? != s || successor(data, f, *fc != 0)? == h {
+    let exit = successor(data, f, *fc != 0)?;
+    if successor(data, p, pc != 0)? != s || exit == h {
         return None;
     }
     let stored = path.stored.clone()?;
+    let mut h_exit = None;
     let (builtin, operands) = if h == p {
         let (builtin, operand) = update(&stored, width)?;
         (builtin, vec![operand])
@@ -1351,6 +1713,7 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         if stored.has_old() || !quiet_exit(data, h, exit) {
             return None;
         }
+        h_exit = Some(exit);
         (BUILTIN_ATOMIC_COMPARE_SWAP, vec![expected, stored.clone()])
     };
     let written: Vec<Storage> = ops
@@ -1358,18 +1721,39 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         .filter_map(|&o| data.obank().get(o)?.get_out())
         .filter_map(|v| storage(data, v))
         .collect();
-    let mut leaves = vec![pointer];
-    path.state
-        .values()
-        .chain([&stored])
+    let tainted = |e: &Expr| {
+        let mut leaves = Vec::new();
+        starts(e, &mut leaves);
+        leaves
+            .iter()
+            .any(|leaf| written.iter().any(|w| w.overlaps(*leaf)))
+    };
+    if [address.as_ref()?, &stored]
+        .into_iter()
         .chain(&operands)
-        .for_each(|e| starts(e, &mut leaves));
-    if leaves
-        .iter()
-        .any(|leaf| written.iter().any(|w| w.overlaps(*leaf)))
+        .any(&tainted)
     {
         return None;
     }
+    let suspects = |state: &BTreeMap<Storage, Expr>| -> Vec<Storage> {
+        state
+            .iter()
+            .filter(|&(_, e)| tainted(e))
+            .map(|(s, _)| *s)
+            .collect()
+    };
+    if !dead_after(data, exit, &suspects(&path.state)) {
+        return None;
+    }
+    if let (Some(x), Some(state)) = (h_exit, h_state.as_ref()) {
+        if !dead_after(data, x, &suspects(state)) {
+            return None;
+        }
+    }
+    let markers: Vec<OpId> = (0..ops.len())
+        .filter(|&i| callother(i).is_some_and(|id| userops.ordering.contains(&id)))
+        .map(|i| ops[i])
+        .collect();
     let at_load = at_load?;
     let (builtin, operands) = spelled(builtin, &operands, width, msvc_spelling(data), |e| {
         buildable(&at_load, e, false)
@@ -1402,7 +1786,14 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         data.op_set_opcode_code(ops[index], OpCode::CPUI_COPY);
         data.op_set_all_input(ops[index], &[source]).ok()?;
     }
-    for (at, value) in [(pass_at, 1), (status_at, 0)] {
+    for &op in &markers {
+        let zero = data.new_constant(1, 0);
+        neutralize(data, op, zero, 1)?;
+    }
+    for (at, value) in [(Some(pass_at), 1), (status_at, 0)] {
+        let Some(at) = at else {
+            continue;
+        };
         let size = data
             .vbank()
             .get(data.obank().get(ops[at])?.get_out()?)?

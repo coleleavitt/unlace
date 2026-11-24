@@ -637,6 +637,8 @@ mod tests {
         /// `gopairreturns` remains explicit while aggregate ABI interactions across
         /// Go corpus sizes are evaluated for automatic selection.
         const UNEVALUATED: &[&str] = &[
+            // `phithread` (issue #20) landed without a corpus sweep.
+            "phithread",
             // `phiarm` (issue #20) landed without a corpus sweep.
             "phiarm",
             // `calleesaved` (issue #20) landed without a corpus sweep.

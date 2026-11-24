@@ -347,6 +347,7 @@ kuna_options! { self, p1;
     "voidtailreturn" => registered!(crate::printc::Voidtailreturn),
     "dirtypool" => registered!(crate::action::DirtyPool),
     "latecse" => registered!(crate::kuna_latecse::LateCse),
+    "phithread" => registered!(crate::kuna_phithread::PhiThread),
     "gotosink" => registered!(crate::kuna_gotosink::GotoSink),
     "cmpmerge" => registered!(crate::kuna_cmpmerge::CmpMerge),
     "switchmerge" => registered!(crate::kuna_switchmerge::Switchmerge),

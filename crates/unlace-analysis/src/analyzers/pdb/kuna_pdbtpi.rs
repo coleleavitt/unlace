@@ -548,7 +548,11 @@ impl<'t, 'f> TpiMapper<'t, 'f> {
         };
         for (i, arg) in arguments.iter().enumerate() {
             if arg.0 == 0 && i + 1 == arguments.len() {
-                first_var_arg_slot = intypes.len() as int4;
+                // A lone `T_NOTYPE` is MSVC's `int f()` in C: no parameters
+                // stated, not a variadic one.
+                if i > 0 {
+                    first_var_arg_slot = intypes.len() as int4;
+                }
                 break;
             }
             let t = self.map(*arg)?;

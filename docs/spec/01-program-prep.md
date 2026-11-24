@@ -8848,7 +8848,11 @@ both
   coming from the procedure's own parameter records: the `S_LOCAL`s flagged as
   parameters, or for MSVC's unflagged `S_REGREL32`/`S_BPREL32` the ones above the
   return address, used only when their count matches the type's. On i386 the
-  stated calling convention binds the `x86win.cspec` model of that name. A
+  stated calling convention binds the `x86win.cspec` model of that name.
+  Identical-COMDAT folding can put several procedures of different types at one
+  address (MSVC's CRT folds `_get_initial_narrow_environment` with unrelated
+  stubs); such an address gets no prototype and no locals. An argument list that
+  is a lone `T_NOTYPE` (C's `int f()`) states no parameters, not `f(...)`. A
   variable's location comes from its def-range (`S_DEFRANGE_FRAMEPOINTER_REL`,
   its full-scope form, `S_DEFRANGE_REGISTER_REL`, `S_DEFRANGE_REGISTER`) or from
   the record itself (`S_REGREL32`, `S_BPREL32`, `S_REGISTER`). A frame-relative

@@ -231,6 +231,15 @@ afterwards. The register file is unchanged.
     carry in V, it zero-extends @aa:16 and leaves DIVXU by zero different: all of those are
     ignored. binutils' h8300h decoder also prints H8S/H8SX forms, which are not generated. Seed 7,
     2500 encodings: 6122 matches; the language needed no fix.
+  - TI PRU (`--arch pru`, `PRU:LE:32:v3`): IMEM at 0x20000000 + address, DMEM from 0. r30/r31 are
+    the pin registers and the carry is not readable from the simulator, so neither is compared and
+    the carry-in instructions are not generated. A burst past r31.b3 is illegal (sim/pru raises
+    SIGILL), one reaching r30/r31 is not compared. Two fixes came out of it: `pcode_emu` now sends a
+    LOAD/STORE into the register space to the registers (it sent every LOAD/STORE to RAM; the space
+    ids come from `slaregs.space_names`), and `pru.sinc`'s unrolled register-file bursts with more
+    than 20 operands (75 bytes and up from rN.b0) are the byte loop the other start bytes use, since
+    the engine stops at 20 operands ("SLEIGH parser out of state space"). A simulator stopped by a
+    signal is restarted. Seed 5, 1500 encodings: 2836 matches, no mismatches.
   - The simulators that cache decoded instructions (the CGEN ones) do not notice code rewritten
     at an address they ran, so a different instruction at a used address starts a fresh
     simulator. MCORE and MSP430 are not wired: sim/mcore's single step leaves PC elsewhere, and
@@ -389,11 +398,15 @@ documented classes.
 `tools/difffuzz/sweep_ci.sh <unlace>` is the cron/CI entry point. It runs the whole sweep with
 the venv's python (`DIFFFUZZ_PYTHON`), the QEMU directories
 `~/.local/share/qemu-8.2-user:~/.local/share/qemu-10.2-user` (`DIFFFUZZ_QEMU_DIR`), rustup's
-rustc-master llvm-objdump for RVV (`DIFFFUZZ_OBJDUMP`) and
-`~/.local/share/difffuzz-tools/loongarch64-linux-gnu-objdump` (`DIFFFUZZ_LA_OBJDUMP`). It goes
+rustc-master llvm-objdump for RVV (`DIFFFUZZ_OBJDUMP`) and for Power ISA 3.1 (`DIFFFUZZ_PPC_OBJDUMP`),
+`~/.local/share/difffuzz-tools/loongarch64-linux-gnu-objdump` (`DIFFFUZZ_LA_OBJDUMP`) and the gdb
+simulator drivers in `~/.local/share/difffuzz-gdbsim/bin` (`DIFFFUZZ_GDBSIM_DIR`). It goes
 through `kuna-slot` when that exists, with core dumps off, and writes the summary to
 `~/.local/share/difffuzz-sweeps/sweep-<UTC time>-<binary>.json` (`DIFFFUZZ_SWEEP_OUT`). Its
-exit status is sweep.py's. LoongArch without an objdump is `unavailable`.
+exit status is sweep.py's. LoongArch without an objdump, or a `gdbsim` configuration without its
+`dfsim-<sim>` driver, is `unavailable`. After the sweep it runs `xopcheck.py` (XOP and TBM
+against its model of the APM; `DIFFFUZZ_SLEIGHPATH` passes a SLEIGH tree), and exits with
+xopcheck's status when the sweep is clean.
 
 Full sweep (unlace-5dac424f4f, 37 configurations, all oracles installed): exit 0, every
 configuration `ok`, no mismatches beyond riscv64v's 15 known ones. The `decode` findings (s390x
@@ -401,6 +414,12 @@ configuration `ok`, no mismatches beyond riscv64v's 15 known ones. The `decode` 
 accepts that the ISA leaves invalid. They are listed in #862. After the `isel` decode and the
 invalid-encoding filters (unlace-478ab58a5e), the only `decode` findings left are AMD FMA4 on
 `x86-64-native` (2), a spec gap routed to the x86 team.
+
+Full sweep (unlace-7b30dee81f, 51 configurations: the 39 above plus `xtensa`, `ppc64-p10` and
+`ppc64le-p10` on QEMU and `moxie`, `ft32`, `iq2000`, `lm32`, `m32r`, `frv`, `h8300h`,
+`mn10300` and `v850` on the gdb simulators, then xopcheck with 158 XOP and 28 TBM cases):
+exit 0, no mismatches beyond riscv64v's 15 known ones. The only `decode` finding left is V850E2's
+`sdivn` (#929).
 
 ## How a case runs
 
@@ -445,7 +464,9 @@ invalid-encoding filters (unlace-478ab58a5e), the only `decode` findings left ar
   7457 lack; on MIPS R6, the REGIMM trap-immediates R6 removed and the Cavium Octeon
   instructions; on TriCore, an encoding with a reserved bit set that Capstone ignores, and the
   TC1.6.2 additions the TC1.6.1 language lacks; on m68k, a full extension word for the opword's
-  own effective address with bit 3 set, a zero base-displacement size or a reserved I/IS value.
+  own effective address with bit 3 set, a zero base-displacement size or a reserved I/IS value;
+  on FR-V, a 64-bit multiply into an odd GRk; on H8/300H, the H8SX `7A x(1erd)` `#xx:16`
+  forms; on M32R, an operand objdump prints as `???`.
 - ARM and Thumb on QEMU (`qemu-arm -cpu max`, QEMU 10; build it with
   `--target-list=arm-linux-user`): the A32 prologue sets NZCVQ and GE with `MSR APSR_nzcvqg`,
   loads r0..lr, and enters the instruction with `LDR pc` from a literal (bit 0 set for Thumb);

@@ -13,6 +13,9 @@
 # (docs/processor-tests.md).
 
 [images]
+arcv2_list_sum = """
+0a220080e120c1070c704c4344424b7ae120c10778604c434442f30a31807860e07ee078
+"""
 r32c = """
 f260df9f9f9f9f9f9f9f9f9f9f9f9f9ffa40bbedfff220df9f9f9f9f9f9f9f9f
 a108640304b10864df9f9f9f9f9f9f9fb4ac40007fdf9f9f9f9f9f9f9f9f9f9f
@@ -369,6 +372,33 @@ expect = [
     "return padd_8(a0,a1);",  # named lane operation
 ]
 
+# Hexagon hardware loops (Hexagon:LE:32:default), assembled with zig cc (LLVM): the
+# :endloop0/:endloop1 packet branches back to the start loop0/loop1 recorded.
+[[family]]
+name = "hexagon_loop"
+language = "Hexagon:LE:32:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/hexagon_loop/loop.bin"
+forbid = ["halt_baddata", "(a1 <= 1);", "(v3 <= 1);"]
+
+[[family.function]]
+test = "hexagon_loop_endloop0_back_edge"
+address = "0x1000"
+expect = [
+    "while( true ) {",
+    "v2 += *a0;",
+    "if (a1 <= 1) break;",
+]
+
+[[family.function]]
+test = "hexagon_loop_endloop1_back_edge"
+address = "0x1020"
+expect = [
+    "while( true ) {",
+    "v2 ^= *a0;",
+    "if (v3 <= 1) break;",
+]
+
 # C-SKY bloop (CSKY:LE:32:v2) built with csky-elf-as -mcpu=ck804e: the loop-closing
 # bloop after an ldbi.w/addu body, in its two-label and three-label forms.
 [[family]]
@@ -575,6 +605,40 @@ expect = [
     "((int *)a0)[2]",
     "0x56781234",
 ]
+
+# Epiphany hardware loops built with epiphany-elf-as: movts ls/le/lc from mov/movt constants
+# give the last loop instruction a count-down back edge (16- and 32-bit movts).
+[[family]]
+name = "epiphany_hwloop"
+language = "epiphany:LE:32:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/epiphany/loop.bin"
+forbid = ["halt_baddata", "write_special"]
+
+[[family.function]]
+test = "epiphany_hwloop_movts16_back_edge"
+address = "0x1000"
+expect = [
+    "do {",
+    "v1 += v2;",
+    "} while (a2);",
+]
+
+[[family.function]]
+test = "epiphany_hwloop_movts32_back_edge"
+address = "0x1048"
+expect = [
+    "v3 = 0x10;",
+    "do {",
+    "v1 ^= v2;",
+    "} while (v3);",
+]
+
+[[family.function]]
+test = "epiphany_hwloop_unknown_bounds_no_loop"
+address = "0x1098"
+expect = ["return a0 + a2;"]
+forbid = ["do {"]
 
 # The Fujitsu FR language loads a big-endian raw image of two hand-assembled
 # functions that use delay slots (`ble:d`, `ret:d`, `call:d`) and decompiles
@@ -2242,6 +2306,44 @@ expect = [
     "return a0;",
 ]
 
+# StarCore hardware loops assembled by hand from the manual's tables: DOSETUPn/DOENn/
+# DOENSHn and the prefix LPMARKA/LPMARKB bits give the last set a count-down back edge.
+[[family]]
+name = "starcore_loops"
+language = "StarCore:LE:32:SC140"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/starcore/loops.bin"
+args = ["--addr"]
+forbid = ["halt_baddata", "invalid_word", "sc_active_lc"]
+
+[[family.function]]
+test = "starcore_long_loop_lpmarkb_back_edge"
+address = "0x0"
+expect = [
+    "if (1 <= a3) {",  # SKIPLS skips the loop when LC0 <= 0
+    "while( true ) {",
+    "if (a3 <= 1) break;",
+]
+
+[[family.function]]
+test = "starcore_nested_loops"
+address = "0x20"
+expect = [
+    "v3 = 4;",  # DOENSH1 #4 inside loop 0
+    "if (v3 <= 1) break;",
+    "if (a3 <= 1) break;",
+]
+
+[[family.function]]
+test = "starcore_short_loop_lpmarka_back_edge"
+address = "0x40"
+expect = ["while( true ) {", "if (a3 <= 1) break;"]
+
+[[family.function]]
+test = "starcore_two_set_short_loop_back_edge"
+address = "0x50"
+expect = ["while( true ) {", "a0 += *a2;", "if (a3 <= 1) break;"]
+
 # The Xbox 360 Xenon language decodes VMX128: two lvx128 loads into vr64/vr65, vaddfp128,
 # vmulfp128 and an stvx128 store (encoded from Xenia's VX128 formats, blr from powerpc-elf-as).
 [[family]]
@@ -2946,3 +3048,412 @@ expect = ["aesenc(SUB3216(v2,0x10),SUB3216(v3,0x10))"]
 test = "x86_extractps_stores_a_dword"
 address = "0x10"
 expect = ["unsigned int *a0"]
+
+# ELF routing and relocation rows: real ET_REL and ET_EXEC images (crates/unlace-cli/tests/fixtures/elfroute/fx.c,
+# built as its README says), loaded with no --target, so the loader picks the language from the ELF header (#706),
+# lays a 16-bit object out inside its space (#707) and applies the relocations (#713-#737). `chain` calls `scale7`
+# twice, `lookup` indexes the global `g_tab`, `pick` is a switch with a call in one case.
+
+# AVR ET_REL (EM_AVR, e_flags avr2) routes to avr8:LE:16:default and lays out below 0x10000 (#706, #707); calls stay unrelocated until #757.
+[[family]]
+name = "elfroute_avr_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/avr.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_avr_o_scale7"
+address = "scale7"
+expect = ["short scale7(short x)"]
+
+[[family.function]]
+test = "elfroute_avr_o_pick"
+address = "pick"
+expect = ["0x2c"]
+
+# AVR ET_EXEC linked at 0.
+[[family]]
+name = "elfroute_avr_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/avr.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_avr_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_avr_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# MSP430 ET_REL (EM_MSP430) routes to TI_MSP430:LE:16:default inside the 16-bit space (#706, #707).
+[[family]]
+name = "elfroute_msp430_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/msp430.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_msp430_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_msp430_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# MSP430 ET_EXEC linked at 0x4400.
+[[family]]
+name = "elfroute_msp430_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/msp430.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_msp430_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_msp430_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_msp430_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# Hexagon ET_REL (EM_HEXAGON) routes to Hexagon:LE:32:default (#706); B22_PCREL calls, 32_6_X/16_X/6_X globals (#737).
+[[family]]
+name = "elfroute_hexagon_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/hexagon.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_hexagon_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_hexagon_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_hexagon_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# Hexagon ET_EXEC.
+[[family]]
+name = "elfroute_hexagon_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/hexagon.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_hexagon_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_hexagon_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_hexagon_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# Lanai ET_REL (EM_LANAI, no object architecture) routes to lanai:BE:32:default (#706); R_LANAI_25 branches, HI16/LO16 globals (#732).
+[[family]]
+name = "elfroute_lanai_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/lanai.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_lanai_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_lanai_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_lanai_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# LoongArch64 ET_REL (EM_LOONGARCH, double-float) routes to Loongarch:LE:64:lp64d (#706); CALL36 calls, PCALA_HI20/LO12 globals (#726).
+[[family]]
+name = "elfroute_loongarch64_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/loongarch64.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_loongarch64_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_loongarch64_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_loongarch64_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# LoongArch64 ET_EXEC.
+[[family]]
+name = "elfroute_loongarch64_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/loongarch64.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_loongarch64_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_loongarch64_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_loongarch64_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# s390x ET_REL: PC32DBL larl of the jump table and PLT32DBL calls (#713).
+[[family]]
+name = "elfroute_s390x_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/s390x.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_s390x_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_s390x_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_s390x_o_pick"
+address = "pick"
+expect = ["switch(op)", "scale7("]
+
+# s390x ET_EXEC.
+[[family]]
+name = "elfroute_s390x_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/s390x.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_s390x_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_s390x_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_s390x_elf_pick"
+address = "pick"
+expect = ["switch(op)", "scale7("]
+
+# AArch64 big-endian ET_REL: CALL26/JUMP26 and ADRP/LO12 patched little-endian (#716); the tail call stays a call.
+[[family]]
+name = "elfroute_aarch64_be_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/aarch64_be.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_aarch64_be_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_aarch64_be_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_aarch64_be_o_pick"
+address = "pick"
+expect = ["0x2c", "return scale7(a); // tail-call"]
+
+# AArch64 big-endian ET_EXEC.
+[[family]]
+name = "elfroute_aarch64_be_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/aarch64_be.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_aarch64_be_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_aarch64_be_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_aarch64_be_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# SPARC64 ET_REL: WDISP30 calls and the H44/M44/L44 address triple (#721).
+[[family]]
+name = "elfroute_sparc64_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/sparc64.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_sparc64_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_sparc64_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_sparc64_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# SPARC64 ET_EXEC linked at 0x100000.
+[[family]]
+name = "elfroute_sparc64_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/sparc64.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_sparc64_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+xfail = "#756: the linked image marks the leaf scale7 no-return"
+
+[[family.function]]
+test = "elfroute_sparc64_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_sparc64_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# AMDGPU ET_REL (EM_AMDGPU, EF_AMDGPU_MACH gfx900) routes to AMDGPU:LE:64:GFX9 (#706); REL32 calls stay unrelocated until #757.
+[[family]]
+name = "elfroute_gfx900_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/gfx900.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_gfx900_o_scale7"
+address = "scale7"
+expect = ["* 7"]
+
+[[family.function]]
+test = "elfroute_gfx900_o_pick"
+address = "pick"
+expect = ["0x2c"]
+
+# AMDGPU gfx900 ET_EXEC.
+[[family]]
+name = "elfroute_gfx900_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/gfx900.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_gfx900_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_gfx900_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_gfx900_elf_pick"
+address = "pick"
+expect = ["0x2c"]
+
+# AMDGPU gfx1030 ET_REL routes to AMDGPU:LE:64:GFX10.
+[[family]]
+name = "elfroute_gfx1030_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/gfx1030.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_gfx1030_o_scale7"
+address = "scale7"
+expect = ["* 7"]
+
+[[family.function]]
+test = "elfroute_gfx1030_o_lookup"
+address = "lookup"
+expect = ["& 7"]
+
+# AMDGPU gfx1100 ET_REL routes to AMDGPU:LE:64:GFX11.
+[[family]]
+name = "elfroute_gfx1100_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/gfx1100.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_gfx1100_o_scale7"
+address = "scale7"
+expect = ["* 7"]
+
+[[family.function]]
+test = "elfroute_gfx1100_o_pick"
+address = "pick"
+expect = ["0x2c"]
+
+# ARCv2 list_sum from arc-elf-gcc 15.3 -mcpu=hs -O2 (the real-code sweep corpus): jeq.d [blink]
+# carries mov_s r0,0 in its delay slot, which runs on the fall-through path too.
+[[family]]
+name = "arcv2"
+language = "ARC:LE:32:ARCv2"
+base = "0x0"
+image = "arcv2_list_sum"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "arcv2_conditional_delayed_return_runs_its_slot"
+address = "0x0"
+expect = ["v2 = 0;", "return v2 + *v1;"]

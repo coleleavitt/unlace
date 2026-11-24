@@ -14,6 +14,12 @@ Reaching `LEND` with `LCOUNT` non-zero counts down and branches directly to the 
 before `LEND` executes, so a counted loop decompiles as `do`/`while`. The `PS.EXCM`
 exception-mode test of the hardware is not modelled. `loopMode` is removed.
 
+## L32R target (local change)
+
+`L32R` computes its literal address in 64-bit disassembly arithmetic, so the one-extended
+offset carried into bit 32. The operand printed as `0x4003c04d0` for a literal at `0x3c04d0`.
+The address is now masked to 32 bits. The p-code was already right, because the space truncates.
+
 ## ESP32-S3 PIE (`Xtensa:LE:32:esp32s3`)
 
 The Xtensa LX7 core of the Espressif ESP32-S3 with its Processor Instruction Extensions (the

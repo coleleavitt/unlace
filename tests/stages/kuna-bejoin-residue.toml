@@ -1,0 +1,211 @@
+# kuna option bejoin (default callers) and option bejoinpass (default
+# whole), GH-904 and GH-815: three more kinds of evidence that a big-endian
+# register pair is one 64-bit value, each from a shape that printed a wrong
+# value.
+#
+# -O0 reloads (bejoin_spill_ppc32_O0.o, bejoin_spill_sparc32_O0.o): clang
+# -O0 spills an argument across a call and reloads it into the second
+# return register before it sign-extends it into the first (`stw
+# r3,8(r31); bl ext; lwz r4,8(r31); srawi r3,r4,31`), and keeps
+# `long long t = x;` in two frame slots it reloads to return.  The reload
+# was taken for a load, which is no extension, so widen printed `int
+# widen` returning `a0 >> 0x1f`, uwiden `(uint8)a0 << 0x20` and local its
+# halves swapped.  A reload of a frame slot is now the value stored there.
+# local_hi and sign are the `int`s over the same values and stay `int`.
+#
+# A pair passed straight on (bejoin_handoff_ppc32_O2.o): to_dbl is `bl
+# add64; bl __floatundidf`, which reads add64's two registers as its 64-bit
+# argument; a call is not otherwise a read, so add64 printed its halves
+# swapped.  A call to a compiler-runtime routine whose first parameter is a
+# 64-bit integer now reads the pair.
+#
+# Reloads that are no return (bejoin_discard_sparc32_O0.o,
+# _mips32_O1.o): keep builds `long long t = y;` from a reloaded argument
+# in %i0:%i1, stores it with `std %i0` and returns nothing; drop reloads a
+# discarded `volatile long long` into $2:$3, then sets $2 to the 0 it
+# returns.  The std reads both words and the overwritten load was never
+# read, so neither proves a 64-bit return.
+#
+# A wrapper's sign test (bejoin_handoff_ppc32_O2.o, _mips32_O2.o): under
+# bejoinpass whole wrap returns sum's whole value, but sign_of, which reads
+# only wrap's first register, read it as wrap's low word, `(int4)wrap(..)`.
+# A function that hands back a proven callee's pair is now proven itself
+# under whole, so the read is the value's high word.
+#
+# Stage: P4 calls and prototypes (return recovery), options bejoin and
+# bejoinpass.  Pass 1 is the default; pass 2 sets bejoin off (the reloads),
+# bejoin evidence (the routine call) or bejoinpass off (the sign test).
+#
+# Images: crates/unlace-analysis/tests/fixtures/bejoin_spill_*.o
+# from bejoin_spill.c, bejoin_handoff_*.o from bejoin_handoff.c,
+# bejoin_discard_*.o from bejoin_discard.c; see bejoin_residue.provenance.
+
+[image]
+arch = 'PowerPC:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '4e80002000000000'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/bejoin_spill_ppc32_O0.o',
+    'read symbols',
+    'lo fu widen',
+    'decompile',
+    'print C',
+    'lo fu uwiden',
+    'decompile',
+    'print C',
+    'lo fu local',
+    'decompile',
+    'print C',
+    'lo fu local_hi',
+    'decompile',
+    'print C',
+    'lo fu sign',
+    'decompile',
+    'print C',
+    'option bejoin off',
+    'lo fu widen',
+    'decompile',
+    'print C',
+    'lo fu uwiden',
+    'decompile',
+    'print C',
+    'lo fu local',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/bejoin_spill_sparc32_O0.o',
+    'read symbols',
+    'option bejoin callers',
+    'lo fu widen',
+    'decompile',
+    'print C',
+    'lo fu uwiden',
+    'decompile',
+    'print C',
+    'option bejoin off',
+    'lo fu widen',
+    'decompile',
+    'print C',
+    'lo fu uwiden',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/bejoin_handoff_ppc32_O2.o',
+    'read symbols',
+    'option bejoin callers',
+    'lo fu add64',
+    'decompile',
+    'print C',
+    'lo fu sign_of',
+    'decompile',
+    'print C',
+    'option bejoin evidence',
+    'lo fu add64',
+    'decompile',
+    'print C',
+    'option bejoin callers',
+    'option bejoinpass off',
+    'lo fu sign_of',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/bejoin_handoff_mips32_O2.o',
+    'read symbols',
+    'option bejoinpass whole',
+    'lo fu sign_of',
+    'decompile',
+    'print C',
+    'option bejoinpass off',
+    'lo fu sign_of',
+    'decompile',
+    'print C',
+    'option bejoinpass whole',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/bejoin_discard_sparc32_O0.o',
+    'read symbols',
+    'lo fu keep',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/bejoin_discard_mips32_O1.o',
+    'read symbols',
+    'lo fu drop',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'bejoin residue #1: a widened argument reloaded after a call returns 8 bytes'
+count = 2
+regex = '^int8 widen\(int4 a0\)$'
+
+[[match]]
+name = 'bejoin residue #2: an unsigned argument reloaded after a call returns 8 bytes'
+count = 2
+regex = '^uint8 uwiden\(uint4 a0\)$'
+
+[[match]]
+name = 'bejoin residue #3: a long long local reloaded from the frame returns 8 bytes'
+count = 1
+regex = '^int8 local\(int4 a0\)$'
+
+[[match]]
+name = "bejoin residue #4: the reloads return the argument's value"
+count = 5
+regex = '^\s*return a0;$'
+
+[[match]]
+name = 'bejoin residue #5: the ints over the same values stay ints'
+count = 2
+regex = '^int4 (local_hi|sign)\(int4 a0\)$'
+
+[[match]]
+name = 'bejoin residue #6: off drops the low word of the PowerPC widen'
+count = 1
+regex = '^int4 widen\(int4 a0\)$'
+
+[[match]]
+name = 'bejoin residue #7: off prints the reloads with their halves swapped, as the default prints keep and drop'
+count = 6
+regex = 'return (CONCAT44\(a0,a0 >> 0x1f\)|\(uint8\)a0 << 0x20);'
+
+[[match]]
+name = 'bejoin residue #8: a pair passed to __floatundidf proves add64'
+count = 1
+literal = 'return CONCAT44(a2 + a0 + (uint4)CARRY4(a3,a1),a3 + a1);'
+
+[[match]]
+name = 'bejoin residue #9: evidence alone prints add64 swapped'
+count = 1
+literal = 'return CONCAT44(a3 + a1,a2 + a0 + (uint4)CARRY4(a3,a1));'
+
+[[match]]
+name = 'bejoin residue #10: a sign test of a whole wrapper reads its high word'
+count = 2
+literal = '(int8)wrap()'
+
+[[match]]
+name = 'bejoin residue #11: bejoinpass off reads the first register as the low word'
+count = 2
+literal = '(int4)wrap()'
+
+[[match]]
+name = 'bejoin residue #12: a pair stored with std is read, so keep is not proven'
+count = 0
+regex = '^int8 keep\('
+
+[[match]]
+name = 'bejoin residue #13: a discarded volatile reload beside the int is not proven'
+count = 0
+regex = '^uint8 drop\('

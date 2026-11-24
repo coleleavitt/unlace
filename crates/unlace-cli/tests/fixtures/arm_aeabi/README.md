@@ -1,0 +1,15 @@
+# ARM run-time ABI helper fixtures
+
+`sf.c` built with zig 0.15.2:
+
+```sh
+zig cc -target arm-freestanding-eabi -O2 -c sf.c -o arm.o
+zig cc -target armeb-freestanding-eabi -O2 -c sf.c -o armeb.o
+zig cc -target thumb-freestanding-eabi -mcpu=cortex_m3 -O2 -c sf.c -o thumbv7m.o
+zig cc -target thumb-freestanding-eabihf -mcpu=cortex_m4+vfp4d16sp -O2 -c sf.c -o thumbv7em-hf.o
+```
+
+The first three are soft-float (the A-profile ones state a VFPv3 FPU, `-mfloat-abi=softfp`); every
+floating-point operation is a call to an `__aeabi_*` helper. The last is hard-float on a
+single-precision FPU: its `double` operations call the helpers, passing the values in core
+registers (`vmov r0, r1, d0`).

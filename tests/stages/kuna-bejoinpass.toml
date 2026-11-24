@@ -1,0 +1,92 @@
+# kuna option bejoinpass whole (the default), GH-904: a big-endian register
+# pair a call hands back and the function returns untouched is one value.
+#
+# bejoin joins a function's returned pair by that function's own proof and
+# a call's output pair by its callee's.  viahook calls through a function
+# pointer, keeps the pair across ext(), and returns it; its caller usehook
+# reads both words of the result, so bejoin callers proves viahook 64-bit,
+# while the callee behind the pointer is unknown.  The RETURN joined high
+# word first and the call first register low, so the same two registers
+# printed swapped:
+#     unsigned long long v1; // v1:v0
+#     v1 = (*hook)();
+#     ext();
+#     return CONCAT44((int4)v1,(int4)((uint8)v1 >> 0x20));      (bug)
+# A call whose two registers reach a RETURN joined high word first,
+# untouched in the same places, now joins high word first too, so the
+# function returns the call's value as it came.
+#
+# The other direction, an unproven wrapper of a proven callee, needs the
+# callee's recovered prototype, which only a whole-binary decompile-all
+# states (protoorder); tests/cli/bejoinpass-*.json cover it on the same
+# images.
+#
+# Stage: P4 calls and prototypes (output-prototype), option bejoinpass.
+# Pass 1 is the default (whole), pass 2 option bejoinpass off.
+#
+# Images: crates/unlace-analysis/tests/fixtures/bejoinpass_mips32_O2
+# (gcc -O2, MIPS o32) and bejoinpass_ppc32_O2.o (clang -O2, PowerPC), both
+# from bejoinpass.c; see bejoinpass.provenance.
+#
+# Assert #1: the default returns the call's value on both targets.
+# Assert #2: the default joins the call high word first (v0:v1, r3:r4).
+# Assert #3: off prints the swap on both targets.
+# Assert #4: off joins the call first register low (v1:v0, r4:r3).
+
+[image]
+arch = 'MIPS:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '03e0000800000000'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/bejoinpass_mips32_O2',
+    'read symbols',
+    'lo fu viahook',
+    'decompile',
+    'print C',
+    'option bejoinpass off',
+    'lo fu viahook',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/bejoinpass_ppc32_O2.o',
+    'read symbols',
+    'option bejoinpass whole',
+    'lo fu viahook',
+    'decompile',
+    'print C',
+    'option bejoinpass off',
+    'lo fu viahook',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "bejoinpass #1: the default returns the call's value as it came"
+count = 2
+regex = '^\s*return v1;$'
+
+[[match]]
+name = "bejoinpass #2: the default joins the call's pair high word first"
+count = 2
+regex = 'unsigned long long v1; // (v0:v1|r3:r4)$'
+
+[[match]]
+name = 'bejoinpass #3: off prints the pair with its halves swapped'
+count = 2
+literal = 'return CONCAT44((int4)v1,(int4)((uint8)v1 >> 0x20));'
+
+[[match]]
+name = "bejoinpass #4: off joins the call's pair first register low"
+count = 2
+regex = 'unsigned long long v1; // (v1:v0|r4:r3)$'

@@ -12,6 +12,7 @@ import capstone as cs
 import unicorn as uc
 from unicorn import arm64_const as a64
 from unicorn import riscv_const as rv
+from unicorn import s390x_const as sz
 from unicorn import x86_const as x86
 
 
@@ -742,6 +743,165 @@ class Ppc64leIsa(Ppc64le):
     lang = "PowerPC:LE:64:A2ALT"
 
 
+S390X_DENY = re.compile(
+    r"^(svc|ex|exrl|diag|sigp|lpswe?|ssm|stnsm|stosm|lctlg?|stctlg?|ptlb|ipte|idte|sske|iske|rrbe|rrbm|"
+    r"lra[y g]?|lurag?|sturg?|stpx|spx|stap|stidp|sck|sckc|stckc|spt|stpt|stck[ef]?|ecag|ectg|stfle|stfl|"
+    r"stsi|stcps|stcrw|tsch|ssch|msch|csch|hsch|rsch|xsch|chsc|rchp|sal|schm|tpi|tpei|siga|"
+    r"mc|trap[24]|tbegin.*|tend|tabort|etnd|ntstg|ppa|niai|bpp|bprp|pfd|pfdrl|"
+    r"sar|ear|lam|lamy|stam|stamy|cpya|sacf|sac|ipk|spka|pt|pti|pc|pr|bsg|bsa|bakr|ereg|eregg|esea|epar|epair|esar|"
+    r"esta|msta|mvcp|mvcs|mvcdk|mvcsk|mvcos|mvpg|mvcl|mvcle|mvclu|clcl|clcle|clclu|"
+    r"cu[0-9]+|cu[a-z]+|tre|troo|trot|trto|trtt|srst|srstu|cuse|cmpsc|kmc|km|kimd|klmd|kmac|kmctr|kmf|kmo|pcc|kma|"
+    r"prno|kdsa|dfltcc|sortl|nnpa.*|[lst]ctlg?|.*[\._]?fpc|sfasr|srnmb?|srnmt|lfas|efpc|sfpc|lfpc|stfpc|"
+    r"[a-z]*dt[a-z]*|[a-z]*xt[a-z]*|v.*|wf.*|lcbb)$"
+)
+
+
+class S390x(Arch):
+    """IBM z/Architecture (QEMU oracle: qemu-s390x -cpu max). The condition code is one-hot in
+    CC0..CC3 with CCA = cc >= 2 and CCB = cc & 1."""
+    name = "s390x"
+    lang = "s390x:BE:64:default"
+    elf_machine = 22
+    big = True
+    pc = "PC"
+    max_len = 6
+    gprs = [(f"r{i}", getattr(sz, f"UC_S390X_REG_R{i}")) for i in range(16)]
+    vecs = [(f"f{i}", getattr(sz, f"UC_S390X_REG_F{i}")) for i in range(16)]
+    pc_const = sz.UC_S390X_REG_PC
+    deny = S390X_DENY
+    qemu_bits = ("CC0", "CC1", "CC2", "CC3", "CCA", "CCB")
+
+    def qemu_bit_values(self, rng):
+        cc = rng.randrange(4)
+        out = {f"CC{k}": int(cc == k) for k in range(4)}
+        out["CCA"], out["CCB"] = int(cc >= 2), cc & 1
+        return out
+
+    def unicorn(self):
+        return uc.Uc(uc.UC_ARCH_S390X, uc.UC_MODE_BIG_ENDIAN)
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_SYSZ, cs.CS_MODE_BIG_ENDIAN)
+
+    def gen(self, rng):
+        return rng.getrandbits(48).to_bytes(6, "big")
+
+    def skip(self, cand):
+        # QEMU 10.2 stores the low word shifted left by 32 (zero) for STMH, not bits 0-31
+        return cand["mnemonic"] == "stmh"
+
+
+class _ObjdumpIns:
+    def __init__(self, b, mnemonic, op_str):
+        self.bytes, self.mnemonic, self.op_str = b, mnemonic, op_str
+
+
+class ObjdumpDis:
+    """A Capstone stand-in for an architecture Capstone 5 lacks: binutils objdump decodes
+    4-byte little-endian words in batches, cached by encoding."""
+
+    def __init__(self, tool, mach):
+        self.tool, self.mach, self.cache = tool, mach, {}
+
+    def prime(self, words):
+        import os
+        import subprocess
+        import tempfile
+        todo = sorted({w for w in words if w not in self.cache})
+        if not todo:
+            return
+        with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
+            f.write(b"".join(todo))
+            path = f.name
+        try:
+            out = subprocess.run([self.tool, "-D", "-b", "binary", "-m", self.mach, path],
+                                 capture_output=True, text=True, check=True).stdout
+        finally:
+            os.unlink(path)
+        got = {}
+        for line in out.splitlines():
+            m = re.match(r"\s*([0-9a-f]+):\t([0-9a-f]{8})\s*\t(\S+)\s*(.*)$", line)
+            if m:
+                got[int(m.group(1), 16) // 4] = (m.group(3), m.group(4).split("#")[0].strip())
+        for i, w in enumerate(todo):
+            mn = got.get(i)
+            self.cache[w] = None if mn is None or mn[0].startswith(".") else mn
+
+    def disasm(self, raw, addr):
+        b = bytes(raw[:4])
+        if len(b) < 4:
+            return
+        if b not in self.cache:
+            self.prime([b])
+        hit = self.cache[b]
+        if hit:
+            yield _ObjdumpIns(b, hit[0], hit[1])
+
+
+LA_NAMES = ("ra tp sp a0 a1 a2 a3 a4 a5 a6 a7 t0 t1 t2 t3 t4 t5 t6 t7 t8 r21 fp "
+            "s0 s1 s2 s3 s4 s5 s6 s7 s8").split()
+LA_FNAMES = [f"fa{i}" for i in range(8)] + [f"ft{i}" for i in range(16)] + [f"fs{i}" for i in range(8)]
+LA_DENY = re.compile(
+    r"^(syscall|break|dbcl|hvcl|ertn|idle|cpucfg|rdtime.*|csr.*|iocsr.*|tlb.*|invtlb|cacop|lddir|ldpte|"
+    r"gcsr.*|gtlb.*|preld.*|asrt.*|ll\..*|sc\..*|llacq.*|screl.*|sc\.q|"
+    r"movfcsr2gr|movgr2fcsr|frecipe.*|frsqrte.*|f(ld|st)(gt|le)\..*|v.*|xv.*|"
+    r"x86.*|arm.*|setx86.*|setarm.*|setj|movgr2scr|movscr2gr|jiscr.*|"
+    r"rcr.*|rotr\.[bh]|rotri\.[bh]|addu12i.*|adc\..*|sbc\..*|sra\.?[bh].*|srl\.?[bh].*|sll\.?[bh].*|"
+    r"ldl\..*|ldr\..*|stl\..*|str\..*|armmove|armmfflag|armmtflag|x86mfflag|x86mtflag|gcsr.*|lbt.*)$"
+)
+_LA_DIS = None
+
+
+class LoongArch64(Arch):
+    """LoongArch64 (QEMU oracle only: qemu-loongarch64 -cpu max; Unicorn and Capstone 5 lack it).
+    Encodings are decoded with binutils objdump ($DIFFFUZZ_LA_OBJDUMP or
+    loongarch64-linux-gnu-objdump on PATH)."""
+    name = "loongarch64"
+    lang = "Loongarch:LE:64:lp64d"
+    elf_machine = 258
+    pc = "pc"
+    gprs = [(n, 0) for n in LA_NAMES]
+    vecs = [(n, 0) for n in LA_FNAMES]
+    deny = LA_DENY
+
+    def partial(self, mnemonic, operands):
+        """A single-precision or word result in an FPR leaves bits 63:32 undefined (QEMU NaN-boxes
+        them); only the low word is compared."""
+        dst = operands.split(",")[0].strip().lstrip("$")
+        if not dst.startswith("f") or mnemonic.startswith("movgr2frh"):
+            return {}
+        parts = mnemonic.split(".")
+        fmt = parts[1] if parts[0] in ("ftint", "ftintrm", "ftintrp", "ftintrz", "ftintrne", "ffint", "fcvt") and len(parts) > 2 else parts[-1]
+        return {dst: 0xFFFFFFFF} if fmt in ("s", "w") else {}
+
+    def ignored(self, mnemonic, operands, state):
+        if re.match(r"^fn?m(add|sub)\.[sd]$", mnemonic):
+            return {operands.split(",")[0].strip().lstrip("$")}  # fused: p-code rounds twice
+        return set()
+
+    def unicorn(self):
+        raise NotImplementedError("LoongArch has no Unicorn model; use --oracle qemu")
+
+    def capstone(self):
+        global _LA_DIS
+        if _LA_DIS is None:
+            import os
+            import shutil
+            tool = os.environ.get("DIFFFUZZ_LA_OBJDUMP") or shutil.which("loongarch64-linux-gnu-objdump")
+            if not tool:
+                raise SystemExit("loongarch64: set DIFFFUZZ_LA_OBJDUMP to a binutils objdump for LoongArch")
+            _LA_DIS = ObjdumpDis(tool, "loongarch")
+        return _LA_DIS
+
+    def gen(self, rng):
+        pool = getattr(self, "_pool", None)
+        if not pool:
+            pool = [rng.getrandbits(32).to_bytes(4, "little") for _ in range(8192)]
+            self.capstone().prime(pool)
+            self._pool = pool
+        return pool.pop()
+
+
 TC_DENY = re.compile(
     r"^(j.*|call.*|ret|rfe|rfm|syscall|debug|trap.*|isync|dsync|svlcx|rslcx|bisr|ldlcx|lducx|stlcx|stucx|"
     r"mfcr|mtcr|enable|disable|wait|nop|cachea.*|cachei.*|loop.*|fcall.*|fret|cmpswap.*|swap.*|ldmst|.*\.f|q.*)$"
@@ -989,4 +1149,56 @@ class Sh4(Arch32):
         return {"S", "Q", "M"}
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), TriCore(), Nios2(), Sh4())}
+M68K_DENY = re.compile(
+    r"^(trap.*|illegal|rte|stop|reset|movec|moves.*|move16|bkpt|chk.*|cpush.*|cinv.*|pflush.*|ptest.*|pmove.*|"
+    r"f.*|linea|linef|cas2.*|callm|rtm|nop|pack|unpk)$"
+)
+
+
+class M68k(Arch32):
+    """Motorola 68040 integer instructions, against QEMU user mode (--oracle qemu, qemu-m68k -cpu
+    m68040). FPU, privileged, trap and MMU/cache instructions are not generated."""
+    name = "m68k"
+    lang = "68000:BE:32:default"
+    elf_machine = 4
+    big = True
+    pc = "PC"
+    gprs = [(f"D{i}", None) for i in range(8)] + [(f"A{i}", None) for i in range(7)] + [("SP", None)]
+    pc_const = None
+    flags_reg = "ccr"
+    flag_bits = {"CF": 0, "VF": 1, "ZF": 2, "NF": 3, "XF": 4}
+    deny = M68K_DENY
+
+    def unicorn(self):
+        raise NotImplementedError("m68k runs with --oracle qemu")
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_M68K, cs.CS_MODE_M68K_040)
+
+    def gen(self, rng):
+        return rng.getrandbits(176).to_bytes(22, "big")
+
+    def canonical(self, cand):
+        # Capstone accepts reserved extension-word encodings (and prints them as such)
+        ops = cand["op_str"]
+        if re.search(r"\(\[|\((?:[ad]\d|a7)\.[wl]|invalid|\[\]|\[,", ops):
+            return False
+        if re.search(r"\bfp\d|\bsr\b", ops) or (cand["mnemonic"] in ("abcd", "sbcd") and "#" in ops):
+            return False
+        return not cand["mnemonic"].startswith("dc.") and cand["mnemonic"] != "abcd.l"
+
+    def skip(self, cand):
+        # QEMU 8.2's memory shifts take arithmetic/logical from EA bit 3 instead of opcode bit 9
+        if cand["mnemonic"] in ("asl.w", "asr.w", "lsl.w", "lsr.w") and not re.match(r"(#|d\d), ", cand["op_str"]):
+            return True
+        # QEMU 8.2's TAS (An)+ always steps by 1, also for A7
+        if cand["mnemonic"] == "tas.b" and cand["op_str"] == "(a7)+":
+            return True
+        # QEMU 8.2 steps A7 by 1 in the byte -(Ay),-(Ax) forms; the manual keeps it word aligned (2)
+        if re.match(r"(addx|subx|abcd|sbcd)(\.b)?$", cand["mnemonic"]) and "-(a7)" in cand["op_str"]:
+            return True
+        # LINK A7: QEMU pushes A7 before the decrement, other references after; the manual leaves it open
+        return cand["mnemonic"] == "link.w" and cand["op_str"].startswith("a7,")
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k())}

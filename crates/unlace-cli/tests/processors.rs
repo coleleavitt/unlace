@@ -2,7 +2,8 @@
 //! family's raw image decompiles through the CLI without unimplemented or bad instructions, and its
 //! output carries the expected text. A function with `xfail = "<why>"` is a known failure: it is
 //! reported, and fails the test once it passes. `UNLACE_PROCESSORS=lanai,meta` runs only the named
-//! families.
+//! families. A `loader = "auto"` family loads its fixture as a file (ELF, ...) instead, so the
+//! loader picks the language and applies the relocations.
 
 use std::path::{Path, PathBuf};
 
@@ -21,6 +22,9 @@ struct Case {
     base: String,
     address: String,
     image: PathBuf,
+    /// Load the fixture as a file (ELF, ...) and let the loader pick the
+    /// language, instead of `--raw-image --target --base`.
+    loaded: bool,
     args: Vec<String>,
     forbid: Vec<String>,
     expect: Vec<String>,
@@ -97,10 +101,20 @@ fn load_cases(text: &str, root: &Path) -> Result<Vec<Case>, String> {
             fam,
             &[
                 "name", "language", "base", "fixture", "image", "args", "forbid", "function",
+                "loader",
             ],
             name,
         )?;
-        let base = str_field(fam, "base", name)?;
+        let loaded = match fam.get("loader") {
+            None => false,
+            Some(_) if str_field(fam, "loader", name)? == "auto" => true,
+            Some(_) => return Err(format!("{name}: `loader` must be \"auto\"")),
+        };
+        let base = match (loaded, fam.get("base")) {
+            (true, None) => "",
+            (true, Some(_)) => return Err(format!("{name}: a `loader` row takes no `base`")),
+            (false, _) => str_field(fam, "base", name)?,
+        };
         let image = match (fam.get("fixture"), fam.get("image")) {
             (Some(_), None) => root.join(str_field(fam, "fixture", name)?),
             (None, Some(_)) => {
@@ -136,6 +150,16 @@ fn load_cases(text: &str, root: &Path) -> Result<Vec<Case>, String> {
                 Some(_) => str_list(func, "language", test)?,
                 None => fam_langs.clone(),
             };
+            if loaded && !langs.is_empty() {
+                return Err(format!(
+                    "{test}: a `loader` row picks its language; drop `language`"
+                ));
+            }
+            let langs = if loaded {
+                vec!["auto".to_owned()]
+            } else {
+                langs
+            };
             if langs.is_empty() {
                 return Err(format!(
                     "{test}: no `language` on the function or its family"
@@ -157,6 +181,7 @@ fn load_cases(text: &str, root: &Path) -> Result<Vec<Case>, String> {
                     base: base.to_owned(),
                     address: address.to_owned(),
                     image: image.clone(),
+                    loaded,
                     args: args.clone(),
                     forbid: forbid.clone(),
                     expect: expect.clone(),
@@ -171,16 +196,10 @@ fn load_cases(text: &str, root: &Path) -> Result<Vec<Case>, String> {
 /// The failures of one case; empty when it passes.
 fn run_case(c: &Case) -> Vec<String> {
     let image = c.image.to_string_lossy();
-    let mut argv: Vec<&str> = vec![
-        "decompile",
-        &image,
-        &c.address,
-        "--raw-image",
-        "--target",
-        &c.language,
-        "--base",
-        &c.base,
-    ];
+    let mut argv: Vec<&str> = vec!["decompile", &image, &c.address];
+    if !c.loaded {
+        argv.extend(["--raw-image", "--target", &c.language, "--base", &c.base]);
+    }
     argv.extend(c.args.iter().map(String::as_str));
     let (stdout, stderr, code) = run_kuna(&argv);
     if code != 0 {
@@ -273,4 +292,17 @@ fn the_manifest_rejects_unknown_keys() {
     assert!(err.contains("unknown key `expct`"), "{err}");
     assert_eq!(hex_bytes("0a ff\n10", "t").unwrap(), [0x0a, 0xff, 0x10]);
     assert!(hex_bytes("abc", "t").is_err());
+    let loaded = "[[family]]\nname = \"x\"\nloader = \"auto\"\nfixture = \"f\"\n\
+                  [[family.function]]\ntest = \"t\"\naddress = \"main\"\n";
+    let cases = load_cases(loaded, &root).unwrap();
+    assert!(cases[0].loaded && cases[0].language == "auto");
+    let typed = loaded.replace(
+        "loader = \"auto\"\n",
+        "loader = \"auto\"\nlanguage = \"a\"\n",
+    );
+    assert!(
+        load_cases(&typed, &root)
+            .unwrap_err()
+            .contains("drop `language`")
+    );
 }

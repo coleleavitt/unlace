@@ -53,5 +53,17 @@ Run only some families while working on them:
 UNLACE_PROCESSORS=lanai,meta cargo test -p unlace-cli --test integration processors::
 ```
 
-A test whose shape does not fit (a loader, an ELF fixture, several commands, a check on JSON
-output) stays its own file in `crates/unlace-cli/tests/`, registered in `integration.rs`.
+## Loaded images
+
+A family with `loader = "auto"` (and no `language` or `base`) loads its fixture as a file instead:
+
+```sh
+unlace decompile <image> <address>
+```
+
+so the loader picks the language from the image (the ELF header) and applies its relocations.
+`address` may be a symbol name. The `elfroute_*` rows use it: one real ET_REL or ET_EXEC build
+of `fixtures/elfroute/fx.c` per machine the ELF loader routes by header or relocates with a
+machine-specific encoder, so a regression in either shows up as a missing call name or global.
+
+A test whose shape does not fit (several commands, a check on JSON output) stays its own file in `crates/unlace-cli/tests/`, registered in `integration.rs`.

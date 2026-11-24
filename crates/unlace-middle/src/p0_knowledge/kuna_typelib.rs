@@ -4,7 +4,8 @@
 //! function with its prototype, and every record with the size, alignment and
 //! member offsets the platform's compiler gives it. `auto` reads the library
 //! built into kuna for the image's target (an x86-64 Linux ELF linked against
-//! glibc or musl; no other target has one, so the option is inert there),
+//! glibc or musl, or an x86 or x64 PE, which reads the Windows API library; no
+//! other target has one, so the option is inert there),
 //! `off` reads none, and a path reads a library file instead of the built-in
 //! one: the text format, or an IDA type library (`.til`), which is read for an
 //! image of any target. The library is consulted when the analysis facts are committed, which

@@ -69,6 +69,15 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna) Gate the COM id and interface pass (`com`); default off.
+    Com,
+    "com",
+    "COM class and interface ids, interface typing",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna) Gate the string-literal pass (`strings`); default on.
     Strings,
     "strings",

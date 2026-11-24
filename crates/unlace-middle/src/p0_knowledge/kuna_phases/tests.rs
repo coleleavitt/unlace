@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_346() {
-    assert_eq!(kuna_num_settables(), 346);
-    assert_eq!(SETTABLE_TABLE.len(), 346);
+fn settable_count_is_347() {
+    assert_eq!(kuna_num_settables(), 347);
+    assert_eq!(SETTABLE_TABLE.len(), 347);
 }
 
 #[test]
-fn tier_counts_are_70_core_172_transform_104_analysis() {
+fn tier_counts_are_70_core_172_transform_105_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_172_transform_104_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 172, 104));
+    assert_eq!((core, transform, analysis), (70, 172, 105));
 }
 
 #[test]
@@ -320,6 +320,9 @@ fn option_values_live_value_present_for_129() {
         "uefi",
         "esprom",
         "cortexmscs",
+        // (kuna) The COM id and interface pass -- an analysis-pass gate read
+        // console-side. Default-off.
+        "com",
         // (kuna) The libgcc `__divdi3` contract -- an analysis-pass gate read
         // console-side via kuna_live_value, like `libcsigs`. Default-off.
         "libgccsigs",

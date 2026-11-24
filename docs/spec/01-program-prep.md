@@ -4342,10 +4342,11 @@ moves.
   about 740 functions, and member layouts for nine records. The type library
   is the same knowledge generated: every function a platform's C library
   declares, with its prototype, and every record with the size, alignment and
-  member offsets the platform's compiler gives it. One library is built in, for
-  an x86-64 Linux ELF dynamically linked against glibc or musl (1,447
-  functions, 347 records, 190 typedefs); on every other image the option does
-  nothing. `off` reads no library and `typelib <file>` reads a library file in
+  member offsets the platform's compiler gives it. Three libraries are built
+  in: one for an x86-64 Linux ELF dynamically linked against glibc or musl
+  (1,447 functions, 347 records, 190 typedefs), and one each for an x86 and an
+  x64 PE, the Windows API (7,962 and 8,111 functions); on every other image the
+  option does nothing. `off` reads no library and `typelib <file>` reads a library file in
   place of the built-in one, for an image of the target the file names.
 
   *Format.* A library is a text file. Three header lines name the format
@@ -4382,11 +4383,52 @@ moves.
   `sysinfo` and `sigset_t`, and functions glibc does not have. 1,374 of the
   1,447 functions are offered to a glibc image.
 
+  *Windows.* `scripts/typelib/gen_windows.py` writes
+  `crates/unlace-console/typelib/windows-x86.ktl` and `windows-x86_64.ktl`
+  from IDA 9.5's shipped Windows type libraries, read from the SQLite dump of
+  them (`ida-9.5-tils.sqlite`, one row per type, member and symbol as IDA prints
+  it): for x86 the Windows 10 SDK library `mssdk_win10.til` and the Native API
+  library `ntapi_win10.til`, for x64 `mssdk64_win10.til` and
+  `ntapi64_win10.til`, the SDK library winning a name both declare. The SDK
+  declares about 28,000 functions, most of them helpers no system DLL exports,
+  so a function is kept only when one of 41 core system DLLs exports its name
+  (kernel32, kernelbase, ntdll, user32, gdi32, advapi32, ws2_32, wininet,
+  winhttp, ole32, oleaut32, shell32, shlwapi, crypt32, bcrypt and the rest
+  listed in the script); the export names come from Wine 10.0's `.spec` files,
+  and no Wine text enters the library. Every type a kept prototype reaches is
+  kept with it: typedefs, enums as integers of their width, and records with the
+  member offsets IDA measured. A record whose members all sit at their natural
+  alignment takes that alignment and is padded to it (the dump states some x64
+  sizes without their tail padding); one whose offsets show a pack takes the
+  largest alignment they allow. IDA's spellings become C (`__int16` is
+  `short`, an anonymous `Outer::$<hash>` is `Outer___<hash>`, its anonymous
+  member `field_<index>`), a bit-field is a hole, and an entry naming a type C
+  cannot spell here (`__int128`, `_UNKNOWN`) is left out. Every x86 entry is
+  a `__stdcall` function that is not variadic, the default model of an x86
+  Windows compiler spec, so the keyword is dropped and a `__cdecl`,
+  `__fastcall` or `__thiscall` export (`wsprintfA`, `DbgPrint`) is left
+  out; x64 has one convention and keeps every entry. That is 7,962 functions,
+  1,696 records and 2,703 typedefs for x86 and 8,111, 1,702 and 2,703 for x64,
+  about 1.4 MB of text each. Every entry is offered (`*`). Every other source
+  of a prototype still declares first, with one exception: on a Windows image
+  (the built-in library or a library file) a library declaration replaces the
+  `win32sigs` entry for the same import, because that hand-written table
+  spells every handle, record pointer and callback `void *`
+  (`kuna_win32sigs::declares` names its entries; the table stays the fallback
+  for a name the library does not declare or cannot read). So
+  `CreateFileW(LPCWSTR, DWORD, DWORD,
+  LPSECURITY_ATTRIBUTES, ...)`, `ReadFile(..., LPOVERLAPPED)`,
+  `NtCreateFile(..., POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK, ...)`, with
+  `_SECURITY_ATTRIBUTES`, `_OVERLAPPED` and `_OBJECT_ATTRIBUTES` laid out for
+  the image's pointer width.
+
   *Reading.* `TypeLibPass` runs at load and records only what needs the object
   file: the image's target, whether it names glibc (`libc.so.6` or a `GLIBC_`
   version in `.dynstr`) or musl (an `ld-musl` interpreter or a `libc.musl-`
-  dependency), and the imported functions with their addresses. An image that
-  names neither C library yields nothing. The library is consulted at the
+  dependency), and the imported functions with their addresses. Any other image
+  is named by its format and machine (a PE is `windows x86` or
+  `windows x86_64`), which only the Windows libraries, a library file of that
+  target or an IDA type library serve. The library is consulted at the
   analysis commit, after every other pass has contributed, and it declares only
   an import no earlier source declared: a prototype from the tables above, from
   debug information, or from a demangled name stands. Reading a prototype
@@ -5219,6 +5261,45 @@ moves.
   `--svd` import puts the device name in front of a structure name the built-in
   layouts use (`STM32F103_SCB_Type`), so an SVD peripheral keeps the SVD's
   registers.
+- **(kuna) COM ids and interfaces** (`com`, default off,
+  `crates/unlace-analysis/src/analyzers/com/mod.rs (ComPass)`): on a PE
+  image, every 16-byte value at 4-byte alignment in a data section that equals
+  a known interface or class id becomes a `GUID` (`Data1`, `Data2`, `Data3`,
+  `Data4[8]`) named after it, with a numeric suffix on a repeat:
+  `IID_IShellLinkW`, `CLSID_ShellLink`, `CLSID_WbemLocator`. For each interface id it
+  finds, the pass builds the interface as COM lays it out
+  (`crates/unlace-analysis/src/analyzers/com/mod.rs (ComTypes)`): a struct
+  named after the interface whose only member is `<Interface>Vtbl *lpVtbl`, and
+  the table, one function pointer per method in slot order, the methods of the
+  base interfaces first (`IUnknown`'s `QueryInterface`, `AddRef`, `Release`,
+  then `IDispatch`'s four for a dual interface), each with `This` (a pointer
+  to the interface) as its first parameter. A method whose parameters include
+  a by-value aggregate (a `VARIANT`, a `POINT`, a `GUID`) keeps an untyped
+  code pointer in its slot, so the table's offsets stay right without stating
+  a prototype the pass cannot spell. A name the program already holds for a
+  complete type of another size is left alone. The commit hands the engine the
+  map from each id's address to its interface
+  (`crates/unlace-bandb-base/src/p5_types/kuna_comtyping.rs (ComInterfaces)`),
+  which types the out-parameter of a COM request by the id it passes (chapter
+  05). The imported `ole32` requests (`CoCreateInstance`, `CoGetClassObject`,
+  `CoGetObject`, `CoGetInterfaceAndReleaseStream`, `CoGetObjectContext`,
+  `CoGetCallContext`, `OleCreate`) get their prototypes by import address,
+  so the out-parameter is an argument at every call even where the call site
+  alone would not place it (the fifth argument of `CoCreateInstance` on x86-64
+  is on the stack). The pass builds types, so it runs at the analysis commit
+  and only when the option is on
+  (`crates/unlace-analysis/src/passes.rs (run_com)`); with it off no type,
+  name or prototype exists. The tables are generated by
+  `scripts/gen_com_tables.py` from the Win32 bindings of the `windows` crate
+  (microsoft/windows-rs 0.62, MIT OR Apache-2.0), which are generated from the
+  Windows metadata: `analyzers/com/interfaces.txt` holds 4401 interfaces, each
+  with its base and the methods it adds, a letter per return and parameter
+  type (`h` HRESULT, `u`/`i` 4-byte integers, `p` a pointer, `w` a wide
+  string, `8` a by-value 64-bit integer, ...), and `analyzers/com/guids.txt`
+  5239 ids, the interfaces' ids as `IID_<Interface>` and the coclasses'
+  as `CLSID_<Class>`. The media, device and printing namespaces are left
+  out. The model is IDA 9.5's `comhelper` plugin, which names a GUID from
+  `clsid.cfg` and applies the `<Interface>Vtbl` type its type library holds.
 - **(kuna) Declared names** (`declaredlibcproto`,
   `crates/unlace-analysis/src/analyzers/protos/mod.rs (declared_libc_prototype)`,
   consulted from `crates/unlace-console/src/engine.rs (ConsoleProgram::declare_function)`):
@@ -9921,7 +10002,37 @@ and a count of its cleanup funclets; each catch funclet gets
 `eh: catch (std::runtime_error &) handler of 0x140001000 (try states 0-0)` and each
 cleanup funclet `eh: unwind funclet of 0x140001000 (state 2)`. Every funclet is
 also a discovered entry. The handler bodies are not spliced into the parent's
-flow, and x86 `FuncInfo` and SEH scope tables are not read.
+flow.
+
+**(kuna) SEH scope tables and x86 C++ `FuncInfo` are listed too** (`msvceh`,
+the same pass; `crates/unlace-analysis/src/analyzers/entry/kuna_msvcseh.rs (x86_scope_table)`).
+A `__try` block's filter and handler are reached only by the exception
+dispatcher, so the pseudocode shows the guarded code and nothing of `__except`
+or `__finally`. On x64 an `UNWIND_INFO` whose handler is the
+`__C_specific_handler` import carries a `SCOPE_TABLE`: a count of 1 to 64, then
+`{BeginAddress, EndAddress, HandlerAddress, JumpTarget}` RVAs. `JumpTarget` 0 is
+a `__finally` whose funclet is `HandlerAddress`; otherwise `HandlerAddress` is
+the filter funclet, or a constant filter below 0x10 or above 0xfffffff0 (1 is
+`EXCEPTION_EXECUTE_HANDLER`), and `JumpTarget` is the `__except` block inside
+the function. The function gets one header comment per record,
+`seh: __try [0x140001010, 0x140001030): __except (EXCEPTION_EXECUTE_HANDLER) -> 0x140001040; ...`,
+and each filter and `__finally` funclet gets `seh: __except filter of ...` or
+`seh: __finally funclet of ...` and is a discovered entry. On x86 the frame
+handler is installed by the prologue, so the pass scans code for
+`push -2; push table; push handler` (SEH4, after an optional
+`push ebp; mov ebp, esp`, which is then the function start), `push -1` (SEH3),
+and `push size; push table; call __SEH_prolog4`. An SEH4 table opens with four
+cookie offsets; the GS offset is -2 (none) or negative and the EH offset negative.
+Records follow (directly for SEH3): `{EnclosingLevel, Filter, Handler}`, read
+while the enclosing level is the outermost marker or a lower record and the
+filter (null for `__finally`) and the handler lie in code. Each record becomes a
+`seh (level N): ...` header comment; the blocks lie inside the function and are
+not shown. An x86 C++ function installs a handler stub instead
+(`push -1; push stub; mov eax, fs:[0]`, or `mov eax, stub; call __EH_prolog3`
+after its `push size`) whose code ends `mov eax, FuncInfo; jmp` within 48 bytes
+of its entry. That `FuncInfo` (magic checked) is decoded as on x64 with
+absolute references and 16-byte `HandlerType`s, and the function gets the same
+try-block comments, ending `the handler blocks are not shown`.
 
 **(kuna) `.pdata` interiors are not function starts either** (`pdatainterior`,
 always on, DIV-155;

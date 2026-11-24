@@ -2027,6 +2027,27 @@ pub fn run_uefi(
     out
 }
 
+/// Run the **deferred** COM markup ([`crate::com::ComPass`]) at the commit
+/// point, only when its option is on: it builds the interface types into the
+/// engine's type factory, so a run with the option off creates none. The pass
+/// declines every image that is not a PE.
+pub fn run_com(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
+    let Ok(file) = crate::loadimage_object::parse_object(bytes) else {
+        return AnalysisOutput::default();
+    };
+    let ctx = AnalysisCtx {
+        file: &file,
+        bytes,
+        image: None,
+        arch,
+        listing: None,
+        image_path: None,
+    };
+    let mut out = crate::com::ComPass.run(&ctx);
+    out.sanitize_names(symbolnamechars_mode());
+    out
+}
+
 /// Build an [`AnalysisCtx`] and run the **deferred** scalar/operand reference-markup
 /// pass ([`crate::operand_refs::OperandRefsPass`]), returning its output keyed by
 /// the pass id (`"operand_refs"`).

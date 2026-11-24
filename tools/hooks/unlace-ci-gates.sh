@@ -86,6 +86,7 @@ rusttest() {
 
 step ignored-fixtures ignored_fixtures
 step test-layout python3 scripts/check_test_layout.py
+step determinism-lint python3 scripts/check_determinism.py
 step fmt fmt
 if [ "$LEVEL" != fast ]; then
   # CI has no global gitignore; the repo tooling tests create a.exe / x.obj and expect git to see them.
@@ -97,6 +98,7 @@ if [ "$LEVEL" != fast ]; then
   step check-spec python3 tools/check_spec.py
   step test-cli "${SLOT[@]}" env PYTHONPATH="$ROOT" python3 -m scripts.repipe.clitests
   step catalog-check "$BIN/unlace" catalog --check
+  step determinism "${SLOT[@]}" python3 scripts/check_determinism.py --run "$BIN/unlace"
   step counters counters
   step options-md options_md
   step ghidra ghidra

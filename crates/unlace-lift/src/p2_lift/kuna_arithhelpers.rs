@@ -231,7 +231,11 @@ pub fn decode_payloads(
     register: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
 ) -> KunaResult<()> {
     use unlace_base::xml::DocumentStorage;
-    for xml in payload_xml(abi) {
+    let float = match abi {
+        HelperAbi::Arm { big_endian } => crate::kuna_aeabifloat::payload_xml(big_endian),
+        HelperAbi::X86 => Vec::new(),
+    };
+    for xml in payload_xml(abi).into_iter().chain(float) {
         let mut store = DocumentStorage::new();
         let root = store.parse_document(xml.as_bytes())?.get_root().clone();
         register(&root)?;

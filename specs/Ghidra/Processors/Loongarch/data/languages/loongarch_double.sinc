@@ -172,28 +172,28 @@
 #la-fp-d.txt ftintrm.w.d mask=0x011a0800	
 #0x011a0800	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
 :ftintrm.w.d  drD, drJ          is op10_31=0x4682 & drD & drJ {
-	local val:4 = trunc(drJ);
+	local val:4 = trunc(floor(drJ));
 	drD = zext(val);
 }
 
 #la-fp-d.txt ftintrm.l.d mask=0x011a2800	
 #0x011a2800	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
 :ftintrm.l.d  drD, drJ          is op10_31=0x468a & drD & drJ {
-	drD = trunc(drJ);
+	drD = trunc(floor(drJ));
 }
 
 
 #la-fp-d.txt ftintrp.w.d mask=0x011a4800	
 #0x011a4800	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
 :ftintrp.w.d  drD, drJ          is op10_31=0x4692 & drD & drJ {
-	local val:4 = trunc(drJ);
+	local val:4 = trunc(ceil(drJ));
 	drD = zext(val);
 }
 
 #la-fp-d.txt ftintrp.l.d mask=0x011a6800	
 #0x011a6800	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
 :ftintrp.l.d  drD, drJ          is op10_31=0x469a & drD & drJ {
-	drD = trunc(drJ);
+	drD = trunc(ceil(drJ));
 }
 
 
@@ -228,14 +228,14 @@
 #la-fp-d.txt ftint.w.d mask=0x011b0800	
 #0x011b0800	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
 :ftint.w.d  drD, drJ            is op10_31=0x46c2 & drD & drJ {
-	local val:4 = trunc(drJ);
+	local val:4 = round_even(drJ);
 	drD = zext(val);
 }
 
 #la-fp-d.txt ftint.l.d mask=0x011b2800	
 #0x011b2800	0xfffffc00	f0:5, f5:5	['freg0_5_s0', 'freg5_5_s0']
 :ftint.l.d  drD, drJ            is op10_31=0x46ca & drD & drJ {
-	drD = trunc(drJ);
+	drD = round_even(drJ);
 }
 
 

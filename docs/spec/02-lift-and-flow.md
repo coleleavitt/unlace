@@ -1286,6 +1286,32 @@ recovered switch table.
   helper also has an `entry|1` twin, and its calls resolve to the even entry).
   The gate is on the install, as for `msvcftol`.
 
+- **AEABI floating-point helpers** (`crates/unlace-lift/src/p2_lift/kuna_aeabifloat.rs`,
+  option **`aeabifloat`**, default off): on 32-bit ARM the same payload list
+  carries the run-time ABI's floating-point helpers (RTABI32 4.1.2), each body
+  the IEEE 754 operation the helper performs on its base-standard operands.
+  `__aeabi_dadd`, `dsub`, `drsub`, `dmul`, `ddiv` and the `f` forms are
+  `f+`, `f-` (operands swapped for `rsub`), `f*`, `f/`; the `int`
+  comparisons `dcmpeq`, `dcmplt`, `dcmple`, `dcmpge`, `dcmpgt` and the `f`
+  forms are `zext` of `f==`, `f<` or `f<=` (swapped for `ge` and `gt`),
+  false on unordered operands as the helpers return 0, and `dcmpun`/`fcmpun`
+  are `nan(a) | nan(b)`; `d2iz`, `d2lz`, `f2iz`, `f2lz` are `trunc`, `d2uiz`
+  and `f2uiz` the low word of an eight-byte `trunc` (exact for every result the
+  C cast defines), `d2f`/`f2d` `float2float`, and `i2d`, `l2d`, `i2f`, `l2f`
+  `int2float`, with `ui2d`/`ui2f` converting the zero-extended word. A `double`
+  is joined from r0:r1 (r2:r3 for the second operand) low word first on
+  little-endian and high word first on big-endian, and an eight-byte result is
+  split back the same way. So `return __aeabi_dadd(a,b);` prints
+  `return a + b;` and `dscale`'s `__aeabi_dmul(v, __aeabi_i2d(n))` prints
+  `return v * (double)n;`. `d2ulz`, `f2ulz`, `ul2d` and `ul2f` have no exact
+  p-code reading and keep their calls, typed by `aeabisigs`, as do the
+  flag-returning `cdcmp`/`cfcmp` comparisons. Default off: the fold takes the
+  image's helpers to be RTABI32's round-to-nearest IEEE ones, which a library
+  built for flush-to-zero or another rounding mode is not. The gate is on the
+  install, as for `arithhelpers`. On a hard-float caller that moves the
+  `r0:r1` result into `d0` (`vmov d0, r0, r1`), the result still prints as two
+  masked halves of a union cast joined by `+`.
+
 - **Objective-C ARC bookkeeping** (`crates/unlace-lift/src/p2_lift/kuna_objcarc.rs`,
   option **`objcarc`**, default on): the second kuna-owned call-fixup family,
   registered next to the one above. An ARC-compiled method is strewn with
@@ -5710,6 +5736,24 @@ Found by `tools/difffuzz` against Unicorn.
   shifted-register forms (`ARMTHUMBinstructions.sinc`) take `thSBIT_CZN` and
   `th_logicflags()`, so with S they set C from the shifter (`ThumbExpandImm12` or `thshift2`),
   as `ORR`, `EOR` and `TST` already did; before, `ANDS.W r8,r11,r9,ROR #21` left C unchanged.
+
+### LoongArch lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz --arch loongarch64 --oracle qemu` (`qemu-loongarch64 -cpu max`).
+
+- `bstrins.w` and `bstrins.d` insert bits `[msb-lsb:0]` of `rj` at `[msb:lsb]` of `rd`; they
+  computed `bstrpick`'s field (bits `[msb:lsb]` of `rj`, shifted down) and cleared the low bits of
+  `rd`, so `bstrins.w s0,fp,23,14` left `s0` almost unchanged.
+- `slli.d`, `srli.d` and `srai.d` mask their 6-bit immediate with `0x3f`; with `0x1f` a shift by
+  32..63 was a shift by 0..31.
+- `rotr.w`, `rotri.w`, `rotr.d` and `rotri.d` rotate with a logical right shift; an arithmetic
+  one filled the rotated-in bits of a negative value with ones.
+- `bytepick.w` and `bytepick.d` concatenate the low bytes of `rk` with the high `sa` bytes of `rj`;
+  they masked the wrong ends, so `bytepick.w t5,a0,t4,0` returned `a0` instead of `t4`.
+- The float-to-integer conversions round as named: `ftintrm` toward minus infinity (`floor`),
+  `ftintrp` toward plus infinity (`ceil`), `ftintrz` toward zero; `ftint`, which uses the FCSR
+  mode, is the round-to-nearest-even user op that `ftintrne` already was. Before, all but
+  `ftintrne` truncated. The `.l.s` forms write the whole 64-bit register; they wrote its low word.
 
 ### PowerPC lifter fixes from differential fuzzing
 

@@ -280,6 +280,20 @@ First run (unlace-2feb8da847, seed 1, 200 per configuration): every available co
 `qemu-ppc`/`qemu-ppc64le`/`qemu-s390x` on this host). `riscv64v` had 66 findings, all in its four
 documented classes.
 
+`tools/difffuzz/sweep_ci.sh <unlace>` is the cron/CI entry point. It runs the whole sweep with
+the venv's python (`DIFFFUZZ_PYTHON`), the QEMU directories
+`~/.local/share/qemu-8.2-user:~/.local/share/qemu-10.2-user` (`DIFFFUZZ_QEMU_DIR`), rustup's
+rustc-master llvm-objdump for RVV (`DIFFFUZZ_OBJDUMP`) and
+`~/.local/share/difffuzz-tools/loongarch64-linux-gnu-objdump` (`DIFFFUZZ_LA_OBJDUMP`). It goes
+through `kuna-slot` when that exists, with core dumps off, and writes the summary to
+`~/.local/share/difffuzz-sweeps/sweep-<UTC time>-<binary>.json` (`DIFFFUZZ_SWEEP_OUT`). Its
+exit status is sweep.py's. LoongArch without an objdump is `unavailable`.
+
+Full sweep (unlace-5dac424f4f, 37 configurations, all oracles installed): exit 0, every
+configuration `ok`, no mismatches beyond riscv64v's 15 known ones. The `decode` findings (s390x
+97, ppc 25, tricore 12, x86-64-native 7, a few elsewhere) are spec gaps or encodings Capstone
+accepts that the ISA leaves invalid. They are listed in #862.
+
 ## How a case runs
 
 - **Registers.** The register file of the language comes from its `.slaspec`

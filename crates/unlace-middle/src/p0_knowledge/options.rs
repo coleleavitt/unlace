@@ -619,12 +619,6 @@ pub trait ArchOption {
     ) -> UnlaceResult<String>;
 }
 
-/// Read a loader toggle, retaining its default for unknown or non-Unicode values.
-#[doc(hidden)]
-pub fn env_toggle(name: &str, default: bool) -> bool {
-    unlace_base::env::var(name).map_or(default, |value| parse_env_toggle(&value, default))
-}
-
 #[doc(hidden)]
 pub fn parse_env_toggle(value: &str, default: bool) -> bool {
     match value.trim().to_ascii_lowercase().as_str() {

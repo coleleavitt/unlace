@@ -101,12 +101,6 @@ pub fn forced() -> Option<SourceLang> {
     crate::loadoptions::scoped(|o| o.sourcelang).unwrap_or_else(crate::loadoptions::env::sourcelang)
 }
 
-/// The forced source language in this process's environment, if any. Reads
-/// only the environment; a load in progress reads [`forced`].
-pub fn forced_from_env() -> Option<SourceLang> {
-    crate::loadoptions::env::sourcelang()
-}
-
 /// Parse a `sourcelang` option value: `auto` (and empty) clear the override,
 /// a language token forces it, anything else is refused with the vocabulary.
 pub fn parse_option_value(value: &str) -> Result<Option<SourceLang>, String> {

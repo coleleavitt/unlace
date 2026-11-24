@@ -59,13 +59,6 @@ pub fn explicit_pdb_path() -> Option<PathBuf> {
     scoped(|o| o.pdb_path.clone()).unwrap_or_else(env::pdb_path)
 }
 
-/// Resolve the explicitly supplied `.pdb` path from [`PDB_PATH_ENV`]. `None` when
-/// the variable is unset or empty. Reads only the environment; a load in
-/// progress reads [`explicit_pdb_path`].
-pub fn pdb_path_from_env() -> Option<PathBuf> {
-    unlace_decomp::loadoptions::env::pdb_path()
-}
-
 /// The ordered `.pdb` candidates for an image, most specific first (see the module
 /// header for the tiers). `image_path` is the image's own on-disk location
 /// ([`crate::pass::AnalysisCtx::image_path`]); `None` leaves only the explicit

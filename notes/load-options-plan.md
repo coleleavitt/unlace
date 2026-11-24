@@ -203,6 +203,8 @@ input read once at an entry point or a host path; **(b)** a debug, trace, cache 
 fault-injection switch; **(c)** option state that should move into `LoadOptions`.
 Line numbers are as of the audit branch; `rg` the name to find a moved one.
 
+Status after the setters, libctypes and dead-reader PRs: no code outside test modules writes a `UNLACE_*` variable, and the one (c) read left is `UNLACE_ARM_ISA`.
+
 ### Writes outside test code
 
 | Where | Writes | Class | Disposition |
@@ -215,10 +217,10 @@ Line numbers are as of the audit branch; `rg` the name to find a moved one.
 
 Test-module writes (`#[cfg(test)]` blocks inside `src`, not a production path):
 `unlace-analysis/src/loader/format/macho.rs:373,381,407` (`UNLACE_MACHO_ARM64E`),
-`unlace-analysis/src/analyzers/pdb/locate.rs:382-458` (`unlace_pdb_path`),
-`unlace-middle/src/p0_knowledge/goabi.rs:107-116` (`UNLACE_GOABI`),
-`unlace-middle/src/p0_knowledge/libctypes.rs:181-223`, and the `set_var` in
-`symbolnamechars/tests.rs`, `protos/libctypes/tests.rs`.
+`unlace-analysis/src/analyzers/pdb/locate.rs:375-451` (`unlace_pdb_path`),
+`unlace-middle/src/p0_knowledge/goabi.rs:107-116` (`UNLACE_GOABI`). They set and
+restore the variable around a test; the gate tests of the other env-gate families
+now use `loadoptions::read` with `Vars::with` instead.
 
 ### Reads of option state outside a scope (c)
 
@@ -226,7 +228,7 @@ Test-module writes (`#[cfg(test)]` blocks inside `src`, not a production path):
 |---|---|---|---|
 | `unlace-lift/src/p1_partition/goreg.rs:73` `goroutine_register` | `UNLACE_GOVERSION` | c | fixed: it re-read `UNLACE_GOVERSION` after the `version` argument (the image's release, from `Architecture::go_version`) and shadowed it; the argument is now the only source |
 | `unlace-console/src/engine.rs:9667` `arm_isa_from_env` | `UNLACE_ARM_ISA` | c | read by `ifacedecomp.rs:1431` (`load raw`), `bootstrap.rs:301` and the `bootstrap_from_*` helpers; no `LoadOptions` field, so moving it needs an `arm_isa` field and Bootstrap plumbing; not moved here |
-| `unlace-middle/src/p0_knowledge/objcsdk.rs:26` `sdk_path_from_env`, `unlace-analysis/src/analyzers/pdb/locate.rs:65` `pdb_path_from_env`, `unlace-middle/src/p0_knowledge/sourcelang.rs:106` `forced_from_env`, `unlace-middle/src/p0_knowledge/options.rs:624` `env_toggle` | their variables | c | environment-only readers that skip the scope; no caller in `src`, so they are dead code to delete |
+| `unlace-middle/src/p0_knowledge/objcsdk.rs` `sdk_path_from_env`, `unlace-analysis/src/analyzers/pdb/locate.rs` `pdb_path_from_env`, `unlace-middle/src/p0_knowledge/sourcelang.rs` `forced_from_env`, `unlace-middle/src/p0_knowledge/options.rs` `env_toggle` | their variables | c | environment-only readers that skipped the scope; no caller anywhere, deleted (dead-readers PR) |
 
 ### Entry points and host paths (a)
 

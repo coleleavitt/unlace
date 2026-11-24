@@ -404,6 +404,7 @@ kuna_options! { self, p1;
     "castarith" => registered!(crate::kuna_coreoptions::CastArith),
     "castindex" => registered!(crate::kuna_coreoptions::CastIndex),
     "ptrfromuse" => registered!(crate::kuna_ptrfromuse::PtrFromUseMode),
+    "ptrfromlocal" => registered!(crate::kuna_ptrfromuse::PtrFromLocal),
     "charptr" => registered!(crate::kuna_charptr::CharPtr),
     "cstringconst" => registered!(crate::kuna_cstringconst::CstringConst),
     "charnum" => registered!(crate::kuna_charnum::CharNum),

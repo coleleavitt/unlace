@@ -483,7 +483,7 @@ option off vs on, on the shipped tree): crazyflie `cf2.elf` `0x803bec8` (the ext
 `0x802f5b4`, openssh `ssh` `0x20810` and u-boot `0x608715f0` are all **byte-identical
 with the option on**.
 
-**What the fixtures test now.** `tests/stages/kuna-argclobber.xml` is re-cut onto
+**What the fixtures test now.** `tests/stages/kuna-argclobber.toml` is re-cut onto
 the real witness shape (clobber on one path, `idivl` remainder on the other) and
 asserts that the *quotient* the caller uses survives both passes while the
 remainder and the third argument go. `tests/stages/kuna-argclobber-guards.toml`

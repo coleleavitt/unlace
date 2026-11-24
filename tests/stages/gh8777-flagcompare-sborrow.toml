@@ -1,0 +1,61 @@
+# GH-8777: "PIC24: signed branch lifts to a raw SBORROW flag idiom."
+# https://github.com/NationalSecurityAgency/ghidra/issues/8777
+#
+# The PIC24 spec models `bra ge` explicitly as the condition-flag identity
+# N == V over the subtraction (V - K):
+#     cond = (SRL_N && SRL_OV) || (!SRL_N && !SRL_OV)        (== XNOR(N,V))
+# where N = sign of (V - K)  (INT_SLESSEQUAL(0, V-K) / INT_SLESS(-1, V-K))
+# and   V = INT_SBORROW(V, K)  (signed overflow).  XNOR(N,V) is the textbook
+# signed `V >= K` test, but upstream has no rule for it, so the raw flag
+# algebra survives into the rendered loop condition:
+#
+#   for (iVar1 = 0; bVar2 = 0 <= iVar1 + -7,
+#       (bVar2 || !SBORROW2(iVar1,7)) && (!bVar2 || SBORROW2(iVar1,7));
+#       iVar1 = iVar1 + 1) { ... }
+#
+# Stage model: S3 "simplification-quiescence" (which algebraic/peephole rules
+# fire).  kuna's RuleSborrowGe (group "analysis", always on) recognizes the
+# XNOR(N,V) tree in either De-Morgan dual form (AND-of-ORs or OR-of-ANDs)
+# with N = sign(V-K) and V = SBORROW(V,K), and rewrites the whole boolean
+# tree to INT_SLESSEQUAL(K, V) == `V s>= K`: the loop condition is the clean
+# signed comparison `7 <= iVar1` and no SBORROW2 remains.
+#
+# Disassembly:
+#   0x000000 mov.w #0x0,W2
+#   0x000002 mov.w #0x7,W3
+#   0x000004 sub.w W2,W3,W12
+#   0x000006 bra   ge,0x10
+#   0x000008 mov.w #0x0,W0
+#   0x00000a mov.w W0,0x80
+#   0x00000c add.w W2,#0x1,W2
+#   0x00000e bra   0x4
+#   0x000010 return
+
+[image]
+arch = 'PIC-24F:LE:24:default:default'
+symbols = [
+    { space = 'rom', offset = '0x0', name = 'FUN_0' },
+]
+
+[[image.bytes]]
+space = 'rom'
+offset = '0x0'
+hex = '02002000730020000306510004003d00000020000004880061014100faff370000000600'
+
+[script]
+commands = [
+    'lo fu FUN_0',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'GH8777 #1: the raw SBORROW2 N==V flag idiom never survives'
+count = 0
+literal = '(v2 || !SBORROW2(v1,7)) && (!v2 || SBORROW2(v1,7))'
+
+[[match]]
+name = 'GH8777 #2: the idiom folds to a clean signed compare (no SBORROW2 left)'
+count = 1
+literal = 'for (v1 = 0; 7 <= v1; v1 = v1 + 1)'

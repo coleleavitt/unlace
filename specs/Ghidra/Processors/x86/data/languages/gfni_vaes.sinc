@@ -1,0 +1,86 @@
+# GFNI (legacy and VEX), and the VEX.256 forms of VAES and VPCLMULQDQ (Intel SDM vol. 2:
+# GF2P8MULB 66 0F 38 CF, GF2P8AFFINEQB 66 0F 3A CE ib, GF2P8AFFINEINVQB 66 0F 3A CF ib; VEX.128/256
+# forms with an NDS source, W0 for GF2P8MULB and W1 for the affine pair; VAESENC/VAESENCLAST/VAESDEC/
+# VAESDECLAST VEX.256.66.0F38.WIG DC-DF, VPCLMULQDQ VEX.256.66.0F3A.WIG 44 ib). The EVEX forms are in
+# avx512.sinc. Each lifts to a user operation (per 128-bit lane for the AES and carry-less ones).
+
+define pcodeop gf2p8mulb;
+define pcodeop gf2p8affineqb;
+define pcodeop gf2p8affineinvqb;
+
+:GF2P8MULB XmmReg1, XmmReg2_m128 is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x38; byte=0xCF; XmmReg1 ... & XmmReg2_m128 {
+	XmmReg1 = gf2p8mulb(XmmReg1, XmmReg2_m128);
+}
+:GF2P8AFFINEQB XmmReg1, XmmReg2_m128, imm8 is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x3A; byte=0xCE; XmmReg1 ... & XmmReg2_m128; imm8 {
+	XmmReg1 = gf2p8affineqb(XmmReg1, XmmReg2_m128, imm8:1);
+}
+:GF2P8AFFINEINVQB XmmReg1, XmmReg2_m128, imm8 is vexMode=0 & $(PRE_66) & byte=0x0F; byte=0x3A; byte=0xCF; XmmReg1 ... & XmmReg2_m128; imm8 {
+	XmmReg1 = gf2p8affineinvqb(XmmReg1, XmmReg2_m128, imm8:1);
+}
+
+:VGF2P8MULB XmmReg1, vexVVVV_XmmReg, XmmReg2_m128 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_XmmReg; byte=0xCF; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128 {
+	local tmp:16 = gf2p8mulb(vexVVVV_XmmReg, XmmReg2_m128);
+	ZmmReg1 = zext(tmp);
+}
+:VGF2P8AFFINEQB XmmReg1, vexVVVV_XmmReg, XmmReg2_m128, imm8 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W1) & vexVVVV_XmmReg; byte=0xCE; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8 {
+	local tmp:16 = gf2p8affineqb(vexVVVV_XmmReg, XmmReg2_m128, imm8:1);
+	ZmmReg1 = zext(tmp);
+}
+:VGF2P8AFFINEINVQB XmmReg1, vexVVVV_XmmReg, XmmReg2_m128, imm8 is $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W1) & vexVVVV_XmmReg; byte=0xCF; (XmmReg1 & ZmmReg1) ... & XmmReg2_m128; imm8 {
+	local tmp:16 = gf2p8affineinvqb(vexVVVV_XmmReg, XmmReg2_m128, imm8:1);
+	ZmmReg1 = zext(tmp);
+}
+
+:VGF2P8MULB YmmReg1, vexVVVV_YmmReg, YmmReg2_m256 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & vexVVVV_YmmReg; byte=0xCF; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256 {
+	local tmp:32 = gf2p8mulb(vexVVVV_YmmReg, YmmReg2_m256);
+	ZmmReg1 = zext(tmp);
+}
+:VGF2P8AFFINEQB YmmReg1, vexVVVV_YmmReg, YmmReg2_m256, imm8 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W1) & vexVVVV_YmmReg; byte=0xCE; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256; imm8 {
+	local tmp:32 = gf2p8affineqb(vexVVVV_YmmReg, YmmReg2_m256, imm8:1);
+	ZmmReg1 = zext(tmp);
+}
+:VGF2P8AFFINEINVQB YmmReg1, vexVVVV_YmmReg, YmmReg2_m256, imm8 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W1) & vexVVVV_YmmReg; byte=0xCF; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256; imm8 {
+	local tmp:32 = gf2p8affineinvqb(vexVVVV_YmmReg, YmmReg2_m256, imm8:1);
+	ZmmReg1 = zext(tmp);
+}
+
+:VAESENC YmmReg1, vexVVVV_YmmReg, YmmReg2_m256 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG) & vexVVVV_YmmReg; byte=0xdc; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256 {
+	local src:32 = YmmReg2_m256;
+	local lo:16 = aesenc(vexVVVV_YmmReg[0,128], src[0,128]);
+	local hi:16 = aesenc(vexVVVV_YmmReg[128,128], src[128,128]);
+	local res:32 = (zext(hi) << 128) | zext(lo);
+	ZmmReg1 = zext(res);
+}
+
+:VAESENCLAST YmmReg1, vexVVVV_YmmReg, YmmReg2_m256 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG) & vexVVVV_YmmReg; byte=0xdd; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256 {
+	local src:32 = YmmReg2_m256;
+	local lo:16 = aesenclast(vexVVVV_YmmReg[0,128], src[0,128]);
+	local hi:16 = aesenclast(vexVVVV_YmmReg[128,128], src[128,128]);
+	local res:32 = (zext(hi) << 128) | zext(lo);
+	ZmmReg1 = zext(res);
+}
+
+:VAESDEC YmmReg1, vexVVVV_YmmReg, YmmReg2_m256 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG) & vexVVVV_YmmReg; byte=0xde; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256 {
+	local src:32 = YmmReg2_m256;
+	local lo:16 = aesdec(vexVVVV_YmmReg[0,128], src[0,128]);
+	local hi:16 = aesdec(vexVVVV_YmmReg[128,128], src[128,128]);
+	local res:32 = (zext(hi) << 128) | zext(lo);
+	ZmmReg1 = zext(res);
+}
+
+:VAESDECLAST YmmReg1, vexVVVV_YmmReg, YmmReg2_m256 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_WIG) & vexVVVV_YmmReg; byte=0xdf; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256 {
+	local src:32 = YmmReg2_m256;
+	local lo:16 = aesdeclast(vexVVVV_YmmReg[0,128], src[0,128]);
+	local hi:16 = aesdeclast(vexVVVV_YmmReg[128,128], src[128,128]);
+	local res:32 = (zext(hi) << 128) | zext(lo);
+	ZmmReg1 = zext(res);
+}
+
+define pcodeop vpclmulqdq_lane;
+:VPCLMULQDQ YmmReg1, vexVVVV_YmmReg, YmmReg2_m256, imm8 is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_WIG) & vexVVVV_YmmReg; byte=0x44; (YmmReg1 & ZmmReg1) ... & YmmReg2_m256; imm8 {
+	local src:32 = YmmReg2_m256;
+	local lo:16 = vpclmulqdq_lane(vexVVVV_YmmReg[0,128], src[0,128], imm8:1);
+	local hi:16 = vpclmulqdq_lane(vexVVVV_YmmReg[128,128], src[128,128], imm8:1);
+	local res:32 = (zext(hi) << 128) | zext(lo);
+	ZmmReg1 = zext(res);
+}

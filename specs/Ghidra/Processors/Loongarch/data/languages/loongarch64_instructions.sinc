@@ -126,7 +126,7 @@
 #0x001b8000	0xffff8000	r0:5,r5:5,r10:5	['reg0_5_s0', 'reg5_5_s0', 'reg10_5_s0']
 :rotr.d RD, RJsrc, RKsrc              is op15_31=0x37 & RD & RJsrc & RKsrc {
 	local shift:1 = RKsrc(0) & 0x3f;
-	local tmp1:8 = RJsrc s>> shift;
+	local tmp1:8 = RJsrc >> shift;
 	local tmp2:8 = RJsrc << (64 - shift);
 	RD = tmp1 + tmp2;
 }
@@ -135,7 +135,7 @@
 #0x004d0000	0xffff0000	r0:5,r5:5,u10:6	['reg0_5_s0', 'reg5_5_s0', 'imm10_6_s0']
 :rotri.d RD, RJsrc, imm10_6           is op16_31=0x4d & RD & RJsrc & imm10_6 {
 	local shift:1 = imm10_6 & 0x3f;
-	local tmp1:8 = RJsrc s>> shift;
+	local tmp1:8 = RJsrc >> shift;
 	local tmp2:8 = RJsrc << (64 - shift);
 	RD = tmp1 + tmp2;
 }
@@ -151,7 +151,7 @@
 #la-base-64.txt slli.d mask=0x00410000	[@qemu]
 #0x00410000	0xffff0000	r0:5,r5:5,u10:6	['reg0_5_s0', 'reg5_5_s0', 'imm10_6_s0']
 :slli.d RD, RJsrc, imm10_6            is op16_31=0x41 & RD & RJsrc & imm10_6 {
-	local shift:1 = imm10_6 & 0x1f;
+	local shift:1 = imm10_6 & 0x3f;
 	RD = RJsrc << shift;
 }
 
@@ -166,7 +166,7 @@
 #la-base-64.txt srai.d mask=0x00490000	[@qemu]
 #0x00490000	0xffff0000	r0:5,r5:5,u10:6	['reg0_5_s0', 'reg5_5_s0', 'imm10_6_s0']
 :srai.d RD, RJsrc, imm10_6            is op16_31=0x49 & RD & RJsrc & imm10_6 {
-	local shift:1 = imm10_6 & 0x1f;
+	local shift:1 = imm10_6 & 0x3f;
 	RD = RJsrc s>> shift;
 }
 
@@ -181,7 +181,7 @@
 #la-base-64.txt srli.d mask=0x00450000	[@qemu]
 #0x00450000	0xffff0000	r0:5,r5:5,u10:6	['reg0_5_s0', 'reg5_5_s0', 'imm10_6_s0']
 :srli.d RD, RJsrc, imm10_6            is op16_31=0x45 & RD & RJsrc & imm10_6 {
-	local shift:1 = imm10_6 & 0x1f;
+	local shift:1 = imm10_6 & 0x3f;
 	RD = RJsrc >> shift;
 }
 
@@ -639,11 +639,9 @@ define pcodeop bytepick.d;
 #la-bitops-64.txt catpick.d mask=0x000c0000	[@orig_name=bytepick.d]
 #0x000c0000	0xfffc0000	r0:5,r5:5,r10:5,u15:3	['reg0_5_s0', 'reg5_5_s0', 'reg10_5_s0', 'imm15_3_s0']
 :bytepick.d RD, RJsrc, RKsrc, imm15_3 is op18_31=0x3 & RD & RJsrc & RKsrc & imm15_3 {
-	local bitstop:1 = 8 * (8 - imm15_3);
-	local mask:8 = (1 <<  bitstop) - 1;
-	local tmp_hi:8 = RKsrc & ~mask;
-	local tmp_lo:8 = (RJsrc & (mask << (64-bitstop)) >> (64-bitstop));
-	RD = tmp_hi + tmp_lo;
+	# {rk[63-8*sa:0], rj[63:64-8*sa]}; a shift by 64 is 0 when sa is 0
+	local sh:1 = 8 * imm15_3;
+	RD = (RKsrc << sh) | (RJsrc >> (64 - sh));
 }
 
 define pcodeop crc.w.d.w;
@@ -669,8 +667,8 @@ define pcodeop crcc.w.d.w;
 	local msb:1 = imm16_6;
 	local lsb:1 = imm10_6;
 	local len:1 = msb + 1 - lsb;
-	local mask:8 = (1 << len) - 1;
-	local repl:8 = (RJsrc & (mask << lsb)) >> lsb;
+	local mask:8 = ((1 << len) - 1) << lsb;
+	local repl:8 = (RJsrc << lsb) & mask;
 
 	RD = (RD & (~mask)) | repl;
 }

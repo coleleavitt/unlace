@@ -17206,7 +17206,7 @@ G_43368b04: "" is f16_21=63 {  }
 { local oc0a:4 = SI_c70643ca * 0x10000 + SI_623ec3d8; local oc0:4 = *[cbank]:4 oc0a; local c:1 = 0:1; SP81_83d = c && G_838037f0; SP84_86d = (!c) && G_838037f0; }
 # CALL.ABS.NOINC !P1, 0x4  [fe40004c000000000000400007943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 "!"^SP87_89^","^SI_7fff4b49 is f0_11=2371 & f90_91=1 & GD_619b08c9 & G_cfbd5bc4 & SP87_89 & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 # LDG.EF.LTC128B.CONSTANT.CTA P1, R1, [R1+0x1], P4  [fe400000208230000010001017381]
 :^GD_619b08c9^"LDG"^G_6713d876^G_61d30104^G_f4faf2cf^G_ee39d134^G_da8afc18^G_3386c047 G_cc5789a6^SR16_23d^","^G_9535fc7c^G_b9e42527 is f0_11=897 & f37_38=3 & f67_67=1 & f69_70=3 & f73_75=4 & f87_89=6 & f91_91=0 & f101_102=3 & GD_619b08c9 & G_6713d876 & G_61d30104 & G_f4faf2cf & G_ee39d134 & G_da8afc18 & G_3386c047 & G_cc5789a6 & SR16_23d & G_9535fc7c & G_b9e42527
 { SR16_23d = *[ram]:4 G_9535fc7c; }
@@ -25728,7 +25728,7 @@ G_43368b04: "" is f16_21=63 {  }
 { SR16_23d = sass_MUFU(SF_5f0f2a79); }
 # CALL.ABS P1, 0x4  [fe400008000000000000400007943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 G_e52b3d2f^SI_7fff4b49 is f0_11=2371 & f90_91=0 & GD_619b08c9 & G_cfbd5bc4 & G_e52b3d2f & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 # BAR.RED.POPC.DEFER_BLOCKING 0x1, 0x1, P1  [fe400008140000040040000007b1d]
 :^GD_619b08c9^"BAR.RED"^G_bd7a8fa3^G_650052ed SI_28c822ef^","^G_a5703988^G_718b5f9e is f0_11=2845 & f77_80=10 & f91_91=0 & GD_619b08c9 & G_bd7a8fa3 & G_650052ed & SI_28c822ef & G_a5703988 & G_718b5f9e
 {  }

@@ -245,12 +245,12 @@ fn parity(corpus: &str, baseline: &str) {
     // Test scripts load their fixtures by repository-relative path.
     std::env::set_current_dir(&root).expect("enter the repository root");
     let r = run_corpus(&root, &root.join(corpus));
-    let now: BTreeSet<String> = dedup_list("data:", &r.passing)
+    let (in_toml, now): (Vec<_>, Vec<_>) = dedup_list("data:", &r.passing)
         .into_iter()
         .enumerate()
-        .filter(|(i, _)| !r.in_toml.contains(i))
-        .map(|(_, k)| k)
-        .collect();
+        .partition(|(i, _)| r.in_toml.contains(i));
+    let now: BTreeSet<String> = now.into_iter().map(|(_, k)| k).collect();
+    let toml_keys: BTreeSet<String> = in_toml.into_iter().map(|(_, k)| k).collect();
     let baseline_path = root.join(baseline);
     let text = std::fs::read_to_string(&baseline_path).ok();
     let broken = r.errors.len() + r.failing.len();
@@ -279,6 +279,10 @@ fn parity(corpus: &str, baseline: &str) {
         .into_iter()
         .filter(|k| k.starts_with("data:"))
         .collect();
+    // A key a TOML test owns (left by a baseline recorded before its file was converted) is
+    // checked in place, not against the baseline.
+    let stale = base.intersection(&toml_keys).count();
+    let base: BTreeSet<String> = base.difference(&toml_keys).cloned().collect();
     let regressed: Vec<&String> = base.difference(&now).collect();
     let newly: Vec<&String> = now.difference(&base).collect();
     let mut report = format!(
@@ -287,6 +291,11 @@ fn parity(corpus: &str, baseline: &str) {
         r.applied,
         r.in_toml.len()
     );
+    if stale > 0 {
+        report += &format!(
+            "{stale} baseline keys belong to TOML tests and are ignored (UNLACE_BLESS=1 drops them)\n"
+        );
+    }
     for n in &r.failing {
         report += &format!("  [data] {n}\n");
     }

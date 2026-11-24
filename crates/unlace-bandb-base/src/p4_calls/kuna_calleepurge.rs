@@ -938,7 +938,9 @@ fn scrambles(regs: &Regs, ins: &[VarnodeData], vals: &[Option<Val>]) -> bool {
 /// stack pointer that calls the walk cannot read left only bounded is placed
 /// there again, and the pops after it (the cookie slot, the callee-saved
 /// registers) read the slots the prologue wrote. A later store to the saved
-/// slot forgets it.
+/// slot forgets it. A call the walk cannot read that is made with the stack
+/// pointer at the saved value (only its return address pushed) takes no stack
+/// argument, so it pops none and the stack pointer stays there (`walk`).
 fn msvc_saved_sp(
     state: &mut State,
     regs: &Regs,
@@ -949,23 +951,34 @@ fn msvc_saved_sp(
     fs_temps: &[u64],
 ) {
     let slot = at.and_then(Val::as_exact);
-    let saves_sp = size == 4
-        && ins.get(2).and_then(|v| regs.exact(v)) == Some(SP)
-        && slot.is_some_and(|o| o < 0);
-    if saves_sp {
+    let sp = state.0[SP].and_then(Val::as_exact);
+    let saves_sp = size == 4 && sp.is_some() && value.and_then(Val::as_exact) == sp;
+    if saves_sp && !slot.is_some_and(|o| o < 0) {
+        trace(|| format!("msvc: esp {sp:?} stored to {at:?}, not a frame slot"));
+    } else if saves_sp {
         if let (Some(o), Some(v)) = (slot, value.and_then(Val::as_exact)) {
+            trace(|| format!("msvc: saved esp {v:#x} in slot {o:#x}"));
             state.3 = Some((o, v));
             return;
         }
     }
     if let (Some((o, _)), Some(w)) = (state.3, slot) {
         if w < o + 4 && o < w + size as i64 {
+            trace(|| format!("msvc: saved esp slot {o:#x} overwritten"));
             state.3 = None;
             return;
         }
     }
     let unlinks = ins.get(1).is_some_and(|a| from_fs(a, regs, fs_temps))
         && !matches!(value, Some(Val::Stack { .. }));
+    if unlinks {
+        trace(|| {
+            format!(
+                "msvc: seh unlink, esp {:?}, saved {:?}",
+                state.0[SP], state.3
+            )
+        });
+    }
     if let (true, Some((_, saved))) = (unlinks, state.3) {
         if let Some(Val::Stack { lo, hi, own: false }) = state.0[SP] {
             if lo <= saved && saved <= hi && lo != hi {
@@ -1469,7 +1482,16 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
             match effect.effect {
                 Effect::Balanced(ep) => s.state.0[SP] = Some(sp.shift(ep as i64)),
                 Effect::NoReturn => s.falls_through = false,
-                Effect::Unknown => s.state.0[SP] = Some(after_unread_call(sp)),
+                Effect::Unknown => {
+                    s.state.0[SP] = Some(match s.state.3 {
+                        Some((_, saved))
+                            if regs.fs.is_some() && sp.as_exact() == Some(saved - 4) =>
+                        {
+                            Val::exact(saved)
+                        }
+                        _ => after_unread_call(sp),
+                    })
+                }
                 Effect::Unbalanced => {
                     s.state.0[SP] = Some(Val::Opaque { own: false });
                     writes |= effect.writes;

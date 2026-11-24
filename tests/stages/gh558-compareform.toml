@@ -1,0 +1,53 @@
+# GH-558: "Don't change conditions to equivalent expressions during decompilation"
+# https://github.com/NationalSecurityAgency/ghidra/issues/558
+#
+# Source:           int gh558(int x) { if (x <= 8) return 1; return 0; }
+# Compiled (as):    cmp $8,%edi ; jg +6 ; mov $1,%eax ; ret ; xor %eax,%eax ; ret
+# Default output:   if (x < 9) ...   - RuleIntLessEqual canonicalizes `x <= 8`
+#                   into `x < 9` (constant+1) inside the Band-B rule pool, and the
+#                   analysis-canonical form leaks into the rendered C.
+#
+# Stage model: the canonicalization is the S3 "simplification quiescence" sub-stage
+# (named group `canonicalcompare`); restoring the source form is an S9-adjacent
+# presentation decision (cleanup-pool group `presentcompare`), controlled by the
+# P0 assertion `option compareform canonical|original`.
+#
+# The script decompiles the function twice: pass 1 under the default pipeline
+# (assert #1 proves the issue reproduces), pass 2 with the P0 assertion set
+# (assert #2 proves the stage-level intervention restores the source form).
+# Both `print C` dumps land in one bulk stream, so each form must appear
+# exactly once.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'gh558' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '83ff087f06b801000000c331c0c3'
+
+[script]
+commands = [
+    'parse line extern int4 gh558(int4 x);',
+    'lo fu gh558',
+    'decompile',
+    'print C',
+    'option compareform canonical',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'GH558 #1: compareform canonical restores upstream x < 9 (old behavior, opt-in)'
+count = 1
+literal = 'if (x < 9)'
+
+[[match]]
+name = 'GH558 #2: default pipeline keeps the source form x <= 8 (fix is DIV-2 default)'
+count = 1
+literal = 'if (x <= 8)'

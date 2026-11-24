@@ -1,5 +1,5 @@
 # kuna golden lift fixture (per-instruction raw p-code from the C++ oracle)
-# corpus: tests/stages/gh8817-v850indbranch.xml
+# corpus: tests/stages/gh8817-v850indbranch.toml
 # sla: Ghidra/Processors/V850/data/languages/V850.sla (relative to specs/)
 # cap: 80 instructions per lift point
 # lift-points (space:byte-offset name): ram:0x2104=tjmp

@@ -1,0 +1,54 @@
+# Kuna: option itaniumeh on clang code. clang starts a call-site range at the
+# call's argument set-up, so the range's first instruction is not the call;
+# the edge goes on the first covered call all the same (#1, f_loop's catch
+# inside its loop). The catch header lists the pad's caught types in handler
+# order (#2), and a pad with a catch clause and a cleanup still names the
+# type (#1). f_dtor's cleanup pad runs the destructor (#3).
+#
+# Fixture: `crates/unlace-cli/tests/fixtures/itaniumeh/eh3_x86_64_clang.so`
+# (clang 22 -O2 -fPIC -shared, source eh3.cc beside it).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/itaniumeh/eh3_x86_64_clang.so',
+    'option itaniumeh on',
+    'read symbols',
+    'load function f_loop',
+    'decompile',
+    'print C',
+    'load function f_multi',
+    'decompile',
+    'print C',
+    'load function f_dtor',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'itaniumeh-clang #1: a range that starts before the call still gives the call its edge'
+count = 1
+regex = '^      \} catch \(int\) \{$'
+
+[[match]]
+name = 'itaniumeh-clang #2: four clauses print in handler order'
+count = 1
+literal = '} catch (Derived | Base | int | ...) {'
+
+[[match]]
+name = 'itaniumeh-clang #3: the cleanup pad runs the destructor'
+count = 1
+literal = 'Guard::~Guard('

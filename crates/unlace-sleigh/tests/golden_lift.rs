@@ -208,7 +208,9 @@ impl LoadImage for DummyImg {
 /// Run one fixture and return the produced body lines.
 fn fixture_engine(fix: &Fixture) -> Sleigh {
     let root = repo_root();
-    let xml = std::fs::read(root.join(&fix.corpus)).expect("read corpus xml");
+    let xml = unlace_stagefile::read_as_xml(&root.join(&fix.corpus))
+        .expect("read corpus")
+        .into_bytes();
     let mut store = DocumentStorage::new();
     let doc_root = store
         .parse_document(&xml)

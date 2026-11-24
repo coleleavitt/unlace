@@ -1,0 +1,328 @@
+# The ARM hard-float VFP contracts are members of the aggressive preset
+# (options armfloatreturn and armfloatargs, stage P4 output-prototype and
+# input-prototype; default off in the catalog). `auto` selects aggressive
+# below 500 KiB, so on such a binary the preset is the default output.
+#
+# The script loads relocatable objects built from armfloat_preset.c and
+# armfloat_preset_m4f.c (sources beside them, clang 14 -O2): armfloat_preset_hard.o states the VFP
+# procedure-call standard (Tag_ABI_VFP_args=1), armfloat_preset_soft.o is
+# the same source for the base standard (-mfloat-abi=soft).
+#
+# Pass 1 (hard, the preset with both options turned off) reproduces the
+# defect: scale's double return is cut to its low word and its d0 parameter
+# is lost, mix loses its double, and backfill's double arrives as two
+# integer words. Pass 2 (hard, the preset) takes and returns each double
+# whole, and backfill keeps the back-filled float in s1 beside the double in
+# d1. In both passes copysign_bits, a float built from the bits of its two
+# float inputs, keeps float parameters, and payload returns a quiet NaN with
+# a payload as its bits rather than as NAN, which compiles to other bits.
+# Passes 3 and 4 run the soft-float object the same two ways: the image
+# states the base standard, so neither option fires and both passes print
+# every value in core registers. Its arithmetic calls the AEABI helpers,
+# whose RTABI32 prototypes (analysis pass aeabisigs) type their values:
+# scale returns the double __aeabi_dmul returns.
+#
+# The hard-float passes also pin what the preset must leave alone.
+# scale_err converts a double to float on one exit and returns oflow's
+# float through a tail call on the other, so it stays float. from_bits
+# hands back an integer parameter in s0, which keeps its integer type
+# rather than taking the float as a parameter its callers would convert by
+# value. save_vfp stores the whole VFP bank (vstmia r0,{d0-d15}), which is
+# no read of eight double parameters. from_bits_o0 is from_bits built
+# without optimization, which spills its integer to the stack and reloads
+# it into s0. set8f stores its eight float arguments with one vstmia
+# r0,{s0-s7}, which is no bank save: they stay parameters. getpar is an int
+# getter that loads a double field into d0 on one path and leaves d0 alone
+# on the others; it keeps its int return. Passes 5 and 6 load
+# armfloat_preset_m4f.o, a base-standard function a Cortex-M4F computes in
+# through the AEABI helpers, with declared prototypes that put its double
+# in d0: the call to __aeabi_dcmplt keeps its integer result in both
+# passes instead of becoming the double left live in d0, and its RTABI32
+# prototype reads the compared double from r0:r1. Passes 7 and 8
+# load armfloat_preset_m7.o (arm-none-eabi-gcc 10.3 -O2 for a Cortex-M7
+# with double-precision VFP) with the options off and under the preset.
+# neg_trunc widens its float into d0 to subtract it and returns the
+# converted difference in r0, so it keeps its int return. to_ticks hands a
+# double it computed in d7 to __aeabi_d2lz in r0:r1; the helper, declared
+# `long long __aeabi_d2lz(double v)` as libgcc's debug information declares
+# it, keeps the base standard, so to_ticks takes no double from d0.
+
+[image]
+arch = 'ARM:LE:32:v7'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '1eff2fe1'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/armfloat_preset_hard.o',
+    'read symbols',
+    'mode aggressive',
+    'option armfloatreturn off',
+    'option armfloatargs off',
+    'lo fu scale',
+    'decompile',
+    'print C',
+    'lo fu mix',
+    'decompile',
+    'print C',
+    'lo fu backfill',
+    'decompile',
+    'print C',
+    'lo fu copysign_bits',
+    'decompile',
+    'print C',
+    'lo fu payload',
+    'decompile',
+    'print C',
+    'lo fu scale_err',
+    'decompile',
+    'print C',
+    'lo fu from_bits',
+    'decompile',
+    'print C',
+    'lo fu save_vfp',
+    'decompile',
+    'print C',
+    'lo fu from_bits_o0',
+    'decompile',
+    'print C',
+    'lo fu set8f',
+    'decompile',
+    'print C',
+    'lo fu getpar',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/armfloat_preset_hard.o',
+    'read symbols',
+    'mode aggressive',
+    'lo fu scale',
+    'decompile',
+    'print C',
+    'lo fu mix',
+    'decompile',
+    'print C',
+    'lo fu backfill',
+    'decompile',
+    'print C',
+    'lo fu copysign_bits',
+    'decompile',
+    'print C',
+    'lo fu payload',
+    'decompile',
+    'print C',
+    'lo fu scale_err',
+    'decompile',
+    'print C',
+    'lo fu from_bits',
+    'decompile',
+    'print C',
+    'lo fu save_vfp',
+    'decompile',
+    'print C',
+    'lo fu from_bits_o0',
+    'decompile',
+    'print C',
+    'lo fu set8f',
+    'decompile',
+    'print C',
+    'lo fu getpar',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/armfloat_preset_soft.o',
+    'read symbols',
+    'mode aggressive',
+    'option armfloatreturn off',
+    'option armfloatargs off',
+    'lo fu scale',
+    'decompile',
+    'print C',
+    'lo fu mix',
+    'decompile',
+    'print C',
+    'lo fu backfill',
+    'decompile',
+    'print C',
+    'lo fu payload',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/armfloat_preset_soft.o',
+    'read symbols',
+    'mode aggressive',
+    'lo fu scale',
+    'decompile',
+    'print C',
+    'lo fu mix',
+    'decompile',
+    'print C',
+    'lo fu backfill',
+    'decompile',
+    'print C',
+    'lo fu payload',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/armfloat_preset_m4f.o',
+    'read symbols',
+    'mode aggressive',
+    'option armfloatreturn off',
+    'option armfloatargs off',
+    'parse line extern long long fixit(double a);',
+    'parse line extern long long __aeabi_d2lz(double v);',
+    'lo fu fixit',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/armfloat_preset_m4f.o',
+    'read symbols',
+    'mode aggressive',
+    'parse line extern long long fixit(double a);',
+    'parse line extern long long __aeabi_d2lz(double v);',
+    'lo fu fixit',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/armfloat_preset_m7.o',
+    'read symbols',
+    'mode aggressive',
+    'option armfloatreturn off',
+    'option armfloatargs off',
+    'parse line extern long long __aeabi_d2lz(double v);',
+    'lo fu neg_trunc',
+    'decompile',
+    'print C',
+    'lo fu to_ticks',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/armfloat_preset_m7.o',
+    'read symbols',
+    'mode aggressive',
+    'parse line extern long long __aeabi_d2lz(double v);',
+    'lo fu neg_trunc',
+    'decompile',
+    'print C',
+    'lo fu to_ticks',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "armfloat preset #1: off cuts scale's double return to its low word and loses its parameter"
+count = 1
+literal = 'unsigned int scale(void)'
+
+[[match]]
+name = "armfloat preset #2: the preset takes and returns scale's double"
+count = 1
+literal = 'double scale(double a0)'
+
+[[match]]
+name = "armfloat preset #3: off loses mix's double parameter"
+count = 1
+literal = 'unsigned int mix(float a0,int a1)'
+
+[[match]]
+name = "armfloat preset #4: the preset takes mix's double, float and int"
+count = 1
+literal = 'double mix(double a0,float a1,int a2)'
+
+[[match]]
+name = "armfloat preset #5: off reads backfill's double as two integer words"
+count = 1
+literal = 'float backfill(float a0,float a1,unsigned int a2,unsigned int a3)'
+
+[[match]]
+name = "armfloat preset #6: the preset takes backfill's double beside the back-filled float"
+count = 1
+literal = 'float backfill(float a0,float a1,double a2)'
+
+[[match]]
+name = "armfloat preset #7: a float built from its float inputs' bits keeps float parameters in both passes"
+count = 2
+literal = 'float copysign_bits(float a0,float a1)'
+
+[[match]]
+name = 'armfloat preset #8: a NaN payload keeps its bits in every pass'
+count = 4
+literal = '0x7fc00123'
+
+[[match]]
+name = 'armfloat preset #9: no pass prints the NaN payload as NAN'
+count = 0
+literal = 'NAN'
+
+[[match]]
+name = "armfloat preset #10: the soft-float image passes scale's double in core registers and returns the typed helper's double in both passes"
+count = 2
+literal = 'double scale(unsigned int a0,unsigned int a1)'
+
+[[match]]
+name = 'armfloat preset #11: no soft-float function takes a double from a VFP register in either pass'
+count = 6
+regex = '(scale|mix|backfill)\((unsigned int|int|float) a0,unsigned int a1[,)]'
+
+[[match]]
+name = 'armfloat preset #12: the preset returns the NaN payload as a float, bit for bit'
+count = 1
+literal = 'float payload(void)'
+
+[[match]]
+name = "armfloat preset #13: a float narrowed on one exit and a call's float on the other stays float in both passes"
+count = 2
+literal = 'float scale_err(float a0)'
+
+[[match]]
+name = 'armfloat preset #14: an integer handed back in s0 keeps its integer parameter in both passes'
+count = 2
+literal = 'unsigned int from_bits(unsigned int a0)'
+
+[[match]]
+name = 'armfloat preset #15: a register-bank save takes only its pointer in both passes'
+count = 2
+regex = 'void save_vfp\((double|unsigned long long) \*a0\)'
+
+[[match]]
+name = 'armfloat preset #16: an AEABI helper call keeps its integer result and takes its doubles in core registers in both passes'
+count = 2
+regex = 'if \(__aeabi_dcmplt\(.*,0\.0\)\)'
+
+[[match]]
+name = 'armfloat preset #17: an integer reloaded into s0 from an unoptimized spill keeps its integer parameter in both passes'
+count = 2
+literal = 'unsigned int from_bits_o0(unsigned int a0)'
+
+[[match]]
+name = 'armfloat preset #18: eight float arguments stored with one vstmia stay parameters in both passes'
+count = 2
+literal = 'void set8f(float a0,float a1,float a2,float a3,float a4,float a5,float a6,float a7,float *a8)'
+
+[[match]]
+name = 'armfloat preset #19: an int getter that loads a double into d0 on one path keeps its int return in both passes'
+count = 2
+literal = 'unsigned int getpar(void *a0,int a1,'
+
+[[match]]
+name = 'armfloat preset #20: an int computed from a double temporary in d0 keeps its int return in both passes'
+count = 2
+literal = 'int neg_trunc(float a0)'
+
+[[match]]
+name = 'armfloat preset #21: a declared AEABI helper keeps the base standard, so its caller keeps its parameters in both passes'
+count = 2
+literal = 'unsigned long long to_ticks(float a0,unsigned int a1,'
+
+[[match]]
+name = 'armfloat preset #22: no pass gives the caller of a declared AEABI helper a double parameter'
+count = 0
+literal = 'to_ticks(double'

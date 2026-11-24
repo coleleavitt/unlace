@@ -511,7 +511,7 @@ impl FunctionTestCollection {
         if filename.ends_with(".toml") {
             let text = std::fs::read_to_string(filename)
                 .map_err(|e| TestError::Parse(format!("Unable to open {filename}: {e}")))?;
-            let stage = StageTest::parse(&text).map_err(TestError::Parse)?;
+            let stage = crate::stagetoml::parse(&text).map_err(TestError::Parse)?;
             return self.restore_stage(&stage);
         }
         let mut store = DocumentStorage::new();

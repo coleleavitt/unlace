@@ -15574,7 +15574,7 @@ G_85854115: ".M8.RZ.SAT" is f77_79=7 & f84_86=7 {  }
 { return [RETPC]; }
 # CALL.ABS.NOINC !P1, 0x4  [fe40004c000000000000400007943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 "!"^SP87_89^","^SI_7fff4b49 is f0_11=2371 & f21_21=0 & f30_30=0 & f90_90=1 & f100_100=0 & GD_619b08c9 & G_cfbd5bc4 & SP87_89 & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 # LDS.S8 R1, [R1+0x1]  [fe400000002000000010001017984]
 :^GD_619b08c9^"LDS"^G_67949254^".S8" SR16_23d^","^G_9535fc7c is f0_11=2436 & f73_75=1 & f87_87=0 & GD_619b08c9 & G_67949254 & SR16_23d & G_9535fc7c
 { local sa:4 = G_9535fc7c:4; SR16_23d = sext(*[shared]:1 sa); }
@@ -15897,7 +15897,7 @@ G_85854115: ".M8.RZ.SAT" is f77_79=7 & f84_86=7 {  }
 { local sa:4 = G_9535fc7c:4; SR16_23d = zext(*[local]:2 sa); }
 # CALL.ABS.NOINC P1, 0x4  [fe40000c000000000000400007943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 G_a3c7c389^SI_7fff4b49 is f0_11=2371 & GD_619b08c9 & G_cfbd5bc4 & G_a3c7c389 & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 # RET.ABS P1, R1 0x4  [fe40000a000000000000401007950]
 :^GD_619b08c9^"RET.ABS"^G_2210c32f G_a3c7c389^SR24_31^" "^SI_a1a2ed96 is f0_11=2384 & f85_85=1 & GD_619b08c9 & G_2210c32f & G_a3c7c389 & SR24_31 & SI_a1a2ed96
 { return [RETPC]; }
@@ -16055,7 +16055,7 @@ G_85854115: ".M8.RZ.SAT" is f77_79=7 & f84_86=7 {  }
 {  }
 # CALL.ABS !P1, 0x4  [fe400048000000000000400007943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 "!"^SP87_89^","^SI_7fff4b49 is f0_11=2371 & f90_90=1 & GD_619b08c9 & G_cfbd5bc4 & SP87_89 & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 # IADD3 R1, P1, P1, R1, 0x1, R1  [fe400001200010000000101017810]
 :^GD_619b08c9^"IADD3" SR16_23d^","^G_2d48330e^G_5cdabf38^G_81b26c12^","^SI_382e92c1^","^G_eb80da6c is f0_11=2064 & f74_74=0 & GD_619b08c9 & SR16_23d & G_2d48330e & G_5cdabf38 & G_81b26c12 & SI_382e92c1 & G_eb80da6c
 { local s1:4 = G_81b26c12 + SI_382e92c1; local s2:4 = s1 + G_eb80da6c; local co:1 = zext(carry(G_81b26c12, SI_382e92c1)) + zext(carry(s1, G_eb80da6c)); G_2d48330e = co > 0; G_5cdabf38 = co > 1; SR16_23d = s2; }
@@ -17390,11 +17390,11 @@ G_85854115: ".M8.RZ.SAT" is f77_79=7 & f84_86=7 {  }
 { local oc0a:4 = SI_c70643ca * 0x10000 + SI_623ec3d8; local oc0:4 = *[cbank]:4 oc0a; local c:1 = 0:1; SP81_83d = c && G_838037f0; SP84_86d = (!c) && G_838037f0; }
 # CALL.ABS.NOINC !P1, 0x4  [fe40004c000000000000400007943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 "!"^SP87_89^","^SI_7fff4b49 is f0_11=2371 & f21_21=1 & f90_91=1 & GD_619b08c9 & G_cfbd5bc4 & SP87_89 & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 "!"^SP87_89^","^SI_7fff4b49 is f0_11=2371 & f21_21=0 & f30_30=1 & f90_91=1 & GD_619b08c9 & G_cfbd5bc4 & SP87_89 & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 "!"^SP87_89^","^SI_7fff4b49 is f0_11=2371 & f21_21=0 & f30_30=0 & f90_91=1 & f100_100=1 & GD_619b08c9 & G_cfbd5bc4 & SP87_89 & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 # ISETP.LE.U32.AND P1, P1, R1, R1, !P1, P1  [fe40004923010000000010100720c]
 :^GD_619b08c9^"ISETP.LE.U32.AND" SP81_83d^","^SP84_86d^","^G_9a4e649f^","^G_13ae7ef1^","^G_838037f0^G_214154c6 is f0_11=524 & f72_78=48 & f91_91=0 & GD_619b08c9 & SP81_83d & SP84_86d & G_9a4e649f & G_13ae7ef1 & G_838037f0 & G_214154c6
 { local c:1 = G_9a4e649f <= G_13ae7ef1; SP81_83d = c && G_838037f0; SP84_86d = (!c) && G_838037f0; }

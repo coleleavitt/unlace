@@ -5690,8 +5690,8 @@ time: each command is one transaction, and the later of two writes to the same k
 
 ## `unlace idb` — IDA databases (`.idb`, `.i64`)
 
-`unlace idb` reads an IDA database with [idb-rs](https://github.com/coleleavitt/idb-rs) (no IDA
-needed; IDA 6 through 9.5 formats, 32- and 64-bit) and turns what the analyst recorded there into the
+`unlace idb` reads an IDA database with `crates/unlace-idb` (no IDA needed; IDA 5 through 9.5
+formats, 32- and 64-bit, zlib or zstd compressed; a port of idb-rs's readers) and turns what the analyst recorded there into the
 `--assert` vocabulary, so it reaches the engine the way any project row does.
 
 ```sh
@@ -5726,14 +5726,15 @@ with another hash is refused unless `--force`.
   <addr> <text>`, one line per address (`--no-comments` leaves them out). A comment that is one
   identifier is the argument name IDA writes beside each typed call's setup and is left out.
 
-IDA's C is rewritten into the engine's grammar: `__int8`…`__int64` (signed or not) and `_BYTE`,
-`_WORD`, `_DWORD`, `_QWORD`, `_BOOLn` become `int1`…`uint8`/`bool`; `__attribute__((…))`,
-`__spoils<…>`, `__noreturn`, `__cdecl` and IDA-only qualifiers (`__hidden`, `__struct_ptr`,
-`__cppobj`, `__ptr32`, …) are dropped, and `__stdcall`/`__fastcall`/`__thiscall` too unless the target
-is 32-bit x86; a bare reference to a local `struct`/`union`/`enum` tag gets its keyword; a function
-name that is not a C identifier is spelled with `_` in the declaration (the directive binds by
-address). A `__usercall`/`__userpurge` prototype (arguments in named registers) is skipped. IDA's
-no-return flags are reported in `noreturn`; the `--assert` vocabulary has no directive for them.
+The types are decoded by unlace's own TIL reader (`unlace_analysis::protos::kuna_til`, the one
+`--option typelib` uses): the local types come from the database's type library section, rendered as
+C (a record as its definition, anything else as a `typedef`, an enum as its integer), and each
+prototype from the type string IDA keeps beside the function, with named types resolved through
+that library and the function named by its C identifier (the directive binds by address). A
+type C cannot spell here (a `__usercall` signature with arguments in named registers, a named type
+the database does not define) is left out and listed in `skipped`. A `.til` of format 0x13 or
+later (newer than kuna_til reads) contributes no types. IDA's no-return flags are reported in
+`noreturn`; the `--assert` vocabulary has no directive for them.
 
 ### Decompiling a database directly
 

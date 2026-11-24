@@ -1411,6 +1411,114 @@ pub fn render(til: &Til, target: &str, ptr_size: u8) -> String {
     out
 }
 
+/// The C declaration, named `name`, of a type string stored outside a library's
+/// buckets: the prototype an IDA database keeps beside a function (`NSUP_TYPEINFO`).
+/// `fields` is the raw list of parameter and member names stored with it; named types
+/// resolve through `til` (the database's own library), whose header sizes `int`,
+/// `bool` and `enum`. `None` when the type cannot be spelled in C.
+pub fn declare_type_string(
+    til: &Til,
+    type_bytes: &[u8],
+    fields: &[u8],
+    name: &str,
+    ptr_size: u8,
+) -> Option<String> {
+    let end = fields.iter().position(|b| *b == 0).unwrap_or(fields.len());
+    let fields = split_fields(&fields[..end]);
+    let mut reader = TypeReader {
+        header: &til.header,
+        fields: fields.iter(),
+    };
+    let ty = reader.read(&mut Cur::new(type_bytes), 0).ok()?;
+    let ptr = match til.header.ptr_size {
+        0 => u64::from(ptr_size),
+        n => u64::from(n),
+    };
+    let mut r = Renderer::new(til, ptr);
+    let text = match &ty.kind {
+        Kind::Func(f) => {
+            let decl = match cc_keyword(f.cc, ptr) {
+                Some(kw) => format!("{kw} {name}"),
+                None => name.to_string(),
+            };
+            let params = r.params(f, name, 0)?;
+            r.declare(&f.ret, &format!("{decl}({params})"), name, "ret", 0)?
+        }
+        _ => r.declare(&ty, name, name, "type", 0)?,
+    };
+    (text.len() <= MAX_LINE).then_some(text)
+}
+
+/// Every named type of `til` as `(ordinal, name, C declaration ending in ';')`: a record as its
+/// definition (`struct name { ... };`, bit-fields as `unsigned int f : 3;`), anything
+/// else as a typedef (an enum as its integer). A type whose name or a member of which
+/// C cannot spell here is left out, as is a record laid out at stated offsets.
+pub fn c_declarations(til: &Til, ptr_size: u8) -> Vec<(u64, String, String)> {
+    let ptr = match til.header.ptr_size {
+        0 => u64::from(ptr_size),
+        n => u64::from(n),
+    };
+    let mut r = Renderer::new(til, ptr);
+    let mut out = Vec::new();
+    let mut seen = BTreeSet::new();
+    for e in &til.types {
+        let Some(ty) = &e.ty else { continue };
+        let Some(name) = c_name(&e.name) else {
+            continue;
+        };
+        if !seen.insert(name.clone()) {
+            continue;
+        }
+        let decl = match &ty.kind {
+            Kind::Struct(udt) | Kind::Union(udt) => {
+                if udt.fixed {
+                    continue;
+                }
+                let keyword = if matches!(ty.kind, Kind::Union(_)) {
+                    "union"
+                } else {
+                    "struct"
+                };
+                let mut members = String::new();
+                let mut ok = true;
+                for (i, m) in udt.members.iter().enumerate() {
+                    let member = m
+                        .name
+                        .clone()
+                        .filter(|n| is_ident(n) && !RESERVED.contains(&n.as_str()))
+                        .unwrap_or_else(|| format!("field_{i}"));
+                    let text = match m.ty.kind {
+                        Kind::Bitfield { nbytes, width } => {
+                            Renderer::int_name(u64::from(nbytes), Some(false))
+                                .map(|base| format!("{base} {member} : {width}"))
+                        }
+                        _ => r.declare(&m.ty, &member, &name, &member, 0),
+                    };
+                    let Some(text) = text else {
+                        ok = false;
+                        break;
+                    };
+                    members.push_str(&text);
+                    members.push_str("; ");
+                }
+                if !ok {
+                    continue;
+                }
+                format!("{keyword} {name} {{ {members}}};")
+            }
+            Kind::Ref(rf) if rf.name.as_deref() == Some(e.name.as_str()) => continue,
+            _ => match r.declare(ty, &name, &name, "type", 0) {
+                Some(text) => format!("typedef {text};"),
+                None => continue,
+            },
+        };
+        if decl.len() <= MAX_LINE {
+            out.push((e.ordinal, name, decl));
+        }
+    }
+    out
+}
+
 /// The first line of every type-library text (`kuna-typelib 1`).
 pub const FORMAT_LINE: &str = "kuna-typelib 1";
 

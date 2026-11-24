@@ -1615,7 +1615,11 @@ frame. The prologue includes the stack motion of the branch that ends the entry
 run, but not of a call (whose push the callee's return removes): a stack
 machine's conditional jump pops its operand, so a CPython entry block
 `LOAD_FAST; POP_JUMP_IF_FALSE` builds no frame, and a jump that leaves the
-operand stack balanced inside the code object is not read as a tail call (#690). Both scans stop at the first control-flow op (so neither leaves the block
+operand stack balanced inside the code object is not read as a tail call (#690).
+Neither tail-call rule is asked about a BRANCH that an earlier relative branch
+of its own instruction jumps over (its time is below the deepest internal
+target): it does not end the instruction, and the RETURN the rewrite plants
+would delete the ops that relative branch reaches (#686). Both scans stop at the first control-flow op (so neither leaves the block
 it starts in), at a stack-pointer write that is not `SP = SP ± <const>` (a
 `leave`-style `SP = FP` restore is not modelled and declines), at an instruction
 address more than 16 bytes from its neighbour (so a hole in the decoded stream

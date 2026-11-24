@@ -125,3 +125,17 @@ tracked; the Xenon-specific non-vector instructions are the base PowerPC ones.
 
 Checked: all 75 VMX128 encodings, with random operands (4500 words), disassemble to their own
 mnemonic; the processors.toml image decompiles to the expected vector expression.
+
+## VSX scalar floating point
+
+A scalar VSX operation works on doubleword 0 of its VSRs, which is the floating-point register
+alias of the first 32 VSRs: `XT[64,64]` (word 0 is `XT[96,32]`, word 1 `XT[64,32]`), the
+convention `lxvd2x` and `lxvw4x` already use. `xsadddp`, `xscvdpspn`, `lxsdx` and `lxsd`
+used the low doubleword instead, so a result never reached the FPR a following `fmr` read.
+The scalar arithmetic (`xs{add,sub,mul,div,sqrt}{dp,sp}`, `xsrsp`, abs/nabs/neg/cpsgn), the
+multiply-adds (`xs[n]m{add,sub}{a,m}{dp,sp}`, as a multiply then an add, as `fmadd` is), the
+integer conversions (`xscv{s,u}xd{dp,sp}`, `xscvdp{s,u}x{ds,ws}`), `xscvspdp[n]`/`xscvdpsp` and
+`stxsdx` are lifted exactly instead of as user ops; sp results are rounded to single and held
+in double format. The other scalar operations (compare, min/max, estimates, round to integer,
+test) stay user ops. Found by the real-code sweep (`notes/real-code-sweep.md`): clang -O2 for
+ppc64le turned `v * n + 0.5f` into `xscvsxdsp` + `xsmaddasp`.

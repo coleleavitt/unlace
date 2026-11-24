@@ -5741,7 +5741,11 @@ moves.
   import and no address-keyed one sits at that entry, so library signatures, type
   libraries and DWARF definitions keep precedence. Calls to the import then take its
   types: an enum parameter prints a constant argument as its member
-  (`gnutls_bye(s,GNUTLS_SHUT_WR)`). (kuna) When neither `.comment`
+  (`gnutls_bye(s,GNUTLS_SHUT_WR)`). (kuna `dwarfenumtypedef`, default off; a load-time
+  env bridge, `KUNA_DWARFENUMTYPEDEF`) An anonymous `DW_TAG_enumeration_type` reached
+  through a typedef is interned as an enum under the typedef's name, the alias
+  `strip_qualifiers` already gives an anonymous aggregate
+  (`dwarf/kuna_dwarfenumtypedef.rs`); off, it is the plain underlying integer. (kuna) When neither `.comment`
   nor the other signals name the toolchain, ELF and Mach-O detection falls back
   to the debug info (`analyzers/sourcelang/kuna_dwarfproducer.rs (dwarf_compiler)`):
   the first 16 compile units' `DW_AT_language` (Rust, Go, Swift) or

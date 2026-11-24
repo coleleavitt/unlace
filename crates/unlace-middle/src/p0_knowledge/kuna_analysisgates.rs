@@ -387,6 +387,16 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna) `dwarfenumtypedef`: an anonymous DWARF enum takes its typedef's name; the
+    /// loader reads `KUNA_DWARFENUMTYPEDEF`.
+    DwarfEnumTypedef,
+    "dwarfenumtypedef",
+    "DWARF anonymous enums named by their typedef",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna) Gate the address-table pass (`addrtable`); default **off** (matches
     /// Ghidra `AddressTableAnalyzer.setDefaultEnablement(false)`).
     Addrtable,

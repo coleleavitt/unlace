@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="ST20"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="st20.sla"
+            processorspec="st20.pspec"
+            id="ST20:LE:32:default">
+    <description>STMicroelectronics ST20-C2/C4 core (transputer-derived integer stack machine)</description>
+    <compiler name="default" spec="st20.cspec" id="default"/>
+  </language>
+</language_definitions>

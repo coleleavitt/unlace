@@ -2071,14 +2071,18 @@ define pcodeop VectorMultiplyWordHighSignedSaturateFractionalToAccumulator2;
 # evmwhusiaaw rD,rA,rB 101 0100 0100
 # TODO Not in PowerISA Version 2.06 manual?
 define pcodeop evmwhusiaawOP;
+@ifndef SPE2
 :evmwhusiaaw D,A,B is OP=4 & A & B & D & XOP_0_10=0x544 { evmwhusiaawOP(D,A,B); }
+@endif
 
 # evmwhusianw rD,rA,rB 101 1100 0100
 # TODO Not in PowerISA Version 2.06 manual?
 define pcodeop evmwhusianwOP;
+@ifndef SPE2
 :evmwhusianw D,A,B is OP=4 & A & B & D & XOP_0_10=0x5C4 {
  evmwhusianwOP(D,A,B,ACC);
 }
+@endif
 
 # evmwlsmiaaw RT,RA,RB
 # ISA-cmt: Vector Multiply Word Low Signed, Modulo, Integer and Accumulate into Words

@@ -1,0 +1,52 @@
+# SmartMIPS ASE (#98) for MIPS32 smart-card cores (4KSc, 4KSd). Encodings: the
+# SmartMIPS rows of the binutils MIPS opcode table (match/mask only); semantics:
+# MIPS32 SmartMIPS ASE specification. ACX extends the HI/LO accumulator by 8 bits.
+# ror/rorv are the MIPS32 Release 2 rotates and are already decoded.
+
+define register offset=0x3E00 size=1 [ ACX ];
+
+define pcodeop smartmips_multp;
+define pcodeop smartmips_pperm;
+define pcodeop smartmips_pperm_acx;
+
+INDEX4_BASE: index(base) is index & base { tmp:$(REGSIZE) = base + (index << 2); tmpscaled:$(ADDRSIZE) = 0; ValCast(tmpscaled,tmp); export tmpscaled; }
+
+:lwxs RD, INDEX4_BASE is $(AMODE) & REL6=0 & prime=0x1c & fct2=2 & fct=0x08 & RD & INDEX4_BASE {
+    RD = sext(*[ram]:4 INDEX4_BASE);
+}
+
+:maddp RSsrc, RTsrc is $(AMODE) & REL6=0 & prime=0x1c & rd=0 & fct2=0x11 & fct=0x01 & RSsrc & RTsrc {
+    local prod:8 = smartmips_multp(RSsrc, RTsrc);
+    local plo:4 = prod:4;
+    local phi:4 = prod(4);
+    lo = lo ^ plo;
+    hi = hi ^ phi;
+}
+
+:multp RSsrc, RTsrc is $(AMODE) & REL6=0 & prime=0 & rd=0 & fct2=0x11 & fct=0x19 & RSsrc & RTsrc {
+    local prod:8 = smartmips_multp(RSsrc, RTsrc);
+    lo = prod:4;
+    hi = prod(4);
+    ACX = 0;
+}
+
+:pperm RSsrc, RTsrc is $(AMODE) & REL6=0 & prime=0x1c & rd=0 & fct2=0x12 & fct=0x01 & RSsrc & RTsrc {
+    local acc:8 = (zext(hi) << 32) | zext(lo);
+    local res:8 = smartmips_pperm(ACX, acc, RSsrc, RTsrc);
+    ACX = smartmips_pperm_acx(ACX, acc, RSsrc, RTsrc);
+    hi = res(4);
+    lo = res:4;
+}
+
+:mflhxu RD is $(AMODE) & REL6=0 & prime=0 & rs=0 & rt=0 & fct2=1 & fct=0x12 & RD {
+    RD = lo;
+    lo = hi;
+    hi = zext(ACX);
+    ACX = 0;
+}
+
+:mtlhx RSsrc is $(AMODE) & REL6=0 & prime=0 & rt=0 & rd=0 & fct2=1 & fct=0x13 & RSsrc {
+    ACX = hi:1;
+    hi = lo;
+    lo = RSsrc;
+}

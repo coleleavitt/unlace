@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="TMS320C3x"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="tms320c3x.sla"
+            processorspec="tms320c3x.pspec"
+            id="TMS320C3x:LE:32:default">
+    <description>Texas Instruments TMS320C3x (C30/C31/C32/C33) and the C3x-compatible TMS320C4x core</description>
+    <compiler name="default" spec="tms320c3x.cspec" id="default"/>
+  </language>
+</language_definitions>

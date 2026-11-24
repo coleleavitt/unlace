@@ -148,6 +148,11 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
   `.4H`/`.8H` `#fbits` and scalar `URSHR d` decoded their shift with the wrong element size.
 - **AArch64 (#546).** Rounding of `SRSRA`/`URSRA` and by-element `SQRDMULH`, saturation of
   `SQDMULH`/`SQRDMULH`/`SQDMLAL`/`SQDMLSL`/`SUQADD`, `SUDOT`/`USDOT`/`BFDOT`/`BFMLALB`/`BFMLALT` by element, and the MOPS `wt` options.
+- **AArch64 SVE.** The SVE forms of F64MM (`LD1RO*`, `FMMLA`, 128-bit `ZIP`/`UZP`/`TRN`), I8MM
+  (`SMMLA`/`UMMLA`/`USMMLA`/`USDOT`/`SUDOT`) and BF16 (`BFDOT`, `BFMLALB`/`BFMLALT`, `BFMMLA`,
+  `BFCVT`/`BFCVTNT`) did not decode (`AARCH64_svemm.sinc`).
+- **AArch64 RMIF.** `RMIF` shifted instead of rotated its source, and `set_NZCV` copied N into
+  every flag the mask left alone instead of keeping it (`rmif x2,#9,#0xd` set C from N).
 - **RISC-V.** `c.jr`, `c.jalr` and `ret` did not clear bit 0 of the target, as `jalr` does.
   Single-precision (and Zfh half-precision) results written to a 64-bit `f` register were
   zero-extended instead of NaN-boxed (`flw fs4,-0x56f(tp)` left `fs4 = 0x000000009b2a6699`
@@ -161,7 +166,7 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
 Open (issue #548):
 
 - AArch64: `FCVT*U` of a negative value wraps instead of giving 0 (kept: clamping makes every
-  `(unsigned)f` unreadable); the SVE `USDOT`/`BFMLALB` and F64MM `LD1RO*` do not decode.
+  `(unsigned)f` unreadable).
 - x86-64: an encoding whose REX prefix is followed by another prefix (REX is then ignored) does
   not decode; `BSF`/`BSR` with a zero source write the destination, which hardware leaves
   unchanged; `MOVSXD r16` and several 3DNow! instructions do not decode.

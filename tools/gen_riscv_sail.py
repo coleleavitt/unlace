@@ -1905,7 +1905,13 @@ class Gen:
                     args.append(comp.tmp(widths[o], o).name)
                 else:
                     args.append(o)
-            comp.emit('%s = %s(%s);' % (ops[0], op, ', '.join(args)))
+            width = {'s': 4, 'h': 2}.get(mnem.rsplit('.', 1)[-1]) if ops and ops[0] == 'frd' else None
+            if width and self.flen == 64:
+                # an S or H result is written NaN-boxed, as every F/Zfh instruction writes it
+                r = comp.tmp(8 * width, '%s(%s)' % (op, ', '.join(args)))
+                comp.emit('%s = 0x%x:8 | zext(%s);' % (ops[0], mask(64) & ~mask(8 * width), r.name))
+            else:
+                comp.emit('%s = %s(%s);' % (ops[0], op, ', '.join(args)))
         if mnem in self.opaque or ctor in self.opaque:
             opaque()
         else:

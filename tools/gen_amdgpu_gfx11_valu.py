@@ -40,7 +40,7 @@ SEM = {
     'v_cvt_f16_u16': 'cvt_u16', 'v_cvt_f16_i16': 'cvt_i16',
     'v_cvt_u16_f16': 'trunc(a)', 'v_cvt_i16_f16': 'trunc(a)',
     'v_sqrt_f16': 'sqrt(a)', 'v_floor_f16': 'floor(a)', 'v_ceil_f16': 'ceil(a)', 'v_trunc_f16': 'trunc_f',
-    'v_rndne_f16': 'round(a)', 'v_rcp_f16': '1 f/ a',
+    'v_rndne_f16': 'round(a)', 'v_rcp_f16': 'rcp',
     'v_fma_f16': '(a f* b) f+ c', 'v_min3_f16': 'min3_f', 'v_max3_f16': 'max3_f',
     'v_min3_i16': 'min3_s', 'v_max3_i16': 'max3_s', 'v_min3_u16': 'min3_u', 'v_max3_u16': 'max3_u',
     'v_maxmin_f16': 'maxmin_f', 'v_minmax_f16': 'minmax_f',
@@ -55,6 +55,15 @@ SEM = {
     'v_cvt_f16_f32': 'float2float(a)', 'v_cvt_f32_f16': 'float2float(a)',
     'v_mad_u32_u16': 'zext(a) * zext(b) + c', 'v_mad_i32_i16': 'sext(a) * sext(b) + c',
     'v_alignbit_b32': 'alignbit', 'v_alignbyte_b32': 'alignbyte',
+    # GFX12 names
+    'v_min_num_f16': 'min_f', 'v_max_num_f16': 'max_f', 'v_minimum_f16': 'min_f', 'v_maximum_f16': 'max_f',
+    'v_minimum_f32': 'min_f', 'v_maximum_f32': 'max_f', 'v_minimum_f64': 'min_f', 'v_maximum_f64': 'max_f',
+    'v_min3_num_f16': 'min3_f', 'v_max3_num_f16': 'max3_f', 'v_minimum3_f16': 'min3_f', 'v_maximum3_f16': 'max3_f',
+    'v_minimum3_f32': 'min3_f', 'v_maximum3_f32': 'max3_f', 'v_minmax_num_f16': 'minmax_f',
+    'v_maxmin_num_f16': 'maxmin_f', 'v_minmax_num_f32': 'minmax_f', 'v_maxmin_num_f32': 'maxmin_f',
+    'v_minimummaximum_f16': 'minmax_f', 'v_maximumminimum_f16': 'maxmin_f', 'v_minimummaximum_f32': 'minmax_f',
+    'v_maximumminimum_f32': 'maxmin_f', 'v_s_rcp_f32': 'rcp', 'v_s_rcp_f16': 'rcp', 'v_s_sqrt_f32': 'sqrt(a)',
+    'v_s_sqrt_f16': 'sqrt(a)',
 }
 NAMED = {  # named user operations
     'v_log_f16': 'log2', 'v_exp_f16': 'exp2', 'v_rsq_f16': 'rsqrt', 'v_sin_f16': 'sin', 'v_cos_f16': 'cos',
@@ -69,7 +78,9 @@ NAMED = {  # named user operations
     'v_cvt_norm_u16_f16': 'cvt_norm', 'v_sat_pk_u8_i16': 'sat_pk', 'v_cvt_off_f32_i4': 'cvt_off',
     'v_dot2_f16_f16': 'dot2', 'v_dot2_bf16_bf16': 'dot2', 'v_movreld_b32': 'movreld', 'v_movrels_b32': 'movrels',
     'v_movrelsd_b32': 'movrels', 'v_movrelsd_2_b32': 'movrels', 'v_permlane16_b32': 'permlane',
-    'v_permlanex16_b32': 'permlane',
+    'v_permlanex16_b32': 'permlane', 'v_permlane16_var_b32': 'permlane', 'v_permlanex16_var_b32': 'permlane',
+    'v_med3_num_f16': 'med3', 'v_s_exp_f32': 'exp2', 'v_s_exp_f16': 'exp2', 'v_s_log_f32': 'log2', 'v_s_log_f16': 'log2',
+    'v_s_rsq_f32': 'rsqrt', 'v_s_rsq_f16': 'rsqrt',
 }
 
 
@@ -91,6 +102,8 @@ def expand(form, w):
                       % (p, o1, p, o2))
     if form == 'trunc_f':
         return None, 'l:4 = trunc(a); r = int2float(l);'
+    if form == 'rcp':
+        return None, 'o:%d = int2float(1:4); r = o f/ a;' % w
     if form == 'alignbit':
         return None, 'l:8 = (zext(a) << 32) | zext(b); s:8 = zext(c & 31); l = l >> s; r = l:4;'
     if form == 'alignbyte':
@@ -143,7 +156,7 @@ def e32(path, body):
         if cmp and not cmpx:
             ops = ops[1:]
         kinds = [kind(o) for o in ops]
-        if '?' in kinds:
+        if '?' in kinds or 'v64' in kinds:
             continue
         dst, srcs = (None, kinds) if cmp else (kinds[0], kinds[1:])
         tabs, pats = [], []

@@ -4437,6 +4437,35 @@ test = "tricore_tc18_gcc_int_then_double"
 address = "g_idmul"
 expect = ["(double)a0 * a2"]
 
+# Option selectmul: the a * zext(c) + b * zext(!c) TriCore's ternary macro lifts sel/min/max to
+# prints as c ? a : b.
+[[family]]
+name = "tricore_tc18_gcc_selectmul"
+loader = "auto"
+args = ["--target", "tricore:LE:32:tc18", "--option", "selectmul", "on"]
+fixture = "crates/unlace-cli/tests/fixtures/tricore_tc18_gcc/gcc_select.elf"
+forbid = ["(unsigned int)(a"]
+
+[[family.function]]
+test = "tricore_tc18_selectmul_min"
+address = "s_min"
+expect = ["return a1 < a0 ? a1 : a0;"]
+
+[[family.function]]
+test = "tricore_tc18_selectmul_umax_negation"
+address = "s_umax"
+expect = ["a0 < a1 ? a1 : a0"]
+
+[[family.function]]
+test = "tricore_tc18_selectmul_sel_reads_the_not_equal"
+address = "s_sel"
+expect = ["? a1 : a2;"]
+
+[[family.function]]
+test = "tricore_tc18_selectmul_sel_expressions"
+address = "s_sel2"
+expect = ["? a1 + 1 : a2 * 3;"]
+
 # The AVR-Dx languages (avr8xt.sla, I/O at data 0, one pspec per series from Microchip's AVR-Dx_DFP)
 # name an `in` from the VPORT window and an `sts` to the PORT block.
 [[family]]

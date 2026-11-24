@@ -2471,6 +2471,24 @@ its Varnode's size; when the whole tree is constant, the hexadecimal literal is 
 constant atom in place of the tree. `PIECE` is not folded: a two-word `CONCAT` of constants
 is a Go or Swift pair, which keeps its form (the stage corpus pins those).
 
+(kuna `selectmul`, default off) A select the lifter wrote as arithmetic prints as C's
+conditional operator (`crates/unlace-emit/src/p9_emit/kuna_selectmul.rs`). SLEIGH has no
+select, so a spec that picks one of two values without a branch computes
+`a * zext(c) + b * zext(!c)`; TriCore's `ternary` macro (behind `sel`, `min`, `max`,
+`sat`, `cmov`) does, and `min` printed `a1 * (unsigned int)(a1 < a0) + a0 * (unsigned
+int)(a1 >= a0)`. Near the top of `op_push_ir_inner`, under a language with `?:`, an
+`INT_ADD`, `INT_OR` or `INT_XOR` whose two inputs are implied `INT_MULT`s, each of a value
+by an implied `INT_ZEXT` of a one-byte boolean, is printed as a select when the two booleans
+are complements: one is the `BOOL_NEGATE` of the other, or they are `INT_EQUAL` and
+`INT_NOTEQUAL` of the same operands (either order), or `INT_LESS`/`INT_LESSEQUAL` (or the
+signed pair) with the operands swapped. Operands are the same when they are one Varnode or two
+constants of equal size and value. Exactly one product is then non-zero, so the expression is
+the value whose boolean holds. The `CONDITIONAL` token takes the condition (pushed in
+condition context, so `x != 0` prints truthy), the value of its term, then the other value;
+the condition is the strict compare or `!=` of the pair, the operand of a negation, or else
+the first input's boolean. A term in a named variable, a float compare and a single
+product (`a * zext(c)` with no complement) keep the arithmetic.
+
 (kuna `cstringconst`, default on) A pointer-wide constant inside a string-literal
 section prints as the literal there, whatever type it reaches the printer with
 (`crates/unlace-emit/src/p9_emit/kuna_cstringconst.rs`). `pushConstant`

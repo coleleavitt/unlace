@@ -207,9 +207,9 @@ Line numbers are as of the audit branch; `rg` the name to find a moved one.
 
 | Where | Writes | Class | Disposition |
 |---|---|---|---|
-| `unlace-middle/src/p0_knowledge/ifuncfpret.rs:40` `set_ifuncfpret_env` | `UNLACE_IFUNCFPRET` | c | no production caller (tests only); removed by the audit PR that follows |
-| `unlace-middle/src/p0_knowledge/ppcapu.rs:21` `set_ppcapu_env` | `UNLACE_PPCAPU` | c | no production caller; same PR |
-| `unlace-middle/src/p0_knowledge/macho_arm64e.rs:28` `set_macho_arm64e_env` | `UNLACE_MACHO_ARM64E` | c | no production caller; same PR |
+| `unlace-middle/src/p0_knowledge/ifuncfpret.rs:40` `set_ifuncfpret_env` | `UNLACE_IFUNCFPRET` | c | removed (setters PR); the gate test now reads the variable through `read::ifuncfpret` and a scope |
+| `unlace-middle/src/p0_knowledge/ppcapu.rs:21` `set_ppcapu_env` | `UNLACE_PPCAPU` | c | removed (setters PR) |
+| `unlace-middle/src/p0_knowledge/macho_arm64e.rs:28` `set_macho_arm64e_env` | `UNLACE_MACHO_ARM64E` | c | removed (setters PR) |
 | `unlace-middle/src/p0_knowledge/symbolnamechars.rs:168` `set_symbolnamechars_env` | `UNLACE_SYMBOLNAMECHARS` | c | called only from `symbolnamechars/tests.rs`; left, the test writes its own variable |
 | `unlace-middle/src/p0_knowledge/libctypes.rs:125` `set_libctypes_env_layout` | `UNLACE_LIBCTYPES` | c | called only from tests (here and `unlace-analysis` `protos/libctypes/tests.rs`); left |
 

@@ -35,13 +35,6 @@ pub fn ifuncfpret_enabled() -> bool {
     crate::loadoptions::scoped(|o| o.ifuncfpret).unwrap_or_else(crate::loadoptions::env::ifuncfpret)
 }
 
-/// Export a `set_unlace_option("ifuncfpret", val)` toggle to [`IFUNCFPRET_ENV`] so a
-/// later `load file` in the *same* process sees the choice.
-pub fn set_ifuncfpret_env(on: bool) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(IFUNCFPRET_ENV, if on { "on" } else { "off" }) };
-}
-
 crate::unlace_flag!(
     /// (unlace `ifuncfpret`) The requested state of the load-time IFUNC PLT-stub naming; the catalog's live `current` field reads it.
     IfuncFpRet,
@@ -54,30 +47,39 @@ crate::unlace_flag!(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::loadoptions::{LoadOptions, Vars, read};
+    use std::collections::BTreeMap;
+
+    /// What the gate reads when its variable holds `value` (`None` = unset).
+    fn read_with(value: Option<&str>) -> bool {
+        let overrides = BTreeMap::from([(IFUNCFPRET_ENV, value.map(str::to_string))]);
+        read::ifuncfpret(&Vars::with(&overrides))
+    }
 
     #[test]
     fn env_gate_default_on_and_off_tokens() {
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::remove_var(IFUNCFPRET_ENV) };
-        assert!(ifuncfpret_enabled(), "unset env ⇒ default on");
-
+        assert!(read_with(None), "unset env ⇒ default on");
         for on in ["on", "1", "true", "ON", "True", ""] {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::set_var(IFUNCFPRET_ENV, on) };
-            assert!(ifuncfpret_enabled(), "`{on}` ⇒ enabled");
+            assert!(read_with(Some(on)), "`{on}` ⇒ enabled");
         }
         for off in ["off", "0", "false"] {
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::set_var(IFUNCFPRET_ENV, off) };
-            assert!(!ifuncfpret_enabled(), "`{off}` ⇒ disabled");
+            assert!(!read_with(Some(off)), "`{off}` ⇒ disabled");
         }
-
-        set_ifuncfpret_env(true);
-        assert!(ifuncfpret_enabled());
-        set_ifuncfpret_env(false);
-        assert!(!ifuncfpret_enabled());
-
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::remove_var(IFUNCFPRET_ENV) };
+        {
+            let _scope = LoadOptions {
+                ifuncfpret: true,
+                ..LoadOptions::default()
+            }
+            .enter();
+            assert!(ifuncfpret_enabled());
+        }
+        {
+            let _scope = LoadOptions {
+                ifuncfpret: false,
+                ..LoadOptions::default()
+            }
+            .enter();
+            assert!(!ifuncfpret_enabled());
+        }
     }
 }

@@ -44,6 +44,10 @@ nios2 = """
 3a88212084024001000001001702c0803a88c5103a880514cc3f80101701c0df
 170000dc0402c0de3a2800f8
 """
+propeller = """
+0016fca00a18fca00c16bc800218fce40914fc5c0d163c850d168ca0f0173c08
+08007c5c0116fc2c00007c5c000000000000000064000000
+"""
 visium = """
 064100244800000500000000864204147f95000400000000864104247f950004
 00000000845700080000000003f7055483f700b487212c0484a9000084891000
@@ -447,6 +451,46 @@ expect = [
     "return a0 - a1;",
 ]
 
+# The Netronome NFP-6xxx microengine language decompiles hand-encoded ME v2.8 microcode
+# (64-bit instruction words, branch targets in instruction numbers) from a raw image.
+[[family]]
+name = "nfp"
+language = "NFP:LE:32:ME28"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/nfp/sum_loop.bin"
+
+# `immed[gprA_1, 0]`, a flag-setting `alu[--, --, B, gprB_0]` and `beq`, then a loop of
+# `alu[gprA_1, gprA_1, +, gprB_0]`, `alu[gprB_0, gprB_0, -, 1]` (swapped operands) and `bne`,
+# a store through `*l$index0[1]` and `rtn[gprA_2]`.
+[[family.function]]
+test = "nfp_counted_loop_decompiles"
+address = "0x0"
+expect = [
+    "v1 = 0;",
+    "v1 += v2;",
+    "v2 = v2 + -1",
+    "*(int *)(v3 + 4) = v1;",
+]
+
+[[family]]
+name = "nfp"
+language = "NFP:LE:32:ME28"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/nfp/coverage.bin"
+
+# One of each class: alu_shf, asr, immed_w1, immed <<16, ld_field_w_clr, br_bset,
+# br!=byte, local_csr_wr, a mem[read] command, a deferred br and ctx_arb[kill].
+[[family.function]]
+test = "nfp_instruction_classes_decode"
+address = "0x0"
+expect = [
+    "(v1 >> 3 & 1) != 1",
+    "(v1 & 0xff) == 0x7f",
+    "local_csr_wr(6,v1);",
+    "cpp_cmd(0x40,0,0,v1,v2,1,1);",
+    "ctx_kill();",
+]
+
 # The Nios II language decompiles a compare-and-branch routine built with nios2-elf-as.
 [[family]]
 name = "nios2"
@@ -536,6 +580,36 @@ test = "pdp11_signed_max"
 address = "0x1010"
 expect = [
     "if (a0 < a1)",
+]
+
+# The Propeller language decompiles a cog routine: a djnz loop, a call/ret pair, a
+# conditional (if_nc) move after a compare and a hub write. Hand-assembled PASM:
+# `mov sum,#0; mov cnt,#10; loop add sum,cnt; djnz cnt,#loop; call #double;
+# cmp sum,limit wc; if_nc mov sum,limit; wrlong sum,par; halt jmp #halt;
+# double shl sum,#1; double_ret ret`.
+[[family]]
+name = "propeller"
+language = "propeller:LE:16:default"
+base = "0x0"
+image = "propeller"
+
+[[family.function]]
+test = "propeller_cog_routine_decompiles"
+address = "0x0"
+expect = [
+    "dat_30 = 10;",
+    "dat_2c += dat_30;",
+    "} while (dat_30);",
+    "sub_24();",
+    "if (dat_34 <= dat_2c)",
+    "dat_2c = dat_34;",
+]
+
+[[family.function]]
+test = "propeller_subroutine_decompiles"
+address = "0x24"
+expect = [
+    "dat_2c <<= 1;",
 ]
 
 # The Rabbit 2000 and 3000A languages decompile a hand-assembled add/compare/store routine.

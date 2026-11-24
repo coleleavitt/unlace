@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<processor_spec>
+  <programcounter register="PC"/>
+  <volatile outputop="write_volatile" inputop="read_volatile">
+    <range space="cog" first="0x7c0" last="0x7ff"/>
+  </volatile>
+  <default_symbols>
+    <symbol name="PAR" address="cog:0x7c0"/>
+    <symbol name="CNT" address="cog:0x7c4"/>
+    <symbol name="INA" address="cog:0x7c8"/>
+    <symbol name="INB" address="cog:0x7cc"/>
+    <symbol name="OUTA" address="cog:0x7d0"/>
+    <symbol name="OUTB" address="cog:0x7d4"/>
+    <symbol name="DIRA" address="cog:0x7d8"/>
+    <symbol name="DIRB" address="cog:0x7dc"/>
+    <symbol name="CTRA" address="cog:0x7e0"/>
+    <symbol name="CTRB" address="cog:0x7e4"/>
+    <symbol name="FRQA" address="cog:0x7e8"/>
+    <symbol name="FRQB" address="cog:0x7ec"/>
+    <symbol name="PHSA" address="cog:0x7f0"/>
+    <symbol name="PHSB" address="cog:0x7f4"/>
+    <symbol name="VCFG" address="cog:0x7f8"/>
+    <symbol name="VSCL" address="cog:0x7fc"/>
+  </default_symbols>
+</processor_spec>

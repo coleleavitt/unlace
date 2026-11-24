@@ -18,6 +18,8 @@ mod lua54;
 mod m6800_family;
 #[path = "mep.rs"]
 mod mep;
+#[path = "mips_ase.rs"]
+mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "v60.rs"]

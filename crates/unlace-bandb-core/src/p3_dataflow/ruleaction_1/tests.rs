@@ -1331,3 +1331,73 @@ fn maskjoin_declines_masks_of_different_values() {
     let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
     assert_eq!(r.apply_op(op, &mut fd), 0);
 }
+
+#[test]
+fn maskjoin_reads_zero_extended_pieces_moved_back_into_place() {
+    // (zext(SUB(x, 4)) << 32) | zext(SUB(x, 0)) is x.
+    let mut fd = build_fd();
+    let x = make_reg(&mut fd, 0x40, 8);
+    let sub_hi = make_op(&mut fd, 0x1000, OpCode::CPUI_SUBPIECE);
+    let four = make_const(&mut fd, 4, 4);
+    wire_input(&mut fd, sub_hi, x, 0);
+    wire_input(&mut fd, sub_hi, four, 1);
+    let hi = give_output(&mut fd, sub_hi, 0x100, 4);
+    let zext_hi = make_op_n(&mut fd, 0x1004, OpCode::CPUI_INT_ZEXT, 1, 0);
+    wire_input(&mut fd, zext_hi, hi, 0);
+    let hi8 = give_output(&mut fd, zext_hi, 0x108, 8);
+    let left = make_op(&mut fd, 0x1008, OpCode::CPUI_INT_LEFT);
+    let thirty_two = make_const(&mut fd, 32, 4);
+    wire_input(&mut fd, left, hi8, 0);
+    wire_input(&mut fd, left, thirty_two, 1);
+    let shifted = give_output(&mut fd, left, 0x110, 8);
+    let sub_lo = make_op(&mut fd, 0x100c, OpCode::CPUI_SUBPIECE);
+    let zero = make_const(&mut fd, 0, 4);
+    wire_input(&mut fd, sub_lo, x, 0);
+    wire_input(&mut fd, sub_lo, zero, 1);
+    let lo = give_output(&mut fd, sub_lo, 0x118, 4);
+    let zext_lo = make_op_n(&mut fd, 0x1010, OpCode::CPUI_INT_ZEXT, 1, 0);
+    wire_input(&mut fd, zext_lo, lo, 0);
+    let lo8 = give_output(&mut fd, zext_lo, 0x120, 8);
+    let op = make_op(&mut fd, 0x1014, OpCode::CPUI_INT_OR);
+    wire_input(&mut fd, op, shifted, 0);
+    wire_input(&mut fd, op, lo8, 1);
+    let _out = give_output(&mut fd, op, 0x128, 8);
+    let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
+    assert_eq!(r.apply_op(op, &mut fd), 1);
+    assert_eq!(code_of(&fd, op), OpCode::CPUI_COPY);
+    assert_eq!(in_of(&fd, op, 0), Some(x));
+}
+
+#[test]
+fn maskjoin_declines_a_piece_shifted_off_its_place() {
+    // (zext(SUB(x, 4)) << 24) | zext(SUB(x, 0)) overlaps, and is not x.
+    let mut fd = build_fd();
+    let x = make_reg(&mut fd, 0x40, 8);
+    let sub_hi = make_op(&mut fd, 0x1000, OpCode::CPUI_SUBPIECE);
+    let four = make_const(&mut fd, 4, 4);
+    wire_input(&mut fd, sub_hi, x, 0);
+    wire_input(&mut fd, sub_hi, four, 1);
+    let hi = give_output(&mut fd, sub_hi, 0x100, 4);
+    let zext_hi = make_op_n(&mut fd, 0x1004, OpCode::CPUI_INT_ZEXT, 1, 0);
+    wire_input(&mut fd, zext_hi, hi, 0);
+    let hi8 = give_output(&mut fd, zext_hi, 0x108, 8);
+    let left = make_op(&mut fd, 0x1008, OpCode::CPUI_INT_LEFT);
+    let shift = make_const(&mut fd, 24, 4);
+    wire_input(&mut fd, left, hi8, 0);
+    wire_input(&mut fd, left, shift, 1);
+    let shifted = give_output(&mut fd, left, 0x110, 8);
+    let sub_lo = make_op(&mut fd, 0x100c, OpCode::CPUI_SUBPIECE);
+    let zero = make_const(&mut fd, 0, 4);
+    wire_input(&mut fd, sub_lo, x, 0);
+    wire_input(&mut fd, sub_lo, zero, 1);
+    let lo = give_output(&mut fd, sub_lo, 0x118, 4);
+    let zext_lo = make_op_n(&mut fd, 0x1010, OpCode::CPUI_INT_ZEXT, 1, 0);
+    wire_input(&mut fd, zext_lo, lo, 0);
+    let lo8 = give_output(&mut fd, zext_lo, 0x120, 8);
+    let op = make_op(&mut fd, 0x1014, OpCode::CPUI_INT_OR);
+    wire_input(&mut fd, op, shifted, 0);
+    wire_input(&mut fd, op, lo8, 1);
+    let _out = give_output(&mut fd, op, 0x128, 8);
+    let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
+    assert_eq!(r.apply_op(op, &mut fd), 0);
+}

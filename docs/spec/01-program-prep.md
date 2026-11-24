@@ -2114,6 +2114,18 @@ that maps an address another `PT_LOAD` already mapped from different file bytes
 (`elf_debuglink.rs (overlapping_loads)`), a shape only a hand-made or hostile
 image has; which bytes win is unchanged.
 
+(unlace) **A Mach-O image's `.dSYM` bundle** (`debuglink`, the same gate). A
+binary shipped without DWARF takes it from the bundle `dsymutil` wrote beside
+it: `<name>.dSYM/Contents/Resources/DWARF/<name>`, and for a framework or app
+the bundle named after the wrapper (`Foo.framework.dSYM` next to
+`Foo.framework`), each enclosing directory up to three levels tried.
+`crates/unlace-analysis/src/loader/macho_dsym.rs (find_dsym)` accepts a
+candidate only when its `LC_UUID` equals the image's, so a dSYM of another
+build is never applied. A universal dSYM is read slice by slice, and the thin
+slice carrying the image's UUID is the one that feeds the DWARF analyzer
+(`analyzers/dwarf/mod.rs (DwarfPass)`), which runs over it as it does over an
+ELF companion. An image with no `LC_UUID` takes no dSYM.
+
 (unlace) **MS-DOS `MZ` executables load as relocated real-mode images.**
 `crates/unlace-analysis/src/loadimage_mz.rs (MzImage)` claims a file
 with an `MZ` (or `ZM`) header that is not the stub of a newer format: a `PE\0\0`

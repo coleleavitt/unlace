@@ -1,0 +1,49 @@
+# kuna-guardedloop-emptybody: a do-while that prints only its test prints as a
+# while loop (option guardedloop).
+#
+# Source (gcc -O2, x86-64):
+#   void wait_ready(void)
+#     { while (!(*(volatile unsigned *)0x40001000 & 1)) ; *(volatile unsigned *)0x40001004 = 5; }
+#
+# gcc emits one block that loads the register, tests the bit and branches
+# back to itself.  The loop body prints nothing, so do {} while (c); and
+# while (c) {} run the same code and need no guard.
+#
+# Stage: P8, ActionGuardedLoop on the final tree (empty_body).  Pass 1
+# (default) prints the while loop and no do-while; pass 2 (guardedloop off)
+# the do-while.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'wait_ready' },
+    { space = 'ram', offset = '0x401020', name = '_start' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+readonly = true
+hex = '8b042500100040a80174f5c704250410004005000000c3660f1f840000000000ebfe'
+
+[script]
+commands = [
+    'lo fu wait_ready',
+    'decompile',
+    'print C',
+    'option guardedloop off',
+    'lo fu wait_ready',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'KUNA-GUARDEDLOOP-EMPTYBODY #1: the busy-wait prints as a while loop (default)'
+count = 1
+regex = 'while \(.*0x40001000.*\) \{'
+
+[[match]]
+name = 'KUNA-GUARDEDLOOP-EMPTYBODY #2: guardedloop off keeps the do-while'
+count = 1
+literal = 'do {'

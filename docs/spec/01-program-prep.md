@@ -7272,7 +7272,10 @@ every other binary's pass list is byte-identical to before the pass existed):
   to 64 hops, and the call site is the source position at that instruction.
   With `lines`, a second pass (`gopcln_lines`) also comments `<file>:<line>`
   at each PC where the position changes, the Go counterpart of `dwarf_lines`.
-  Both passes read the option themselves, so a default run decodes nothing;
+  Both passes run at the commit point, only when the option is on
+  (`crates/unlace-analysis/src/passes.rs (run_gopcln)`): a load-time pass sees
+  the option's constructor default, so registered at load they never wrote a
+  comment. A default run decodes nothing;
   a function is read only when its entry lies in executable bytes, and at most
   2,000,000 comments are written per image. The comments go through the same
   comment database as `dwarf_lines`, so they appear in the C text and in the

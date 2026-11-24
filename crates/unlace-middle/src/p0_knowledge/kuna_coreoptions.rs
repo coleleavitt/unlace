@@ -67,7 +67,7 @@ crate::kuna_flag!(
     "noretfirst",
     "non-returning arm first",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 crate::kuna_flag!(

@@ -2787,10 +2787,11 @@ whole register (`add $1,%rax` after the call) relies on the zero-extension the
 callee performs, and its printed C sign-extended the `int` result. In
 `decompile-all` such a function is decompiled again with the width its callers
 compute with (`Funcdata::unlace_wide_return`, `voidret` in chapter
-[04](04-calls-and-prototypes.md)). Where a caller computes with all eight bytes
-the pull refuses the trim the same way (`zero_extended_word`); where callers
-compute with at most four, a narrower value keeps its trim and is unsigned
-instead (chapter [05](05-types.md)).
+[04](04-calls-and-prototypes.md)). Wherever a caller computes with more of the
+register than the trimmed value, the pull refuses the trim the same way
+(`zero_extended_word`) and the function returns the width its callers read: a
+narrower C type would not make the compiled function set those bytes (chapter
+[05](05-types.md)).
 A convention that extends the value by its type's sign (`inttype`) leaves the
 trim alone, since there a caller may read the whole register of an `unsigned
 int`. Each trim the pull makes of a zero-extended value is noted on the

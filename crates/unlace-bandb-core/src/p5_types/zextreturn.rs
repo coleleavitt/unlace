@@ -26,8 +26,10 @@
 //! [`zero_extended_word`] makes the trim keep the whole register. Under the
 //! other conventions only the callers can tell: one that computes with more of
 //! the register relies on the zero-extension, and `voidret` has the function
-//! decompiled again, keeping the whole register for a caller computing in 64
-//! bits and otherwise typing the narrow value unsigned.
+//! decompiled again, returning the register at the widest width its callers
+//! read: the convention does not make the narrow type set those bytes, so a
+//! narrower C return type would leave them to chance when the printed function
+//! is compiled.
 
 use std::rc::Rc;
 
@@ -41,10 +43,8 @@ use crate::funcdata::Funcdata;
 use crate::op::pcodeop_addlflags::unlace_zextreturn;
 
 /// Did trimming the RETURN input `vn` to the `size`-byte value under `mask`
-/// drop only known-zero bits, where the convention extends that value by sign,
-/// or where the function's callers compute with up to four bytes of the
-/// register ([`read_width`])? `storage` is a non-constant input of a RETURN,
-/// which names the register.
+/// drop only known-zero bits, where the convention extends that value by sign?
+/// `storage` is a non-constant input of a RETURN, which names the register.
 #[doc(hidden)]
 pub fn unsigned_trim(
     data: &Funcdata,
@@ -60,7 +60,6 @@ pub fn unsigned_trim(
         return false;
     };
     crate::narrowext::extends_by_sign(data.get_arch().narrow_ext.output, list, &narrow, size)
-        || read_width(data, &narrow, size).is_some_and(|w| w <= 4)
 }
 
 /// Would trimming the RETURN input `vn` to the `size`-byte value under `mask`
@@ -68,9 +67,10 @@ pub fn unsigned_trim(
 /// `narrowext` rule sign-extends a return of that width whatever its type (a
 /// 32-bit value on RISC-V and LoongArch LP64), one whose sign bit may be set.
 /// Where the convention extends it neither so nor by its type's sign (x86-64,
-/// AArch64), one whose callers compute with more than four bytes of the
-/// register ([`read_width`]), whatever its sign: C would compute with the
-/// narrow type where the binary computes in 64 bits. The RETURN must then keep
+/// AArch64), one whose callers compute with more of the register than the value
+/// ([`read_width`]), whatever its sign: those conventions leave the bits above
+/// a narrow return unspecified, so a `bool` or `unsigned char` function
+/// compiled from the printed C need not set the bytes the binary's callers read. The RETURN must then keep
 /// the whole register. Such a trim that no caller has yet computed with wider
 /// is noted on `data`, so that `voidret` can ask the callers.
 #[doc(hidden)]
@@ -99,7 +99,7 @@ pub fn zero_extended_word(
     if any || by_type {
         return any && sign;
     }
-    if read_width(data, &narrow, size).is_some_and(|w| w > 4) {
+    if read_width(data, &narrow, size).is_some() {
         return true;
     }
     data.unlace_note_zext_word(narrow, size, sign);
@@ -108,9 +108,7 @@ pub fn zero_extended_word(
 
 /// How many bytes of the register holding the `size`-byte value at `narrow`
 /// the function's callers compute with, when more than the value
-/// ([`Funcdata::unlace_wide_return`]). Up to four, C's promotion of an unsigned
-/// narrow type to `int` extends it as the binary does; beyond, only a 64-bit
-/// type does.
+/// ([`Funcdata::unlace_wide_return`]).
 fn read_width(data: &Funcdata, narrow: &Address, size: i32) -> Option<i32> {
     data.unlace_wide_return()
         .filter(|(addr, width)| wider_over(addr, *width, narrow, size))

@@ -7180,7 +7180,15 @@ every other binary's pass list is byte-identical to before the pass existed):
   that also sits in a vftable no base accounts for, or whose holders share no
   such class (identical-code folding, `_purecall`), is left untyped. Finally it
   reports each vftable whose first class was typed, with the `rtti` label of
-  that address, and every vftable's slot words. At the analysis commit a third
+  that address, and every vftable's slot words. A vftable walk stops only at a
+  slot that is not code, so a vftable laid directly before another table of code
+  pointers ran into it (SensorService.dll's `Sensors::BrSensor` took an RPC
+  server's dispatch table for 11 more slots, and typed those routines' first
+  parameter `BrSensor *`). Before any of the above, each class's own vftable is
+  cut to the shortest vftable a derived class keeps for its subobject, which is
+  never shorter than the base's, and every vftable is cut at the first slot,
+  past its first, that a pointer-width word of the image points to
+  (`kuna_msvcvtabletypes.rs (trim_overruns)`). At the analysis commit a third
   pass (`crates/unlace-analysis/src/analyzers/rtti/kuna_msvcctors.rs (run)`,
   x86 and x86-64 only) names the constructors and destructors that store a
   class's vftable through `this` and reports their `this` class too (chapter

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<processor_spec>
+  <programcounter register="pc"/>
+  <context_data>
+    <tracked_set space="ram">
+      <set name="zero" val="0"/>
+    </tracked_set>
+  </context_data>
+  <register_data>
+    <register name="ipending" volatile="true"/>
+  </register_data>
+</processor_spec>

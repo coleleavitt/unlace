@@ -419,6 +419,7 @@ kuna_options! { self, p1;
     "uefi" => registered!(crate::kuna_analysisgates::Uefi),
     "cortexmscs" => registered!(crate::kuna_analysisgates::Cortexmscs),
     "com" => registered!(crate::kuna_analysisgates::Com),
+    "comcfg" => registered!(crate::kuna_comcfg::ComCfg),
     "strings" => registered!(crate::kuna_analysisgates::Strings),
     "widestrings" => {
         registered!(crate::kuna_analysisgates::Widestrings)
@@ -542,6 +543,7 @@ kuna_options! { self, p1;
     "goitabcalls" => registered!(crate::kuna_goitabcalls::GoItabCalls),
     "cppsig" => registered!(crate::kuna_cppsig::CppSigMode),
     "dwarfglobaltypes" => registered!(crate::kuna_analysisgates::Dwarfglobaltypes),
+    "dwarfdecls" => registered!(crate::kuna_analysisgates::Dwarfdecls),
     "dwarfscopes" => {
         let (val, msg) = <crate::kuna_analysisgates::DwarfScopes as crate::kuna_optionset::KunaOption>::parse(p1)?;
         // FIXME: Audit that the environment access only happens in single-threaded code.

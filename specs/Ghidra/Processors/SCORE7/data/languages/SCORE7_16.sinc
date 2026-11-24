@@ -1,0 +1,117 @@
+# SCORE7 16-bit instructions, included three times by SCORE7.sinc: as root instructions; as root
+# instructions that are the first half of a parallel-conditional-execution (PCE) pair (the next
+# halfword has its marker set; X16 adds that halfword, D16 shows it, B16/E16 execute it instead
+# when T is clear); and as the subtable pce2 that decodes the second half (T16 = "pce2").
+# Mnemonics are quoted: in a subtable an unquoted word would be read as an operand.
+
+# ---- R-form 1 (op16 = 0) ----
+$(T16):"nop!"$(D16) is $(C16) op16=0 & func16=0$(X16) { $(B16) $(E16)}
+$(T16):"mlfh!" rd16, HighRA$(D16) is $(C16) op16=0 & func16=1 & rd16 & HighRA$(X16) { $(B16) rd16 = HighRA; $(E16)}
+$(T16):"mhfl!" HighRD, ra16$(D16) is $(C16) op16=0 & func16=2 & HighRD & ra16$(X16) { $(B16) HighRD = ra16; $(E16)}
+$(T16):"mv!" rd16, ra16$(D16) is $(C16) op16=0 & func16=3 & rd16 & ra16$(X16) { $(B16) rd16 = ra16; $(E16)}
+$(T16):"br"^BC16^"!" ra16$(D16) is $(C16) op16=0 & func16=4 & BC16 & ra16$(X16) { $(B16)
+    local t:4 = ra16;
+    if (!BC16) goto inst_next;
+    goto [t];
+$(E16)}
+$(T16):"br!" r3$(D16) is $(C16) op16=0 & func16=4 & c16=15 & ra16=3 & r3$(X16) { $(B16) return [r3]; $(E16)}
+$(T16):"br!" ra16$(D16) is $(C16) op16=0 & func16=4 & c16=15 & ra16$(X16) { $(B16) goto [ra16]; $(E16)}
+$(T16):"t"^TC16^"!"$(D16) is $(C16) op16=0 & func16=5 & TC16$(X16) { $(B16) T = TC16; $(E16)}
+$(T16):"tset!"$(D16) is $(C16) op16=0 & func16=5 & c16=15$(X16) { $(B16) T = 1; $(E16)}
+$(T16):"sll!" rd16, ra16$(D16) is $(C16) op16=0 & func16=8 & rd16 & ra16$(X16) { $(B16) rd16 = rd16 << (ra16 & 31); $(E16)}
+$(T16):"addc!" rd16, ra16$(D16) is $(C16) op16=0 & func16=9 & rd16 & ra16$(X16) { $(B16) rd16 = rd16 + ra16 + zext(C); $(E16)}
+$(T16):"srl!" rd16, ra16$(D16) is $(C16) op16=0 & func16=10 & rd16 & ra16$(X16) { $(B16) rd16 = rd16 >> (ra16 & 31); $(E16)}
+$(T16):"sra!" rd16, ra16$(D16) is $(C16) op16=0 & func16=11 & rd16 & ra16$(X16) { $(B16) rd16 = rd16 s>> (ra16 & 31); $(E16)}
+$(T16):"br"^BC16^"l!" ra16$(D16) is $(C16) op16=0 & func16=12 & BC16 & ra16$(X16) { $(B16)
+    local t:4 = ra16;
+    if (!BC16) goto inst_next;
+    r3 = inst_next;
+    call [t];
+$(E16)}
+$(T16):"brl!" ra16$(D16) is $(C16) op16=0 & func16=12 & c16=15 & ra16$(X16) { $(B16) local t:4 = ra16; r3 = inst_next; call [t]; $(E16)}
+
+# ---- custom-engine group (op16 = 1; not in MAME's core) ----
+$(T16):"mtcel!" ra16$(D16) is $(C16) op16=1 & func16=0 & rdn16=0 & ra16$(X16) { $(B16) cel = ra16; $(E16)}
+$(T16):"mtceh!" ra16$(D16) is $(C16) op16=1 & func16=0 & rdn16=1 & ra16$(X16) { $(B16) ceh = ra16; $(E16)}
+$(T16):"mfcel!" ra16$(D16) is $(C16) op16=1 & func16=1 & rdn16=0 & ra16$(X16) { $(B16) ra16 = cel; $(E16)}
+$(T16):"mfceh!" ra16$(D16) is $(C16) op16=1 & func16=1 & rdn16=1 & ra16$(X16) { $(B16) ra16 = ceh; $(E16)}
+# mul.f! and mulu! as the 32-bit mul.f (= mul in MAME) and mulu
+$(T16):"mul.f!" rd16, ra16$(D16) is $(C16) op16=1 & func16=2 & rd16 & ra16$(X16) { $(B16)
+    local p:8 = sext(rd16) * sext(ra16); cel = p:4; ceh = p(4);
+$(E16)}
+$(T16):"mulu!" rd16, ra16$(D16) is $(C16) op16=1 & func16=3 & rd16 & ra16$(X16) { $(B16)
+    local p:8 = zext(rd16) * zext(ra16); cel = p:4; ceh = p(4);
+$(E16)}
+$(T16):^MAC16 rd16, ra16$(D16) is $(C16) op16=1 & MAC16 & rd16 & ra16$(X16) { $(B16)
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(MAC16, acc, rd16, ra16);
+    cel = acc:4; ceh = acc(4);
+$(E16)}
+
+# ---- R-form 2 (op16 = 2) ----
+$(T16):"add!" rd16, ra16$(D16) is $(C16) op16=2 & func16=0 & rd16 & ra16$(X16) { $(B16)
+    local a:4 = rd16; local b:4 = ra16; local r:4 = a + b; addflags(a, b, r); rd16 = r;
+$(E16)}
+$(T16):"sub!" rd16, ra16$(D16) is $(C16) op16=2 & func16=1 & rd16 & ra16$(X16) { $(B16)
+    local a:4 = rd16; local b:4 = ra16; local r:4 = a - b; subflags(a, b, r); rd16 = r;
+$(E16)}
+$(T16):"neg!" rd16, ra16$(D16) is $(C16) op16=2 & func16=2 & rd16 & ra16$(X16) { $(B16)
+    local b:4 = ra16; local r:4 = 0 - b; subflags(0:4, b, r); rd16 = r;
+$(E16)}
+$(T16):"cmp!" rd16, ra16$(D16) is $(C16) op16=2 & func16=3 & rd16 & ra16$(X16) { $(B16)
+    local a:4 = rd16; local b:4 = ra16; local r:4 = a - b; subflags(a, b, r);
+$(E16)}
+$(T16):"and!" rd16, ra16$(D16) is $(C16) op16=2 & func16=4 & rd16 & ra16$(X16) { $(B16) local r:4 = rd16 & ra16; zn(r); rd16 = r; $(E16)}
+$(T16):"or!" rd16, ra16$(D16) is $(C16) op16=2 & func16=5 & rd16 & ra16$(X16) { $(B16) local r:4 = rd16 | ra16; zn(r); rd16 = r; $(E16)}
+$(T16):"not!" rd16, ra16$(D16) is $(C16) op16=2 & func16=6 & rd16 & ra16$(X16) { $(B16) local r:4 = ~ra16; zn(r); rd16 = r; $(E16)}
+$(T16):"xor!" rd16, ra16$(D16) is $(C16) op16=2 & func16=7 & rd16 & ra16$(X16) { $(B16) local r:4 = rd16 ^ ra16; zn(r); rd16 = r; $(E16)}
+$(T16):"lw!" rd16, "["^ra16^"]"$(D16) is $(C16) op16=2 & func16=8 & rd16 & ra16$(X16) { $(B16) rd16 = *:4 ra16; $(E16)}
+$(T16):"lh!" rd16, "["^ra16^"]"$(D16) is $(C16) op16=2 & func16=9 & rd16 & ra16$(X16) { $(B16) rd16 = sext(*:2 ra16); $(E16)}
+$(T16):"pop!" PReg, "["^preg_base^"]"$(D16) is $(C16) op16=2 & func16=10 & PReg & preg_base$(X16) { $(B16)
+    local a:4 = preg_base; preg_base = a + 4; PReg = *:4 a;
+$(E16)}
+$(T16):"lbu!" rd16, "["^ra16^"]"$(D16) is $(C16) op16=2 & func16=11 & rd16 & ra16$(X16) { $(B16) rd16 = zext(*:1 ra16); $(E16)}
+$(T16):"sw!" rd16, "["^ra16^"]"$(D16) is $(C16) op16=2 & func16=12 & rd16 & ra16$(X16) { $(B16) *:4 ra16 = rd16; $(E16)}
+$(T16):"sh!" rd16, "["^ra16^"]"$(D16) is $(C16) op16=2 & func16=13 & rd16 & ra16$(X16) { $(B16) *:2 ra16 = rd16:2; $(E16)}
+$(T16):"push!" PReg, "["^preg_base^"]"$(D16) is $(C16) op16=2 & func16=14 & PReg & preg_base$(X16) { $(B16)
+    local v:4 = PReg; local a:4 = preg_base - 4; preg_base = a; *:4 a = v;
+$(E16)}
+$(T16):"sb!" rd16, "["^ra16^"]"$(D16) is $(C16) op16=2 & func16=15 & rd16 & ra16$(X16) { $(B16) *:1 ra16 = rd16:1; $(E16)}
+
+# ---- J-form (op16 = 3) and branch (op16 = 4) ----
+$(T16):"j!" JTarget16$(D16) is $(C16) op16=3 & lk16=0 & JTarget16$(X16) { $(B16) goto JTarget16; $(E16)}
+$(T16):"jl!" JTarget16$(D16) is $(C16) op16=3 & lk16=1 & JTarget16$(X16) { $(B16) r3 = inst_next; call JTarget16; $(E16)}
+$(T16):"b"^BC16^"!" BTarget16$(D16) is $(C16) op16=4 & BC16 & BTarget16$(X16) { $(B16) if (BC16) goto BTarget16; $(E16)}
+$(T16):"b!" BTarget16$(D16) is $(C16) op16=4 & c16=15 & BTarget16$(X16) { $(B16) goto BTarget16; $(E16)}
+
+# ---- ldiu! (op16 = 5) ----
+$(T16):"ldiu!" rd16, imm8$(D16) is $(C16) op16=5 & rd16 & imm8$(X16) { $(B16) rd16 = imm8; $(E16)}
+
+# ---- I-form 1a (op16 = 6) ----
+$(T16):"addei!" rd16, imm4$(D16) is $(C16) op16=6 & i16_func3=0 & imm_sign=0 & rd16 & imm4$(X16) { $(B16)
+    local r:4 = rd16 + (1 << imm4); zn(r); rd16 = r;
+$(E16)}
+$(T16):"subei!" rd16, imm4$(D16) is $(C16) op16=6 & i16_func3=0 & imm_sign=1 & rd16 & imm4$(X16) { $(B16)
+    local r:4 = rd16 - (1 << imm4); zn(r); rd16 = r;
+$(E16)}
+$(T16):"slli!" rd16, imm5$(D16) is $(C16) op16=6 & i16_func3=1 & rd16 & imm5$(X16) { $(B16)
+    local a:4 = rd16; local s:4 = imm5; local r:4 = a << s;
+    C = (s != 0) && (((a >> (32 - s)) & 1) != 0); zn(r); rd16 = r;
+$(E16)}
+$(T16):"sdbbp!" imm5$(D16) is $(C16) op16=6 & i16_func3=2 & imm5$(X16) { $(B16) local code:1 = imm5; debug_break(code); $(E16)}
+$(T16):"srli!" rd16, imm5$(D16) is $(C16) op16=6 & i16_func3=3 & rd16 & imm5$(X16) { $(B16)
+    local a:4 = rd16; local s:4 = imm5; local r:4 = a >> s;
+    C = (s != 0) && (((a >> (s - 1)) & 1) != 0); zn(r); rd16 = r;
+$(E16)}
+$(T16):"bitclr!" rd16, imm5$(D16) is $(C16) op16=6 & i16_func3=4 & rd16 & imm5$(X16) { $(B16) local r:4 = rd16 & ~(1 << imm5); zn(r); rd16 = r; $(E16)}
+$(T16):"bitset!" rd16, imm5$(D16) is $(C16) op16=6 & i16_func3=5 & rd16 & imm5$(X16) { $(B16) local r:4 = rd16 | (1 << imm5); zn(r); rd16 = r; $(E16)}
+$(T16):"bittst!" rd16, imm5$(D16) is $(C16) op16=6 & i16_func3=6 & rd16 & imm5$(X16) { $(B16) local a:4 = rd16; N = a s< 0; Z = (a & (1 << imm5)) == 0; $(E16)}
+$(T16):"bittgl!" rd16, imm5$(D16) is $(C16) op16=6 & i16_func3=7 & rd16 & imm5$(X16) { $(B16) local r:4 = rd16 ^ (1 << imm5); zn(r); rd16 = r; $(E16)}
+
+# ---- I-form 1b (op16 = 7): r2 (frame pointer) + scaled offset ----
+$(T16):"lwp!" rd16, Off4$(D16) is $(C16) op16=7 & i16_func3=0 & rd16 & Off4$(X16) { $(B16) local a:4 = r2 + Off4; rd16 = *:4 a; $(E16)}
+$(T16):"lhp!" rd16, Off2$(D16) is $(C16) op16=7 & i16_func3=1 & rd16 & Off2$(X16) { $(B16) local a:4 = r2 + Off2; rd16 = sext(*:2 a); $(E16)}
+$(T16):"lbup!" rd16, imm5$(D16) is $(C16) op16=7 & i16_func3=3 & rd16 & imm5$(X16) { $(B16) local a:4 = r2 + imm5; rd16 = zext(*:1 a); $(E16)}
+$(T16):"swp!" rd16, Off4$(D16) is $(C16) op16=7 & i16_func3=4 & rd16 & Off4$(X16) { $(B16) local a:4 = r2 + Off4; *:4 a = rd16; $(E16)}
+$(T16):"shp!" rd16, Off2$(D16) is $(C16) op16=7 & i16_func3=5 & rd16 & Off2$(X16) { $(B16) local a:4 = r2 + Off2; *:2 a = rd16:2; $(E16)}
+$(T16):"sbp!" rd16, imm5$(D16) is $(C16) op16=7 & i16_func3=7 & rd16 & imm5$(X16) { $(B16) local a:4 = r2 + imm5; *:1 a = rd16:1; $(E16)}

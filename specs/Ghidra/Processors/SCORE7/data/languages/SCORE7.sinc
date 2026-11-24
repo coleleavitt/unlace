@@ -1,0 +1,1021 @@
+# Sunplus S+CORE 7 / SCORE7
+# Native Ghidra SLEIGH processor definition.
+#
+# Originally written by Arthur Koba (Ghidra pull request #9671, Apache License 2.0), from MAME's
+# BSD-3-Clause SCORE7 core (behaviour) with GNU binutils as an encoding/decode oracle. Reworked by
+# Ghidra-Rare after differential testing against GNU objdump 2.45 (-m score7), MAME's core and
+# disassembler, and code compiled with GCC 4.5.4 (score-elf); see CREDITS.md for the changes.
+#
+# SCORE7 uses 16-bit and 32-bit instructions. Bit 15 of each halfword is a marker: a 32-bit
+# instruction has both markers set (the logical 30-bit opcode omits them), a halfword with the
+# marker clear is a 16-bit instruction, and a 16-bit instruction followed by a halfword with the
+# marker set is a parallel-conditional-execution (PCE) pair. Halfwords are in program order in
+# both byte orders (the first halfword is the high half of a big-endian 32-bit word and the low
+# half of a little-endian one). An instruction at an address that is 2 mod 4 is always 16-bit.
+#
+# Syntax follows objdump: "[ra, imm]" offsets, "[ra, imm]+" pre-increment, "[ra]+, imm"
+# post-increment, ".c" for condition-flag updates, "!" for 16-bit instructions.
+
+define endian=$(ENDIAN);
+define alignment=2;
+
+define space ram type=ram_space size=4 wordsize=1 default;
+define space register type=register_space size=4;
+
+define register offset=0x000 size=4
+[ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 ];
+
+# GCC SCORE ABI: r0 is the stack pointer, r2 the frame pointer, r3 the return-address/link
+# register, r28 the global pointer (objdump prints "gp"), r29 the PIC register.
+
+define register offset=0x100 size=4
+[ cr0 cr1 cr2 cr3 cr4 cr5 cr6 cr7 cr8 cr9 cr10 cr11 cr12 cr13 cr14 cr15 cr16 cr17 cr18 cr19 cr20 cr21 cr22 cr23 cr24 cr25 cr26 cr27 cr28 cr29 cr30 cr31 ];
+
+# Control registers: cr0 = PSR, cr1 = condition register, cr2 = ECR, cr3 = EXCPVEC, cr5 = EPC,
+# cr6 = EMA. The condition flags of cr1 (bits 4..0: T N Z C V) are kept in the flag registers
+# below so that the decompiler sees them separately; mtcr/mfcr of cr1 and rte move them.
+
+define register offset=0x200 size=4
+[ sr0 sr1 sr2 sr3 sr4 sr5 sr6 sr7 sr8 sr9 sr10 sr11 sr12 sr13 sr14 sr15 sr16 sr17 sr18 sr19 sr20 sr21 sr22 sr23 sr24 sr25 sr26 sr27 sr28 sr29 sr30 sr31 ];
+
+# Special registers: sr0 = CNT (loop counter of the "cnz" condition), sr1 = LCR, sr2 = SCR.
+
+define register offset=0x280 size=4 [ ceh cel ];
+define register offset=0x290 size=1 [ V C Z N T ];
+define register offset=0x300 size=4 pc;
+
+# Transient decode context: an instruction that starts at an address that is 2 mod 4 is 16-bit.
+define register offset=0x304 size=4 score_context;
+define context score_context
+    decode_phase = (0,0) noflow
+    packet_half  = (1,1) noflow
+;
+
+# Operations without a public (non-GPL) description of their effect, or with effects outside
+# the CPU core (exceptions, caches, TLB, coprocessors, custom engine).
+define pcodeop syscall;
+define pcodeop trap;
+define pcodeop debug_break;
+define pcodeop pflush;
+define pcodeop cache;
+define pcodeop sleep;
+define pcodeop tlb_op;
+define pcodeop drte;
+define pcodeop parity_error;
+define pcodeop ceinst;
+define pcodeop ce_mac;            # DSP multiply-accumulate forms of the custom engine
+define pcodeop ce_op;             # other custom-engine operations (min, max, saturating ...)
+define pcodeop custom_engine;     # lcb/lcw/lce/scb/scw/sce
+define pcodeop coprocessor_to;    # mtcN / mtccN / ldcN
+define pcodeop coprocessor_from;  # mfcN / mfccN / stcN
+define pcodeop coprocessor_op;    # copN
+
+# Physical 32-bit encoding (bits 31 and 15 are the halfword markers).
+define token score32(32)
+    p_lo        = (15,15)
+    p_hi        = (31,31)
+    major32     = (26,30)
+    rd32        = (21,25)
+    ra32        = (16,20)
+    rb32        = (10,14)
+    crd         = (21,25)
+    cra         = (16,20)
+    crb         = (10,14)
+    rdnum       = (21,25)
+    ranum       = (16,20)
+    rbnum       = (10,14)
+    rb_lo2      = (10,11)
+    rbsel       = (10,14)
+    rbdec       = (10,14)
+    c32         = (10,13)
+    c32_hi      = (14,14)
+    spad        = (7,9)
+    func6       = (1,6)
+    cu          = (0,0)
+
+    code_lo     = (10,14)
+    code_mid    = (16,20)
+    code_hi     = (21,25)
+
+    ifunc3      = (18,20)
+    imm16_lo    = (1,14)
+    imm16_hi    = (16,17)
+    imm16_hi_s  = (16,17) signed
+
+    ri_imm14    = (1,14)
+    ri_imm14_s  = (1,14) signed
+
+    jdisp_lo    = (1,14)
+    jdisp_hi    = (16,25)
+
+    bc_disp_lo  = (1,9)
+    bc_disp_hi_s= (16,25) signed
+
+    rix_func3   = (0,2)
+    rix_imm12   = (3,14) signed
+
+    cr_op5      = (0,4)
+    cr_op8      = (0,7)
+    cr_b89      = (8,9)
+    cp_num      = (3,4)
+    cp_sub      = (0,2)
+    cp_imm5     = (5,9)
+    cp_imm10    = (5,14) signed
+
+    ls_imm15    = (0,14) signed
+
+    ce_a        = (5,9)
+    ce_b        = (0,4)
+;
+
+# Physical 16-bit encoding. Bit 15 is the marker.
+define token score16(16)
+    p16         = (15,15)
+    op16        = (12,14)
+    rd16        = (8,11)
+    ra16        = (4,7)
+    rdn16       = (8,11)
+    c16         = (8,11)
+    func16      = (0,3)
+
+    j11         = (1,11)
+    lk16        = (0,0)
+
+    b8          = (0,7) signed
+
+    imm8        = (0,7)
+    i16_func3   = (0,2)
+    imm5        = (3,7)
+    imm4        = (3,6)
+    imm_sign    = (7,7)
+
+    preg_base   = (4,6)
+    preg_hi     = (7,7)
+    preg_lo     = (8,11)
+;
+
+attach variables [ rd32 ra32 rb32 ] [
+    r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31
+];
+
+# Coprocessor registers (no Ghidra state: the coprocessor is external to the core)
+attach names [ crd cra crb ] [
+    cr0 cr1 cr2 cr3 cr4 cr5 cr6 cr7 cr8 cr9 cr10 cr11 cr12 cr13 cr14 cr15 cr16 cr17 cr18 cr19 cr20 cr21 cr22 cr23 cr24 cr25 cr26 cr27 cr28 cr29 cr30 cr31
+];
+
+attach names [ rbdec ] [
+    er0 er1 er2 er3 er4 er5 er6 er7 er8 er9 er10 er11 er12 er13 er14 er15 er16 er17 er18 er19 er20 er21 er22 er23 er24 er25 er26 er27 er28 er29 er30 er31
+];
+
+attach variables [ rd16 ra16 ] [
+    r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15
+];
+
+attach variables [ preg_base ] [
+    r0 r1 r2 r3 r4 r5 r6 r7
+];
+
+# ----- operands -----
+
+CR: cr0  is ra32=0 & cr0 { export cr0; }
+CR: cr2  is ra32=2 & cr2 { export cr2; }
+CR: cr3  is ra32=3 & cr3 { export cr3; }
+CR: cr4  is ra32=4 & cr4 { export cr4; }
+CR: cr5  is ra32=5 & cr5 { export cr5; }
+CR: cr6  is ra32=6 & cr6 { export cr6; }
+CR: cr7  is ra32=7 & cr7 { export cr7; }
+CR: cr8  is ra32=8 & cr8 { export cr8; }
+CR: cr9  is ra32=9 & cr9 { export cr9; }
+CR: cr10 is ra32=10 & cr10 { export cr10; }
+CR: cr11 is ra32=11 & cr11 { export cr11; }
+CR: cr12 is ra32=12 & cr12 { export cr12; }
+CR: cr13 is ra32=13 & cr13 { export cr13; }
+CR: cr14 is ra32=14 & cr14 { export cr14; }
+CR: cr15 is ra32=15 & cr15 { export cr15; }
+CR: cr16 is ra32=16 & cr16 { export cr16; }
+CR: cr17 is ra32=17 & cr17 { export cr17; }
+CR: cr18 is ra32=18 & cr18 { export cr18; }
+CR: cr19 is ra32=19 & cr19 { export cr19; }
+CR: cr20 is ra32=20 & cr20 { export cr20; }
+CR: cr21 is ra32=21 & cr21 { export cr21; }
+CR: cr22 is ra32=22 & cr22 { export cr22; }
+CR: cr23 is ra32=23 & cr23 { export cr23; }
+CR: cr24 is ra32=24 & cr24 { export cr24; }
+CR: cr25 is ra32=25 & cr25 { export cr25; }
+CR: cr26 is ra32=26 & cr26 { export cr26; }
+CR: cr27 is ra32=27 & cr27 { export cr27; }
+CR: cr28 is ra32=28 & cr28 { export cr28; }
+CR: cr29 is ra32=29 & cr29 { export cr29; }
+CR: cr30 is ra32=30 & cr30 { export cr30; }
+CR: cr31 is ra32=31 & cr31 { export cr31; }
+
+SR: sr0  is rb32=0 & sr0 { export sr0; }
+SR: sr1  is rb32=1 & sr1 { export sr1; }
+SR: sr2  is rb32=2 & sr2 { export sr2; }
+SR: sr3  is rb32=3 & sr3 { export sr3; }
+SR: sr4  is rb32=4 & sr4 { export sr4; }
+SR: sr5  is rb32=5 & sr5 { export sr5; }
+SR: sr6  is rb32=6 & sr6 { export sr6; }
+SR: sr7  is rb32=7 & sr7 { export sr7; }
+SR: sr8  is rb32=8 & sr8 { export sr8; }
+SR: sr9  is rb32=9 & sr9 { export sr9; }
+SR: sr10 is rb32=10 & sr10 { export sr10; }
+SR: sr11 is rb32=11 & sr11 { export sr11; }
+SR: sr12 is rb32=12 & sr12 { export sr12; }
+SR: sr13 is rb32=13 & sr13 { export sr13; }
+SR: sr14 is rb32=14 & sr14 { export sr14; }
+SR: sr15 is rb32=15 & sr15 { export sr15; }
+SR: sr16 is rb32=16 & sr16 { export sr16; }
+SR: sr17 is rb32=17 & sr17 { export sr17; }
+SR: sr18 is rb32=18 & sr18 { export sr18; }
+SR: sr19 is rb32=19 & sr19 { export sr19; }
+SR: sr20 is rb32=20 & sr20 { export sr20; }
+SR: sr21 is rb32=21 & sr21 { export sr21; }
+SR: sr22 is rb32=22 & sr22 { export sr22; }
+SR: sr23 is rb32=23 & sr23 { export sr23; }
+SR: sr24 is rb32=24 & sr24 { export sr24; }
+SR: sr25 is rb32=25 & sr25 { export sr25; }
+SR: sr26 is rb32=26 & sr26 { export sr26; }
+SR: sr27 is rb32=27 & sr27 { export sr27; }
+SR: sr28 is rb32=28 & sr28 { export sr28; }
+SR: sr29 is rb32=29 & sr29 { export sr29; }
+SR: sr30 is rb32=30 & sr30 { export sr30; }
+SR: sr31 is rb32=31 & sr31 { export sr31; }
+
+SImm16: val is imm16_lo & imm16_hi_s [ val = (imm16_hi_s << 14) | imm16_lo; ] { export *[const]:4 val; }
+UImm16: val is imm16_lo & imm16_hi [ val = (imm16_hi << 14) | imm16_lo; ] { export *[const]:4 val; }
+HImm16: val is imm16_lo & imm16_hi [ val = (imm16_hi << 14) | imm16_lo; ] { local v:4 = val << 16; export v; }
+SImm14: ri_imm14_s is ri_imm14_s { export *[const]:4 ri_imm14_s; }
+UImm14: ri_imm14 is ri_imm14 { export *[const]:4 ri_imm14; }
+
+# Cache operations: the codes objdump decodes (the others are reserved)
+CacheOp: rdnum is (code_hi<5 | (code_hi>7 & code_hi<15) | code_hi=16 | code_hi=17 | code_hi=24 | code_hi>25) & rdnum { export *[const]:1 rdnum; }
+
+# syscall code: the rd, ra and rb fields
+SysCode: val is code_hi & code_mid & code_lo [ val = (code_hi << 10) | (code_mid << 5) | code_lo; ] { export *[const]:4 val; }
+
+JTarget32: addr is jdisp_lo & jdisp_hi
+    [ addr = (inst_start & 0xfe000000) | (((jdisp_hi << 14) | jdisp_lo) << 1); ]
+    { export *:4 addr; }
+
+BTarget32: addr is bc_disp_lo & bc_disp_hi_s
+    [ addr = inst_start + (((bc_disp_hi_s << 9) | bc_disp_lo) << 1); ]
+    { export *:4 addr; }
+
+# Memory operands
+EA15: "["^ra32^", "^ls_imm15^"]" is ra32 & ls_imm15 { local a:4 = ra32 + ls_imm15; export a; }
+PreInc: "["^ra32^", "^rix_imm12^"]+" is ra32 & rix_imm12 { ra32 = ra32 + rix_imm12; export ra32; }
+PostInc: "["^ra32^"]+, "^rix_imm12 is ra32 & rix_imm12 { local a:4 = ra32; ra32 = ra32 + rix_imm12; export a; }
+CPEA: "["^rd32^", "^off^"]" is rd32 & cp_imm10 [ off = cp_imm10 << 2; ] { local a:4 = rd32 + off; export a; }
+
+# ----- flag helpers -----
+
+macro zn(value) {
+    Z = (value == 0);
+    N = (value s< 0);
+}
+
+macro addflags(a, b, result) {
+    zn(result);
+    C = carry(a, b);
+    V = scarry(a, b);
+}
+
+macro subflags(a, b, result) {
+    zn(result);
+    C = (a >= b);
+    V = sborrow(a, b);
+}
+
+macro getcr1(val) {
+    val = (cr1 & 0xffffffe0) | zext(V) | (zext(C) << 1) | (zext(Z) << 2) | (zext(N) << 3) | (zext(T) << 4);
+}
+
+macro setcr1(val) {
+    cr1 = val;
+    V = (val & 1) != 0;
+    C = (val & 2) != 0;
+    Z = (val & 4) != 0;
+    N = (val & 8) != 0;
+    T = (val & 0x10) != 0;
+}
+
+# ----- conditions (16 codes; 14 is "CNT > 0", 15 always) -----
+# Branches decrement CNT (sr0) when they test "cnz" and it is non-zero; t, mv and trap do not.
+
+BC32: "cs"  is c32=0  { export C; }
+BC32: "cc"  is c32=1  { local t:1 = !C; export t; }
+BC32: "gtu" is c32=2  { local t:1 = C && !Z; export t; }
+BC32: "leu" is c32=3  { local t:1 = !C || Z; export t; }
+BC32: "eq"  is c32=4  { export Z; }
+BC32: "ne"  is c32=5  { local t:1 = !Z; export t; }
+BC32: "gt"  is c32=6  { local t:1 = !Z && (N == V); export t; }
+BC32: "le"  is c32=7  { local t:1 = Z || (N != V); export t; }
+BC32: "ge"  is c32=8  { local t:1 = (N == V); export t; }
+BC32: "lt"  is c32=9  { local t:1 = (N != V); export t; }
+BC32: "mi"  is c32=10 { export N; }
+BC32: "pl"  is c32=11 { local t:1 = !N; export t; }
+BC32: "vs"  is c32=12 { export V; }
+BC32: "vc"  is c32=13 { local t:1 = !V; export t; }
+BC32: "cnz" is c32=14 { local t:1 = sr0 != 0; sr0 = sr0 - zext(t); export t; }
+
+TC32: "cs"  is c32=0  { export C; }
+TC32: "cc"  is c32=1  { local t:1 = !C; export t; }
+TC32: "gtu" is c32=2  { local t:1 = C && !Z; export t; }
+TC32: "leu" is c32=3  { local t:1 = !C || Z; export t; }
+TC32: "eq"  is c32=4  { export Z; }
+TC32: "ne"  is c32=5  { local t:1 = !Z; export t; }
+TC32: "gt"  is c32=6  { local t:1 = !Z && (N == V); export t; }
+TC32: "le"  is c32=7  { local t:1 = Z || (N != V); export t; }
+TC32: "ge"  is c32=8  { local t:1 = (N == V); export t; }
+TC32: "lt"  is c32=9  { local t:1 = (N != V); export t; }
+TC32: "mi"  is c32=10 { export N; }
+TC32: "pl"  is c32=11 { local t:1 = !N; export t; }
+TC32: "vs"  is c32=12 { export V; }
+TC32: "vc"  is c32=13 { local t:1 = !V; export t; }
+
+BC16: "cs"  is c16=0  { export C; }
+BC16: "cc"  is c16=1  { local t:1 = !C; export t; }
+BC16: "gtu" is c16=2  { local t:1 = C && !Z; export t; }
+BC16: "leu" is c16=3  { local t:1 = !C || Z; export t; }
+BC16: "eq"  is c16=4  { export Z; }
+BC16: "ne"  is c16=5  { local t:1 = !Z; export t; }
+BC16: "gt"  is c16=6  { local t:1 = !Z && (N == V); export t; }
+BC16: "le"  is c16=7  { local t:1 = Z || (N != V); export t; }
+BC16: "ge"  is c16=8  { local t:1 = (N == V); export t; }
+BC16: "lt"  is c16=9  { local t:1 = (N != V); export t; }
+BC16: "mi"  is c16=10 { export N; }
+BC16: "pl"  is c16=11 { local t:1 = !N; export t; }
+BC16: "vs"  is c16=12 { export V; }
+BC16: "vc"  is c16=13 { local t:1 = !V; export t; }
+BC16: "cnz" is c16=14 { local t:1 = sr0 != 0; sr0 = sr0 - zext(t); export t; }
+
+TC16: "cs"  is c16=0  { export C; }
+TC16: "cc"  is c16=1  { local t:1 = !C; export t; }
+TC16: "gtu" is c16=2  { local t:1 = C && !Z; export t; }
+TC16: "leu" is c16=3  { local t:1 = !C || Z; export t; }
+TC16: "eq"  is c16=4  { export Z; }
+TC16: "ne"  is c16=5  { local t:1 = !Z; export t; }
+TC16: "gt"  is c16=6  { local t:1 = !Z && (N == V); export t; }
+TC16: "le"  is c16=7  { local t:1 = Z || (N != V); export t; }
+TC16: "ge"  is c16=8  { local t:1 = (N == V); export t; }
+TC16: "lt"  is c16=9  { local t:1 = (N != V); export t; }
+TC16: "mi"  is c16=10 { export N; }
+TC16: "pl"  is c16=11 { local t:1 = !N; export t; }
+TC16: "vs"  is c16=12 { export V; }
+TC16: "vc"  is c16=13 { local t:1 = !V; export t; }
+TC16: "cnz" is c16=14 { local t:1 = sr0 != 0; export t; }
+
+# ----- 16-bit operands -----
+JTarget16: addr is j11 [ addr = (inst_start & 0xfffff000) | (j11 << 1); ] { export *:4 addr; }
+BTarget16: addr is b8 [ addr = inst_start + (b8 << 1); ] { export *:4 addr; }
+
+# lwp!/swp! and lhp!/shp! offsets (scaled; shown in bytes as objdump does)
+Off4: off is imm5 [ off = imm5 << 2; ] { export *[const]:4 off; }
+Off2: off is imm5 [ off = imm5 << 1; ] { export *[const]:4 off; }
+
+# push!/pop! register: bit 7 is bit 4 of the register number
+PReg: r0 is preg_hi=0 & preg_lo=0 & r0 { export r0; }
+PReg: r1 is preg_hi=0 & preg_lo=1 & r1 { export r1; }
+PReg: r2 is preg_hi=0 & preg_lo=2 & r2 { export r2; }
+PReg: r3 is preg_hi=0 & preg_lo=3 & r3 { export r3; }
+PReg: r4 is preg_hi=0 & preg_lo=4 & r4 { export r4; }
+PReg: r5 is preg_hi=0 & preg_lo=5 & r5 { export r5; }
+PReg: r6 is preg_hi=0 & preg_lo=6 & r6 { export r6; }
+PReg: r7 is preg_hi=0 & preg_lo=7 & r7 { export r7; }
+PReg: r8 is preg_hi=0 & preg_lo=8 & r8 { export r8; }
+PReg: r9 is preg_hi=0 & preg_lo=9 & r9 { export r9; }
+PReg: r10 is preg_hi=0 & preg_lo=10 & r10 { export r10; }
+PReg: r11 is preg_hi=0 & preg_lo=11 & r11 { export r11; }
+PReg: r12 is preg_hi=0 & preg_lo=12 & r12 { export r12; }
+PReg: r13 is preg_hi=0 & preg_lo=13 & r13 { export r13; }
+PReg: r14 is preg_hi=0 & preg_lo=14 & r14 { export r14; }
+PReg: r15 is preg_hi=0 & preg_lo=15 & r15 { export r15; }
+PReg: r16 is preg_hi=1 & preg_lo=0 & r16 { export r16; }
+PReg: r17 is preg_hi=1 & preg_lo=1 & r17 { export r17; }
+PReg: r18 is preg_hi=1 & preg_lo=2 & r18 { export r18; }
+PReg: r19 is preg_hi=1 & preg_lo=3 & r19 { export r19; }
+PReg: r20 is preg_hi=1 & preg_lo=4 & r20 { export r20; }
+PReg: r21 is preg_hi=1 & preg_lo=5 & r21 { export r21; }
+PReg: r22 is preg_hi=1 & preg_lo=6 & r22 { export r22; }
+PReg: r23 is preg_hi=1 & preg_lo=7 & r23 { export r23; }
+PReg: r24 is preg_hi=1 & preg_lo=8 & r24 { export r24; }
+PReg: r25 is preg_hi=1 & preg_lo=9 & r25 { export r25; }
+PReg: r26 is preg_hi=1 & preg_lo=10 & r26 { export r26; }
+PReg: r27 is preg_hi=1 & preg_lo=11 & r27 { export r27; }
+PReg: r28 is preg_hi=1 & preg_lo=12 & r28 { export r28; }
+PReg: r29 is preg_hi=1 & preg_lo=13 & r29 { export r29; }
+PReg: r30 is preg_hi=1 & preg_lo=14 & r30 { export r30; }
+PReg: r31 is preg_hi=1 & preg_lo=15 & r31 { export r31; }
+
+# mlfh!/mhfl!: the high register bank r16-r31
+HighRA: r16 is ra16=0 & r16 { export r16; }
+HighRA: r17 is ra16=1 & r17 { export r17; }
+HighRA: r18 is ra16=2 & r18 { export r18; }
+HighRA: r19 is ra16=3 & r19 { export r19; }
+HighRA: r20 is ra16=4 & r20 { export r20; }
+HighRA: r21 is ra16=5 & r21 { export r21; }
+HighRA: r22 is ra16=6 & r22 { export r22; }
+HighRA: r23 is ra16=7 & r23 { export r23; }
+HighRA: r24 is ra16=8 & r24 { export r24; }
+HighRA: r25 is ra16=9 & r25 { export r25; }
+HighRA: r26 is ra16=10 & r26 { export r26; }
+HighRA: r27 is ra16=11 & r27 { export r27; }
+HighRA: r28 is ra16=12 & r28 { export r28; }
+HighRA: r29 is ra16=13 & r29 { export r29; }
+HighRA: r30 is ra16=14 & r30 { export r30; }
+HighRA: r31 is ra16=15 & r31 { export r31; }
+HighRD: r16 is rd16=0 & r16 { export r16; }
+HighRD: r17 is rd16=1 & r17 { export r17; }
+HighRD: r18 is rd16=2 & r18 { export r18; }
+HighRD: r19 is rd16=3 & r19 { export r19; }
+HighRD: r20 is rd16=4 & r20 { export r20; }
+HighRD: r21 is rd16=5 & r21 { export r21; }
+HighRD: r22 is rd16=6 & r22 { export r22; }
+HighRD: r23 is rd16=7 & r23 { export r23; }
+HighRD: r24 is rd16=8 & r24 { export r24; }
+HighRD: r25 is rd16=9 & r25 { export r25; }
+HighRD: r26 is rd16=10 & r26 { export r26; }
+HighRD: r27 is rd16=11 & r27 { export r27; }
+HighRD: r28 is rd16=12 & r28 { export r28; }
+HighRD: r29 is rd16=13 & r29 { export r29; }
+HighRD: r30 is rd16=14 & r30 { export r30; }
+HighRD: r31 is rd16=15 & r31 { export r31; }
+
+# 16-bit multiply-accumulate forms (custom engine)
+MAC16: "mad.f!"   is func16=4  { export 0x84:1; }
+MAC16: "madu!"    is func16=5  { export 0x85:1; }
+MAC16: "msb.f!"   is func16=6  { export 0x86:1; }
+MAC16: "msbu!"    is func16=7  { export 0x87:1; }
+MAC16: "mazl.f!"  is func16=8  { export 0x88:1; }
+MAC16: "mazh.f!"  is func16=9  { export 0x89:1; }
+MAC16: "madl.fs!" is func16=10 { export 0x8a:1; }
+MAC16: "madh.fs!" is func16=11 { export 0x8b:1; }
+MAC16: "mszl.f!"  is func16=12 { export 0x8c:1; }
+MAC16: "mszh.f!"  is func16=13 { export 0x8d:1; }
+MAC16: "msbl.fs!" is func16=14 { export 0x8e:1; }
+MAC16: "msbh.fs!" is func16=15 { export 0x8f:1; }
+
+# Root wrapper: set the transient address phase before matching the real instruction.
+:^instruction is decode_phase=0 & instruction
+    [ packet_half = (inst_start >> 1) $and 1; decode_phase=1; ]
+    { build instruction; }
+
+# ---- 16-bit instructions (SCORE7_16.sinc: as root instructions and as the two halves of a PCE
+# pair, which are the tables pce1/pce2) ----
+@define T16 ""
+@define C16 "decode_phase=1 & p16=0 &"
+@define D16 ""
+@define X16 ""
+@define B16 ""
+@define E16 ""
+@include "SCORE7_16.sinc"
+@undef T16
+@undef C16
+@undef D16
+@undef X16
+@undef B16
+@undef E16
+@define T16 "pce2"
+@define C16 ""
+@define D16 ""
+@define X16 ""
+@define B16 ""
+@define E16 ""
+@include "SCORE7_16.sinc"
+@undef T16
+@undef C16
+@undef D16
+@undef X16
+@undef B16
+@undef E16
+PCESEP: " || " is epsilon { }
+
+# Parallel conditional execution: a 16-bit instruction followed by a halfword with its marker set
+# (a second 16-bit instruction); the first executes when T is set, the second otherwise (MAME).
+@define T16 ""
+@define C16 "decode_phase=1 & packet_half=0 & p16=0 &"
+@define D16 "^PCESEP^pce2"
+@define X16 "; p16=1 & pce2 & PCESEP"
+@define B16 "if (!T) goto <pce_second>;"
+@define E16 "goto inst_next; <pce_second> build pce2;"
+@include "SCORE7_16.sinc"
+@undef T16
+@undef C16
+@undef D16
+@undef X16
+@undef B16
+@undef E16
+
+# First halfword with the marker set and second clear: the "undefined parity bit" exception.
+:parity_error is decode_phase=1 & packet_half=0 & p16=1; p16=0 {
+    parity_error();
+}
+
+# ===========================================================================
+# 32-bit instructions
+# ===========================================================================
+
+@define P32 "decode_phase=1 & packet_half=0 & p_lo=1 & p_hi=1"
+@define S32 "decode_phase=1 & packet_half=0 & p_lo=1 & p_hi=1 & major32=0 & spad=0"
+
+# ---- special form (major 0) ----
+:nop is $(S32) & func6=0 & cu=0 { }
+:syscall SysCode is $(S32) & func6=1 & cu=0 & SysCode { syscall(SysCode); }
+:trap^TC32 ranum is $(S32) & func6=2 & cu=0 & TC32 & c32_hi=0 & ranum {
+    if (!TC32) goto inst_next;
+    trap(ranum:1);
+}
+:trap ranum is $(S32) & func6=2 & cu=0 & c32_hi=0 & c32=15 & ranum { trap(ranum:1); }
+:sdbbp ranum is $(S32) & func6=3 & cu=0 & ranum { debug_break(ranum:1); }
+
+:br^BC32 ra32 is $(S32) & func6=4 & cu=0 & BC32 & c32_hi=0 & ra32 {
+    local t:4 = ra32;
+    if (!BC32) goto inst_next;
+    goto [t];
+}
+:br^BC32^"l" ra32 is $(S32) & func6=4 & cu=1 & BC32 & c32_hi=0 & ra32 {
+    local t:4 = ra32;
+    if (!BC32) goto inst_next;
+    r3 = inst_next;
+    call [t];
+}
+:br r3 is $(S32) & func6=4 & cu=0 & c32_hi=0 & c32=15 & ra32=3 & r3 { return [r3]; }
+:br ra32 is $(S32) & func6=4 & cu=0 & c32_hi=0 & c32=15 & ra32 { goto [ra32]; }
+:brl ra32 is $(S32) & func6=4 & cu=1 & c32_hi=0 & c32=15 & ra32 { local t:4 = ra32; r3 = inst_next; call [t]; }
+
+:pflush is $(S32) & func6=5 & cu=0 { pflush(); }
+
+# Atomic load / store word: the access is modelled; the link/conditional part is not (Ghidra has
+# no exclusive-monitor state)
+:alw rd32, "["^ra32^"]" is $(S32) & func6=6 & cu=0 & rd32 & ra32 { rd32 = *:4 ra32; }
+:asw rd32, "["^ra32^"]" is $(S32) & func6=7 & cu=0 & rd32 & ra32 { *:4 ra32 = rd32; }
+
+:add rd32, ra32, rb32 is $(S32) & func6=8 & cu=0 & rd32 & ra32 & rb32 { rd32 = ra32 + rb32; }
+:add.c rd32, ra32, rb32 is $(S32) & func6=8 & cu=1 & rd32 & ra32 & rb32 {
+    local a:4 = ra32; local b:4 = rb32; local r:4 = a + b;
+    addflags(a, b, r);
+    rd32 = r;
+}
+:addc rd32, ra32, rb32 is $(S32) & func6=9 & cu=0 & rd32 & ra32 & rb32 { rd32 = ra32 + rb32 + zext(C); }
+:addc.c rd32, ra32, rb32 is $(S32) & func6=9 & cu=1 & rd32 & ra32 & rb32 {
+    # full carry/overflow of ra + rb + C (MAME computes them from (ra + C) + rb, which loses the
+    # carry when ra + C wraps)
+    local a:4 = ra32; local b:4 = rb32; local cin:4 = zext(C); local s:4 = a + b; local r:4 = s + cin;
+    zn(r); C = carry(a, b) || carry(s, cin); V = ((a ^ r) & (b ^ r)) s< 0;
+    rd32 = r;
+}
+:sub rd32, ra32, rb32 is $(S32) & func6=10 & cu=0 & rd32 & ra32 & rb32 { rd32 = ra32 - rb32; }
+:sub.c rd32, ra32, rb32 is $(S32) & func6=10 & cu=1 & rd32 & ra32 & rb32 {
+    local a:4 = ra32; local b:4 = rb32; local r:4 = a - b;
+    subflags(a, b, r);
+    rd32 = r;
+}
+:subc rd32, ra32, rb32 is $(S32) & func6=11 & cu=0 & rd32 & ra32 & rb32 { rd32 = ra32 - rb32 - zext(!C); }
+:subc.c rd32, ra32, rb32 is $(S32) & func6=11 & cu=1 & rd32 & ra32 & rb32 {
+    # full borrow/overflow of ra - rb - !C (C = no borrow), see addc.c
+    local a:4 = ra32; local b:4 = rb32; local bin:4 = zext(!C); local d:4 = a - b; local r:4 = d - bin;
+    zn(r); C = (a >= b) && (d >= bin); V = ((a ^ b) & (a ^ r)) s< 0;
+    rd32 = r;
+}
+:cmpteq.c ra32, rb32 is $(S32) & func6=12 & cu=1 & rdnum=0 & ra32 & rb32 {
+    local a:4 = ra32; local b:4 = rb32; local r:4 = a - b; subflags(a, b, r); T = Z;
+}
+:cmptmi.c ra32, rb32 is $(S32) & func6=12 & cu=1 & rdnum=1 & ra32 & rb32 {
+    local a:4 = ra32; local b:4 = rb32; local r:4 = a - b; subflags(a, b, r); T = N;
+}
+:cmp.c ra32, rb32 is $(S32) & func6=12 & cu=1 & rdnum=3 & ra32 & rb32 {
+    local a:4 = ra32; local b:4 = rb32; local r:4 = a - b; subflags(a, b, r);
+}
+:cmpzteq.c ra32 is $(S32) & func6=13 & cu=1 & rbsel=0 & rdnum=0 & ra32 {
+    local a:4 = ra32; subflags(a, 0:4, a); T = Z;
+}
+:cmpztmi.c ra32 is $(S32) & func6=13 & cu=1 & rbsel=0 & rdnum=1 & ra32 {
+    local a:4 = ra32; subflags(a, 0:4, a); T = N;
+}
+:cmpz.c ra32 is $(S32) & func6=13 & cu=1 & rbsel=0 & rdnum=3 & ra32 {
+    local a:4 = ra32; subflags(a, 0:4, a);
+}
+:neg rd32, rb32 is $(S32) & func6=15 & cu=0 & rd32 & rb32 { rd32 = 0 - rb32; }
+:neg.c rd32, rb32 is $(S32) & func6=15 & cu=1 & rd32 & rb32 {
+    local b:4 = rb32; local r:4 = 0 - b; subflags(0:4, b, r); rd32 = r;
+}
+:and rd32, ra32, rb32 is $(S32) & func6=16 & cu=0 & rd32 & ra32 & rb32 { rd32 = ra32 & rb32; }
+:and.c rd32, ra32, rb32 is $(S32) & func6=16 & cu=1 & rd32 & ra32 & rb32 { local r:4 = ra32 & rb32; zn(r); rd32 = r; }
+:or rd32, ra32, rb32 is $(S32) & func6=17 & cu=0 & rd32 & ra32 & rb32 { rd32 = ra32 | rb32; }
+:or.c rd32, ra32, rb32 is $(S32) & func6=17 & cu=1 & rd32 & ra32 & rb32 { local r:4 = ra32 | rb32; zn(r); rd32 = r; }
+:not rd32, ra32 is $(S32) & func6=18 & cu=0 & rd32 & ra32 { rd32 = ~ra32; }
+:not.c rd32, ra32 is $(S32) & func6=18 & cu=1 & rd32 & ra32 { local r:4 = ~ra32; zn(r); rd32 = r; }
+:xor rd32, ra32, rb32 is $(S32) & func6=19 & cu=0 & rd32 & ra32 & rb32 { rd32 = ra32 ^ rb32; }
+:xor.c rd32, ra32, rb32 is $(S32) & func6=19 & cu=1 & rd32 & ra32 & rb32 { local r:4 = ra32 ^ rb32; zn(r); rd32 = r; }
+
+# Bit operations: the bit number is the rb field (an immediate)
+:bitclr.c rd32, ra32, rbnum is $(S32) & func6=20 & cu=1 & rd32 & ra32 & rbnum { local r:4 = ra32 & ~(1 << rbnum); zn(r); rd32 = r; }
+:bitset.c rd32, ra32, rbnum is $(S32) & func6=21 & cu=1 & rd32 & ra32 & rbnum { local r:4 = ra32 | (1 << rbnum); zn(r); rd32 = r; }
+:bittst.c ra32, rbnum is $(S32) & func6=22 & cu=1 & ra32 & rbnum { local a:4 = ra32; N = a s< 0; Z = (a & (1 << rbnum)) == 0; }
+:bittgl.c rd32, ra32, rbnum is $(S32) & func6=23 & cu=1 & rd32 & ra32 & rbnum { local r:4 = ra32 ^ (1 << rbnum); zn(r); rd32 = r; }
+
+# Shifts by register (count = rb & 31); .c also sets C to the last bit shifted out
+:sll rd32, ra32, rb32 is $(S32) & func6=24 & cu=0 & rd32 & ra32 & rb32 { rd32 = ra32 << (rb32 & 31); }
+:sll.c rd32, ra32, rb32 is $(S32) & func6=24 & cu=1 & rd32 & ra32 & rb32 {
+    local a:4 = ra32; local s:4 = rb32 & 31; local r:4 = a << s;
+    zn(r); C = (s != 0) && (((a >> (32 - s)) & 1) != 0); rd32 = r;
+}
+:srl rd32, ra32, rb32 is $(S32) & func6=26 & cu=0 & rd32 & ra32 & rb32 { rd32 = ra32 >> (rb32 & 31); }
+:srl.c rd32, ra32, rb32 is $(S32) & func6=26 & cu=1 & rd32 & ra32 & rb32 {
+    local a:4 = ra32; local s:4 = rb32 & 31; local r:4 = a >> s;
+    zn(r); C = (s != 0) && (((a >> (s - 1)) & 1) != 0); rd32 = r;
+}
+:sra rd32, ra32, rb32 is $(S32) & func6=27 & cu=0 & rd32 & ra32 & rb32 { rd32 = ra32 s>> (rb32 & 31); }
+:sra.c rd32, ra32, rb32 is $(S32) & func6=27 & cu=1 & rd32 & ra32 & rb32 {
+    local a:4 = ra32; local s:4 = rb32 & 31; local r:4 = a s>> s;
+    zn(r); C = (s != 0) && (((a >> (s - 1)) & 1) != 0); rd32 = r;
+}
+
+# Rotates (MAME does not emulate them). Rotation by register; ".c" sets Z and N from the result
+# and C to the last bit rotated out (as for the shifts); rorc/rolc rotate through C (33 bits).
+:ror rd32, ra32, rb32 is $(S32) & func6=28 & cu=0 & rd32 & ra32 & rb32 {
+    local a:4 = ra32; local s:4 = rb32 & 31; rd32 = (a >> s) | (a << ((32 - s) & 31));
+}
+:ror.c rd32, ra32, rb32 is $(S32) & func6=28 & cu=1 & rd32 & ra32 & rb32 {
+    local a:4 = ra32; local s:4 = rb32 & 31; local r:4 = (a >> s) | (a << ((32 - s) & 31));
+    zn(r); C = (s != 0) && ((r & 0x80000000) != 0); rd32 = r;
+}
+:rorc.c rd32, ra32, rb32 is $(S32) & func6=29 & cu=1 & rd32 & ra32 & rb32 {
+    local a:8 = (zext(C) << 32) | zext(ra32); local s:8 = zext(rb32 & 31);
+    local r:8 = ((a >> s) | (a << ((33 - s) % 33))) & 0x1ffffffff;
+    local res:4 = r:4; zn(res); C = (r >> 32) != 0; rd32 = res;
+}
+:rol rd32, ra32, rb32 is $(S32) & func6=30 & cu=0 & rd32 & ra32 & rb32 {
+    local a:4 = ra32; local s:4 = rb32 & 31; rd32 = (a << s) | (a >> ((32 - s) & 31));
+}
+:rol.c rd32, ra32, rb32 is $(S32) & func6=30 & cu=1 & rd32 & ra32 & rb32 {
+    local a:4 = ra32; local s:4 = rb32 & 31; local r:4 = (a << s) | (a >> ((32 - s) & 31));
+    zn(r); C = (s != 0) && ((r & 1) != 0); rd32 = r;
+}
+:rolc.c rd32, ra32, rb32 is $(S32) & func6=31 & cu=1 & rd32 & ra32 & rb32 {
+    local a:8 = (zext(C) << 32) | zext(ra32); local s:8 = zext(rb32 & 31);
+    local r:8 = ((a << s) | (a >> ((33 - s) % 33))) & 0x1ffffffff;
+    local res:4 = r:4; zn(res); C = (r >> 32) != 0; rd32 = res;
+}
+
+# Multiply and divide to CEH:CEL (MAME ignores the cu bit of mul, which objdump shows as mul.f)
+:mul ra32, rb32 is $(S32) & func6=32 & cu=0 & ra32 & rb32 {
+    local p:8 = sext(ra32) * sext(rb32); cel = p:4; ceh = p(4);
+}
+:mul.f ra32, rb32 is $(S32) & func6=32 & cu=1 & ra32 & rb32 {
+    local p:8 = sext(ra32) * sext(rb32); cel = p:4; ceh = p(4);
+}
+:mulu ra32, rb32 is $(S32) & func6=33 & cu=0 & ra32 & rb32 {
+    local p:8 = zext(ra32) * zext(rb32); cel = p:4; ceh = p(4);
+}
+:div ra32, rb32 is $(S32) & func6=34 & cu=0 & ra32 & rb32 {
+    local a:4 = ra32; local b:4 = rb32;
+    if (b == 0) goto <dz>;
+    cel = a s/ b; ceh = a s% b;
+    goto inst_next;
+<dz>
+    trap(0:1);   # divide-by-zero exception
+}
+:divu ra32, rb32 is $(S32) & func6=35 & cu=0 & ra32 & rb32 {
+    local a:4 = ra32; local b:4 = rb32;
+    if (b == 0) goto <dz>;
+    cel = a / b; ceh = a % b;
+    goto inst_next;
+<dz>
+    trap(0:1);   # divide-by-zero exception
+}
+
+:mfcel rd32 is $(S32) & func6=36 & cu=0 & rbnum=1 & rd32 { rd32 = cel; }
+:mfceh rd32 is $(S32) & func6=36 & cu=0 & rbnum=2 & rd32 { rd32 = ceh; }
+:mfcehl rd32, ra32 is $(S32) & func6=36 & cu=0 & rbnum=3 & rd32 & ra32 { rd32 = ceh; ra32 = cel; }
+:mtcel rd32 is $(S32) & func6=37 & cu=0 & rbnum=1 & rd32 { cel = rd32; }
+:mtceh rd32 is $(S32) & func6=37 & cu=0 & rbnum=2 & rd32 { ceh = rd32; }
+:mtcehl rd32, ra32 is $(S32) & func6=37 & cu=0 & rbnum=3 & rd32 & ra32 { ceh = rd32; cel = ra32; }
+# Other selectors: objdump's generic form; the core uses the low two bits (MAME)
+:mfce rd32, rbdec is $(S32) & func6=36 & cu=0 & rbsel>3 & rb_lo2=1 & rd32 & rbdec { rd32 = cel; }
+:mfce rd32, rbdec is $(S32) & func6=36 & cu=0 & rbsel>3 & rb_lo2=2 & rd32 & rbdec { rd32 = ceh; }
+:mfce rd32, rbdec is $(S32) & func6=36 & cu=0 & rbsel>3 & rb_lo2=3 & rd32 & rbdec & ra32 { rd32 = ceh; ra32 = cel; }
+:mfce rd32, rbdec is $(S32) & func6=36 & cu=0 & rb_lo2=0 & rd32 & rbdec { }
+:mtce rd32, rbdec is $(S32) & func6=37 & cu=0 & rbsel>3 & rb_lo2=1 & rd32 & rbdec { cel = rd32; }
+:mtce rd32, rbdec is $(S32) & func6=37 & cu=0 & rbsel>3 & rb_lo2=2 & rd32 & rbdec { ceh = rd32; }
+:mtce rd32, rbdec is $(S32) & func6=37 & cu=0 & rbsel>3 & rb_lo2=3 & rd32 & rbdec & ra32 { ceh = rd32; cel = ra32; }
+:mtce rd32, rbdec is $(S32) & func6=37 & cu=0 & rb_lo2=0 & rd32 & rbdec { }
+
+:mfsr rd32, SR is $(S32) & func6=40 & cu=0 & rd32 & SR { rd32 = SR; }
+:mtsr ra32, SR is $(S32) & func6=41 & cu=0 & ra32 & SR { SR = ra32; }
+
+:t^TC32 is $(S32) & func6=42 & cu=0 & TC32 & c32_hi=0 { T = TC32; }
+:tcnz is $(S32) & func6=42 & cu=0 & c32_hi=0 & c32=14 { T = sr0 != 0; }
+:tset is $(S32) & func6=42 & cu=0 & c32_hi=0 & c32=15 { T = 1; }
+:mv^TC32 rd32, ra32 is $(S32) & func6=43 & cu=0 & TC32 & c32_hi=0 & rd32 & ra32 {
+    if (!TC32) goto inst_next;
+    rd32 = ra32;
+}
+:mv rd32, ra32 is $(S32) & func6=43 & cu=0 & c32_hi=0 & c32=15 & rd32 & ra32 { rd32 = ra32; }
+
+:extsb rd32, ra32 is $(S32) & func6=44 & cu=0 & rd32 & ra32 { rd32 = sext(ra32:1); }
+:extsb.c rd32, ra32 is $(S32) & func6=44 & cu=1 & rd32 & ra32 { local r:4 = sext(ra32:1); zn(r); rd32 = r; }
+:extsh rd32, ra32 is $(S32) & func6=45 & cu=0 & rd32 & ra32 { rd32 = sext(ra32:2); }
+:extsh.c rd32, ra32 is $(S32) & func6=45 & cu=1 & rd32 & ra32 { local r:4 = sext(ra32:2); zn(r); rd32 = r; }
+:extzb rd32, ra32 is $(S32) & func6=46 & cu=0 & rd32 & ra32 { rd32 = zext(ra32:1); }
+:extzb.c rd32, ra32 is $(S32) & func6=46 & cu=1 & rd32 & ra32 { local r:4 = zext(ra32:1); zn(r); rd32 = r; }
+:extzh rd32, ra32 is $(S32) & func6=47 & cu=0 & rd32 & ra32 { rd32 = zext(ra32:2); }
+:extzh.c rd32, ra32 is $(S32) & func6=47 & cu=1 & rd32 & ra32 { local r:4 = zext(ra32:2); zn(r); rd32 = r; }
+
+# Custom-engine loads/stores with post-increment (not emulated by MAME; no public description)
+:lcb "["^ra32^"]+" is $(S32) & func6=48 & cu=0 & ra32 { custom_engine(48:1, ra32); }
+:lcw rd32, "["^ra32^"]+" is $(S32) & func6=49 & cu=0 & rd32 & ra32 { rd32 = custom_engine(49:1, ra32); }
+:lce rd32, "["^ra32^"]+" is $(S32) & func6=51 & cu=0 & rd32 & ra32 { rd32 = custom_engine(51:1, ra32); }
+:scb rd32, "["^ra32^"]+" is $(S32) & func6=52 & cu=0 & rd32 & ra32 { custom_engine(52:1, rd32, ra32); }
+:scw rd32, "["^ra32^"]+" is $(S32) & func6=53 & cu=0 & rd32 & ra32 { custom_engine(53:1, rd32, ra32); }
+:sce "["^ra32^"]+" is $(S32) & func6=55 & cu=0 & ra32 { custom_engine(55:1, ra32); }
+
+# Shifts and rotates by an immediate (the rb field)
+:slli rd32, ra32, rbnum is $(S32) & func6=56 & cu=0 & rd32 & ra32 & rbnum { local sh:4 = rbnum; rd32 = ra32 << sh; }
+:slli.c rd32, ra32, rbnum is $(S32) & func6=56 & cu=1 & rd32 & ra32 & rbnum { local sh:4 = rbnum;
+    local a:4 = ra32; local r:4 = a << sh;
+    zn(r); C = (sh != 0) && (((a >> (32 - sh)) & 1) != 0); rd32 = r;
+}
+:srli rd32, ra32, rbnum is $(S32) & func6=58 & cu=0 & rd32 & ra32 & rbnum { local sh:4 = rbnum; rd32 = ra32 >> sh; }
+:srli.c rd32, ra32, rbnum is $(S32) & func6=58 & cu=1 & rd32 & ra32 & rbnum { local sh:4 = rbnum;
+    local a:4 = ra32; local r:4 = a >> sh;
+    zn(r); C = (sh != 0) && (((a >> (sh - 1)) & 1) != 0); rd32 = r;
+}
+:srai rd32, ra32, rbnum is $(S32) & func6=59 & cu=0 & rd32 & ra32 & rbnum { local sh:4 = rbnum; rd32 = ra32 s>> sh; }
+:srai.c rd32, ra32, rbnum is $(S32) & func6=59 & cu=1 & rd32 & ra32 & rbnum { local sh:4 = rbnum;
+    local a:4 = ra32; local r:4 = a s>> sh;
+    zn(r); C = (sh != 0) && (((a >> (sh - 1)) & 1) != 0); rd32 = r;
+}
+:rori rd32, ra32, rbnum is $(S32) & func6=60 & cu=0 & rd32 & ra32 & rbnum { local sh:4 = rbnum;
+    local a:4 = ra32; rd32 = (a >> sh) | (a << ((32 - sh) & 31));
+}
+:rori.c rd32, ra32, rbnum is $(S32) & func6=60 & cu=1 & rd32 & ra32 & rbnum { local sh:4 = rbnum;
+    local a:4 = ra32; local r:4 = (a >> sh) | (a << ((32 - sh) & 31));
+    zn(r); C = (sh != 0) && ((r & 0x80000000) != 0); rd32 = r;
+}
+:roric.c rd32, ra32, rbnum is $(S32) & func6=61 & cu=1 & rd32 & ra32 & rbnum { local sh:4 = rbnum;
+    local a:8 = (zext(C) << 32) | zext(ra32); local s:8 = zext(sh);
+    local r:8 = ((a >> s) | (a << ((33 - s) % 33))) & 0x1ffffffff;
+    local res:4 = r:4; zn(res); C = (r >> 32) != 0; rd32 = res;
+}
+:roli rd32, ra32, rbnum is $(S32) & func6=62 & cu=0 & rd32 & ra32 & rbnum { local sh:4 = rbnum;
+    local a:4 = ra32; rd32 = (a << sh) | (a >> ((32 - sh) & 31));
+}
+:roli.c rd32, ra32, rbnum is $(S32) & func6=62 & cu=1 & rd32 & ra32 & rbnum { local sh:4 = rbnum;
+    local a:4 = ra32; local r:4 = (a << sh) | (a >> ((32 - sh) & 31));
+    zn(r); C = (sh != 0) && ((r & 1) != 0); rd32 = r;
+}
+:rolic.c rd32, ra32, rbnum is $(S32) & func6=63 & cu=1 & rd32 & ra32 & rbnum { local sh:4 = rbnum;
+    local a:8 = (zext(C) << 32) | zext(ra32); local s:8 = zext(sh);
+    local r:8 = ((a << s) | (a >> ((33 - s) % 33))) & 0x1ffffffff;
+    local res:4 = r:4; zn(res); C = (r >> 32) != 0; rd32 = res;
+}
+
+# ---- I-form 1 (major 1) and I-form 2 (major 5, immediate << 16) ----
+:addi rd32, SImm16 is $(P32) & major32=1 & ifunc3=0 & cu=0 & rd32 & SImm16 { rd32 = rd32 + SImm16; }
+:addi.c rd32, SImm16 is $(P32) & major32=1 & ifunc3=0 & cu=1 & rd32 & SImm16 {
+    local a:4 = rd32; local r:4 = a + SImm16; addflags(a, SImm16, r); rd32 = r;
+}
+:cmpi.c rd32, SImm16 is $(P32) & major32=1 & ifunc3=2 & cu=1 & rd32 & SImm16 {
+    local a:4 = rd32; local r:4 = a - SImm16; subflags(a, SImm16, r);
+}
+:andi rd32, UImm16 is $(P32) & major32=1 & ifunc3=4 & cu=0 & rd32 & UImm16 { rd32 = rd32 & UImm16; }
+:andi.c rd32, UImm16 is $(P32) & major32=1 & ifunc3=4 & cu=1 & rd32 & UImm16 { local r:4 = rd32 & UImm16; zn(r); rd32 = r; }
+:ori rd32, UImm16 is $(P32) & major32=1 & ifunc3=5 & cu=0 & rd32 & UImm16 { rd32 = rd32 | UImm16; }
+:ori.c rd32, UImm16 is $(P32) & major32=1 & ifunc3=5 & cu=1 & rd32 & UImm16 { local r:4 = rd32 | UImm16; zn(r); rd32 = r; }
+:ldi rd32, SImm16 is $(P32) & major32=1 & ifunc3=6 & rd32 & SImm16 { rd32 = SImm16; }
+
+:addis rd32, UImm16 is $(P32) & major32=5 & ifunc3=0 & cu=0 & rd32 & UImm16 & HImm16 { rd32 = rd32 + HImm16; }
+:addis.c rd32, UImm16 is $(P32) & major32=5 & ifunc3=0 & cu=1 & rd32 & UImm16 & HImm16 {
+    local a:4 = rd32; local b:4 = HImm16; local r:4 = a + b; addflags(a, b, r); rd32 = r;
+}
+# cmpis.c: MAME implements it; objdump 2.45 does not decode it
+:cmpis.c rd32, UImm16 is $(P32) & major32=5 & ifunc3=2 & cu=1 & rd32 & UImm16 & HImm16 {
+    local a:4 = rd32; local b:4 = HImm16; local r:4 = a - b; subflags(a, b, r);
+}
+:andis rd32, UImm16 is $(P32) & major32=5 & ifunc3=4 & cu=0 & rd32 & UImm16 & HImm16 { rd32 = rd32 & HImm16; }
+:andis.c rd32, UImm16 is $(P32) & major32=5 & ifunc3=4 & cu=1 & rd32 & UImm16 & HImm16 { local r:4 = rd32 & HImm16; zn(r); rd32 = r; }
+:oris rd32, UImm16 is $(P32) & major32=5 & ifunc3=5 & cu=0 & rd32 & UImm16 & HImm16 { rd32 = rd32 | HImm16; }
+:oris.c rd32, UImm16 is $(P32) & major32=5 & ifunc3=5 & cu=1 & rd32 & UImm16 & HImm16 { local r:4 = rd32 | HImm16; zn(r); rd32 = r; }
+:ldis rd32, UImm16 is $(P32) & major32=5 & ifunc3=6 & rd32 & UImm16 & HImm16 { rd32 = HImm16; }
+
+# ---- J-form (major 2) ----
+:j JTarget32 is $(P32) & major32=2 & cu=0 & JTarget32 { goto JTarget32; }
+:jl JTarget32 is $(P32) & major32=2 & cu=1 & JTarget32 { r3 = inst_next; call JTarget32; }
+
+# ---- branch (major 4): b<cond><l> ----
+:b^BC32 BTarget32 is $(P32) & major32=4 & cu=0 & BC32 & c32_hi=0 & BTarget32 {
+    if (BC32) goto BTarget32;
+}
+:b^BC32^"l" BTarget32 is $(P32) & major32=4 & cu=1 & BC32 & c32_hi=0 & BTarget32 {
+    if (!BC32) goto inst_next;
+    r3 = inst_next;
+    call BTarget32;
+}
+:b BTarget32 is $(P32) & major32=4 & cu=0 & c32_hi=0 & c32=15 & BTarget32 { goto BTarget32; }
+:bl BTarget32 is $(P32) & major32=4 & cu=1 & c32_hi=0 & c32=15 & BTarget32 { r3 = inst_next; call BTarget32; }
+
+# ---- load/store with pre-increment (major 3) and post-increment (major 7) ----
+:lw rd32, PreInc is $(P32) & major32=3 & rix_func3=0 & rd32 & PreInc { rd32 = *:4 PreInc; }
+:lh rd32, PreInc is $(P32) & major32=3 & rix_func3=1 & rd32 & PreInc { rd32 = sext(*:2 PreInc); }
+:lhu rd32, PreInc is $(P32) & major32=3 & rix_func3=2 & rd32 & PreInc { rd32 = zext(*:2 PreInc); }
+:lb rd32, PreInc is $(P32) & major32=3 & rix_func3=3 & rd32 & PreInc { rd32 = sext(*:1 PreInc); }
+:sw rd32, PreInc is $(P32) & major32=3 & rix_func3=4 & rd32 & PreInc { local v:4 = rd32; *:4 PreInc = v; }
+:sh rd32, PreInc is $(P32) & major32=3 & rix_func3=5 & rd32 & PreInc { local v:2 = rd32:2; *:2 PreInc = v; }
+:lbu rd32, PreInc is $(P32) & major32=3 & rix_func3=6 & rd32 & PreInc { rd32 = zext(*:1 PreInc); }
+:sb rd32, PreInc is $(P32) & major32=3 & rix_func3=7 & rd32 & PreInc { local v:1 = rd32:1; *:1 PreInc = v; }
+
+:lw rd32, PostInc is $(P32) & major32=7 & rix_func3=0 & rd32 & PostInc { local a:4 = PostInc; rd32 = *:4 a; }
+:lh rd32, PostInc is $(P32) & major32=7 & rix_func3=1 & rd32 & PostInc { local a:4 = PostInc; rd32 = sext(*:2 a); }
+:lhu rd32, PostInc is $(P32) & major32=7 & rix_func3=2 & rd32 & PostInc { local a:4 = PostInc; rd32 = zext(*:2 a); }
+:lb rd32, PostInc is $(P32) & major32=7 & rix_func3=3 & rd32 & PostInc { local a:4 = PostInc; rd32 = sext(*:1 a); }
+:sw rd32, PostInc is $(P32) & major32=7 & rix_func3=4 & rd32 & PostInc { local v:4 = rd32; local a:4 = PostInc; *:4 a = v; }
+:sh rd32, PostInc is $(P32) & major32=7 & rix_func3=5 & rd32 & PostInc { local v:2 = rd32:2; local a:4 = PostInc; *:2 a = v; }
+:lbu rd32, PostInc is $(P32) & major32=7 & rix_func3=6 & rd32 & PostInc { local a:4 = PostInc; rd32 = zext(*:1 a); }
+:sb rd32, PostInc is $(P32) & major32=7 & rix_func3=7 & rd32 & PostInc { local v:1 = rd32:1; local a:4 = PostInc; *:1 a = v; }
+
+# ---- CR form (major 6): control registers, system operations, coprocessors 1-3 ----
+:mtcr rd32, CR is $(P32) & major32=6 & cr_op5=0 & rd32 & CR { CR = rd32; }
+:mtcr rd32, cr1 is $(P32) & major32=6 & cr_op5=0 & rd32 & ra32=1 & cr1 { setcr1(rd32); }
+:mfcr rd32, CR is $(P32) & major32=6 & cr_op5=1 & rd32 & CR { rd32 = CR; }
+:mfcr rd32, cr1 is $(P32) & major32=6 & cr_op5=1 & rd32 & ra32=1 & cr1 { local v:4; getcr1(v); rd32 = v; }
+:rte is $(P32) & major32=6 & cr_op8=0x84 & cr_b89=0 {
+    cr0 = (cr0 & 0xfffffffc) | ((cr0 >> 2) & 0x3);
+    local v:4; getcr1(v);
+    setcr1((v & 0xffffffe0) | ((v >> 5) & 0x1f));
+    return [cr5];
+}
+:stlb   is $(P32) & major32=6 & cr_op8=0x04 & cr_b89=0 { tlb_op(0:1); }
+:mftlb  is $(P32) & major32=6 & cr_op8=0x24 & cr_b89=0 { tlb_op(1:1); }
+:mtptlb is $(P32) & major32=6 & cr_op8=0x44 & cr_b89=0 { tlb_op(2:1); }
+:mtrtlb is $(P32) & major32=6 & cr_op8=0x64 & cr_b89=0 { tlb_op(3:1); }
+:drte   is $(P32) & major32=6 & cr_op8=0xa4 & cr_b89=0 { drte(); }
+:sleep  is $(P32) & major32=6 & cr_op8=0xc4 & cr_b89=0 { sleep(); }
+
+CPN: "1" is cp_num=1 { export 1:1; }
+CPN: "2" is cp_num=2 { export 2:1; }
+CPN: "3" is cp_num=3 { export 3:1; }
+
+:mtc^CPN rd32, cra is $(P32) & major32=6 & CPN & cp_sub=0 & rd32 & cra { coprocessor_to(CPN, cra:1, rd32); }
+:mfc^CPN rd32, cra is $(P32) & major32=6 & CPN & cp_sub=1 & rd32 & cra { rd32 = coprocessor_from(CPN, cra:1); }
+:ldc^CPN cra, CPEA is $(P32) & major32=6 & CPN & cp_sub=2 & cra & CPEA { local v:4 = *:4 CPEA; coprocessor_to(CPN, cra:1, v); }
+:stc^CPN cra, CPEA is $(P32) & major32=6 & CPN & cp_sub=3 & cra & CPEA { local v:4 = coprocessor_from(CPN, cra:1); *:4 CPEA = v; }
+:cop^CPN crd, cra, crb, cp_imm5 is $(P32) & major32=6 & CPN & cp_sub=4 & crd & cra & crb & cp_imm5 { coprocessor_op(CPN, crd:1, cra:1, crb:1, cp_imm5:1); }
+:mtcc^CPN rd32, cra is $(P32) & major32=6 & CPN & cp_sub=6 & rd32 & cra { coprocessor_to(CPN, cra:1, rd32); }
+:mfcc^CPN rd32, cra is $(P32) & major32=6 & CPN & cp_sub=7 & rd32 & cra { rd32 = coprocessor_from(CPN, cra:1); }
+
+# ---- RI form: addri (8), andri (12), orri (13) ----
+:addri rd32, ra32, SImm14 is $(P32) & major32=8 & cu=0 & rd32 & ra32 & SImm14 { rd32 = ra32 + SImm14; }
+:addri.c rd32, ra32, SImm14 is $(P32) & major32=8 & cu=1 & rd32 & ra32 & SImm14 {
+    local a:4 = ra32; local r:4 = a + SImm14; addflags(a, SImm14, r); rd32 = r;
+}
+:andri rd32, ra32, UImm14 is $(P32) & major32=12 & cu=0 & rd32 & ra32 & UImm14 { rd32 = ra32 & UImm14; }
+:andri.c rd32, ra32, UImm14 is $(P32) & major32=12 & cu=1 & rd32 & ra32 & UImm14 { local r:4 = ra32 & UImm14; zn(r); rd32 = r; }
+:orri rd32, ra32, UImm14 is $(P32) & major32=13 & cu=0 & rd32 & ra32 & UImm14 { rd32 = ra32 | UImm14; }
+:orri.c rd32, ra32, UImm14 is $(P32) & major32=13 & cu=1 & rd32 & ra32 & UImm14 { local r:4 = ra32 | UImm14; zn(r); rd32 = r; }
+
+# ---- LS form (majors 16-23): [ra, simm15] ----
+:lw rd32, EA15 is $(P32) & major32=16 & rd32 & EA15 { rd32 = *:4 EA15; }
+:lh rd32, EA15 is $(P32) & major32=17 & rd32 & EA15 { rd32 = sext(*:2 EA15); }
+:lhu rd32, EA15 is $(P32) & major32=18 & rd32 & EA15 { rd32 = zext(*:2 EA15); }
+:lb rd32, EA15 is $(P32) & major32=19 & rd32 & EA15 { rd32 = sext(*:1 EA15); }
+:sw rd32, EA15 is $(P32) & major32=20 & rd32 & EA15 { *:4 EA15 = rd32; }
+:sh rd32, EA15 is $(P32) & major32=21 & rd32 & EA15 { *:2 EA15 = rd32:2; }
+:lbu rd32, EA15 is $(P32) & major32=22 & rd32 & EA15 { rd32 = zext(*:1 EA15); }
+:sb rd32, EA15 is $(P32) & major32=23 & rd32 & EA15 { *:1 EA15 = rd32:1; }
+
+:cache CacheOp, EA15 is $(P32) & major32=24 & CacheOp & EA15 { cache(CacheOp, EA15); }
+
+# ---- custom engine (major 28) ----
+# Named operations as objdump decodes them. abs and clz are implemented; the others have no
+# public (non-GPL) description of their arithmetic (saturation, operand order, signedness,
+# fractional formats) and are pcodeops that read their sources and write their destination.
+@define CE32 "decode_phase=1 & packet_half=0 & p_lo=1 & p_hi=1 & major32=28"
+:abs rd32, ra32 is $(CE32) & ce_a=0 & ce_b=10 & rbnum=0 & rd32 & ra32 {
+    local a:4 = ra32; rd32 = (a ^ (a s>> 31)) - (a s>> 31);
+}
+:clz rd32, ra32 is $(CE32) & ce_a=0 & ce_b=13 & rbnum=0 & rd32 & ra32 { rd32 = lzcount(ra32); }
+:min rd32, ra32, rb32 is $(CE32) & ce_a=0 & ce_b=6 & rd32 & ra32 & rb32 { rd32 = ce_op(6:1, ra32, rb32); }
+:max rd32, ra32, rb32 is $(CE32) & ce_a=0 & ce_b=7 & rd32 & ra32 & rb32 { rd32 = ce_op(7:1, ra32, rb32); }
+:bitrev rd32, ra32, rb32 is $(CE32) & ce_a=0 & ce_b=12 & rd32 & ra32 & rb32 { rd32 = ce_op(12:1, ra32, rb32); }
+:abs.s rd32, ra32 is $(CE32) & ce_a=2 & ce_b=11 & rbnum=0 & rd32 & ra32 { rd32 = ce_op(0x4b:1, ra32); }
+:add.s rd32, ra32, rb32 is $(CE32) & ce_a=2 & ce_b=8 & rd32 & ra32 & rb32 { rd32 = ce_op(0x48:1, ra32, rb32); }
+:sub.s rd32, ra32, rb32 is $(CE32) & ce_a=2 & ce_b=9 & rd32 & ra32 & rb32 { rd32 = ce_op(0x49:1, ra32, rb32); }
+:sll.s rd32, ra32, rb32 is $(CE32) & ce_a=2 & ce_b=14 & rd32 & ra32 & rb32 { rd32 = ce_op(0x4e:1, ra32, rb32); }
+
+:mad ra32, rb32 is $(CE32) & rdnum=0 & ce_a=0 & ce_b=0 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x00:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:madu ra32, rb32 is $(CE32) & rdnum=0 & ce_a=1 & ce_b=0 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x20:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:mad.f ra32, rb32 is $(CE32) & rdnum=0 & ce_a=4 & ce_b=0 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x80:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:msb ra32, rb32 is $(CE32) & rdnum=0 & ce_a=0 & ce_b=1 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x01:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:msbu ra32, rb32 is $(CE32) & rdnum=0 & ce_a=1 & ce_b=1 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x21:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:msb.f ra32, rb32 is $(CE32) & rdnum=0 & ce_a=4 & ce_b=1 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x81:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:madl ra32, rb32 is $(CE32) & rdnum=0 & ce_a=0 & ce_b=2 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x02:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:madl.fs ra32, rb32 is $(CE32) & rdnum=0 & ce_a=6 & ce_b=2 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0xc2:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:mazl ra32, rb32 is $(CE32) & rdnum=0 & ce_a=8 & ce_b=2 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x102:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:mazl.f ra32, rb32 is $(CE32) & rdnum=0 & ce_a=12 & ce_b=2 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x182:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:madh ra32, rb32 is $(CE32) & rdnum=0 & ce_a=16 & ce_b=3 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x203:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:madh.fs ra32, rb32 is $(CE32) & rdnum=0 & ce_a=22 & ce_b=3 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x2c3:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:mazh ra32, rb32 is $(CE32) & rdnum=0 & ce_a=24 & ce_b=3 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x303:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:mazh.f ra32, rb32 is $(CE32) & rdnum=0 & ce_a=28 & ce_b=3 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x383:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:msbl ra32, rb32 is $(CE32) & rdnum=0 & ce_a=0 & ce_b=4 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x04:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:msbl.fs ra32, rb32 is $(CE32) & rdnum=0 & ce_a=6 & ce_b=4 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0xc4:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:mszl ra32, rb32 is $(CE32) & rdnum=0 & ce_a=8 & ce_b=4 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x104:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:mszl.f ra32, rb32 is $(CE32) & rdnum=0 & ce_a=12 & ce_b=4 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x184:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:msbh ra32, rb32 is $(CE32) & rdnum=0 & ce_a=16 & ce_b=5 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x205:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:msbh.fs ra32, rb32 is $(CE32) & rdnum=0 & ce_a=22 & ce_b=5 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x2c5:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:mszh ra32, rb32 is $(CE32) & rdnum=0 & ce_a=24 & ce_b=5 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x305:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+:mszh.f ra32, rb32 is $(CE32) & rdnum=0 & ce_a=28 & ce_b=5 & ra32 & rb32 {
+    local acc:8 = (zext(ceh) << 32) | zext(cel);
+    acc = ce_mac(0x385:2, acc, ra32, rb32);
+    cel = acc:4; ceh = acc(4);
+}
+
+# Other custom-engine instructions
+:ceinst rdnum, ra32, rb32, ce_a, ce_b is $(CE32) & rdnum & ra32 & rb32 & ce_a & ce_b {
+    ceinst(rdnum:1, ra32, rb32, ce_a:1, ce_b:1);
+}

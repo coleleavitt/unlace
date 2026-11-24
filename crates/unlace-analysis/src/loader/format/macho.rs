@@ -226,7 +226,7 @@ impl ObjectFormat for MachOFormat {
     /// layout, so it is laid out the way an ELF `.o` is
     /// ([`crate::loader::reloc_object`]).
     fn relocatable_layout(&self, file: &object::File) -> bool {
-        file.kind() == object::ObjectKind::Relocatable
+        object::Object::kind(file) == object::ObjectKind::Relocatable
     }
 
     /// Every section but the debug-only ones (`S_ATTR_DEBUG`: `__DWARF`,

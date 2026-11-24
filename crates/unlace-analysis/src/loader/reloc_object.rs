@@ -3105,7 +3105,7 @@ mod tests {
         data[at..at + n].to_vec()
     }
 
-    fn word_at(layout: &RelocLayout, vma: u64) -> u32 {
+    fn mword_at(layout: &RelocLayout, vma: u64) -> u32 {
         u32::from_le_bytes(bytes_at(layout, vma, 4).try_into().unwrap())
     }
 
@@ -3122,7 +3122,7 @@ mod tests {
             .vma
     }
 
-    fn section(layout: &RelocLayout, name: &str) -> u64 {
+    fn msection(layout: &RelocLayout, name: &str) -> u64 {
         layout
             .section_info
             .iter()
@@ -3141,8 +3141,8 @@ mod tests {
 
     /// AArch64 `adrp` + low-12 pair: the address the two instructions form.
     fn adrp_pair(layout: &RelocLayout, at: u64, scale: u32) -> u64 {
-        let adrp = word_at(layout, at);
-        let lo = word_at(layout, at + 4);
+        let adrp = mword_at(layout, at);
+        let lo = mword_at(layout, at + 4);
         let immlo = u64::from((adrp >> 29) & 3);
         let immhi = u64::from((adrp >> 5) & 0x7_ffff);
         let page = ((immhi << 2 | immlo) << 12) as i64;
@@ -3152,7 +3152,7 @@ mod tests {
     }
 
     fn branch26(layout: &RelocLayout, at: u64) -> u64 {
-        let insn = word_at(layout, at);
+        let insn = mword_at(layout, at);
         let imm = (((insn & 0x03ff_ffff) << 6) as i32 >> 4) as i64;
         at.wrapping_add(imm as u64)
     }
@@ -3171,15 +3171,15 @@ mod tests {
         assert!(fmt.relocatable_layout(&file));
         let layout = layout_relocatable(&file, fmt.as_ref());
         let f = named(&layout, "_f");
-        assert_eq!(f, section(&layout, "__text"));
+        assert_eq!(f, msection(&layout, "__text"));
         assert!(
             !layout
                 .symbol_info
                 .iter()
                 .any(|s| s.name.starts_with("ltmp"))
         );
-        let cstring = section(&layout, "__cstring");
-        let data = section(&layout, "__data");
+        let cstring = msection(&layout, "__cstring");
+        let data = msection(&layout, "__data");
         assert_eq!(
             adrp_pair(&layout, f + 0x8, 0),
             cstring,
@@ -3225,8 +3225,8 @@ mod tests {
         let fmt = crate::loader::format::detect(&file).unwrap();
         let layout = layout_relocatable(&file, fmt.as_ref());
         let f = named(&layout, "_f");
-        let cstring = section(&layout, "__cstring");
-        let rel = |at: u64, end: u64| end.wrapping_add(word_at(&layout, at) as i32 as i64 as u64);
+        let cstring = msection(&layout, "__cstring");
+        let rel = |at: u64, end: u64| end.wrapping_add(mword_at(&layout, at) as i32 as i64 as u64);
         assert_eq!(rel(f + 0x7, f + 0xb), cstring, "leaq L_.str(%rip)");
         assert_eq!(rel(f + 0xc, f + 0x10), extern_of(&file, &layout, "_puts"));
         let slot = rel(f + 0x13, f + 0x17);

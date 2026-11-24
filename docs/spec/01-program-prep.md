@@ -6977,8 +6977,9 @@ every other binary's pass list is byte-identical to before the pass existed):
   (`gotypeglobals`). The compiler joins that result with the hit path of the
   assertion's inline cache probe, an itab loaded from the cache the record's
   `Cache` word points at; a join input computed from a read of that word
-  within eight defining ops counts as the same interface, any other input must
-  resolve to it.
+  within eight defining ops counts as the same interface, a constant zero (the
+  nil table of the failed assertion) agrees with any interface, and any other
+  input must resolve to it.
   A stripped binary has no DWARF to type an interface parameter, but its
   callers state it: converting a concrete value to an interface at a call
   loads the static itab into the register that carries the table word. The
@@ -6987,10 +6988,13 @@ every other binary's pass list is byte-identical to before the pass existed):
   x86-64, run only under the option) takes every `LEA` of a static itab (the
   located itabs and their interfaces, as the harvest finds them), follows its
   fall-through to the first direct call within 16 instructions, refusing a
-  branch, an indirect call and any instruction that names the register or one
-  of its parts as its first operand (except `CMP`, `TEST`, `PUSH`, `NOP`,
-  `BT`) or writes registers it does not name, and votes
-  `(callee, register) -> interface`. A Go value of interface type has one
+  branch and an indirect call, and keeps the set of registers holding the
+  itab: the `LEA`'s destination plus every whole integer argument register a
+  `MOV dst,src` copies it to (the compiler often loads it into `RCX` and moves
+  it to `RAX` just before the call), each dropped at an instruction that names
+  it or one of its parts as its first operand (except `CMP`, `TEST`, `PUSH`,
+  `NOP`, `BT`) or writes registers it does not name. At the call it votes
+  `(callee, register) -> interface` for every register still in the set. A Go value of interface type has one
   static type, so a pair with two interfaces is dropped; a pair every vote
   agrees on, whose interface has a record, becomes an unlocked input hint:
   the callee's register is `arg<N>_tab`, a pointer to the record.

@@ -117,6 +117,11 @@ fn table_interface(
             let mut unresolved: Vec<VarnodeId> = Vec::new();
             for i in 0..n {
                 let input = def.get_in(i)?;
+                // A nil table (the assertion's failure path, a nil interface)
+                // agrees with any interface.
+                if constant_value(fd, input) == Some(0) {
+                    continue;
+                }
                 if let Some((interface, record)) = assert_result(fd, arch, input) {
                     records.extend(record);
                     if found.as_ref().is_some_and(|held| *held != interface) {

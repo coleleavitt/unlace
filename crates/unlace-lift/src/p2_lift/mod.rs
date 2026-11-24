@@ -23,6 +23,7 @@ pub mod kuna_guarddispatch; // (kuna `guarddispatch`) a call through a Control F
 pub mod kuna_honestgaps; // (kuna `honestgaps`) name the losses the decompile otherwise drops silently
 pub mod kuna_int3pad; // (kuna) name the int3 pad control ran into instead of printing it as a call through swi()
 pub mod kuna_itaniumeh; // (kuna `itaniumeh`) exceptional edges from each covered call to its Itanium landing pad
+pub mod kuna_javasync; // (kuna `javasync`) synchronized and finally from a DEX method's catch-all handlers
 pub mod kuna_javatry; // (kuna `javatry`) exception edges and try dispatches from a DEX method's try items
 pub mod kuna_jumpassist; // (kuna) the JumpAssisted model: switches computed by a <jumpassist> user-op
 pub mod kuna_jumptablefault;

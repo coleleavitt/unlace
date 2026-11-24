@@ -3965,6 +3965,22 @@ profile, the type speller and the Java string escapes, and
   `if (dispatch) goto L` is a catch whose body is that jump. The clause binds
   the variable `java_caught` defines (declared only there) and names the types
   its handler catches, `A | B` for several.
+- **synchronized and finally** (kuna, `option javasync`, default off; the
+  idioms are read in chapter 2, `kuna_javasync.rs (idioms)`). A `try` whose
+  one clause is a monitor release prints as `synchronized (x) { }`, `x` the
+  operand of the `monitorEnter`, with no catch clause. The `monitorEnter` ends
+  the list element just before the `try` and prints first, so before a
+  statement list prints, `kuna_javasyncprint.rs (java_prepare_synchronized)`
+  finds each such `try` in it whose preceding element holds the
+  `monitorEnter` op and leaves that op out; a marked `try` that then prints as
+  a plain `try` (its protected part runs past the ranges) prints the
+  `monitorEnter` just before `try`. A `try` whose last clause is a finally
+  handler prints that clause as `finally { }`; the earlier clauses print as
+  catches. Once the form is chosen (`kuna_javasyncprint.rs (java_try_form)`),
+  every statement whose op lies on an instruction the idiom stands for is left
+  out of the whole function (`java_hide_form`): the monitor operations, or the
+  rethrow and the copies of the finally code on the normal paths. A typed
+  catch keeps its own copy of the finally code.
 - **Signature.** The method name prints without its class path, the `this`
   parameter is hidden, and an empty parameter list prints `()`.
 - **Casts.** `CastStrategyJava` decides casts (`cast.rs (java_cast_standard)`):

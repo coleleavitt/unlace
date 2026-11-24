@@ -5004,6 +5004,31 @@ an `if` with no exit; never fold a dispatch into `&&`/`||`, a loop condition or
 a condition list; and prefer an exit other than a handler when choosing a
 loop's exit, so a catch inside a loop stays in the loop. The printer (chapter 9)
 reads the dispatch `if` as the `try` statement.
+
+**(kuna) `option javasync on|off`, default off: catch-all idioms,
+`crates/unlace-lift/src/p2_lift/kuna_javasync.rs`.** javac and D8 compile two
+Java constructs to a catch-all handler, and `kuna_javasync.rs (idioms)` reads
+each catch-all handler of a method (one no typed clause names) from the
+instruction bytes and the try items, for the printer:
+
+- **synchronized.** The handler is exactly `move-exception vE; monitor-exit vX;
+  throw vE` with X other than E, and the instruction just before the first range
+  it protects is `monitor-enter vX`. The ranges are taken less the handler's own
+  code (D8 lets a range run on over the handler; javac gives it a range of its
+  own). Every `monitor-exit vX` inside the ranges, and one that starts right at
+  their end, is a normal way out of the block; a `monitor-enter vX` inside them
+  declines (a nested lock on the same register).
+- **finally.** The handler is `move-exception vE`, then straight-line code F (no
+  branch, return, throw, monitor operation or payload; at most 512 bytes), then
+  `throw vE`. Each protected range must end in a byte-equal copy of F, or run on
+  into the next one through instructions that cannot throw (a D8 split); no
+  handler may start inside a copy; a method with a switch declines; and no goto
+  or if may jump into a copy, or to its start from outside the protected ranges
+  (that path would lose F when the copy is left out). A handler that is only
+  `monitor-exit` is no `finally`.
+
+Reading the bytes keeps the check exact and cheap: it runs once per function
+when the printer starts, only for DEX methods with try items and the option on.
 ### Early Go jump chains (`kuna_gojumpchain.rs`)
 
 `kuna_gojumpchain.rs (ActionGoJumpChain)` runs before Go write-barrier

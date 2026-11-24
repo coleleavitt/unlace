@@ -2629,6 +2629,28 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "javasync"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "readability-rewrites"
+strength = "HARD"
+rewind = "P9"
+issue = "kuna-dex-loader"
+summary = "In java-language output with javatry on, print a DEX catch-all handler as the Java construct it was compiled from. javac and D8 compile synchronized (x) { body } to monitor-enter x before the protected code, monitor-exit x on each normal way out, and a catch-all whose handler is move-exception e; monitor-exit x; throw e: that try prints as synchronized (x) { body }, without the monitorEnter and monitorExit calls and without the catch clause. They compile try { body } finally { F } to a catch-all whose handler is move-exception e; F; throw e, with a copy of F where each protected range ends: that clause prints as finally { F }, without the rethrow, and the copies on the normal paths are left out. Both are read from the instruction bytes and the try table and decline on any doubt: the handler must be exactly that shape, F straight-line code, the monitor-enter of the same register just before the first range, every range must end in a byte-equal copy of F (or run on into the next range through instructions that cannot throw), and no branch from outside the protected code may enter a copy. A typed catch keeps its own copy of the finally code."
+use_when = "Off by default: a try whose catch-all only looks like the compiler's pattern (hand-written smali, an obfuscator) would lose the statements the idiom stands for. Turn ON for javac or D8 output, where synchronized blocks print as a try with a catch (Throwable) that calls monitorExit and rethrows, and a finally clause prints as a catch (Throwable) plus a second copy of its code after the try."
+example = "option javasync on"
+source_decompiler = "kuna"
+inspiration = "Hex-Rays 9.5 SYNC_BLOCK and MAKE_FINALLY for Dalvik (notes/ida-hexrays-rules.md); jadx's synchronized and finally regions"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "monitorEnter(x) before a try whose catch (Throwable) calls monitorExit(x) and rethrows|a catch (Throwable) clause that runs the same code as the statements after the try and rethrows"
+live_field = "java_sync"
+live_true = "on"
+live_false = "off"
+
+[[settable]]
 option = "switchguardbound"
 values = "on|off"
 default = "off"

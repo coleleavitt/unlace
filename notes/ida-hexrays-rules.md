@@ -40,8 +40,8 @@ meaning is read from its pseudocode (microcode opcodes: 4 mov, 42 jcnd, 43-52 co
 
 | Hex-Rays rule | function | what it does | unlace |
 |---|---|---|---|
-| **`SYNC_BLOCK`**, **`MONITOR-EXIT`** | `sub_2FA2B0`, `sub_2FA620` | a block bracketed by `monitor-enter(x)` / `monitor-exit(x)` with the catch-all exit handler becomes `synchronized (x) { }` (Dalvik; `is_synchronized` in `sub_455600`) | **none**: `javatry` prints try/catch; no `git grep -i 'monitor-enter\|synchronized'` hit |
-| **`MAKE_FINALLY`** | `sub_2FB550` | a `catch (...)` as the last handler whose body ends by rethrowing, with the same code duplicated on the normal path, becomes `finally { }` | **none** (for `javatry`, and later MSVC EH) |
+| **`SYNC_BLOCK`**, **`MONITOR-EXIT`** | `sub_2FA2B0`, `sub_2FA620` | a block bracketed by `monitor-enter(x)` / `monitor-exit(x)` with the catch-all exit handler becomes `synchronized (x) { }` (Dalvik; `is_synchronized` in `sub_455600`) | `javasync` (default off): `p2_lift/kuna_javasync.rs` reads the handler, `printc/kuna_javasyncprint.rs` prints `synchronized (x) { }` |
+| **`MAKE_FINALLY`** | `sub_2FB550` | a `catch (...)` as the last handler whose body ends by rethrowing, with the same code duplicated on the normal path, becomes `finally { }` | `javasync` for DEX (default off): byte-equal copies of F at each range end; MSVC EH still none |
 | `CREATE_TRY`, `TRY-1`, `THROW-1` | `sub_2FCD20`, `sub_2E1170`, `sub_2E1C60` | build try/throw items | yes for Itanium (`itaniumeh`) and DEX (`javatry`); MSVC open (`notes/ida-msvc-eh.md`) |
 | `ENSURE_CORRECT_INTEGER_PROMOTION`, `NEGATE_CONSTANT` | `sub_2EF2F0` | cast placement so C's promotions give the machine result; print `x - 5` not `x + -5` | yes in substance (Ghidra cast rules, `castternary`, `castimplied`) |
 | `AUTOCONV_TO_ENUM`, `AUTOCONV_CPP_CONST` | `sub_2D8BD0` | convert a constant compared with or assigned to an enum-typed value to the enum member; C++ const conversions | partial: Ghidra prints enum members for enum-typed varnodes; no automatic retyping |

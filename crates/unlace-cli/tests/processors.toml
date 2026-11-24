@@ -2404,6 +2404,15 @@ address = "0x40"
 expect = ["while( true ) {", "if (a3 <= 1) break;"]
 
 [[family.function]]
+test = "starcore_cont_ends_the_iteration_early"
+address = "0x70"
+expect = [
+    "while( true ) {",
+    "if (a0 <= *a2) {",  # IFT CONT skips the rest when D1 > D0
+    "a0 += *a2 * 3LL;",
+]
+
+[[family.function]]
 test = "starcore_two_set_short_loop_back_edge"
 address = "0x50"
 expect = ["while( true ) {", "a0 += *a2;", "if (a3 <= 1) break;"]

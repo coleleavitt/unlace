@@ -4588,8 +4588,11 @@ mark that ends an iteration later than its own set passes noflow context forward
 loop, reaches the last set, and `LPMARKA` on the last set (or on a one-set short loop) acts
 there. The root constructor adds the manual's test after that set: while `LCn > 1`, count
 down and branch directly to the start; otherwise clear `LCn`. The loop end clears the loop's
-enable bit for the code after it, so an enclosing loop becomes active again. A set carrying
-both marks (an inner and an outer loop ending together) and `CONT`/`CONTD` are not modelled.
+enable bit for the code after it, so an enclosing loop becomes active again. `CONT`/`CONTD`
+end an iteration early in the same way: when its set's condition holds, the root constructor
+branches to the label once `LCn` is down to one (clearing it and the loop's enable bit there)
+and back to the start otherwise. A set carrying both marks (an inner and an outer loop ending
+together) is not modelled.
 
 ### Vendored community processor modules (#98)
 

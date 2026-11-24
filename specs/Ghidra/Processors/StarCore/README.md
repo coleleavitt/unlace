@@ -40,13 +40,13 @@ its DALU or AGU position as the manual's table describes.
   (each register-size variant of a form counted separately); register pairs and
   quads, effective-address modes with their post-updates, immediates (one's
   complement `~` fields too), PC-relative and absolute targets.
-- p-code for 244 forms: moves between memory and registers (`.B/.W/.L`, signed
+- p-code for 246 forms: moves between memory and registers (`.B/.W/.L`, signed
   and `MOVEU`, every addressing mode), immediate moves, `TFR`, `TFRA`,
   `TFRT`/`TFRF`, `ADD`, `SUB`, `ADDA`, `SUBA`, `AND`, `OR`, `EOR`, `IMPY`,
   shifts, `NEG`, `NOT`, `ABS`, `INC`, sign and zero extension, the compare and
   test instructions (T bit), `BRA`, `BT`, `BF`, `BSR`, `JMP`, `JSR`, `JT`, `JF`,
   `RTS`, `RTE` and their delayed forms, `NOP`, and the hardware loops: `DOSETUPn`, `DOENn`,
-  `DOENSHn`, `SKIPLS`, `BREAK` and the prefix loop marks (below).
+  `DOENSHn`, `SKIPLS`, `BREAK`, `CONT`, `CONTD` and the prefix loop marks (below).
 
 ## Hardware loops
 
@@ -57,15 +57,16 @@ one-set short loop, `LPMARKB` two sets before the last of a long loop or on the 
 two-set short loop (carried forward in context to the set that ends the iteration). After that
 set, while `LCn > 1` it counts down and branches to the start, otherwise `LCn` is cleared and the
 loop's enable bit is cleared for the code that follows. `SKIPLS` branches when the active `LCn`
-is zero or less.
+is zero or less. `CONT`/`CONTD`, under their set's condition, branch to their label when
+the active `LCn` is one or less (clearing it) and back to the loop start otherwise, `CONTD`
+after its delay slot.
 
 ## Gaps
 
-- 113 named user operations: fractional multiply and MAC (`MPY`, `MAC`, `MACR`, ...),
+- 111 named user operations: fractional multiply and MAC (`MPY`, `MAC`, `MACR`, ...),
   the 16-bit pair, Viterbi and BMU bit-mask instructions, `DIV`, bit-field
   `EXTRACT`/`INSERT`, the multi-register moves (`.2W`, `.2L`, `.4W`, `.4F`),
-  fractional moves with scaling, the loop continue instructions `CONT` and `CONTD`,
-  `PUSH`/`POP`, interrupt and debug control, and `sc_active_lc` for `SKIPLS`
+  fractional moves with scaling, `PUSH`/`POP`, interrupt and debug control, and `sc_active_lc` for `SKIPLS`
   where no enabled loop is known.
 - A set that carries both loop marks (an inner and an outer loop ending together) only ends
   the inner one; a loop set up in another function, or through `SR`/`LCn`/`SAn` moves, is not

@@ -4256,6 +4256,17 @@ document hashes the whole file and records the slice's own hash as
 An unreadable or unparseable binary is exit `1` with the reason on stderr; a
 malformed command line (an unknown `--format`) is exit `2` with the usage block.
 
+## `unlace identify-packer` — ranked packer classification with evidence
+
+```sh
+unlace identify-packer ./app              # text report
+unlace identify-packer ./app --json       # one JSON object
+```
+
+A read-only, deterministic classifier. It names a packer when a section carries a known packer's section name (UPX, ASPack, Themida/WinLicense, MPRESS, Enigma, VMProtect, PEtite, FSG, NsPack, MEW), then ranks hypotheses from per-section Shannon entropy (7.0 bits/byte or more reads as compressed or encrypted), executable high-entropy sections, and whether the entry point lies in a writable section or outside `.text`/`__text`. The report lists every section with its entropy and access bits, the unsupported recovery steps, and the next commands to run. `unlace unpack` does the actual UPX, NEOLite and PKLITE unpacking.
+
+Not yet reported: TLS callbacks, and the Mach-O write bit (the section record does not carry it, so a Mach-O section is never reported writable). Nothing is unpacked or executed.
+
 ## `unlace unpack` — statically unpack a UPX-, NEOLite- or PKLITE-packed executable
 
 ```bash

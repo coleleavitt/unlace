@@ -469,12 +469,23 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
                 decl: decl.to_string(),
             }
         }
+        "noreturn" => {
+            let (func, tail) = take_token(rest);
+            if func.is_empty() || !tail.is_empty() {
+                return Err(bad(
+                    "noreturn takes exactly <func> (a function name or a hex entry address)",
+                ));
+            }
+            Body::NoReturn {
+                func: func.to_string(),
+            }
+        }
         "" => return Err("--assert: empty directive".into()),
         other => {
             return Err(format!(
                 "--assert {raw:?}: unknown directive {other:?} (want one of \
                  function, typedef, prototype, callproto, data, param, return, comment, flow, callee, \
-                 name, type, format, isolate, readonly, volatile, bytes)"
+                 name, type, format, isolate, readonly, volatile, bytes, register, noreturn)"
             ));
         }
     };

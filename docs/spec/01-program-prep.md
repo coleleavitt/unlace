@@ -6943,8 +6943,18 @@ every other binary's pass list is byte-identical to before the pass existed):
   prints a CALLIND whose target is a LOAD of a method slot of such a record
   (`PTRSUB` or `INT_ADD` of the record pointer and a constant at or past
   offset 24) as `Interface.Method(args)`, the receiver first:
-  `main.Shape.Area(s_data)`. The slots carry no prototype, so the arguments
-  are the ones the call site recovers.
+  `main.Shape.Area(s_data)`. When the image's default prototype model is
+  the Go register ABI (`abi-internal`), each slot whose method signature
+  (`crates/unlace-analysis/src/analyzers/gotypes/kuna_itabtypes.rs (method_pieces)`,
+  read from the `Imethod.Typ` func descriptor) is all one-register scalars,
+  integers and bool at their own width and the pointer-shaped kinds (pointer,
+  unsafe pointer, chan, map, func) as an opaque pointer, with at most eight
+  parameters, at most one result and no variadic tail, is a pointer to a
+  function of that prototype under that model, the receiver (the data word,
+  an opaque pointer) first; `ActionDeindirect` forces it on a call through a
+  table typed by the record, so the call passes exactly those arguments. Any
+  other slot is an untyped `code *` and the call keeps the arguments the
+  call site recovers.
   The table pointer need not be typed: the printer also follows it back
   through copies and joins whose inputs all agree to a LOAD of the first word
   of an interface-typed field of a named struct, read through a chain of
@@ -6969,6 +6979,21 @@ every other binary's pass list is byte-identical to before the pass existed):
   `Cache` word points at; a join input computed from a read of that word
   within eight defining ops counts as the same interface, any other input must
   resolve to it.
+  A stripped binary has no DWARF to type an interface parameter, but its
+  callers state it: converting a concrete value to an interface at a call
+  loads the static itab into the register that carries the table word. The
+  Listing consumer
+  (`crates/unlace-analysis/src/analyzers/gotypes/kuna_itabargs.rs (votes)`,
+  x86-64, run only under the option) takes every `LEA` of a static itab (the
+  located itabs and their interfaces, as the harvest finds them), follows its
+  fall-through to the first direct call within 16 instructions, refusing a
+  branch, an indirect call and any instruction that names the register or one
+  of its parts as its first operand (except `CMP`, `TEST`, `PUSH`, `NOP`,
+  `BT`) or writes registers it does not name, and votes
+  `(callee, register) -> interface`. A Go value of interface type has one
+  static type, so a pair with two interfaces is dropped; a pair every vote
+  agrees on, whose interface has a record, becomes an unlocked input hint:
+  the callee's register is `arg<N>_tab`, a pointer to the record.
 
 - **Go pclntab** (`gopclntab`, Go-detected binaries only, always on;
   `crates/unlace-analysis/src/analyzers/pclntab/mod.rs`): the runtime
@@ -8803,8 +8828,11 @@ both
   offsets. A forward reference resolves to the definition with the same unique
   name; an aggregate is interned before its members are walked, so a pointer to
   itself names the shell. A class carries each base class as a `super_<Base>`
-  member and its table pointer as a `__vftable` member at offset 0; bitfield
-  members, overlapping members and members past the stated size are left out.
+  member and its table pointer as a `__vftable` member at offset 0. A structure's
+  bitfield (an `LF_MEMBER` of an `LF_BITFIELD` type) keeps its bit position, placed
+  in the smallest byte span that covers it as `dwarfstructs` does (PE images are
+  little-endian); overlapping members, members past the stated size and a union's
+  bitfields are left out.
   Every procedure record in the module streams then gives its entry address a
   prototype from its type (a member function's `this` first), the parameter names
   coming from the procedure's own parameter records: the `S_LOCAL`s flagged as
@@ -8833,8 +8861,9 @@ both
   type become typed globals, and each `??_7` vftable public is typed as an array
   of code pointers, one per slot the virtuals its class or its primary base
   introduces occupy (a per-base table of a multiply-inheriting class is left
-  untyped). The facts are computed at load whenever `pdb` finds a `.pdb` and
-  committed only with `pdb` and `pdbtypes` both on. Default off: it changes the
+  untyped). The pass runs at the commit, with the deferred entry passes, and only
+  when `pdb` and `pdbtypes` are both on, so a default load never reads the type,
+  module or line streams. Default off: it changes the
   output of every PE with a matching `.pdb`, and the x64 frame math has been
   measured only on the clang-built fixtures `pdb_types_x86_64` and
   `pdb_types_i386` (`unlace-console/tests/verify_pdbtypes.rs`).
@@ -8845,9 +8874,15 @@ both
   every line entry inside a procedure becomes an instruction comment at its
   address, attached to that procedure. Only the file's base name is kept, the
   first entry per address wins, and the compiler's hidden line numbers
-  (`0xfeefee`, `0xf00f00`) and line 0 are dropped. Committed only with `pdb` and
-  `pdblines` both on, and left out of the `aggressive` preset for the reason
+  (`0xfeefee`, `0xf00f00`) and line 0 are dropped. It runs at the commit, only
+  with `pdb` and `pdblines` both on, and is left out of the `aggressive` preset for the reason
   `dwarf_lines` is.
+
+  Every PDB pass (`pdb`, `pdbinterior`, `pdbtypes`, `pdblines`) runs under a
+  panic guard: the `pdb` crate asserts on some malformed records (an `LF_ARRAY`
+  whose dimensions are not followed by the end of the record), so a panic while
+  reading the `.pdb` is caught, reported once as a `[kuna pdb]` line on stderr,
+  and that pass contributes nothing, as if there were no `.pdb`.
 - **CVF trace** (`cvftrace`, PE32 i386 only, default `on`;
   `crates/unlace-analysis/src/analyzers/kuna_cvftrace/mod.rs`): Compaq
   Visual Fortran links a `.trace` section of traceback records into its images,

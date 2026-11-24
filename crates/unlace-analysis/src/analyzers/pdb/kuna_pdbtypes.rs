@@ -39,8 +39,9 @@
 //! out, as is an x64 frame-register slot of a function with no unwind data. Locals
 //! of inlined call sites belong to the inlinee and are skipped.
 //!
-//! Inert unless `pdb` locates a fingerprint-matching `.pdb` beside a PE, and
-//! committed only under `option pdbtypes on` (default off).
+//! Inert unless `pdb` locates a fingerprint-matching `.pdb` beside a PE. Run at
+//! the commit (a deferred pass) and only under `option pdbtypes on` (default
+//! off), so a default load never reads the type or module streams.
 
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -83,12 +84,13 @@ impl AnalysisPass for PdbTypesPass {
     }
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        let mut out = AnalysisOutput::default();
-        let Some((mut pdb, image_base)) = super::open_matched(ctx) else {
-            return out;
-        };
-        collect(&mut pdb, image_base, ctx, &mut out);
-        out
+        super::guarded("pdbtypes", || {
+            let mut out = AnalysisOutput::default();
+            if let Some((mut pdb, image_base)) = super::open_matched(ctx) {
+                collect(&mut pdb, image_base, ctx, &mut out);
+            }
+            out
+        })
     }
 }
 

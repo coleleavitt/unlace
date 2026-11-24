@@ -18,6 +18,7 @@
 use std::collections::BTreeMap;
 
 use object::LittleEndian as LE;
+use object::Object as _;
 use object::pe::IMAGE_FILE_MACHINE_AMD64;
 use object::read::pe::PeFile64;
 

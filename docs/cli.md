@@ -594,6 +594,7 @@ One directive per `--assert`, keyed by intent rather than by phase:
 | `volatile <addr>+<size>` | device memory: every access is a real access |
 | `bytes <addr> <hex\|@FILE>` | the bytes mapped here are these, whatever the file holds |
 | `register <name> <hex value> [<addr>+<size>]` | the register holds this value on entry to code in the range (everywhere without one), a tracked register as a processor spec's `tracked_set` states it: `register CS 0xf000 0xf0000+0x10000` |
+| `noreturn <func>` | the function (a name or a `0x` entry address) never returns: each caller stops at its calls to it; a function is declared at an entry nothing starts at. Every surface applies it; the console script spells it `function noreturn <func>` |
 
 Storage is a register name (`RDI`), the console's `%RDI`, or its address grammar
 (`[stack,-0x18,8]`). Addresses are hexadecimal with or without `0x`. A size is
@@ -5721,7 +5722,8 @@ with another hash is refused unless `--force`.
 - every local type as `typedef <declaration>` (`--no-types` leaves them out);
 - every function as `function <start>[-<end>][=<name>]`: the end of the entry chunk unless the
   function has other chunks, the name unless IDA only has a dummy (`sub_…`) one;
-- every prototype IDA holds as `prototype <start> <declaration>`;
+- every prototype IDA holds as `prototype <start> <declaration>`, and every function IDA marked
+  no-return as `noreturn <start>`;
 - the function comments, and the regular and repeatable comments inside functions, as `comment
   <addr> <text>`, one line per address (`--no-comments` leaves them out). A comment that is one
   identifier is the argument name IDA writes beside each typed call's setup and is left out.
@@ -5733,8 +5735,8 @@ prototype from the type string IDA keeps beside the function, with named types r
 that library and the function named by its C identifier (the directive binds by address). A
 type C cannot spell here (a `__usercall` signature with arguments in named registers, a named type
 the database does not define) is left out and listed in `skipped`. A `.til` of format 0x13 or
-later (newer than kuna_til reads) contributes no types. IDA's no-return flags are reported in
-`noreturn`; the `--assert` vocabulary has no directive for them.
+later (newer than kuna_til reads) contributes no types. IDA's no-return flags are stored as
+`noreturn <entry>` directives and listed in `noreturn`.
 
 ### Decompiling a database directly
 

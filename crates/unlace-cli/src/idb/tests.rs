@@ -110,6 +110,7 @@ fn turns_a_database_into_directives() {
             "typedef typedef unsigned int DWORD;",
             "function 0x1000-0x1010=main",
             "function 0x2000-0x2010=.exit",
+            "noreturn 0x2000",
             "function 0x3000-0x3010=custom",
             "prototype 0x1000 int main(int argc, char **argv)",
             "prototype 0x2000 void _exit(int status)",
@@ -130,11 +131,11 @@ fn turns_a_database_into_directives() {
             comments: false,
         },
     );
-    assert!(
-        bare.directives
+    assert!(bare.directives.iter().all(|d| {
+        ["function ", "noreturn ", "prototype "]
             .iter()
-            .all(|d| d.starts_with("function ") || d.starts_with("prototype "))
-    );
+            .any(|kind| d.starts_with(kind))
+    }));
 }
 
 #[test]

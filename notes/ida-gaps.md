@@ -49,7 +49,7 @@ one idiom or one ecosystem, L = niche. Size: S < 1 PR-day, M = a few PRs, L = a 
 | ~~UEFI cross-module protocol links (install -> implementation)~~ | uefi `sub_14820`, `sub_29D00` | **mostly closed**: `analyzers/uefi/` types protocol lookups' out-parameters from the GUID, types installed interface instances and their member functions, and annotates a lookup with the installing module from an `unlace unpack --protocols` index (`uefi/index`) | - | - |
 | Processor modules with no SLEIGH spec here: RX, RL78, H8/H8500, C166, TMS320C6x/C5x, ST7/ST9, Alpha, M32R, i960, DSP56K, Z8, PDP-11 | `procs/`: 74 modules vs 44 SLEIGH families in `specs/Ghidra/Processors` | none (no spec) | L-M (automotive/industrial firmware: RX, RL78, C166, TMS320) | L each (a SLEIGH spec) |
 
-Beyond these: named Hex-Rays microcode and ctree rules without an unlace equivalent are in `notes/ida-hexrays-rules.md` (`saturated_mul`, Java `synchronized`/`finally`, pre-structuring arm hoisting, ...).
+Beyond these: named Hex-Rays microcode and ctree rules without an unlace equivalent are in `notes/ida-hexrays-rules.md` (`saturated_mul` is done as option `satmul`; Java `synchronized`/`finally`, pre-structuring arm hoisting, ...).
 
 ## Closed since the 2026-11-22 survey (do not re-open)
 

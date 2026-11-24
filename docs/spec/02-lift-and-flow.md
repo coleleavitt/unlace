@@ -4273,6 +4273,43 @@ per encoding against LLVM's names, RV32 and RV64, and LLVM-selected 8- and
 16-bit `atomicrmw`/`cmpxchg` functions that decompile with no bad or
 unimplemented instruction.
 
+
+### RISC-V vector extension (#98)
+
+`riscv.rvv.sinc` decodes the ratified vector extension (RVV 1.0) and the
+ratified vector extensions built on it: Zvbb, Zvbc, Zvkg, Zvkned, Zvknha/Zvknhb,
+Zvksed, Zvksh, Zvfbfmin and Zvfbfwma. It replaces a 0.9-draft table in which
+every instruction was `unimpl` (so any function that reached a `vsetvli`
+stopped at an unimplemented instruction) and which used draft names and
+encodings: `vlxei` instead of `vluxei`/`vloxei`, `vpopc.m`, `vmandnot.mm`,
+`vfredsum.vs`, the removed `vamo*` and `vdot` instructions, and 128- to
+1024-bit element loads. The file is generated: encodings from riscv-opcodes
+(`extensions/rv_v`, `rv_zv*`), mnemonics and operand order from LLVM's
+disassembler (`-M no-aliases`), including the segment forms
+(`vlseg<n>e<eew>.v`, `vlsseg`, `vluxseg`, `vloxseg` and their stores, one
+constructor per `nf`) and a separate constructor for each masked form
+(`vm=0`, displayed `,v0.t`). `vsetvli`/`vsetivli` print their `vtype` as
+`e<sew>,m<lmul>|mf<n>,ta|tu,ma|mu` (new token fields `op2325` for vsew and
+`op2029` for the 10-bit `vsetivli` immediate).
+
+Each instruction lifts to a user operation named after it, with dots as
+underscores (`vadd_vv`, `vlseg2e8_v`, `vsetvli`): its output is the
+register it writes (`vd`, `rd` for `vset*`, `vmv.x.s`, `vcpop.m`,
+`vfirst.m`, or the FP `rd` for `vfmv.f.s`; stores have none) and its inputs
+are the source operands in assembly order, with the old `vd` first for the
+multiply-accumulate, slide-up, scalar-move-into-vector and vector-crypto forms
+and for every masked form, and `v0` last for masked forms. Element-wise
+semantics depend on `vl` and `vtype` at run time, which a static lift cannot
+fix, so they stay inside the user operations; what is kept is the data flow
+between vector registers, scalar registers, FP registers and the memory
+addresses a load or store uses, so a vectorized function decompiles to a
+sequence of calls such as `v8 = vadd_vv(v8,v9)` instead of stopping.
+Exercised by `unlace-cli/tests/riscv_vector.rs`: all 1258 encoding shapes
+against LLVM's names (`fixtures/riscv_vector/probe64.txt`) and LLVM-lowered
+vector functions (load/add/store, a reduction into a scalar, an FMA with a
+scalar operand, a select) that decompile with no bad or unimplemented
+instruction, RV32 and RV64.
+
 ### RISC-V scalar cryptography (#98)
 
 `riscv.rv32k.sinc` (RV32 and RV64) and `riscv.rv64k.sinc` (RV64 only,
@@ -4449,6 +4486,21 @@ the same operand (`vMem32z`), so the qword-index gathers still decode in
 `ZMM16`..`ZMM31` (`EVEX.V'`) still reads as `ZMM0`..`ZMM15`, as for every EVEX
 VSIB operand. Exercised by
 `tests/stages/gh1627-x86-senduipi-gatherpf.xml`.
+
+In 64-bit mode the x86 spec also decodes Intel AMX (`amx.sinc`, #98):
+AMX-TILE `LDTILECFG`, `STTILECFG`, `TILERELEASE`, `TILEZERO`, `TILELOADD`,
+`TILELOADDT1`, `TILESTORED`; AMX-INT8 `TDPBSSD`/`TDPBSUD`/`TDPBUSD`/`TDPBUUD`;
+AMX-BF16 `TDPBF16PS`; AMX-FP16 `TDPFP16PS`; AMX-COMPLEX `TCMMIMFP16PS` and
+`TCMMRLFP16PS` (VEX.128 map 0F38, W0, opcodes 49, 4B, 5C, 5E and 6C, the
+mandatory prefix in VEX.pp selecting the variant; the dot products take the
+destination tile in ModRM.reg, the first source in ModRM.rm and the second in
+VEX.vvvv). The tile registers are not varnodes: each instruction is a user
+operation that takes tile numbers (displayed `TMM0`..`TMM7`), `LDTILECFG`
+reads and `STTILECFG` writes the 64-byte configuration in memory, and the tile
+loads and stores take the `[base + index*scale]` address whose index register
+is the row stride. Before, each was a bad instruction. Exercised by
+`unlace-cli/tests/x86_amx.rs` (every instruction against the LLVM-assembled
+probe, and a tile int8 multiply kernel that decompiles to the user operations).
 
 The x86 VMX lifts report the instruction's outcome the way the hardware does
 (Intel SDM 31.2, "Conventions"): each of `VMLAUNCH`, `VMRESUME`, `VMXOFF`,
@@ -5125,6 +5177,69 @@ block-removal primitive redirects the edge and resets structure.
 
 This normalization removes no computation or memory effect. The existing
 `gowritebarrier` pass independently removes the exposed runtime bookkeeping.
+
+## 2.17 Pre-structuring arm hoist
+
+**(ida) `option armhoist`, default off,
+`crates/unlace-lift/src/p2_lift/kuna_armhoist.rs (ActionArmHoist)`.** When both
+arms of a two-way branch begin or end with the same instruction, the compiler
+has emitted it twice and the structured C prints it twice:
+`if (c) { x = 1; f(x); } else { x = 2; f(x); }` where the source wrote
+`f(x)` once after the `if`. Hex-Rays moves such instructions out of the arms
+on microcode before it structures (`EXTRACT_IDENTICAL_HEAD_IF_INSNS`,
+`EXTRACT_EQUAL_IF_TAIL_INSNS`, and `REMOVE_IF_BRANCH` for an arm left empty;
+`notes/ida-hexrays-rules.md`). `dedupitetail` (chapter 8) merges equal leaves
+of the structured tree after structuring; this pass does the hoist in the
+p-code, before structuring, so the structurer, the merge and every later rule
+see one copy.
+
+**Candidates.** A basic block B ending in a CBRANCH with two distinct
+successors T and F, neither of them B, each with B as its only predecessor.
+The *head* of an arm is its first op when that op is not a flow break. When T
+and F also each have a single out-edge to the same block J, J is neither B, T
+nor F, and J has exactly the two in-edges from T and F, the branch also has a
+*tail*: the last op of each arm, skipping one closing BRANCH.
+
+**Op identity.** Two ops are the same op when their opcodes are equal, their
+outputs are both absent or name the same storage (space, offset, size), and
+each input pair names the same storage or is a pair of equal constants of
+equal size. Annotation inputs never match. The pass declines an op that reads
+or writes the unique space (a SLEIGH temporary must not cross a block) and the
+opcodes BRANCH, CBRANCH, BRANCHIND, RETURN, MULTIEQUAL, INDIRECT, NEW, CPOOLREF
+and SEGMENTOP.
+
+**The edit.** At the head, while the two first ops are the same op, the op in
+T moves to just before B's CBRANCH and the op in F is destroyed. At the tail,
+while the two last ops are the same op, the op in T moves to the start of J
+(each later one before the one moved last, so their order is kept) and the op
+in F is destroyed. A destroyed CALL loses its `FuncCallSpecs` record first
+(`Funcdata::delete_call_specs`); the moved call keeps its own. At most 16 ops
+move from each end of one branch.
+
+**Why it preserves semantics.** The pass runs in the pre-SSA window: it is
+registered in `mainloop` right after `outline` and before `varnodeprops`,
+and it returns at once when the `Ssa` maturity fact is settled. There an op is
+the storage it reads and writes; nothing links one op's output to another
+op's input, and no INDIRECT or MULTIEQUAL has to be patched. A tail op and its
+copy run right before the branch into J, and J is entered only from T and F,
+so running the op once at the start of J runs it at the same point on every
+path. A head op moves only across B's CBRANCH, which writes nothing and reads
+only its condition, so the move is sound when the op cannot change the
+condition: a pure op or LOAD must not write storage that overlaps it, and a
+CALL, CALLIND, CALLOTHER or STORE, whose effects are not limited to its output,
+moves only when the condition is a constant or a unique temporary.
+
+**What it changes downstream.** A shared call prints once after the `if`, and
+the per-arm argument setup becomes a phi at the join, so the example above
+reads `if (c) { x = 1; } else { x = 2; } f(x);`. An arm left with nothing but
+its branch is removed by the dead-control-flow passes (`ActionDoNothing`), and
+a branch with both arms emptied is folded like any other redundant CBRANCH.
+
+**The option.** `option armhoist on|off`, default **off**: it moves code across
+a branch before structuring and has not yet been measured against the 675
+datatest assertions, decbench GED or the speed budget. When off,
+`ActionArmHoist::apply` returns before reading the CFG and output is
+unchanged.
 
 ## Octeon integer targets
 

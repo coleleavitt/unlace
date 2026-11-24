@@ -12,6 +12,8 @@ mod riscv_bitmanip;
 mod riscv_crypto;
 #[path = "riscv_hints.rs"]
 mod riscv_hints;
+#[path = "riscv_vector.rs"]
+mod riscv_vector;
 #[path = "riscv_zabha.rs"]
 mod riscv_zabha;
 #[path = "riscv_zcb.rs"]
@@ -26,6 +28,8 @@ mod riscv_zfh;
 mod rust_signature_summary;
 #[path = "sparc_prologue_start.rs"]
 mod sparc_prologue_start;
+#[path = "x86_amx.rs"]
+mod x86_amx;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

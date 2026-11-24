@@ -3957,6 +3957,13 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::NoreturnKnown>()
                 .0
         }
+        // (kuna `goitabcalls`) Interface parameters typed from the static itabs
+        // callers pass: only under the option.
+        "goitabargs" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_goitabcalls::GoItabCalls>()
+                .0
+        }
         // (kuna) PE/Mach-O import-slot call binding — typed-slot `externref`
 
         // paint plus PE-only Win32 no-return names, committed only when enabled.
@@ -9015,6 +9022,10 @@ fn commit_analysis_output(
     // 7c. An Objective-C direct method's `self`, the same unlocked hint; a
     //     function Swift already hinted keeps that one.
     commit_input_hints(prog, code_space, &out.objc_self_hints);
+    // 7c'. (kuna `goitabcalls`) A stripped Go function's interface table word,
+    //      typed from the static itabs its callers pass; a function another
+    //      source already hinted keeps that hint.
+    commit_input_hints(prog, code_space, &out.go_itab_inputs);
 
     // 7d. (kuna `swiftmetadata`) Each local Swift enum's case count by its
     //     metadata accessor: the bound of the table its `switch` indexes

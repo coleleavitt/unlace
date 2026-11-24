@@ -372,9 +372,12 @@ subsection of its `linking` custom section (version 2), for every index the
 `name` section does not name (`loader/format/wasm.rs`). An undefined symbol
 is named only when it carries `WASM_SYM_EXPLICIT_NAME`.
 
-(kuna, unlace#678) A relocatable object for a 16-bit machine (AVR, MSP430) is
-laid out from `SMALL_RELOC_BASE` (0x100) instead of 0x400000, which is past
-the end of its address space; every other machine keeps 0x400000
+(kuna, unlace#678) A relocatable object for a 16-bit machine is laid out
+inside its address space instead of at 0x400000, which is past its end: an AVR
+object from `SMALL_RELOC_BASE` (0x100), an MSP430 object from
+`MSP430_RELOC_BASE` (0x200, the first RAM address, above the special-function
+and peripheral registers the processor spec names, so a laid-out global does
+not print as `TBCCR5`); every other machine keeps 0x400000
 (`reloc_object::reloc_base`, also used by the FID relocation map).
 
 (kuna, unlace#676) Six more ELF machines are read from the header

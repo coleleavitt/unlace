@@ -395,6 +395,17 @@ matching generic targets). RDNA images take the wave32 language, because the
 wave size is in the kernel descriptor, not the ELF header; wave64 code and
 GFX9.4, GCN 1-4 and GFX12 images still need an explicit `--target`.
 
+Five further machines are routed the same way:
+- `EM_68K` (4) selects `68000:BE:32:Coldfire` when `e_flags` names a ColdFire ISA
+  (`EF_M68K_CF_MASK`), `68000:BE:32:default` for `EF_M68K_M68000`, and `68000:BE:32:MC68020`
+  otherwise (gcc's default `-m68020` has no flag).
+- `EM_OPENRISC` (92) and `EM_XTENSA` (94) take the language of the header's byte order.
+- `EM_CSKY` (252) selects ABIv1 when `e_flags` bits 28-31 are 1, and ABIv2 otherwise, in the
+  header's byte order.
+- `EM_CUDA` (190) selects the SASS language of the `sm_NN` in `e_flags`. The SM number is in
+  bits 8-15 from ELF ABI version 8 (CUDA 12.8 ptxas), and in bits 0-7 before that. An
+  architecture with no SASS language (sm_30, sm_32) still needs `--target`.
+
 (kuna) PowerPC32 ELF APU requirements are read by
 `crates/unlace-analysis/src/loader/kuna_ppcaputarget.rs` when the
 default-off `ppcapu` load-time option is on. SPE and embedded floating-point APUs

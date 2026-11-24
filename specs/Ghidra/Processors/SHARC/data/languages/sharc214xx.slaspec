@@ -1,0 +1,474 @@
+# Analog Devices ADSP-214xx SHARC (ADSP-21467/21469, 21477-21479, 21483-21489):
+# the 48-bit SHARC instruction set (ISA) and the Variable Instruction Set Architecture
+# (VISA, 16/32/48-bit instructions in short-word memory).
+#
+# Code space.  One code space, sw, whose addressable unit is a 16-bit short word: VISA
+# code sits at its short-word (SW) address.  48-bit ISA code is placed at the SW alias of
+# its 48-bit address -- the three short words that hold it in the same physical SRAM
+# column, SW = 3*A48 - (A48 & 0xe0000) (block 0: 0x8c000 -> 0x124000) -- with the most
+# significant parcel first, so one program holds both kinds of code exactly as they
+# overlap in block 0.  The context bit `visa` selects the decoder (0 = ISA).
+#
+# Data space.  dm has 32-bit units (normal-word addresses) and holds internal memory,
+# external memory and the IOP registers; PM data accesses use the same space.
+#
+# Hardware loops.  DO ... UNTIL marks its loop's last instruction with context (lend,
+# lterm, ltop); the root table below adds the loop-back there, so the decompiler sees an
+# ordinary loop.  The loop-counter stack is six registers, pushed by DO and popped when
+# the loop ends, so nested loops restore their counts and the saves fold away.
+#
+# Delayed branches.  A (DB) branch executes the next two instructions.  In ISA code that
+# is 12 bytes; in VISA code the delay-slot byte count depends on the first slot's length,
+# which the context field `dslot` records (see DS below and the SHARC Delay Slot analyzer).
+#
+# SIMD.  MODE1 PEYEN is a run-time mode; like bit-reverse addressing (brm0/brm8) it is a
+# context bit, simd, set by the user (or an analyzer) over code that runs with PEYEN on.  With
+# simd = 1 every instruction also performs its implicit PEy half (PGR "SIMD Mode" and the
+# "SIMD Explicit/Implicit Operation" of each ch. 9 type): computes on Sn, MSF/MSB and the
+# ASTATy/STKYy flags, conditions tested per PE (computes and data moves) or on both PEs
+# (branches, DO UNTIL), data moves of the complementary registers at address + 1 (normal word)
+# or + 2 (short word).  The simd = 1 constructors are separate (generated last), so simd = 0
+# decodes to exactly the SISD constructors.  The display is the explicit instruction.
+#
+# The instruction tables are generated: see tools/gen_sinc.py.
+
+define endian=big;
+define alignment=2;
+
+define space sw       type=ram_space      size=4 wordsize=2 default;
+define space dm       type=ram_space      size=4 wordsize=4;
+define space register type=register_space size=4;
+
+define register offset=0x000 size=4 [ R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 ];
+define register offset=0x040 size=4 [ I0 I1 I2 I3 I4 I5 I6 I7 I8 I9 I10 I11 I12 I13 I14 I15 ];
+define register offset=0x080 size=4 [ M0 M1 M2 M3 M4 M5 M6 M7 M8 M9 M10 M11 M12 M13 M14 M15 ];
+define register offset=0x0C0 size=4 [ L0 L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 L11 L12 L13 L14 L15 ];
+define register offset=0x100 size=4 [ B0 B1 B2 B3 B4 B5 B6 B7 B8 B9 B10 B11 B12 B13 B14 B15 ];
+define register offset=0x140 size=4 [ S0 S1 S2 S3 S4 S5 S6 S7 S8 S9 S10 S11 S12 S13 S14 S15 ];
+define register offset=0x180 size=4 [ FADDR DADDR UREG_62 PC PCSTK PCSTKP LADDR CURLCNTR
+                                      LCNTR EMUCLK EMUCLK2 PX PX1 PX2 TPERIOD TCOUNT ];
+define register offset=0x1C0 size=4 [ USTAT1 USTAT2 MODE1 MMASK MODE2 FLAGS ASTATX ASTATY
+                                      STKYX STKYY IRPTL IMASK IMASKP LRPTL USTAT3 USTAT4 ];
+# Multiplier result registers (PGR Figure 3-2): 80 bits, MR2 (16) : MR1 (32) : MR0 (32).
+# MRF/MRB are MR1:MR0 (64 bits) and MR2F/MR2B the 16 guard bits; the 80-bit arithmetic
+# carries between them explicitly (see the mac macros below).
+define register offset=0x200 size=8 [ MRF MRB ];
+define register offset=0x200 size=4 [ MR1F MR0F MR1B MR0B ];
+define register offset=0x210 size=2 [ MR2F MR2B ];
+# The bit FIFO (ADSP-214xx shifter, PGR "Bit FIFO"): 64 bits and its write pointer, and
+# the shifter FIFO flag SF (condition 14 on the ADSP-2147x/2148x; ASTAT holds it read-only).
+define register offset=0x220 size=8 [ BFF ];
+define register offset=0x228 size=4 [ BFFWRP ];
+define register offset=0x22C size=1 [ SF ];
+# Loop-counter stack below CURLCNTR and loop-address stack below LADDR (six levels each,
+# PGR Table 4-4).
+define register offset=0x240 size=4 [ LCSTK0 LCSTK1 LCSTK2 LCSTK3 LCSTK4 LCSTK5 ];
+define register offset=0x260 size=4 [ LASTK0 LASTK1 LASTK2 LASTK3 LASTK4 LASTK5 ];
+# Loading Bn also loads In; the ureg loads write their register and, through a companion
+# field, In for a B code or this scratch register for every other code (never read).
+define register offset=0x280 size=4 [ BIX ];
+# PC stack below PCSTK (30 entries in all, PGR Table 4-4) and the status stack (15 levels
+# of MODE1, ASTATx, ASTATy).
+define register offset=0x300 size=4 [ PCS1 PCS2 PCS3 PCS4 PCS5 PCS6 PCS7 PCS8 PCS9 PCS10
+                                      PCS11 PCS12 PCS13 PCS14 PCS15 PCS16 PCS17 PCS18 PCS19
+                                      PCS20 PCS21 PCS22 PCS23 PCS24 PCS25 PCS26 PCS27 PCS28 PCS29 ];
+define register offset=0x380 size=4 [ SSM0 SSM1 SSM2 SSM3 SSM4 SSM5 SSM6 SSM7 SSM8 SSM9 SSM10 SSM11 SSM12 SSM13 SSM14 ];
+define register offset=0x3C0 size=4 [ SSX0 SSX1 SSX2 SSX3 SSX4 SSX5 SSX6 SSX7 SSX8 SSX9 SSX10 SSX11 SSX12 SSX13 SSX14 ];
+define register offset=0x400 size=4 [ SSY0 SSY1 SSY2 SSY3 SSY4 SSY5 SSY6 SSY7 SSY8 SSY9 SSY10 SSY11 SSY12 SSY13 SSY14 ];
+define register offset=0x440 size=4 [ SSP ];
+# SIMD (PEy, MODE1 PEYEN): the PEy multiplier result registers MSF/MSB (PGR "PEy Multiplier
+# Results Registers", the same 80-bit layout as MRF/MRB), PEy's bit FIFO, write pointer and SF
+# flag (each processing element has its own shifter, PGR "SIMD Mode"; SF is ASTATy bit 14), and
+# NOCOMP, the sink for the implicit transfer of a universal register that has no complement
+# (PGR Table 10-3; written, never read).
+define register offset=0x480 size=8 [ MSF MSB ];
+define register offset=0x480 size=4 [ MS1F MS0F MS1B MS0B ];
+define register offset=0x490 size=2 [ MS2F MS2B ];
+define register offset=0x498 size=8 [ BFFY ];
+define register offset=0x4A0 size=4 [ BFFWRPY ];
+define register offset=0x4A4 size=1 [ SFY ];
+define register offset=0x4A8 size=4 [ NOCOMP ];
+
+# Arithmetic status (ASTATx, PGR Table A-6), sticky status (STKYx, Table A-7), MODE1
+# (Table A-1) and FLAGS (Table A-5) bits.  The flags are bit ranges of their registers, so
+# moving ASTATX/STKYX/MODE1 through a ureg move reads and writes the same bits.
+define bitrange AZ=ASTATX[0,1] AV=ASTATX[1,1] AN=ASTATX[2,1] AC=ASTATX[3,1] AS=ASTATX[4,1]
+                AI=ASTATX[5,1] MN=ASTATX[6,1] MV=ASTATX[7,1] MU=ASTATX[8,1] MI=ASTATX[9,1]
+                AF=ASTATX[10,1] SV=ASTATX[11,1] SZ=ASTATX[12,1] SS=ASTATX[13,1]
+                BTF=ASTATX[18,1] CACC=ASTATX[24,8]
+                AUS=STKYX[0,1] AVS=STKYX[1,1] AOS=STKYX[2,1] AIS=STKYX[5,1] MOS=STKYX[6,1]
+                MVS=STKYX[7,1] MUS=STKYX[8,1] MIS=STKYX[9,1] CB7S=STKYX[17,1] CB15S=STKYX[18,1]
+                BR8=MODE1[0,1] BR0=MODE1[1,1] ALUSAT=MODE1[13,1] TRUNC=MODE1[15,1] CBUFEN=MODE1[24,1]
+                FLAG0=FLAGS[0,1] FLAG1=FLAGS[2,1] FLAG2=FLAGS[4,1] FLAG3=FLAGS[6,1];
+# The PEy flags in ASTATy/STKYy (same layout, PGR Tables A-6/A-7; the stack and circular
+# buffer sticky bits exist in STKYx only, PGR "Conditional Instruction Execution in SIMD Mode").
+define bitrange AZY=ASTATY[0,1] AVY=ASTATY[1,1] ANY=ASTATY[2,1] ACY=ASTATY[3,1] ASY=ASTATY[4,1]
+                AIY=ASTATY[5,1] MNY=ASTATY[6,1] MVY=ASTATY[7,1] MUY=ASTATY[8,1] MIY=ASTATY[9,1]
+                AFY=ASTATY[10,1] SVY=ASTATY[11,1] SZY=ASTATY[12,1] SSY=ASTATY[13,1]
+                BTFY=ASTATY[18,1] CACCY=ASTATY[24,8]
+                AUSY=STKYY[0,1] AVSY=STKYY[1,1] AOSY=STKYY[2,1] AISY=STKYY[5,1] MOSY=STKYY[6,1]
+                MVSY=STKYY[7,1] MUSY=STKYY[8,1] MISY=STKYY[9,1];
+
+define register offset=0x500 size=8 contextreg;
+define context contextreg
+  visa  = (0,0)   noflow   # 1 = VISA decoding, 0 = 48-bit ISA
+  lend  = (1,1)   noflow   # this instruction is the last one of a DO loop
+  dslot = (2,3)   noflow   # (DB) in VISA code: first delay slot is 2/4/6 bytes (0/1/2)
+  dslot2 = (4,5)  noflow   # (DB) in VISA code: second delay slot is 2/4/6 bytes (0/1/2)
+  brm0  = (6,6)   noflow   # bit-reverse mode of DAG1 (MODE1 BR0) assumed on: I0 post-modify output reversed
+  brm8  = (7,7)   noflow   # bit-reverse mode of DAG2 (MODE1 BR8) assumed on: I8 post-modify output reversed
+  lterm = (8,12)  noflow   # the loop's termination code (15 = LCE, 31 = FOREVER)
+  simd  = (13,13) noflow   # SIMD mode (MODE1 PEYEN) assumed on: PEy executes the implicit half
+  ltop  = (32,55) noflow   # the loop's first instruction
+;
+
+# Hardware state that p-code cannot reach: core halt states and the instruction cache.
+define pcodeop idle;       define pcodeop emuidle;   define pcodeop flushcache;
+
+# ---------------------------------------------------------------- fixed-point ALU
+# Results and flags follow PGR ch. 11 "ALU Fixed-Point Computations" and Table 3-2.
+macro fixres(r) { AZ = (r == 0); AN = (r s< 0); AF = 0; AS = 0; AI = 0; }
+macro fixlogic(r) { fixres(r); AV = 0; AC = 0; }
+
+# d = x + y + c with AC (carry out of bit 31), AV (signed overflow), ALUSAT saturation and
+# the AOS sticky bit.  Subtraction is x + ~y + 1 (borrow-free carry).
+macro aluadd(d, x, y, c) {
+	local s:4 = x + y + c;
+	AC = carry(x, y) || carry(x + y, c);
+	AV = (((x ^ s) & (y ^ s)) s< 0);
+	local satv:4 = 0x7fffffff + zext(s s>= 0);
+	s = s + zext(AV && ALUSAT) * (satv - s);
+	d = s; fixres(s); AOS = AOS || AV;
+}
+
+# COMP / COMPU: AZ, AN and the compare accumulator CACC (MSB = x > y).
+macro compflags(gt) { AV = 0; AC = 0; AS = 0; AF = 0; CACC = (CACC >> 1) | (zext(gt) << 7); }
+
+# ---------------------------------------------------------------- floating-point ALU
+# Results follow PGR ch. 11 "ALU Floating-Point Computations": a NAN result is all ones;
+# AZ is set for zero or denormal results, AV for an infinite result, AI for NAN operands.
+# The modelled rounding is the C run-time configuration (round to nearest, 32-bit
+# results): see GHIDRA-RARE.md.
+macro fltnan(r) { r = r | (zext(nan(r)) * 0xffffffff); }
+# A denormal is flushed to zero of the same sign (inputs and post-rounded results).
+macro ftz(v) { v = v & ~(zext((v & 0x7f800000) == 0) * 0x7fffff); }
+macro fltres(r) {
+	AZ = ((r & 0x7f800000) == 0); AN = (r s< 0); AF = 1; AC = 0; AS = 0;
+	AUS = AUS || (((r & 0x7f800000) == 0) && ((r & 0x7fffff) != 0));
+	ftz(r);
+}
+macro fltov(r) { AV = ((r & 0x7fffffff) == 0x7f800000); AVS = AVS || AV; }
+macro fltinv(i) { AI = i; AIS = AIS || i; }
+
+# x * 2^n on the bit pattern (SCALB, FLOAT/FIX BY): zero and denormal stay signed zero,
+# infinity stays infinity, a NAN becomes all ones; exponent overflow gives infinity and
+# underflow signed zero.
+macro scalbf(d, x, n) {
+	local e:4 = (x >> 23) & 0xff;
+	local ne:4 = e + n;
+	local sg:4 = x & 0x80000000;
+	local r:4 = (x & 0x807fffff) | ((ne & 0xff) << 23);
+	r = r + zext(ne s>= 255) * ((sg | 0x7f800000) - r);
+	r = r + zext(ne s<= 0) * (sg - r);
+	r = r + zext(e == 0) * (sg - r);
+	r = r + zext(e == 255) * (x - r);
+	d = r;
+}
+
+# Fixed-point conversion of v (already scaled): toward zero (tz = 1, TRUNC) or by the
+# MODE1 TRUNC bit (FIX: toward minus infinity, else to nearest even).  Out of range and
+# infinity saturate under ALUSAT, else give all ones; a NAN gives all ones.
+macro fixconv(d, v, tz) {
+	local fl:4 = floor(v);
+	local fr:4 = v f- fl;
+	local fli:4 = trunc(fl);
+	local up:4 = zext((fr f> 0x3f000000:4) || ((fr f== 0x3f000000:4) && ((fli & 1) == 1)));
+	local near:4 = fli + up;
+	local r:4 = trunc(v);
+	r = r + zext(tz == 0) * (zext(TRUNC) * fli + zext(TRUNC == 0) * near - r);
+	local big:1 = (v f>= 0x4f000000:4) || (v f< 0xcf000000:4);
+	local sat:4 = 0x7fffffff + zext(v f< 0:4);
+	local ovr:4 = sat + zext(ALUSAT == 0) * (0xffffffff - sat);
+	r = r + zext(big) * (ovr - r);
+	r = r | (zext(nan(v)) * 0xffffffff);
+	AV = big; AVS = AVS || AV;
+	fltinv(nan(v) || (big && ALUSAT == 0));
+	d = r; AZ = (r == 0); AN = (r s< 0); AF = 1; AC = 0; AS = 0;
+}
+
+# ---------------------------------------------------------------- shifter: 16-bit floats
+# FPACK / FUNPACK (PGR 11-84): sign, 4-bit exponent (bias 7), 11-bit fraction; gradual
+# underflow below exponent 121, fractions rounded to nearest even.
+macro fpack(d, x) {
+	local sgn:4 = (x >> 16) & 0x8000;
+	local e:4 = (x >> 23) & 0xff;
+	local f:4 = x & 0x7fffff;
+	local nv:4 = ((((e >> 4) & 8) | (e & 7)) << 11) | (f >> 12);
+	local rb:4 = (f >> 11) & 1;
+	local st:4 = zext((f & 0x7ff) != 0);
+	nv = nv + (rb & (st | (nv & 1)));
+	local ov:1 = (nv > 0x7fff);
+	nv = nv - zext(ov) * (nv - 0x7fff);
+	local m:4 = f | 0x800000;
+	local sh:4 = 134 - e;
+	local dv:4 = m >> sh;
+	local drb:4 = (m >> (sh - 1)) & 1;
+	local dst:4 = zext((m & ((1 << (sh - 1)) - 1)) != 0);
+	dv = dv + (drb & (dst | (dv & 1)));
+	local big:1 = (e > 135);
+	local norm:1 = (e > 120) && (e <= 135);
+	local den:1 = (e > 109) && (e <= 120);
+	local r:4 = sgn | (zext(big) * 0x7fff + zext(norm) * nv + zext(den) * dv);
+	r = r * zext(e > 109);
+	d = r; SV = big || (norm && ov); SZ = 0; SS = 0;
+}
+macro funpack(d, x) {
+	local s:4 = (x & 0x8000) << 16;
+	local e4:4 = (x >> 11) & 15;
+	local f11:4 = x & 0x7ff;
+	local nexp:4 = ((e4 & 8) << 4) | (((~e4 >> 3) & 1) * 0x78) | (e4 & 7);
+	local nr:4 = s | (nexp << 23) | (f11 << 12);
+	local lz:4 = lzcount(f11) - 21;
+	local dfr:4 = ((f11 << (lz + 1)) & 0x7ff) << 12;
+	local dr:4 = ((120 - lz) << 23) | dfr;
+	dr = s | (dr * zext(f11 != 0));
+	d = nr * zext(e4 != 0) + dr * zext(e4 == 0);
+}
+
+# ---------------------------------------------------------------- multiplier
+# 80-bit results (MR2:MR1:MR0) are handled as a 16-bit high part h and a 64-bit low part l
+# (tools/gen_sinc.py writes the products, accumulation, saturation and flags).
+# Round an 80-bit value to nearest even at bit 32 (the MR1/MR0 boundary, PGR "Round MRx").
+macro mrround(h, l) {
+	local half:8 = 0x80000000;
+	local nl:8 = l + half;
+	h = h + zext(carry(l, half));
+	nl = nl & ~(zext((nl & 0xffffffff) == 0) << 32);
+	l = nl;
+}
+
+# ---------------------------------------------------------------- data address generators
+# Post-modify with circular buffering (PGR "Circular Buffering Mode"): when CBUFEN is set
+# and Ln is not zero the index wraps into [Bn, Bn + Ln).  cb is the CB7S/CB15S sticky bit
+# for I7/I15 (BIX elsewhere, never read).
+macro postmod(i, m, b, l) {
+	local ni:4 = i + m;
+	local on:1 = CBUFEN && (l != 0);
+	local hi:1 = on && (ni >= b + l);
+	local lo:1 = on && (ni < b);
+	ni = ni - zext(hi) * l + zext(lo) * l;
+	i = ni;
+}
+# MODIFY wraps whenever Ln is not zero, independent of CBUFEN (PGR "Modify Instruction").
+macro modwrap(d, i, m, b, l) {
+	local ni:4 = i + m;
+	local on:1 = (l != 0);
+	local hi:1 = on && (ni >= b + l);
+	local lo:1 = on && (ni < b);
+	d = ni - zext(hi) * l + zext(lo) * l;
+}
+# Bit-reversed address output of I0/I8 in bit-reverse mode (MODE1 BR0/BR8).
+macro bitrev32(v) {
+	v = ((v >> 1) & 0x55555555) | ((v & 0x55555555) << 1);
+	v = ((v >> 2) & 0x33333333) | ((v & 0x33333333) << 2);
+	v = ((v >> 4) & 0x0f0f0f0f) | ((v & 0x0f0f0f0f) << 4);
+	v = ((v >> 8) & 0x00ff00ff) | ((v & 0x00ff00ff) << 8);
+	v = (v >> 16) | (v << 16);
+}
+
+# ---------------------------------------------------------------- SIMD (PEy)
+# The flag-setting macros above for PEy, writing the ASTATy/STKYy flags (the generator's
+# PEy compute bodies are the PEx bodies with every flag, macro and register renamed).
+macro fixresY(r) { AZY = (r == 0); ANY = (r s< 0); AFY = 0; ASY = 0; AIY = 0; }
+macro fixlogicY(r) { fixresY(r); AVY = 0; ACY = 0; }
+macro aluaddY(d, x, y, c) {
+	local s:4 = x + y + c;
+	ACY = carry(x, y) || carry(x + y, c);
+	AVY = (((x ^ s) & (y ^ s)) s< 0);
+	local satv:4 = 0x7fffffff + zext(s s>= 0);
+	s = s + zext(AVY && ALUSAT) * (satv - s);
+	d = s; fixresY(s); AOSY = AOSY || AVY;
+}
+macro compflagsY(gt) { AVY = 0; ACY = 0; ASY = 0; AFY = 0; CACCY = (CACCY >> 1) | (zext(gt) << 7); }
+macro fltresY(r) {
+	AZY = ((r & 0x7f800000) == 0); ANY = (r s< 0); AFY = 1; ACY = 0; ASY = 0;
+	AUSY = AUSY || (((r & 0x7f800000) == 0) && ((r & 0x7fffff) != 0));
+	ftz(r);
+}
+macro fltovY(r) { AVY = ((r & 0x7fffffff) == 0x7f800000); AVSY = AVSY || AVY; }
+macro fltinvY(i) { AIY = i; AISY = AISY || i; }
+macro fixconvY(d, v, tz) {
+	local fl:4 = floor(v);
+	local fr:4 = v f- fl;
+	local fli:4 = trunc(fl);
+	local up:4 = zext((fr f> 0x3f000000:4) || ((fr f== 0x3f000000:4) && ((fli & 1) == 1)));
+	local near:4 = fli + up;
+	local r:4 = trunc(v);
+	r = r + zext(tz == 0) * (zext(TRUNC) * fli + zext(TRUNC == 0) * near - r);
+	local big:1 = (v f>= 0x4f000000:4) || (v f< 0xcf000000:4);
+	local sat:4 = 0x7fffffff + zext(v f< 0:4);
+	local ovr:4 = sat + zext(ALUSAT == 0) * (0xffffffff - sat);
+	r = r + zext(big) * (ovr - r);
+	r = r | (zext(nan(v)) * 0xffffffff);
+	AVY = big; AVSY = AVSY || AVY;
+	fltinvY(nan(v) || (big && ALUSAT == 0));
+	d = r; AZY = (r == 0); ANY = (r s< 0); AFY = 1; ACY = 0; ASY = 0;
+}
+macro fpackY(d, x) {
+	local sgn:4 = (x >> 16) & 0x8000;
+	local e:4 = (x >> 23) & 0xff;
+	local f:4 = x & 0x7fffff;
+	local nv:4 = ((((e >> 4) & 8) | (e & 7)) << 11) | (f >> 12);
+	local rb:4 = (f >> 11) & 1;
+	local st:4 = zext((f & 0x7ff) != 0);
+	nv = nv + (rb & (st | (nv & 1)));
+	local ov:1 = (nv > 0x7fff);
+	nv = nv - zext(ov) * (nv - 0x7fff);
+	local m:4 = f | 0x800000;
+	local sh:4 = 134 - e;
+	local dv:4 = m >> sh;
+	local drb:4 = (m >> (sh - 1)) & 1;
+	local dst:4 = zext((m & ((1 << (sh - 1)) - 1)) != 0);
+	dv = dv + (drb & (dst | (dv & 1)));
+	local big:1 = (e > 135);
+	local norm:1 = (e > 120) && (e <= 135);
+	local den:1 = (e > 109) && (e <= 120);
+	local r:4 = sgn | (zext(big) * 0x7fff + zext(norm) * nv + zext(den) * dv);
+	r = r * zext(e > 109);
+	d = r; SVY = big || (norm && ov); SZY = 0; SSY = 0;
+}
+# The implicit (PEy) address of a SIMD access (PGR Table 6-4, the "+k" of the ch. 9 type
+# descriptions): the explicit address + 1 in normal-word space, + 2 in short-word space
+# (0x100000-0x1fffff, the internal SW range of this memory map).  SIMD transfers exist in
+# normal-word and short-word space only (PGR "DAG Transfers in SIMD Mode"): ok is clear
+# for the IOP registers (below 0x40000) and the long-word range (0x40000-0x7ffff).
+macro simdea(ey, ok, ea) {
+	ey = ea + 1 + zext((ea >> 20) == 1);
+	ok = (ea >= 0x80000);
+}
+
+# A computed code address.  In ISA code a code pointer is a 48-bit address; like the direct
+# targets (map48 in tools/gen_sinc.py) it is mapped to its short-word alias,
+# SW = 3*A - (A & 0xe0000) for A in 0x80000..0xfffff.  In VISA code pointers are short-word
+# addresses already.  `isa` is the constant exported by ISA, so the decompiler folds the
+# expression away in VISA code.
+macro pmcode(t, isa) {
+	local s48:4 = isa * zext((t >> 19) == 1);
+	t = t + s48 * (2 * t - (t & 0xe0000));
+}
+
+# DO pushes CURLCNTR, the loop end (LADDR) and the loop top (PC stack); the end of the
+# loop or a (LA) jump pops all three.
+macro pushPC(v) {
+	PCS29 = PCS28; PCS28 = PCS27; PCS27 = PCS26; PCS26 = PCS25; PCS25 = PCS24; PCS24 = PCS23;
+	PCS23 = PCS22; PCS22 = PCS21; PCS21 = PCS20; PCS20 = PCS19; PCS19 = PCS18; PCS18 = PCS17;
+	PCS17 = PCS16; PCS16 = PCS15; PCS15 = PCS14; PCS14 = PCS13; PCS13 = PCS12; PCS12 = PCS11;
+	PCS11 = PCS10; PCS10 = PCS9; PCS9 = PCS8; PCS8 = PCS7; PCS7 = PCS6; PCS6 = PCS5;
+	PCS5 = PCS4; PCS4 = PCS3; PCS3 = PCS2; PCS2 = PCS1; PCS1 = PCSTK; PCSTK = v;
+	PCSTKP = PCSTKP + 1;
+}
+macro popPC() {
+	PCSTK = PCS1; PCS1 = PCS2; PCS2 = PCS3; PCS3 = PCS4; PCS4 = PCS5; PCS5 = PCS6;
+	PCS6 = PCS7; PCS7 = PCS8; PCS8 = PCS9; PCS9 = PCS10; PCS10 = PCS11; PCS11 = PCS12;
+	PCS12 = PCS13; PCS13 = PCS14; PCS14 = PCS15; PCS15 = PCS16; PCS16 = PCS17; PCS17 = PCS18;
+	PCS18 = PCS19; PCS19 = PCS20; PCS20 = PCS21; PCS21 = PCS22; PCS22 = PCS23; PCS23 = PCS24;
+	PCS24 = PCS25; PCS25 = PCS26; PCS26 = PCS27; PCS27 = PCS28; PCS28 = PCS29;
+	PCSTKP = PCSTKP - 1;
+}
+macro pushLoopCA(la) {
+	LCSTK5 = LCSTK4; LCSTK4 = LCSTK3; LCSTK3 = LCSTK2;
+	LCSTK2 = LCSTK1; LCSTK1 = LCSTK0; LCSTK0 = CURLCNTR;
+	LASTK5 = LASTK4; LASTK4 = LASTK3; LASTK3 = LASTK2;
+	LASTK2 = LASTK1; LASTK1 = LASTK0; LASTK0 = LADDR; LADDR = la;
+}
+macro popLoopCA() {
+	CURLCNTR = LCSTK0; LCSTK0 = LCSTK1; LCSTK1 = LCSTK2;
+	LCSTK2 = LCSTK3; LCSTK3 = LCSTK4; LCSTK4 = LCSTK5;
+	LADDR = LASTK0; LASTK0 = LASTK1; LASTK1 = LASTK2;
+	LASTK2 = LASTK3; LASTK3 = LASTK4; LASTK4 = LASTK5;
+}
+macro pushLoop(top, la) { pushLoopCA(la); pushPC(top); }
+macro popLoop() { popLoopCA(); popPC(); }
+# PUSH/POP STS: the status stack holds MODE1, ASTATx and ASTATy (PGR "Status Stack").
+macro pushSTS() {
+	SSM14 = SSM13; SSM13 = SSM12; SSM12 = SSM11; SSM11 = SSM10; SSM10 = SSM9; SSM9 = SSM8;
+	SSM8 = SSM7; SSM7 = SSM6; SSM6 = SSM5; SSM5 = SSM4; SSM4 = SSM3; SSM3 = SSM2;
+	SSM2 = SSM1; SSM1 = SSM0; SSM0 = MODE1;
+	SSX14 = SSX13; SSX13 = SSX12; SSX12 = SSX11; SSX11 = SSX10; SSX10 = SSX9; SSX9 = SSX8;
+	SSX8 = SSX7; SSX7 = SSX6; SSX6 = SSX5; SSX5 = SSX4; SSX4 = SSX3; SSX3 = SSX2;
+	SSX2 = SSX1; SSX1 = SSX0; SSX0 = ASTATX;
+	SSY14 = SSY13; SSY13 = SSY12; SSY12 = SSY11; SSY11 = SSY10; SSY10 = SSY9; SSY9 = SSY8;
+	SSY8 = SSY7; SSY7 = SSY6; SSY6 = SSY5; SSY5 = SSY4; SSY4 = SSY3; SSY3 = SSY2;
+	SSY2 = SSY1; SSY1 = SSY0; SSY0 = ASTATY;
+	SSP = SSP + 1;
+}
+macro popSTS() {
+	MODE1 = SSM0; SSM0 = SSM1; SSM1 = SSM2; SSM2 = SSM3; SSM3 = SSM4; SSM4 = SSM5;
+	SSM5 = SSM6; SSM6 = SSM7; SSM7 = SSM8; SSM8 = SSM9; SSM9 = SSM10; SSM10 = SSM11;
+	SSM11 = SSM12; SSM12 = SSM13; SSM13 = SSM14;
+	ASTATX = SSX0; SSX0 = SSX1; SSX1 = SSX2; SSX2 = SSX3; SSX3 = SSX4; SSX4 = SSX5;
+	SSX5 = SSX6; SSX6 = SSX7; SSX7 = SSX8; SSX8 = SSX9; SSX9 = SSX10; SSX10 = SSX11;
+	SSX11 = SSX12; SSX12 = SSX13; SSX13 = SSX14;
+	ASTATY = SSY0; SSY0 = SSY1; SSY1 = SSY2; SSY2 = SSY3; SSY3 = SSY4; SSY4 = SSY5;
+	SSY5 = SSY6; SSY6 = SSY7; SSY7 = SSY8; SSY8 = SSY9; SSY9 = SSY10; SSY10 = SSY11;
+	SSY11 = SSY12; SSY12 = SSY13; SSY13 = SSY14;
+	SSP = SSP - 1;
+}
+
+# Delay slots of a (DB) branch.  Ghidra collects delay-slot instructions until their
+# lengths reach the byte count given here, so for two instructions of variable length the
+# count must be one more than the first slot's length: the first slot alone falls short,
+# and the second always completes it.  dslot is 0 by default (a 16-bit first slot, the
+# common case); the SHARC Delay Slot analyzer sets it where the first slot is longer.
+DS: is visa=0           { delayslot(12); }
+DS: is visa=1 & dslot=0 { delayslot(3); }
+DS: is visa=1 & dslot=1 { delayslot(5); }
+DS: is visa=1 & dslot=2 { delayslot(7); }
+DS: is visa=1 & dslot=3 { delayslot(3); }
+
+# The return address a CALL pushes (PGR "PC Stack Access"): the next instruction, or the one
+# after the two delay slots of a CALL (DB), as the hardware holds it: a 48-bit address in ISA
+# code (PCVAL + 1 or + 3), the short-word address in VISA code (the slot lengths come from
+# dslot and dslot2, which the SHARC Delay Slot analyzer sets).
+RA0: ra is visa=0 [ ra = ((inst_start + (((((inst_start - 0x100000) >> 18) & 3) + 4) << 17)) / 3) + 1; ] { export *[const]:4 ra; }
+RA0: ra is visa=1 [ ra = inst_next; ] { export *[const]:4 ra; }
+RA1: ra is visa=0 [ ra = ((inst_start + (((((inst_start - 0x100000) >> 18) & 3) + 4) << 17)) / 3) + 3; ] { export *[const]:4 ra; }
+RA1: ra is visa=1 & dslot & dslot2 [ ra = inst_next + dslot + dslot2 + 2; ] { export *[const]:4 ra; }
+
+# The PC as the core reads it (ureg PC, a pushed return address): the 48-bit address of the
+# instruction in ISA code (the inverse of the short-word alias map, by the SW block), the
+# short-word address in VISA code.
+PCVAL: pv is visa=0 [ pv = (inst_start + (((((inst_start - 0x100000) >> 18) & 3) + 4) << 17)) / 3; ] { export *[const]:4 pv; }
+PCVAL: pv is visa=1 [ pv = inst_start; ] { export *[const]:4 pv; }
+
+LoopTop: ltop is ltop { export *:4 ltop; }
+
+ISA: is visa=0 { export 1:4; }
+ISA: is visa=1 { export 0:4; }
+
+@include "sharc214xx.sinc"
+
+# ================================================================ root table
+# Counter loop (UNTIL LCE): CURLCNTR counts down after the last instruction; a count of
+# 0 therefore runs 2^32 times, as on the hardware.
+:^instr is lend=1 & lterm=15 & LoopTop & instr {
+	build instr;
+	CURLCNTR = CURLCNTR - 1;
+	if (CURLCNTR != 0) goto LoopTop;
+	popLoop();
+}
+
+:^instr is lend=1 & lterm=31 & LoopTop & instr {
+	build instr;
+	goto LoopTop;
+}
+
+# Arithmetic loop: DO ... UNTIL <condition>, tested after the last instruction.
+:^instr is lend=1 & LoopTop & LTERM & instr {
+	build instr;
+	build LTERM;
+	if (!LTERM) goto LoopTop;
+	popLoop();
+}
+
+:^instr is instr { build instr; }

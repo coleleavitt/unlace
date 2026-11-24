@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- VisualDSP++ / CrossCore Embedded Studio C run-time model for the SHARC.
+     Every data type is a whole number of 32-bit words (char is 32 bits).  I7 is the
+     stack pointer and I6 the frame pointer; the stack grows down in dm.  Arguments go in
+     R4, R8, R12, the result in R0.  R3, R5-R7, R9-R11, R13-R15, I0-I3, I5, I8-I11, I14,
+     I15, M0-M3 and M8-M11 are preserved by the callee (the registers compiled functions
+     save and restore through I6).  The run time keeps M5 = M13 = 0, M6 = M14 = 1 and
+     M7 = M15 = -1 at all times (the compiler uses them as constant modifiers), which the
+     tracked set below tells the analysis.  Hardware-loop state is preserved across a call:
+     a callee's loops push and pop the loop-counter stack. -->
+<compiler_spec>
+  <data_organization>
+    <absolute_max_alignment value="0" />
+    <machine_alignment value="1" />
+    <default_alignment value="1" />
+    <default_pointer_alignment value="1" />
+    <pointer_size value="4" />
+    <char_size value="4" />
+    <short_size value="4" />
+    <integer_size value="4" />
+    <long_size value="4" />
+    <long_long_size value="8" />
+    <float_size value="4" />
+    <double_size value="4" />
+    <long_double_size value="8" />
+    <size_alignment_map>
+      <entry size="1" alignment="1" />
+      <entry size="2" alignment="1" />
+      <entry size="4" alignment="1" />
+      <entry size="8" alignment="1" />
+    </size_alignment_map>
+  </data_organization>
+  <global>
+    <range space="sw"/>
+    <range space="dm"/>
+    <!-- Registers that drive or reflect hardware (flag pins, interrupt masks and latches, the
+         memory and interrupt mode bits): writes to them are effects, not dead stores.  MODE1 is
+         not listed: its start-up value is tracked below, which a global would show as a write
+         at every function entry. -->
+    <register name="FLAGS"/>
+    <register name="IMASK"/>
+    <register name="IMASKP"/>
+    <register name="IRPTL"/>
+    <register name="LRPTL"/>
+    <register name="MMASK"/>
+    <register name="MODE2"/>
+  </global>
+  <stackpointer register="I7" space="dm" growth="negative"/>
+  <returnaddress>
+    <register name="PCSTK"/>
+  </returnaddress>
+  <context_data>
+    <tracked_set space="sw">
+      <set name="M5" val="0"/>
+      <set name="M6" val="1"/>
+      <set name="M7" val="0xffffffff"/>
+      <set name="M13" val="0"/>
+      <set name="M14" val="1"/>
+      <set name="M15" val="0xffffffff"/>
+      <!-- MODE1 as the C run-time start-up leaves it (___lib_setup_c in CrossCore Embedded Studio
+           executables: from the reset value 0, BIT SET MODE1 0x78, BIT CLR MODE1 0xa078, BIT SET
+           MODE1 0x1011800): NESTM, IRPTEN, RND32 and CBUFEN set; ALUSAT and TRUNC clear, so
+           compiled integer arithmetic wraps and the saturation p-code folds away.  Code that
+           changes MODE1 (BIT SET MODE1 TRUNC around a FIX, PEYEN for SIMD) is followed. -->
+      <set name="MODE1" val="0x1011800"/>
+      <!-- The run time keeps the circular-buffer length registers zero outside code that sets up
+           a circular buffer, so post-modify addressing is linear (the circular-buffer p-code folds
+           away). -->
+      <set name="L0" val="0"/><set name="L1" val="0"/><set name="L2" val="0"/><set name="L3" val="0"/>
+      <set name="L4" val="0"/><set name="L5" val="0"/><set name="L6" val="0"/><set name="L7" val="0"/>
+      <set name="L8" val="0"/><set name="L9" val="0"/><set name="L10" val="0"/><set name="L11" val="0"/>
+      <set name="L12" val="0"/><set name="L13" val="0"/><set name="L14" val="0"/><set name="L15" val="0"/>
+    </tracked_set>
+  </context_data>
+  <default_proto>
+    <prototype name="__vdsp" extrapop="0" stackshift="0">
+      <input>
+        <pentry minsize="1" maxsize="4"><register name="R4"/></pentry>
+        <pentry minsize="1" maxsize="4"><register name="R8"/></pentry>
+        <pentry minsize="1" maxsize="4"><register name="R12"/></pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="4"><register name="R0"/></pentry>
+      </output>
+      <unaffected>
+        <register name="R3"/><register name="R5"/><register name="R6"/><register name="R7"/><register name="R9"/><register name="R10"/><register name="R11"/><register name="R13"/><register name="R14"/><register name="R15"/>
+        <register name="I0"/><register name="I1"/><register name="I2"/><register name="I3"/><register name="I5"/><register name="I6"/><register name="I7"/><register name="I8"/><register name="I9"/><register name="I10"/><register name="I11"/><register name="I14"/><register name="I15"/>
+        <register name="M0"/><register name="M1"/><register name="M2"/><register name="M3"/><register name="M5"/><register name="M6"/><register name="M7"/><register name="M8"/><register name="M9"/><register name="M10"/><register name="M11"/><register name="M13"/><register name="M14"/><register name="M15"/>
+        <register name="CURLCNTR"/><register name="LCSTK0"/><register name="LCSTK1"/><register name="LCSTK2"/><register name="LCSTK3"/><register name="LCSTK4"/><register name="LCSTK5"/>
+        <register name="LADDR"/><register name="LASTK0"/><register name="LASTK1"/><register name="LASTK2"/><register name="LASTK3"/><register name="LASTK4"/><register name="LASTK5"/>
+        <register name="PCSTK"/><register name="PCSTKP"/>
+        <register name="L0"/><register name="L1"/><register name="L2"/><register name="L3"/><register name="L4"/><register name="L5"/><register name="L6"/><register name="L7"/>
+        <register name="L8"/><register name="L9"/><register name="L10"/><register name="L11"/><register name="L12"/><register name="L13"/><register name="L14"/><register name="L15"/>
+      </unaffected>
+      <killedbycall>
+        <register name="R0"/><register name="R1"/><register name="R2"/><register name="R4"/><register name="R8"/><register name="R12"/><register name="I4"/><register name="I12"/><register name="I13"/><register name="M4"/><register name="M12"/>
+        <register name="MRF"/><register name="MRB"/><register name="MR2F"/><register name="MR2B"/><register name="PX"/>
+        <register name="ASTATX"/><register name="ASTATY"/><register name="STKYX"/><register name="SF"/>
+      </killedbycall>
+    </prototype>
+  </default_proto>
+</compiler_spec>

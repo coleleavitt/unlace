@@ -4205,6 +4205,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `RL78` | Renesas RL78 | `RL78:LE:16:default`, `RL78:LE:16:S2` | aleph-void/ghidra-rl78 (fork of CUB3D/ghidra-rl78) @ `b870c6eaf0`, Apache-2.0 |
 | `N64RSP` | Nintendo 64 RSP | `RSP:BE:32:default` | aleph-void/Ghidra-RSP (fork of Random06457/Ghidra-RSP) @ `35d58e76ea`, MIT |
 | `SCORE7` | Sunplus S+core (SCORE7) | `SCORE7:BE:32:default`, `SCORE7:LE:32:default` | aleph-void/ghidra-score7 @ `940b07da9b`, Apache-2.0 |
+| `SHARC` | Analog Devices SHARC (ADSP-21xxx) | `SHARC:BE:32:214xx` | aleph-void/ghidra-sharc (fork of roblg/ghidra-sharc) @ `8d0c391e71`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

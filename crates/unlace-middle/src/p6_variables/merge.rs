@@ -312,6 +312,11 @@ pub trait MergeContext: HighContext {
     fn vn_constant_value(&self, _vn: VarnodeId) -> Option<u64> {
         None
     }
+    /// (kuna) Does the function's own prototype model leave `[addr, addr+size)`
+    /// unaffected by a call (a callee-saved register)?
+    fn storage_callee_saved(&self, _addr: &unlace_base::address::Address, _size: int4) -> bool {
+        false
+    }
     /// (kuna) `vn->getAddr()` and `vn->getSize()`; `None` when the context
     /// does not model storage (option `typemerge storage` then joins nothing).
     fn vn_storage(&self, _vn: VarnodeId) -> Option<(unlace_base::address::Address, int4)> {
@@ -1210,6 +1215,8 @@ pub struct Merge {
     /// (kuna) Option `phiarm`: trim phi arms that are variables of their own
     /// ([`crate::kuna_phiarm`]).
     phi_arm_split: bool,
+    /// (kuna) Option `calleesaved` ([`crate::kuna_calleesaved`]).
+    callee_saved_split: bool,
     /// (kuna) Each arm value `kuna_phiarm` trimmed, with the MULTIEQUAL output
     /// it was trimmed from.
     phi_arms: Vec<(VarnodeId, VarnodeId)>,
@@ -1236,6 +1243,7 @@ impl Merge {
             proto_partial: Vec::new(),
             tied_phis: Vec::new(),
             phi_arm_split: false,
+            callee_saved_split: false,
             phi_arms: Vec::new(),
             probes: 0,
             spent: false,
@@ -1267,6 +1275,12 @@ impl Merge {
     /// (kuna) Turn option `phiarm` on or off for the next `merge_marker`.
     pub fn set_phi_arm_split(&mut self, on: bool) {
         self.phi_arm_split = on;
+    }
+
+    /// (kuna) Turn option `calleesaved` on or off for the next
+    /// `merge_by_datatype`.
+    pub fn set_callee_saved_split(&mut self, on: bool) {
+        self.callee_saved_split = on;
     }
 
     /// Borrow the intersection-test cache.
@@ -1660,20 +1674,39 @@ impl Merge {
         if mode == crate::kuna_typemerge::TypeMergeMode::Off {
             highlist.clear();
         }
+        let calls = if self.callee_saved_split && !highlist.is_empty() {
+            for &h in &highlist {
+                MergeIntersect::update_high(ctx, &mut self.test_cache, h);
+            }
+            crate::kuna_calleesaved::call_ops(&*ctx)
+        } else {
+            Vec::new()
+        };
         let mut remaining: std::collections::VecDeque<_> = highlist
             .into_iter()
-            .map(|h| (h, mode.storage_key(&*ctx, h)))
+            .map(|h| {
+                (
+                    h,
+                    mode.storage_key(&*ctx, h),
+                    crate::kuna_calleesaved::span_key(&*ctx, h, &calls),
+                )
+            })
             .collect();
-        while let Some((first, first_storage)) = remaining.pop_front() {
+        while let Some((first, first_storage, first_span)) = remaining.pop_front() {
             let ct = ctx.high_get_type(first);
             let mut highvec = vec![first];
+            let mut spans: Vec<_> = first_span.into_iter().collect();
             let mut rest: std::collections::VecDeque<_> = std::collections::VecDeque::new();
-            while let Some((h, storage)) = remaining.pop_front() {
+            while let Some((h, storage, span)) = remaining.pop_front() {
                 let t = ctx.high_get_type(h);
-                if std::rc::Rc::ptr_eq(&ct, &t) && mode.joins(&first_storage, &storage) {
+                if std::rc::Rc::ptr_eq(&ct, &t)
+                    && mode.joins(&first_storage, &storage)
+                    && span.as_ref().is_none_or(|s| !spans.contains(s))
+                {
                     highvec.push(h);
+                    spans.extend(span);
                 } else {
-                    rest.push_back((h, storage));
+                    rest.push_back((h, storage, span));
                 }
             }
             remaining = rest;

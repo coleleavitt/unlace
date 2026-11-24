@@ -2172,7 +2172,13 @@ impl Action for ActionMergeType {
             .get_arch()
             .kuna_options
             .get::<crate::kuna_typemerge::TypeMergeMode>();
+        let callee_saved = data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_calleesaved::CalleeSavedSplit>()
+            .0;
         data.with_covermerge(|merge, data| {
+            merge.set_callee_saved_split(callee_saved);
             let _ = merge.merge_by_datatype(data, &range, mode);
         });
         0

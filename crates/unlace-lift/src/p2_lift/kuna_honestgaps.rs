@@ -164,12 +164,46 @@ pub fn seed(arch: &Architecture, fd: &mut Funcdata) {
             sites.push((withheld_prototype_text(&name, cause), op.get_addr().clone()));
         }
     }
-    if let Some((name, cause)) = own {
-        fd.warning_header(&withheld_prototype_text(&name, cause));
+    use crate::architecture::comment_type;
+    let header = own.map(|(name, cause)| withheld_prototype_text(&name, cause));
+    let header = header.filter(|text| {
+        !is_pending(
+            fd.pending_comments_ref(),
+            comment_type::warningheader,
+            fd.get_address(),
+            text,
+        )
+    });
+    let sites: Vec<_> = sites
+        .into_iter()
+        .filter(|(text, addr)| {
+            !is_pending(fd.pending_comments_ref(), comment_type::warning, addr, text)
+        })
+        .collect();
+    if let Some(text) = header {
+        fd.warning_header(&text);
     }
     for (text, addr) in sites {
         fd.warning(&text, &addr);
     }
+}
+
+/// Is a warning of type `tp` at `addr` whose text ends in `text` (the stored
+/// text carries the `WARNING: ` prefix) already buffered? Keeps [`seed`]
+/// idempotent when it runs again on a Funcdata whose comments were kept.
+pub fn is_pending(
+    pending: &[(
+        unlace_base::types::uint4,
+        unlace_base::address::Address,
+        String,
+    )],
+    tp: unlace_base::types::uint4,
+    addr: &unlace_base::address::Address,
+    text: &str,
+) -> bool {
+    pending
+        .iter()
+        .any(|(t, a, stored)| *t == tp && a == addr && stored.ends_with(text))
 }
 
 #[cfg(test)]

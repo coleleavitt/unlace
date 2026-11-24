@@ -4406,7 +4406,14 @@ shifts `srar`/`srlr`, `ave`/`aver`, `sat_s`/`sat_u`, `max_a`/`min_a`, `hadd`/`hs
 `subsus_u`/`subsuu_s`, `bclr`/`bset`/`bneg` (each with its immediate form), `add_a`/`adds_a`,
 `bmnzi`/`bmzi`/`bseli`, `maddv`/`msubv`, `insert`/`insve` and the dot products `dotp`/`dpadd`/`dpsub`; the `bz`/`bnz` branches test the
 register directly (`.v`: all bits zero or not; `.df`: some element zero, or every element nonzero).
-The floating-point and fixed-point `q` instructions are user operations named after its mnemonic (`msa_addv_w`) with the
+The floating-point instructions are IEEE-exact in round-to-nearest (MSACSR's reset mode;
+the Cause/Flags bits are not modelled): `fadd`/`fsub`/`fmul`/`fdiv`/`fsqrt`, `fmadd`/`fmsub` (the `.w`
+forms fused through float64, the `.d` forms not fused), `fmax`/`fmin`/`fmax_a`/`fmin_a` (IEEE 754-2008
+maxNum/minNum: a signalling NaN gives it quieted), the `fc*`/`fs*` compares (the signalling forms
+give the same results), `fclass`, `ffint`, `ftint` (round to nearest even) and `ftrunc` with
+saturation and NaN to 0, `frint`, `frcp`/`frsqrt` (as the exact quotient), `fexupl`/`fexupr`/`fexdo`,
+and the Q15/Q31 forms `mul_q`/`mulr_q`/`madd_q`/`maddr_q`/`msub_q`/`msubr_q`, `ffql`/`ffqr` and `ftq`
+with QEMU's saturation. Only `fexp2` and `flog2` are user operations named after its mnemonic (`msa_addv_w`) with the
 destination as output and the read operands (and the destination, for the accumulating forms)
 as inputs.
 

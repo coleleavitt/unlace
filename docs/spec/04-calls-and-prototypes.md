@@ -5927,6 +5927,19 @@ dead byte write after a call (`movb gc1,%dl; xorb $0,%dl; ret`, or `setne %dl;
 ret`) as `unsigned int f(...)` returning the call's leftover `EDX`. The function
 then returns `void`, as it does when no pair forms.
 
+The walk keeps a half when *any* path computes it. Under `option retpairpaths on`
+(default off) the second register of such a join must be computed on *every*
+path instead (`kuna_returnuncomputed.rs (second_half_on_every_path)`, the
+`computes_everywhere` walk with the same placement test): a phi that reaches the
+RETURN with the caller's own `EDX`, or a call's clobber, on one path is not a
+returned half, because a function that returns a 64-bit value writes `EDX` on
+every path. MSVC's `int __fastcall CmdBufStartCommand` (SysWOW64
+`TpmCoreProvisioning.dll` `0x100a4bec`) returns early with `EDX` untouched and
+otherwise leaves the last call's register argument in it, and printed `return
+CONCAT44(a1,v1);`; with the option it returns `v1`. A fastcall function that
+hands back its own `EDX` argument as the high word on one path loses that half,
+which is why the rule is an option.
+
 A high register the function set to zero is computed too, so the pair of a
 zero-extended 64-bit return survives this repair. The earlier trim that narrowed
 it to its low register, and printed `unsigned long long` as `int`, refuses a pair

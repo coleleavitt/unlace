@@ -2,6 +2,17 @@
 #
 # A [[family]] names a raw image (`fixture`, a path from the repository root, or `image`, a key
 # of [images] holding hex bytes), its load `base` and its SLEIGH `language` id (a list runs
+# every function once per language). Each [[family.function]] decompiles one address:
+#   unlace decompile <image> <address> --raw-image --target <language> --base <base>
+# (plus the family's `args`, extra CLI arguments). A function passes when the run exits 0, its
+# lowercased output contains neither "unimplemented" nor "bad instruction" nor any `forbid` entry
+# (family and function lists add up), and its output contains every `expect` entry
+# (case-sensitive). A function may override `language`; one with `xfail = "<why>"` is a known
+# failure, reported until it passes (then the test fails: drop the marker).
+# A new processor family adds a [[family]] here instead of a new *_raw.rs file
+# (docs/processor-tests.md).
+
+[images]
 c28x_epwm1_tbprd = """
 1f76010123283412060000000000000000000000
 """
@@ -14,17 +25,6 @@ d24220002100304100000000
 msp430x_p1_p2 = """
 d24200020302304100000000
 """
-# every function once per language). Each [[family.function]] decompiles one address:
-#   unlace decompile <image> <address> --raw-image --target <language> --base <base>
-# (plus the family's `args`, extra CLI arguments). A function passes when the run exits 0, its
-# lowercased output contains neither "unimplemented" nor "bad instruction" nor any `forbid` entry
-# (family and function lists add up), and its output contains every `expect` entry
-# (case-sensitive). A function may override `language`; one with `xfail = "<why>"` is a known
-# failure, reported until it passes (then the test fails: drop the marker).
-# A new processor family adds a [[family]] here instead of a new *_raw.rs file
-# (docs/processor-tests.md).
-
-[images]
 # PIC18: movlw 5; movwf 0xb7, a; movwf 0x01, a; return
 pic18_access = """
 050eb76e016e1200

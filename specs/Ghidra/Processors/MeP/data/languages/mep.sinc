@@ -1,0 +1,421 @@
+# Toshiba Media embedded Processor (MeP-c4 core ISA), core mode only.
+# Written for unlace from the MeP instruction descriptions in GNU binutils
+# (cpu/mep-core.cpu, opcodes/mep-dis.c); see ../../README.md.
+
+define endian=$(ENDIAN);
+define alignment=2;
+
+define space ram type=ram_space size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0x0 size=4 [
+  r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 tp gp sp
+];
+
+define register offset=0x100 size=4 [
+  csr0 lp sar csr3 rpb rpe rpc hi lo csr9 csr10 csr11 mb0 me0 mb1 me1
+  psw id tmp epc exc cfg vid npc dbg depc opt rcfg ccfg csr29 csr30 csr31
+];
+
+define register offset=0x200 size=4 [ pc ];
+
+define register offset=0x400 size=8 [
+  c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15
+  c16 c17 c18 c19 c20 c21 c22 c23 c24 c25 c26 c27 c28 c29 c30 c31
+];
+
+define token instr16(16)
+  maj      = (12,15)
+  rn       = (8,11)
+  rnx      = (8,11)
+  crn      = (8,11)
+  cimm4    = (8,11)
+  rn3      = (8,10)
+  b4       = (11,11)
+  b5       = (10,10)
+  b6       = (9,9)
+  b7       = (8,8)
+  rm       = (4,7)
+  rmx      = (4,7)
+  uimm4    = (4,7)
+  csrlo    = (4,7)
+  b8       = (7,7)
+  b9       = (6,6)
+  b10      = (5,5)
+  b11      = (4,4)
+  rl       = (0,3)
+  sub4     = (0,3)
+  sub3     = (0,2)
+  sub2     = (0,1)
+  b12      = (3,3)
+  b13      = (2,2)
+  b14      = (1,1)
+  b15      = (0,0)
+  csrhi    = (0,0)
+  simm8    = (0,7) signed
+  uimm8    = (0,7)
+  simm6    = (2,7) signed
+  uimm5    = (3,7)
+  uimm3    = (8,10)
+  udisp7   = (0,6)
+  udisp7a2 = (1,6)
+  udisp7a4 = (2,6)
+  pcrel8   = (1,7) signed
+  pcrel12  = (1,11) signed
+  udisp2   = (8,9)
+  uimm2    = (4,5)
+  lo24a4   = (2,7)
+  lo24a2   = (4,10)
+;
+
+define token ext16(16)
+  imm16  = (0,15)
+  simm16 = (0,15) signed
+  ext8   = (8,15)
+  cimm5  = (3,7)
+  x29    = (0,2)
+;
+
+attach variables [ rn rm rl ] [
+  r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 tp gp sp
+];
+attach variables [ rn3 ] [ r0 r1 r2 r3 r4 r5 r6 r7 ];
+attach variables [ crn ] [
+  c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15
+];
+
+define pcodeop syscall;
+define pcodeop softwareInterrupt;
+define pcodeop breakException;
+define pcodeop debugBreak;
+define pcodeop returnFromInterrupt;
+define pcodeop returnFromDebug;
+define pcodeop halt;
+define pcodeop sleep;
+define pcodeop syncMemory;
+define pcodeop syncCoprocessor;
+define pcodeop cacheOp;
+define pcodeop prefetch;
+define pcodeop controlBusStore;
+define pcodeop controlBusLoad;
+define pcodeop userCustomInstruction;
+define pcodeop dspInstruction;
+define pcodeop coprocessorBranchCondition;
+define pcodeop enterVliwCall;
+
+# Control registers: number 0 is the PC, handled by its own constructors.
+csrn: lp    is csrhi=0 & csrlo=1 & lp { export lp; }
+csrn: sar   is csrhi=0 & csrlo=2 & sar { export sar; }
+csrn: csr3  is csrhi=0 & csrlo=3 & csr3 { export csr3; }
+csrn: rpb   is csrhi=0 & csrlo=4 & rpb { export rpb; }
+csrn: rpe   is csrhi=0 & csrlo=5 & rpe { export rpe; }
+csrn: rpc   is csrhi=0 & csrlo=6 & rpc { export rpc; }
+csrn: hi    is csrhi=0 & csrlo=7 & hi { export hi; }
+csrn: lo    is csrhi=0 & csrlo=8 & lo { export lo; }
+csrn: csr9  is csrhi=0 & csrlo=9 & csr9 { export csr9; }
+csrn: csr10 is csrhi=0 & csrlo=10 & csr10 { export csr10; }
+csrn: csr11 is csrhi=0 & csrlo=11 & csr11 { export csr11; }
+csrn: mb0   is csrhi=0 & csrlo=12 & mb0 { export mb0; }
+csrn: me0   is csrhi=0 & csrlo=13 & me0 { export me0; }
+csrn: mb1   is csrhi=0 & csrlo=14 & mb1 { export mb1; }
+csrn: me1   is csrhi=0 & csrlo=15 & me1 { export me1; }
+csrn: psw   is csrhi=1 & csrlo=0 & psw { export psw; }
+csrn: id    is csrhi=1 & csrlo=1 & id { export id; }
+csrn: tmp   is csrhi=1 & csrlo=2 & tmp { export tmp; }
+csrn: epc   is csrhi=1 & csrlo=3 & epc { export epc; }
+csrn: exc   is csrhi=1 & csrlo=4 & exc { export exc; }
+csrn: cfg   is csrhi=1 & csrlo=5 & cfg { export cfg; }
+csrn: vid   is csrhi=1 & csrlo=6 & vid { export vid; }
+csrn: npc   is csrhi=1 & csrlo=7 & npc { export npc; }
+csrn: dbg   is csrhi=1 & csrlo=8 & dbg { export dbg; }
+csrn: depc  is csrhi=1 & csrlo=9 & depc { export depc; }
+csrn: opt   is csrhi=1 & csrlo=10 & opt { export opt; }
+csrn: rcfg  is csrhi=1 & csrlo=11 & rcfg { export rcfg; }
+csrn: ccfg  is csrhi=1 & csrlo=12 & ccfg { export ccfg; }
+csrn: csr29 is csrhi=1 & csrlo=13 & csr29 { export csr29; }
+csrn: csr30 is csrhi=1 & csrlo=14 & csr30 { export csr30; }
+csrn: csr31 is csrhi=1 & csrlo=15 & csr31 { export csr31; }
+
+# Branch targets.
+rel8: dest  is pcrel8  [ dest = inst_start + pcrel8 * 2; ]  { export *:4 dest; }
+rel12: dest is pcrel12 [ dest = inst_start + pcrel12 * 2; ] { export *:4 dest; }
+rel17: dest is simm16  [ dest = inst_start + simm16 * 2; ]  { export *:4 dest; }
+rel24: dest is lo24a2; simm16 [ dest = inst_start + simm16 * 256 + lo24a2 * 2; ] { export *:4 dest; }
+abs24: dest is lo24a2; imm16  [ dest = (inst_start & 0xf0000000) | (imm16 << 8) | (lo24a2 << 1); ] { export *:4 dest; }
+
+# Memory operands.
+spdisp: off"(sp)" is udisp7a4 [ off = udisp7a4 << 2; ] { local a:4 = sp + off; export a; }
+tpdisp: udisp7"(tp)"   is udisp7 { local a:4 = tp + udisp7; export a; }
+tpdisp2: off"(tp)"     is udisp7a2 [ off = udisp7a2 << 1; ] { local a:4 = tp + off; export a; }
+tpdisp4: off"(tp)"     is udisp7a4 [ off = udisp7a4 << 2; ] { local a:4 = tp + off; export a; }
+rdisp16: simm16"("rm")"  is rm; simm16 { local a:4 = rm + simm16; export a; }
+abs24a4: "("^addr^")"    is lo24a4; imm16 [ addr = (imm16 << 8) | (lo24a4 << 2); ] { export *[const]:4 addr; }
+
+# ---- Loads and stores --------------------------------------------------------
+
+:sb rn,"("rm")"  is maj=0 & rn & rm & sub4=8  { *:1 rm = rn:1; }
+:sh rn,"("rm")"  is maj=0 & rn & rm & sub4=9  { *:2 rm = rn:2; }
+:sw rn,"("rm")"  is maj=0 & rn & rm & sub4=10 { *:4 rm = rn; }
+:lbu rn,"("rm")" is maj=0 & rn & rm & sub4=11 { rn = zext(*:1 rm); }
+:lb rn,"("rm")"  is maj=0 & rn & rm & sub4=12 { rn = sext(*:1 rm); }
+:lh rn,"("rm")"  is maj=0 & rn & rm & sub4=13 { rn = sext(*:2 rm); }
+:lw rn,"("rm")"  is maj=0 & rn & rm & sub4=14 { rn = *:4 rm; }
+:lhu rn,"("rm")" is maj=0 & rn & rm & sub4=15 { rn = zext(*:2 rm); }
+
+:sw rn,spdisp  is maj=4 & rn & b8=0 & sub2=2 & spdisp { *:4 spdisp = rn; }
+:lw rn,spdisp  is maj=4 & rn & b8=0 & sub2=3 & spdisp { rn = *:4 spdisp; }
+:sw rn3,tpdisp4 is maj=4 & b4=0 & rn3 & b8=1 & sub2=2 & tpdisp4 { *:4 tpdisp4 = rn3; }
+:lw rn3,tpdisp4 is maj=4 & b4=0 & rn3 & b8=1 & sub2=3 & tpdisp4 { rn3 = *:4 tpdisp4; }
+:lbu rn3,tpdisp is maj=4 & b4=1 & rn3 & b8=1 & tpdisp { rn3 = zext(*:1 tpdisp); }
+
+:sb rn3,tpdisp  is maj=8 & b4=0 & rn3 & b8=0 & tpdisp { *:1 tpdisp = rn3:1; }
+:sh rn3,tpdisp2 is maj=8 & b4=0 & rn3 & b8=1 & b15=0 & tpdisp2 { *:2 tpdisp2 = rn3:2; }
+:lb rn3,tpdisp  is maj=8 & b4=1 & rn3 & b8=0 & tpdisp { rn3 = sext(*:1 tpdisp); }
+:lh rn3,tpdisp2 is maj=8 & b4=1 & rn3 & b8=1 & b15=0 & tpdisp2 { rn3 = sext(*:2 tpdisp2); }
+:lhu rn3,tpdisp2 is maj=8 & b4=1 & rn3 & b8=1 & b15=1 & tpdisp2 { rn3 = zext(*:2 tpdisp2); }
+
+:sb rn,rdisp16  is (maj=12 & rn & sub4=8) ... & rdisp16  { *:1 rdisp16 = rn:1; }
+:sh rn,rdisp16  is (maj=12 & rn & sub4=9) ... & rdisp16  { *:2 rdisp16 = rn:2; }
+:sw rn,rdisp16  is (maj=12 & rn & sub4=10) ... & rdisp16 { *:4 rdisp16 = rn; }
+:lbu rn,rdisp16 is (maj=12 & rn & sub4=11) ... & rdisp16 { rn = zext(*:1 rdisp16); }
+:lb rn,rdisp16  is (maj=12 & rn & sub4=12) ... & rdisp16 { rn = sext(*:1 rdisp16); }
+:lh rn,rdisp16  is (maj=12 & rn & sub4=13) ... & rdisp16 { rn = sext(*:2 rdisp16); }
+:lw rn,rdisp16  is (maj=12 & rn & sub4=14) ... & rdisp16 { rn = *:4 rdisp16; }
+:lhu rn,rdisp16 is (maj=12 & rn & sub4=15) ... & rdisp16 { rn = zext(*:2 rdisp16); }
+
+:sw rn,abs24a4 is (maj=14 & rn & sub2=2) ... & abs24a4 { abs24a4 = rn; }
+:lw rn,abs24a4 is (maj=14 & rn & sub2=3) ... & abs24a4 { rn = abs24a4; }
+
+# ---- Extension, moves ---------------------------------------------------------
+
+:extb rn  is maj=1 & rn & rmx=0 & sub4=13  { rn = sext(rn:1); }
+:exth rn  is maj=1 & rn & rmx=2 & sub4=13  { rn = sext(rn:2); }
+:extub rn is maj=1 & rn & rmx=8 & sub4=13  { rn = zext(rn:1); }
+:extuh rn is maj=1 & rn & rmx=10 & sub4=13 { rn = zext(rn:2); }
+
+:mov rn,rm is maj=0 & rn & rm & sub4=0 { rn = rm; }
+:mov rn,simm8 is maj=5 & rn & simm8 { rn = simm8; }
+:mov rn,simm16 is maj=12 & rn & rmx=0 & sub4=1; simm16 { rn = simm16; }
+:movu rn,imm16 is maj=12 & rn & rmx=1 & sub4=1; imm16 { rn = imm16; }
+:movh rn,imm16 is maj=12 & rn & rmx=2 & sub4=1; imm16 { rn = imm16 << 16; }
+:movu rn3,val  is maj=13 & b4=0 & rn3 & uimm8; imm16 [ val = (imm16 << 8) | uimm8; ] { rn3 = val; }
+
+# ---- Arithmetic ---------------------------------------------------------------
+
+:add3 rl,rn,rm    is maj=9 & rn & rm & rl { rl = rn + rm; }
+:add rn,simm6     is maj=6 & rn & simm6 & sub2=0 { rn = rn + simm6; }
+:add3 rn,"sp",uimm  is maj=4 & rn & b8=0 & udisp7a4 & sub2=0 [ uimm = udisp7a4 << 2; ] { rn = sp + uimm; }
+:add3 rn,rm,simm16 is maj=12 & rn & rm & sub4=0; simm16 { rn = rm + simm16; }
+:advck3 "r0",rn,rm  is maj=0 & rn & rm & sub4=7 { r0 = zext(scarry(rn, rm)); }
+:sub rn,rm        is maj=0 & rn & rm & sub4=4 { rn = rn - rm; }
+:sbvck3 "r0",rn,rm  is maj=0 & rn & rm & sub4=5 { r0 = zext(sborrow(rn, rm)); }
+:neg rn,rm        is maj=0 & rn & rm & sub4=1 { rn = -rm; }
+:slt3 "r0",rn,rm    is maj=0 & rn & rm & sub4=2 { r0 = zext(rn s< rm); }
+:sltu3 "r0",rn,rm   is maj=0 & rn & rm & sub4=3 { r0 = zext(rn < rm); }
+:slt3 "r0",rn,uimm5  is maj=6 & rn & uimm5 & sub3=1 { r0 = zext(rn s< uimm5); }
+:sltu3 "r0",rn,uimm5 is maj=6 & rn & uimm5 & sub3=5 { r0 = zext(rn < uimm5); }
+:sl1ad3 "r0",rn,rm  is maj=2 & rn & rm & sub4=6 { r0 = (rn << 1) + rm; }
+:sl2ad3 "r0",rn,rm  is maj=2 & rn & rm & sub4=7 { r0 = (rn << 2) + rm; }
+:slt3 rn,rm,simm16  is maj=12 & rn & rm & sub4=2; simm16 { rn = zext(rm s< simm16); }
+:sltu3 rn,rm,imm16  is maj=12 & rn & rm & sub4=3; imm16  { rn = zext(rm < imm16); }
+
+# ---- Logic and shifts ---------------------------------------------------------
+
+:or rn,rm  is maj=1 & rn & rm & sub4=0 { rn = rn | rm; }
+:and rn,rm is maj=1 & rn & rm & sub4=1 { rn = rn & rm; }
+:xor rn,rm is maj=1 & rn & rm & sub4=2 { rn = rn ^ rm; }
+:nor rn,rm is maj=1 & rn & rm & sub4=3 { rn = ~(rn | rm); }
+:or3 rn,rm,imm16  is maj=12 & rn & rm & sub4=4; imm16 { rn = rm | imm16; }
+:and3 rn,rm,imm16 is maj=12 & rn & rm & sub4=5; imm16 { rn = rm & imm16; }
+:xor3 rn,rm,imm16 is maj=12 & rn & rm & sub4=6; imm16 { rn = rm ^ imm16; }
+
+:srl rn,rm is maj=2 & rn & rm & sub4=12 { rn = rn >> (rm & 0x1f); }
+:sra rn,rm is maj=2 & rn & rm & sub4=13 { rn = rn s>> (rm & 0x1f); }
+:sll rn,rm is maj=2 & rn & rm & sub4=14 { rn = rn << (rm & 0x1f); }
+:srl rn,uimm5 is maj=6 & rn & uimm5 & sub3=2 { rn = rn >> uimm5; }
+:sra rn,uimm5 is maj=6 & rn & uimm5 & sub3=3 { rn = rn s>> uimm5; }
+:sll rn,uimm5 is maj=6 & rn & uimm5 & sub3=6 { rn = rn << uimm5; }
+:sll3 "r0",rn,uimm5 is maj=6 & rn & uimm5 & sub3=7 { r0 = rn << uimm5; }
+:fsft rn,rm is maj=2 & rn & rm & sub4=15 {
+  local wide:8 = (zext(rn) << 32) | zext(rm);
+  wide = wide << (sar & 0x3f);
+  rn = wide(4);
+}
+:ssarb udisp2"("rm")" is maj=1 & b4=0 & b5=0 & udisp2 & rm & sub4=12 {
+  local byte:4 = (rm + udisp2) & 3;
+@if ENDIAN == "big"
+  sar = byte * 8;
+@else
+  sar = 32 - byte * 8;
+@endif
+}
+
+# ---- Branches, calls, returns -------------------------------------------------
+
+:bra rel12   is maj=11 & rel12 & b15=0 { goto rel12; }
+:bsr rel12   is maj=11 & rel12 & b15=1 { lp = inst_next; call rel12; }
+:beqz rn,rel8 is maj=10 & rn & rel8 & b15=0 { if (rn == 0) goto rel8; }
+:bnez rn,rel8 is maj=10 & rn & rel8 & b15=1 { if (rn != 0) goto rel8; }
+:beqi rn,uimm4,rel17 is maj=14 & rn & uimm4 & sub4=0; rel17 { if (rn == uimm4) goto rel17; }
+:bnei rn,uimm4,rel17 is maj=14 & rn & uimm4 & sub4=4; rel17 { if (rn != uimm4) goto rel17; }
+:bgei rn,uimm4,rel17 is maj=14 & rn & uimm4 & sub4=8; rel17 { if (rn s>= uimm4) goto rel17; }
+:blti rn,uimm4,rel17 is maj=14 & rn & uimm4 & sub4=12; rel17 { if (rn s< uimm4) goto rel17; }
+:beq rn,rm,rel17 is maj=14 & rn & rm & sub4=1; rel17 { if (rn == rm) goto rel17; }
+:bne rn,rm,rel17 is maj=14 & rn & rm & sub4=5; rel17 { if (rn != rm) goto rel17; }
+:bsr rel24 is (maj=13 & b4=1 & sub4=9) ... & rel24 { lp = inst_next; call rel24; }
+:jmp abs24 is (maj=13 & b4=1 & sub4=8) ... & abs24 { goto abs24; }
+:bsrv rel24 is (maj=13 & b4=1 & sub4=11) ... & rel24 { lp = inst_next | 1; enterVliwCall(); call rel24; }
+:jmp rm  is maj=1 & rnx=0 & rm & sub4=14 { local t:4 = rm; goto [t]; }
+:jsr rm  is maj=1 & rnx=0 & rm & sub4=15 { lp = inst_next; local t:4 = rm; call [t]; }
+:jsrv rm is maj=1 & rnx=8 & rm & sub4=15 { lp = inst_next | 1; enterVliwCall(); local t:4 = rm; call [t]; }
+:ret     is maj=7 & rnx=0 & rmx=0 & sub4=2 { return [lp]; }
+:reti    is maj=7 & rnx=0 & rmx=1 & sub4=2 { local t:4 = returnFromInterrupt(); return [t]; }
+:dret    is maj=7 & rnx=0 & rmx=1 & sub4=3 { dbg = dbg & 0xffff7fff; local t:4 = returnFromDebug(depc); return [t]; }
+
+:repeat rn,rel17 is maj=14 & rn & rmx=0 & sub4=9; rel17 { rpb = inst_next; rpe = &rel17; rpc = rn; }
+:erepeat rel17   is maj=14 & rnx=0 & rmx=1 & sub4=9; rel17 { rpb = inst_next; rpe = &rel17 | 1; rpc = 1; }
+
+:bcpeq uimm4,rel17 is maj=13 & rnx=8 & uimm4 & sub4=4; rel17 { local c:1 = coprocessorBranchCondition(0:1, uimm4:1); if (c) goto rel17; }
+:bcpne uimm4,rel17 is maj=13 & rnx=8 & uimm4 & sub4=5; rel17 { local c:1 = coprocessorBranchCondition(1:1, uimm4:1); if (c) goto rel17; }
+:bcpat uimm4,rel17 is maj=13 & rnx=8 & uimm4 & sub4=6; rel17 { local c:1 = coprocessorBranchCondition(2:1, uimm4:1); if (c) goto rel17; }
+:bcpaf uimm4,rel17 is maj=13 & rnx=8 & uimm4 & sub4=7; rel17 { local c:1 = coprocessorBranchCondition(3:1, uimm4:1); if (c) goto rel17; }
+
+# ---- Control ------------------------------------------------------------------
+
+:stc rn,csrn is maj=7 & rn & csrn & b12=1 & b13=0 & b14=0 { csrn = rn; }
+:ldc rn,csrn is maj=7 & rn & csrn & b12=1 & b13=0 & b14=1 { rn = csrn; }
+:ldc rn,"pc" is maj=7 & rn & csrhi=0 & csrlo=0 & b12=1 & b13=0 & b14=1 { rn = inst_next; }
+:stc rn,"pc" is maj=7 & rn & csrhi=0 & csrlo=0 & b12=1 & b13=0 & b14=0 { goto [rn]; }
+
+:di    is maj=7 & rnx=0 & rmx=0 & sub4=0 { psw = psw & 0xfffffffe; }
+:ei    is maj=7 & rnx=0 & rmx=1 & sub4=0 { psw = psw | 1; }
+:halt  is maj=7 & rnx=0 & rmx=2 & sub4=2 { psw = psw | 0x800; halt(); }
+:break is maj=7 & rnx=0 & rmx=3 & sub4=2 { breakException(); }
+:sleep is maj=7 & rnx=0 & rmx=6 & sub4=2 { sleep(); }
+:dbreak is maj=7 & rnx=0 & rmx=3 & sub4=3 { dbg = dbg | 1; debugBreak(); }
+:swi uimm2 is maj=7 & rnx=0 & b8=0 & b9=0 & uimm2 & sub4=6 { exc = exc | (1 << (uimm2 + 4)); softwareInterrupt(uimm2:1); }
+:syncm  is maj=7 & rnx=0 & rmx=1 & sub4=1 { syncMemory(); }
+:synccp is maj=7 & rnx=0 & rmx=2 & sub4=1 { syncCoprocessor(); }
+:syscall num is maj=7 & b4=1 & b5 & b6 & b7 & b8=0 & b9=0 & b10=0 & b11 & sub4=0 [ num = (b5 << 3) | (b6 << 2) | (b7 << 1) | b11; ] { syscall(num:1); }
+:cache cimm4,"("rm")" is maj=7 & cimm4 & rm & sub4=4 { cacheOp(cimm4:1, rm); }
+:pref cimm4,"("rm")"  is maj=7 & cimm4 & rm & sub4=5 { prefetch(cimm4:1, rm); }
+:pref cimm4,rdisp16   is (maj=15 & cimm4 & sub4=3) ... & rdisp16 { prefetch(cimm4:1, rdisp16); }
+:stcb rn,"("rm")" is maj=7 & rn & rm & sub4=12 { controlBusStore(rn, rm & 0xffff); }
+:ldcb rn,"("rm")" is maj=7 & rn & rm & sub4=13 { rn = controlBusLoad(rm & 0xffff); }
+:stcb rn,imm16 is maj=15 & rn & rmx=0 & sub4=4; imm16 { controlBusStore(rn, imm16:4); }
+:ldcb rn,imm16 is maj=15 & rn & rmx=1 & sub4=4; imm16 { rn = controlBusLoad(imm16:4); }
+
+# ---- Bit manipulation (optional) ----------------------------------------------
+
+:bsetm "("rm")",uimm3 is maj=2 & b4=0 & uimm3 & rm & sub4=0 { local v:1 = *:1 rm; *:1 rm = v | (1 << uimm3:1); }
+:bclrm "("rm")",uimm3 is maj=2 & b4=0 & uimm3 & rm & sub4=1 { local v:1 = *:1 rm; *:1 rm = v & ~(1 << uimm3:1); }
+:bnotm "("rm")",uimm3 is maj=2 & b4=0 & uimm3 & rm & sub4=2 { local v:1 = *:1 rm; *:1 rm = v ^ (1 << uimm3:1); }
+:btstm "r0","("rm")",uimm3 is maj=2 & b4=0 & uimm3 & rm & sub4=3 { local v:1 = *:1 rm; r0 = zext(v & (1 << uimm3:1)); }
+:tas rn,"("rm")" is maj=2 & rn & rm & sub4=4 { local old:1 = *:1 rm; *:1 rm = 1; rn = zext(old); }
+
+# ---- Multiply and divide (optional) -------------------------------------------
+
+macro sethilo(result) {
+  hi = result(4);
+  lo = result:4;
+}
+
+:mul rn,rm   is maj=1 & rn & rm & sub4=4 { local p:8 = sext(rn) * sext(rm); sethilo(p); }
+:mulu rn,rm  is maj=1 & rn & rm & sub4=5 { local p:8 = zext(rn) * zext(rm); sethilo(p); }
+:mulr rn,rm  is maj=1 & rn & rm & sub4=6 { local p:8 = sext(rn) * sext(rm); sethilo(p); rn = lo; }
+:mulru rn,rm is maj=1 & rn & rm & sub4=7 { local p:8 = zext(rn) * zext(rm); sethilo(p); rn = lo; }
+:div rn,rm   is maj=1 & rn & rm & sub4=8 { lo = rn s/ rm; hi = rn s% rm; }
+:divu rn,rm  is maj=1 & rn & rm & sub4=9 { lo = rn / rm; hi = rn % rm; }
+
+
+:madd rn,rm   is maj=15 & rn & rm & sub4=1; imm16=0x3004 { local acc:8 = (zext(hi) << 32) | zext(lo); acc = acc + sext(rn) * sext(rm); sethilo(acc); }
+:maddu rn,rm  is maj=15 & rn & rm & sub4=1; imm16=0x3005 { local acc:8 = (zext(hi) << 32) | zext(lo); acc = acc + zext(rn) * zext(rm); sethilo(acc); }
+:maddr rn,rm  is maj=15 & rn & rm & sub4=1; imm16=0x3006 { local acc:8 = (zext(hi) << 32) | zext(lo); acc = acc + sext(rn) * sext(rm); sethilo(acc); rn = lo; }
+:maddru rn,rm is maj=15 & rn & rm & sub4=1; imm16=0x3007 { local acc:8 = (zext(hi) << 32) | zext(lo); acc = acc + zext(rn) * zext(rm); sethilo(acc); rn = lo; }
+
+# ---- Optional ALU extensions (major 15, sub 1) --------------------------------
+
+:ldz rn,rm is maj=15 & rn & rm & sub4=1; imm16=0 { rn = lzcount(rm); }
+:ave rn,rm is maj=15 & rn & rm & sub4=1; imm16=2 { rn = (rn + rm + 1) s>> 1; }
+:abs rn,rm is maj=15 & rn & rm & sub4=1; imm16=3 {
+  local d:4 = rn - rm;
+  local m:4 = d s>> 31;
+  rn = (d ^ m) - m;
+}
+:min rn,rm is maj=15 & rn & rm & sub4=1; imm16=4 {
+  local c:4 = zext(rn s> rm);
+  rn = rn + (rm - rn) * c;
+}
+:max rn,rm is maj=15 & rn & rm & sub4=1; imm16=5 {
+  local c:4 = zext(rn s< rm);
+  rn = rn + (rm - rn) * c;
+}
+:minu rn,rm is maj=15 & rn & rm & sub4=1; imm16=6 {
+  local c:4 = zext(rn > rm);
+  rn = rn + (rm - rn) * c;
+}
+:maxu rn,rm is maj=15 & rn & rm & sub4=1; imm16=7 {
+  local c:4 = zext(rn < rm);
+  rn = rn + (rm - rn) * c;
+}
+:sadd rn,rm is maj=15 & rn & rm & sub4=1; imm16=8 {
+  local o:1 = scarry(rn, rm);
+  local sat:4 = 0x7fffffff + zext(rn s< 0);
+  local sum:4 = rn + rm;
+  rn = sum + (sat - sum) * zext(o);
+}
+:saddu rn,rm is maj=15 & rn & rm & sub4=1; imm16=9 {
+  local c:1 = carry(rn, rm);
+  local sum:4 = rn + rm;
+  rn = sum | (0 - zext(c));
+}
+:ssub rn,rm is maj=15 & rn & rm & sub4=1; imm16=10 {
+  local o:1 = sborrow(rn, rm);
+  local sat:4 = 0x7fffffff + zext(rn s< 0);
+  local d:4 = rn - rm;
+  rn = d + (sat - d) * zext(o);
+}
+:ssubu rn,rm is maj=15 & rn & rm & sub4=1; imm16=11 {
+  local b:1 = rn < rm;
+  local d:4 = rn - rm;
+  rn = d * zext(!b);
+}
+:clip rn,cimm5 is maj=15 & rn & rmx=0 & sub4=1; ext8=0x10 & cimm5 & x29=0 {
+  local mx:4 = (1 << cimm5) >> 1;
+  local hi_:4 = mx - 1;
+  local lo_:4 = -mx;
+  local v:4 = rn;
+  local cz:4 = zext(cimm5:1 == 0);
+  local over:4 = zext(v s> hi_);
+  local under:4 = zext(v s< lo_);
+  v = v + (hi_ - v) * over;
+  v = v + (lo_ - v) * under;
+  rn = v * (1 - cz);
+}
+:clipu rn,cimm5 is maj=15 & rn & rmx=0 & sub4=1; ext8=0x10 & cimm5 & x29=1 {
+  local top:4 = (1 << cimm5) - 1;
+  local v:4 = rn;
+  local over:4 = zext(v s> top);
+  local under:4 = zext(v s< 0);
+  v = v + (top - v) * over;
+  v = v * (1 - under);
+  rn = v;
+}
+
+:uci rn,rm,imm16 is maj=15 & rn & rm & sub4=2; imm16 { rn = userCustomInstruction(rn, rm, imm16:4); }
+:dsp rn,rm,imm16 is maj=15 & rn & rm & sub4=0; imm16 { rn = dspInstruction(rn, rm, imm16:4); }
+
+# ---- Coprocessor loads and stores ---------------------------------------------
+
+:swcp crn,"("rm")"  is maj=3 & crn & rm & sub4=8  { *:4 rm = crn:4; }
+:lwcp crn,"("rm")"  is maj=3 & crn & rm & sub4=9  { crn = sext(*:4 rm); }
+:smcp crn,"("rm")"  is maj=3 & crn & rm & sub4=10 { *:8 rm = crn; }
+:lmcp crn,"("rm")"  is maj=3 & crn & rm & sub4=11 { crn = *:8 rm; }
+:swcpi crn,"("rm"+)" is maj=3 & crn & rm & sub4=0 { *:4 rm = crn:4; rm = rm + 4; }
+:lwcpi crn,"("rm"+)" is maj=3 & crn & rm & sub4=1 { crn = sext(*:4 rm); rm = rm + 4; }
+:smcpi crn,"("rm"+)" is maj=3 & crn & rm & sub4=2 { *:8 rm = crn; rm = rm + 8; }
+:lmcpi crn,"("rm"+)" is maj=3 & crn & rm & sub4=3 { crn = *:8 rm; rm = rm + 8; }
+:swcp crn,rdisp16 is (maj=15 & crn & sub4=12) ... & rdisp16 { *:4 rdisp16 = crn:4; }
+:lwcp crn,rdisp16 is (maj=15 & crn & sub4=13) ... & rdisp16 { crn = sext(*:4 rdisp16); }
+:smcp crn,rdisp16 is (maj=15 & crn & sub4=14) ... & rdisp16 { *:8 rdisp16 = crn; }
+:lmcp crn,rdisp16 is (maj=15 & crn & sub4=15) ... & rdisp16 { crn = *:8 rdisp16; }

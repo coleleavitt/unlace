@@ -2189,7 +2189,20 @@ classified:
   the stream in ECX and the text in EDX, the `value` pushed before it for the
   `__thiscall` `operator<<(unsigned long)` that pops it went to the first call
   and the second printed without it.
-  This bookkeeping runs only with the option on and never changes
+  A third piece places the stack pointer again in the epilogue
+  (`kuna_calleepurge.rs (msvc_saved_sp)`). An EH prologue saves the exact
+  stack pointer for its catch funclets (`mov [ebp-0x10],esp`, after the
+  pushes of the callee-saved registers and the cookie), and the function's own
+  code is back at that value where it unlinks the SEH registration
+  (`mov ecx,[ebp-0xc]; mov fs:[0],ecx`). A stack pointer that a call the walk
+  cannot read (a virtual call through `[eax+8]`, whose pop no one states) left
+  only bounded is set to the saved value there, if the bounds contain it. The
+  pops after the unlink (the cookie slot, the callee-saved registers) then read
+  the slots the prologue wrote, instead of unplaced stack. A later store to the
+  saved slot forgets it. This one does change what the pop proof reads, so with
+  the option on an MSVC EH function whose virtual calls left its stack pointer
+  bounded can prove its pop.
+  The rest of this bookkeeping runs only with the option on and never changes
   a value the pop proof reads; turning the option on or off drops the walks
   already taken, so a walk is never reused with the other setting. A nested call to a function recorded as
   stack-moving (above) whose own extent is not stated leaves the extent

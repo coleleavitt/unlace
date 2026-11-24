@@ -838,7 +838,11 @@ impl Builder<'_> {
         fd.op_set_opcode_code(op, code);
         fd.op_set_all_input(op, inputs).ok()?;
         let out = fd.new_unique_out(size, op).ok()?;
-        fd.obank_mut().insert_before_dead(op, self.before);
+        if fd.obank().get(self.before)?.is_dead() {
+            fd.obank_mut().insert_before_dead(op, self.before);
+        } else {
+            fd.op_insert_before(op, self.before);
+        }
         if self.first == self.before {
             self.first = op;
         }
@@ -1263,11 +1267,26 @@ fn apply(
     let (atomic, store_op) = (ops[first_load], ops[store]);
     trace!("cas apply: pair accumulator {:?}", plan.pair_accumulator);
     let pair = plan.pair_accumulator.and_then(|(hi, lo, source)| {
-        let value = fd.obank().get(store_op)?.get_in(2)?;
-        let def = fd.vbank().get(value)?.get_def()?;
-        let at = ops.iter().position(|&o| o == def)?;
-        let only_store = fd.vbank().get(value)?.descend_iter().all(|o| o == store_op);
-        (at > first_load && at < store && only_store).then_some((hi, lo, source, def))
+        let value = storage(fd, fd.obank().get(store_op)?.get_in(2)?)?;
+        let out_of = |i: usize| {
+            fd.obank()
+                .get(ops[i])
+                .and_then(|o| o.get_out())
+                .and_then(|v| storage(fd, v))
+        };
+        let at = (first_load + 1..store)
+            .rev()
+            .find(|&i| out_of(i) == Some(value))?;
+        let read_elsewhere = (at + 1..ops.len()).filter(|&i| i != store).any(|i| {
+            fd.obank().get(ops[i]).is_some_and(|o| {
+                (0..o.num_input()).any(|slot| {
+                    o.get_in(slot)
+                        .and_then(|v| storage(fd, v))
+                        .is_some_and(|r| r.overlaps(value))
+                })
+            })
+        });
+        (!read_elsewhere).then_some((hi, lo, source, ops[at]))
     });
     trace!(
         "cas apply: pair rewrite {:?}",
@@ -1897,12 +1916,15 @@ fn writes(data: &Funcdata, ops: &[OpId]) -> Vec<Storage> {
         .collect()
 }
 
-/// Whether no op of the retried cycle `cycle` (a rotated loop's
-/// store-exclusive, store, status and reload blocks, in that order) reads a
-/// storage that an op at or after it in the cycle writes before anything
-/// earlier in the cycle does: such a read would see a different value on a
-/// retry than on the first pass.
-fn cycle_invariant(data: &Funcdata, cycle: &[OpId]) -> bool {
+/// The retried cycle `cycle` of a rotated loop (its store-exclusive, status
+/// and reload blocks in that order, branches included) read as a dataflow:
+/// a storage an op reads before any earlier op of the cycle writes it, while
+/// a later op does, holds a different value on a retry than on the first
+/// pass. That difference is followed forward through the ops that read it.
+/// Declined (`None`) when it reaches a load, a store, a user operation or a
+/// branch; otherwise the storages it still holds at the end, which must be
+/// dead after the loop.
+fn cycle_taint(data: &Funcdata, cycle: &[OpId]) -> Option<Vec<Storage>> {
     let outs: Vec<Option<Storage>> = cycle
         .iter()
         .map(|&o| {
@@ -1912,25 +1934,50 @@ fn cycle_invariant(data: &Funcdata, cycle: &[OpId]) -> bool {
                 .and_then(|v| storage(data, v))
         })
         .collect();
-    cycle.iter().enumerate().all(|(i, &o)| {
-        let Some(op) = data.obank().get(o) else {
-            return false;
-        };
-        (0..op.num_input()).all(|slot| {
-            let Some(vn) = op.get_in(slot) else {
-                return false;
-            };
+    let mut tainted: Vec<Storage> = Vec::new();
+    for (i, &o) in cycle.iter().enumerate() {
+        let op = data.obank().get(o)?;
+        let mut hit = false;
+        for slot in 0..op.num_input() {
+            let vn = op.get_in(slot)?;
             if is_constant(data, vn).is_some() {
-                return true;
+                continue;
             }
-            let Some(read) = storage(data, vn) else {
-                return false;
-            };
+            let read = storage(data, vn)?;
             let set_before = outs[..i].iter().flatten().any(|w| w.overlaps(read));
             let set_after = outs[i..].iter().flatten().any(|w| w.overlaps(read));
-            set_before || !set_after
-        })
-    })
+            if (!set_before && set_after) || tainted.iter().any(|t| t.overlaps(read)) {
+                hit = true;
+            }
+        }
+        if hit
+            && matches!(
+                op.code(),
+                OpCode::CPUI_LOAD
+                    | OpCode::CPUI_STORE
+                    | OpCode::CPUI_CALLOTHER
+                    | OpCode::CPUI_CBRANCH
+                    | OpCode::CPUI_BRANCH
+                    | OpCode::CPUI_BRANCHIND
+                    | OpCode::CPUI_CALL
+                    | OpCode::CPUI_CALLIND
+                    | OpCode::CPUI_RETURN
+            )
+        {
+            return None;
+        }
+        if let Some(out) = outs[i] {
+            tainted.retain(|t| {
+                !(out.offset <= t.offset
+                    && t.space == out.space
+                    && t.offset + t.size as u64 <= out.offset + out.size as u64)
+            });
+            if hit {
+                tainted.push(out);
+            }
+        }
+    }
+    Some(tainted)
 }
 
 fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
@@ -2141,20 +2188,17 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
     };
     if let (Some(r), Some(r_state)) = (r, r_state.as_ref()) {
         let r_ops = body(data, r);
-        let cycle: Vec<OpId> = p_ops
-            .iter()
-            .chain(&s_ops)
-            .chain(&f_ops)
-            .chain(&r_ops)
-            .copied()
+        let cycle: Vec<OpId> = [p, s, f, r]
+            .into_iter()
+            .flat_map(|b| block_ops(data, b))
             .collect();
-        if !cycle_invariant(data, &cycle) {
+        let Some(carried) = cycle_taint(data, &cycle) else {
             trace!(
                 "llsc: rotated loop at {:?} reads a value its cycle rewrites",
                 p
             );
             return None;
-        }
+        };
         let body_writes = writes(data, &p_ops)
             .into_iter()
             .chain(writes(data, &s_ops))
@@ -2172,6 +2216,7 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
             .filter(|s| !body_writes.iter().any(|b| b.overlaps(**s)))
             .filter(|s| differs(s, &path.state))
             .copied()
+            .chain(carried.iter().copied())
             .collect();
         if !dead_after(data, exit, &on_exit) {
             trace!(
@@ -2187,6 +2232,7 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
             .filter(|s| !status.iter().any(|t| t == *s))
             .filter(|s| differs(s, h_state))
             .copied()
+            .chain(carried.iter().copied())
             .collect();
         if !dead_after(data, h_exit?, &on_fail) {
             trace!(

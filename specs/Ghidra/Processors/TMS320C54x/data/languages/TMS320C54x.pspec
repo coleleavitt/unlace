@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  TMS320C54x processor spec. Data-space addresses 0x00-0x1F are the CPU's memory-mapped
+  registers; 0x20-0x5F the on-chip peripherals, labelled here with the C5402/C5409/C5416
+  family map (McBSP0-2 sub-addressed, timer, wait states, HPI, DMA, clock). Older parts
+  (C541-C548) put different peripherals there.
+-->
+<processor_spec>
+  <programcounter register="PC"/>
+  <context_data>
+    <context_set space="prog">
+      <set name="cplmode" val="0"/>
+    </context_set>
+  </context_data>
+  <default_symbols>
+    <symbol name="IMR"  address="data:0000"/>
+    <symbol name="IFR"  address="data:0001"/>
+    <symbol name="ST0"  address="data:0006"/>
+    <symbol name="ST1"  address="data:0007"/>
+    <symbol name="AL"   address="data:0008"/>
+    <symbol name="AH"   address="data:0009"/>
+    <symbol name="AG"   address="data:000A"/>
+    <symbol name="BL"   address="data:000B"/>
+    <symbol name="BH"   address="data:000C"/>
+    <symbol name="BG"   address="data:000D"/>
+    <symbol name="T"    address="data:000E"/>
+    <symbol name="TRN"  address="data:000F"/>
+    <symbol name="AR0"  address="data:0010"/>
+    <symbol name="AR1"  address="data:0011"/>
+    <symbol name="AR2"  address="data:0012"/>
+    <symbol name="AR3"  address="data:0013"/>
+    <symbol name="AR4"  address="data:0014"/>
+    <symbol name="AR5"  address="data:0015"/>
+    <symbol name="AR6"  address="data:0016"/>
+    <symbol name="AR7"  address="data:0017"/>
+    <symbol name="SP"   address="data:0018"/>
+    <symbol name="BK"   address="data:0019"/>
+    <symbol name="BRC"  address="data:001A"/>
+    <symbol name="RSA"  address="data:001B"/>
+    <symbol name="REA"  address="data:001C"/>
+    <symbol name="PMST" address="data:001D"/>
+    <symbol name="XPC"  address="data:001E"/>
+    <symbol name="DRR20" address="data:0020"/>
+    <symbol name="DRR10" address="data:0021"/>
+    <symbol name="DXR20" address="data:0022"/>
+    <symbol name="DXR10" address="data:0023"/>
+    <symbol name="TIM"   address="data:0024"/>
+    <symbol name="PRD"   address="data:0025"/>
+    <symbol name="TCR"   address="data:0026"/>
+    <symbol name="SWWSR" address="data:0028"/>
+    <symbol name="BSCR"  address="data:0029"/>
+    <symbol name="SWCR"  address="data:002B"/>
+    <symbol name="HPIC"  address="data:002C"/>
+    <symbol name="DRR22" address="data:0030"/>
+    <symbol name="DRR12" address="data:0031"/>
+    <symbol name="DXR22" address="data:0032"/>
+    <symbol name="DXR12" address="data:0033"/>
+    <symbol name="SPSA2" address="data:0034"/>
+    <symbol name="SPSD2" address="data:0035"/>
+    <symbol name="SPSA0" address="data:0038"/>
+    <symbol name="SPSD0" address="data:0039"/>
+    <symbol name="GPIOCR" address="data:003C"/>
+    <symbol name="GPIOSR" address="data:003D"/>
+    <symbol name="DRR21" address="data:0040"/>
+    <symbol name="DRR11" address="data:0041"/>
+    <symbol name="DXR21" address="data:0042"/>
+    <symbol name="DXR11" address="data:0043"/>
+    <symbol name="SPSA1" address="data:0048"/>
+    <symbol name="SPSD1" address="data:0049"/>
+    <symbol name="DMPREC" address="data:0054"/>
+    <symbol name="DMSA"   address="data:0055"/>
+    <symbol name="DMSDI"  address="data:0056"/>
+    <symbol name="DMSDN"  address="data:0057"/>
+    <symbol name="CLKMD"  address="data:0058"/>
+  </default_symbols>
+  <default_memory_blocks>
+    <memory_block name="MMR" start_address="data:0000" mode="rw" length="0x60" initialized="false"/>
+    <memory_block name="SCRATCH" start_address="data:0060" mode="rw" length="0x20" initialized="false"/>
+  </default_memory_blocks>
+</processor_spec>

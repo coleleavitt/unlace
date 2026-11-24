@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="NFP"
+            endian="little"
+            size="32"
+            variant="ME28"
+            version="1.0"
+            slafile="nfp.sla"
+            processorspec="nfp.pspec"
+            id="NFP:LE:32:ME28">
+    <description>Netronome NFP-6xxx flow processor microengine (ME v2.8), 8-context mode</description>
+    <compiler name="default" spec="nfp.cspec" id="default"/>
+  </language>
+</language_definitions>

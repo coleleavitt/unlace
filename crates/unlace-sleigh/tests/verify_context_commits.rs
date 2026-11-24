@@ -9,7 +9,7 @@
 //! `@include`s, transitively). Zero occurrences must mean `false`, and any
 //! occurrence must mean `true`, for all 339 vendored languages.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use unlace_base::address::Address;
@@ -70,8 +70,12 @@ fn vendored_sla() -> Vec<(String, String, PathBuf)> {
 }
 
 /// The `.slaspec` of a `.sla`, plus every source it `@include`s, transitively.
+/// An `@include "$(NAME)"` takes NAME's first `@define` met on the way (the
+/// slaspec's own definition wins over a later `@ifndef` default, as in the
+/// preprocessor); an include whose macro is never defined is skipped.
 fn source_closure(slaspec: &Path) -> BTreeSet<PathBuf> {
     let mut seen: BTreeSet<PathBuf> = BTreeSet::new();
+    let mut defines: BTreeMap<String, String> = BTreeMap::new();
     let mut stack = vec![slaspec.to_path_buf()];
     while let Some(f) = stack.pop() {
         let f = f
@@ -83,6 +87,15 @@ fn source_closure(slaspec: &Path) -> BTreeSet<PathBuf> {
         let text = std::fs::read_to_string(&f).unwrap_or_else(|e| panic!("{}: {e}", f.display()));
         let dir = f.parent().unwrap().to_path_buf();
         for line in text.lines() {
+            if let Some(rest) = line.trim_start().strip_prefix("@define") {
+                let mut parts = rest.trim().splitn(2, char::is_whitespace);
+                if let (Some(name), Some(value)) = (parts.next(), parts.next()) {
+                    defines
+                        .entry(name.to_owned())
+                        .or_insert_with(|| value.trim().trim_matches('"').to_owned());
+                }
+                continue;
+            }
             let Some(rest) = line.trim_start().strip_prefix("@include") else {
                 continue;
             };
@@ -90,7 +103,15 @@ fn source_closure(slaspec: &Path) -> BTreeSet<PathBuf> {
             let Some(close) = rest[open + 1..].find('"') else {
                 continue;
             };
-            stack.push(dir.join(&rest[open + 1..open + 1 + close]));
+            let name = &rest[open + 1..open + 1 + close];
+            let name = match name.strip_prefix("$(").and_then(|n| n.strip_suffix(')')) {
+                Some(macro_name) => match defines.get(macro_name) {
+                    Some(value) => value.clone(),
+                    None => continue,
+                },
+                None => name.to_owned(),
+            };
+            stack.push(dir.join(name));
         }
     }
     seen

@@ -499,7 +499,10 @@ class Mips64(Arch):
 
 
 # Release 6 compact branches (no delay slot) are compared; delay-slot branches are not.
-MIPSR6_DENY = re.compile(MIPS64_DENY.pattern.replace("^(b.*|j.*|", "^(b(?!\\w*c$).*|j(?!\\w*c$).*|").replace("|bc.*|bal.*|", "|"))
+MIPSR6_DENY = re.compile(MIPS64_DENY.pattern.replace("^(b.*|j.*|", "^(b(?!\\w*c$).*|j(?!\\w*c$).*|").replace("|bc.*|bal.*|", "|")
+                         .replace(".*\\.(s|d|ps|w|l|b|h|v)", ".*\\.(s|ps|l)|cfcmsa|ctcmsa"))
+# MSA: w0..w31 are compared; FPU operations (on $f registers, outside the harness state) are skipped.
+MSA_VECS = [(f"w{i}", None) for i in range(32)]
 
 
 class Mips64R6(Mips64):
@@ -507,8 +510,12 @@ class Mips64R6(Mips64):
     name = "mips64r6"
     lang = "MIPS:BE:64:R6"
     gprs = Mips64.gprs[:31]
+    vecs = MSA_VECS
     cs_mode = cs.CS_MODE_MIPS64 | cs.CS_MODE_MIPS32R6
     deny = MIPSR6_DENY
+
+    def skip(self, cand):
+        return "$f" in cand["op_str"]
 
     def ignored(self, mnemonic, operands, state):
         if re.match(r"^d?(div|mod)u?$", mnemonic):
@@ -521,7 +528,11 @@ class Mips32R6(Mips32):
     name = "mipsr6"
     lang = "MIPS:BE:32:R6"
     gprs = Mips32.gprs[:31]
+    vecs = MSA_VECS
     deny = MIPSR6_DENY
+
+    def skip(self, cand):
+        return "$f" in cand["op_str"]
 
     def capstone(self):
         return cs.Cs(cs.CS_ARCH_MIPS, cs.CS_MODE_MIPS32 | cs.CS_MODE_MIPS32R6 | cs.CS_MODE_BIG_ENDIAN)

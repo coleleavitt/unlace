@@ -293,11 +293,58 @@ class Mips64Harness(MipsHarness):
     """MIPS64 code on qemu-mips64: the registers are loaded and compared at their full 64 bits."""
 
 
+def msa_ldd(wd, base, off):
+    return 0x78000023 | ((off // 8) & 0x3FF) << 16 | base << 11 | wd << 6
+
+
+def msa_std(wd, base, off):
+    return 0x78000027 | ((off // 8) & 0x3FF) << 16 | base << 11 | wd << 6
+
+
 class MipsR6Harness(MipsHarness):
-    """MIPS32 Release 6 code on a MIPS64R6 core (I6400). R6 has no HI/LO."""
+    """MIPS32 Release 6 code on a MIPS64R6 core (I6400, which has MSA). R6 has no HI/LO. The MSA
+    registers w0..w31 are at 512 + 16*i (doubleword 0, then doubleword 1, as ld.d/st.d move
+    them)."""
     qemu = ("qemu-mips64", ["-cpu", "I6400"])
     flags = 0xA0000406  # EF_MIPS_ARCH_64R6 | EF_MIPS_NAN2008 | EF_MIPS_PIC | EF_MIPS_CPIC
     hilo = False
+    vec_at = 512
+    table_size = 512 + 512 + 8
+    marker_at = 512 + 512
+
+    def prologue(self, target):
+        code = MipsHarness.prologue(self, target)
+        # the vector loads go first, while the scratch register still holds the table address
+        s = self.scratch
+        head = mips_li32(s, TABLES) + [msa_ldd(i, s, self.vec_at + 16 * i) for i in range(32)]
+        rest = code[8:]
+        n_extra = 32
+        # rebuild with the branch displacement adjusted for the extra instructions
+        c = head
+        body = [int.from_bytes(rest[i:i + 4], "big") for i in range(0, len(rest), 4)]
+        br = body[-2]
+        off = (br & 0xFFFF) - n_extra
+        body[-2] = (br & 0xFFFF0000) | (off & 0xFFFF)
+        return words(c + body, True)
+
+    def epilogue(self, dumps, marker):
+        s = self.scratch
+        c = mips_li32(s, OUT) + [msa_std(i, s, self.vec_at + 16 * i) for i in range(32)]
+        return words(c, True) + MipsHarness.epilogue(self, dumps, marker)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(MipsHarness.table(self, arch, init, init_vec, flagword))
+        for i, (n, _) in enumerate(arch.vecs):
+            v = init_vec.get(n, 0)
+            struct.pack_into(">QQ", t, self.vec_at + 16 * i, v & (2 ** 64 - 1), v >> 64)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs, flags = MipsHarness.parse(self, arch, out)
+        for i, (n, _) in enumerate(arch.vecs):
+            lo, hi = struct.unpack_from(">QQ", out, self.vec_at + 16 * i)
+            regs[n] = lo | hi << 64
+        return regs, flags
 
 
 class Mips64R6Harness(MipsR6Harness):

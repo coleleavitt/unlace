@@ -3,7 +3,7 @@
 //! `Merge::mergeByDatatype` (`merge.cc:359-401`) joins any two variables of
 //! one data-type whose lifetimes do not overlap, wherever each is stored, so two
 //! distinct source variables that happen to share a type print as one reused
-//! local. `on` keeps that; `storage` joins two only when every instance of each
+//! local. `on` keeps that (upstream); `storage`, the shipped default, joins two only when every instance of each
 //! lives in one register or stack slot and the two slots are the same; `off`
 //! joins none by type and keeps only the prior-decompile variable groups.
 
@@ -111,7 +111,7 @@ impl crate::kuna_optionset::KunaOption for TypeMergeMode {
     }
 
     fn shipped() -> Self {
-        TypeMergeMode::On
+        TypeMergeMode::Storage
     }
 
     fn parse(value: &str) -> KunaResult<(Self, String)> {
@@ -139,9 +139,9 @@ mod tests {
     }
 
     #[test]
-    fn shipped_default_is_upstream() {
+    fn shipped_default_is_storage() {
         use crate::kuna_optionset::KunaOption;
-        assert_eq!(TypeMergeMode::shipped(), TypeMergeMode::On);
+        assert_eq!(TypeMergeMode::shipped(), TypeMergeMode::Storage);
         assert_eq!(TypeMergeMode::unset(), TypeMergeMode::On);
     }
 

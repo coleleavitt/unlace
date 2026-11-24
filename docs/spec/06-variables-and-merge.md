@@ -505,8 +505,10 @@ marking (below), three passes fuse variables to reduce clutter:
   `merge_by_datatype`) narrows which same-typed highs share a group. The type
   grouping joins two variables that only share a type wherever each is
   stored, so two distinct source variables (two loop counters, a saved
-  argument and a later call result) can print as one reused local. `on`, the
-  default, is upstream. `storage` keys each gathered high by the one storage
+  argument and a later call result) can print as one reused local. `on` is
+  upstream. `storage`, the default (issue #20: on DecBench O2-noinline it cut
+  the decompiled locals that stand for several DWARF variables by 15% for GED
+  +24 and about 13% more declarations), keys each gathered high by the one storage
   all its instances share (`kuna_typemerge.rs (single_storage)`: same space,
   offset and size, read through `MergeContext::vn_storage`; a high whose
   instances differ, or whose context cannot say, has no key) and lets a

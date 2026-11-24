@@ -508,14 +508,18 @@ marking (below), three passes fuse variables to reduce clutter:
   argument and a later call result) can print as one reused local. `on` is
   upstream. `storage`, the default (issue #20: on DecBench O2-noinline it cut
   the decompiled locals that stand for several DWARF variables by 15% for GED
-  +24 and about 13% more declarations), keys each gathered high by the one storage
-  all its instances share (`kuna_typemerge.rs (single_storage)`: same space,
-  offset and size, read through `MergeContext::vn_storage`; a high whose
-  instances differ, or whose context cannot say, has no key) and lets a
-  candidate join a group only when its key equals the group head's
-  (`kuna_typemerge.rs (TypeMergeMode::joins)`), so a slot or register the
-  compiler reused for one value still reads as one variable while values the
-  machine held apart stay apart. `off` clears the gathered list, so no high
+  +24 and about 13% more declarations), keys each gathered high by the storages
+  its instances sit in (`kuna_typemerge.rs (storages)`: same space, offset and
+  size, read through `MergeContext::vn_storage`; a high whose context cannot
+  say for one instance has no key) and lets a candidate join a group only when
+  its key shares a storage with the group head's (`kuna_typemerge.rs
+  (TypeMergeMode::joins)`). A slot or register the compiler reused for one value
+  still reads as one variable, and a high that an earlier merge spread over
+  several registers still joins one held in any of them; values that never
+  shared a register or slot stay apart. Requiring one single storage per high
+  instead left every high that the required merges had already spread over two
+  registers without any type join, which multiplied SIMD lane and Dalvik
+  register variables (a VM handler went from 40 to over 100 declarations). `off` clears the gathered list, so no high
   is joined by type. Both narrower modes still run the prior-decompile groups
   (`kuna_stablenames.rs (variable_groups)`) and leave every other merge pass
   alone; they only drop speculative joins.

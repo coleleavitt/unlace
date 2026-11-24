@@ -3,9 +3,10 @@
 //! `Merge::mergeByDatatype` (`merge.cc:359-401`) joins any two variables of
 //! one data-type whose lifetimes do not overlap, wherever each is stored, so two
 //! distinct source variables that happen to share a type print as one reused
-//! local. `on` keeps that (upstream); `storage`, the shipped default, joins two only when every instance of each
-//! lives in one register or stack slot and the two slots are the same; `off`
-//! joins none by type and keeps only the prior-decompile variable groups.
+//! local. `on` keeps that (upstream). `storage`, the shipped default, joins
+//! two only when they share a register or stack slot: some instance of one sits
+//! where some instance of the other does. `off` joins none by type and keeps
+//! only the prior-decompile variable groups.
 
 use unlace_base::address::Address;
 use unlace_base::error::{KunaError, KunaResult};
@@ -42,22 +43,45 @@ impl TypeMergeMode {
         self,
         ctx: &dyn MergeContext,
         high: HighVariableId,
-    ) -> Option<(Address, int4)> {
+    ) -> Option<Vec<(Address, int4)>> {
         match self {
-            TypeMergeMode::Storage => single_storage(ctx, high),
+            TypeMergeMode::Storage => storages(ctx, high),
             TypeMergeMode::On | TypeMergeMode::Off => None,
         }
     }
 
     /// May a same-typed candidate with storage `other` join the group whose
-    /// head has storage `head`?
-    pub fn joins(self, head: &Option<(Address, int4)>, other: &Option<(Address, int4)>) -> bool {
+    /// head has storage `head`? Under `storage` they must share one storage
+    /// location: a high an earlier merge already spread over several registers
+    /// still joins a high held in any one of them.
+    pub fn joins(
+        self,
+        head: &Option<Vec<(Address, int4)>>,
+        other: &Option<Vec<(Address, int4)>>,
+    ) -> bool {
         match self {
             TypeMergeMode::On => true,
             TypeMergeMode::Off => false,
-            TypeMergeMode::Storage => head.is_some() && head == other,
+            TypeMergeMode::Storage => match (head, other) {
+                (Some(h), Some(o)) => h.iter().any(|s| o.contains(s)),
+                _ => false,
+            },
         }
     }
+}
+
+/// Every storage an instance of `high` sits in, sorted and without repeats, or
+/// `None` when the context cannot say for one of them.
+pub fn storages(ctx: &dyn MergeContext, high: HighVariableId) -> Option<Vec<(Address, int4)>> {
+    let mut found: Vec<(Address, int4)> = Vec::new();
+    for i in 0..ctx.high_num_instances(high) {
+        let s = ctx.vn_storage(ctx.high_get_instance(high, i))?;
+        if !found.contains(&s) {
+            found.push(s);
+        }
+    }
+    found.sort();
+    (!found.is_empty()).then_some(found)
 }
 
 /// The storage every instance of `high` shares, or `None` when they differ or
@@ -147,9 +171,12 @@ mod tests {
 
     #[test]
     fn joins_follows_the_mode() {
-        let a = Some((Address::default(), 4));
-        let b = Some((Address::default(), 8));
+        let a = Some(vec![(Address::default(), 4)]);
+        let b = Some(vec![(Address::default(), 8)]);
+        let ab = Some(vec![(Address::default(), 4), (Address::default(), 8)]);
         assert!(TypeMergeMode::On.joins(&None, &None));
+        assert!(TypeMergeMode::Storage.joins(&ab, &b));
+        assert!(TypeMergeMode::Storage.joins(&a, &ab));
         assert!(!TypeMergeMode::Off.joins(&a, &a));
         assert!(TypeMergeMode::Storage.joins(&a, &a));
         assert!(!TypeMergeMode::Storage.joins(&a, &b));

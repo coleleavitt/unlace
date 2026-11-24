@@ -435,6 +435,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         passes.push(Box::new(
             crate::loader::kuna_elfgotimports::ElfGotImportPass,
         ));
+        // (kuna) An ARM ELF that states the base procedure-call standard binds
+        // its external functions to the base-standard model (#681).
+        passes.push(Box::new(crate::loader::kuna_armbasepcs::ArmBasePcsPass));
     }
 
     // S1 PE/Mach-O/ELF import-slot call binding (PeImportCallPass): paint
@@ -2858,13 +2861,13 @@ mod tests {
         assert!(!elf.contains(&"objc"), "ELF must not carry the objc pass");
         assert!(macho.contains(&"objc"), "Mach-O must carry the objc pass");
         // Compare the format-neutral base after dropping each format's gated
-        // additions: `elfgotimports` for ELF and `authptrcall`, `arm64evcall`,
+        // additions: `elfgotimports` and `armbasepcs` for ELF and `authptrcall`, `arm64evcall`,
         // `stubbinds`, `cfstrings`, `machobinds`, `machodataslots` and `objc` for
         // Mach-O. Both carry `itaniumrtti`.
         let elf_neutral: Vec<&str> = elf
             .iter()
             .copied()
-            .filter(|&p| p != "elfgotimports")
+            .filter(|&p| p != "elfgotimports" && p != "armbasepcs")
             .collect();
         let macho_neutral: Vec<&str> = macho
             .iter()

@@ -187,6 +187,9 @@ fn picks_by_sign(data: &Funcdata, phi: OpId, pos: usize, x: VarnodeId) -> bool {
         return false;
     };
     let n = size(data, x);
+    if !(1..=8).contains(&n) {
+        return false;
+    }
     let half: uintb = 1 << (n * 8 - 1);
     let positive = CircleRange::new(1, half, n, 1);
     let negative = CircleRange::new(half + 1, 0, n, 1);
@@ -204,7 +207,7 @@ fn division(data: &Funcdata, op: OpId) -> Option<(VarnodeId, int4)> {
     let shifted = input(data, op, 0)?;
     let k = constant(data, input(data, op, 1)?)?;
     let bits = size(data, shifted) as uintb * 8;
-    if k == 0 || k >= bits - 1 {
+    if !(8..=64).contains(&bits) || k == 0 || k >= bits - 1 {
         return None;
     }
     let bias = (1 << k) - 1;
@@ -246,7 +249,8 @@ fn remainder(data: &Funcdata, phi: OpId) -> Option<(VarnodeId, uintb)> {
         let Some(m) = constant(data, input(data, and, 1)?) else {
             continue;
         };
-        if m == 0 || m & (m + 1) != 0 || m >= 1 << (size(data, x) * 8 - 1) {
+        let n = size(data, x);
+        if !(1..=8).contains(&n) || m == 0 || m & m.wrapping_add(1) != 0 || m >= 1 << (n * 8 - 1) {
             continue;
         }
         let Some(neg_and) = negation_of(data, input(data, phi, 1 - pos as int4)?) else {

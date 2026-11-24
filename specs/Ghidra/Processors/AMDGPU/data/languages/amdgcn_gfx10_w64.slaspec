@@ -454,31 +454,61 @@ V32_j18: S32_j18 is j18_v=0 ... & S32_j18 ... { export S32_j18; }
 V64_j18: j18_vp is j18_v=1 & j18_vp { export j18_vp; }
 V64_j18: S64_j18 is j18_v=0 ... & S64_j18 ... { export S64_j18; }
 
+# 64-bit float operands: a 32-bit literal supplies the high half of the double.
+S64F_i0: i0_sp is i0_h=0 & i0_sp { export i0_sp; }
+S64F_i0: i0_c64 is i0_h=1 & i0_c64 { export *[const]:8 i0_c64; }
+S64F_i0: "scc" is i0_x=253 { t:8 = zext(SCC); export t; }
+S64F_i0: litv is i0_x=255; litv { v:8 = zext(litv:4) << 32; export v; }
+V64F_i0: i0_vp is i0_v=1 & i0_vp { export i0_vp; }
+V64F_i0: S64F_i0 is i0_v=0 ... & S64F_i0 ... { export S64F_i0; }
+S64F_i8: i8_sp is i8_h=0 & i8_sp { export i8_sp; }
+S64F_i8: i8_c64 is i8_h=1 & i8_c64 { export *[const]:8 i8_c64; }
+S64F_i8: "scc" is i8_x=253 { t:8 = zext(SCC); export t; }
+S64F_i8: litv is i8_x=255; litv { v:8 = zext(litv:4) << 32; export v; }
+S64F_j0: j0_sp is j0_h=0 & j0_sp { export j0_sp; }
+S64F_j0: j0_c64 is j0_h=1 & j0_c64 { export *[const]:8 j0_c64; }
+S64F_j0: "scc" is j0_x=253 { t:8 = zext(SCC); export t; }
+S64F_j0: litv is j0_x=255 ; litv { v:8 = zext(litv:4) << 32; export v; }
+V64F_j0: j0_vp is j0_v=1 & j0_vp { export j0_vp; }
+V64F_j0: S64F_j0 is j0_v=0 ... & S64F_j0 ... { export S64F_j0; }
+S64F_j9: j9_sp is j9_h=0 & j9_sp { export j9_sp; }
+S64F_j9: j9_c64 is j9_h=1 & j9_c64 { export *[const]:8 j9_c64; }
+S64F_j9: "scc" is j9_x=253 { t:8 = zext(SCC); export t; }
+S64F_j9: litv is j9_x=255 ; litv { v:8 = zext(litv:4) << 32; export v; }
+V64F_j9: j9_vp is j9_v=1 & j9_vp { export j9_vp; }
+V64F_j9: S64F_j9 is j9_v=0 ... & S64F_j9 ... { export S64F_j9; }
+S64F_j18: j18_sp is j18_h=0 & j18_sp { export j18_sp; }
+S64F_j18: j18_c64 is j18_h=1 & j18_c64 { export *[const]:8 j18_c64; }
+S64F_j18: "scc" is j18_x=253 { t:8 = zext(SCC); export t; }
+S64F_j18: litv is j18_x=255 ; litv { v:8 = zext(litv:4) << 32; export v; }
+V64F_j18: j18_vp is j18_v=1 & j18_vp { export j18_vp; }
+V64F_j18: S64F_j18 is j18_v=0 ... & S64F_j18 ... { export S64F_j18; }
+
 # VOP3 float sources: abs (word 0 bits 8-10) and neg (word 1 bits 29-31) modifiers.
 F32_j0: V32_j0 is v3abs0=0 ; v3neg0=0 ... & V32_j0 ... { export V32_j0; }
 F32_j0: "|"^V32_j0^"|" is v3abs0=1 ; v3neg0=0 ... & V32_j0 ... { t:4 = abs(V32_j0); export t; }
 F32_j0: "-"^V32_j0 is v3abs0=0 ; v3neg0=1 ... & V32_j0 ... { t:4 = f- V32_j0; export t; }
 F32_j0: "-|"^V32_j0^"|" is v3abs0=1 ; v3neg0=1 ... & V32_j0 ... { t:4 = f- abs(V32_j0); export t; }
-F64_j0: V64_j0 is v3abs0=0 ; v3neg0=0 ... & V64_j0 ... { export V64_j0; }
-F64_j0: "|"^V64_j0^"|" is v3abs0=1 ; v3neg0=0 ... & V64_j0 ... { t:8 = abs(V64_j0); export t; }
-F64_j0: "-"^V64_j0 is v3abs0=0 ; v3neg0=1 ... & V64_j0 ... { t:8 = f- V64_j0; export t; }
-F64_j0: "-|"^V64_j0^"|" is v3abs0=1 ; v3neg0=1 ... & V64_j0 ... { t:8 = f- abs(V64_j0); export t; }
+F64_j0: V64F_j0 is v3abs0=0 ; v3neg0=0 ... & V64F_j0 ... { export V64F_j0; }
+F64_j0: "|"^V64F_j0^"|" is v3abs0=1 ; v3neg0=0 ... & V64F_j0 ... { t:8 = abs(V64F_j0); export t; }
+F64_j0: "-"^V64F_j0 is v3abs0=0 ; v3neg0=1 ... & V64F_j0 ... { t:8 = f- V64F_j0; export t; }
+F64_j0: "-|"^V64F_j0^"|" is v3abs0=1 ; v3neg0=1 ... & V64F_j0 ... { t:8 = f- abs(V64F_j0); export t; }
 F32_j9: V32_j9 is v3abs1=0 ; v3neg1=0 ... & V32_j9 ... { export V32_j9; }
 F32_j9: "|"^V32_j9^"|" is v3abs1=1 ; v3neg1=0 ... & V32_j9 ... { t:4 = abs(V32_j9); export t; }
 F32_j9: "-"^V32_j9 is v3abs1=0 ; v3neg1=1 ... & V32_j9 ... { t:4 = f- V32_j9; export t; }
 F32_j9: "-|"^V32_j9^"|" is v3abs1=1 ; v3neg1=1 ... & V32_j9 ... { t:4 = f- abs(V32_j9); export t; }
-F64_j9: V64_j9 is v3abs1=0 ; v3neg1=0 ... & V64_j9 ... { export V64_j9; }
-F64_j9: "|"^V64_j9^"|" is v3abs1=1 ; v3neg1=0 ... & V64_j9 ... { t:8 = abs(V64_j9); export t; }
-F64_j9: "-"^V64_j9 is v3abs1=0 ; v3neg1=1 ... & V64_j9 ... { t:8 = f- V64_j9; export t; }
-F64_j9: "-|"^V64_j9^"|" is v3abs1=1 ; v3neg1=1 ... & V64_j9 ... { t:8 = f- abs(V64_j9); export t; }
+F64_j9: V64F_j9 is v3abs1=0 ; v3neg1=0 ... & V64F_j9 ... { export V64F_j9; }
+F64_j9: "|"^V64F_j9^"|" is v3abs1=1 ; v3neg1=0 ... & V64F_j9 ... { t:8 = abs(V64F_j9); export t; }
+F64_j9: "-"^V64F_j9 is v3abs1=0 ; v3neg1=1 ... & V64F_j9 ... { t:8 = f- V64F_j9; export t; }
+F64_j9: "-|"^V64F_j9^"|" is v3abs1=1 ; v3neg1=1 ... & V64F_j9 ... { t:8 = f- abs(V64F_j9); export t; }
 F32_j18: V32_j18 is v3abs2=0 ; v3neg2=0 ... & V32_j18 ... { export V32_j18; }
 F32_j18: "|"^V32_j18^"|" is v3abs2=1 ; v3neg2=0 ... & V32_j18 ... { t:4 = abs(V32_j18); export t; }
 F32_j18: "-"^V32_j18 is v3abs2=0 ; v3neg2=1 ... & V32_j18 ... { t:4 = f- V32_j18; export t; }
 F32_j18: "-|"^V32_j18^"|" is v3abs2=1 ; v3neg2=1 ... & V32_j18 ... { t:4 = f- abs(V32_j18); export t; }
-F64_j18: V64_j18 is v3abs2=0 ; v3neg2=0 ... & V64_j18 ... { export V64_j18; }
-F64_j18: "|"^V64_j18^"|" is v3abs2=1 ; v3neg2=0 ... & V64_j18 ... { t:8 = abs(V64_j18); export t; }
-F64_j18: "-"^V64_j18 is v3abs2=0 ; v3neg2=1 ... & V64_j18 ... { t:8 = f- V64_j18; export t; }
-F64_j18: "-|"^V64_j18^"|" is v3abs2=1 ; v3neg2=1 ... & V64_j18 ... { t:8 = f- abs(V64_j18); export t; }
+F64_j18: V64F_j18 is v3abs2=0 ; v3neg2=0 ... & V64F_j18 ... { export V64F_j18; }
+F64_j18: "|"^V64F_j18^"|" is v3abs2=1 ; v3neg2=0 ... & V64F_j18 ... { t:8 = abs(V64F_j18); export t; }
+F64_j18: "-"^V64F_j18 is v3abs2=0 ; v3neg2=1 ... & V64F_j18 ... { t:8 = f- V64F_j18; export t; }
+F64_j18: "-|"^V64F_j18^"|" is v3abs2=1 ; v3neg2=1 ... & V64F_j18 ... { t:8 = f- abs(V64F_j18); export t; }
 
 VN32_i0: i0_vg is i0_v=1 & i0_vg { export i0_vg; }
 VN32_i0: i0_lo7 is i0_v=0 & i0_h=0 & i0_lo7 { export i0_lo7; }
@@ -1518,24 +1548,24 @@ define pcodeop bpermute;
   a:4 = F32_j0; d:4 = i0v8; r:4 = 0; r = trunc(floor(a));
   i0v8 = r;
 }
-:v_cvt_i32_f64 i17_vg, V64_i0 is e7=0x3f ... & vop1op=3 ... & i17_vg ... & V64_i0 ... {
-  a:8 = V64_i0; d:4 = i17_vg; r:4 = 0; r = trunc(a);
+:v_cvt_i32_f64 i17_vg, V64F_i0 is e7=0x3f ... & vop1op=3 ... & i17_vg ... & V64F_i0 ... {
+  a:8 = V64F_i0; d:4 = i17_vg; r:4 = 0; r = trunc(a);
   i17_vg = r;
 }
 :v_cvt_i32_f64_e64 i0v8, F64_j0 is e6=0x35 ... & vop3op=387 ... & i0v8 ... & F64_j0 ... {
   a:8 = F64_j0; d:4 = i0v8; r:4 = 0; r = trunc(a);
   i0v8 = r;
 }
-:v_cvt_u32_f64 i17_vg, V64_i0 is e7=0x3f ... & vop1op=21 ... & i17_vg ... & V64_i0 ... {
-  a:8 = V64_i0; d:4 = i17_vg; r:4 = 0; t:8 = trunc(a); r = t:4;
+:v_cvt_u32_f64 i17_vg, V64F_i0 is e7=0x3f ... & vop1op=21 ... & i17_vg ... & V64F_i0 ... {
+  a:8 = V64F_i0; d:4 = i17_vg; r:4 = 0; t:8 = trunc(a); r = t:4;
   i17_vg = r;
 }
 :v_cvt_u32_f64_e64 i0v8, F64_j0 is e6=0x35 ... & vop3op=405 ... & i0v8 ... & F64_j0 ... {
   a:8 = F64_j0; d:4 = i0v8; r:4 = 0; t:8 = trunc(a); r = t:4;
   i0v8 = r;
 }
-:v_cvt_f32_f64 i17_vg, V64_i0 is e7=0x3f ... & vop1op=15 ... & i17_vg ... & V64_i0 ... {
-  a:8 = V64_i0; d:4 = i17_vg; r:4 = 0; r = float2float(a);
+:v_cvt_f32_f64 i17_vg, V64F_i0 is e7=0x3f ... & vop1op=15 ... & i17_vg ... & V64F_i0 ... {
+  a:8 = V64F_i0; d:4 = i17_vg; r:4 = 0; r = float2float(a);
   i17_vg = r;
 }
 :v_cvt_f32_f64_e64 i0v8, F64_j0 is e6=0x35 ... & vop3op=399 ... & i0v8 ... & F64_j0 ... {
@@ -1566,48 +1596,48 @@ define pcodeop bpermute;
   a:4 = F32_j0; d:8 = i0vp; r:8 = 0; r = float2float(a);
   i0vp = r;
 }
-:v_rcp_f64 i17_vp, V64_i0 is e7=0x3f ... & vop1op=47 ... & i17_vp ... & V64_i0 ... {
-  a:8 = V64_i0; d:8 = i17_vp; r:8 = 0; one:8 = 0x3ff0000000000000; r = one f/ a;
+:v_rcp_f64 i17_vp, V64F_i0 is e7=0x3f ... & vop1op=47 ... & i17_vp ... & V64F_i0 ... {
+  a:8 = V64F_i0; d:8 = i17_vp; r:8 = 0; one:8 = 0x3ff0000000000000; r = one f/ a;
   i17_vp = r;
 }
 :v_rcp_f64_e64 i0vp, F64_j0 is e6=0x35 ... & vop3op=431 ... & i0vp ... & F64_j0 ... {
   a:8 = F64_j0; d:8 = i0vp; r:8 = 0; one:8 = 0x3ff0000000000000; r = one f/ a;
   i0vp = r;
 }
-:v_rsq_f64 i17_vp, V64_i0 is e7=0x3f ... & vop1op=49 ... & i17_vp ... & V64_i0 ... {
-  a:8 = V64_i0; d:8 = i17_vp; r:8 = 0; r = rsqrt(a);
+:v_rsq_f64 i17_vp, V64F_i0 is e7=0x3f ... & vop1op=49 ... & i17_vp ... & V64F_i0 ... {
+  a:8 = V64F_i0; d:8 = i17_vp; r:8 = 0; r = rsqrt(a);
   i17_vp = r;
 }
 :v_rsq_f64_e64 i0vp, F64_j0 is e6=0x35 ... & vop3op=433 ... & i0vp ... & F64_j0 ... {
   a:8 = F64_j0; d:8 = i0vp; r:8 = 0; r = rsqrt(a);
   i0vp = r;
 }
-:v_sqrt_f64 i17_vp, V64_i0 is e7=0x3f ... & vop1op=52 ... & i17_vp ... & V64_i0 ... {
-  a:8 = V64_i0; d:8 = i17_vp; r:8 = 0; r = sqrt(a);
+:v_sqrt_f64 i17_vp, V64F_i0 is e7=0x3f ... & vop1op=52 ... & i17_vp ... & V64F_i0 ... {
+  a:8 = V64F_i0; d:8 = i17_vp; r:8 = 0; r = sqrt(a);
   i17_vp = r;
 }
 :v_sqrt_f64_e64 i0vp, F64_j0 is e6=0x35 ... & vop3op=436 ... & i0vp ... & F64_j0 ... {
   a:8 = F64_j0; d:8 = i0vp; r:8 = 0; r = sqrt(a);
   i0vp = r;
 }
-:v_trunc_f64 i17_vp, V64_i0 is e7=0x3f ... & vop1op=23 ... & i17_vp ... & V64_i0 ... {
-  a:8 = V64_i0; d:8 = i17_vp; r:8 = 0; t:8 = trunc(a); r = int2float(t);
+:v_trunc_f64 i17_vp, V64F_i0 is e7=0x3f ... & vop1op=23 ... & i17_vp ... & V64F_i0 ... {
+  a:8 = V64F_i0; d:8 = i17_vp; r:8 = 0; t:8 = trunc(a); r = int2float(t);
   i17_vp = r;
 }
 :v_trunc_f64_e64 i0vp, F64_j0 is e6=0x35 ... & vop3op=407 ... & i0vp ... & F64_j0 ... {
   a:8 = F64_j0; d:8 = i0vp; r:8 = 0; t:8 = trunc(a); r = int2float(t);
   i0vp = r;
 }
-:v_floor_f64 i17_vp, V64_i0 is e7=0x3f ... & vop1op=26 ... & i17_vp ... & V64_i0 ... {
-  a:8 = V64_i0; d:8 = i17_vp; r:8 = 0; r = floor(a);
+:v_floor_f64 i17_vp, V64F_i0 is e7=0x3f ... & vop1op=26 ... & i17_vp ... & V64F_i0 ... {
+  a:8 = V64F_i0; d:8 = i17_vp; r:8 = 0; r = floor(a);
   i17_vp = r;
 }
 :v_floor_f64_e64 i0vp, F64_j0 is e6=0x35 ... & vop3op=410 ... & i0vp ... & F64_j0 ... {
   a:8 = F64_j0; d:8 = i0vp; r:8 = 0; r = floor(a);
   i0vp = r;
 }
-:v_fract_f64 i17_vp, V64_i0 is e7=0x3f ... & vop1op=62 ... & i17_vp ... & V64_i0 ... {
-  a:8 = V64_i0; d:8 = i17_vp; r:8 = 0; r = fract(a);
+:v_fract_f64 i17_vp, V64F_i0 is e7=0x3f ... & vop1op=62 ... & i17_vp ... & V64F_i0 ... {
+  a:8 = V64F_i0; d:8 = i17_vp; r:8 = 0; r = fract(a);
   i17_vp = r;
 }
 :v_fract_f64_e64 i0vp, F64_j0 is e6=0x35 ... & vop3op=446 ... & i0vp ... & F64_j0 ... {
@@ -1924,36 +1954,36 @@ define pcodeop bpermute;
 :v_cmp_nlt_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=14 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(a f< b); SD64_i0 = zext(c); }
 :v_cmp_tru_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=15 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 1:1; vcc = zext(c); }
 :v_cmp_tru_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=15 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = 1:1; SD64_i0 = zext(c); }
-:v_cmp_f_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=32 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = 0:1; vcc = zext(c); }
+:v_cmp_f_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=32 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = 0:1; vcc = zext(c); }
 :v_cmp_f_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=32 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = 0:1; SD64_i0 = zext(c); }
-:v_cmp_lt_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=33 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = a f< b; vcc = zext(c); }
+:v_cmp_lt_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=33 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = a f< b; vcc = zext(c); }
 :v_cmp_lt_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=33 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = a f< b; SD64_i0 = zext(c); }
-:v_cmp_eq_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=34 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = a f== b; vcc = zext(c); }
+:v_cmp_eq_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=34 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = a f== b; vcc = zext(c); }
 :v_cmp_eq_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=34 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = a f== b; SD64_i0 = zext(c); }
-:v_cmp_le_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=35 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = a f<= b; vcc = zext(c); }
+:v_cmp_le_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=35 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = a f<= b; vcc = zext(c); }
 :v_cmp_le_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=35 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = a f<= b; SD64_i0 = zext(c); }
-:v_cmp_gt_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=36 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = a f> b; vcc = zext(c); }
+:v_cmp_gt_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=36 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = a f> b; vcc = zext(c); }
 :v_cmp_gt_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=36 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = a f> b; SD64_i0 = zext(c); }
-:v_cmp_lg_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=37 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = (a f< b) || (a f> b); vcc = zext(c); }
+:v_cmp_lg_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=37 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = (a f< b) || (a f> b); vcc = zext(c); }
 :v_cmp_lg_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=37 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = (a f< b) || (a f> b); SD64_i0 = zext(c); }
-:v_cmp_ge_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=38 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = a f>= b; vcc = zext(c); }
+:v_cmp_ge_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=38 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = a f>= b; vcc = zext(c); }
 :v_cmp_ge_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=38 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = a f>= b; SD64_i0 = zext(c); }
-:v_cmp_o_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=39 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = !(nan(a) || nan(b)); vcc = zext(c); }
+:v_cmp_o_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=39 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = !(nan(a) || nan(b)); vcc = zext(c); }
 :v_cmp_o_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=39 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = !(nan(a) || nan(b)); SD64_i0 = zext(c); }
-:v_cmp_u_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=40 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = nan(a) || nan(b); vcc = zext(c); }
+:v_cmp_u_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=40 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = nan(a) || nan(b); vcc = zext(c); }
 :v_cmp_u_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=40 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = nan(a) || nan(b); SD64_i0 = zext(c); }
-:v_cmp_nge_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=41 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = !(a f>= b); vcc = zext(c); }
+:v_cmp_nge_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=41 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = !(a f>= b); vcc = zext(c); }
 :v_cmp_nge_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=41 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = !(a f>= b); SD64_i0 = zext(c); }
-:v_cmp_nlg_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=42 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = !((a f< b) || (a f> b)); vcc = zext(c); }
+:v_cmp_nlg_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=42 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = !((a f< b) || (a f> b)); vcc = zext(c); }
 :v_cmp_nlg_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=42 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = !((a f< b) || (a f> b)); SD64_i0 = zext(c); }
-:v_cmp_ngt_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=43 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = !(a f> b); vcc = zext(c); }
-:v_cmp_nle_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=44 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = !(a f<= b); vcc = zext(c); }
+:v_cmp_ngt_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=43 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = !(a f> b); vcc = zext(c); }
+:v_cmp_nle_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=44 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = !(a f<= b); vcc = zext(c); }
 :v_cmp_nle_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=44 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = !(a f<= b); SD64_i0 = zext(c); }
-:v_cmp_neq_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=45 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = !(a f== b); vcc = zext(c); }
+:v_cmp_neq_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=45 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = !(a f== b); vcc = zext(c); }
 :v_cmp_neq_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=45 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = !(a f== b); SD64_i0 = zext(c); }
-:v_cmp_nlt_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=46 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = !(a f< b); vcc = zext(c); }
+:v_cmp_nlt_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=46 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = !(a f< b); vcc = zext(c); }
 :v_cmp_nlt_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=46 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = !(a f< b); SD64_i0 = zext(c); }
-:v_cmp_tru_f64 "vcc", V64_i0, i9_vp is e7=0x3e ... & vopcop=47 ... & V64_i0 ... & i9_vp ... { a:8 = V64_i0; b:8 = i9_vp; c:1 = 1:1; vcc = zext(c); }
+:v_cmp_tru_f64 "vcc", V64F_i0, i9_vp is e7=0x3e ... & vopcop=47 ... & V64F_i0 ... & i9_vp ... { a:8 = V64F_i0; b:8 = i9_vp; c:1 = 1:1; vcc = zext(c); }
 :v_cmp_tru_f64_e64 SD64_i0, F64_j0, F64_j9 is e6=0x35 ... & vop3op=47 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & F64_j9 ... { a:8 = F64_j0; b:8 = F64_j9; c:1 = 1:1; SD64_i0 = zext(c); }
 :v_cmp_f_i32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=128 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 0:1; vcc = zext(c); }
 :v_cmp_f_i32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=128 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = 0:1; SD64_i0 = zext(c); }
@@ -2042,70 +2072,70 @@ define pcodeop bpermute;
 :v_cmp_ne_u16_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=173 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:2 = V32_j0:2; b:2 = V32_j9:2; c:1 = a != b; SD64_i0 = zext(c); }
 :v_cmp_ge_u16 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=174 ... & V32_i0 ... & i9_vg ... { a:2 = V32_i0:2; b:2 = i9_vg:2; c:1 = a >= b; vcc = zext(c); }
 :v_cmp_ge_u16_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=174 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:2 = V32_j0:2; b:2 = V32_j9:2; c:1 = a >= b; SD64_i0 = zext(c); }
-:v_cmpx_f_i32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=144 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 0:1; vcc = zext(c); exec = zext(c); }
-:v_cmpx_f_i32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=144 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = 0:1; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_lt_i32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=145 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a s< b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_lt_i32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=145 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a s< b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_eq_i32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=146 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a == b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_eq_i32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=146 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a == b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_le_i32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=147 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a s<= b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_le_i32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=147 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a s<= b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_gt_i32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=148 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a s> b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_gt_i32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=148 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a s> b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_ne_i32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=149 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a != b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_ne_i32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=149 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a != b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_ge_i32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=150 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a s>= b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_ge_i32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=150 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a s>= b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_t_i32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=151 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 1:1; vcc = zext(c); exec = zext(c); }
-:v_cmpx_t_i32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=151 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = 1:1; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_f_u32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=208 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 0:1; vcc = zext(c); exec = zext(c); }
-:v_cmpx_f_u32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=208 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = 0:1; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_lt_u32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=209 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a < b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_lt_u32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=209 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a < b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_eq_u32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=210 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a == b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_eq_u32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=210 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a == b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_le_u32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=211 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a <= b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_le_u32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=211 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a <= b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_gt_u32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=212 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a > b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_gt_u32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=212 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a > b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_ne_u32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=213 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a != b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_ne_u32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=213 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a != b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_ge_u32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=214 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a >= b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_ge_u32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=214 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a >= b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_t_u32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=215 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 1:1; vcc = zext(c); exec = zext(c); }
-:v_cmpx_t_u32_e64 SD64_i0, V32_j0, V32_j9 is e6=0x35 & vop3op=215 & i0_h=0 & SD64_i0 ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = 1:1; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_f_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=16 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 0:1; vcc = zext(c); exec = zext(c); }
-:v_cmpx_f_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=16 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = 0:1; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_lt_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=17 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a f< b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_lt_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=17 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = a f< b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_eq_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=18 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a f== b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_eq_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=18 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = a f== b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_le_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=19 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a f<= b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_le_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=19 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = a f<= b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_gt_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=20 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a f> b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_gt_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=20 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = a f> b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_lg_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=21 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = (a f< b) || (a f> b); vcc = zext(c); exec = zext(c); }
-:v_cmpx_lg_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=21 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = (a f< b) || (a f> b); SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_ge_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=22 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a f>= b; vcc = zext(c); exec = zext(c); }
-:v_cmpx_ge_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=22 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = a f>= b; SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_o_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=23 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !(nan(a) || nan(b)); vcc = zext(c); exec = zext(c); }
-:v_cmpx_o_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=23 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(nan(a) || nan(b)); SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_u_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=24 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = nan(a) || nan(b); vcc = zext(c); exec = zext(c); }
-:v_cmpx_u_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=24 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = nan(a) || nan(b); SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_nge_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=25 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !(a f>= b); vcc = zext(c); exec = zext(c); }
-:v_cmpx_nge_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=25 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(a f>= b); SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_nlg_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=26 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !((a f< b) || (a f> b)); vcc = zext(c); exec = zext(c); }
-:v_cmpx_nlg_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=26 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !((a f< b) || (a f> b)); SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_ngt_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=27 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !(a f> b); vcc = zext(c); exec = zext(c); }
-:v_cmpx_ngt_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=27 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(a f> b); SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_nle_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=28 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !(a f<= b); vcc = zext(c); exec = zext(c); }
-:v_cmpx_nle_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=28 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(a f<= b); SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_neq_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=29 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !(a f== b); vcc = zext(c); exec = zext(c); }
-:v_cmpx_neq_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=29 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(a f== b); SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_nlt_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=30 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !(a f< b); vcc = zext(c); exec = zext(c); }
-:v_cmpx_nlt_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=30 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(a f< b); SD64_i0 = zext(c); exec = zext(c); }
-:v_cmpx_tru_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=31 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 1:1; vcc = zext(c); exec = zext(c); }
-:v_cmpx_tru_f32_e64 SD64_i0, F32_j0, F32_j9 is e6=0x35 ... & vop3op=31 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = 1:1; SD64_i0 = zext(c); exec = zext(c); }
+:v_cmpx_f_i32 V32_i0, i9_vg is e7=0x3e ... & vopcop=144 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 0:1; exec = zext(c); }
+:v_cmpx_f_i32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=144 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = 0:1; exec = zext(c); }
+:v_cmpx_lt_i32 V32_i0, i9_vg is e7=0x3e ... & vopcop=145 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a s< b; exec = zext(c); }
+:v_cmpx_lt_i32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=145 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a s< b; exec = zext(c); }
+:v_cmpx_eq_i32 V32_i0, i9_vg is e7=0x3e ... & vopcop=146 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a == b; exec = zext(c); }
+:v_cmpx_eq_i32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=146 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a == b; exec = zext(c); }
+:v_cmpx_le_i32 V32_i0, i9_vg is e7=0x3e ... & vopcop=147 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a s<= b; exec = zext(c); }
+:v_cmpx_le_i32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=147 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a s<= b; exec = zext(c); }
+:v_cmpx_gt_i32 V32_i0, i9_vg is e7=0x3e ... & vopcop=148 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a s> b; exec = zext(c); }
+:v_cmpx_gt_i32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=148 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a s> b; exec = zext(c); }
+:v_cmpx_ne_i32 V32_i0, i9_vg is e7=0x3e ... & vopcop=149 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a != b; exec = zext(c); }
+:v_cmpx_ne_i32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=149 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a != b; exec = zext(c); }
+:v_cmpx_ge_i32 V32_i0, i9_vg is e7=0x3e ... & vopcop=150 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a s>= b; exec = zext(c); }
+:v_cmpx_ge_i32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=150 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a s>= b; exec = zext(c); }
+:v_cmpx_t_i32 V32_i0, i9_vg is e7=0x3e ... & vopcop=151 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 1:1; exec = zext(c); }
+:v_cmpx_t_i32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=151 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = 1:1; exec = zext(c); }
+:v_cmpx_f_u32 V32_i0, i9_vg is e7=0x3e ... & vopcop=208 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 0:1; exec = zext(c); }
+:v_cmpx_f_u32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=208 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = 0:1; exec = zext(c); }
+:v_cmpx_lt_u32 V32_i0, i9_vg is e7=0x3e ... & vopcop=209 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a < b; exec = zext(c); }
+:v_cmpx_lt_u32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=209 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a < b; exec = zext(c); }
+:v_cmpx_eq_u32 V32_i0, i9_vg is e7=0x3e ... & vopcop=210 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a == b; exec = zext(c); }
+:v_cmpx_eq_u32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=210 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a == b; exec = zext(c); }
+:v_cmpx_le_u32 V32_i0, i9_vg is e7=0x3e ... & vopcop=211 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a <= b; exec = zext(c); }
+:v_cmpx_le_u32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=211 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a <= b; exec = zext(c); }
+:v_cmpx_gt_u32 V32_i0, i9_vg is e7=0x3e ... & vopcop=212 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a > b; exec = zext(c); }
+:v_cmpx_gt_u32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=212 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a > b; exec = zext(c); }
+:v_cmpx_ne_u32 V32_i0, i9_vg is e7=0x3e ... & vopcop=213 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a != b; exec = zext(c); }
+:v_cmpx_ne_u32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=213 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a != b; exec = zext(c); }
+:v_cmpx_ge_u32 V32_i0, i9_vg is e7=0x3e ... & vopcop=214 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a >= b; exec = zext(c); }
+:v_cmpx_ge_u32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=214 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = a >= b; exec = zext(c); }
+:v_cmpx_t_u32 V32_i0, i9_vg is e7=0x3e ... & vopcop=215 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 1:1; exec = zext(c); }
+:v_cmpx_t_u32_e64 V32_j0, V32_j9 is e6=0x35 & vop3op=215 & i0_x=0x7e ; V32_j0 ... & V32_j9 ... { a:4 = V32_j0; b:4 = V32_j9; c:1 = 1:1; exec = zext(c); }
+:v_cmpx_f_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=16 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 0:1; exec = zext(c); }
+:v_cmpx_f_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=16 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = 0:1; exec = zext(c); }
+:v_cmpx_lt_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=17 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a f< b; exec = zext(c); }
+:v_cmpx_lt_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=17 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = a f< b; exec = zext(c); }
+:v_cmpx_eq_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=18 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a f== b; exec = zext(c); }
+:v_cmpx_eq_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=18 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = a f== b; exec = zext(c); }
+:v_cmpx_le_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=19 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a f<= b; exec = zext(c); }
+:v_cmpx_le_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=19 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = a f<= b; exec = zext(c); }
+:v_cmpx_gt_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=20 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a f> b; exec = zext(c); }
+:v_cmpx_gt_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=20 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = a f> b; exec = zext(c); }
+:v_cmpx_lg_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=21 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = (a f< b) || (a f> b); exec = zext(c); }
+:v_cmpx_lg_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=21 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = (a f< b) || (a f> b); exec = zext(c); }
+:v_cmpx_ge_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=22 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = a f>= b; exec = zext(c); }
+:v_cmpx_ge_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=22 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = a f>= b; exec = zext(c); }
+:v_cmpx_o_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=23 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !(nan(a) || nan(b)); exec = zext(c); }
+:v_cmpx_o_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=23 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(nan(a) || nan(b)); exec = zext(c); }
+:v_cmpx_u_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=24 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = nan(a) || nan(b); exec = zext(c); }
+:v_cmpx_u_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=24 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = nan(a) || nan(b); exec = zext(c); }
+:v_cmpx_nge_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=25 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !(a f>= b); exec = zext(c); }
+:v_cmpx_nge_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=25 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(a f>= b); exec = zext(c); }
+:v_cmpx_nlg_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=26 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !((a f< b) || (a f> b)); exec = zext(c); }
+:v_cmpx_nlg_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=26 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !((a f< b) || (a f> b)); exec = zext(c); }
+:v_cmpx_ngt_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=27 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !(a f> b); exec = zext(c); }
+:v_cmpx_ngt_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=27 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(a f> b); exec = zext(c); }
+:v_cmpx_nle_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=28 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !(a f<= b); exec = zext(c); }
+:v_cmpx_nle_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=28 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(a f<= b); exec = zext(c); }
+:v_cmpx_neq_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=29 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !(a f== b); exec = zext(c); }
+:v_cmpx_neq_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=29 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(a f== b); exec = zext(c); }
+:v_cmpx_nlt_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=30 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = !(a f< b); exec = zext(c); }
+:v_cmpx_nlt_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=30 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = !(a f< b); exec = zext(c); }
+:v_cmpx_tru_f32 V32_i0, i9_vg is e7=0x3e ... & vopcop=31 ... & V32_i0 ... & i9_vg ... { a:4 = V32_i0; b:4 = i9_vg; c:1 = 1:1; exec = zext(c); }
+:v_cmpx_tru_f32_e64 F32_j0, F32_j9 is e6=0x35 ... & vop3op=31 ... & i0_x=0x7e ... & F32_j0 ... & F32_j9 ... { a:4 = F32_j0; b:4 = F32_j9; c:1 = 1:1; exec = zext(c); }
 
 # SMEM (bits 31-26 = 111101): the base is an SGPR pair (bits 0-5 times 2); the address adds the
 # signed 21-bit offset and the SGPR in word 1 bits 25-31 unless that is null.
@@ -2279,4 +2309,19 @@ DSA: "["^jv0^"+"^dsoff16^"]" is dsoff16 ; jv0 { a:4 = jv0 + dsoff16; export a; }
 :s_waitcnt_lgkmcnt uimm16 is e4=0xb & sopkop=26 & uimm16 { }
 :s_subvector_loop_begin uimm16 is e4=0xb & sopkop=27 & uimm16 { }
 :s_subvector_loop_end uimm16 is e4=0xb & sopkop=28 & uimm16 { }
+
+# f64 division helpers and the class compares (real-code sweep: clang -O2 f64 division).
+:v_div_scale_f64 i0vp, SD64_i8, F64_j0, F64_j9, F64_j18 is e6=0x35 ... & vop3op=366 ... & i0vp ... & SD64_i8 ... & F64_j0 ... & F64_j9 ... & F64_j18 ... {
+  i0vp = div_scale(F64_j0, F64_j9, F64_j18); SD64_i8 = 0;
+}
+:v_div_fmas_f64 i0vp, F64_j0, F64_j9, F64_j18 is e6=0x35 ... & vop3op=368 ... & i0vp ... & F64_j0 ... & F64_j9 ... & F64_j18 ... {
+  i0vp = (F64_j0 f* F64_j9) f+ F64_j18;
+}
+:v_div_fixup_f64 i0vp, F64_j0, F64_j9, F64_j18 is e6=0x35 ... & vop3op=352 ... & i0vp ... & F64_j0 ... & F64_j9 ... & F64_j18 ... {
+  i0vp = div_fixup(F64_j0, F64_j9, F64_j18);
+}
+:v_cmp_class_f64 "vcc", V64F_i0, i9_vg is e7=0x3e ... & vopcop=168 ... & V64F_i0 ... & i9_vg ... { c:1 = cmp_class(V64F_i0, i9_vg); vcc = zext(c); }
+:v_cmp_class_f64_e64 SD64_i0, F64_j0, V32_j9 is e6=0x35 ... & vop3op=168 ... & i0_h=0 ... & SD64_i0 ... & F64_j0 ... & (e6 ; V32_j9 ...) ... { c:1 = cmp_class(F64_j0, V32_j9); SD64_i0 = zext(c); }
+:v_cmp_class_f32 "vcc", V32_i0, i9_vg is e7=0x3e ... & vopcop=136 ... & V32_i0 ... & i9_vg ... { c:1 = cmp_class(V32_i0, i9_vg); vcc = zext(c); }
+:v_cmp_class_f32_e64 SD64_i0, F32_j0, V32_j9 is e6=0x35 ... & vop3op=136 ... & i0_h=0 ... & SD64_i0 ... & F32_j0 ... & (e6 ; V32_j9 ...) ... { c:1 = cmp_class(F32_j0, V32_j9); SD64_i0 = zext(c); }
 

@@ -129,9 +129,8 @@ exact. `--field-table` lets an existing subtable (`immI`, `immS`) decode, displa
 sign-extended immediate, including one split across the encoding. `--drop-display` follows
 LLVM in leaving out `rne` on the exact conversions. `--idiom` lifts the `rs2 = rs1` aliases as a
 copy, `f-` or `abs()`. `--unbox exact` NaN-unboxes single-precision sources. The decompiler folds the check where
-the value is known boxed (`boxedcompare`, and `fpargboxed` for argument registers). On a musl
-subset that leaves 1.5% more lines than reading the low bits, all of it unboxing of call
-results, with 0 words wrong against QEMU instead of 13.
+the value is known boxed (`boxedcompare`, and `fpargboxed` for argument registers and call
+results). This gives 0 words wrong against QEMU instead of 13 for reading the low bits.
 
 To compare another variant, copy `specs/Ghidra/Processors/RISCV/data/languages` into
 `<dir>/Ghidra/Processors/RISCV/data/languages`, replace `riscv.zb.sinc`, compile with

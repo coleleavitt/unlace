@@ -49,13 +49,6 @@ pub fn goabi_env_enabled() -> bool {
     crate::loadoptions::scoped(|o| o.goabi).unwrap_or_else(crate::loadoptions::env::goabi)
 }
 
-/// Export a `set_unlace_option("goabi", val)` toggle to [`GOABI_ENV`] so a later
-/// `load file` in the same process sees the choice.
-pub fn set_goabi_env(on: bool) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(GOABI_ENV, if on { "auto" } else { "off" }) };
-}
-
 /// Parse an `option goabi` value (`auto`/on-tokens enable, off-tokens disable).
 pub fn parse_goabi(value: &str) -> Result<bool, String> {
     match value.trim().to_ascii_lowercase().as_str() {

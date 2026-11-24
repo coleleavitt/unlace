@@ -346,6 +346,8 @@ mod verify_noreturn_disc;
 
 #[path = "verify_noreturn_discstrict.rs"]
 mod verify_noreturn_discstrict;
+#[path = "verify_noreturn_int3.rs"]
+mod verify_noreturn_int3;
 
 #[path = "verify_noreturn_error.rs"]
 mod verify_noreturn_error;

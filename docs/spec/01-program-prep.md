@@ -15050,8 +15050,16 @@ the RETURN only for a callee that ran `restore` in its delay slot, and reading
 the last op alone made every SPARC call a terminal one, so any function with
 three callers in a linked image was concluded no-return. For its *successor* only **positive** evidence counts: the successor
 is data (outside every executable range, so the compiler emitted nothing there to
-fall into), or the successor is another function's entry (the compiler left the
-caller no tail at all). The legacy tally had a third arm ahead of those two — the
+fall into), the successor is an x86 `int3` (MSVC, and clang and rustc targeting
+Windows, plant the trap after a call that does not return: `call
+__CxxThrowException@8; int3`), or the successor is another function's entry (the
+compiler left the caller no tail at all). The promotion rule skips an `int3` in
+the caller's body rather than reading its lifted RETURN as a returning path, and
+`noreturn_propagate` skips a trailing `int3` as padding when it locates the last
+real instruction, so a static-CRT `_Xlen` (`call __CxxThrowException@8; int3`)
+is concluded no-return once its callee is. On SLABHIDDevice.dll (i386 MSVC, no
+symbols, default `auto` mode, so the Listing is built) this names
+`__CxxThrowException@8` and the helpers that only throw. The legacy tally had a third arm ahead of those two — the
 successor is not a decoded instruction start.
 
 That third arm is a statement about unlace, not about the program. The Listing walk
@@ -15089,6 +15097,18 @@ threshold; `call abort` followed by padding, invisible to the evidence predicate
 which unconditionally cannot return. Without it, every caller grows a spurious
 fall-through edge into the cold path that structures into an invalid
 `while(true)`+`goto`.
+
+A call through an import slot counts as a no-return call when the load-time
+passes flagged the slot, and on x86 also when the slot is `TerminateProcess` and
+the process handle is the current one (`terminates_current`): reading the
+contiguous instructions before the call backward (at most four), the `-1`
+pseudo-handle stored as the first argument (`push -1`, `mov dword [esp],-1`,
+`or rcx,-1`, `mov rcx,-1`), or eax/rax stored as it (`push eax`, `mov
+[esp],eax`, `mov rcx,rax`) after a `call [GetCurrentProcess]` with only constant
+argument stores in between. The CRT's `__invoke_watson` and
+`__report_gsfailure` end that way and keep a cookie check and a `ret` behind the
+call, so the reachability rule concludes them
+(`tests/stages/terminatecurrent.toml`).
 
 On Go AMD64 ELF, `pclntab/gomcall.rs` independently identifies the
 unique `runtime.mcall` name and entry address in pclntab and verifies that

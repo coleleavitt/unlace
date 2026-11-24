@@ -249,7 +249,7 @@ def run_case(args, cfg_name, opt, case):
 
     proj = work / "proj"
     cmd = args.wrap + [args.unlace, "decompile-project", str(orig), "-o", str(proj),
-                       "--functions", ",".join(funcs), "--sleighpath", args.sleighpath]
+                       "--functions", ",".join(funcs + ["main"]), "--sleighpath", args.sleighpath]
     for name, value in args.option:
         cmd += ["--option", name, value]
     rc, out, err = sh(cmd, timeout=args.decomp_timeout)

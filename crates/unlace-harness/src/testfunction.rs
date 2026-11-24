@@ -416,6 +416,7 @@ impl FunctionTestCollection {
     pub fn clear(&mut self) {
         if let Some(dcp) = self.dcp_mut() {
             dcp.clear_architecture();
+            dcp.load_options = None;
         }
         self.commands.clear();
         self.expected_errors.clear();
@@ -879,9 +880,7 @@ pub struct FileRun {
 pub fn run_test_files_each(test_files: &[String], spec_roots: &[String]) -> Vec<FileRun> {
     let mut collection = FunctionTestCollection::with_spec_roots(spec_roots.to_vec());
     let mut runs = Vec::with_capacity(test_files.len());
-    let env = option_env_snapshot();
     for file in test_files {
-        restore_option_env(&env);
         collection.clear();
         let started = std::time::Instant::now();
         let mut run = FileRun {
@@ -910,40 +909,7 @@ pub fn run_test_files_each(test_files: &[String], spec_roots: &[String]) -> Vec<
         run.wall_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
         runs.push(run);
     }
-    restore_option_env(&env);
     runs
-}
-
-/// Whether `name` is one of the environment variables load-time options travel in
-/// (`option sourcelang c` sets `UNLACE_SOURCELANG`, `option goabi` sets `UNLACE_GOABI`, ...).
-fn is_option_env(name: &std::ffi::OsStr) -> bool {
-    let name = name.to_string_lossy().to_ascii_lowercase();
-    name.starts_with("unlace_") || name.starts_with("unlace_")
-}
-
-/// The option-carrying environment variables as the run found them.
-fn option_env_snapshot() -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
-    std::env::vars_os()
-        .filter(|(k, _)| is_option_env(k))
-        .collect()
-}
-
-/// Put the option-carrying environment back to `snapshot`, so an `option` one test file's
-/// script set (exported to the environment for the next `load file`) does not reach the next
-/// file's load.
-fn restore_option_env(snapshot: &[(std::ffi::OsString, std::ffi::OsString)]) {
-    for (k, _) in std::env::vars_os() {
-        if is_option_env(&k) && !snapshot.iter().any(|(s, _)| *s == k) {
-            // SAFETY: the datatest driver runs its files one after another on this thread.
-            unsafe { std::env::remove_var(&k) };
-        }
-    }
-    for (k, v) in snapshot {
-        if std::env::var_os(k).as_ref() != Some(v) {
-            // SAFETY: as above.
-            unsafe { std::env::set_var(k, v) };
-        }
-    }
 }
 
 /// Load one test file without running it and describe it ([`FunctionTestCollection::describe`]).

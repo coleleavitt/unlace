@@ -2671,6 +2671,8 @@ impl PrintC {
             TagType::FieldToken => {
                 let name = if self.out_lang == crate::lang::OutLang::Go {
                     crate::langgo::identifier(&atom.name)
+                } else if self.out_lang == crate::lang::OutLang::C {
+                    sanitize_type_name(&atom.name).into_owned()
                 } else {
                     atom.name.clone()
                 };
@@ -2680,6 +2682,8 @@ impl PrintC {
             TagType::BitFieldToken => {
                 let name = if self.out_lang == crate::lang::OutLang::Go {
                     crate::langgo::identifier(&atom.name)
+                } else if self.out_lang == crate::lang::OutLang::C {
+                    sanitize_type_name(&atom.name).into_owned()
                 } else {
                     atom.name.clone()
                 };
@@ -4407,6 +4411,19 @@ impl PrintC {
                 }
             }
         }
+        // (unlace `vaarg`) The `ap` a `va_start(ap,..)` or `va_arg(ap,T)` of the
+        // promoted local `va_list` names has no HighVariable, so declare it.
+        if matches!(self.lang().forms.decl, crate::lang::DeclForm::CTypeThenName)
+            && Self::prints_local_va_list(fd)
+            && !decls.iter().any(|(_, name)| name == "ap")
+        {
+            self.emit.tag_line();
+            self.emit.print("va_list", SyntaxHighlight::TypeColor);
+            self.emit.spaces(1, 0);
+            self.emit.print("ap", SyntaxHighlight::VarColor);
+            self.emit
+                .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
+        }
         // Blank separating line before the body (C++ emits a tag_line after the
         // last decl; the body's first statement then starts on its own line).
         self.emit.tag_line();
@@ -4448,6 +4465,30 @@ impl PrintC {
                 }
             }
         }
+    }
+
+    /// (unlace `vaarg`) Does the body print a `va_start`/`va_arg` on the promoted
+    /// local `va_list` (the constant `push_va_list` spells `ap`)?
+    fn prints_local_va_list(fd: &Funcdata) -> bool {
+        fd.obank()
+            .iter_code(unlace_num::opcodes::OpCode::CPUI_CALLOTHER)
+            .any(|op| {
+                let Some(o) = fd.obank().get(op).filter(|o| !o.is_dead()) else {
+                    return false;
+                };
+                let builtin = o
+                    .get_in(0)
+                    .and_then(|v| fd.vbank().get(v))
+                    .map(|v| v.get_offset());
+                matches!(
+                    builtin,
+                    Some(b) if b == crate::userop::BUILTIN_VA_START as u64
+                        || b == crate::userop::BUILTIN_VAARG as u64
+                ) && o
+                    .get_in(1)
+                    .and_then(|v| fd.vbank().get(v))
+                    .is_some_and(|v| v.is_constant())
+            })
     }
 
     /// (unlace) The locals the last printed document declared.
@@ -5691,6 +5732,84 @@ impl PrintC {
         Some((pad, other, Some(tru)))
     }
 
+    /// (unlace `itaniumeh`) The `try` form of the blocks `list` of `blk`: the first
+    /// exceptional-edge `if` (no else) whose normal path never falls through and whose landing
+    /// pad starts the rest of the list, its pad, and whether the `catch` stays open to the end
+    /// of the body. It does on the function's top-level spine (only lists above, or ifs this
+    /// list is the condition of: the pad's own selector tests), where the rest of the body is
+    /// reached through the pad alone.
+    pub(super) fn eh_list_try_match(
+        &self,
+        fd: &Funcdata,
+        blk: BlockId,
+        list: &[BlockId],
+    ) -> Option<crate::ctree::ListTry> {
+        if self.lang().kw_open_curly != "{" {
+            return None;
+        }
+        let n = list.len();
+        let k = (0..n.saturating_sub(1)).find(|&k| {
+            self.is_eh_if(fd, list[k])
+                && fd.sblocks_ref().block(list[k]).get_size() == 2
+                && fd
+                    .sblocks_ref()
+                    .block(fd.sblocks_ref().block(list[k]).get_block(1))
+                    .size_out()
+                    == 0
+                && self.eh_pad_start(fd, list[k + 1]).is_some()
+        })?;
+        let pad = self.eh_pad_start(fd, list[k + 1])?;
+        let mut spine = true;
+        let mut at = blk;
+        while let Some(p) = fd.sblocks_ref().block(at).get_parent() {
+            let ty = fd.sblocks_ref().block(p).get_type();
+            let as_condition =
+                ty == crate::block::BlockType::If && fd.sblocks_ref().block(p).get_block(0) == at;
+            if !as_condition
+                && !matches!(
+                    ty,
+                    crate::block::BlockType::Ls | crate::block::BlockType::Graph
+                )
+            {
+                spine = false;
+                break;
+            }
+            at = p;
+        }
+        Some(crate::ctree::ListTry {
+            at: k,
+            pad,
+            keep_open: spine,
+        })
+    }
+
+    /// (unlace `itaniumeh`) The `try` form of the `if` `blk` on an exceptional edge: its
+    /// condition block, the arm that runs inside the `try` (printed after the `catch` it
+    /// would read as code the handler falls into), the landing pad and the arm the edge
+    /// enters. The arm that starts at a pad is the handler; else the pad of the call the edge
+    /// follows names it (`eh_if_arms`).
+    pub(super) fn eh_try_match(
+        &self,
+        fd: &Funcdata,
+        blk: BlockId,
+    ) -> Option<(BlockId, Option<BlockId>, u64, BlockId)> {
+        let block = fd.sblocks_ref().block(blk);
+        if self.lang().kw_open_curly != "{" || block.get_size() < 2 || !self.is_eh_if(fd, blk) {
+            return None;
+        }
+        let cond = block.get_block(0);
+        let tru = block.get_block(1);
+        let other = (block.get_size() == 3).then(|| block.get_block(2));
+        if let Some(pad) = self.eh_pad_start(fd, tru) {
+            return Some((cond, other, pad, tru));
+        }
+        if let Some((other, pad)) = other.and_then(|o| Some((o, self.eh_pad_start(fd, o)?))) {
+            return Some((cond, Some(tru), pad, other));
+        }
+        let (pad, handler, normal) = self.eh_if_arms(fd, blk)?;
+        Some((cond, normal, pad, handler))
+    }
+
     /// (unlace `itaniumeh`) Is `blk` an `if` whose condition is an
     /// `eh_unwinding()` exceptional edge?
     fn is_eh_if(&self, fd: &Funcdata, blk: BlockId) -> bool {
@@ -5839,7 +5958,8 @@ impl PrintC {
     }
 
     /// The blocks of `list`, the children of `blk` (all of them, or the rest
-    /// of a switch arm), printed in sequence.
+    /// of a switch arm), printed in sequence: through the statements the C syntax
+    /// tree built from them when it holds one for each block.
     fn emit_block_list(
         &mut self,
         fd: &Funcdata,
@@ -5847,9 +5967,43 @@ impl PrintC {
         blk: BlockId,
         list: &[BlockId],
     ) {
+        let items: Option<Vec<crate::ctree::StmtId>> = self
+            .ctree
+            .as_ref()
+            .and_then(|tree| list.iter().map(|&b| tree.node_for(b)).collect());
+        self.emit_list_items(fd, arch, blk, list, items.as_deref());
+    }
+
+    /// One element of a list printed by [`emit_list_items`](Self::emit_list_items): the tree
+    /// statement `items[k]` when given, else the block `list[k]`.
+    fn emit_list_item(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        list: &[BlockId],
+        items: Option<&[crate::ctree::StmtId]>,
+        k: usize,
+    ) {
+        match items.and_then(|items| items.get(k)) {
+            Some(&id) => self.emit_ctree_arm(fd, arch, id),
+            None => self.emit_block(fd, arch, list[k]),
+        }
+    }
+
+    /// C++ `PrintC::emitBlockLs` (printc.cc:2925) over the blocks `list` of `blk`, each
+    /// printed from the tree statement `items` holds for it (one per block) when given.
+    pub(super) fn emit_list_items(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        blk: BlockId,
+        list: &[BlockId],
+        items: Option<&[crate::ctree::StmtId]>,
+    ) {
+        let items = items.filter(|items| items.len() == list.len());
         if self.context.is_set(modifiers::ONLY_BRANCH) {
-            if let Some(&last) = list.last() {
-                self.emit_block(fd, arch, last);
+            if !list.is_empty() {
+                self.emit_list_item(fd, arch, list, items, list.len() - 1);
             }
             return;
         }
@@ -5859,56 +6013,28 @@ impl PrintC {
         let n = list.len();
         // (unlace `itaniumeh`) An exceptional-edge `if` whose normal path never
         // falls through and whose landing pad starts the rest of the list:
-        // `try { call; <normal path> } catch (..) { <pad> }`.
-        if self.lang().kw_open_curly == "{" {
-            if let Some(k) = (0..n.saturating_sub(1)).find(|&k| {
-                self.is_eh_if(fd, list[k])
-                    && fd.sblocks_ref().block(list[k]).get_size() == 2
-                    && fd
-                        .sblocks_ref()
-                        .block(fd.sblocks_ref().block(list[k]).get_block(1))
-                        .size_out()
-                        == 0
-                    && self.eh_pad_start(fd, list[k + 1]).is_some()
-            }) {
-                let pad = self.eh_pad_start(fd, list[k + 1]).expect("pad");
-                self.context.push_mod();
-                self.context.set_mod(modifiers::NO_BRANCH);
-                for &b in &list[..k] {
-                    let id = self.emit.begin_block(0);
-                    self.emit_block(fd, arch, b);
-                    self.emit.end_block(id);
-                }
-                self.context.pop_mod();
-                let cond = fd.sblocks_ref().block(list[k]).get_block(0);
-                let normal = fd.sblocks_ref().block(list[k]).get_block(1);
-                // On the function's top-level spine (only lists above, or ifs this
-                // list is the condition of — the pad's own selector tests), the
-                // rest of the body is reached through the pad alone: the catch
-                // stays open to the end of the body.
-                let mut spine = true;
-                let mut at = blk;
-                while let Some(p) = fd.sblocks_ref().block(at).get_parent() {
-                    let ty = fd.sblocks_ref().block(p).get_type();
-                    let as_condition = ty == crate::block::BlockType::If
-                        && fd.sblocks_ref().block(p).get_block(0) == at;
-                    if !as_condition
-                        && !matches!(
-                            ty,
-                            crate::block::BlockType::Ls | crate::block::BlockType::Graph
-                        )
-                    {
-                        spine = false;
-                        break;
-                    }
-                    at = p;
-                }
-                self.emit_eh_try(fd, arch, cond, Some(normal), pad, &list[k + 1..], spine);
-                return;
+        // `try { call; <normal path> } catch (..) { <pad> }` (`list_try_form`).
+        if let Some(found) = self.list_try_form(fd, blk, list) {
+            let crate::ctree::ListTry {
+                at: k,
+                pad,
+                keep_open: spine,
+            } = found;
+            self.context.push_mod();
+            self.context.set_mod(modifiers::NO_BRANCH);
+            for j in 0..k {
+                let id = self.emit.begin_block(0);
+                self.emit_list_item(fd, arch, list, items, j);
+                self.emit.end_block(id);
             }
+            self.context.pop_mod();
+            let cond = fd.sblocks_ref().block(list[k]).get_block(0);
+            let normal = fd.sblocks_ref().block(list[k]).get_block(1);
+            self.emit_eh_try(fd, arch, cond, Some(normal), pad, &list[k + 1..], spine);
+            return;
         }
-        if self.java_catches.is_some() && self.list_has_java_try(fd, &list) {
-            self.emit_block_ls_java_try(fd, arch, &list);
+        if self.list_java_try(fd, blk, list) {
+            self.emit_block_ls_java_try(fd, arch, list);
             return;
         }
         let id1 = self.emit.begin_block(0);
@@ -5921,7 +6047,7 @@ impl PrintC {
         // renders `abort(); abort();`.  The datatest corpus never produces a
         // size-1 `Ls`, so this only surfaced under the unlace structuring passes.
         if n == 1 {
-            self.emit_block(fd, arch, list[0]);
+            self.emit_list_item(fd, arch, list, items, 0);
             self.emit.end_block(id1);
             return;
         }
@@ -5930,18 +6056,18 @@ impl PrintC {
         if !self.is_flat() {
             self.context.set_mod(modifiers::NO_BRANCH);
         }
-        self.emit_block(fd, arch, list[0]);
+        self.emit_list_item(fd, arch, list, items, 0);
         self.emit.end_block(id1);
         // Middle blocks: no_branch.
-        for &subbl in list.iter().take(n.saturating_sub(1)).skip(1) {
+        for j in 1..n.saturating_sub(1) {
             let id2 = self.emit.begin_block(0);
-            self.emit_block(fd, arch, subbl);
+            self.emit_list_item(fd, arch, list, items, j);
             self.emit.end_block(id2);
         }
         self.context.pop_mod();
         // Final block: caller's branch state.
         let id3 = self.emit.begin_block(0);
-        self.emit_block(fd, arch, list[n - 1]);
+        self.emit_list_item(fd, arch, list, items, n - 1);
         self.emit.end_block(id3);
     }
 
@@ -5951,9 +6077,8 @@ impl PrintC {
     fn emit_block_if(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         use crate::prettyprint::Emit;
         // (unlace `javatry`) A DEX try dispatch prints as `try { } catch`.
-        if let Some(shape) = self
-            .java_try_shape(fd, blk, &[])
-            .filter(Self::java_try_standalone)
+        if self.is_java_try(fd, blk)
+            && let Some(shape) = self.java_try_shape(fd, blk, &[])
         {
             self.emit_java_try(fd, arch, shape, &[]);
             return;
@@ -5970,10 +6095,8 @@ impl PrintC {
         // `option iteboolean on`.
         // (unlace `itaniumeh`) Inside a `try` whose pad this edge also reaches,
         // the edge is the try's own: print the call and the normal path only.
-        if self.eh_open_pad.is_some()
-            && self.is_eh_if(fd, blk)
-            && self.eh_if_target(fd, blk) == self.eh_open_pad
-        {
+        let open_pad = self.open_try_pad(fd, blk);
+        if open_pad.is_some() && self.is_eh_if(fd, blk) && self.eh_if_target(fd, blk) == open_pad {
             let size = fd.sblocks_ref().block(blk).get_size();
             let cond = fd.sblocks_ref().block(blk).get_block(0);
             self.context.push_mod();
@@ -5984,7 +6107,7 @@ impl PrintC {
             self.context.pop_mod();
             for k in 1..size {
                 let sub = fd.sblocks_ref().block(blk).get_block(k);
-                if self.eh_pad_start(fd, sub) != self.eh_open_pad {
+                if self.eh_pad_start(fd, sub) != open_pad {
                     let b = self.emit.begin_block(0);
                     self.emit_block(fd, arch, sub);
                     self.emit.end_block(b);
@@ -5992,29 +6115,11 @@ impl PrintC {
             }
             return;
         }
-        // (unlace `itaniumeh`) `if (eh_unwinding()) { pad } [else { normal }]`.
-        if self.lang().kw_open_curly == "{"
-            && fd.sblocks_ref().block(blk).get_size() >= 2
-            && self.is_eh_if(fd, blk)
-        {
-            let cond = fd.sblocks_ref().block(blk).get_block(0);
-            let tru = fd.sblocks_ref().block(blk).get_block(1);
-            let other = (fd.sblocks_ref().block(blk).get_size() == 3)
-                .then(|| fd.sblocks_ref().block(blk).get_block(2));
-            // The normal arm goes inside the `try`: printed after the `catch`
-            // it would read as code the handler falls into.
-            if let Some(pad) = self.eh_pad_start(fd, tru) {
-                self.emit_eh_try(fd, arch, cond, other, pad, &[tru], false);
-                return;
-            }
-            if let Some((other, pad)) = other.and_then(|o| Some((o, self.eh_pad_start(fd, o)?))) {
-                self.emit_eh_try(fd, arch, cond, Some(tru), pad, &[other], false);
-                return;
-            }
-            if let Some((pad, handler, normal)) = self.eh_if_arms(fd, blk) {
-                self.emit_eh_try(fd, arch, cond, normal, pad, &[handler], false);
-                return;
-            }
+        // (unlace `itaniumeh`) `if (eh_unwinding()) { pad } [else { normal }]`: the `Try`
+        // statement the tree made of it (`ctree_rewrite`).
+        if let Some((cond, normal, pad, handler)) = self.try_form(fd, blk) {
+            self.emit_eh_try(fd, arch, cond, normal, pad, &[handler], false);
+            return;
         }
         match self.ite_form(fd, arch, blk) {
             Some(ctreeprint::IteForm::Bool(m)) => {
@@ -16633,10 +16738,76 @@ pub struct DeclaredLocal {
 // without an `Architecture`.
 // ===========================================================================
 
+/// The words C (C23, with `<stdbool.h>`'s `bool`/`true`/`false`) reserves, which
+/// no type, member or enumerator can be named.
+const C_RESERVED_WORDS: &[&str] = &[
+    "_Alignas",
+    "_Alignof",
+    "_Atomic",
+    "_BitInt",
+    "_Bool",
+    "_Complex",
+    "_Decimal128",
+    "_Decimal32",
+    "_Decimal64",
+    "_Generic",
+    "_Imaginary",
+    "_Noreturn",
+    "_Static_assert",
+    "_Thread_local",
+    "alignas",
+    "alignof",
+    "auto",
+    "bool",
+    "break",
+    "case",
+    "char",
+    "const",
+    "constexpr",
+    "continue",
+    "default",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "float",
+    "for",
+    "goto",
+    "if",
+    "inline",
+    "int",
+    "long",
+    "nullptr",
+    "register",
+    "restrict",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "static_assert",
+    "struct",
+    "switch",
+    "thread_local",
+    "true",
+    "typedef",
+    "typeof",
+    "typeof_unqual",
+    "union",
+    "unsigned",
+    "void",
+    "volatile",
+    "while",
+];
+
 /// (unlace) Rewrite `name` into a valid C identifier: every character outside
-/// `[A-Za-z0-9_]` becomes `_`, and a leading digit gains a `_` prefix.
-/// Borrowed unchanged when already valid (the caller emits a
-/// `/* renamed from "…" */` comment when it changed).
+/// `[A-Za-z0-9_]` becomes `_`, a leading digit gains a `_` prefix, and a C
+/// keyword (a DWARF member named `register`) gains a `_` suffix. Borrowed
+/// unchanged when already valid (the caller emits a `/* renamed from "…" */`
+/// comment when it changed). The printer spells a member access with the same
+/// rewrite, so a definition and its uses agree.
 #[doc(hidden)]
 pub fn sanitize_type_name(name: &str) -> std::borrow::Cow<'_, str> {
     let ok_char = |c: char| c.is_ascii_alphanumeric() || c == '_';
@@ -16644,6 +16815,9 @@ pub fn sanitize_type_name(name: &str) -> std::borrow::Cow<'_, str> {
         && name.chars().all(ok_char)
         && !name.starts_with(|c: char| c.is_ascii_digit());
     if clean {
+        if C_RESERVED_WORDS.contains(&name) {
+            return std::borrow::Cow::Owned(format!("{name}_"));
+        }
         return std::borrow::Cow::Borrowed(name);
     }
     let mut s = String::with_capacity(name.len() + 1);
@@ -17028,7 +17202,10 @@ impl RealTypeCtx {
             enabled: arch.unlace_options.get::<crate::printc::Realtypes>().0,
             long_is_8: arch.types().get_size_of_long() == 8,
             ctypes: arch.unlace_options.get::<crate::coreoptions::CTypes>().0,
-            model: crate::ctypes::CDataModel::from_types(&*arch.types()),
+            model: crate::ctypes::CDataModel {
+                char_signed: crate::ctypes::plain_char_signed(&arch.archid, arch.image_apple),
+                ..crate::ctypes::CDataModel::from_types(&*arch.types())
+            },
             c_type_definition: false,
             cpp_short_names: arch
                 .unlace_options

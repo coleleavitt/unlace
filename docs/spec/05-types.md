@@ -3578,14 +3578,17 @@ returned `char` or `unsigned` themselves (`movzbl %al,%eax`, `mov %eax,%eax`)
 before they use more of the register, and so do AArch64's. On i386 only a value
 narrower than the register's four bytes can be read wider. The function is then decompiled again with
 the width its callers compute with (`Funcdata::unlace_wide_return`,
-`zextreturn.rs (read_width)`). Where that is at most four bytes, the value
-keeps its trim and takes the record as above (`zextreturn.rs
-(unsigned_trim)`), so it returns `unsigned char` or `unsigned short`, which C
-promotes to `int` as the binary extends: kmod's `int get_bind(..) { return
-sym->bind; }` over a `uint8_t` printed as `char`, and the caller's `bind ==
-'W'` read a negative `char` for a bind of 0x80 or more. Where a caller computes
-with all eight bytes, the RETURN keeps the whole register, since no promotion
-reaches 64 bits: the caller adds in 64 bits (`call z32m; add $1,%rax`), and its
+`zextreturn.rs (read_width)`), and the RETURN keeps the register at that
+width whatever it is. A narrower type would not do even where C's promotion to
+`int` extends it as the binary does in the printed callers: x86-64 and AArch64
+leave the bytes above a returned `bool`, `char` or `short` unspecified, so the
+printed function, compiled, need not set the bytes the binary's own callers
+read. `int lt(int a, unsigned b) { return a < b; }` (`xor %eax,%eax; cmp;
+setb %al`) printed as `bool lt(..)`, and a caller reading `%eax` after the
+compiled `bool` function got `-256` (tools/semantic `conversions.lt_mixed`);
+kmod's `int get_bind(..) { return sym->bind; }` over a `uint8_t` now returns
+32 bits, not `unsigned char`. Where a caller computes with all eight bytes, the
+RETURN keeps the whole register, since no promotion reaches 64 bits: the caller adds in 64 bits (`call z32m; add $1,%rax`), and its
 printed `z32m(..) + 1` would add in 32 over an `unsigned int`, or in `int` over
 an `unsigned char` multiplied by `0x1000001`. So `int z32m(int a0) { return a0
 * 3; }` beside a caller that sign-extended it now reads `unsigned long

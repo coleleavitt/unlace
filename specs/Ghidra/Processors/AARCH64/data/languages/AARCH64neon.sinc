@@ -26447,7 +26447,8 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=1 & Imm_shr_imm16 & b_1115=0x1c & 
 :ucvtf Rd_FPR32, Rn_FPR32
 is b_3031=1 & u=1 & b_2428=0x1e & size_high=0 & b_1722=0x10 & b_1216=0x1d & b_1011=2 & Rn_FPR32 & Rd_FPR32 & Zd
 {
-	Rd_FPR32 = NEON_ucvtf(Rn_FPR32);
+	local tmp1:8 = zext(Rn_FPR32);
+	Rd_FPR32 = int2float(tmp1);
 	zext_zs(Zd);
 }
 
@@ -26459,7 +26460,8 @@ is b_3031=1 & u=1 & b_2428=0x1e & size_high=0 & b_1722=0x10 & b_1216=0x1d & b_10
 :ucvtf Rd_FPR64, Rn_FPR64
 is b_3031=1 & u=1 & b_2428=0x1e & size_high=0 & b_1722=0x30 & b_1216=0x1d & b_1011=2 & Rn_FPR64 & Rd_FPR64 & Zd
 {
-	Rd_FPR64 = NEON_ucvtf(Rn_FPR64);
+	local tmp1:9 = zext(Rn_FPR64);
+	Rd_FPR64 = int2float(tmp1);
 	zext_zd(Zd);
 }
 
@@ -26506,7 +26508,8 @@ is sf=0 & q=1 & b_2929=1 & b_2428=0x0e & advSIMD3.size=1 & b_1721=0x10 & b_1216=
 :ucvtf Rd_FPR16, Rn_FPR16
 is b_1031=0b0111111001111001110110 & Rd_FPR16 & Rn_FPR16 & Zd
 {
-	Rd_FPR16 = NEON_ucvtf(Rn_FPR16);
+	local tmp1:4 = zext(Rn_FPR16);
+	Rd_FPR16 = int2float(tmp1);
 	zext_zh(Zd);
 }
 

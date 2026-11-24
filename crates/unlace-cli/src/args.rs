@@ -8,10 +8,10 @@ pub(crate) fn take_value(argv: &[String], i: &mut usize, flag: &str) -> Result<S
     Ok(value.clone())
 }
 
-/// Remove a global `--image NAME` from `argv` and export it to the loader,
-/// which rebuilds that image when the input is a dyld shared cache. Every
-/// subcommand and every `decomp_dbg` subprocess it spawns reads the same
-/// variable, the way `--slice` reaches them.
+/// Remove a global `--image NAME` from `argv` and record it as an invocation
+/// variable ([`crate::loadtime::invocation`]), which the loader reads to
+/// rebuild that image when the input is a dyld shared cache. Every subcommand
+/// and every subprocess it spawns reads the same value.
 pub(crate) fn take_global_image(argv: &mut Vec<String>) -> Result<(), String> {
     let mut i = 0;
     while i < argv.len() {
@@ -27,7 +27,7 @@ pub(crate) fn take_global_image(argv: &mut Vec<String>) -> Result<(), String> {
             i += 1;
             continue;
         };
-        unlace_decomp::dyldcache::set_dyldimage_env(&value);
+        crate::loadtime::set_invocation_var(unlace_decomp::dyldcache::DYLDIMAGE_ENV, &value);
     }
     Ok(())
 }

@@ -1,0 +1,44 @@
+# A member a binary's debug information names with a C keyword: zig's
+# compiler_rt DWARF has a struct member `register`, and C99 code may name one
+# `bool`, `alignof` or `typeof`, all keywords in C23. Printed verbatim, the
+# definition and every access fail to compile; with zig's DWARF kept no
+# AArch64 function of tools/semantic compiled. A keyword now gains a `_`
+# suffix, in the definition and at each access alike.
+#
+# fixtures/ckeywords/members-gcc-O2: members.c, gcc -std=c99 -O2 -g -fno-pie
+# -no-pie -nostdlib -static -fcf-protection=none
+# -fno-asynchronous-unwind-tables -Wl,--build-id=none, .comment stripped.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/ckeywords/members-gcc-O2',
+    'read symbols',
+    'load function score',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'C keyword members #1: the accesses carry the escaped names'
+min = 1
+max = 3
+regex = '->(alignof|bool|typeof)_'
+
+[[match]]
+name = 'C keyword members #2: no access is spelled with a bare keyword'
+count = 0
+regex = '->(alignof|bool|typeof)[^_]'

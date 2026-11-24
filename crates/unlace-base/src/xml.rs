@@ -2356,7 +2356,15 @@ mod tests {
         // walk from the incoming stack pointer is a stack-address local (option spphistack)
         // and vastart-callindirect / a va_start prologue whose field writes moved into call INDIRECTs
         // and aarch64-fcvtzu / an unsigned AArch64 float conversion to a word stays unsigned
-        assert_eq!(count, 1024, "corpus file count drifted");
+        // and aarch64-signed-char / a sign-extended byte on AArch64 prints as signed char
+        // and aarch64-fcmp-nan / an unordered AArch64 FCMP takes the processor's signed conditions
+        // and loader-name-localalias / gcc's f.localalias does not name f
+        // and valist-declared / the promoted va_list ap is declared
+        // and rawswitch-loop / a matched table whose cases loop back with a loaded index is labelled by it
+        // and boolreturn-condlist / guards concatenated into the next guard's condition join the return run
+        // and c-keyword-members / a member named with a C keyword is escaped
+        // and terminatecurrent / a TerminateProcess(GetCurrentProcess()) wrapper is no-return
+        assert_eq!(count, 1034, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

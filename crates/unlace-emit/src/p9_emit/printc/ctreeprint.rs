@@ -139,12 +139,23 @@ impl PrintC {
                 }
                 _ => false,
             },
-            StmtKind::Seq(_) if ty == BlockType::Ls => {
-                self.emit_block_ls(fd, arch, blk);
+            StmtKind::Seq(children) if ty == BlockType::Ls => {
+                let list: Vec<BlockId> = fd.sblocks_ref().block(blk).get_list().to_vec();
+                self.emit_list_items(fd, arch, blk, &list, Some(children.as_slice()));
                 true
             }
             StmtKind::Seq(_) if ty == BlockType::Goto => {
                 self.emit_block_goto(fd, arch, blk);
+                true
+            }
+            StmtKind::Seq(_) if ty == BlockType::Condition => {
+                self.emit_block_condition(fd, arch, blk);
+                true
+            }
+            StmtKind::Seq(children) if ty == BlockType::MultiGoto => {
+                for child in children {
+                    self.emit_ctree_arm(fd, arch, child);
+                }
                 true
             }
             StmtKind::Opaque => false,
@@ -175,7 +186,9 @@ impl PrintC {
         }
     }
 
-    /// Take the tree to `rewritten`: each `if` the `iteboolean` or `iteregion` print form
+    /// Take the tree to `rewritten`. First each `if` on an `eh_unwinding()` exceptional edge
+    /// that prints as a `try` (`eh_try_match`; `itaniumeh`) becomes a `Try` statement, which
+    /// no later rewrite touches. Then each `if` the `iteboolean` or `iteregion` print form
     /// applies to (the same tests, in the same order, `emit_block_if` used to make while
     /// printing) becomes the assignment statement it prints as. With `option boolreturn on`
     /// (C output), an `if` whose arms only return `1` and `0` becomes `return c` or
@@ -185,6 +198,36 @@ impl PrintC {
             return;
         };
         self.ctree_take_plans();
+        for &id in &ids {
+            let Some(blk) = self.ctree.as_ref().and_then(|tree| {
+                let stmt = tree.stmt(id);
+                let blk = stmt.origin?;
+                (tree.node_for(blk) == Some(id) && matches!(stmt.kind, StmtKind::If { .. }))
+                    .then_some(blk)
+            }) else {
+                continue;
+            };
+            if self
+                .java_try_shape(fd, blk, &[])
+                .filter(Self::java_try_standalone)
+                .is_some()
+            {
+                if let Some(tree) = self.ctree.as_mut() {
+                    tree.stmt_mut(id).kind = StmtKind::JavaTry;
+                }
+                continue;
+            }
+            if let Some((cond, normal, pad, handler)) = self.eh_try_match(fd, blk)
+                && let Some(tree) = self.ctree.as_mut()
+            {
+                tree.stmt_mut(id).kind = StmtKind::Try {
+                    cond,
+                    normal,
+                    pad,
+                    handler,
+                };
+            }
+        }
         let bool_return = arch.unlace_options.get::<crate::ctree::Boolreturn>().0
             && self.out_lang == crate::lang::OutLang::C;
         let ret_ternary = arch.unlace_options.get::<crate::ctree::Retternary>().0
@@ -202,7 +245,11 @@ impl PrintC {
             }) else {
                 continue;
             };
-            if fd.sblocks_ref().block(blk).get_type() != BlockType::If {
+            if fd.sblocks_ref().block(blk).get_type() != BlockType::If
+                || self.ctree.as_ref().is_some_and(|tree| {
+                    matches!(tree.stmt(id).kind, StmtKind::Try { .. } | StmtKind::JavaTry)
+                })
+            {
                 continue;
             }
             let form = match self.ite_boolean_match(fd, blk) {
@@ -210,6 +257,13 @@ impl PrintC {
                 None => self.ite_ternary_match(fd, arch, blk).map(IteForm::Ternary),
             };
             let Some(form) = form else {
+                if self
+                    .ctree
+                    .as_ref()
+                    .is_some_and(|tree| tree.is_condition(id))
+                {
+                    continue;
+                }
                 if bool_return
                     && let Some((cond_block, ret_op, negate)) = self.bool_return_shape(fd, blk)
                 {
@@ -296,7 +350,11 @@ impl PrintC {
             let ids = self
                 .ctree
                 .as_ref()
-                .map(|tree| tree.stmt_ids())
+                .map(|tree| {
+                    let mut ids = tree.stmt_ids();
+                    ids.retain(|id| !tree.is_condition(*id));
+                    ids
+                })
                 .unwrap_or_default();
             for id in ids {
                 self.fold_return_ite(fd, id);
@@ -313,8 +371,145 @@ impl PrintC {
                 while self.fold_nested_and(fd, id) {}
             }
         }
+        self.ctree_list_tries(fd);
         if let Some(tree) = self.ctree.as_mut() {
             tree.advance(CMaturity::Rewritten);
+        }
+    }
+
+    /// (unlace `itaniumeh`) Record on each list sequence the `try` form `emit_list_items`
+    /// prints it in (`eh_list_try_match`).
+    fn ctree_list_tries(&mut self, fd: &Funcdata) {
+        let lists: Vec<(StmtId, BlockId)> = match self.ctree.as_ref() {
+            Some(tree) => tree
+                .stmt_ids()
+                .into_iter()
+                .filter_map(|id| {
+                    let stmt = tree.stmt(id);
+                    let blk = stmt.origin?;
+                    (tree.node_for(blk) == Some(id)
+                        && matches!(stmt.kind, StmtKind::Seq(_))
+                        && fd.sblocks_ref().block(blk).get_type() == BlockType::Ls)
+                        .then_some((id, blk))
+                })
+                .collect(),
+            None => return,
+        };
+        for (id, blk) in lists {
+            let list: Vec<BlockId> = fd.sblocks_ref().block(blk).get_list().to_vec();
+            if let Some(found) = self.eh_list_try_match(fd, blk, &list)
+                && let Some(tree) = self.ctree.as_mut()
+            {
+                tree.set_list_try(id, found);
+            }
+            if self.java_catches.is_some()
+                && self.list_has_java_try(fd, &list)
+                && let Some(tree) = self.ctree.as_mut()
+            {
+                tree.set_java_list(id);
+            }
+        }
+    }
+
+    /// (unlace `javatry`) Does the `BlockIf` `blk` print as a DEX `try` on its own? The
+    /// tree's `JavaTry` statement (`ctree_rewrite`); for an `if` the tree holds no
+    /// statement for, the match itself.
+    pub(super) fn is_java_try(&self, fd: &Funcdata, blk: BlockId) -> bool {
+        match self.ctree.as_ref().and_then(|tree| tree.node_for(blk)) {
+            Some(id) => self
+                .ctree
+                .as_ref()
+                .is_some_and(|tree| matches!(tree.stmt(id).kind, StmtKind::JavaTry)),
+            None => self
+                .java_try_shape(fd, blk, &[])
+                .filter(Self::java_try_standalone)
+                .is_some(),
+        }
+    }
+
+    /// (unlace `javatry`) Do the blocks `list` of `blk` print through the Java `try` list
+    /// printer? What the tree recorded for `blk`'s sequence when `list` is all of it, else
+    /// the match itself.
+    pub(super) fn list_java_try(&self, fd: &Funcdata, blk: BlockId, list: &[BlockId]) -> bool {
+        if self.java_catches.is_none() {
+            return false;
+        }
+        let whole = fd.sblocks_ref().block(blk).get_list().len() == list.len();
+        let node = self
+            .ctree
+            .as_ref()
+            .and_then(|tree| tree.node_for(blk))
+            .filter(|_| whole);
+        match (self.ctree.as_ref(), node) {
+            (Some(tree), Some(id)) => tree.is_java_list(id),
+            _ => self.list_has_java_try(fd, list),
+        }
+    }
+
+    /// (unlace `itaniumeh`) The landing pad of the `try` printed around the block `blk`: the
+    /// nearest enclosing `try` whose normal path holds `blk`, a `Try` statement (`try_form`)
+    /// whose normal arm is on `blk`'s parent chain or a list's `try` form (`list_try_form`)
+    /// whose `if`'s normal path is. Printing descends only into a block's components, so this
+    /// is the pad `emit_eh_try` holds open while `blk` prints; without a tree, that pad.
+    pub(super) fn open_try_pad(&self, fd: &Funcdata, blk: BlockId) -> Option<u64> {
+        if self.ctree.is_none() {
+            return self.eh_open_pad;
+        }
+        crate::itaniumeh::eh_table(fd.get_arch())?;
+        let sb = fd.sblocks_ref();
+        let mut child = blk;
+        for _ in 0..(1usize << 16) {
+            let parent = sb.block(child).get_parent()?;
+            if sb.block(parent).get_type() == BlockType::If {
+                if let Some((_, Some(normal), pad, _)) = self.try_form(fd, parent)
+                    && normal == child
+                {
+                    // A Java `try` prints before it, and an `if` on the enclosing `try`'s
+                    // own edge prints its arms without opening a `try`: either way the
+                    // enclosing pad stays open.
+                    let outer = self.open_try_pad(fd, parent);
+                    let java = self.is_java_try(fd, parent);
+                    if java || (outer.is_some() && self.eh_if_target(fd, parent) == outer) {
+                        return outer;
+                    }
+                    return Some(pad);
+                }
+                if sb.block(parent).get_size() == 2
+                    && sb.block(parent).get_block(1) == child
+                    && let Some(ls) = sb.block(parent).get_parent()
+                    && sb.block(ls).get_type() == BlockType::Ls
+                {
+                    let list: Vec<BlockId> = sb.block(ls).get_list().to_vec();
+                    if let Some(form) = self.list_try_form(fd, ls, &list)
+                        && list.get(form.at) == Some(&parent)
+                    {
+                        return Some(form.pad);
+                    }
+                }
+            }
+            child = parent;
+        }
+        None
+    }
+
+    /// (unlace `itaniumeh`) The `try` form of the blocks `list` of `blk`: the one the tree
+    /// recorded for `blk`'s sequence when `list` is all of it, else the match itself (the rest
+    /// of a switch arm or goto block, or a list the tree holds no sequence for).
+    pub(super) fn list_try_form(
+        &self,
+        fd: &Funcdata,
+        blk: BlockId,
+        list: &[BlockId],
+    ) -> Option<crate::ctree::ListTry> {
+        let whole = fd.sblocks_ref().block(blk).get_list().len() == list.len();
+        let node = self
+            .ctree
+            .as_ref()
+            .and_then(|tree| tree.node_for(blk))
+            .filter(|_| whole);
+        match (self.ctree.as_ref(), node) {
+            (Some(tree), Some(id)) => tree.list_try(id),
+            _ => self.eh_list_try_match(fd, blk, list),
         }
     }
 
@@ -349,6 +544,31 @@ impl PrintC {
             return Some(IteForm::Bool(m));
         }
         self.ite_ternary_match(fd, arch, blk).map(IteForm::Ternary)
+    }
+
+    /// (unlace `itaniumeh`) The `try` form the tree gave the `BlockIf` `blk`
+    /// (`eh_try_match`, run by `ctree_rewrite`); for an `if` the tree holds no statement for
+    /// (below the builder's depth bound), the match itself.
+    pub(super) fn try_form(
+        &self,
+        fd: &Funcdata,
+        blk: BlockId,
+    ) -> Option<(BlockId, Option<BlockId>, u64, BlockId)> {
+        let Some(tree) = self.ctree.as_ref() else {
+            return self.eh_try_match(fd, blk);
+        };
+        let Some(id) = tree.node_for(blk) else {
+            return self.eh_try_match(fd, blk);
+        };
+        match tree.stmt(id).kind {
+            StmtKind::Try {
+                cond,
+                normal,
+                pad,
+                handler,
+            } => Some((cond, normal, pad, handler)),
+            _ => None,
+        }
     }
 
     /// The `return` form the tree gave the `BlockIf` `blk`: its condition block, the body's
@@ -581,11 +801,18 @@ impl PrintC {
                 boolreturn_trace(fd, || format!("run {id:?}: guard {sid:?} does not combine"));
                 break;
             };
-            value = next;
+            let rest = std::mem::replace(&mut value, next);
             folded.extend(first);
             first = Some(sid);
             if !self.clean_guard_cond(fd, cond) {
-                break;
+                let Some((peeled, lead)) = self.fold_cond_list_guards(fd, cond, &arm, &rest, 0)
+                else {
+                    break;
+                };
+                value = peeled;
+                if !self.clean_guard_cond(fd, lead) {
+                    break;
+                }
             }
         }
         let Some(first) = first else {
@@ -682,6 +909,91 @@ impl PrintC {
             value: Some(expr),
             op: Some(ret_op),
         };
+    }
+
+    /// (unlace `boolreturn`) Fold the guards a condition list carries in front of its test.
+    /// When the structurer concatenates a collapsed guard `if` with the next guard's
+    /// condition block, that condition is a `BlockList` `[if (g) return K;, test]`, and the
+    /// leading guard prints as a statement before the test. With `arm` the folded guard's
+    /// returned value and `rest` the run value after it, the run value from the first guard
+    /// of the list on, and that guard's condition: every leading component must be a guard
+    /// (`cond_list_guard`) whose body is a run value, every test after the first must print
+    /// nothing before it (`clean_guard_cond`), and the first guard's own condition list is
+    /// folded the same way. `None` leaves the list as the statements before the test.
+    fn fold_cond_list_guards(
+        &mut self,
+        fd: &Funcdata,
+        cond: BlockId,
+        arm: &RunTerm,
+        rest: &RunTerm,
+        depth: usize,
+    ) -> Option<(RunTerm, BlockId)> {
+        let sb = fd.sblocks_ref();
+        if depth >= 16 || sb.block(cond).get_type() != BlockType::Ls {
+            return None;
+        }
+        let parts: Vec<BlockId> = (0..sb.block(cond).get_size())
+            .map(|k| sb.block(cond).get_block(k))
+            .collect();
+        let (&test, guards) = parts.split_last()?;
+        if guards.is_empty() || !self.clean_guard_cond(fd, test) {
+            boolreturn_trace(fd, || format!("condition list {cond:?}: test prints"));
+            return None;
+        }
+        let mut value = combine_return(test, arm, rest)?;
+        let mut lead = test;
+        for (at, &part) in guards.iter().enumerate().rev() {
+            let Some((gcond, body)) = self.cond_list_guard(fd, part) else {
+                boolreturn_trace(fd, || {
+                    format!("condition list {cond:?}: {part:?} is no guard")
+                });
+                return None;
+            };
+            let (_, garm) = self.return_term(fd, body)?;
+            if at == 0
+                && let Some(found) = self.fold_cond_list_guards(fd, gcond, &garm, &value, depth + 1)
+            {
+                return Some(found);
+            }
+            value = combine_return(gcond, &garm, &value)?;
+            lead = gcond;
+            if at > 0 && !self.clean_guard_cond(fd, gcond) {
+                return None;
+            }
+        }
+        Some((value, lead))
+    }
+
+    /// A component of a condition list as a guard of a return run: an `if` without else and
+    /// without goto, not a switch-merge or exception `if`, that the tree did not rewrite. Its
+    /// condition block and its body block.
+    fn cond_list_guard(&self, fd: &Funcdata, blk: BlockId) -> Option<(BlockId, BlockId)> {
+        let block = fd.sblocks_ref().block(blk);
+        if block.get_type() != BlockType::If
+            || block.get_size() != 2
+            || block.get_if_goto_target().is_some()
+            || self.switch_plans.ifs.contains_key(&blk)
+            || self.is_eh_if(fd, blk)
+        {
+            return None;
+        }
+        let (cond, body) = (block.get_block(0), block.get_block(1));
+        if let Some(tree) = self.ctree.as_ref()
+            && let Some(id) = tree.node_for(blk)
+        {
+            let StmtKind::If {
+                cond: test,
+                els: None,
+                ..
+            } = &tree.stmt(id).kind
+            else {
+                return None;
+            };
+            if !matches!(tree.expr(*test).kind, ExprKind::Branch(c) if c == cond) {
+                return None;
+            }
+        }
+        Some((cond, body))
     }
 
     /// In a `BlockGraph`, does the `if` statement `id` fall through to the statement `next`,
@@ -1458,7 +1770,11 @@ fn first_branch(tree: &crate::ctree::CTree, expr: ExprId) -> Option<BlockId> {
 
 /// Every statement of `tree`, last added first (an `if` before the statements inside it).
 fn ids_rev(tree: Option<&crate::ctree::CTree>) -> Vec<StmtId> {
-    let mut ids = tree.map(|tree| tree.stmt_ids()).unwrap_or_default();
+    let Some(tree) = tree else {
+        return Vec::new();
+    };
+    let mut ids = tree.stmt_ids();
+    ids.retain(|id| !tree.is_condition(*id));
     ids.reverse();
     ids
 }

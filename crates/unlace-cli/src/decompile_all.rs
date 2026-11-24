@@ -24,8 +24,8 @@ use std::fmt::Write as _;
 use unlace_analysis::loader::macho_fat::SlicePref;
 use unlace_base::address::Address;
 use unlace_console::engine::{
-    ArmIsa, ConsoleProgram, EntryLookupError, EntrySelector, FunctionEntry, ObjectLocation,
-    bootstrap_from_image_with_isa, bootstrap_from_raw, bootstrap_from_raw_segments,
+    ArmIsa, Bootstrap, ConsoleProgram, EntryLookupError, EntrySelector, FunctionEntry,
+    ObjectLocation,
 };
 // The decompile loop + result shape live in the shared decompile-project core
 // (`unlace_console::project` — also reused by the `unlace_wasm` front-end).
@@ -47,9 +47,9 @@ use crate::args::take_value as take;
 use crate::callgraph::CallGraph;
 use crate::jobs;
 use crate::jsonfmt::{Json, dumps_indent2};
+use crate::loadtime::is_loadtime_gate;
 #[cfg(test)]
 use crate::loadtime::last_option_value;
-use crate::loadtime::{apply_to_process as apply_loadtime_env, is_loadtime_gate};
 use crate::paths;
 
 /// Parsed `decompile-all` / `functions` arguments (the two share a loader;
@@ -1954,17 +1954,19 @@ fn load_program_with_rust_profiles(
         .map_err(|_| format!("binary not found: {}", args.binary))?
         .to_string_lossy()
         .into_owned();
-    // Load-time loader gates are read by `bootstrap_from_object` itself, so they
-    // must be exported BEFORE it runs (the same gates `unlace decompile` threads to
-    // the subprocess env). Keep the restoration guard alive through runtime
-    // option recording too: the bridged options update their env again inside
-    // `set_unlace_option` and must not leak into a later load.
-    let _loadtime_env = apply_loadtime_env(
-        &args.options,
-        args.slice.as_deref(),
-        jobs::decode_lanes(args),
-        defaults.functions_inventory() && args.apply_rust_signatures.is_none(),
-    );
+    // The load-time gates the loader reads (the same ones `unlace decompile`
+    // hands its console child): the program loads with them and keeps them for
+    // its commit and decompiles.
+    let inventory = defaults.functions_inventory() && args.apply_rust_signatures.is_none();
+    let load_options = unlace_decomp::loadoptions::LoadOptions {
+        go_version: None,
+        ..crate::loadtime::load_options(
+            &args.options,
+            args.slice.as_deref(),
+            jobs::decode_lanes(args),
+            inventory,
+        )
+    };
 
     let spec_roots = spec_roots(args.sleighpath.as_deref());
     let target = args.target.as_deref().unwrap_or("");
@@ -1999,21 +2001,24 @@ fn load_program_with_rust_profiles(
                 _ => None,
             })
             .collect();
+        let load = Bootstrap::new(&spec_roots[..])
+            .target(target)
+            .arm_isa(args.isa)
+            .options(&load_options);
         match segments {
-            Some(runs) => {
-                bootstrap_from_raw_segments(&binary, target, runs, &entries, args.isa, &spec_roots)
-            }
-            None => bootstrap_from_raw(
+            Some(runs) => load.raw_segments(&binary, runs, &entries),
+            None => load.raw(
                 &binary,
-                target,
                 args.base.expect("raw parser requires --base"),
                 &entries,
-                args.isa,
-                &spec_roots,
             ),
         }
     } else {
-        bootstrap_from_image_with_isa(&binary, target, &spec_roots, args.isa)
+        Bootstrap::new(&spec_roots[..])
+            .target(target)
+            .arm_isa(args.isa)
+            .options(&load_options)
+            .image(&binary)
     }
     .map_err(|e| {
         let detail = e.explain();

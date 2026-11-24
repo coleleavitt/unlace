@@ -57,11 +57,6 @@ impl KernelcacheChoice {
     }
 }
 
-pub fn set_kernelcache_env(choice: &KernelcacheChoice) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(KERNELCACHE_ENV, choice.as_str()) };
-}
-
 pub fn parse_kernelcache(value: &str) -> UnlaceResult<(KernelcacheChoice, String)> {
     let choice = KernelcacheChoice::parse(value).ok_or_else(|| {
         UnlaceError::parse(format!(

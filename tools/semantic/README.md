@@ -23,7 +23,9 @@ For each configuration (compiler + target), optimisation level and case:
    reference executable. Its weak `T` symbols are the functions under test. Local data symbols
    are made global in a copy of the object so emitted C can name them. DWARF is stripped from
    the reference (zig's static compiler_rt brings its own; `--keep-debug` keeps it).
-2. `unlace decompile-project <ref> --functions <T list>` writes `orig.c` and `orig.h`.
+2. `unlace decompile-project <ref> --functions <T list>,main` writes `orig.c` and `orig.h`.
+   `main` is decompiled but not checked: it is the caller of every function under test, and
+   a decompile-all run settles some return types by what the callers read.
 3. For each function the driver builds a translation unit: `#include "orig.h"`, `#include
    "shim.h"` and that function's body from `orig.c`, compiled `-std=c11 -O0 -fwrapv
    -fno-strict-aliasing` (`--emit-opt` changes the level). Because the original is weak, linking

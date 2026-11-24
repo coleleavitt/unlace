@@ -443,11 +443,10 @@ fn functions_of_all(path: &str, members: &[Member<'_>], argv: &[String]) -> i32 
     let mut status = 0;
     for member in members.iter().filter(|m| m.is_object()) {
         let member_arg = format!("--member={}", member.name);
-        let run = Command::new(&exe)
-            .arg("functions")
-            .args(argv)
-            .arg(member_arg)
-            .output();
+        let mut run = Command::new(&exe);
+        run.arg("functions").args(argv).arg(member_arg);
+        crate::loadtime::apply_invocation(&mut run);
+        let run = run.output();
         let out = match run {
             Ok(out) => out,
             Err(e) => {

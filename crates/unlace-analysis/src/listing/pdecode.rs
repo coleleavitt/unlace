@@ -58,9 +58,10 @@ use super::walk::{
     WalkState,
 };
 
-/// How many decode lanes the walk should use. Set by `unlace --jobs N` for the
-/// duration of the load; absent means the serial walk.
-pub const DECODE_JOBS_ENV: &str = "UNLACE_DECODE_JOBS";
+/// How many decode lanes the walk should use, read into
+/// `LoadOptions::decode_jobs` at the load (`unlace --jobs N` sets that field);
+/// absent means the serial walk.
+pub const DECODE_JOBS_ENV: &str = unlace_decomp::loadoptions::DECODE_JOBS_ENV;
 /// Lower the [`Refusal::TooSmall`] floor (tests set `0`).
 pub const DECODE_MIN_BYTES_ENV: &str = "UNLACE_DECODE_MIN_BYTES";
 /// Override the intervals-per-lane cut (measurement / tests).
@@ -209,10 +210,12 @@ impl WalkPlan {
         }
     }
 
-    /// The plan [`DECODE_JOBS_ENV`] asks for. The only place the decode-lane
-    /// environment is read.
+    /// The plan the load's `LoadOptions::decode_jobs` (else [`DECODE_JOBS_ENV`])
+    /// asks for.
     pub fn from_env(arch: &Architecture) -> WalkPlan {
-        let lanes = env_usize(DECODE_JOBS_ENV)
+        use unlace_decomp::loadoptions::{env, scoped};
+        let lanes = scoped(|o| o.decode_jobs)
+            .unwrap_or_else(env::decode_jobs)
             .unwrap_or(1)
             .min(MAX_DECODE_LANES);
         let per_lane = env_usize(DECODE_INTERVALS_ENV)

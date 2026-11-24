@@ -1,0 +1,59 @@
+# rawswitch-loop: a jump table whose first path carries a constant index and
+# whose later cases loop back with an index loaded from memory.
+#
+# zlib inflateBack sets state->mode = TYPE and enters switch (state->mode); the
+# cases store the next mode and jump back to the dispatch. At flow time only the
+# constant path is known, so the value-range models fail and option rawswitch
+# matches the table from its cmp/ja/lea/movslq/jmp instructions. Synthetic
+# x86-64 copy (48 int3 bytes first, so the matcher's 40-byte window is mapped):
+#
+#     1030  mov $5,%eax
+#     1035  sub $5,%eax ; cmp $3,%eax ; ja 105f
+#           lea 1068(%rip),%rdx ; movslq (%rdx,%rax,4),%rax ; add %rdx,%rax
+#           notrack jmp *%rax
+#     104e  case 0: mov (%rdi),%eax ; jmp 1035
+#     1052  case 1: lea 0xa(%rsi),%eax ; ret
+#     1056  case 2: mov 4(%rdi),%eax ; jmp 1035
+#     105b  case 3: lea 0xd(%rsi),%eax ; ret
+#     105f  default: mov $0x63,%eax ; ret
+#
+# Pass 1 (option rawswitch off) keeps the computed call; pass 2 (option
+# rawswitch on) prints the switch over the mode with the labels 5..8.
+# Stage: P2 switch-model.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [ { space = 'ram', offset = '0x1030', name = 'rawloop' } ]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = 'ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccb80500000083e80583f8037722488d1524000000486304824801d03effe08b07ebe38d460ac38b4704ebda8d460dc3b863000000c30f1f00e6ffffffeaffffffeefffffff3ffffff'
+
+[script]
+commands = [
+    'option rawswitch off',
+    'lo fu rawloop',
+    'decompile',
+    'print C',
+    'option rawswitch on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'RAWSWITCH LOOP #1: only the default pass keeps the computed call'
+count = 1
+regex = '\(\*\(code \*\)'
+
+[[match]]
+name = 'RAWSWITCH LOOP #2: rawswitch on labels the cases by the mode'
+count = 1
+regex = 'case 8:'
+
+[[match]]
+name = 'RAWSWITCH LOOP #3: rawswitch on decodes the last row'
+count = 1
+regex = '\+ 0xd;'

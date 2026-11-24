@@ -2584,11 +2584,22 @@ impl ConsoleProgram {
         let num_spaces = self.arch().manage().num_spaces();
         // Clone the (name, addr) pairs so the borrow of `self.arch_mut()` below
         // does not overlap `self.symbols`.
-        let records: Vec<(String, Address)> = self
+        let mut records: Vec<(String, Address)> = self
             .symbols
             .iter()
             .map(|s| (s.name.clone(), s.addr.clone()))
             .collect();
+        // The first name of an address names its function, so put the one the
+        // inventory reports first: an ELF lists its local symbols before its
+        // global ones, and gcc's `f.localalias` would otherwise name `f`.
+        records.sort_by_cached_key(|(name, addr)| {
+            let vma = addr.get_offset();
+            (
+                vma,
+                self.is_not_declared_name(vma, name),
+                entry_name_rank(name),
+            )
+        });
         let aliases = self.function_address_aliases.clone();
         let arch = self.arch_mut();
         for (name, addr) in records {
@@ -5006,7 +5017,9 @@ pub fn bootstrap_program(
     arch_id: &str,
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).xml_image(binaryimage, arch_id)
+    Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
+        .xml_image(binaryimage, arch_id)
 }
 
 /// The XML bootstrap behind [`bootstrap_program`].
@@ -5379,6 +5392,7 @@ pub fn bootstrap_from_raw(
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .arm_isa(isa)
         .raw(path, base, entries)
@@ -5397,6 +5411,7 @@ pub fn bootstrap_from_raw_segments(
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .arm_isa(isa)
         .raw_segments(path, runs, entries)
@@ -5607,6 +5622,7 @@ pub fn bootstrap_from_image_with_isa(
     isa: Option<ArmIsa>,
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .arm_isa(isa)
         .image(path)
@@ -5712,6 +5728,7 @@ pub fn bootstrap_from_wasm_bytes(
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .wasm_bytes(path, bytes)
 }
@@ -5905,6 +5922,7 @@ pub fn bootstrap_from_mz_bytes(
     isa: Option<ArmIsa>,
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .arm_isa(isa)
         .mz_bytes(path, bytes)
@@ -6005,7 +6023,11 @@ pub fn bootstrap_from_image(
     target: &str,
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).target(target).image(path)
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(arm_isa_from_env()?)
+        .options(&LoadOptions::from_env_for_load())
+        .image(path)
 }
 
 /// Whether the file at `path` opens as a UEFI TE, reading only the bytes the
@@ -6071,6 +6093,7 @@ pub fn bootstrap_from_dex_bytes(
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .dex_bytes(path, bytes)
 }
@@ -6231,6 +6254,7 @@ pub fn bootstrap_from_te(
     isa: Option<ArmIsa>,
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .arm_isa(isa)
         .te(path)
@@ -6257,6 +6281,7 @@ pub fn bootstrap_from_te_bytes(
     isa: Option<ArmIsa>,
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
         .target(target)
         .arm_isa(isa)
         .te_bytes(path, bytes)
@@ -6555,18 +6580,6 @@ pub(crate) fn bootstrap_object(
     let stated = if from_env { None } else { options.go_version };
     options.go_version =
         unlace_analysis::loader::gobuildinfo::go_toolchain_version(&bytes).or(stated);
-    if from_env {
-        match options.go_version {
-            Some((maj, min)) => {
-                // FIXME: Audit that the environment access only happens in single-threaded code.
-                unsafe {
-                    std::env::set_var(unlace_decomp::goreg::GOVERSION_ENV, format!("{maj}.{min}"))
-                }
-            }
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            None => unsafe { std::env::remove_var(unlace_decomp::goreg::GOVERSION_ENV) },
-        }
-    }
     let _load = enter_load(&options, from_env);
     let explicit_isa = isa.is_some();
     let import_proofs = unlace_analysis::loader::ImportProofScope::enter(&bytes);
@@ -9446,7 +9459,9 @@ pub fn bootstrap_from_root(
     root: &Rc<Element>,
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).xml_root(root)
+    Bootstrap::new(spec_roots)
+        .options(&LoadOptions::from_env_for_load())
+        .xml_root(root)
 }
 
 /// The arch id and `<binaryimage>` a parsed XML document root names.
@@ -9558,7 +9573,16 @@ pub fn bootstrap_from_file(
     target: &str,
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).target(target).file(path)
+    // An unreadable ARM ISA variable keeps the environment-mode load, which
+    // reports it only for an input that reads it.
+    let Ok(isa) = arm_isa_from_env() else {
+        return Bootstrap::new(spec_roots).target(target).file(path);
+    };
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(isa)
+        .options(&LoadOptions::from_env_for_load())
+        .file(path)
 }
 
 /// What [`bootstrap_from_file`] found at a path, by its leading bytes.

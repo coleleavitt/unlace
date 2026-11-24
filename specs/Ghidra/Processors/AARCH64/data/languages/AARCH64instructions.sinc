@@ -3867,27 +3867,21 @@ macro fcomp(a, b)
 {
 	NG = a f< b;
 	ZR = a f== b;
-	CY = a f>= b;
-	OV = 0;
+	CY = !(a f< b);
 }
 
-# this sets NG, ZR, CY, and OV to the values the processor
-# uses to indicate an unordered comparison.  If at least 
-# one of the inputs is NaN, it skips to the next instruction.
-# A use of this macro should be followed by a use of the
-# fcomp macro, which will set the flags according to an 
-# ordered comparison.  Basically, set the flags to the "unordered"
-# values, check for unordered, and if not set the flags again with
-# fcomp.
+# (unlace) The unordered half of an FCMP: V is set exactly when an input is a
+# NaN. fcomp, which every use follows this with, sets N, Z and C, which the
+# ordered p-code comparisons already give their unordered values (N=0, Z=0,
+# C=1) with no branch: the old form jumped over fcomp on a NaN, which
+# RuleIgnoreNan then removed as a NaN guard, and an unordered compare took the
+# ordered path (le printed as a0 <= b, which is false for a NaN).
 macro ftestNAN(a, b)
 {
-	NG = 0;
-	ZR = 0;
-	CY = 1;
-	OV = 1;
-	tst:1 = nan(a) || nan(b);
-	if (tst) goto inst_next;
+	OV = nan(a) || nan(b);
 }
+
+
 
 macro ROR32(out, val, rotate)
 {

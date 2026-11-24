@@ -1749,6 +1749,23 @@ bounded boolean fan-out first, before dropping guards could hide the proof.
 Thus ordinary UCOMISS conditions keep their ordered forms without granting
 an unguarded MINSS comparison a false complement.
 
+AArch64 FCMP sets V exactly when an input is a NaN, and its signed conditions
+compare N with V: `ge` is `N == V`, `lt` is `N != V`, `gt` and `le` add Z. The
+lift states that without a branch: `ftestNAN` sets `OV = NAN(a) || NAN(b)`
+and `fcomp` sets `NG = a < b`, `ZR = a == b` and `CY = !(a < b)`, the flag
+values the processor gives an unordered compare as well
+(`specs/Ghidra/Processors/AARCH64/data/languages/AARCH64instructions.sinc`).
+Before, `ftestNAN` jumped over `fcomp` on a NaN, `RuleIgnoreNan` removed that
+jump as a NaN guard, and every condition took its ordered form: `le` printed
+as `a <= b`, false where the processor's `le` holds for a NaN. An ordered
+comparison and the NaN test of its operands are never both true, so
+`floatnegation.rs (fold_exclusive_guard)` rewrites `cmp != unordered` as
+`cmp || unordered`, which the guarded folds above then complement, and
+`cmp == unordered` as the complement itself: `(a < b) == (NAN(a) || NAN(b))`
+is `b <= a`. `RuleIgnoreNan` runs it from the NaN test before it drops
+any guard (`tests/stages/aarch64-fcmp-nan.toml`, tools/semantic
+`floats.fcmp`). A comparison that reads memory is left to `nanignore`.
+
 **A float compare read back through a flag's sign bit.** ARM VFP compares in
 `FloatVectorCompare` pack their four results into FPSCR bits 31..28, and
 `vmrs APSR_nzcv, fpscr` copies them into the flags, so `bpl` after
@@ -2787,10 +2804,11 @@ whole register (`add $1,%rax` after the call) relies on the zero-extension the
 callee performs, and its printed C sign-extended the `int` result. In
 `decompile-all` such a function is decompiled again with the width its callers
 compute with (`Funcdata::unlace_wide_return`, `voidret` in chapter
-[04](04-calls-and-prototypes.md)). Where a caller computes with all eight bytes
-the pull refuses the trim the same way (`zero_extended_word`); where callers
-compute with at most four, a narrower value keeps its trim and is unsigned
-instead (chapter [05](05-types.md)).
+[04](04-calls-and-prototypes.md)). Wherever a caller computes with more of the
+register than the trimmed value, the pull refuses the trim the same way
+(`zero_extended_word`) and the function returns the width its callers read: a
+narrower C type would not make the compiled function set those bytes (chapter
+[05](05-types.md)).
 A convention that extends the value by its type's sign (`inttype`) leaves the
 trim alone, since there a caller may read the whole register of an `unsigned
 int`. Each trim the pull makes of a zero-extended value is noted on the

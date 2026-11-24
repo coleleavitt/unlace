@@ -3183,19 +3183,34 @@ When the model is not admitted the branch is truncated to a `CALLIND` carrying
 `"Treating indirect jump as call"` and neither arm is ever decoded.
 
 **Model 4 — the table matched from its instructions** (`rawswitch.rs
-(JumpModelRaw)`, unlace, `option rawswitch`, default off; x86-64 only). When
+(JumpModelRaw)`, unlace, `option rawswitch`, default on; x86-64 only). When
 `jumptable.rs (JumpTable::recover_addresses)` fails with every model above, the
 bytes before the BRANCHIND (up to 40, fewer where the image starts closer to
 the jump) are matched backward against gcc's and clang's PIC dispatch: `cmp $N,%idx; ja default`, `lea table(%rip),%base` (before or after
 the pair), `movslq (%base,%idx,4),%dst`, `add %base,%dst`, `jmp *%dst` (with
 `notrack` or a REX prefix). The table's `N + 1` rows are offsets from its start;
 each target must lie within `0xffff` of the jump and there must be two distinct
-targets, else nothing is installed. The case labels are the row indices. This is
-IDA's idiom matcher, and it is what the data flow cannot give when the index is a
-constant on the only path into the dispatch: zlib's `inflateBack` sets
-`state->mode` just before `switch (state->mode)` and gcc threads each case to the
-next, so the value-range models see one value and the other cases were never
-decoded (`tests/stages/rawswitch.toml`).
+targets, else nothing is installed. The window reads at most 40 bytes back and
+stops at the first unmapped byte, so a dispatch near the start of the image still
+matches. This is IDA's idiom matcher, and it is what the data flow cannot give
+when the index is a constant on the only path into the dispatch: zlib's
+`inflateBack` sets `state->mode` just before `switch (state->mode)` and gcc
+threads each case to the next, so the value-range models see one value and the
+other cases were never decoded (`tests/stages/rawswitch.toml`). It is on by default: over sed, tar, gzip,
+patchelf and libz (2263 functions) the matcher changes only `inflateBack`.
+
+The labels are given on the whole function, once every case is decoded. When a
+value-range model now recovers the table and its own rows are the matched rows in
+order, it labels them as its own original (`JumpTable::recover_labels`), so the
+cases that loop back to the dispatch with a new index give the switch its real
+values (`tests/stages/rawswitch-loop.toml`: labels 5..8 over a `mode - 5`
+index); when its rows differ, the trivial model labels by address. When no model
+recovers it, the table keeps `JumpModelRaw` (`JumpTable::recover_model` matches
+the instructions again and requires the same rows): the switch variable is the
+varnode the row is read with (the `* 4` index of the LOAD the destination adds,
+less a zero extension and a constant added to it), the BRANCHIND reads it
+directly, and row `i` is labelled `i` minus that constant. An index that is
+still a constant there leaves the jump's input alone and labels by address.
 
 **Model 0 — the jump-assist user-op** (`jumpassist.rs
 (JumpModelAssisted)`, C++ `JumpAssisted`, `option jumpassist`, default on).
@@ -4643,6 +4658,14 @@ truncate to 64 bits and keep the low word, exact for every value below 2^32
 (`tests/stages/aarch64-fcvtzu.toml`). A negative input or one of 2^32 or more is not
 clamped as the instruction does; neither is a 64-bit destination's input of 2^63 or more,
 whose constructors still use the signed `trunc`.
+
+### AArch64 scalar UCVTF from a SIMD register
+
+`ucvtf` with its integer in a scalar SIMD register (`ucvtf d0, d0`, `s0, s0`, `h0, h0`;
+`AARCH64neon.sinc`) lifted as the user op `NEON_ucvtf`, which the printer prints as an
+undeclared call (tools/semantic `floats.i2d`, clang -O0). It now zero-extends the integer one
+byte wider than it is and converts that with `int2float`, as the general-register `ucvtf`
+forms beside it already do, so the conversion is unsigned and exact.
 
 ### AArch64 SVE matrix multiply and BFloat16 (#98)
 

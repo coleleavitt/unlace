@@ -49,12 +49,6 @@ pub fn ruststdsigs() -> RustStdSigs {
         .unwrap_or_else(crate::loadoptions::env::ruststdsigs)
 }
 
-/// Bridge a `set_unlace_option("ruststdsigs", val)` choice to [`RUSTSTDSIGS_ENV`].
-pub fn set_ruststdsigs_env(value: RustStdSigs) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(RUSTSTDSIGS_ENV, value.as_str()) };
-}
-
 impl crate::optionset::UnlaceOption for RustStdSigs {
     const NAME: &'static str = "ruststdsigs";
     crate::unlace_option_id!();

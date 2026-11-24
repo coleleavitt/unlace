@@ -2366,7 +2366,13 @@ x86-64 System V and `unsigned long long` on i386, from one table.
 Three cases resist an exact answer, and each is decided rather than left to fall
 out of the table. A 1-byte integer is `signed char`/`unsigned char`, never bare
 `char` — its signedness is implementation-defined, and unlace reserves the `char`
-core type for text. `code` is Ghidra's pseudo-type for a function body and only
+core type for text. That `char` core type is itself signed, so where the target's
+plain `char` is unsigned it cannot be spelled `char` either: on AArch64 under the
+`default` compiler spec (AAPCS64; not Apple, whose ABI keeps `char` signed, nor
+`windows`), `ctypes.rs (plain_char_signed)` marks the model unsigned and a
+`char`-typed scalar, cast or array element prints `signed char`, so the emitted C
+sign-extends when it is compiled for the target (`tests/stages/aarch64-signed-char.toml`).
+A `char` reached through a pointer keeps `char`: that is how text is declared. `code` is Ghidra's pseudo-type for a function body and only
 ever reaches the output as `code *`, which becomes `void *`. And floating point
 is the one place an approximation is unavoidable: an exact width match wins, but
 a width above `double` with no exact match spells `long double`, which is how the
@@ -4169,7 +4175,12 @@ compiles":
   carry no padding.
 
 A non-C identifier is rewritten by `printc.rs (sanitize_type_name)` (annotated
-`/* renamed from "…" */`). Within a C type definition, member and typedef
+`/* renamed from "…" */`). A C keyword (C23 with `<stdbool.h>`: `register`,
+`bool`, `typeof`, `alignof`, …) is not one either and gains a `_` suffix: zig's
+compiler_rt DWARF names a struct member `register`, and C99 code may name one
+`bool`. In C output the printer spells every member and bitfield access through
+the same rule, so a renamed member's definition and its uses agree
+(`tests/stages/c-keyword-members.toml`). Within a C type definition, member and typedef
 declarators use the name written by this rule for their named base type. This
 keeps `elm_tag *p`, `elm_tag *list[2]`, and `elm_tag (*table)[3]` tied to the
 same declared `elm_tag` alias when DWARF names the type `elm.tag`. The C
@@ -4219,8 +4230,13 @@ uint4;`, …; 8-byte integers always spell `long long` so the text is
 data-model independent; `bool` is covered by `#include <stdbool.h>`;
 `char`/`void` are real C and emit nothing), then the fixed Ghidra/unlace
 `undefined` family — `undefined`, `undefined1..8` (3/5/6/7 mapped to the next
-larger unsigned integer, each carrying a sizeof-divergence note) and
-`undefined16`/`undefined32` as byte-array structs. The non-printer half of
+larger unsigned integer, each carrying a sizeof-divergence note),
+`undefined16` as `unsigned __int128` where the compiler defines
+`__SIZEOF_INT128__` and otherwise a byte-array struct, and `undefined32` as a
+byte-array struct. A body computes with a 16-byte value (a function returning
+the `rdx:rax` pair ends `return *(unsigned __int128 *)v1;`, `SUB168(x,8)`
+reads one), which a struct cannot hold, so with the struct no such body
+compiled (tools/semantic `noreturn.checked_div`, `conversions.mul_hi`). The non-printer half of
 the export (section enumeration, one-instruction disassembly, raw image
 bytes, named data symbols for the `.asm`/`README.md` artifacts) lives on the
 console engine, `crates/unlace-console/src/engine.rs
@@ -5896,9 +5912,34 @@ The design is `docs/architecture/ctree.md`. `PrintC::emit_function_body` builds
 a C syntax tree for every function before it prints the body, unless the printer
 is in flat mode (flat printing walks the basic blocks through `emit_block_graph`
 with no tree). The tree walk (`printc/ctreeprint.rs`, `emit_ctree_stmt`) prints
-graph sequences and leaves itself and chooses the emitter for every other
-statement kind; only an opaque statement (a condition or multi-goto block)
-reaches the block printer's own dispatch, `emit_block_raw`. The tree lives in
+graph sequences, leaves and multi-goto blocks itself and chooses the emitter for
+every other statement kind. A condition block is built like any other block, its
+statements marked as a condition (`CTree::is_condition`), and prints through the
+tree under the `NO_BRANCH` and `ONLY_BRANCH` walks; of the statement rewrites only
+the `try` form and the `iteboolean`/`iteregion` assignment forms (which the block
+printer also applied inside conditions) reach condition statements. A
+`BlockCondition` is a sequence of its two clauses printed by
+`emit_block_condition`. Only a block past the builder's depth bound, and flat
+printing, reach the block printer's own dispatch, `emit_block_raw`. The elements of a
+`BlockList` print from the tree's sequence statements (`emit_list_items`), so a
+rewrite that changes a statement changes what its list prints. Before any other
+rewrite, `ctree_rewrite` turns each `if` on an `eh_unwinding()` exceptional edge
+that prints as `try { ... } catch (..) { ... }` (`itaniumeh`: one arm starts at a
+landing pad, or the call the edge follows names the pad) into a `Try` statement
+holding the condition block, the arm inside the `try`, the pad and the handler arm;
+`emit_block_if` prints that statement, and no later rewrite folds it. The DEX `try` forms are decided the same way: an `if` that opens a `try` on its
+own (`java_try_shape` with `java_try_standalone`) becomes a `JavaTry` statement
+before any other rewrite, and a list holding a `try` dispatch is recorded on its
+sequence (`CTree::set_java_list`); `emit_block_if` and `emit_list_items` read
+those (`is_java_try`, `list_java_try`). A list's `try` form (an exceptional-edge `if` whose normal path never
+falls through, followed by the landing pad that starts the rest of the list) is
+recorded on the list's sequence as a `ListTry` (`eh_list_try_match`); only part
+of a list (the rest of a switch arm or goto block) is matched while printing. The
+`if` whose edge is the enclosing `try`'s own (printed as its call and normal
+path only) is found from the tree: `open_try_pad` walks the block's parents to
+the nearest `Try` statement or list `try` form whose normal path holds it
+(printing descends only into a block's components, so that is the `try` printed
+around it). The tree lives in
 `crates/unlace-ctree/src`: `unlace_ctree` holds the statement and expression
 arenas and the tree's maturity (`built`, `statements`, `rewritten`, `final`,
 which only rises), and `unlace_ctreebuild::build` makes one statement per
@@ -5969,7 +6010,19 @@ constants are `c` or `!c`, two values stop the walk. Every `if` but the first
 of the run must have a condition leaf that prints nothing before its test, with
 no label line and no comment, or a `BlockCondition` (`a && b`, `a || b`) each of
 whose components is one (`clean_guard_cond`); an `if` that fails it can only
-be the first, and the walk stops there. A value that ends as the bare positive
+be the first, and the walk stops there, unless its condition is a `BlockList` that
+carries guards in front of its test (`fold_cond_list_guards`). The structurer
+concatenates a collapsed guard `if` with the next guard's condition block, so that
+guard's condition is `[if (g) return K;, test]` and the leading guard prints as a
+statement before the test. When every leading component is an `if` without else and
+without goto, not a switch-merge or exception `if` and not rewritten by the tree
+(`cond_list_guard`), whose body leaf `return_term` accepts, and the test and every
+leading guard's condition after the first print nothing (`clean_guard_cond`), the
+guards join the run right to left, the test standing for the list's condition; the
+first guard's own condition list folds the same way, and the walk goes on from the
+first guard's condition. `emit_block_if` then prints the run from that first
+condition, so the guards do not print again: `if (a) return 1; if (b) return 1;
+return c;` at a function body's root is `return a || b || c;`. A value that ends as the bare positive
 condition must pass `cond_is_boolean`. The first `if` of the run becomes
 `Return` with the folded value and the tail's `RETURN` as markup; the later ones
 and the tail become empty sequences. `emit_block_if` prints the first through the

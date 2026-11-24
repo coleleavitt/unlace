@@ -108,7 +108,7 @@ pub(crate) fn apply(sub: &str, argv: &mut [String], limit: usize) {
     if followed.images == selected {
         return;
     }
-    unlace_decomp::dyldcache::set_dyldimage_env(&followed.images);
+    crate::loadtime::set_invocation_var(unlace_decomp::dyldcache::DYLDIMAGE_ENV, &followed.images);
     for i in 2..argv.len() {
         if argv[i - 2] == "--option" && argv[i - 1] == "dyldimage" {
             argv[i] = followed.images.clone();

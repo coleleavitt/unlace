@@ -542,6 +542,9 @@ Three tiers:
 | a loop counter reused later as an unrelated result or return code | [`typemerge`](#typemerge----on--storage--off-default-on) |
 | two source variables of the same type print as one name | [`typemerge`](#typemerge----on--storage--off-default-on) |
 | a saved argument and a later call result share one declared local | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| one local holds a value computed and used on one branch arm and an unrelated value from the other arm | [`phiarm`](#phiarm----on--off-default-off) |
+| a variable is assigned different kinds of values on two paths that meet at a join | [`phiarm`](#phiarm----on--off-default-off) |
+| two source variables that meet only at a join print as one name | [`phiarm`](#phiarm----on--off-default-off) |
 | an inlined callee body is spliced into the caller and should read as a call | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | want to pull a chosen region out of a function into a named pseudofunction | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | acting on an almostregion inline-candidate report by hand or with an llm | [`outline`](#outline----off----default-off-destructive-opt-in) |
@@ -1149,6 +1152,10 @@ Three tiers:
 | v10 and v11 declared between v1 and v2 | [`declorder`](#declorder----natural--name-default-natural) |
 | local declarations in string order v1, v10, v11, v2 | [`declorder`](#declorder----natural--name-default-natural) |
 | a numbered local hard to find among ten or more declarations | [`declorder`](#declorder----natural--name-default-natural) |
+| std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > instead of std::string | [`cppshortnames`](#cppshortnames----on--off-default-off) |
+| a std::vector or std::map type spelled with its allocator and comparator | [`cppshortnames`](#cppshortnames----on--off-default-off) |
+| __cxx11 or __1 in front of a std function name | [`cppshortnames`](#cppshortnames----on--off-default-off) |
+| C++ type names too long to read | [`cppshortnames`](#cppshortnames----on--off-default-off) |
 | a local holding open()'s result named v1 | [`libcnames`](#libcnames----on--off-default-on) |
 | read's byte count kept as a vN | [`libcnames`](#libcnames----on--off-default-on) |
 | a stack buffer passed to read() or ReadFile() named vN | [`libcnames`](#libcnames----on--off-default-on) |
@@ -2454,6 +2461,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P6/merge-aggressiveness · kuna · presentation-default · unlace-20
 - **Example:** `option typemerge storage`
 
+### `phiarm` -- on | off, default `off`
+
+- **Symptoms:** one local holds a value computed and used on one branch arm and an unrelated value from the other arm; a variable is assigned different kinds of values on two paths that meet at a join; two source variables that meet only at a join print as one name.
+- **What it does:** Keep a value computed on one arm of a join, and used on that arm in its own right, out of the variable the join produces. Merge::mergeOp (merge.cc:719) forces a MULTIEQUAL's output and every input it does not trim into one HighVariable, trimming only on a required-test or Cover conflict, so `x = f(); g(x);` on one arm and `y = h(); k(y);` on the other both print as the join variable `r` when the two values meet at the join: two source variables that only met there share one name. Hex-Rays splits such arms before it allocates variables (BREAK_PHI_ARM_MERGES, hexx64 sub_1915E0). ON trims a MULTIEQUAL input inside the required merge (kuna_phiarm.rs (arm_slots)) when the join variable is not address-tied, persistent or an input and some non-marker op reads it; the input's predecessor is not dominated by the join block, so a loop back edge (an induction update) stays in its loop variable; the input is written by an op that is not a COPY, MULTIEQUAL or INDIRECT (an assignment `r = a;` to the join variable stays merged) and that does not read the join value; and some op other than the MULTIEQUAL, not a marker, reads the input. Each such input gets upstream's trimOpInput COPY at the end of its predecessor (`r = x;`), and kuna_phiarm.rs (keeps_apart) stops the later speculative merges (ActionMergeCopy, ActionMergeAdjacent, ActionMergeType) and any later forced merge from joining the arm value back into the join variable; a forced merge that would do so trims instead, as for a Cover conflict. OFF, the default, is upstream byte-for-byte.
+- **When to flip:** OFF by default: it is a judgement, not a proof. Where the source had one variable assigned on both arms and then used (`r = f(); g(r); ... use(r)`), ON prints an extra variable and an assignment `r = x;` at the end of the arm. Turn it ON when a function reuses one name for values that clearly mean different things on different paths, for example a status code on one arm and a pointer on the other meeting before a common test, or when comparing variable boundaries against DWARF. Not yet measured on a corpus; a default change needs the DecBench variable-match and declaration-count numbers.
+- **Where / provenance:** P6/merge-aggressiveness · ida · presentation-default · unlace-20
+- **Example:** `option phiarm on`
+
 ### `outline` -- off | <fn>:<head>-<exit>[;...], default `off` (destructive opt-in)
 
 - **Symptoms:** an inlined callee body is spliced into the caller and should read as a call; want to pull a chosen region out of a function into a named pseudofunction; acting on an almostregion inline-candidate report by hand or with an llm.
@@ -3733,6 +3748,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default: locals declare as `v1, v2, ..., v10`, the order IDA declares its numbered locals in. Set it to `name` for the plain string order (`v1, v10, v11, v2`) the declaration pass used before.
 - **Where / provenance:** P9/naming-policy · ida · presentation-default · kuna-declorder
 - **Example:** `option declorder name`
+
+### `cppshortnames` -- on | off, default `off`
+
+- **Symptoms:** std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > instead of std::string; a std::vector or std::map type spelled with its allocator and comparator; __cxx11 or __1 in front of a std function name; C++ type names too long to read.
+- **What it does:** Print a standard C++ name the way a C++ programmer writes it. A demangler and DWARF spell `std::string` as `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >`. With the option on, `kuna_cppshortnames` shortens the name where the printer writes it, and the type, its Symbol and every directive keep the full name. An inline namespace right after `std` (`__cxx11`, `__1`, `__2`, `__ndk1`) is dropped from a type name and from the namespaces printed in front of a declared or called function (`std::basic_string::_M_append`). A character template whose other arguments are its defaults prints as its standard alias: `basic_string`, `basic_string_view` over `char`, `wchar_t`, `char8_t`, `char16_t` and `char32_t` (`std::string`, `std::wstring`, `std::u16string_view`), and the stream and buffer templates over `char` and `wchar_t` (`std::ostream`, `std::wistream`, `std::ostringstream`, `std::filebuf`). A DWARF name without its namespace (`basic_string<char, std::char_traits<char>, std::allocator<char> >`) counts when a default argument shows it is the standard one. A standard container loses its trailing default arguments when they name its own element, or for a map its own key and value pair: `std::vector<int, std::allocator<int> >` prints `std::vector<int>`, `std::map<int, std::string, std::less<int>, std::allocator<std::pair<int const, std::string> > >` prints `std::map<int, std::string>`, and `std::unique_ptr<Foo, std::default_delete<Foo> >` prints `std::unique_ptr<Foo>`. Any other argument stays (`std::vector<int, std::allocator<long>>`, `std::set<int, std::greater<int>>`). MSVC's `class`/`struct` argument tags are dropped. A rewritten name closes nested argument lists as `>>`. A name more than 32 template levels deep, longer than 4 KiB, or with unbalanced brackets prints as it is. The scope name of a member of the C++11-ABI string stays `basic_string`: the demangled symbol has lost its template arguments, so `char` and `wchar_t` cannot be told apart.
+- **When to flip:** Turn on for C++ binaries: `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > *` prints `std::string *`, and `std::__cxx11::basic_string::_M_append` prints `std::basic_string::_M_append`. Off by default because it respells names that stage assertions and CLI tests spell in full.
+- **Where / provenance:** P9/naming-policy · ida · presentation-default · kuna-cppshortnames
+- **Example:** `option cppshortnames on`
 
 ### `libcnames` -- on | off, default `on`
 

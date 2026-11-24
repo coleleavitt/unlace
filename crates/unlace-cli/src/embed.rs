@@ -118,6 +118,57 @@ impl Request {
     }
 }
 
+/// An IDA database read for a load (`unlace idb`; `crate::idb`).
+#[derive(Clone, Debug, Default)]
+pub struct Idb {
+    /// IDA's processor module name (`metapc`, `ARM`, ...).
+    pub processor: String,
+    /// The SLEIGH language id the processor maps to, when unlace has a mapping.
+    pub target: Option<String>,
+    /// The SHA-256 of the file IDA loaded, when the database records it.
+    pub input_sha256: Option<String>,
+    /// The segments as `(byte address, bytes, execute, write)`, when read with bytes.
+    pub segments: Vec<(u64, Vec<u8>, bool, bool)>,
+    /// Function entries, address-ordered.
+    pub entries: Vec<u64>,
+    /// The local types, functions and prototypes as `--assert` directives.
+    pub directives: Vec<String>,
+    /// Entries of the functions IDA marked no-return.
+    pub noreturn: Vec<u64>,
+}
+
+/// Read the IDA database at `path`, with its segments' bytes when `bytes` is set.
+pub fn read_idb(path: &str, bytes: bool) -> Result<Idb, String> {
+    let db = crate::idb::open(path, bytes)?;
+    let target = crate::idb::sleigh_target(&db.info.processor, db.info.bitness, db.info.big_endian);
+    let selection = crate::idb::Selection {
+        types: true,
+        comments: false,
+    };
+    let knowledge = crate::idb::knowledge(&db, target.as_deref(), selection);
+    let entries = db.functions.iter().map(|f| f.start).collect();
+    Ok(Idb {
+        processor: db.info.processor.clone(),
+        input_sha256: db.info.input_sha256.clone(),
+        segments: db
+            .memory
+            .into_iter()
+            .map(|run| (run.start, run.bytes, run.perms.execute, run.perms.write))
+            .collect(),
+        entries,
+        directives: knowledge.directives,
+        noreturn: knowledge.noreturn,
+        target,
+    })
+}
+
+/// The SHA-256 of the file at `path`, the identity `unlace project` binds.
+pub fn file_sha256(path: &str) -> Result<String, String> {
+    unlace_project::BinaryIdentity::of_file(std::path::Path::new(path))
+        .map(|identity| identity.sha256)
+        .map_err(|e| format!("{path}: {e}"))
+}
+
 /// The [`section_flags`](unlace_sleigh::loadimage::section_flags) of a raw
 /// segment with these access rights: code or data, and read-only unless
 /// writable.

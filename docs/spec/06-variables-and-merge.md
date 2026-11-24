@@ -518,6 +518,21 @@ marking (below), three passes fuse variables to reduce clutter:
   (`kuna_stablenames.rs (variable_groups)`) and leave every other merge pass
   alone; they only drop speculative joins.
 
+  Option `phiarm` (`kuna_phiarm.rs (arm_slots)`, default off) acts one step
+  earlier, inside the required merge: `merge.rs (Merge::merge_op)` asks it,
+  after upstream's own trims of a MULTIEQUAL, which inputs are values of their
+  own, and gives each upstream's `trimOpInput` COPY at the end of its
+  predecessor. An input qualifies when the join variable is not address-tied,
+  persistent or an input and a non-marker op reads it; its predecessor is not
+  dominated by the join block (a back edge keeps its induction value in the
+  loop variable); it is written by an op that is not a COPY, MULTIEQUAL or
+  INDIRECT and does not read the join value; and an op other than the
+  MULTIEQUAL, not a marker, reads it. The pair (arm value, join output) is
+  recorded, and `kuna_phiarm.rs (keeps_apart)`, asked by `Merge::merge` and
+  `Merge::merge_test`, refuses any later merge that would join the two again,
+  so a later forced merge trims instead and `ActionMergeCopy` does not undo the
+  split. This is the copy form of Hex-Rays' `BREAK_PHI_ARM_MERGES`.
+
 **Explicit vs implied** — which values get a named token at all. Between the
 required and speculative groups, `coreaction_cleanup.rs (ActionMarkExplicit)`
 decides per Varnode via `coreaction_cleanup.rs (base_explicit)`: explicit

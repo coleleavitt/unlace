@@ -699,6 +699,16 @@ latent = false
 exposure = "(unlace) option cstringconst -> PrintC::push_vn_explicit_ir pointer and call-argument arms + unlace_cstringconst::literal_char"
 
 [[subphase]]
+name = "global-string-name"
+phase = "P9"
+decision = "an unnamed global whose bytes are a C string: its address or its string label"
+assertion = "stringglobalnames on|off"
+strength = "HARD"
+rewind = "P9"
+latent = false
+exposure = "(unlace) option stringglobalnames -> unlace_emit::stringglobalnames::global_name, used by PrintC and the project header"
+
+[[subphase]]
 name = "type-definition-preamble"
 phase = "P9"
 decision = "print the definitions of the composite/enum/typedef types a function's C names above it vs the bare function document"
@@ -1595,6 +1605,25 @@ symptoms = "a short string literal argument prints as a hex integer like 0x28abe
 live_field = "cstring_const"
 live_true = "on"
 live_false = "off"
+
+[[settable]]
+option = "stringglobalnames"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "global-string-name"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-1282-string-global-names"
+summary = "Name an unnamed global whose bytes are a C string after the string, as IDA does: a global holding `\"hello world\"` prints as `&aHelloWorld` where unlace prints `&dat_<addr>`, and the `decompile-project` header declares it under the same name. The label capitalises the words of the text, drops every non-alphanumeric byte, and reads `aEmpty` when nothing is left. The text is the printable run from the global's address up to a NUL, at least two bytes long and holding a letter or digit, read from the loaded image. Two globals holding the same text share one name; the printer does not uniquify them, which is why the option is off by default. Inert unless the option is on, so 0/675 datatest assertions move."
+use_when = "Off by default: the label is IDA's naming, not the program's, and two globals with the same text collide. Flip on when reading output next to IDA, or when a string's use site is easier to follow by its text than by its address."
+example = "option stringglobalnames on"
+source_decompiler = "ida"
+inspiration = "IDA names a string global after its text (aHelloWorld, aS, aEmpty) and prints the name at every use; an LLM reading the output gets the string's meaning from the name."
+change_kind = "presentation-default"
+tier = "core"
+symptoms = "a global used by address prints as dat_2b080 where the string it holds says what the use is|a format string or message is only reachable as &dat_<addr> and the reader must look the bytes up|the same string global appears as dat_<addr> in one function and under its text in IDA"
 
 [[settable]]
 option = "charnum"

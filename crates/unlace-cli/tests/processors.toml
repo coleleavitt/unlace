@@ -135,6 +135,9 @@ b8ffffffff0fbdc7c3cccccccccccccc486601f8c3cccccccccccccccccc
 cccc406663c7c3
 """
 
+s390x_km_lzrg = """
+b92e0024e3203000002a07fe
+"""
 s390x_hfp_decimal = """
 930020002002fa333000400007fe
 """
@@ -4280,3 +4283,17 @@ forbid = ["halt_baddata"]
 test = "ebpf_retindexuse_counter_is_returned"
 address = "0x0"
 expect = ["return "]
+
+# s390x CIPHER MESSAGE then LOAD AND ZERO RIGHTMOST BYTE through the advanced address: km %r2,%r4
+# (r2:r3 and r4:r5 rewritten, r0/r1 read); lzrg %r2,0(%r3); br %r14.
+[[family]]
+name = "s390x_km_lzrg"
+language = "s390x:BE:64:default"
+base = "0x1000"
+image = "s390x_km_lzrg"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s390x_km_writes_its_pairs"
+address = "0x1000"
+expect = ["hd_km(a0,a1,a2,a3,", "(unsigned long *)hd_km_1(", "& 0xffffffffffffff00;"]

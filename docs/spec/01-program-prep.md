@@ -1300,7 +1300,14 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   of a `bcc` into bits 24..2, `R_LANAI_21` the absolute 21-bit address of an
   SLS/SLI access into bits 22..18 and 15..0, `HI16`/`LO16` the halves of
   `S + A` into an RI immediate, and `R_LANAI_32` a big-endian data word; the
-  absolute fields are range-checked. Hexagon (unlace#677, little-endian
+  absolute fields are range-checked. CUDA cubins (`EM_CUDA`) are told apart
+  the same way:
+  - `R_CUDA_ABS32_LO_32`/`HI_32` write the low or high word of `S + A` into
+    bits 32..63 of the 128-bit SASS word (the 32-bit immediate);
+  - `R_CUDA_ABS47_34` writes `(S + A) >> 2` into bits 34..80 (the `CALL.ABS` target);
+  - `R_CUDA_64` is a data doubleword;
+  - the yield and unused-clear relocations are no-ops;
+  - the constant-bank `CONST_FIELD*` offsets stay unsupported. Hexagon (unlace#677, little-endian
   RELA) covers the PC-relative branches `B22`/`B15`/`B13`/`B9`/`B7_PCREL`
   (`(S + A - P) >> 2` dealt into each form's ABI bit mask, range-checked),
   their extended `_X` forms (the low six bits of `S + A - P`), the `immext`

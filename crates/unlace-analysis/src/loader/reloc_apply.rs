@@ -92,6 +92,8 @@ enum Specific {
     LanaiBranch25,
     LanaiAbs21,
     LanaiHalf { high: bool },
+    CudaAbs32 { high: bool },
+    CudaAbs47,
     HexBranch { mask: u32, extended: bool },
     HexExtender { pc: bool },
     HexLow6 { form: HexLow6 },
@@ -254,6 +256,7 @@ impl RelocationSpec {
                     | Specific::LarchCall36
                     | Specific::LarchBranch { .. }
                     | Specific::LanaiBranch25
+                    | Specific::CudaAbs47
                     | Specific::HexBranch { .. }
                     | Specific::Aarch64Imm19 { load: false }
                     | Specific::Aarch64Imm14
@@ -285,6 +288,7 @@ pub fn classify_elf(
 ) -> Result<Option<RelocationSpec>, RelocationFailure> {
     match (arch, machine) {
         (Architecture::Unknown, Some(EM_LANAI)) => classify_lanai(RelocationInfo::from(reloc)),
+        (Architecture::Unknown, Some(EM_CUDA)) => classify_cuda(RelocationInfo::from(reloc)),
         _ => classify(arch, reloc),
     }
 }
@@ -310,6 +314,49 @@ fn classify_lanai(reloc: RelocationInfo) -> Result<Option<RelocationSpec>, Reloc
         specific,
         width: 4,
         call: false,
+        got: false,
+    }))
+}
+
+/// `EM_CUDA` (cubin), which the `object` crate maps to no architecture.
+pub const EM_CUDA: u16 = 190;
+const R_CUDA_64: u32 = 2;
+const R_CUDA_ABS32_LO_32: u32 = 0x38;
+const R_CUDA_ABS32_HI_32: u32 = 0x39;
+const R_CUDA_ABS47_34: u32 = 0x3a;
+const R_CUDA_YIELD_CLEAR_PRED4_87: u32 = 0x44;
+const R_CUDA_YIELD_OPCODE9_0: u32 = 0x45;
+const R_CUDA_UNUSED_CLEAR64: u32 = 0x49;
+
+/// CUDA (little-endian 128-bit SASS words, REL and RELA): `ABS32_LO_32`/`ABS32_HI_32` put
+/// the low or high word of `S + A` into bits 32..63 (the 32-bit immediate of `MOV`/`IADD3`),
+/// `ABS47_34` puts `(S + A) >> 2` into bits 34..80 (the target of `CALL.ABS`), and `64` is a
+/// data doubleword. The yield and unused-clear relocations only let the driver patch scheduling
+/// bits, so they are no-ops here. Constant-bank offsets (`CONST_FIELD*`) stay unsupported: a
+/// bank offset is not the symbol's load address.
+fn classify_cuda(reloc: RelocationInfo) -> Result<Option<RelocationSpec>, RelocationFailure> {
+    let (specific, width, call) = match reloc.r_type {
+        Some(0)
+        | Some(R_CUDA_YIELD_CLEAR_PRED4_87)
+        | Some(R_CUDA_YIELD_OPCODE9_0)
+        | Some(R_CUDA_UNUSED_CLEAR64) => return Ok(None),
+        Some(R_CUDA_64) => (
+            Specific::Data {
+                bytes: 8,
+                pc: false,
+            },
+            8,
+            false,
+        ),
+        Some(R_CUDA_ABS32_LO_32) => (Specific::CudaAbs32 { high: false }, 8, false),
+        Some(R_CUDA_ABS32_HI_32) => (Specific::CudaAbs32 { high: true }, 8, false),
+        Some(R_CUDA_ABS47_34) => (Specific::CudaAbs47, 16, true),
+        _ => return Err(RelocationFailure::Unsupported),
+    };
+    Ok(Some(RelocationSpec {
+        specific,
+        width,
+        call,
         got: false,
     }))
 }
@@ -909,6 +956,17 @@ fn apply_info(
             );
             Ok(())
         }
+        Specific::CudaAbs32 { high } => {
+            let value = (symbol as i128 + reloc.addend as i128) as u64;
+            let word = if high {
+                (value >> 32) as u32
+            } else {
+                value as u32
+            };
+            write_u32(&mut field[4..8], true, word);
+            Ok(())
+        }
+        Specific::CudaAbs47 => cuda_abs47(field, reloc, symbol),
         Specific::LanaiHalf { high } => {
             let value = symbol as i128 + reloc.addend as i128;
             let half = if high { value >> 16 } else { value };
@@ -1994,6 +2052,27 @@ fn lanai_field(
     }
     insn = (insn & !mask) | ((value as u32) & mask);
     write_u32(field, false, insn);
+    Ok(())
+}
+
+/// CUDA `ABS47_34`: the word address `(S + A) >> 2` into bits 34..80 of a little-endian
+/// 128-bit instruction.
+fn cuda_abs47(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+) -> Result<(), RelocationFailure> {
+    let value = symbol as i128 + reloc.addend as i128;
+    require_aligned(value, 4)?;
+    if !(0..1i128 << 49).contains(&value) {
+        return Err(RelocationFailure::OutOfRange);
+    }
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(&field[..16]);
+    let mut insn = u128::from_le_bytes(bytes);
+    let mask: u128 = ((1u128 << 47) - 1) << 34;
+    insn = (insn & !mask) | ((((value as u128) >> 2) << 34) & mask);
+    field[..16].copy_from_slice(&insn.to_le_bytes());
     Ok(())
 }
 
@@ -3538,6 +3617,106 @@ mod hexagon_tests {
         );
         assert_eq!(scatter_bits(0x0000_0ff0, 0x5), 0x50);
         assert_eq!(scatter_bits(0x0000_1f18, 0x7f), 0x1f18);
+    }
+}
+
+#[cfg(test)]
+mod cuda_tests {
+    use super::*;
+
+    fn info(r_type: u32, addend: i64) -> RelocationInfo {
+        RelocationInfo {
+            kind: RelocationKind::Unknown,
+            encoding: RelocationEncoding::Unknown,
+            size: 0,
+            addend,
+            implicit_addend: false,
+            r_type: Some(r_type),
+        }
+    }
+
+    #[test]
+    fn immediates_and_call_targets_take_the_address() {
+        // `MOV R4, 0xffffffff` (sm_80) given the low and high words of 0x1234_5678_9abc.
+        let mov = u128::from_le_bytes([
+            0x02, 0x78, 0x04, 0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x0f, 0x00, 0x00, 0x00, 0xd6,
+            0x0f, 0x00,
+        ]);
+        for (high, want) in [(false, 0x5678_9abcu32), (true, 0x1234)] {
+            let r = if high {
+                R_CUDA_ABS32_HI_32
+            } else {
+                R_CUDA_ABS32_LO_32
+            };
+            let spec = classify_cuda(info(r, 0)).unwrap().unwrap();
+            let mut field = mov.to_le_bytes();
+            apply_info(
+                spec,
+                info(r, 0),
+                &mut field[..8],
+                true,
+                0x1234_5678_9abc,
+                0,
+                None,
+                None,
+            )
+            .unwrap();
+            let got = u128::from_le_bytes(field);
+            assert_eq!((got >> 32) as u32, want);
+            assert_eq!(
+                got & !(0xffff_ffffu128 << 32),
+                mov & !(0xffff_ffffu128 << 32)
+            );
+        }
+        // `CALL.ABS.NOINC 0x0` to 0x100: nvdisasm prints field 0x40 as 0x100.
+        let call = u128::from_le_bytes([
+            0x43, 0x79, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x03, 0x00, 0xea,
+            0x0f, 0x02,
+        ]);
+        let spec = classify_cuda(info(R_CUDA_ABS47_34, 0)).unwrap().unwrap();
+        assert!(spec.is_call() && spec.targets_code());
+        let mut field = call.to_le_bytes();
+        apply_info(
+            spec,
+            info(R_CUDA_ABS47_34, 0),
+            &mut field,
+            true,
+            0x100,
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        let got = u128::from_le_bytes(field);
+        assert_eq!((got >> 34) & ((1u128 << 47) - 1), 0x40);
+        assert_eq!(
+            got & !(((1u128 << 47) - 1) << 34),
+            call & !(((1u128 << 47) - 1) << 34)
+        );
+        assert_eq!(
+            apply_info(
+                spec,
+                info(R_CUDA_ABS47_34, 2),
+                &mut field,
+                true,
+                0x100,
+                0,
+                None,
+                None
+            ),
+            Err(RelocationFailure::Misaligned)
+        );
+        assert!(
+            classify_cuda(info(R_CUDA_YIELD_OPCODE9_0, 0x118))
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            classify_cuda(info(R_CUDA_UNUSED_CLEAR64, 0))
+                .unwrap()
+                .is_none()
+        );
+        assert!(classify_cuda(info(0x42, 0)).is_err(), "CONST_FIELD21_38");
     }
 }
 

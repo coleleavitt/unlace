@@ -232,6 +232,7 @@ pub struct CTree {
     conds: BTreeSet<StmtId>,
     list_tries: BTreeMap<StmtId, ListTry>,
     java_lists: BTreeSet<StmtId>,
+    rest_tries: BTreeMap<StmtId, Vec<Option<ListTry>>>,
 }
 
 impl CTree {
@@ -285,6 +286,19 @@ impl CTree {
     /// Does the list sequence `id` print through the Java `try` list printer?
     pub fn is_java_list(&self, id: StmtId) -> bool {
         self.java_lists.contains(&id)
+    }
+
+    /// Record the `try` form of each rest of the list sequence `id`: entry `skip` is the form
+    /// of its blocks from `skip` on, the one a switch arm or goto block printed from `skip`
+    /// takes (`list_try_form`).
+    pub fn set_rest_tries(&mut self, id: StmtId, rests: Vec<Option<ListTry>>) {
+        self.rest_tries.insert(id, rests);
+    }
+
+    /// The `try` form recorded for the rest of the list sequence `id` from `skip` on. The
+    /// outer `None` means no form was recorded for that rest.
+    pub fn rest_try(&self, id: StmtId, skip: usize) -> Option<Option<ListTry>> {
+        self.rest_tries.get(&id)?.get(skip).copied()
     }
 
     /// Add an expression.

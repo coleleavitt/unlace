@@ -92,10 +92,28 @@ Done (2026-11-24):
 #1097-#1107 were merged edit-only (no build, no measurement, by order of 2026-11-24); each calls
 the emitter the block printer called for the same block, and should print the same text.
 
-What still matches while printing: part of a list (the rest of a switch arm or goto block,
-`emit_arm_rest`, `emit_block_goto_from` with a skip) runs the list `try` matchers on the
-slice, and any block the tree holds no statement for (past the depth bound) runs every
+9. ctree/resttry (edit-only, 2026-11-24): the `itaniumeh` list `try` form of a rest of a list (the
+   rest of a switch arm or goto block, `emit_arm_rest`, `emit_block_goto_from` with a skip) is recorded on the tree when it is built into `rewritten`
+   (`ctree_rest_tries`, `CTree::set_rest_tries`), one entry per skip, and `list_try_form` reads
+   it. Identity by construction: `eh_list_try_match` reads only the function, the output
+   language and the block's own list (`is_eh_if`, `eh_pad_start`, `eh_table`, `self.lang()`),
+   none of the printer's context or emit state, and the table holds its result on the same slice
+   the printer passed. Lists over `MAX_REST_TRIES` (512) and any list with no recorded table
+   fall back to the match itself, which gives the same answer. Not yet done: the same for
+   `list_java_try` / `list_has_java_try` (the DEX `try` matcher on a rest; it reads
+   `java_catches`, printer state, so it needs its own check).
+
+What still matches while printing: the DEX `try` matcher on a rest of a list (`list_has_java_try`
+for a slice), and any block the tree holds no statement for (past the depth bound) runs every
 matcher itself.
+
+Left as is, and why (no output change, but not identical by construction without a run):
+- `Opaque` nodes (ctreebuild.rs): depth bound, zero-component loops/gotos, short if/while, and
+  `BlockType::Plain`. Making `Plain` a `Seq` changes what `folded_return` (filters empty
+  `Seq` children) and `fold_return_run` (counts children) see; needs a stage-corpus run.
+- `switch_plans.ifs.contains_key` in the rewrites (ctreeprint.rs, `boolreturn` matchers): read at
+  rewrite time, not print time; replacing them with `switch_of` differs when a later rewrite
+  turns a switch-merged node's statement into an empty sequence (`fold_return_run`).
 
 Left as is, on purpose: the per-kind emitters (`emit_block_if`, `emit_block_while_do`, the
 switch, loop and goto printers and their Rust/Go variants) still take the statement's origin

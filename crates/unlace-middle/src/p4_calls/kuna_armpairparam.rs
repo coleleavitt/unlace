@@ -31,7 +31,7 @@ crate::kuna_flag!(
     "armpairparam",
     "register-pair parameter joining",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 /// Whether `size` bytes at `addr` are exactly two consecutive general

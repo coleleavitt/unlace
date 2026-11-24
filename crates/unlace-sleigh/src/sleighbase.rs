@@ -26,6 +26,7 @@ use unlace_num::opcodes::{OpcodeDecoder, OpcodeEncoder};
 
 use unlace_num::pcoderaw::VarnodeData;
 
+use crate::kuna_lazytemplates::{self, LazyTemplates};
 use crate::semantics::ConstructTpl;
 use crate::slaformat as sla;
 use crate::slghpatexpress::PatternValue;
@@ -154,6 +155,9 @@ pub struct SleighBase {
     pub(crate) symtab: SymbolTable,
     /// Backing store for `ConstructTpl` (the `ConstructTplHandle` index space).
     pub(crate) templates: Vec<ConstructTpl>,
+    /// (kuna) The template store of a lazily decoded `.sla`; when it is not
+    /// empty it holds the handle space instead of `templates`.
+    lazy_templates: LazyTemplates,
     /// C++ `maxdelayslotbytes`.
     pub(crate) maxdelayslotbytes: u32,
     /// C++ `unique_allocatemask`.
@@ -176,6 +180,7 @@ impl SleighBase {
             root: None,
             symtab: SymbolTable::new(),
             templates: Vec::new(),
+            lazy_templates: LazyTemplates::new(),
             maxdelayslotbytes: 0,
             unique_allocatemask: 0,
             num_sections: 0,
@@ -470,7 +475,14 @@ impl SleighBase {
             .ok_or_else(|| KunaError::sleigh("constant space not registered"))?;
         let mut symtab = std::mem::take(&mut self.symtab);
         let mut templates = std::mem::take(&mut self.templates);
-        let decode_res = {
+        let mut lazy = LazyTemplates::new();
+        let decode_res = if kuna_lazytemplates::lazy_enabled() {
+            let mut trans = LazyTemplateDecoder {
+                const_space,
+                templates: &mut lazy,
+            };
+            symtab.decode(decoder, &mut trans)
+        } else {
             let mut trans = TemplateDecoder {
                 const_space,
                 templates: &mut templates,
@@ -479,6 +491,7 @@ impl SleighBase {
         };
         self.symtab = symtab;
         self.templates = templates;
+        self.lazy_templates = lazy;
         decode_res?;
 
         decoder.close_element(el)?;
@@ -581,7 +594,12 @@ impl SleighBase {
         self.manager
             .get_constant_space()
             .ok_or_else(|| KunaError::sleigh("constant space not registered"))?;
-        self.symtab.encode(encoder, &self.templates)?;
+        if self.lazy_templates.is_empty() {
+            self.symtab.encode(encoder, &self.templates)?;
+        } else {
+            let templates = self.lazy_templates.all(&self.manager)?;
+            self.symtab.encode(encoder, &templates)?;
+        }
 
         encoder.close_element(&sla::ELEM_SLEIGH);
         Ok(())
@@ -757,6 +775,26 @@ impl SleighBaseTrans for TemplateDecoder<'_> {
     }
 }
 
+/// (kuna) [`TemplateDecoder`] for a lazily decoded `.sla`
+/// (`kuna_lazytemplates`): keeps each template's bytes for its first use.
+struct LazyTemplateDecoder<'a> {
+    const_space: Rc<AddrSpace>,
+    templates: &'a mut LazyTemplates,
+}
+
+impl SleighBaseTrans for LazyTemplateDecoder<'_> {
+    fn get_constant_space(&self) -> Rc<AddrSpace> {
+        Rc::clone(&self.const_space)
+    }
+
+    fn decode_construct_tpl(
+        &mut self,
+        decoder: &mut dyn OpcodeDecoder,
+    ) -> KunaResult<(i32, ConstructTplHandle)> {
+        self.templates.take(decoder)
+    }
+}
+
 impl SleighBase {
     /// Convenience: the manager owning the spaces (for the engine).
     pub fn manager(&self) -> &AddrSpaceManager {
@@ -814,9 +852,33 @@ impl SleighBase {
         self.root
     }
 
-    /// Read access to the `ConstructTpl` arena (C++ template store).
+    /// Read access to the `ConstructTpl` arena (C++ template store) of a
+    /// compiled or eagerly decoded spec. A lazily decoded `.sla` keeps its
+    /// templates elsewhere and this is empty: the engine reads through
+    /// [`Self::template`].
     pub fn templates(&self) -> &[ConstructTpl] {
         &self.templates
+    }
+
+    /// (kuna) The template behind `handle`, from either store; a lazily decoded
+    /// one is decoded on its first use (`kuna_lazytemplates`).
+    pub fn template(&self, handle: ConstructTplHandle) -> KunaResult<&ConstructTpl> {
+        if self.lazy_templates.is_empty() {
+            return self
+                .templates
+                .get(handle)
+                .ok_or_else(|| KunaError::sleigh("bad ConstructTpl handle"));
+        }
+        self.lazy_templates.get(handle, &self.manager)
+    }
+
+    /// (kuna) The delay-slot count of the template behind `handle`, without
+    /// decoding a lazy one.
+    pub fn template_delay_slot(&self, handle: ConstructTplHandle) -> KunaResult<u32> {
+        if self.lazy_templates.is_empty() {
+            return self.template(handle).map(ConstructTpl::delay_slot);
+        }
+        self.lazy_templates.delay_slot(handle)
     }
 
     /// Mutable access to an arena-owned template by its handle.

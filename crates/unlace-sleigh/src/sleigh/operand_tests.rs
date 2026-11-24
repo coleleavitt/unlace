@@ -318,7 +318,6 @@ fn borrowed_builder_cursor_uses_target_tree_and_cross_addresses() {
         cross_ctx: Some(1),
         contexts: &contexts,
         table: &table,
-        templates: &[],
         engine: &engine,
         const_space: Rc::clone(&space),
         uniq_space: space,

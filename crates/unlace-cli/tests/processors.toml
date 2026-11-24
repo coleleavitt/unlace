@@ -64,6 +64,13 @@ visium = """
 04170008
 """
 
+xtensa_esp32s3_pie_loop = """
+36410024018334818384089e44019a52c5ff56d5fe0c021df0
+"""
+xtensa_esp32s3_pie_fused = """
+3641002e0dace13400aa44809a1df0
+"""
+
 # The native Blackfin language decompiles a raw image: a zero-overhead
 # hardware loop (LSETUP) becomes a loop, and a CALL with register arguments
 # and a multi-issue bundle decompiles to a call.
@@ -987,4 +994,38 @@ forbid = ["concat11"]  # the immediates are constants, not reads of the code byt
 expect = [
     "0x2000) = 0x35;",  # LDA #$1234; ADC #$0001 folds: low byte of $1235 to $2000
     "0x2001) = 0x12;",  # high byte to $2001
+]
+
+# The Xtensa ESP32-S3 language decodes the PIE (EE.*) vector instructions: a loop of two
+# post-incrementing 128-bit loads, a saturating byte add and a store, and a 32-bit fused
+# add-and-load. The base instructions were assembled with llvm-mc, the EE.* words encoded from
+# the field layout of Espressif's ESP32-S3 TableGen description.
+[[family]]
+name = "xtensa_esp32s3_pie_loop"
+language = "Xtensa:LE:32:esp32s3"
+base = "0x40000000"
+image = "xtensa_esp32s3_pie_loop"
+
+[[family.function]]
+test = "esp32s3_pie_vector_loop_decompiles"
+address = "0x40000000"
+expect = [
+    "a0 += 0x10;",
+    "a1 += 0x10;",
+    "*(char (*)[16])(a2 & 0xfffffff0) = ee_vadds_s8(*v1,*v2);",
+    "} while (a3);",
+]
+
+[[family]]
+name = "xtensa_esp32s3_pie_fused"
+language = "Xtensa:LE:32:esp32s3"
+base = "0x40000000"
+image = "xtensa_esp32s3_pie_fused"
+
+[[family.function]]
+test = "esp32s3_pie_fused_load_decompiles"
+address = "0x40000000"
+expect = [
+    "= ee_vadds_s16(",
+    "v2 = a0 + 0x10;",
 ]

@@ -6,6 +6,9 @@ mod chip8;
 mod common;
 #[path = "evm.rs"]
 mod evm;
+#[path = "ez80_raw.rs"]
+mod ez80_raw;
+
 #[path = "hexagon_hmx.rs"]
 mod hexagon_hmx;
 #[path = "huc6280.rs"]
@@ -25,6 +28,8 @@ mod mips_elf_selection;
 
 #[path = "v60.rs"]
 mod v60;
+#[path = "vax.rs"]
+mod vax;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
@@ -60,6 +65,8 @@ mod riscv_zcmp;
 mod riscv_zfa;
 #[path = "riscv_zfh.rs"]
 mod riscv_zfh;
+#[path = "riscv_zig_void_return.rs"]
+mod riscv_zig_void_return;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
 #[path = "sbpf.rs"]

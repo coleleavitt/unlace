@@ -4472,6 +4472,33 @@ moves.
   and a file larger than 64 MiB is refused. A header directory is not a
   library: `--types DIR` reads one.
 
+  *Several libraries, and IDA's choice.* `typelib a:b` reads a `:`-separated
+  list of library files, text or `.til`, asked in order: the first library
+  that declares a function wins, and a type the factory already holds from an
+  earlier library is used as it is. Under `auto`, when the environment
+  variable `UNLACE_TIL_DIR` names a directory of IDA type libraries (an IDA
+  install's `til` directory or its `pc` subdirectory), a PE also reads the
+  libraries IDA's x86 module and PDB plugin would load for it, ahead of the
+  built-in library (`library_sources`, `til_choice`). The PE optional-header
+  `Subsystem`, which `TypeLibPass` carries forward, decides the family: a
+  native image (1, a driver) reads `ntddk`, an EFI image (10 to 13) `uefi`,
+  and any other `mssdk`; an x64 image reads the `64` library of the family
+  (`mssdk64`, `ntddk64`, `uefi64`). Of each family the newest release
+  present is read (`_win10`, then `_win81`, `_win8`, `_win7`, `_vista`,
+  `_ws03`, `_xp`, `_2000`, `_nt`, then the bare name), and a user-mode or
+  native image also reads the newest Native API library (`ntapi`,
+  `ntapi64`). Which files were read, and any that could not be, is said once on
+  stderr (`[kuna typelib] UNLACE_TIL_DIR: read ...`); an unreadable library is
+  skipped, where a listed file that cannot be read is an error.
+
+  *Names beyond imports.* As IDA applies a library to every name in the
+  database, every library also declares a function the image defines when
+  FLIRT, FID or a PDB named it and nothing declared it
+  (`names_beyond_imports`): per address, the name the image's own metadata
+  states (a PDB) when every such name there agrees, else a signature name
+  (FLIRT, FID) when every signature name there agrees. An address that already
+  has a prototype, or is an import, is left alone.
+
   *After load.* A `--types` header or an `--assert prototype` for the same
   function replaces the library's declaration. A header's definition of a
   record the library already defined is rejected like any redefinition; `typelib

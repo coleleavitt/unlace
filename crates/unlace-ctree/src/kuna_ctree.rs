@@ -148,9 +148,11 @@ pub enum ExprKind {
     And(ExprId, ExprId),
     Or(ExprId, ExprId),
     Ternary(ExprId, ExprId, ExprId),
+    /// `dest = value`; `op` is the op the statement's markup points at.
     Assign {
         dest: VarnodeId,
         value: ExprId,
+        op: OpId,
     },
     Const {
         value: u64,
@@ -352,7 +354,9 @@ impl CTree {
                 self.expr_text(*a),
                 self.expr_text(*b)
             ),
-            ExprKind::Assign { dest, value } => format!("{dest:?} = {}", self.expr_text(*value)),
+            ExprKind::Assign { dest, value, .. } => {
+                format!("{dest:?} = {}", self.expr_text(*value))
+            }
             ExprKind::Const { value, size } => format!("{value:#x}:{size}"),
         }
     }

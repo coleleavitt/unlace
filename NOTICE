@@ -169,6 +169,10 @@ specs/Ghidra/Processors/N64RSP vendors the Nintendo 64 RSP SLEIGH specification 
 aleph-void/Ghidra-RSP (https://github.com/aleph-void/Ghidra-RSP), a fork of Random06457/Ghidra-RSP, released under the
 MIT License (its license file is in that directory).
 
+specs/Ghidra/Processors/SCORE7 vendors the Sunplus S+core (SCORE7) SLEIGH specification of
+aleph-void/ghidra-score7 (https://github.com/aleph-void/ghidra-score7), released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

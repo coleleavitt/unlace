@@ -10313,7 +10313,16 @@ commented `rethrow`; otherwise the nearest `lea rdx, [rip+d]` of a labelled
 belongs to the function whose `.pdata` record covers the call, followed through
 `UNW_FLAG_CHAININFO` to the primary record, so a split-off chunk comments its
 owner. An x86 image has no `.pdata` to name the owner, so its throw sites are not
-commented; its records are labelled.
+commented; its records are labelled. The records also name code
+(`kuna_msvceh.rs (member_symbols)`): a class `CatchableType`'s non-null copy
+constructor is `C::C` and a `ThrowInfo`'s non-null destructor is `C::~C` of the
+thrown class, `C` spelled as the RTTI pass spells it (templates dropped). An
+address two classes claim (an identical-code fold) is left unnamed, and a
+function the symbol table names keeps its name. Neither function is called
+directly, so the vftable-store ctor/dtor recovery (`vtabletypes`) never reached
+them: on Holley's `USBCAN-Driver.dll` IDA 9.5 names the copy constructors of
+`std::logic_error`, `std::out_of_range` and `std::bad_exception` and unlace left them
+`sub_`.
 
 **(kuna) MSVC try blocks are listed** (`msvceh`, the same pass;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvcfuncinfo.rs (decode_fh4)`).

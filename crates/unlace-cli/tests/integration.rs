@@ -1,11 +1,15 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
+#[path = "blackfin_raw.rs"]
+mod blackfin_raw;
 #[path = "c28x_raw.rs"]
 mod c28x_raw;
 #[path = "chip8.rs"]
 mod chip8;
 mod common;
+#[path = "frv_raw.rs"]
+mod frv_raw;
 #[path = "clipper_raw.rs"]
 mod clipper_raw;
 #[path = "fr_raw.rs"]
@@ -72,6 +76,8 @@ mod rust_signature_summary;
 mod sparc_prologue_start;
 #[path = "stm8_raw.rs"]
 mod stm8_raw;
+#[path = "tricore_tc18.rs"]
+mod tricore_tc18;
 #[path = "upd7725.rs"]
 mod upd7725;
 #[path = "uxn.rs"]

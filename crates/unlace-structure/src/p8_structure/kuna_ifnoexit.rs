@@ -28,6 +28,11 @@ pub struct ExitLeafFacts {
     pub java_handlers: std::collections::BTreeSet<BlockId>,
     /// (kuna `javatry`) The basic blocks that end in a dispatch.
     pub java_dispatch: std::collections::BTreeSet<BlockId>,
+    /// (kuna `noretfirst`) The blocks whose no-return halt follows a call: the
+    /// call sits in the block itself, or the halt has a block of its own and
+    /// every predecessor ends in a call.  A halt planted where a branch's
+    /// fall-through reached the next function (`funcboundflow`) is not here.
+    pub noreturn_call: std::collections::BTreeSet<BlockId>,
 }
 
 impl ExitLeafFacts {
@@ -42,6 +47,11 @@ impl ExitLeafFacts {
     /// produce the identical `return(#0x1:4)` shape from a decode failure.
     pub fn is_noreturn_halt(&self, bb: BlockId) -> bool {
         (self.halt_type(bb) & crate::op::pcodeop_flags::noreturn) != 0
+    }
+
+    /// Whether `bb` ends in a no-return halt that a call produced.
+    pub fn is_noreturn_call(&self, bb: BlockId) -> bool {
+        self.noreturn_call.contains(&bb)
     }
 }
 

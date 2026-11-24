@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="StarCore"
+            endian="little"
+            size="32"
+            variant="SC140"
+            version="1.0"
+            slafile="sc140.sla"
+            processorspec="starcore.pspec"
+            id="StarCore:LE:32:SC140">
+    <description>NXP StarCore SC140 DSP core (MSC81xx), little endian</description>
+    <compiler name="default" spec="starcore.cspec" id="default"/>
+  </language>
+</language_definitions>

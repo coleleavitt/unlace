@@ -4123,6 +4123,20 @@ literal append whose returned reference is used, an unprovable register-count
 append, a collapse whose continuation zeroes the changed registers, and 29 near
 misses, one defect each, that must stay unrolled in both passes.
 
+### Instruction buffer length (#98)
+
+The SLEIGH parser context buffers `MAX_INSTRUCTION_LEN` = 32 instruction bytes
+(`crates/unlace-sleigh/src/sleigh.rs`), twice upstream's 16, and `load_fill` reads
+that many at each decode. Long-operand ISAs need it: a NEC V60 Format II
+instruction with two double-displacement operands is 20 bytes, and VAX operand
+specifiers chain to well past 16. A read that starts past the buffer is still a
+`BadData` decode error ("Instruction is using more than 32 bytes"); the packed
+reads in `kuna_instructionbytes.rs` take any buffer width. A start address that
+is mapped zero-fills the rest of the read, as before, so a decode near the end of
+a segment sees the same bytes it did with 16. Valid x86 encodings stop at 15 bytes, so
+their decodes do not change; only a run of 16 to 31 redundant prefixes, which
+the CPU faults on, now decodes instead of failing.
+
 ### ARM CPSR control fields (GH-848)
 
 ARM-state `MRS CPSR` combines modeled NZCVQ flags with

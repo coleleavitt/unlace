@@ -13,9 +13,8 @@ run after the rebase and before the suite:
     never trust the merged value: `assert_rederived` re-derives every counter from a fresh
     capture on the rebased tree (scripts/repipe/counters.py) and asserts against the file.
 
-  shape C -- SILENT keep-both auto-merge. A `docs/baseline-stages.json` auto-merge left a
-    stale `data_footer: 375` against 381 real keys (#253), and five rounds of keep-both
-    resolution duplicated a row in `tests/stages/README.md`. Keep-both is git's safe default
+  shape C -- SILENT keep-both auto-merge. Five rounds of keep-both resolution duplicated a row in
+    `tests/stages/README.md` (#253 and later). Keep-both is git's safe default
     and it is exactly wrong for a counter or a table. `assert_keepboth` diffs against
     `origin/main` and asserts that nothing was REMOVED and nothing was ADDED TWICE.
 
@@ -49,11 +48,9 @@ from pathlib import Path
 from . import config, counters
 
 REL_BASELINE = "docs/baseline.json"
-REL_BASELINE_STAGES = "docs/baseline-stages.json"
 
 # The files a keep-both resolution silently corrupts: counters, tables and generated lists.
 KEEPBOTH_PATHS = (
-    REL_BASELINE_STAGES,
     "tests/stages/README.md",
     "docs/options.md",
     "crates/unlace-decomp/phases.toml",
@@ -195,7 +192,7 @@ def _footer_findings(path, rel, text, check):
                                footer[0], len(passing)),
                            "re-RECORD it, never merge it:\n"
                            "  UNLACE_BLESS=1 cargo test -p unlace-harness --test parity "
-                           "{}".format("datatests" if rel == "docs/baseline.json" else "stage_tests")))
+                           "datatests"))
     if len(footer) > 1 and footer[1] < footer[0]:
         out.append(Finding("C", check, REJECT, "impossible-footer", rel, 0,
                            "data_footer {} has more passing than total".format(footer)))
@@ -261,21 +258,6 @@ def _catalog_count_key(baseline, phases, catalog, xml):
         return None
 
 
-def _catalog_count_rename(base_text, head_text, base_ref, repo):
-    """Permit only one derived catalog-count key replacement, without changing files."""
-    evidence = (counters.REL_PHASES_TOML, counters.REL_CATALOG_FIXTURE,
-                counters.REL_CATALOG_XML)
-    base = _catalog_count_key(base_text, *(show(base_ref, rel, repo) for rel in evidence))
-    try:
-        head = _catalog_count_key(head_text, *((repo / rel).read_text(encoding="utf-8")
-                                              for rel in evidence))
-    except (OSError, UnicodeError):
-        return None
-    if base is None or head is None or base[1] >= head[1] or base[2] != head[2]:
-        return None
-    return base[0], head[0]
-
-
 def assert_keepboth(path, base_ref="origin/main", repo=None):
     """Shape C. Diff ``path`` against ``base_ref``: nothing REMOVED, nothing ADDED TWICE.
 
@@ -309,15 +291,6 @@ def assert_keepboth(path, base_ref="origin/main", repo=None):
     head_c = collections.Counter(_norm(l) for l in head_text.splitlines() if _significant(l))
 
     removed = [(l, n - head_c.get(l, 0)) for l, n in base_c.items() if head_c.get(l, 0) < n]
-    if rel == REL_BASELINE_STAGES and removed:
-        rename = _catalog_count_rename(base_text, head_text, base_ref, root)
-        if rename is not None:
-            old, new = (json.dumps(key) for key in rename)
-            if base_c[old] == head_c[new] == 1 and head_c[old] == base_c[new] == 0:
-                removed = [(line, missing) for line, missing in removed if line != old]
-                out.append(Finding("C", "assert-keepboth", INFO, "catalog-count-renamed", rel, 0,
-                                   "catalog assertion key follows the derived registry count",
-                                   "{} -> {}".format(*rename)))
     for line, missing in sorted(removed)[:20]:
         out.append(Finding("C", "assert-keepboth", REJECT, "line-removed", rel, 0,
                            "{} line(s) present on {} are gone".format(missing, base_ref),
@@ -479,56 +452,6 @@ def _selftest_shape_b(root):
     }
 
 
-def _selftest_shape_c(root):
-    """keep-both merged both sides' new keys; data_footer stayed at the pre-merge count.
-
-    The #253 shape: neither branch touched the footer, so there is nothing to conflict on
-    and the merged file claims 375 while carrying 381 keys.
-    """
-    repo = _new_repo(os.path.join(root, "shape-c"))
-    rel = "docs/baseline-stages.json"
-
-    def doc(keys, footer):
-        return json.dumps({"data_footer": [footer, footer], "passing": keys,
-                           "returncode": 0, "unit_footer": None}, indent=2) + "\n"
-
-    keys = ["data:STAGE #{:04d}: a stage assertion that is long enough to be significant".format(i)
-            for i in range(1, 376)]
-    _write(repo, rel, doc(keys, 375))
-    _sh(repo, "add", "-A"), _sh(repo, "commit", "-qm", "base: 375 keys")
-    _sh(repo, "branch", "theirs")
-
-    ours = keys[:10] + ["data:OURS #{}: a new stage assertion from our branch".format(i)
-                        for i in range(1, 4)] + keys[10:]
-    _write(repo, rel, doc(ours, 375))
-    _sh(repo, "add", "-A"), _sh(repo, "commit", "-qm", "ours: +3 keys")
-
-    _sh(repo, "checkout", "-q", "theirs")
-    theirs = keys + ["data:THEIRS #{}: a new stage assertion from their branch".format(i)
-                     for i in range(1, 4)]
-    _write(repo, rel, doc(theirs, 375))
-    _sh(repo, "add", "-A"), _sh(repo, "commit", "-qm", "theirs: +3 keys")
-
-    _sh(repo, "checkout", "-q", "main")
-    rc, _, _ = _sh(repo, "merge", "--no-edit", "-q", "theirs")
-
-    merged = json.loads((Path(repo) / rel).read_text(encoding="utf-8"))
-    findings = assert_keepboth(rel, "theirs", repo=repo)
-    stale = [f for f in findings if f.id == "stale-footer"]
-    caught = rc == 0 and bool(stale) and merged["data_footer"][0] != len(merged["passing"])
-    return {
-        "case": "C",
-        "name": "silent keep-both auto-merge (stale data_footer)",
-        "caught": caught,
-        "log": "shape-C-averted" if caught else "shape-C-MISSED",
-        "merge_conflicted": rc != 0,
-        "merged_footer": merged["data_footer"][0],
-        "real_key_count": len(merged["passing"]),
-        "findings": [f.oneline() for f in findings],
-        "repo": repo,
-    }
-
-
 def _selftest_shape_c2(root):
     """Five rounds of keep-both duplicated a row in tests/stages/README.md.
 
@@ -579,7 +502,7 @@ def self_test(keep=False):
         return {"ok": False, "error": "git not on PATH"}
     root = tempfile.mkdtemp(prefix="repipe-mergecheck-selftest-")
     try:
-        cases = [_selftest_shape_b(root), _selftest_shape_c(root), _selftest_shape_c2(root)]
+        cases = [_selftest_shape_b(root), _selftest_shape_c2(root)]
         return {"ok": all(c["caught"] for c in cases), "scratch": root, "cases": cases}
     finally:
         if not keep:

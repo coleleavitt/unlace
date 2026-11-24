@@ -4789,6 +4789,15 @@ emitted the way `mba` emits its own (`unlace_mba::replace`): new ops before the
 root, the root a `COPY` of the result, and a subterm the old tree already
 computes reused.
 
+Each accepted replacement is marked with how far it was checked. `Proved`:
+`mba::prove_equal` returned true at the tree's full width. `Screened`: the
+proof did not run (more than three leaves) or was inconclusive, or the
+replacement is a closed-form seed of a tree with one bitwise op (checked on
+random inputs only). A screened replacement adds one header note to the
+function, `WARNING: egraph: an MBA expression in this function was simplified
+without a full-width proof ...`, which the comment database keeps once per
+function. The marks report the checks; acceptance is unchanged.
+
 **Measured** (pinned build 54380310a5, with the once-per-tree-value
 regrouping). The corpus: functions whose return value is a 1-4 variable
 expression (sometimes with a 32-bit constant) hidden by OLLVM-style

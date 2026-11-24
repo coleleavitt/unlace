@@ -27,6 +27,10 @@
 //!    (run for at most three leaves, where it proves equality at the full
 //!    width). The checks guard the lowering in both directions; equality
 //!    itself follows from the rules being identities.
+//!
+//! An accepted expression is marked [`Proof::Proved`] when `prove_equal` proved
+//! it equal at the full width; otherwise [`Proof::Screened`], and the function
+//! gets a header note (see `SCREENED_NOTE`). Acceptance does not depend on it.
 
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
@@ -369,6 +373,19 @@ fn run(eg: EGraph<Bv, Fold>, mask: u64, nodes: usize, iters: usize) -> Runner<Bv
         .run(rules())
 }
 
+/// How far an accepted expression was checked against the tree it replaces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Proof {
+    /// [`mba::prove_equal`] proved the two equal at the tree's full width.
+    Proved,
+    /// Only the random full-width inputs and the small-width check agreed.
+    Screened,
+}
+
+/// The header note of a function with a screened rewrite. One text for every
+/// rewrite, so the comment database keeps one line per function.
+const SCREENED_NOTE: &str = "egraph: an MBA expression in this function was simplified without a full-width proof (checked on 64 random inputs and on every input at up to 8 bits); the simplification is assumed correct";
+
 /// The cheapest expression equal to `f` (`n` leaves, `bits` wide) that saturation
 /// finds, when it has fewer than `budget` ops and fewer than `bit_budget`
 /// bitwise ops and passes the checks. Saturation runs in two rounds: a quick
@@ -382,7 +399,7 @@ pub(crate) fn saturate(
     bits: u32,
     budget: usize,
     bit_budget: usize,
-) -> Option<Expr> {
+) -> Option<(Expr, Proof)> {
     if n == 0 || n > MAX_LEAVES {
         return None;
     }
@@ -399,7 +416,7 @@ pub(crate) fn saturate(
         let s = add(&mut eg, &s, n, mask, false);
         eg.union(root, s);
     }
-    let check = |runner: &Runner<Bv, Fold, ()>| -> Option<Expr> {
+    let check = |runner: &Runner<Bv, Fold, ()>| -> Option<(Expr, Proof)> {
         let root = runner.egraph.find(root);
         let (_, best) = Extractor::new(&runner.egraph, OpCount).find_best(root);
         let simple = lower(&best, best.root())?;
@@ -413,11 +430,11 @@ pub(crate) fn saturate(
         let proof = (n <= MAX_NONLINEAR_LEAVES)
             .then(|| mba::prove_equal(f, &simple, n, bits))
             .flatten();
-        let ok = match proof {
-            Some(p) => p,
-            None => agree_exhaustive(f, &simple, n),
-        };
-        ok.then_some(simple)
+        match proof {
+            Some(true) => Some((simple, Proof::Proved)),
+            Some(false) => None,
+            None => agree_exhaustive(f, &simple, n).then_some((simple, Proof::Screened)),
+        }
     };
     let quick = run(eg, mask, QUICK_NODE_LIMIT, QUICK_ITER_LIMIT);
     if let Some(s) = check(&quick) {
@@ -525,7 +542,9 @@ impl Rule for RuleEgraphSimplify {
         // A tree with one bitwise op has no MBA identity to compose; the
         // closed forms of `mba` are all it gets, without an e-graph.
         let simple = if bitwise_ops(&t.expr) < 2 {
-            mba_seed(&t.expr, t.n, mba::mask_of(size)).filter(|s| s.ops() < t.budget)
+            mba_seed(&t.expr, t.n, mba::mask_of(size))
+                .filter(|s| s.ops() < t.budget)
+                .map(|s| (s, Proof::Screened))
         } else {
             // A tree already regrouped once may only lose bitwise ops now,
             // which saturation checks before the evaluations do.
@@ -536,7 +555,7 @@ impl Rule for RuleEgraphSimplify {
             };
             saturate(&t.expr, t.n, 8 * size as u32, t.budget, bits_cap)
         };
-        let Some(simple) = simple else {
+        let Some((simple, proof)) = simple else {
             self.barren.insert(key);
             return 0;
         };
@@ -548,7 +567,11 @@ impl Rule for RuleEgraphSimplify {
             return 0;
         }
         let rw = t.into_rewrite(simple);
-        mba::replace(data, op, &rw, size)
+        let done = mba::replace(data, op, &rw, size);
+        if done != 0 && proof == Proof::Screened {
+            data.warning_header(SCREENED_NOTE);
+        }
+        done
     }
 }
 
@@ -585,7 +608,7 @@ mod tests {
             bx(Expr::Xor(l(0), l(1))),
             bx(Expr::Mul(bx(Expr::And(l(0), l(1))), 2)),
         );
-        let s = saturate(&f, 2, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
+        let (s, _) = saturate(&f, 2, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
         assert_eq!(s.ops(), 1);
         assert!(mba::agree(&f, &s, 2, 0xffff_ffff));
     }
@@ -596,7 +619,8 @@ mod tests {
             bx(Expr::Xor(l(0), k(0x3039))),
             bx(Expr::Mul(bx(Expr::And(l(0), k(0x3039))), 2)),
         );
-        let s = saturate(&f, 1, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
+        let (s, proof) = saturate(&f, 1, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
+        assert_eq!(proof, Proof::Proved);
         assert_eq!(s.ops(), 1);
         assert_eq!(mba::prove_equal(&f, &s, 1, 32), Some(true));
     }
@@ -610,7 +634,7 @@ mod tests {
             bx(Expr::Mul(bx(Expr::And(l(0), l(1))), 2)),
         );
         let f = Expr::Sub(bx(a), bx(b));
-        let s = saturate(&f, 2, 64, f.ops(), bitwise_ops(&f)).expect("saturates");
+        let (s, _) = saturate(&f, 2, 64, f.ops(), bitwise_ops(&f)).expect("saturates");
         assert_eq!(s, Expr::Const(0));
     }
 
@@ -622,7 +646,8 @@ mod tests {
             bx(Expr::Xor(bx(t.clone()), l(2))),
             bx(Expr::Mul(bx(Expr::And(bx(t), l(2))), 2)),
         );
-        let s = saturate(&f, 3, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
+        let (s, proof) = saturate(&f, 3, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
+        assert_eq!(proof, Proof::Proved);
         assert_eq!(s.ops(), 2);
         assert!(mba::agree(&f, &s, 3, 0xffff_ffff));
         assert_eq!(mba::prove_equal(&f, &s, 3, 32), Some(true));

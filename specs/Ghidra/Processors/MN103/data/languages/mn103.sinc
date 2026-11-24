@@ -1,0 +1,465 @@
+# Matsushita/Panasonic MN10300 family (MN1030, AM33, AM33-2) instruction set.
+#
+# Rewritten for Ghidra-Rare. The variant .slaspec files select the instruction sets:
+#   AM33    defined: AM33 extended registers and instructions (r0-r7/e0-e7, xr, D6-D10 formats)
+#   AM33_2  defined: AM33-2 single/double precision FPU on top of AM33
+# The repetitive families, including the FPU, are generated into mn103_gen.sinc by
+# tools/gen_mn103_sleigh.py.
+# Operand text follows GNU objdump so that the decode can be diffed against it. Semantics of the
+# MN1030 instructions follow the MN1030/MN103S instruction manual (13250-040E). The AM33 and AM33-2
+# extensions have no public manual: their semantics come from compiled C whose results are known
+# (test/ctest), from the manual's definition of the same mnemonic, or, where neither establishes
+# them, the instruction is a pcodeop. GHIDRA-RARE.md lists which is which.
+
+define endian=little;
+define alignment=1;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0x00 size=4 [ D0 D1 D2 D3 A0 A1 A2 A3 ];
+define register offset=0x20 size=4 [ SP PC MDR LIR LAR ];
+# PSW (manual: Z, N, C, V in bits 0-3). The flags are kept in separate byte registers so the
+# decompiler can track them; reads and writes of PSW pack and unpack them. The AM33 EPSW is only
+# reached through pcodeops (its layout is not documented publicly).
+define register offset=0x40 size=2 [ PSW ];
+define register offset=0x48 size=1 [ ZF NF CF VF ];
+@ifdef AM33
+# r0-r7 are the AM33 extended registers e0-e7; r8-r15 are a0-a3 and d0-d3.
+define register offset=0x60 size=4 [ R0 R1 R2 R3 R4 R5 R6 R7 ];
+define register offset=0x80 size=4 [ USP SSP MSP ];
+# Extended system registers xr1-xr15 as objdump names them (xr0 is sp).
+define register offset=0xa0 size=4 [ XR1 XR2 XR3 XR4 XR5 XR6 XR7 XR8 XR9 XR10 XR11 XR12 XR13 XR14 XR15 ];
+@endif
+@ifdef AM33_2
+define register offset=0x100 size=4 [ FS0 FS1 FS2 FS3 FS4 FS5 FS6 FS7 FS8 FS9 FS10 FS11 FS12 FS13 FS14 FS15
+                                      FS16 FS17 FS18 FS19 FS20 FS21 FS22 FS23 FS24 FS25 FS26 FS27 FS28 FS29 FS30 FS31 ];
+# The double registers fdN are modelled as registers of their own: how they share storage with
+# fsN/fsN+1 is not established.
+define register offset=0x180 size=8 [ FD0 FD2 FD4 FD6 FD8 FD10 FD12 FD14 FD16 FD18 FD20 FD22 FD24 FD26 FD28 FD30 ];
+# FPU compare result (less, greater, equal, unordered) set by fcmp and tested by fbcc/flcc. Where
+# these sit in FPCR is not established, so moves to and from FPCR are pcodeops.
+define register offset=0x4c size=1 [ FCC_L FCC_G FCC_E FCC_U ];
+@endif
+# Scratch pointer used by the register-list helpers of movm/call/ret.
+define register offset=0x200 size=4 [ mvptr ];
+
+# loop_top: address after the last SETLB on the flow path, so Lcc can branch statically.
+define register offset=0x300 size=8 [ contextreg ];
+define context contextreg
+	loop_top = (0,31)
+	loop_valid = (32,32)
+;
+
+# ---------------------------------------------------------------------------------------------
+# Tokens. b0..b3 are the opcode/register bytes at offsets 0..3 of an instruction.
+
+define token b0tok (8)
+	op0     = (0,7)
+	op0_74  = (4,7)
+	op0_72  = (2,7)
+	op0_10  = (0,1)
+	op0_32  = (2,3)
+	op0_30  = (0,3)
+	dn0_0   = (0,1)
+	an0_0   = (0,1)
+	dm1_0   = (2,3)
+	am1_0   = (2,3)
+	dn1_0   = (2,3)
+	an1_0   = (2,3)
+;
+
+define token b1tok (8)
+	op1     = (0,7)
+	op1_74  = (4,7)
+	op1_72  = (2,7)
+	op1_76  = (6,7)
+	op1_10  = (0,1)
+	op1_32  = (2,3)
+	op1_30  = (0,3)
+	op1_54  = (4,5)
+	fsn1_1  = (0,1)
+	fsn1b_1 = (0,1)
+	dn0_1   = (0,1)
+	an0_1   = (0,1)
+	dm1_1   = (2,3)
+	am1_1   = (2,3)
+	di_1    = (2,3)
+	dn2_1   = (4,5)
+	an2_1   = (4,5)
+	dm2_1   = (4,5)
+	am2_1   = (4,5)
+	imm4_1  = (0,3) dec
+	rn0_1   = (0,3)
+	rm0_1   = (0,3)
+	rn2_1   = (4,7)
+	rm2_1   = (4,7)
+	rmid_1  = (2,5)
+	regs1   = (0,7)
+	b1_7    = (7,7)
+	b1_6    = (6,6)
+	b1_5    = (5,5)
+	b1_4    = (4,4)
+	b1_3    = (3,3)
+	b1_2    = (2,2)
+	b1_1    = (1,1)
+	b1_0    = (0,0)
+;
+
+define token b2tok (8)
+	op2     = (0,7)
+	op2_74  = (4,7)
+	op2_30  = (0,3)
+	rn0_2   = (0,3)
+	rm0_2   = (0,3)
+	rn2_2   = (4,7)
+	rm2_2   = (4,7)
+	xrn0_2  = (0,3)
+	xrm2_2  = (4,7)
+	imm4h_2 = (4,7) dec
+	simm4h_2 = (4,7) signed dec
+	fsh_2   = (4,7)
+	fshb_2  = (4,7)
+	fsl_2   = (0,3)
+	fslb_2  = (0,3)
+	fdh_2   = (5,7)
+	fdhb_2  = (5,7)
+	fdl_2   = (1,3)
+	fdlb_2  = (1,3)
+	b2_4    = (4,4)
+	b2_74   = (4,7)
+	regs2   = (0,7)
+	b2_3    = (3,3)
+	b2_2    = (2,2)
+	b2_1    = (1,1)
+	b2_0    = (0,0)
+;
+
+define token b3tok (8)
+	op3     = (0,7)
+	op3_30  = (0,3)
+	op3_74  = (4,7)
+	rn0_3   = (0,3)
+	rm2_3   = (4,7)
+	rd0_3   = (0,3)
+	rd2_3   = (4,7)
+	imm4h_3 = (4,7) dec
+	simm4h_3 = (4,7) signed dec
+	fsh_3   = (4,7)
+	fshb_3  = (4,7)
+	fdh_3   = (5,7)
+	fdhb_3  = (5,7)
+	b3_4    = (4,4)
+	imm4l_3 = (0,3) dec
+	b3_3    = (3,3)
+	b3_2    = (2,2)
+	b3_1    = (1,1)
+	b3_0    = (0,0)
+;
+
+define token i8tok (8)
+	imm8    = (0,7) dec
+	simm8   = (0,7) signed dec
+	rel8    = (0,7) signed
+	regs8   = (0,7)
+	abs8    = (0,7)
+;
+define token i16tok (16)
+	imm16   = (0,15) dec
+	simm16  = (0,15) signed dec
+	abs16   = (0,15)
+	rel16   = (0,15) signed
+;
+define token i24tok (24)
+	imm24   = (0,23) dec
+	simm24  = (0,23) signed dec
+	abs24   = (0,23)
+;
+define token i32tok (32)
+	imm32   = (0,31) dec
+	simm32  = (0,31) signed dec
+	abs32   = (0,31)
+	rel32   = (0,31) signed
+;
+
+attach variables [ dn0_0 dm1_0 dn1_0 dn0_1 dm1_1 di_1 dn2_1 dm2_1 ] [ D0 D1 D2 D3 ];
+attach variables [ an0_0 am1_0 an1_0 an0_1 am1_1 an2_1 am2_1 ] [ A0 A1 A2 A3 ];
+@ifdef AM33
+attach variables [ rn0_1 rm0_1 rn2_1 rm2_1 rmid_1 rn0_2 rm0_2 rn2_2 rm2_2 rn0_3 rm2_3 rd0_3 rd2_3 ]
+	[ R0 R1 R2 R3 R4 R5 R6 R7 A0 A1 A2 A3 D0 D1 D2 D3 ];
+attach variables [ xrn0_2 xrm2_2 ] [ SP XR1 XR2 XR3 XR4 XR5 XR6 XR7 XR8 XR9 XR10 XR11 XR12 XR13 XR14 XR15 ];
+@endif
+
+@ifdef AM33_2
+attach variables [ fsh_2 fsl_2 fsh_3 ] [ FS0 FS1 FS2 FS3 FS4 FS5 FS6 FS7 FS8 FS9 FS10 FS11 FS12 FS13 FS14 FS15 ];
+attach variables [ fshb_2 fslb_2 fshb_3 ] [ FS16 FS17 FS18 FS19 FS20 FS21 FS22 FS23 FS24 FS25 FS26 FS27 FS28 FS29 FS30 FS31 ];
+attach variables [ fdh_2 fdl_2 fdh_3 ] [ FD0 FD2 FD4 FD6 FD8 FD10 FD12 FD14 ];
+attach variables [ fdhb_2 fdlb_2 fdhb_3 ] [ FD16 FD18 FD20 FD22 FD24 FD26 FD28 FD30 ];
+attach variables [ fsn1_1 ] [ FS0 FS1 FS2 FS3 ];
+attach variables [ fsn1b_1 ] [ FS4 FS5 FS6 FS7 ];
+@endif
+
+define pcodeop trap;
+define pcodeop syscall;
+define pcodeop software_break;
+define pcodeop return_from_monitor;
+define pcodeop user_defined;
+define pcodeop user_defined_imm;
+
+# ---------------------------------------------------------------------------------------------
+# Flag helpers
+
+macro getPSW(v) {
+	v = (zext(PSW) & 0xfff0) | (zext(VF) << 3) | (zext(CF) << 2) | (zext(NF) << 1) | zext(ZF);
+}
+macro setPSWflags(v) {
+	ZF = (v & 1) != 0;
+	NF = (v & 2) != 0;
+	CF = (v & 4) != 0;
+	VF = (v & 8) != 0;
+}
+macro resZN(r) {
+	ZF = (r == 0);
+	NF = (r s< 0);
+}
+macro addFlags(a, b, r) {
+	CF = carry(a, b);
+	VF = scarry(a, b);
+	resZN(r);
+}
+# r = a - b
+macro subFlags(a, b, r) {
+	CF = a < b;
+	VF = sborrow(a, b);
+	resZN(r);
+}
+macro logicFlags(r) {
+	resZN(r);
+	CF = 0;
+	VF = 0;
+}
+
+# ---------------------------------------------------------------------------------------------
+# Operand subtables
+
+# PC-relative targets are relative to the start of the instruction.
+REL8:  addr is rel8  [ addr = inst_start + rel8; ]  { export *[ram]:4 addr; }
+REL16: addr is rel16 [ addr = inst_start + rel16; ] { export *[ram]:4 addr; }
+REL32: addr is rel32 [ addr = inst_start + rel32; ] { export *[ram]:4 addr; }
+
+
+# ---------------------------------------------------------------------------------------------
+# Register lists of movm/call/ret (manual): bit 7 d2, 6 d3, 5 a2, 4 a3, 3 other (d0 d1 a0 a1 mdr lir
+# lar). AM33 bits 2 exreg0, 1 exreg1, 0 exother (names as objdump prints them). exreg1 is r4-r7,
+# saved above d2 with r4 highest: GCC saves r4-r7 with it and its DWARF CFI places them there.
+# Which registers exreg0 and exother hold, and their save-area size, is not established: those
+# groups are pcodeops that leave the walk pointer unknown.
+
+RL_d2: "d2"    is b1_7=1 { }
+RL_d3: "d3"    is b1_6=1 { }
+RL_a2: "a2"    is b1_5=1 { }
+RL_a3: "a3"    is b1_4=1 { }
+RL_ot: "other" is b1_3=1 { }
+RL_e0: "exreg0" is b1_2=1 { }
+RL_e1: "exreg1" is b1_1=1 { }
+RL_ex: "exother" is b1_0=1 { }
+
+# Display of the list in objdump order, joining names with commas.
+RL7: RL_ex is RL_ex & b1_0=1 { }
+RL7: "" is b1_0=0 { }
+RL6: RL_e1 is RL_e1 & b1_1=1 & b1_0=0 { }
+RL6: RL_e1^","^RL7 is RL_e1 & b1_1=1 & RL7 { }
+RL6: RL7 is b1_1=0 & RL7 { }
+RL5: RL_e0 is RL_e0 & b1_2=1 & b1_1=0 & b1_0=0 { }
+RL5: RL_e0^","^RL6 is RL_e0 & b1_2=1 & RL6 { }
+RL5: RL6 is b1_2=0 & RL6 { }
+RL4: RL_ot is RL_ot & b1_3=1 & b1_2=0 & b1_1=0 & b1_0=0 { }
+RL4: RL_ot^","^RL5 is RL_ot & b1_3=1 & RL5 { }
+RL4: RL5 is b1_3=0 & RL5 { }
+RL3: RL_a3 is RL_a3 & b1_4=1 & b1_3=0 & b1_2=0 & b1_1=0 & b1_0=0 { }
+RL3: RL_a3^","^RL4 is RL_a3 & b1_4=1 & RL4 { }
+RL3: RL4 is b1_4=0 & RL4 { }
+RL2: RL_a2 is RL_a2 & b1_5=1 & b1_4=0 & b1_3=0 & b1_2=0 & b1_1=0 & b1_0=0 { }
+RL2: RL_a2^","^RL3 is RL_a2 & b1_5=1 & RL3 { }
+RL2: RL3 is b1_5=0 & RL3 { }
+RL1: RL_d3 is RL_d3 & b1_6=1 & b1_5=0 & b1_4=0 & b1_3=0 & b1_2=0 & b1_1=0 & b1_0=0 { }
+RL1: RL_d3^","^RL2 is RL_d3 & b1_6=1 & RL2 { }
+RL1: RL2 is b1_6=0 & RL2 { }
+RL0: RL_d2 is RL_d2 & b1_7=1 & b1_6=0 & b1_5=0 & b1_4=0 & b1_3=0 & b1_2=0 & b1_1=0 & b1_0=0 { }
+RL0: RL_d2^","^RL1 is RL_d2 & b1_7=1 & RL1 { }
+RL0: RL1 is b1_7=0 & RL1 { }
+REGLIST: "["^RL0^"]" is RL0 { }
+
+# Pushes (movm regs,(sp) and call): mvptr walks down from the starting address, highest group
+# first: d2, d3, a2, a3, other (manual), with the AM33 groups first (exreg1 established above d2;
+# the place of exreg0 and exother is not).
+@ifdef AM33
+define pcodeop movm_save_exreg0;
+define pcodeop movm_save_exother;
+define pcodeop movm_restore_exreg0;
+define pcodeop movm_restore_exother;
+PU_e0: is b1_2=0 { }
+PU_e0: is b1_2=1 { mvptr = movm_save_exreg0(mvptr); }
+PU_e1: is b1_1=0 { }
+PU_e1: is b1_1=1 { mvptr = mvptr - 4; *:4 mvptr = R4; mvptr = mvptr - 4; *:4 mvptr = R5;
+                   mvptr = mvptr - 4; *:4 mvptr = R6; mvptr = mvptr - 4; *:4 mvptr = R7; }
+PU_ex: is b1_0=0 { }
+PU_ex: is b1_0=1 { mvptr = movm_save_exother(mvptr); }
+@endif
+PU_d2: is b1_7=0 { }
+PU_d2: is b1_7=1 { mvptr = mvptr - 4; *:4 mvptr = D2; }
+PU_d3: is b1_6=0 { }
+PU_d3: is b1_6=1 { mvptr = mvptr - 4; *:4 mvptr = D3; }
+PU_a2: is b1_5=0 { }
+PU_a2: is b1_5=1 { mvptr = mvptr - 4; *:4 mvptr = A2; }
+PU_a3: is b1_4=0 { }
+PU_a3: is b1_4=1 { mvptr = mvptr - 4; *:4 mvptr = A3; }
+PU_ot: is b1_3=0 { }
+PU_ot: is b1_3=1 { mvptr = mvptr - 4; *:4 mvptr = D0; mvptr = mvptr - 4; *:4 mvptr = D1;
+                   mvptr = mvptr - 4; *:4 mvptr = A0; mvptr = mvptr - 4; *:4 mvptr = A1;
+                   mvptr = mvptr - 4; *:4 mvptr = MDR; mvptr = mvptr - 4; *:4 mvptr = LIR;
+                   mvptr = mvptr - 4; *:4 mvptr = LAR; mvptr = mvptr - 4; }
+@ifdef AM33
+PUSHLIST: is PU_e0 & PU_e1 & PU_ex & PU_d2 & PU_d3 & PU_a2 & PU_a3 & PU_ot {
+	build PU_e0; build PU_e1; build PU_ex; build PU_d2; build PU_d3; build PU_a2; build PU_a3; build PU_ot;
+}
+@else
+PUSHLIST: is PU_d2 & PU_d3 & PU_a2 & PU_a3 & PU_ot {
+	build PU_d2; build PU_d3; build PU_a2; build PU_a3; build PU_ot;
+}
+@endif
+
+# Pops: mvptr walks down from the top of the save area (the reverse walk of a push reads the same
+# slots), so a pop reads the slot each push wrote.
+@ifdef AM33
+PO_e0: is b1_2=0 { }
+PO_e0: is b1_2=1 { mvptr = movm_restore_exreg0(mvptr); }
+PO_e1: is b1_1=0 { }
+PO_e1: is b1_1=1 { mvptr = mvptr - 4; R4 = *:4 mvptr; mvptr = mvptr - 4; R5 = *:4 mvptr;
+                   mvptr = mvptr - 4; R6 = *:4 mvptr; mvptr = mvptr - 4; R7 = *:4 mvptr; }
+PO_ex: is b1_0=0 { }
+PO_ex: is b1_0=1 { mvptr = movm_restore_exother(mvptr); }
+@endif
+PO_d2: is b1_7=0 { }
+PO_d2: is b1_7=1 { mvptr = mvptr - 4; D2 = *:4 mvptr; }
+PO_d3: is b1_6=0 { }
+PO_d3: is b1_6=1 { mvptr = mvptr - 4; D3 = *:4 mvptr; }
+PO_a2: is b1_5=0 { }
+PO_a2: is b1_5=1 { mvptr = mvptr - 4; A2 = *:4 mvptr; }
+PO_a3: is b1_4=0 { }
+PO_a3: is b1_4=1 { mvptr = mvptr - 4; A3 = *:4 mvptr; }
+PO_ot: is b1_3=0 { }
+PO_ot: is b1_3=1 { mvptr = mvptr - 4; D0 = *:4 mvptr; mvptr = mvptr - 4; D1 = *:4 mvptr;
+                   mvptr = mvptr - 4; A0 = *:4 mvptr; mvptr = mvptr - 4; A1 = *:4 mvptr;
+                   mvptr = mvptr - 4; MDR = *:4 mvptr; mvptr = mvptr - 4; LIR = *:4 mvptr;
+                   mvptr = mvptr - 4; LAR = *:4 mvptr; mvptr = mvptr - 4; }
+@ifdef AM33
+POPLIST: is PO_e0 & PO_e1 & PO_ex & PO_d2 & PO_d3 & PO_a2 & PO_a3 & PO_ot {
+	build PO_e0; build PO_e1; build PO_ex; build PO_d2; build PO_d3; build PO_a2; build PO_a3; build PO_ot;
+}
+@else
+POPLIST: is PO_d2 & PO_d3 & PO_a2 & PO_a3 & PO_ot {
+	build PO_d2; build PO_d3; build PO_a2; build PO_a3; build PO_ot;
+}
+@endif
+# Size in bytes of the save area of a register list (exreg0/exother excluded: see movm).
+LISTSIZE: sz is regs1 [ sz = 4 * (((regs1 >> 7) & 1) + ((regs1 >> 6) & 1) + ((regs1 >> 5) & 1) + ((regs1 >> 4) & 1))
+@ifdef AM33
+	+ 32 * ((regs1 >> 3) & 1) + 16 * ((regs1 >> 1) & 1);
+@else
+	+ 32 * ((regs1 >> 3) & 1);
+@endif
+	] { export *[const]:4 sz; }
+
+
+# Division: the 64-bit dividend MDR:dst is divided by src; quotient to dst, remainder to MDR.
+# Division by zero, or a quotient that does not fit in 32 bits, sets V; dst and MDR are then
+# undefined (left unchanged here). C is undefined (cleared).
+macro divs(dst, src) {
+	local n:8 = (zext(MDR) << 32) | zext(dst);
+	local d:8 = sext(src);
+	CF = 0;
+	VF = 1;
+	if (src == 0) goto <dz>;
+	local r:8 = n s% d; local q:8 = n s/ d;
+	VF = (q s> 0x7fffffff) || (q s< -0x80000000);
+	if (VF) goto <dz>;
+	MDR = r:4; dst = q:4;
+<dz>
+	resZN(dst);
+}
+macro divu(dst, src) {
+	local n:8 = (zext(MDR) << 32) | zext(dst);
+	local d:8 = zext(src);
+	CF = 0;
+	VF = 1;
+	if (src == 0) goto <dz>;
+	local r:8 = n % d; local q:8 = n / d;
+	VF = q > 0xffffffff;
+	if (VF) goto <dz>;
+	MDR = r:4; dst = q:4;
+<dz>
+	resZN(dst);
+}
+@ifdef AM33
+# AM33 operations whose semantics are not established (see GHIDRA-RARE.md).
+define pcodeop mac;
+define pcodeop macu;
+define pcodeop macb;
+define pcodeop macbu;
+define pcodeop mach;
+define pcodeop machu;
+define pcodeop dmach;
+define pcodeop dmachu;
+define pcodeop dmulh;
+define pcodeop dmulhu;
+define pcodeop sat16;
+define pcodeop sat24;
+define pcodeop mcste;
+define pcodeop swap;
+define pcodeop swaph;
+define pcodeop swhw;
+define pcodeop bit_search;
+define pcodeop read_epsw;
+define pcodeop write_epsw;
+define pcodeop and_epsw;
+define pcodeop or_epsw;
+# bsch Rm,Rn: GCC computes 31 - clz(x) as "clr Rn; bsch x,Rn" (test/ctest clz), which
+# establishes the result for Rn = 0 and a nonzero Rm only: the index of the highest set bit.
+# Other inputs, and the flags, are left to the bit_search pcodeop.
+macro bsch(dst, src) {
+	local v:4 = src;
+	local start:4 = dst;
+	if (start != 0 || v == 0) goto <other>;
+	local n:4 = lzcount(v);
+	dst = 31 - n;
+	goto <done>;
+<other>
+	dst = bit_search(v, start);
+<done>
+}
+@endif
+
+@ifdef AM33_2
+define pcodeop read_fpcr;
+define pcodeop write_fpcr;
+define pcodeop ftoi;
+define pcodeop itof;
+define pcodeop ftod;
+define pcodeop dtof;
+define pcodeop fsqrt;
+define pcodeop frsqrt;
+define pcodeop data_cache_prefetch;
+# fcmp m,n compares n with m.
+macro fcmpflags(n, m) {
+	FCC_U = nan(n) || nan(m);
+	FCC_L = (!FCC_U) && (n f< m);
+	FCC_G = (!FCC_U) && (m f< n);
+	FCC_E = (!FCC_U) && (n f== m);
+}
+@endif
+
+@include "mn103_base.sinc"
+@ifdef AM33
+@include "mn103_am33.sinc"
+@endif

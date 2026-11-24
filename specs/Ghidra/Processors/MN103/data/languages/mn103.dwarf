@@ -1,0 +1,13 @@
+<dwarf>
+  <!-- GCC's MN10300 DWARF register numbers, as its DWARF output shows them (variable
+       locations and CFI of compiled code): 0-3 d0-d3, 4-7 a0-a3, 9 sp (the CFA register),
+       10-17 r0-r7 (e0-e7), 18-49 fs0-fs31. -->
+  <register_mappings>
+    <register_mapping dwarf="0" ghidra="D0" auto_count="4"/>
+    <register_mapping dwarf="4" ghidra="A0" auto_count="4"/>
+    <register_mapping dwarf="9" ghidra="SP" stackpointer="true"/>
+    <register_mapping dwarf="10" ghidra="R0" auto_count="8"/>
+    <register_mapping dwarf="18" ghidra="FS0" auto_count="32"/>
+  </register_mappings>
+  <call_frame_cfa value="0"/>
+</dwarf>

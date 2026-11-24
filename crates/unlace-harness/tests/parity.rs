@@ -334,6 +334,63 @@ fn write_parity_times(corpus: &str, r: &DataResult) {
     }
 }
 
+/// A full run's assertions against the baseline: must-pass (the baseline's keys), regressed (a
+/// must-pass key that no longer passes; fails the gate) and newly passing (passes, not in the
+/// baseline; reported, never failing, so a bless that adds it is a deliberate step).
+#[derive(Debug, PartialEq)]
+struct Classes {
+    must_pass: usize,
+    regressed: Vec<String>,
+    newly: Vec<String>,
+}
+
+impl Classes {
+    fn of(base: &BTreeSet<String>, now: &BTreeSet<String>) -> Classes {
+        Classes {
+            must_pass: base.len(),
+            regressed: base.difference(now).cloned().collect(),
+            newly: now.difference(base).cloned().collect(),
+        }
+    }
+
+    fn summary(&self, baseline: &str, failing: usize, errors: usize) -> String {
+        format!(
+            "  must-pass      {:>5}  ({baseline} keys; {} pass)\n  \
+             regressed      {:>5}  (must-pass keys that no longer pass: the gate fails)\n  \
+             newly passing  {:>5}  (pass, not in the baseline: reported, not failing)\n  \
+             failing        {:>5}  (assertions that fail: the gate fails)\n  \
+             file errors    {:>5}  (files that could not be parsed or run: the gate fails)\n",
+            self.must_pass,
+            self.must_pass - self.regressed.len(),
+            self.regressed.len(),
+            self.newly.len(),
+            failing,
+            errors
+        )
+    }
+
+    /// The newly passing keys and the command that records them, or nothing.
+    fn newly_block(&self, corpus: &str) -> String {
+        if self.newly.is_empty() {
+            return String::new();
+        }
+        let filter = if corpus.ends_with("datatests") {
+            "datatests"
+        } else {
+            "stage_tests"
+        };
+        let mut s = format!(
+            "{corpus}: newly passing ({}), not in the baseline; to record them deliberately:\n  \
+             UNLACE_BLESS=1 cargo test -p unlace-harness --test parity {filter}\n",
+            self.newly.len()
+        );
+        for k in &self.newly {
+            s += &format!("  {k}\n");
+        }
+        s
+    }
+}
+
 /// A baseline key's assertion name: `data:<name>` without its ` @dupN` suffix.
 fn key_name(key: &str) -> &str {
     let name = key.strip_prefix("data:").unwrap_or(key);
@@ -493,14 +550,14 @@ fn parity(corpus: &str, baseline: &str) {
     // checked in place, not against the baseline.
     let stale = base.intersection(&toml_keys).count();
     let base: BTreeSet<String> = base.difference(&toml_keys).cloned().collect();
-    let regressed: Vec<&String> = base.difference(&now).collect();
-    let newly: Vec<&String> = now.difference(&base).collect();
+    let classes = Classes::of(&base, &now);
     let mut report = format!(
         "{corpus}: {}/{} assertions passed ({} of them in TOML tests)\n",
         r.succeeded,
         r.applied,
         r.in_toml.len()
     );
+    report += &classes.summary(baseline, r.failing.len(), r.errors.len());
     if stale > 0 {
         report += &format!(
             "{stale} baseline keys belong to TOML tests and are ignored (UNLACE_BLESS=1 drops them)\n"
@@ -512,25 +569,23 @@ fn parity(corpus: &str, baseline: &str) {
     for f in &r.errors {
         report += &format!("  [data] ERROR in {f}\n");
     }
-    if !regressed.is_empty() {
-        report += &format!("REGRESSED ({}):\n", regressed.len());
-        for k in &regressed {
+    if !classes.regressed.is_empty() {
+        report += &format!("REGRESSED ({}):\n", classes.regressed.len());
+        for k in &classes.regressed {
             report += &format!("  {k}\n");
         }
     }
-    if !newly.is_empty() {
-        report += &format!(
-            "newly passing ({}), re-record with UNLACE_BLESS=1:\n",
-            newly.len()
-        );
-        for k in &newly {
-            report += &format!("  {k}\n");
-        }
-    }
-    let ok = regressed.is_empty() && broken == 0;
+    let newly = classes.newly_block(corpus);
+    report += &newly;
+    let ok = classes.regressed.is_empty() && broken == 0;
     report += if ok { "PARITY OK" } else { "PARITY FAIL" };
     assert!(ok, "{report}");
     println!("{report}");
+    // Past cargo test's capture, so a passing run still shows what a bless would add.
+    if !newly.is_empty() {
+        use std::io::Write as _;
+        let _ = std::io::stderr().write_all(newly.as_bytes());
+    }
 }
 
 #[test]
@@ -659,6 +714,37 @@ fn the_file_selection_matches_paths_names_and_globs() {
         assert!(selected(root, file, &[p.to_string()]), "{p}");
     }
     assert!(!selected(root, file, &["tests/datatests/*".to_string()]));
+}
+
+#[test]
+fn the_report_classifies_must_pass_regressed_and_newly_passing() {
+    let set = |k: &[&str]| {
+        k.iter()
+            .map(|s| s.to_string())
+            .collect::<BTreeSet<String>>()
+    };
+    let c = Classes::of(&set(&["data:a", "data:b"]), &set(&["data:b", "data:c"]));
+    assert_eq!(
+        c,
+        Classes {
+            must_pass: 2,
+            regressed: vec!["data:a".into()],
+            newly: vec!["data:c".into()],
+        }
+    );
+    let block = c.newly_block("tests/stages");
+    assert!(
+        block.contains("UNLACE_BLESS=1 cargo test -p unlace-harness --test parity stage_tests")
+    );
+    assert!(block.contains("  data:c\n"));
+    assert!(
+        c.summary("b.json", 0, 0)
+            .contains("must-pass          2  (b.json keys; 1 pass)")
+    );
+    assert_eq!(
+        Classes::of(&set(&["data:a"]), &set(&["data:a"])).newly_block("x"),
+        ""
+    );
 }
 
 #[test]

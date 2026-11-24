@@ -90,8 +90,17 @@ const COMMANDS: &[(&str, CommandHandler)] = &[
     ("idb", idb::run),
 ];
 
-/// Run the `unlace` command line over this process's arguments.
+/// Run the `unlace` command line over this process's arguments, then print the
+/// per-action wall-clock table when `UNLACE_TIMING` is set.
 pub fn main() -> ExitCode {
+    let code = run_cli();
+    if let Some(report) = unlace_decomp::actionprof::timing_report() {
+        eprint!("{report}");
+    }
+    code
+}
+
+fn run_cli() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
         usage();

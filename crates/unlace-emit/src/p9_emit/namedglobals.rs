@@ -1,5 +1,5 @@
 //! Whole mapped objects behind named global references actually printed in C.
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -26,6 +26,12 @@ pub struct References {
     /// instance, and one function's print asks it for every read of the global.
     /// Keyed by the function too, in case one print reads two.
     data_instance: BTreeMap<(usize, crate::context::HighVariableId), Option<Address>>,
+    /// The `(space, offset)` and name pairs [`record`](Self::record) has already
+    /// been asked about since the last reset.  Its outcome reads only that pair
+    /// and the architecture, which does not change while one function prints,
+    /// so a repeat call would find the object it recorded already present or
+    /// find the same reason to record nothing.
+    asked: BTreeMap<(i32, u64), BTreeSet<String>>,
 }
 
 impl References {
@@ -172,6 +178,18 @@ impl References {
     /// Retain the whole mapped declaration, never the type of a partial read.
     /// Split mappings and uncertain geometry do not prove a standalone object.
     pub fn record(&mut self, fd: &Funcdata, arch: &Architecture, address: &Address, name: &str) {
+        let key = (
+            address.get_space().map_or(-1, |s| s.get_index()),
+            address.get_offset(),
+        );
+        if self
+            .asked
+            .get(&key)
+            .is_some_and(|names| names.contains(name))
+        {
+            return;
+        }
+        self.asked.entry(key).or_default().insert(name.to_string());
         if !plain_identifier(name) {
             return;
         }

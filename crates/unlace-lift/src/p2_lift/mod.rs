@@ -16,6 +16,7 @@ pub mod cortexmpriv; // (unlace) fold the Cortex-M isCurrentModePrivileged() gua
 pub mod decodehalt; // (unlace) a halt planted where the decode failed says so instead of printing as an ordinary return
 pub mod entryretdispatch; // (unlace) recover an entry-point push/push/ret dispatch chain as calls
 pub mod evmcalls; // (unlace `evmcalls`) Solidity internal calls and returns in EVM bytecode
+pub mod evmselectors; // (unlace) Solidity dispatcher selectors and keccak-256 (`solidity_selector`, `dispatch_entries`)
 pub mod fastfailnoreturn; // (unlace) a Windows `int 0x29` (__fastfail) ends the flow instead of unbalancing the stack
 pub mod flow;
 pub mod fpuemu; // (unlace) decode the 8087 emulator's INT 34h-3Dh as the x87 instructions they stand for

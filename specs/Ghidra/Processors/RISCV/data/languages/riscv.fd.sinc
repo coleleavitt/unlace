@@ -70,122 +70,146 @@ define pcodeop fsub_s;
 
 :fmadd.s frd,frs1,frs2,frs3,"rne" is frd & frs1 & frs2 & frs3 & op0006=0x43 & funct3=0x0 & op2526=0x0
 {
-	frd = fmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmadd.s frd,frs1,frs2,frs3,"rtz" is frd & frs1 & frs2 & frs3 & op0006=0x43 & funct3=0x1 & op2526=0x0
 {
-	frd = fmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmadd.s frd,frs1,frs2,frs3,"rdn" is frd & frs1 & frs2 & frs3 & op0006=0x43 & funct3=0x2 & op2526=0x0
 {
-	frd = fmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmadd.s frd,frs1,frs2,frs3,"rup" is frd & frs1 & frs2 & frs3 & op0006=0x43 & funct3=0x3 & op2526=0x0
 {
-	frd = fmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmadd.s frd,frs1,frs2,frs3,"rmm" is frd & frs1 & frs2 & frs3 & op0006=0x43 & funct3=0x4 & op2526=0x0
 {
-	frd = fmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmadd.s frd,frs1,frs2,frs3,"dyn" is frd & frs1 & frs2 & frs3 & op0006=0x43 & funct3=0x7 & op2526=0x0
 {
-	frd = fmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmsub.s frd,frs1,frs2,frs3,"rne" is frd & frs1 & frs2 & frs3 & op0006=0x47 & funct3=0x0 & op2526=0x0
 {
-	frd = fmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmsub.s frd,frs1,frs2,frs3,"rtz" is frd & frs1 & frs2 & frs3 & op0006=0x47 & funct3=0x1 & op2526=0x0
 {
-	frd = fmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmsub.s frd,frs1,frs2,frs3,"rdn" is frd & frs1 & frs2 & frs3 & op0006=0x47 & funct3=0x2 & op2526=0x0
 {
-	frd = fmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmsub.s frd,frs1,frs2,frs3,"rup" is frd & frs1 & frs2 & frs3 & op0006=0x47 & funct3=0x3 & op2526=0x0
 {
-	frd = fmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmsub.s frd,frs1,frs2,frs3,"rmm" is frd & frs1 & frs2 & frs3 & op0006=0x47 & funct3=0x4 & op2526=0x0
 {
-	frd = fmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmsub.s frd,frs1,frs2,frs3,"dyn" is frd & frs1 & frs2 & frs3 & op0006=0x47 & funct3=0x7 & op2526=0x0
 {
-	frd = fmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmsub.s frd,frs1,frs2,frs3,"rne" is frd & frs1 & frs2 & frs3 & op0006=0x4b & funct3=0x0 & op2526=0x0
 {
-	frd = fnmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fnmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmsub.s frd,frs1,frs2,frs3,"rtz" is frd & frs1 & frs2 & frs3 & op0006=0x4b & funct3=0x1 & op2526=0x0
 {
-	frd = fnmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fnmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmsub.s frd,frs1,frs2,frs3,"rdn" is frd & frs1 & frs2 & frs3 & op0006=0x4b & funct3=0x2 & op2526=0x0
 {
-	frd = fnmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fnmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmsub.s frd,frs1,frs2,frs3,"rup" is frd & frs1 & frs2 & frs3 & op0006=0x4b & funct3=0x3 & op2526=0x0
 {
-	frd = fnmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fnmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmsub.s frd,frs1,frs2,frs3,"rmm" is frd & frs1 & frs2 & frs3 & op0006=0x4b & funct3=0x4 & op2526=0x0
 {
-	frd = fnmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fnmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmsub.s frd,frs1,frs2,frs3,"dyn" is frd & frs1 & frs2 & frs3 & op0006=0x4b & funct3=0x7 & op2526=0x0
 {
-	frd = fnmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fnmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmadd.s frd,frs1,frs2,frs3,"rne" is frd & frs1 & frs2 & frs3 & op0006=0x4f & funct3=0x0 & op2526=0x0
 {
-	frd = fnmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fnmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmadd.s frd,frs1,frs2,frs3,"rtz" is frd & frs1 & frs2 & frs3 & op0006=0x4f & funct3=0x1 & op2526=0x0
 {
-	frd = fnmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fnmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmadd.s frd,frs1,frs2,frs3,"rdn" is frd & frs1 & frs2 & frs3 & op0006=0x4f & funct3=0x2 & op2526=0x0
 {
-	frd = fnmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fnmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmadd.s frd,frs1,frs2,frs3,"rup" is frd & frs1 & frs2 & frs3 & op0006=0x4f & funct3=0x3 & op2526=0x0
 {
-	frd = fnmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fnmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmadd.s frd,frs1,frs2,frs3,"rmm" is frd & frs1 & frs2 & frs3 & op0006=0x4f & funct3=0x4 & op2526=0x0
 {
-	frd = fnmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fnmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmadd.s frd,frs1,frs2,frs3,"dyn" is frd & frs1 & frs2 & frs3 & op0006=0x4f & funct3=0x7 & op2526=0x0
 {
-	frd = fnmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fnmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fadd.s frd,frs1,frs2,"rne" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x0 & funct7=0x0
@@ -214,22 +238,26 @@ define pcodeop fsub_s;
 
 :fadd.s frd,frs1,frs2,"rtz" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x1 & funct7=0x0
 {
-	frd = fadd_s(frs1, frs2);
+	local sg1:4 = fadd_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fadd.s frd,frs1,frs2,"rdn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x2 & funct7=0x0
 {
-	frd = fadd_s(frs1, frs2);
+	local sg1:4 = fadd_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fadd.s frd,frs1,frs2,"rup" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x3 & funct7=0x0
 {
-	frd = fadd_s(frs1, frs2);
+	local sg1:4 = fadd_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fadd.s frd,frs1,frs2,"rmm" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x4 & funct7=0x0
 {
-	frd = fadd_s(frs1, frs2);
+	local sg1:4 = fadd_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fadd.s frd,frs1,frs2,"dyn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x7 & funct7=0x0
@@ -282,22 +310,26 @@ define pcodeop fsub_s;
 
 :fsub.s frd,frs1,frs2,"rtz" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x1 & funct7=0x4
 {
-	frd = fsub_s(frs1, frs2);
+	local sg1:4 = fsub_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsub.s frd,frs1,frs2,"rdn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x2 & funct7=0x4
 {
-	frd = fsub_s(frs1, frs2);
+	local sg1:4 = fsub_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsub.s frd,frs1,frs2,"rup" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x3 & funct7=0x4
 {
-	frd = fsub_s(frs1, frs2);
+	local sg1:4 = fsub_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsub.s frd,frs1,frs2,"rmm" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x4 & funct7=0x4
 {
-	frd = fsub_s(frs1, frs2);
+	local sg1:4 = fsub_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsub.s frd,frs1,frs2,"dyn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x7 & funct7=0x4
@@ -350,22 +382,26 @@ define pcodeop fsub_s;
 
 :fmul.s frd,frs1,frs2,"rtz" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x1 & funct7=0x8
 {
-	frd = fmul_s(frs1, frs2);
+	local sg1:4 = fmul_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmul.s frd,frs1,frs2,"rdn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x2 & funct7=0x8
 {
-	frd = fmul_s(frs1, frs2);
+	local sg1:4 = fmul_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmul.s frd,frs1,frs2,"rup" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x3 & funct7=0x8
 {
-	frd = fmul_s(frs1, frs2);
+	local sg1:4 = fmul_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmul.s frd,frs1,frs2,"rmm" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x4 & funct7=0x8
 {
-	frd = fmul_s(frs1, frs2);
+	local sg1:4 = fmul_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmul.s frd,frs1,frs2,"dyn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x7 & funct7=0x8
@@ -418,22 +454,26 @@ define pcodeop fsub_s;
 
 :fdiv.s frd,frs1,frs2,"rtz" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x1 & funct7=0xc
 {
-	frd = fdiv_s(frs1, frs2);
+	local sg1:4 = fdiv_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fdiv.s frd,frs1,frs2,"rdn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x2 & funct7=0xc
 {
-	frd = fdiv_s(frs1, frs2);
+	local sg1:4 = fdiv_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fdiv.s frd,frs1,frs2,"rup" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x3 & funct7=0xc
 {
-	frd = fdiv_s(frs1, frs2);
+	local sg1:4 = fdiv_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fdiv.s frd,frs1,frs2,"rmm" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x4 & funct7=0xc
 {
-	frd = fdiv_s(frs1, frs2);
+	local sg1:4 = fdiv_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fdiv.s frd,frs1,frs2,"dyn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x7 & funct7=0xc
@@ -478,22 +518,26 @@ define pcodeop fsub_s;
 
 :fsqrt.s frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x580
 {
-	frd = fsqrt_s(frs1);
+	local sg1:4 = fsqrt_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsqrt.s frd,frs1,"rdn" is frd & frs1 & op0006=0x53 & funct3=0x2 & op2031=0x580
 {
-	frd = fsqrt_s(frs1);
+	local sg1:4 = fsqrt_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsqrt.s frd,frs1,"rup" is frd & frs1 & op0006=0x53 & funct3=0x3 & op2031=0x580
 {
-	frd = fsqrt_s(frs1);
+	local sg1:4 = fsqrt_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsqrt.s frd,frs1,"rmm" is frd & frs1 & op0006=0x53 & funct3=0x4 & op2031=0x580
 {
-	frd = fsqrt_s(frs1);
+	local sg1:4 = fsqrt_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsqrt.s frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x580
@@ -1982,122 +2026,146 @@ define pcodeop fsub_s;
 
 :fmadd.s frd,frs1,frs2,frs3,"rne" is frd & frs1 & frs2 & frs3 & op0006=0x43 & funct3=0x0 & op2526=0x0
 {
-	frd = fmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmadd.s frd,frs1,frs2,frs3,"rtz" is frd & frs1 & frs2 & frs3 & op0006=0x43 & funct3=0x1 & op2526=0x0
 {
-	frd = fmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmadd.s frd,frs1,frs2,frs3,"rdn" is frd & frs1 & frs2 & frs3 & op0006=0x43 & funct3=0x2 & op2526=0x0
 {
-	frd = fmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmadd.s frd,frs1,frs2,frs3,"rup" is frd & frs1 & frs2 & frs3 & op0006=0x43 & funct3=0x3 & op2526=0x0
 {
-	frd = fmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmadd.s frd,frs1,frs2,frs3,"rmm" is frd & frs1 & frs2 & frs3 & op0006=0x43 & funct3=0x4 & op2526=0x0
 {
-	frd = fmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmadd.s frd,frs1,frs2,frs3,"dyn" is frd & frs1 & frs2 & frs3 & op0006=0x43 & funct3=0x7 & op2526=0x0
 {
-	frd = fmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmsub.s frd,frs1,frs2,frs3,"rne" is frd & frs1 & frs2 & frs3 & op0006=0x47 & funct3=0x0 & op2526=0x0
 {
-	frd = fmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmsub.s frd,frs1,frs2,frs3,"rtz" is frd & frs1 & frs2 & frs3 & op0006=0x47 & funct3=0x1 & op2526=0x0
 {
-	frd = fmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmsub.s frd,frs1,frs2,frs3,"rdn" is frd & frs1 & frs2 & frs3 & op0006=0x47 & funct3=0x2 & op2526=0x0
 {
-	frd = fmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmsub.s frd,frs1,frs2,frs3,"rup" is frd & frs1 & frs2 & frs3 & op0006=0x47 & funct3=0x3 & op2526=0x0
 {
-	frd = fmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmsub.s frd,frs1,frs2,frs3,"rmm" is frd & frs1 & frs2 & frs3 & op0006=0x47 & funct3=0x4 & op2526=0x0
 {
-	frd = fmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmsub.s frd,frs1,frs2,frs3,"dyn" is frd & frs1 & frs2 & frs3 & op0006=0x47 & funct3=0x7 & op2526=0x0
 {
-	frd = fmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmsub.s frd,frs1,frs2,frs3,"rne" is frd & frs1 & frs2 & frs3 & op0006=0x4b & funct3=0x0 & op2526=0x0
 {
-	frd = fnmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fnmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmsub.s frd,frs1,frs2,frs3,"rtz" is frd & frs1 & frs2 & frs3 & op0006=0x4b & funct3=0x1 & op2526=0x0
 {
-	frd = fnmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fnmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmsub.s frd,frs1,frs2,frs3,"rdn" is frd & frs1 & frs2 & frs3 & op0006=0x4b & funct3=0x2 & op2526=0x0
 {
-	frd = fnmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fnmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmsub.s frd,frs1,frs2,frs3,"rup" is frd & frs1 & frs2 & frs3 & op0006=0x4b & funct3=0x3 & op2526=0x0
 {
-	frd = fnmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fnmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmsub.s frd,frs1,frs2,frs3,"rmm" is frd & frs1 & frs2 & frs3 & op0006=0x4b & funct3=0x4 & op2526=0x0
 {
-	frd = fnmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fnmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmsub.s frd,frs1,frs2,frs3,"dyn" is frd & frs1 & frs2 & frs3 & op0006=0x4b & funct3=0x7 & op2526=0x0
 {
-	frd = fnmsub_s(frs1, frs2, frs3);
+	local sg1:4 = fnmsub_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmadd.s frd,frs1,frs2,frs3,"rne" is frd & frs1 & frs2 & frs3 & op0006=0x4f & funct3=0x0 & op2526=0x0
 {
-	frd = fnmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fnmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmadd.s frd,frs1,frs2,frs3,"rtz" is frd & frs1 & frs2 & frs3 & op0006=0x4f & funct3=0x1 & op2526=0x0
 {
-	frd = fnmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fnmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmadd.s frd,frs1,frs2,frs3,"rdn" is frd & frs1 & frs2 & frs3 & op0006=0x4f & funct3=0x2 & op2526=0x0
 {
-	frd = fnmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fnmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmadd.s frd,frs1,frs2,frs3,"rup" is frd & frs1 & frs2 & frs3 & op0006=0x4f & funct3=0x3 & op2526=0x0
 {
-	frd = fnmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fnmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmadd.s frd,frs1,frs2,frs3,"rmm" is frd & frs1 & frs2 & frs3 & op0006=0x4f & funct3=0x4 & op2526=0x0
 {
-	frd = fnmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fnmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fnmadd.s frd,frs1,frs2,frs3,"dyn" is frd & frs1 & frs2 & frs3 & op0006=0x4f & funct3=0x7 & op2526=0x0
 {
-	frd = fnmadd_s(frs1, frs2, frs3);
+	local sg1:4 = fnmadd_s(frs1, frs2, frs3);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fadd.s frd,frs1,frs2,"rne" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x0 & funct7=0x0
@@ -2126,22 +2194,26 @@ define pcodeop fsub_s;
 
 :fadd.s frd,frs1,frs2,"rtz" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x1 & funct7=0x0
 {
-	frd = fadd_s(frs1, frs2);
+	local sg1:4 = fadd_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fadd.s frd,frs1,frs2,"rdn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x2 & funct7=0x0
 {
-	frd = fadd_s(frs1, frs2);
+	local sg1:4 = fadd_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fadd.s frd,frs1,frs2,"rup" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x3 & funct7=0x0
 {
-	frd = fadd_s(frs1, frs2);
+	local sg1:4 = fadd_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fadd.s frd,frs1,frs2,"rmm" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x4 & funct7=0x0
 {
-	frd = fadd_s(frs1, frs2);
+	local sg1:4 = fadd_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fadd.s frd,frs1,frs2,"dyn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x7 & funct7=0x0
@@ -2194,22 +2266,26 @@ define pcodeop fsub_s;
 
 :fsub.s frd,frs1,frs2,"rtz" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x1 & funct7=0x4
 {
-	frd = fsub_s(frs1, frs2);
+	local sg1:4 = fsub_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsub.s frd,frs1,frs2,"rdn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x2 & funct7=0x4
 {
-	frd = fsub_s(frs1, frs2);
+	local sg1:4 = fsub_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsub.s frd,frs1,frs2,"rup" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x3 & funct7=0x4
 {
-	frd = fsub_s(frs1, frs2);
+	local sg1:4 = fsub_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsub.s frd,frs1,frs2,"rmm" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x4 & funct7=0x4
 {
-	frd = fsub_s(frs1, frs2);
+	local sg1:4 = fsub_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsub.s frd,frs1,frs2,"dyn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x7 & funct7=0x4
@@ -2262,22 +2338,26 @@ define pcodeop fsub_s;
 
 :fmul.s frd,frs1,frs2,"rtz" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x1 & funct7=0x8
 {
-	frd = fmul_s(frs1, frs2);
+	local sg1:4 = fmul_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmul.s frd,frs1,frs2,"rdn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x2 & funct7=0x8
 {
-	frd = fmul_s(frs1, frs2);
+	local sg1:4 = fmul_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmul.s frd,frs1,frs2,"rup" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x3 & funct7=0x8
 {
-	frd = fmul_s(frs1, frs2);
+	local sg1:4 = fmul_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmul.s frd,frs1,frs2,"rmm" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x4 & funct7=0x8
 {
-	frd = fmul_s(frs1, frs2);
+	local sg1:4 = fmul_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fmul.s frd,frs1,frs2,"dyn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x7 & funct7=0x8
@@ -2330,22 +2410,26 @@ define pcodeop fsub_s;
 
 :fdiv.s frd,frs1,frs2,"rtz" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x1 & funct7=0xc
 {
-	frd = fdiv_s(frs1, frs2);
+	local sg1:4 = fdiv_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fdiv.s frd,frs1,frs2,"rdn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x2 & funct7=0xc
 {
-	frd = fdiv_s(frs1, frs2);
+	local sg1:4 = fdiv_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fdiv.s frd,frs1,frs2,"rup" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x3 & funct7=0xc
 {
-	frd = fdiv_s(frs1, frs2);
+	local sg1:4 = fdiv_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fdiv.s frd,frs1,frs2,"rmm" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x4 & funct7=0xc
 {
-	frd = fdiv_s(frs1, frs2);
+	local sg1:4 = fdiv_s(frs1, frs2);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fdiv.s frd,frs1,frs2,"dyn" is frd & frs1 & frs2 & op0006=0x53 & funct3=0x7 & funct7=0xc
@@ -2390,22 +2474,26 @@ define pcodeop fsub_s;
 
 :fsqrt.s frd,frs1,"rtz" is frd & frs1 & op0006=0x53 & funct3=0x1 & op2031=0x580
 {
-	frd = fsqrt_s(frs1);
+	local sg1:4 = fsqrt_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsqrt.s frd,frs1,"rdn" is frd & frs1 & op0006=0x53 & funct3=0x2 & op2031=0x580
 {
-	frd = fsqrt_s(frs1);
+	local sg1:4 = fsqrt_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsqrt.s frd,frs1,"rup" is frd & frs1 & op0006=0x53 & funct3=0x3 & op2031=0x580
 {
-	frd = fsqrt_s(frs1);
+	local sg1:4 = fsqrt_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsqrt.s frd,frs1,"rmm" is frd & frs1 & op0006=0x53 & funct3=0x4 & op2031=0x580
 {
-	frd = fsqrt_s(frs1);
+	local sg1:4 = fsqrt_s(frs1);
+	frd = 0xffffffff00000000:8 | zext(sg1);
 }
 
 :fsqrt.s frd,frs1,"dyn" is frd & frs1 & op0006=0x53 & funct3=0x7 & op2031=0x580

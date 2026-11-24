@@ -5589,7 +5589,7 @@ have a fixed byte and differ), then by a referenced name (`wrap_mix` and
 `wrap_sum` above are the same bytes around a call to a different function, and
 the matcher accepts each only where the call goes to that name). Functions that
 nothing tells apart are reported as a `collision:` line and left out of the
-`.sig`; they stay in the `.pat`. Functions with the same bytes and the same name
+`.sig`; they stay in the `.pat`. Names that share a pattern and CRC in the `.pat` are also listed as a `collision in` line before the `.sig` is built; the `.pat` itself is written unchanged. Functions with the same bytes and the same name
 are written once. The exit status is 0 when the files were written, 1 when an
 input cannot be read or no function is left to write, and 2 on a usage error.
 

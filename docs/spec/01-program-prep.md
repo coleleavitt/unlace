@@ -9818,7 +9818,9 @@ both
   only a function alone with its name is resolved). Functions with the same bytes
   and the same name become one module. Whatever still collides is listed on
   stderr and left out of the `.sig`: no name is chosen and no module is merged
-  under two names.
+  under two names. The `.pat` is written unchanged, but `flirt make` lists each
+  group of functions that share a pattern and CRC under different names as a
+  `collision in` line on stderr before the `.sig` is built.
 - **Format strings** (`formatstring off|static|full`, default `static`;
   `crates/unlace-analysis/src/analyzers/formatstring/mod.rs`): what a
   `printf`/`scanf`-family call does with its variadic arguments is stated by its

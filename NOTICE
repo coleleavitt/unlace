@@ -126,6 +126,10 @@ specs/Ghidra/Processors/JieLi vendors the JieLi audio SoC SLEIGH specification o
 aleph-void/ghidra-jieli (https://github.com/aleph-void/ghidra-jieli), a fork of quarkslab/ghidra-jieli, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/M740 vendors the Mitsubishi MELPS 740 SLEIGH specification of
+aleph-void/ghidra-m740 (https://github.com/aleph-void/ghidra-m740), released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

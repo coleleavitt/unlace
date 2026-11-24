@@ -1,0 +1,3 @@
+# Mitsubishi MELPS 740 with WIT (special page FFxx)
+@define MELPS740_WIT "1"
+@include "melps740.sinc"

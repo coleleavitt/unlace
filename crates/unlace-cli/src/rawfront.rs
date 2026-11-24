@@ -4,7 +4,9 @@
 //! `--raw-image --target --base --entry` arguments it would otherwise need by
 //! hand (`unlace_analysis::loader::firmware`). A U-Boot FIT image selected as
 //! an archive member (`armember`) arrives already flattened. `--svd FILE` adds a CMSIS-SVD
-//! device's peripherals as typed volatile globals and its interrupt names.
+//! device's peripherals as typed volatile globals, to an object file (an ELF, an
+//! ESP image) as well, and names a raw dump's interrupt handlers after the
+//! device's interrupts.
 //!
 //! Runs before the subcommand parses its arguments, for the subcommands that
 //! take a raw image. The binary must be the first argument. A container is
@@ -76,6 +78,9 @@ pub fn prepare(
         && !prepared.args.iter().any(|a| a == "--raw-image")
         && esp::parse(&bytes).is_some()
     {
+        if let Some(device) = &device {
+            declare_device(device, &mut prepared.args);
+        }
         return Ok(prepared);
     }
     let out = &mut prepared.args;
@@ -106,6 +111,9 @@ pub fn prepare(
                 );
                 out[0] = path.display().to_string();
                 prepared.temp.push(path);
+                if let Some(device) = &device {
+                    declare_device(device, out);
+                }
                 return Ok(prepared);
             }
             Some(containers::Container::Flat(mut flat)) => {
@@ -167,6 +175,9 @@ pub fn prepare(
     }
     let raw = has(out, "--raw-image");
     if !raw && is_object(&bytes) {
+        if let Some(device) = &device {
+            declare_device(device, out);
+        }
         return Ok(prepared);
     }
     let target = value(out, "--target");
@@ -230,42 +241,50 @@ pub fn prepare(
         out.extend(["--define-function".into(), format!("{addr:#x}={name}")]);
     }
     if let Some(device) = &device {
-        let mut declared = std::collections::BTreeSet::new();
-        for p in device
-            .peripherals
-            .iter()
-            .filter(|p| !p.registers.is_empty())
-        {
-            let renamed;
-            let p = if unlace_analysis::cortexmscs::names_a_type(&p.type_name) {
-                renamed = unlace_analysis::loader::firmware::svd::Peripheral {
-                    type_name: format!("{}_{}", device.c_name(), p.type_name),
-                    ..p.clone()
-                };
-                &renamed
-            } else {
-                p
-            };
-            if declared.insert(p.type_name.clone()) {
-                out.extend(["--assert".into(), format!("typedef {}", p.c_struct())]);
-            }
-            out.extend([
-                "--assert".into(),
-                format!("data {:#x} struct {} {}", p.base, p.type_name, p.name),
-            ]);
-            out.extend([
-                "--assert".into(),
-                format!("volatile {:#x}+{:#x}", p.base, p.extent()),
-            ]);
-        }
-        eprintln!(
-            "[kuna firmware] SVD {}: {} peripherals, {} interrupts",
-            device.name,
-            device.peripherals.len(),
-            device.interrupts.len()
-        );
+        declare_device(device, out);
     }
     Ok(prepared)
+}
+
+/// Declare the peripherals of `device` as typed volatile globals: a
+/// structure per peripheral type, a global at each base and a volatile range
+/// over its registers. A type named like a built-in System Control Space
+/// block takes the device name in front.
+fn declare_device(device: &svd::Device, out: &mut Vec<String>) {
+    let mut declared = std::collections::BTreeSet::new();
+    for p in device
+        .peripherals
+        .iter()
+        .filter(|p| !p.registers.is_empty())
+    {
+        let renamed;
+        let p = if unlace_analysis::cortexmscs::names_a_type(&p.type_name) {
+            renamed = unlace_analysis::loader::firmware::svd::Peripheral {
+                type_name: format!("{}_{}", device.c_name(), p.type_name),
+                ..p.clone()
+            };
+            &renamed
+        } else {
+            p
+        };
+        if declared.insert(p.type_name.clone()) {
+            out.extend(["--assert".into(), format!("typedef {}", p.c_struct())]);
+        }
+        out.extend([
+            "--assert".into(),
+            format!("data {:#x} struct {} {}", p.base, p.type_name, p.name),
+        ]);
+        out.extend([
+            "--assert".into(),
+            format!("volatile {:#x}+{:#x}", p.base, p.extent()),
+        ]);
+    }
+    eprintln!(
+        "[kuna firmware] SVD {}: {} peripherals, {} interrupts",
+        device.name,
+        device.peripherals.len(),
+        device.interrupts.len()
+    );
 }
 
 /// Remove `flag VALUE` from `args`, returning the value.

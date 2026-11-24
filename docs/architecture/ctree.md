@@ -12,6 +12,9 @@ does `option noretfirst` (backlog #8: the arm that never falls through first, th
 and `option nestedand` (backlog #10, the under-fold part: nested ifs without else as one `&&`)
 and `option retternary` (backlog #9, the rest: `return c ? A : B`, `return !c || x`) and
 `option orexit` (backlog #10, equal exits: `if (a) goto L; if (b) goto L;` as one `||`).
+The print plans `switchmerge` (which `if`s print as a switch), `gotonext` (goto types, dropped
+jumps) and `voidtailreturn` (the elided `RETURN`) now live in the tree when it is built
+(`ctree_take_plans`); the switch arm plans and the suppressed labels are still printer state.
 Spec: `docs/spec/09-emission.md`, "Printing through the C syntax tree".
 
 Today the printer walks the structured block graph and the p-code ops directly and writes text as it

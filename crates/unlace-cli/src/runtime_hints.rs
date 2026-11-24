@@ -9,8 +9,6 @@
 //! actionable entries as one `note:` line each on stderr (see `docs/cli.md`).
 
 use object::{Object, ObjectSection};
-use regex::bytes::Regex;
-use std::sync::OnceLock;
 use unlace_analysis::analyzers::sourcelang::{Compiler, effective_compiler_bytes};
 
 use crate::jsonfmt::Json;
@@ -51,17 +49,6 @@ const MARKERS: &[(&[u8], Marker)] = &[
     (b"NUITKA_ONEFILE_PARENT", Marker::Nuitka),
     (b"__nuitka_binary_dir", Marker::Nuitka),
 ];
-
-fn marker_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        let alternatives: Vec<String> = MARKERS
-            .iter()
-            .map(|(m, _)| m.iter().map(|b| format!("\\x{b:02x}")).collect())
-            .collect();
-        Regex::new(&format!("(?-u){}", alternatives.join("|"))).expect("marker regex")
-    })
-}
 
 /// What a lenient PE header walk found.
 struct PeView {
@@ -248,13 +235,10 @@ pub fn detect(bytes: &[u8], toolchain: bool, cil: bool) -> Vec<RuntimeHint> {
     let pe = pe_view(bytes);
     let mut seen: Vec<Marker> = Vec::new();
     let mut last_cookie = None;
-    for m in marker_regex().find_iter(bytes) {
-        let Some(&(_, marker)) = MARKERS.iter().find(|(lit, _)| *lit == m.as_bytes()) else {
-            continue;
-        };
+    for &(lit, marker) in MARKERS {
         if marker == Marker::PyInstaller {
-            last_cookie = Some(m.start());
-        } else if !seen.contains(&marker) {
+            last_cookie = memchr::memmem::rfind(bytes, lit);
+        } else if !seen.contains(&marker) && memchr::memmem::find(bytes, lit).is_some() {
             seen.push(marker);
         }
     }

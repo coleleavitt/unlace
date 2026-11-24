@@ -7227,6 +7227,20 @@ impl JumpTable {
             self.jmodel = Some(model);
             return Ok(());
         }
+        // (unlace `rawswitch`) A table flow matched from its instructions keeps
+        // that model when the value-range models still fail on the whole function.
+        if !self.addresstable.is_empty() {
+            if let Some(model) =
+                (fd.hooks().rawswitch_recover)(self, fd, indirect, matchsize, max_table_size)?
+            {
+                let mut rows = Vec::new();
+                model.build_addresses(fd, indirect, &mut rows, None, None)?;
+                if rows == self.addresstable {
+                    self.jmodel = Some(model);
+                    return Ok(());
+                }
+            }
+        }
         // No model matched.
         self.jmodel = None;
         Ok(())
@@ -7688,6 +7702,10 @@ impl JumpTable {
     /// fallback needs `recoverModel`/`buildAddresses` (W4). The two-phase
     /// structure is faithful.
     pub fn recover_labels(&mut self, fd: &mut Funcdata) -> UnlaceResult<()> {
+        let foreign = self.unlace_foreign_origin(fd)?;
+        if foreign == Some(false) {
+            self.jmodel = None;
+        }
         match self.jmodel.take() {
             Some(mut model) => {
                 let orig_size = self
@@ -7696,7 +7714,7 @@ impl JumpTable {
                     .map(|m| m.get_table_size())
                     .unwrap_or(0);
                 model.find_unnormalized(fd, self.maxaddsub, self.maxleftright, self.maxext)?;
-                let res = if self.origmodel.is_none() || orig_size == 0 {
+                let res = if self.origmodel.is_none() || orig_size == 0 || foreign.is_some() {
                     // orig is the model itself (C++ buildLabels(...,jmodel)).
                     let mut addresstable = std::mem::take(&mut self.addresstable);
                     let mut label = std::mem::take(&mut self.label);
@@ -7759,6 +7777,28 @@ impl JumpTable {
         }
         self.clear_saved_model();
         Ok(())
+    }
+
+    /// (unlace) Whether the current value-range model labels a table that flow
+    /// recovered with another kind of model (`rawswitch`, `constselectjump`):
+    /// `None` when it does not apply, else whether the current model's own rows
+    /// are the table's, so it can serve as its own original. When they are not,
+    /// the table is labelled by the trivial model instead.
+    fn unlace_foreign_origin(&self, fd: &Funcdata) -> UnlaceResult<Option<bool>> {
+        let (Some(model), Some(orig), Some(indirect)) =
+            (self.jmodel.as_ref(), self.origmodel.as_ref(), self.indirect)
+        else {
+            return Ok(None);
+        };
+        if orig.get_table_size() == 0
+            || orig.as_any().is::<JumpBasicModel>()
+            || !model.as_any().is::<JumpBasicModel>()
+        {
+            return Ok(None);
+        }
+        let mut rows = Vec::new();
+        model.build_addresses(fd, indirect, &mut rows, None, None)?;
+        Ok(Some(rows == self.addresstable))
     }
 
     /// (unlace) Relabel the trivial table of a dropped model: each out-edge by

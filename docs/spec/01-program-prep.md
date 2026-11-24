@@ -4409,9 +4409,14 @@ moves.
   `__fastcall` or `__thiscall` export (`wsprintfA`, `DbgPrint`) is left
   out; x64 has one convention and keeps every entry. That is 7,962 functions,
   1,696 records and 2,703 typedefs for x86 and 8,111, 1,702 and 2,703 for x64,
-  about 1.4 MB of text each. Every entry is offered (`*`). On a PE the
-  `win32sigs` table and every other source still declare first, so the
-  library declares the rest: `CreateFileW(LPCWSTR, DWORD, DWORD,
+  about 1.4 MB of text each. Every entry is offered (`*`). Every other source
+  of a prototype still declares first, with one exception: on a Windows image
+  (the built-in library or a library file) a library declaration replaces the
+  `win32sigs` entry for the same import, because that hand-written table
+  spells every handle, record pointer and callback `void *`
+  (`kuna_win32sigs::declares` names its entries; the table stays the fallback
+  for a name the library does not declare or cannot read). So
+  `CreateFileW(LPCWSTR, DWORD, DWORD,
   LPSECURITY_ATTRIBUTES, ...)`, `ReadFile(..., LPOVERLAPPED)`,
   `NtCreateFile(..., POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK, ...)`, with
   `_SECURITY_ATTRIBUTES`, `_OVERLAPPED` and `_OBJECT_ATTRIBUTES` laid out for

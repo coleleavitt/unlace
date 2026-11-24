@@ -69,6 +69,15 @@ Measure before and after on the same 152 images: prototypes typed from the libra
 `void *`/`undefined` parameters left at Win32 call sites (decompile-all JSON). Expected gain from §1:
 up to 1,023 more distinct imports declared, 99 of them upgraded from `void *`.
 
+## Status (2026-11-24, gap-wintil)
+
+Steps 1 and 5 are done, and a narrower step 3: `typelib auto` on an x86 or x64 PE reads a built-in
+Windows API library (`crates/unlace-console/typelib/windows-x86.ktl`, `windows-x86_64.ktl`), derived
+by `scripts/typelib/gen_windows.py` from `mssdk[64]_win10` + `ntapi[64]_win10` in the tils dump and
+kept to the exports of 41 core DLLs (Wine 10.0 .spec names); deriving a compact table into the repo was
+allowed for this gap. On a Windows image a library declaration replaces the `win32sigs` one. Still
+open: `ntddk` for drivers (subsystem 1), several libraries, names beyond imports (step 4).
+
 ## Re-check
 
 ```sh

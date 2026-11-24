@@ -449,21 +449,29 @@ pub(crate) fn saturate(
             return None;
         }
         // A proof at the full width makes the small-width check redundant.
-        let proof = (n <= MAX_NONLINEAR_LEAVES)
-            .then(|| mba::prove_equal(f, &simple, n, bits))
-            .flatten();
+        let proof =
+            (n <= MAX_NONLINEAR_LEAVES).then(|| mba::prove_equal_witness(f, &simple, n, bits));
         match proof {
-            Some(true) => Some((simple, Proof::Proved)),
-            Some(false) => {
+            Some(mba::FullWidth::Equal) => Some((simple, Proof::Proved)),
+            Some(mba::FullWidth::Refuted(Some(leaves))) => {
                 trace_refusal(
                     f,
                     &simple,
-                    "a full-width proof found a reachable carry state where the bits differ",
+                    "a full-width proof found the input where the bits differ",
+                    Some(leaves.as_slice()),
+                );
+                None
+            }
+            Some(mba::FullWidth::Refuted(None)) => {
+                trace_refusal(
+                    f,
+                    &simple,
+                    "a full-width proof refuted it, but no input re-evaluates to a difference",
                     None,
                 );
                 None
             }
-            None => match exhaustive_witness(f, &simple, n) {
+            Some(mba::FullWidth::Unknown) | None => match exhaustive_witness(f, &simple, n) {
                 Some(leaves) => {
                     trace_refusal(f, &simple, "small-width check", Some(&leaves));
                     None

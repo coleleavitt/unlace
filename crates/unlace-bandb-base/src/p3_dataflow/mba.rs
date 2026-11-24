@@ -1375,40 +1375,75 @@ impl Circuit {
     }
 }
 
+/// What the full-width proof of [`prove_equal_witness`] found.
+#[derive(Debug, PartialEq)]
+pub(crate) enum FullWidth {
+    /// Equal for every input at every bit.
+    Equal,
+    /// A reachable carry state where the bits differ. The input that reaches
+    /// it, with the bits above the differing one zero, when it re-evaluates
+    /// to differing values; `None` otherwise.
+    Refuted(Option<Vec<u64>>),
+    /// No answer: a product, a multiplier too wide, or more than [`MAX_STATES`].
+    Unknown,
+}
+
 /// Are `a` and `b` equal for every value of their `n` leaves at `bits`
 /// bits? Both circuits run side by side from bit 0 up while the set of carry
-/// states that some input prefix reaches is followed exactly, so `Some(true)`
-/// is a proof and `Some(false)` a reachable state where the bits differ.
-/// `None`: a product of two terms, a multiplier too wide, or more than
-/// [`MAX_STATES`] states.
-pub(crate) fn prove_equal(a: &Expr, b: &Expr, n: usize, bits: u32) -> Option<bool> {
+/// states that some input prefix reaches is followed exactly, so `Equal`
+/// is a proof and `Refuted` a reachable state where the bits differ. Each
+/// state keeps one input prefix that reaches it, which gives the refuting
+/// input.
+pub(crate) fn prove_equal_witness(a: &Expr, b: &Expr, n: usize, bits: u32) -> FullWidth {
     let mask = if bits >= 64 {
         u64::MAX
     } else {
         (1u64 << bits) - 1
     };
     let mut c = Circuit::default();
-    let (ra, rb) = (c.add(a, mask)?, c.add(b, mask)?);
-    let mut states = std::collections::BTreeSet::from([vec![0u32; c.slots]]);
+    let (Some(ra), Some(rb)) = (c.add(a, mask), c.add(b, mask)) else {
+        return FullWidth::Unknown;
+    };
+    let mut states = std::collections::BTreeMap::from([(vec![0u32; c.slots], vec![0u64; n])]);
     let mut val = Vec::with_capacity(c.gates.len());
     for pos in 0..bits {
-        let mut next = std::collections::BTreeSet::new();
-        for st in &states {
+        let mut next: std::collections::BTreeMap<Vec<u32>, Vec<u64>> =
+            std::collections::BTreeMap::new();
+        for (st, prefix) in &states {
             for inp in 0..1usize << n {
                 let mut s = st.clone();
                 c.step(&mut s, inp, pos, &mut val);
+                let with_bit = || -> Vec<u64> {
+                    prefix
+                        .iter()
+                        .enumerate()
+                        .map(|(i, l)| l | ((((inp >> i) & 1) as u64) << pos))
+                        .collect()
+                };
                 if val[ra] != val[rb] {
-                    return Some(false);
+                    let w = with_bit();
+                    let differs = a.eval(&w, mask) != b.eval(&w, mask);
+                    return FullWidth::Refuted(differs.then_some(w));
                 }
-                next.insert(s);
+                next.entry(s).or_insert_with(with_bit);
                 if next.len() > MAX_STATES {
-                    return None;
+                    return FullWidth::Unknown;
                 }
             }
         }
         states = next;
     }
-    Some(true)
+    FullWidth::Equal
+}
+
+/// [`prove_equal_witness`] without the input: `Some(true)` proved,
+/// `Some(false)` refuted, `None` no answer.
+pub(crate) fn prove_equal(a: &Expr, b: &Expr, n: usize, bits: u32) -> Option<bool> {
+    match prove_equal_witness(a, b, n, bits) {
+        FullWidth::Equal => Some(true),
+        FullWidth::Refuted(_) => Some(false),
+        FullWidth::Unknown => None,
+    }
 }
 
 /// `e ^ k`, folded when `k` is zero or `e` a constant.
@@ -1991,6 +2026,19 @@ mod tests {
             prove_equal(&Expr::Prod(x(), y()), &Expr::Prod(y(), x()), 2, 64),
             None
         );
+    }
+
+    #[test]
+    fn proof_names_the_input_that_refutes() {
+        let f = Expr::Add(
+            Box::new(Expr::Xor(x(), y())),
+            Box::new(Expr::Mul(and(x(), y()), 2)),
+        );
+        let g = Expr::Xor(x(), y());
+        let FullWidth::Refuted(Some(w)) = prove_equal_witness(&f, &g, 2, 64) else {
+            panic!("refuted with an input");
+        };
+        assert_ne!(f.eval(&w, u64::MAX), g.eval(&w, u64::MAX));
     }
 
     #[test]

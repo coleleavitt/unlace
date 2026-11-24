@@ -281,10 +281,9 @@
             
             index = r0 * 4;
             offset = *:4 (tmpptr + index);
-            offset = offset * 4;
-            lr = lr + offset;
+            lr = tmpptr + offset;
  
-            TB = (lr & 1) != 0;
+            TB = 1;
             pc = lr & 0xfffffffe;
             goto [pc];
       ]]></body>

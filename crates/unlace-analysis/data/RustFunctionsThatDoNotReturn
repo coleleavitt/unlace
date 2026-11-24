@@ -92,3 +92,10 @@ std::panicking::rust_panic_with_hook
 std::panicking::panic_with_hook
 std::panicking::rust_panic_without_hook
 std::panicking::rust_panic
+
+# (kuna, #28) alloc/src/alloc.rs: `__rust_alloc_error_handler` (the extern the
+# allocator shim defines, `-> !`) and its default `__rdl_alloc_error_handler`
+# (`-> !`); core/src/panicking.rs `assert_failed_inner` (`-> !`).
+rust_alloc_error_handler
+rdl_alloc_error_handler
+core::panicking::assert_failed_inner

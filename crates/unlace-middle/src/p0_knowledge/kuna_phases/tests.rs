@@ -41,19 +41,19 @@ fn subphase_count_is_49() {
 }
 
 #[test]
-fn surface_count_is_101() {
-    assert_eq!(kuna_num_surfaces(), 101);
-    assert_eq!(SURFACE_TABLE.len(), 101);
+fn surface_count_is_102() {
+    assert_eq!(kuna_num_surfaces(), 102);
+    assert_eq!(SURFACE_TABLE.len(), 102);
 }
 
 #[test]
-fn settable_count_is_333() {
-    assert_eq!(kuna_num_settables(), 333);
-    assert_eq!(SETTABLE_TABLE.len(), 333);
+fn settable_count_is_337() {
+    assert_eq!(kuna_num_settables(), 337);
+    assert_eq!(SETTABLE_TABLE.len(), 337);
 }
 
 #[test]
-fn tier_counts_are_67_core_166_transform_100_analysis() {
+fn tier_counts_are_69_core_168_transform_100_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_67_core_166_transform_100_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (67, 166, 100));
+    assert_eq!((core, transform, analysis), (69, 168, 100));
 }
 
 #[test]
@@ -954,8 +954,10 @@ fn option_values_live_value_present_for_129() {
     // Recounted after merging upstream/main (2026-11-22): the fork's live-field rows plus upstream's.
     // +1 for `oslog` (live_field = os_log_args).
     // 137 -> 138: `spsolve` (#70) added a live_field row without the bump.
+    // +1 for `guarddispatch` (live_field = guard_dispatch).
+    // +1 for `flownames` (live_field = flow_names).
     // +2 for `atomics` and `llscfold` (live_field = atomics, llsc_fold).
-    assert_eq!(with_live, 140);
+    assert_eq!(with_live, 142);
 }
 
 #[test]
@@ -1280,8 +1282,12 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // Recounted after merging upstream/main (2026-11-22): one row per settable, the last without a comma.
     // +1 for `oslog`; its P9 row.
     // +1 for `callresultuse`; its P4 row.
+    // +1 for `guarddispatch`; its P2 row.
+    // +1 for `typemerge`; its P6 row sits after `indirectonly`.
+    // +1 for `flownames`; its P6 row sits beside `contextnames`.
+    // +1 for `honestgaps`; its P2 row.
     // +2 for `atomics` and `llscfold`.
-    assert_eq!(json.matches("},\n").count(), 326);
+    assert_eq!(json.matches("},\n").count(), 330);
 }
 
 #[test]

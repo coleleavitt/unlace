@@ -2331,9 +2331,11 @@ mod tests {
         // and kuna-itaniumeh-arm / ARM EHABI landing pads print as try/catch (option itaniumeh)
         // and kuna-itaniumeh-clang / a clang call-site range that starts before its call (option itaniumeh)
         // and kuna-itaniumeh-sharedpad / a landing pad folded into the handler it jumps to prints as a try
+        // and kuna-peloadconfig / PE load configuration function tables, guard slots and delay-load imports (option guarddispatch)
+        // and kuna-thumb1case / stripped Thumb-1 switches through libgcc's case helpers
         // and kuna-atomics-x86 + kuna-atomics-a64 + kuna-atomics-riscv / locked x86, AArch64 LSE and
         // RISC-V AMO read-modify-writes print as __sync builtins (options atomics, llscfold)
-        assert_eq!(count, 1004, "corpus file count drifted");
+        assert_eq!(count, 1006, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

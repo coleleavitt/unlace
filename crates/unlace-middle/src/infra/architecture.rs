@@ -644,6 +644,9 @@ pub struct Architecture {
     /// through one of these import slots is made direct while the flow is
     /// followed ([`crate::kuna_msvcimportcall`]). Empty unless `msvcsig` applied.
     pub msvcsig_import_slots: std::collections::BTreeSet<(int4, uintb)>,
+    /// (kuna `guarddispatch`) The Control Flow Guard dispatch pointer slots a PE
+    /// load configuration names, as `(space index, offset)`.
+    pub guard_dispatch_slots: std::collections::BTreeSet<(int4, uintb)>,
     /// (kuna `pushpadread`) The number of STACK arguments each printf-family
     /// format call consumes, keyed by the call instruction's VMA -- derived from
     /// the format resolver's per-site conversion count. The callee-body probe
@@ -1176,6 +1179,7 @@ impl Architecture {
             analysis_ppc32picimports: Default::default(),
 
             msvcsig_import_slots: std::collections::BTreeSet::new(),
+            guard_dispatch_slots: std::collections::BTreeSet::new(),
             format_stack_args: std::rc::Rc::new(std::collections::BTreeMap::new()),
             elfmain_main_decl: None,
             fid_prototypes: std::collections::BTreeSet::new(),

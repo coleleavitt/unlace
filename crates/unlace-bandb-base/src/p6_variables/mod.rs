@@ -12,6 +12,7 @@ pub mod kuna_cookiescramble;
 pub mod kuna_declhightype;
 pub mod kuna_dynamichashmax;
 pub mod kuna_dynamiclocals;
+pub mod kuna_flownames;
 pub mod kuna_foldcallretphi;
 pub mod kuna_globalvalue;
 pub mod kuna_guardedreadtrim;

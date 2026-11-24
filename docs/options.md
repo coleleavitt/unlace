@@ -216,6 +216,8 @@ Three tiers:
 | two object views of one frame address become unrelated local variables | [`stackviews`](#stackviews----on--off-default-off) |
 | spurious uninitialized local (xStack_N) returned after storing through a pointer to a local | [`stackalias`](#stackalias----on--off-default-off-destructive-opt-in) |
 | store through a take-address-of-local pointer dropped as dead so the later read is garbage | [`stackalias`](#stackalias----on--off-default-off-destructive-opt-in) |
+| every function-pointer call in a /guard:cf PE prints as (*__guard_dispatch_icall_fptr)(...) | [`guarddispatch`](#guarddispatch----on--off-default-on) |
+| indirect call target dropped and the dispatch slot called instead | [`guarddispatch`](#guarddispatch----on--off-default-on) |
 | bogus (*pcVar1)() indirect call after calling a struct-returning function on sparc | [`sparcstructret`](#sparcstructret----on--off-default-on) |
 | function tail dropped after a sparc call followed by unimp | [`sparcstructret`](#sparcstructret----on--off-default-on) |
 | switch rendered as nested if/else-if compare tree over one variable | [`loweredswitch`](#loweredswitch----on--off--linear--tree--all-default-on) |
@@ -241,6 +243,7 @@ Three tiers:
 | a byte loaded with ldrb is declared unsigned int and used as an index | [`regnarrow`](#regnarrow----on--off-default-on) |
 | an int local prints as unsigned long on x86-64 though every value is a zero-extended 32-bit result | [`regnarrow`](#regnarrow----on--off-default-on) |
 | a long long parameter on i386 or 32-bit ARM prints as two int parameters | [`pairparam`](#pairparam----on--off-default-on) |
+| a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters | [`pairparam`](#pairparam----on--off-default-on) |
 | a signed char loaded with ldrsb is declared int | [`regsigned`](#regsigned----on--off-default-off) |
 | a short counter prints as int with (int)(short) casts at every use | [`regsigned`](#regsigned----on--off-default-off) |
 | an int local prints as long on x86-64 though every value is a movsxd | [`regsigned`](#regsigned----on--off-default-off) |
@@ -535,6 +538,10 @@ Three tiers:
 | a declared local is never written and never read anywhere in the function | [`indirectonly`](#indirectonly----on--off-default-off) |
 | a `vN = slot;` ... `slot = vN;` round-trip copy pair around a loop that only reads the slot | [`indirectonly`](#indirectonly----on--off-default-off) |
 | a call result assigned to a temporary that is immediately assigned to a stack slot | [`indirectonly`](#indirectonly----on--off-default-off) |
+| one local is assigned unrelated values in different parts of the function | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| a loop counter reused later as an unrelated result or return code | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| two source variables of the same type print as one name | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| a saved argument and a later call result share one declared local | [`typemerge`](#typemerge----on--storage--off-default-on) |
 | an inlined callee body is spliced into the caller and should read as a call | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | want to pull a chosen region out of a function into a named pseudofunction | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | acting on an almostregion inline-candidate report by hand or with an llm | [`outline`](#outline----off----default-off-destructive-opt-in) |
@@ -1148,6 +1155,10 @@ Three tiers:
 | loop counters print as v5, v3, v1 instead of i, j, k | [`contextnames`](#contextnames----on--off-default-off) |
 | the accumulator a function returns keeps a vN name | [`contextnames`](#contextnames----on--off-default-off) |
 | nested loops are hard to tell apart in stripped code | [`contextnames`](#contextnames----on--off-default-off) |
+| a local loaded from a struct field keeps a vN name | [`flownames`](#flownames----on--off-default-off) |
+| v3 = p->len instead of len = p->len | [`flownames`](#flownames----on--off-default-off) |
+| a char pointer local named vN | [`flownames`](#flownames----on--off-default-off) |
+| a pointer to a named struct named vN | [`flownames`](#flownames----on--off-default-off) |
 | a double parameter stored into a global prints as unsigned long and moves ahead of the integer parameters | [`floatglobals`](#floatglobals----on--off-default-on) |
 | a float parameter copied into a global prints as unsigned int | [`floatglobals`](#floatglobals----on--off-default-on) |
 | a global passed to a float parameter prints as a union reinterpretation ((union { unsigned int from; float to; }){ .from = dat_10001d78 }).to | [`floatglobals`](#floatglobals----on--off-default-on) |
@@ -1246,6 +1257,9 @@ Three tiers:
 | case N: goto label_X; next to default: label_X: | [`switchmerge`](#switchmerge----on--off-default-on) |
 | output printed with option ctree on differs from the same function printed with it off | [`ctree`](#ctree----on--off-default-off) |
 | a C-level cleanup needs the printed statement tree rather than the structured block graph | [`ctree`](#ctree----on--off-default-off) |
+| a debug build shows a generic register name where the DWARF information names a local | [`honestgaps`](#honestgaps----on--off-default-off) |
+| a function with unimplemented instructions says so in its header but not where | [`honestgaps`](#honestgaps----on--off-default-off) |
+| the real-binary harness cannot tell which functions lost information | [`honestgaps`](#honestgaps----on--off-default-off) |
 
 ## Toggleable transforms
 
@@ -1739,6 +1753,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P6/alias-facets · ghidra-upstream · opt-in-tool · GH-8500
 - **Example:** `option stackalias on`
 
+### `guarddispatch` -- on | off, default `on`
+
+- **Symptoms:** every function-pointer call in a /guard:cf PE prints as (*__guard_dispatch_icall_fptr)(...); indirect call target dropped and the dispatch slot called instead.
+- **What it does:** Print a call through a Control Flow Guard dispatch slot as the indirect call it guards.
+- **When to flip:** On by default: an image built with Control Flow Guard calls a function pointer as `mov rax, target; call [__guard_dispatch_icall_fptr]`, and the dispatch routine validates `rax` and jumps to it. On, a CALLIND whose target its instruction loads from a dispatch slot the PE load configuration names (`__guard_dispatch_icall_fptr`, `__guard_xfg_dispatch_icall_fptr`) calls the target register `rax` instead (x86-64 only), so `(*__guard_dispatch_icall_fptr)(a, b)` becomes `(*f)(a, b)`. The guard check itself is not shown. Only a PE with a load configuration fills the slot set, so it is inert everywhere else (0/675). Flip off to see the call through the dispatch slot as the instructions state it.
+- **Where / provenance:** P2/flow-classification · kuna · presentation-default · kuna-pe-loadconfig
+- **Example:** `option guarddispatch off`
+
 ### `sparcstructret` -- on | off, default `on`
 
 - **Symptoms:** bogus (*pcVar1)() indirect call after calling a struct-returning function on sparc; function tail dropped after a sparc call followed by unimp.
@@ -1797,8 +1819,8 @@ The control surface: each of these can make output worse on the wrong source sha
 
 ### `pairparam` -- on | off, default `on`
 
-- **Symptoms:** a long long parameter on i386 or 32-bit ARM prints as two int parameters.
-- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow or carry links them.
+- **Symptoms:** a long long parameter on i386 or 32-bit ARM prints as two int parameters; a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters.
+- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow, a carry or a two-word equality links them.
 - **When to flip:** On by default.
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option pairparam off`
@@ -2418,6 +2440,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** OFF by default, although the body is upstream verbatim, because the merge it unlocks can fabricate a store. When the illegal input is the SOURCE of the copy -- the machine loads an escaped frame slot into a register and then mutates the register -- the merge makes the emitted C mutate the slot, and a later call that was handed the enclosing object reads a value the machine never wrote there. The heritage pass cannot catch it: an INDIRECT is only attached where the storage is still live in the SSA, so a slot whose last read is before the loop gets no INDIRECT at any call after it and the cover-intersection test has nothing to intersect. Stock Ghidra 12.1.2 emits the same fabricated store on the same input (docs/features/indirectonly/counterexample.md), so this is an upstream defect the port inherits rather than a porting error; kuna declines to inherit it by default. Turn it ON to reproduce Ghidra variable partitioning exactly, or for the merges that are sound: where the illegal input is the DESTINATION -- the machine really does store to the slot -- the value is computed into the slot instead of into a temporary that is assigned across, and the assignment, now a COPY inside one variable, is hidden by markInternalCopies; on coreutils `ls` -O2 `main` the two 8-byte loads that fill a 16-byte `struct dev_ino` on the frame stop being printed into two register locals that the following `hash_delete(..., &di)` never sees. The blast radius is small and was measured over 34 whole-binary `decompile-all` slices (ls, sort, grep, gzip, diff, bzip2, find, tar at -O0 and -O2, plus kmod, e2fsck, dpkg, dpkg-query, dash and bash at -O0, -O2 and -O2-noinline): 27 functions change and the corpus loses 19 declarations net, but 24 of the 27 write a frame slot inside an object whose address reaches a later call, so nothing in the emitted C certifies a safe subset -- of the six settled against the disassembly, four restore a store the machine really makes (`ls` -O2 `main`, `tar` -O0 `sub_429c6`, `dpkg` -O0 `sub_2019c`, `e2fsck` -O0 `sub_1680a`, three of them -O0 frames where the variable really does live in memory) while two fabricate one (`bzip2` -O2 `sub_3890`, `kmod` -O2-noinline `sub_97b0`, both -O2 where the value lives in a register for its whole lifetime).
 - **Where / provenance:** P6/merge-aggressiveness · ghidra · presentation-default · kuna-indirectonly
 - **Example:** `option indirectonly on`
+
+### `typemerge` -- on | storage | off, default `on`
+
+- **Symptoms:** one local is assigned unrelated values in different parts of the function; a loop counter reused later as an unrelated result or return code; two source variables of the same type print as one name; a saved argument and a later call result share one declared local.
+- **What it does:** Narrow which variables ActionMergeType joins. Merge::mergeByDatatype (merge.cc:359-401) gathers every HighVariable of the function, groups them by identical data-type, and lets mergeLinear join any two in a group whose lifetimes do not overlap, wherever each is stored: two distinct source variables that only share a type (two `int` counters of two loops, a saved argument and a later result) print as one reused local, and a value that crossed a call or a phi in another register becomes the same name as an unrelated one. `on` is that upstream pass byte-for-byte. `storage` keeps the type grouping but lets a high join a group only when every instance of it and every instance of the group's first high sit in one and the same storage (same space, offset and size; kuna_typemerge.rs (single_storage)), so a register or stack slot that the compiler reused for one variable still reads as one variable while values held in different registers stay apart. `off` skips the type grouping entirely. Both narrower modes leave the required merges, ActionMergeCopy, ActionMergeAdjacent, ActionDominantCopy and the prior-decompile variable groups (kuna_stablenames.rs (variable_groups)) untouched; they only drop speculative joins, so every variable they keep apart is one upstream would have printed as the same name.
+- **When to flip:** ON (upstream) by default: it is the pass that folds dozens of same-typed temporaries into a handful of reused locals, and the narrower modes print more declarations. Flip to `storage` when one local is assigned values that clearly mean different things in different parts of the function (a loop counter reused as a return code, a saved argument overwritten by an unrelated result) and you want the variables the machine kept in different places printed apart; it keeps a variable the compiler spilled to one slot or held in one register whole. Flip to `off` to see every speculative same-type join undone, at the cost of the most declarations. The narrower modes have not yet been measured against DWARF variable boundaries on a corpus, which is what a default change would need.
+- **Where / provenance:** P6/merge-aggressiveness · kuna · presentation-default · unlace-20
+- **Example:** `option typemerge storage`
 
 ### `outline` -- off | <fn>:<head>-<exit>[;...], default `off` (destructive opt-in)
 
@@ -3314,7 +3344,7 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 ### `uefi` -- on | off, default `on`
 
 - **Symptoms:** an EFI driver entry point takes two undefined8 parameters; a UEFI boot service call renders as (**(code **)(*(long *)(param_2 + 0x60) + 0x140))(...); a protocol GUID in .data is an unnamed 16-byte blob; a DXE core's static boot-services table is raw words; a UEFI driver calls a protocol member as (**(code **)(dat_1a60 + 0x18))(...); gBS is dat_1a70 and every boot service call outside the entry is an offset off it; a driver binding Supported/Start/Stop function is sub_xxx with untyped parameters; a PEIM entry is typed (EFI_HANDLE, EFI_SYSTEM_TABLE *); an SMM driver calls through an untyped gSmst; which module implements the protocol this driver locates.
-- **What it does:** UEFI module markup for a PE image whose Subsystem is an EFI application, boot driver, runtime driver or ROM (10..13). The entry point gets the locked prototype EFI_STATUS _ModuleEntryPoint(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable). EFI_SYSTEM_TABLE, EFI_BOOT_SERVICES, EFI_RUNTIME_SERVICES, EFI_DXE_SERVICES, EFI_PEI_SERVICES, the console text protocols and EFI_GUID are built from the UEFI and PI specifications with natural alignment for the image's pointer width, and every service member is a typed function pointer, so `SystemTable->BootServices->LocateProtocol(&guid, 0, &iface)` renders as a member call with its arguments. Every 16-byte value in a data section equal to a GUID declared in the EDK2 package files (965 names, gEfiLoadedImageProtocolGuid and the rest) is named and typed EFI_GUID. A service table the module defines statically (the DXE, PEI and SMM cores) is found by its EFI_TABLE_HEADER signature (IBI SYST, BOOTSERV, RUNTSERV, DXE_SERV, PEI SERV) and typed. The ARM PEI-services getters (Thumb `mrc p15,0,r0,c13,c0,2; bx lr`, the A32 form, and AArch64 `mrs x0, tpidr_el0; ret`) are named ArmReadTpidrurw and return EFI_PEI_SERVICES **. The pass also follows the service tables through the module's code: the globals the entry stores them in are named and typed (gImageHandle, gST, gBS, gRT, gDS, gSmst, gMmst); LocateProtocol, HandleProtocol, OpenProtocol, SmmLocateProtocol/MmLocateProtocol and LocatePpi type their interface out-parameter from the GUID argument, using the interface structs of 371 protocol and PPI GUIDs generated from the EDK2 MdePkg and MdeModulePkg headers (edk2-stable202505), so a call through the interface names its member; InstallProtocolInterface, InstallMultipleProtocolInterfaces, the MM installs, InstallPpi and NotifyPpi type the installed instance (or descriptor list) and name each function it points at <Interface><Member> with the member's prototype; an interface installed under a GUID with no struct gets one synthesized from the instance (Function_<off>/Field_<off>). A PEIM is entered as (VOID *FileHandle, EFI_PEI_SERVICES **PeiServices) and a standalone-MM module with EFI_MM_SYSTEM_TABLE *; an SMM driver's gSmst is typed EFI_SMM_SYSTEM_TABLE2 * from GetSmstLocation; the X64/IA32 GetPeiServicesTablePointer (sidt) and the PeiServices<Service> forwarding functions of a PEIM are recognized. Beside the kuna-uefi.index that `unlace unpack <firmware> --protocols` writes, a module takes its phase from its FFS file type and each interface lookup gets a comment naming the module of the volume that installs the interface, with the instance address and member functions.
+- **What it does:** UEFI module markup for a PE image whose Subsystem is an EFI application, boot driver, runtime driver or ROM (10..13). The entry point gets the locked prototype EFI_STATUS _ModuleEntryPoint(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable). EFI_SYSTEM_TABLE, EFI_BOOT_SERVICES, EFI_RUNTIME_SERVICES, EFI_DXE_SERVICES, EFI_PEI_SERVICES, the console text protocols and EFI_GUID are built from the UEFI and PI specifications with natural alignment for the image's pointer width, and every service member is a typed function pointer, so `SystemTable->BootServices->LocateProtocol(&guid, 0, &iface)` renders as a member call with its arguments. Every 16-byte value in a data section equal to a GUID declared in the EDK2 package files (965 names, gEfiLoadedImageProtocolGuid and the rest) is named and typed EFI_GUID. A service table the module defines statically (the DXE, PEI and SMM cores) is found by its EFI_TABLE_HEADER signature (IBI SYST, BOOTSERV, RUNTSERV, DXE_SERV, PEI SERV) and typed. The ARM PEI-services getters (Thumb `mrc p15,0,r0,c13,c0,2; bx lr`, the A32 form, and AArch64 `mrs x0, tpidr_el0; ret`) are named ArmReadTpidrurw and return EFI_PEI_SERVICES **. The pass also follows the service tables through the module's code: the globals the entry stores them in are named and typed (gImageHandle, gST, gBS, gRT, gDS, gSmst, gMmst); LocateProtocol, HandleProtocol, OpenProtocol, SmmLocateProtocol/MmLocateProtocol and LocatePpi type their interface out-parameter from the GUID argument, using the interface structs of 371 protocol and PPI GUIDs generated from the EDK2 MdePkg and MdeModulePkg headers (edk2-stable202505), so a call through the interface names its member; InstallProtocolInterface, InstallMultipleProtocolInterfaces, the MM installs, InstallPpi and NotifyPpi type the installed instance (or descriptor list) and name each function it points at <Interface><Member> with the member's prototype; SmmRegisterProtocolNotify/MmRegisterProtocolNotify name their callback <Guid>Notify with its Interface parameter typed from the GUID; an interface installed under a GUID with no struct gets one synthesized from the instance (Function_<off>/Field_<off>). A PEIM is entered as (VOID *FileHandle, EFI_PEI_SERVICES **PeiServices) and a standalone-MM module with EFI_MM_SYSTEM_TABLE *; an SMM driver's gSmst is typed EFI_SMM_SYSTEM_TABLE2 * from GetSmstLocation; the X64/IA32 GetPeiServicesTablePointer (sidt) and the PeiServices<Service> forwarding functions of a PEIM are recognized. Beside the kuna-uefi.index that `unlace unpack <firmware> --protocols` writes, a module takes its phase from its FFS file type and each interface lookup gets a comment naming the module of the volume that installs the interface, with the instance address and member functions.
 - **When to flip:** On by default; it only acts on EFI-subsystem PE images, so every other input is byte-identical. Flip off to see the module without the EFI types: the entry then takes two untyped words and every service call is an indirect call through an offset. To link protocol lookups to their implementations across a firmware image, unpack it with `unlace unpack FIRMWARE --protocols` and decompile the modules in the directory it wrote. `KUNA_UEFI_DEBUG=1` prints every service call the pass read.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida95-53
 - **Example:** `option uefi off`
@@ -3699,6 +3729,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **Where / provenance:** P6/naming-policy · kuna · presentation-default · kuna-contextnames
 - **Example:** `option contextnames on`
 
+### `flownames` -- on | off, default `off`
+
+- **Symptoms:** a local loaded from a struct field keeps a vN name; v3 = p->len instead of len = p->len; a char pointer local named vN; a pointer to a named struct named vN.
+- **What it does:** Name a numbered local from the structure fields and the type it meets when no declaration or library call names it. `kuna_flownames` reads two kinds of evidence for the `libcnames` alias walk: a named field the value is loaded from or stored to through a typed pointer (`len = p->len`, `p->len = len`), or copied out of or into a member of a stack structure (`size = st.st_size`), counted only when every field the local meets has the same name, leading underscores dropped (`_flags` gives `flags`); and the local's own type, `str` for a `char` pointer, `wstr` for a wide-character pointer and `p_<name>` for a pointer to a named structure (`p_passwd`, the last `::` component without template arguments for a C++ type). A field the analysis made up (`field_0x10`), padding (`__pad0`, `__glibc_reserved`, `unused`), and a structure it synthesized (`struct_3`, `astruct_1`) name nothing. A field name ranks below a library argument and above a role name (`dest`/`src`) and `result`; a type name is the weakest evidence of all. The walk numbers every local exactly as with the option off and only then prints the name, so `v4` stays the same variable in every mode, a directive may name the local by either spelling, a clash takes `_2`, `_3`, ... in evidence order, and no spelling repeats a name another variable, the scope or a callee holds. Naming a local after the parameter it is passed to is upstream's `lookForFuncParamNames` for a locked callee prototype and `libcnames` for the built-in library tables; this option adds the evidence neither has.
+- **When to flip:** Turn on for stripped code that works through typed structures: `v3 = a0->st_size;` prints `st_size = a0->st_size;`, a `char *` local prints `str` and a `struct passwd *` local `p_passwd`. Off by default because it renames locals that other features' stage assertions and CLI tests spell as `vN`, and because a type name says less than the name a reader would choose.
+- **Where / provenance:** P6/naming-policy · ida · presentation-default · kuna-flownames
+- **Example:** `option flownames on`
+
 ### `floatglobals` -- on | off, default `on`
 
 - **Symptoms:** a double parameter stored into a global prints as unsigned long and moves ahead of the integer parameters; a float parameter copied into a global prints as unsigned int; a global passed to a float parameter prints as a union reinterpretation ((union { unsigned int from; float to; }){ .from = dat_10001d78 }).to; firmware calls of float helpers wrap every global argument in a union.
@@ -3922,6 +3960,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Leave it off. Turn it on to check the tree printer against the block printer on a binary (nothing should change), or while moving a C-level cleanup into the tree. It is a migration switch: once the tree path is the only printer, the option goes away.
 - **Where / provenance:** P9/brace-form · kuna · opt-in-tool · kuna-ctree
 - **Example:** `option ctree on`
+
+### `honestgaps` -- on | off, default `off`
+
+- **Symptoms:** a debug build shows a generic register name where the DWARF information names a local; a function with unimplemented instructions says so in its header but not where; the real-binary harness cannot tell which functions lost information.
+- **What it does:** Name in the output the losses the decompile otherwise drops without a word, each as a warning comment at the site that --json lists under its own kind. An instruction SLEIGH decodes but has no p-code for, stepped over as a no-op under the ignoreunimplemented policy, gets `notmodelled: <insn> has no p-code semantics; stepped over as a no-op` at its address (before, one header line said the function ignored unimplemented instructions, never which). A DWARF register local that no write of its register reaching its range can carry, which the decompile drops so its name never appears, gets a header line `debuginfo: DWARF local <name> (range from 0x...) not bound: no write of its register reaches it`. Losses that already print (decode-failure halts, funcboundflow and instruction-budget truncation, out-of-bounds flow, unrecovered jump tables) are unchanged.
+- **When to flip:** Turn on when auditing how much of a binary the output can be trusted for: with --json each record lists these sites in warnings and the document totals every warning kind in warning_kinds. Leave off for the upstream text.
+- **Where / provenance:** P2/decode-error-policy · kuna · opt-in-tool · unlace-33-honestgaps
+- **Example:** `option honestgaps on`
 
 ## Programmatic use
 

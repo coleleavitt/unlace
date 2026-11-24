@@ -18,6 +18,10 @@
 //! call), the guard goes too: the `if` becomes a list of its condition block's
 //! statements and the arm.  No goto may reach an assignment of `I` or the
 //! loop's first block.
+//!
+//! A do-while whose body prints nothing but its test, `do {} while (c);`, prints
+//! as `while (c) {}` with no guard at all: the body runs nothing, so testing
+//! first runs the same code.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -512,6 +516,22 @@ fn plan(data: &Funcdata, w: BlockId, targets: &BTreeSet<BlockId>) -> Option<Opti
     .then_some(None)
 }
 
+/// Does the do-while `w` print nothing but its test: a body of one basic block
+/// whose only printed op is the CBRANCH back to itself?
+fn empty_body(data: &Funcdata, w: BlockId) -> bool {
+    let graph = data.sblocks_ref();
+    let body = graph.block(w).get_block(0);
+    let b = graph.block(body);
+    if b.get_type() != BlockType::Copy {
+        return false;
+    }
+    let Some(bb) = b.get_copy() else {
+        return false;
+    };
+    branch_to(data, bb, bb).is_some()
+        && crate::kuna_condfold::printed_shape(data, &data.bb_ops(bb)).is_some_and(|s| s.stmts == 1)
+}
+
 /// Print each qualifying guarded do-while as a while loop (see the module docs);
 /// returns how many loops changed.
 #[doc(hidden)]
@@ -538,6 +558,13 @@ pub fn guardedloop_apply(data: &mut Funcdata) -> i32 {
     }
     let mut count = 0;
     for w in loops {
+        if empty_body(data, w) {
+            data.sblocks_mut()
+                .block_mut(w)
+                .set_flag(block_flags::f_kuna_top_test);
+            count += 1;
+            continue;
+        }
         let Some(drop) = plan(data, w, &targets) else {
             continue;
         };

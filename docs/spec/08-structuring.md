@@ -1977,3 +1977,14 @@ statements and `I` runs on the skipped path. A goto into `I` or to the loop's
 first block keeps the do-while. cmark O2ni (clang -O2 -fno-inline, arm64): 12
 functions change, GED -45 (9625 to 9580), do-whiles 151 to 133, while loops 45
 to 63; `finalize_document` prints `while (v2 != v3) { ... }` with no guard.
+
+A do-while whose body is one basic block that prints nothing but its test
+(`empty_body`: the block branches back to itself and `kuna_condfold::printed_shape`
+counts only the terminal CBRANCH) needs no guard: `do {} while (c);` and
+`while (c) {}` run the same code, so it takes `f_kuna_top_test` directly. This is
+the busy-wait on a device register that firmware writes as `while (!(REG & BIT));`
+(Hex-Rays prints it as `while ( ... ) ;`). DecBench O2-noinline has 200 of them
+in 44 binaries; with the loop printed at the top, GED over those binaries' 21,658
+scored functions goes from 208,492 to 207,801 (-691; 99 functions better, 29
+worse). The 29 are sources that wrote the `do { reg = REG & BIT; } while (!reg);`
+form, such as libopencm3 `console_putc` (0 to 10).

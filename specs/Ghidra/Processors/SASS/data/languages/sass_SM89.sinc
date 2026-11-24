@@ -11726,7 +11726,7 @@ G_6e5ecb3e: ".CLEAR" is f84_84=1 {  }
 { sass_CALL(); }
 # CALL.ABS.NOINC !P1, 0x4  [fe40004c000000000000400007943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 "!"^SP87_89^","^SI_7fff4b49 is f0_11=2371 & f90_91=1 & GD_619b08c9 & G_cfbd5bc4 & SP87_89 & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 # I2IP.U4.S32.SAT R1, R1, 0x1, R1.???0  [fe400000060010000000101017839]
 :^GD_619b08c9^"I2IP.U4.S32"^G_bc606d5e SR16_23d^","^G_9a4e649f^","^SI_382e92c1^","^G_d1709e0d is f0_11=2105 & f76_78=6 & f91_91=0 & f123_123=0 & GD_619b08c9 & G_bc606d5e & SR16_23d & G_9a4e649f & SI_382e92c1 & G_d1709e0d
 { SR16_23d = sass_I2IP(G_9a4e649f, SI_382e92c1); }
@@ -21840,7 +21840,7 @@ G_6e5ecb3e: ".CLEAR" is f84_84=1 {  }
 {  }
 # CALL.ABS P1, 0x4  [fe400008000000000000400007943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 G_e52b3d2f^SI_7fff4b49 is f0_11=2371 & f90_91=0 & GD_619b08c9 & G_cfbd5bc4 & G_e52b3d2f & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 # SHF.L.U64.HI R1, R1, R1, 0x1  [fe400000102010000000101017419]
 :^GD_619b08c9^"SHF.L.U64.HI" SR16_23d^","^G_9a4e649f^","^G_3671ca4d^","^SI_4ce6212f is f0_11=1049 & f73_76=1 & f80_80=1 & f91_91=0 & f124_124=0 & GD_619b08c9 & SR16_23d & G_9a4e649f & G_3671ca4d & SI_4ce6212f
 { local v:8 = (zext(SI_4ce6212f) << 32) | zext(G_9a4e649f); local r:8 = v << zext((G_3671ca4d & 63)); SR16_23d = r(4); }

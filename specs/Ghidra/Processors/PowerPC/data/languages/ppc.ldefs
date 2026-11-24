@@ -37,6 +37,20 @@
   </language>
   <language processor="PowerPC"
             endian="big"
+            size="32"
+            variant="Gekko"
+            version="1.0"
+            slafile="ppc_32_gekko_be.sla"
+            processorspec="ppc_32.pspec"
+            manualindexfile="../manuals/PowerPC.idx"
+            id="PowerPC:BE:32:Gekko">
+    <description>IBM Gekko / Broadway (PowerPC 750CL) 32-bit big endian with paired singles</description>
+    <compiler name="default" spec="ppc_32.cspec" id="default"/>
+    <external_name tool="gnu" name="powerpc:750"/>
+    <external_name tool="DWARF.register.mapping.file" name="ppc.dwarf"/>
+  </language>
+  <language processor="PowerPC"
+            endian="big"
             size="64"
             variant="default"
             version="1.7"

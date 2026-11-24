@@ -1,0 +1,4 @@
+# Zilog Z8001 (segmented Z8000): 7-bit segment + 16-bit offset, flattened as seg<<16|off.
+# See z8000.sinc for sources.
+@define SEGMENTED "1"
+@include "z8000.sinc"

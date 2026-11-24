@@ -1,7 +1,7 @@
-# PowerPC: SPE2 and EFS2 for NXP e200z4/e200z7 (#98)
+# PowerPC: SPE2 and EFS2 for NXP e200z4/e200z7, Gekko paired singles (#98)
 
-The Ghidra-vendored PowerPC module is unchanged except for one language added for
-unlace: `PowerPC:BE:32:e200-SPE2` (`ppc_32_e200_spe2_be.slaspec`), the Power ISA
+The Ghidra-vendored PowerPC module is unchanged except for two languages added for
+unlace: `PowerPC:BE:32:Gekko` (below, "Gekko / Broadway paired singles") and `PowerPC:BE:32:e200-SPE2` (`ppc_32_e200_spe2_be.slaspec`), the Power ISA
 embedded + VLE language (`PowerPC:BE:64:VLE-32addr`) plus `SPE2.sinc`.
 
 ## Sources
@@ -54,3 +54,45 @@ The default PowerPC languages do not define `SPE2` and are unchanged.
 - Encodings binutils rejects (an update-form offset of 0, a shift count above the
   lane width, an `evxtrd` offset of 0) still decode.
 - The language is selected with `--target`; ELF headers do not route to it.
+
+# Gekko / Broadway paired singles (#98)
+
+`PowerPC:BE:32:Gekko` (`ppc_32_gekko_be.slaspec`) is the 32-bit big-endian
+PowerPC language without AltiVec plus `paired_single.sinc`: the paired-single
+instructions of the IBM Gekko (GameCube) and Broadway (Wii), the PowerPC 750CL.
+
+## Sources
+
+- The IBM PowerPC 750CL RISC Microprocessor User's Manual, the paired-single
+  instruction chapter (semantics, GQR layout).
+- Decode checked against `powerpc-elf-objdump -M gekko` from binutils 2.43.1
+  (as an oracle only; no text copied).
+
+## Coverage
+
+All 39 paired-single instructions and their record (`.`) forms decode as objdump
+names them. A probe of 7,060 words (random primary-opcode 4/56/57/60/61 words plus
+every A-form and X-form extended opcode with random registers) agrees with
+objdump on every word, except the update forms with rA = 0 (`psq_lu`, `psq_stu`,
+`psq_lux`, `psq_stux`): those are invalid forms in the manual and stay bad
+instructions here, while objdump prints them.
+
+- Each FPR holds ps0 (the FPR, `fN`) and ps1 (`ps1_N`, the otherwise unused low half
+  of the overlaid VSX register). Arithmetic computes in double and rounds each slot
+  to single, as `fadds` does. `ps_sum0`/`ps_sum1`, `ps_muls0/1`, `ps_madds0/1`,
+  `ps_merge00..11` and `ps_sel` move the slots the manual names; `ps_cmpu0/1` and
+  `ps_cmpo0/1` set a CR field and FPCC like `fcmpu`; record forms set CR1.
+- `psq_l`/`psq_st` and their `u`, `x` and `ux` forms with GQR index 0 are plain
+  single-precision loads and stores (two slots, or ps0 only with W=1, where a load
+  sets ps1 to 1.0). The SDKs keep GQR0 at zero (the float type), so this is what
+  such code means. With any other GQR the transfer is quantized by a run-time
+  register, so it is a `psq_load`/`psq_store` user op on that GQR (`spr390`-`spr397`).
+- `dcbz_l` is a user op. The 405/440 multiply-accumulate instructions
+  (`mulhwInstructions.sinc`) share primary opcode 4 and are left out of this
+  language under `@define PAIRED_SINGLE`; the other PowerPC languages are unchanged.
+
+## Gaps
+
+- `ps_res` and `ps_rsqrte` are exact reciprocals, not the hardware estimates.
+- GQRs print under their SPR names (`spr390`-`spr397` = GQR0-GQR7).
+- Selected with `--target`; ELF headers (`EM_PPC`) do not route to it.

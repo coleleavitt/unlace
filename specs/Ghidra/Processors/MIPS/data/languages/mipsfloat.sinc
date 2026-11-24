@@ -1161,83 +1161,83 @@ macro trapIfSNaN(x1, x2) { }
     <done>
 }
 
-:min.S fd, fs, ft	is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & cop1code=0x0 & fs & fd & ft & fct=0x1c {
+:min.S fd, fs, ft	is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & fs & fd & ft & fct=0x1c {
     # set floating point fd to the min of fs and ft, TBD special case for NaN
     tmp_cond:1 = fs:4 f< ft:4;
     fd[0,32] = (fs:4 * zext(tmp_cond == 1)) | (ft:4 * zext(tmp_cond == 0) );
 }
-:min.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & cop1code=0x0 & fs & fd & ft & fct=0x1c 
+:min.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & fs & fd & ft & fct=0x1c 
 				& fsD & fdD & ftD {
     tmp_cond:1 = fsD f< ftD;
     fdD = zext( (fsD * zext(tmp_cond == 1)) | (ftD * zext(tmp_cond == 0) ) );
 }
 
-:max.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & cop1code=0x0 & fs & fd & ft & fct=0x1d {
+:max.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & fs & fd & ft & fct=0x1d {
     # set floating point fd to the max of fs and ft, TBD special case for NaN
     tmp_cond:1 = fs:4 f> ft:4;
     fd[0,32] = (fs:4 * zext(tmp_cond == 1)) | (ft:4 * zext(tmp_cond == 0) );
 }
-:max.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & cop1code=0x0 & fs & fd & ft & fct=0x1d
+:max.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & fs & fd & ft & fct=0x1d
                                 & fsD & fdD & ftD {
     tmp_cond:1 = fsD f> ftD;
     fdD = zext( (fsD * zext(tmp_cond == 1)) | (ftD * zext(tmp_cond == 0) ) );
 }
 
-:mina.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & cop1code=0x0 & fs & fd & ft & fct=0x1e {
+:mina.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & fs & fd & ft & fct=0x1e {
     # set floating point fd to the min of absolute values of fs and ft, TBD special case for NaN
     tmp_cond:1 = abs(fs:4) f< abs(ft:4);
     fd[0,32] = (fs:4 * zext(tmp_cond == 1)) | (ft:4 * zext(tmp_cond == 0) );
 }
-:mina.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & cop1code=0x0 & fs & fd & ft & fct=0x1e 
+:mina.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & fs & fd & ft & fct=0x1e 
                                 & fsD & fdD & ftD {
     tmp_cond:1 = abs(fsD) f< abs(ftD);
     fdD = zext( (fsD * zext(tmp_cond == 1)) | (ftD * zext(tmp_cond == 0) ) );
 }
 
-:maxa.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & cop1code=0x0 & fs & fd & ft & fct=0x1f {
+:maxa.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & fs & fd & ft & fct=0x1f {
     # set floating point fd to the max of absolute values of fs and ft, TBD special case for NaN
     tmp_cond:1 = abs(fs:4) f> abs(ft:4);
     fd[0,32] = (fs:4 * zext(tmp_cond == 1)) | (ft:4 * zext(tmp_cond == 0) );
 }
-:maxa.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & cop1code=0x0 & fs & fd & ft & fct=0x1f
+:maxa.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & fs & fd & ft & fct=0x1f
                                 & fsD & fdD & ftD {
     tmp_cond:1 = abs(fsD) f> abs(ftD);
     fdD = zext( (fsD * zext(tmp_cond == 1)) | (ftD * zext(tmp_cond == 0) ) );
 }
 
-:maddf.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & cop1code=0x0 & fs & fd & ft & fct=0x18 {
+:maddf.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & fs & fd & ft & fct=0x18 {
     # set floating point fd = fd + fs * ft, using 32-bit floating values
     fd[0,32] = fd:4 f+ (fs:4 f* ft:4);
 }
-:maddf.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & cop1code=0x0 & fs & fd & ft & fct=0x18
+:maddf.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & fs & fd & ft & fct=0x18
                                 & fsD & fdD & ftD {
     fdD = fdD f+ (fsD f* ftD);
 }
 
-:msubf.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & cop1code=0x0 & fs & fd & ft & fct=0x19 {
+:msubf.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & fs & fd & ft & fct=0x19 {
     # set floating point fd = fd - fs * ft, using 32-bit floating values
     fd[0,32] = fd:4 f- (fs:4 f* ft:4);
 }
-:msubf.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & cop1code=0x0 & fs & fd & ft & fct=0x19 
+:msubf.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & fs & fd & ft & fct=0x19 
                                 & fsD & fdD & ftD {
     fdD = fdD f- (fsD f* ftD);
 }
 
-:seleqz.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & cop1code=0x0 & fs & fd & ft & fct=0x14 {
+:seleqz.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & fs & fd & ft & fct=0x14 {
     # Set floating point register fd to fs if ft[0] == 0, else if == 1 then set fd to 0, TBD special case for NaN
     # Note that the description of these select instructions in the MIPS manual does not properly use the C conditional operator
     fd = zext(fs * zext(ft[0,1] == 0));
 }
-:seleqz.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & cop1code=0x0 & fs & fd & ft & fct=0x14
+:seleqz.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & fs & fd & ft & fct=0x14
                                 & fsD & fdD & ftD {
     fdD = zext(fsD * zext(ftD[0,1] == 0));
 }
 
-:selnez.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & cop1code=0x0 & fs & fd & ft & fct=0x17 {
+:selnez.S fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x10 & fs & fd & ft & fct=0x17 {
     # set floating point register fd to fs if ft[0] == 1, else if == 0 then set fd to 0, TBD special case for NaN
     fd = zext(fs * zext(ft[0,1] == 1));
 }
-:selnez.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & cop1code=0x0 & fs & fd & ft & fct=0x17
+:selnez.D fd, fs, ft       is $(AMODE) & REL6=1 & prime=0x11 & format=0x11 & fs & fd & ft & fct=0x17
                                 & fsD & fdD & ftD {
     fdD = zext(fsD * zext(ftD[0,1] == 1));
 }

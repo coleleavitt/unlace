@@ -2028,8 +2028,9 @@ define pcodeop mac_wOp;
 # arch    arch_sh_up
 :mov.b M_0t,N_0t_at_neg     is OP_0=0x2 & N_0t_at_neg & M_0t & OP_1=0x4 {
 
+	local v:4 = M_0t;
 	N_0t_at_neg = N_0t_at_neg - 1;
-	*:1 ( N_0t_at_neg ) = M_0t:1;
+	*:1 ( N_0t_at_neg ) = v:1;
 }
 
 
@@ -2039,8 +2040,9 @@ define pcodeop mac_wOp;
 # arch    arch_sh_up
 :mov.w M_0t,N_0t_at_neg     is OP_0=0x2 & N_0t_at_neg & M_0t & OP_1=0x5 {
 
+	local v:4 = M_0t;
 	N_0t_at_neg = N_0t_at_neg - 2;
-	*:2 ( N_0t_at_neg ) = M_0t:2;
+	*:2 ( N_0t_at_neg ) = v:2;
 }
 
 
@@ -2050,8 +2052,9 @@ define pcodeop mac_wOp;
 # arch    arch_sh_up
 :mov.l M_0t,N_0t_at_neg     is OP_0=0x2 & N_0t_at_neg & M_0t & OP_1=0x6 {
 
+	local v:4 = M_0t;
 	N_0t_at_neg = N_0t_at_neg - 4;
-	*:4 ( N_0t_at_neg ) = M_0t;
+	*:4 ( N_0t_at_neg ) = v;
 }
 
 
@@ -2061,8 +2064,9 @@ define pcodeop mac_wOp;
 # arch    arch_sh_up
 :mov.b M_0t_at,N_0t         is OP_0=0x6 & N_0t & M_0t_at & OP_1=0x4 {
 
-	N_0t = sext( *:1 ( M_0t_at ) );
-	M_0t_at = M_0t_at + 1;
+	local a:4 = M_0t_at;
+	M_0t_at = a + 1;
+	N_0t = sext( *:1 ( a ) );
 }
 
 
@@ -2072,8 +2076,9 @@ define pcodeop mac_wOp;
 # arch    arch_sh_up
 :mov.w M_0t_at,N_0t         is OP_0=0x6 & N_0t & M_0t_at & OP_1=0x5 {
 
-	N_0t = sext( *:2 ( M_0t_at ) );
-	M_0t_at = M_0t_at + 2;
+	local a:4 = M_0t_at;
+	M_0t_at = a + 2;
+	N_0t = sext( *:2 ( a ) );
 }
 
 
@@ -2083,8 +2088,9 @@ define pcodeop mac_wOp;
 # arch    arch_sh_up
 :mov.l M_0t_at,N_0t         is OP_0=0x6 & N_0t & M_0t_at & OP_1=0x6 {
 
-	N_0t = *:4 ( M_0t_at );
-	M_0t_at = M_0t_at + 4;
+	local a:4 = M_0t_at;
+	M_0t_at = a + 4;
+	N_0t = *:4 ( a );
 }
 
 

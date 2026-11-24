@@ -2894,3 +2894,17 @@ expect = [
 test = "r32c_byte_store_is_one_byte"
 address = "0x30"
 expect = ["dat_40 = 0x7f;"]
+
+# MIPS32 R6 with MSA: an ld.w of a vector and a copy_s.w of lane 1 decompile to an array read.
+[[family]]
+name = "mips_msa"
+language = "MIPS:BE:32:R6"
+base = "0x10000"
+fixture = "crates/unlace-cli/tests/fixtures/mips_msa/load_lane.bin"
+
+[[family.function]]
+test = "mips_msa_load_lane_decompiles"
+address = "0x10000"
+expect = [
+    "return ((unsigned int *)a0)[1];",  # ld.w w0,0(a0); copy_s.w v0,w0[1]
+]

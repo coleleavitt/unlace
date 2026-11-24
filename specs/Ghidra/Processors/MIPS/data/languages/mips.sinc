@@ -658,6 +658,7 @@ define token instr(32)
     simmed      = (0,15) signed
     simmseq     = (6,15) signed
     simmed11    = (0,10) signed
+@include "mips_msa_fields.sinc"
 ;
 
 attach variables [ rs rt rd base index baser6 ] [ 

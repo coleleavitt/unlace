@@ -1,12 +1,13 @@
 //! The Lumina function key: an MD5 over the function's position-independent bytes.
 //!
-//! IDA's `calc_func_metadata` walks every chunk of a function in address order and asks the processor
-//! module's `ev_calcrel` hook for each instruction's relocation mask: the bits that hold an address
-//! (call and branch displacements, absolute addresses, PC-relative data references). The key is
-//! `MD5(normalized ‖ mask)` over the whole function, where `normalized = bytes & !mask` (Synacktiv,
-//! "Investigating IDA Lumina feature"; "Reversing IDA's Lumina Protocol", stack.int.mov). Which bits a
-//! mask covers is the producer's choice, so a key matches IDA's only where both masked the same
-//! operands; two unlace runs over the same code always agree.
+//! IDA's `calc_func_metadata` (libida 9.5 `0x875160`, per chunk `sub_873660`) walks every chunk of a
+//! function in address order. For each code item it asks the processor module's `ev_calcrel` hook
+//! (event `0x52`) for the item's relocation mask, the bits that hold an address (call and branch
+//! displacements, absolute addresses, PC-relative data references), and appends `byte & !mask` to one
+//! buffer and the mask to another; an item the hook does not cover goes in unmasked. The key is
+//! `MD5Update(normalized); MD5Update(mask)`. Which bits a mask covers is the producer's choice, so a key
+//! matches IDA's only where both masked the same operands; two unlace runs over the same code always
+//! agree.
 
 use md5::{Digest, Md5};
 

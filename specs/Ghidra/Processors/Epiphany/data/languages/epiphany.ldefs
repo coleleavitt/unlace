@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="epiphany"
+    endian="little"
+    size="32"
+    variant="default"
+    version="1.0"
+    slafile="epiphany.sla"
+    processorspec="epiphany.pspec"
+    id="epiphany:LE:32:default">
+    <description>Adapteva Epiphany</description>
+    <compiler name="default" spec="epiphany.cspec" id="default"/>
+    <external_name tool="gnu" name="epiphany"/>
+  </language>
+</language_definitions>

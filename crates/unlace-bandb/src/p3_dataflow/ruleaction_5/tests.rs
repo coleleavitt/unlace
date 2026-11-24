@@ -3,10 +3,10 @@
 // Each ported rule is exercised by hand-building the exact input op pattern on a
 // real `Funcdata` and asserting the precise transformation per the C++ body
 // (ops created/destroyed, opcode changes, constants), with negative tests for
-// the early-out guards.  The three STUB-stubbed pointer rules
-// (RulePtrArith/RuleStructOffset0/RulePushPtr) are verified only for their
-// structural surface (name/getOpList/group filtering); their `applyOp` is a
-// no-op stub by design (see the module-level STUB notes).
+// the early-out guards.  The pointer rules (RulePtrArith/RuleStructOffset0/
+// RulePushPtr) are verified for their structural surface (name/getOpList/group
+// filtering) and for the type-recovery gate; their transforms are covered by the
+// datatest and stage corpora.
 
 use super::*;
 
@@ -1092,8 +1092,8 @@ fn specs_lists_nine_rules_in_order() {
 }
 
 #[test]
-fn pointer_rules_are_noop_stubs() {
-    // STUB-stubbed: applyOp returns 0 (no transform) regardless of input.
+fn pointer_rules_gated_before_type_recovery() {
+    // Type recovery has not started, so the pointer rules return 0 before any transform.
     let mut fd = build_fd();
     let op = mk_op(&mut fd, 2, 0x100, OpCode::CPUI_INT_ADD);
     let v0 = mk_vn(&mut fd, 0x10, 8);

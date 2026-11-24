@@ -5440,6 +5440,43 @@ nothing tells apart are reported as a `collision:` line and left out of the
 are written once. The exit status is 0 when the files were written, 1 when an
 input cannot be read or no function is left to write, and 2 on a usage error.
 
+## `unlace project` — the project file
+
+A project file is a SQLite database of overrides for one binary, the durable form of `--assert`
+(`docs/project.md` is the design). `--project FILE` on `decompile` and `decompile-all` applies it:
+its rows go in as `--assert` directives ahead of the command line's own, which still win, and each is
+reported in the run's `assertions` array.
+
+```bash
+unlace project init ./a.out                       # creates ./a.out.unlace, bound to the SHA-256
+unlace project set ./a.out.unlace 'function 0x401000=main' \
+    'prototype main int main(int argc,char **argv)' 'name main::v2 credbuf' 'bookmark 0x401000 start'
+unlace project set ./a.out.unlace @overrides.kuna # an --assert @file, one directive per line
+unlace decompile ./a.out main --project ./a.out.unlace
+unlace project list ./a.out.unlace                # the directives decompile applies
+unlace project query ./a.out.unlace "SELECT printf('0x%x', address), name FROM functions" --json
+unlace project unset ./a.out.unlace 'name main::v2'
+unlace project export ./a.out.unlace -o a.out.project.json   # canonical JSON, for git
+unlace project import ./a.out.unlace a.out.project.json [--replace]
+```
+
+| command | does | `--json` document |
+|---|---|---|
+| `init <binary> [-o FILE] [--force]` | create the file (default `<binary>.unlace`); `--force` replaces one | `{project, binary:{sha256,path,size}, schema_version}` |
+| `set FILE <directive\|@file>...` | store directives, all or none; each is checked against the `--assert` grammar first | `{project, stored:[directive]}` |
+| `unset FILE <directive>...` | remove what a directive sets (its value may be left off) | `{project, removed}` |
+| `get FILE <table> <key>` | one row: an address for `functions`/`data`/`patches`/`bookmarks`, `<kind> <target>` for `assertions`, the stored text otherwise | `{columns:[name], rows:[[value]]}` |
+| `list FILE [<table>]` | no table: every override as the directive it applies; a table: its rows | `{project, binary, directives:[directive]}`, or `{columns, rows}` |
+| `query FILE <SQL>` | any read-only SQL; a write is refused | `{columns, rows}` |
+| `export FILE [-o OUT]` | canonical JSON: sorted, hex addresses | the export itself: `{format:"unlace-project", schema_version, binary, functions, prototypes, locals, types, data, comments, callsites, patches, bookmarks, assertions}` |
+| `import FILE <JSON> [--replace]` | write an export back; refuses another binary's | `{project, imported, replaced}` |
+
+In `{columns, rows}` an integer is a JSON number (an address above `i64::MAX` is negative: select
+`printf('0x%x', address)`), text is a string, a blob is a hex string and NULL is `null`. Without
+`--json`, rows print tab-separated under a header line. `bookmark <addr> <title>` is the one
+project-only directive: it is stored and listed, never sent to the engine. Writers can run at the same
+time: each command is one transaction, and the later of two writes to the same key wins.
+
 ## Everything else
 
 `unlace modes` (list the option presets) also exists, plus minor flags not covered

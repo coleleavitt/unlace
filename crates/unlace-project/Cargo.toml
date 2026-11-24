@@ -1,0 +1,19 @@
+[package]
+name = "unlace-project"
+description = "The unlace project file: a SQLite database of user overrides (names, prototypes, locals, types, comments, patches) that the decompiler applies as --assert directives"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# The bundled feature compiles SQLite's amalgamation (C) with `cc`; no system library is needed.
+rusqlite = { version = "0.43", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+thiserror.workspace = true
+
+[lints]
+workspace = true

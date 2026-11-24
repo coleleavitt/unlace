@@ -1017,6 +1017,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
     let mut func_decls: Vec<crate::funcdecl::FuncDecl> = Vec::new();
     let mut assertions: Vec<unlace_console::assertions::Directive> = Vec::new();
     let mut assert_strict = false;
+    let mut project_file: Option<String> = None;
     let mut types: Vec<String> = Vec::new();
     let mut types_cpp: Option<String> = None;
     let mut decomp_dbg: Option<String> = None;
@@ -1094,6 +1095,12 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
             "--assert-strict" => {
                 assert_strict = true;
                 forwarded.push("--assert-strict".into());
+            }
+            "--project" => {
+                let value = take_value(argv, &mut i, "--project")?;
+                project_file = Some(value.clone());
+                forwarded.push("--project".into());
+                forwarded.push(value);
             }
             "--types" => {
                 types.push(take_value(argv, &mut i, "--types")?);
@@ -1223,6 +1230,15 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
     if let Some(flag) = record_flag {
         return Err(format!("{flag} selects --json record keys; add --json"));
     }
+    // `--project`: its overrides come first, so a command-line --assert still wins.
+    if let Some(project) = &project_file {
+        let mut stored = Vec::new();
+        for directive in crate::project::directives_for(project, &binary)? {
+            stored.extend(crate::assertdecl::parse_flag(&directive)?);
+        }
+        stored.append(&mut assertions);
+        assertions = stored;
+    }
     let assertions = crate::assertdecl::with_types(&types, types_cpp.as_deref(), assertions)?;
 
     // (kuna outlang, DIV-80) The auto policy -- follow the binary when the caller
@@ -1275,7 +1291,7 @@ fn usage() {
          \x20                     [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                     [--option N V].. [--kassert ARGS].. \\\n\
          \x20                     [--define-function S[-E][=N]|@FILE].. \\\n\
-         \x20                     [--assert DIRECTIVE|@FILE].. [--assert-strict] \\\n\
+         \x20                     [--assert DIRECTIVE|@FILE].. [--assert-strict] [--project FILE] \\\n\
          \x20                     [--types FILE.h|DIR].. [--types-cpp CC] \\\n\
          \x20                     [--isa auto|arm|thumb] [--slice ARCH] [--target T] \\\n\
          \x20                     [--sleighpath D] [--decomp-dbg P] [--max-fn-memory MiB]\n\
@@ -1329,6 +1345,8 @@ fn usage() {
          @FILE holds one per line with `#` comments, which is what makes an override\n\
          durable across invocations.  A directive the engine declines is reported and\n\
          the run still succeeds; --assert-strict makes it exit 1 instead.\n\
+         --project FILE applies a project file (`unlace project`): its overrides go in\n\
+         as --assert directives ahead of the command line's, which still win.\n\
          \n\
          --types <file.h | dir> (repeatable) loads C declarations for this run: each\n\
          function declaration is the prototype of the function or import of that\n\

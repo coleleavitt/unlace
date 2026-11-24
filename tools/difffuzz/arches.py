@@ -1000,4 +1000,56 @@ class Sh4(Arch32):
         return {"S", "Q", "M"}
 
 
-ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), TriCore(), Nios2(), Sh4())}
+M68K_DENY = re.compile(
+    r"^(trap.*|illegal|rte|stop|reset|movec|moves.*|move16|bkpt|chk.*|cpush.*|cinv.*|pflush.*|ptest.*|pmove.*|"
+    r"f.*|linea|linef|cas2.*|callm|rtm|nop|pack|unpk)$"
+)
+
+
+class M68k(Arch32):
+    """Motorola 68040 integer instructions, against QEMU user mode (--oracle qemu, qemu-m68k -cpu
+    m68040). FPU, privileged, trap and MMU/cache instructions are not generated."""
+    name = "m68k"
+    lang = "68000:BE:32:default"
+    elf_machine = 4
+    big = True
+    pc = "PC"
+    gprs = [(f"D{i}", None) for i in range(8)] + [(f"A{i}", None) for i in range(7)] + [("SP", None)]
+    pc_const = None
+    flags_reg = "ccr"
+    flag_bits = {"CF": 0, "VF": 1, "ZF": 2, "NF": 3, "XF": 4}
+    deny = M68K_DENY
+
+    def unicorn(self):
+        raise NotImplementedError("m68k runs with --oracle qemu")
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_M68K, cs.CS_MODE_M68K_040)
+
+    def gen(self, rng):
+        return rng.getrandbits(176).to_bytes(22, "big")
+
+    def canonical(self, cand):
+        # Capstone accepts reserved extension-word encodings (and prints them as such)
+        ops = cand["op_str"]
+        if re.search(r"\(\[|\((?:[ad]\d|a7)\.[wl]|invalid|\[\]|\[,", ops):
+            return False
+        if re.search(r"\bfp\d|\bsr\b", ops) or (cand["mnemonic"] in ("abcd", "sbcd") and "#" in ops):
+            return False
+        return not cand["mnemonic"].startswith("dc.") and cand["mnemonic"] != "abcd.l"
+
+    def skip(self, cand):
+        # QEMU 8.2's memory shifts take arithmetic/logical from EA bit 3 instead of opcode bit 9
+        if cand["mnemonic"] in ("asl.w", "asr.w", "lsl.w", "lsr.w") and not re.match(r"(#|d\d), ", cand["op_str"]):
+            return True
+        # QEMU 8.2's TAS (An)+ always steps by 1, also for A7
+        if cand["mnemonic"] == "tas.b" and cand["op_str"] == "(a7)+":
+            return True
+        # QEMU 8.2 steps A7 by 1 in the byte -(Ay),-(Ax) forms; the manual keeps it word aligned (2)
+        if re.match(r"(addx|subx|abcd|sbcd)(\.b)?$", cand["mnemonic"]) and "-(a7)" in cand["op_str"]:
+            return True
+        # LINK A7: QEMU pushes A7 before the decrement, other references after; the manual leaves it open
+        return cand["mnemonic"] == "link.w" and cand["op_str"].startswith("a7,")
+
+
+ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), TriCore(), Nios2(), Sh4(), M68k())}

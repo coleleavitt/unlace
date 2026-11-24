@@ -13,6 +13,22 @@ define space register type=register_space size=4;
 define register offset=0 size=4 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 fp ip sp lr r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 r32 r33 r34 r35 r36 r37 r38 r39 r40 r41 r42 r43 r44 r45 r46 r47 r48 r49 r50 r51 r52 r53 r54 r55 r56 r57 r58 r59 r60 r61 r62 r63 ];
 define register offset=0x100 size=4 [ pc ];
 define register offset=0x110 size=1 [ AZ AN AC AV BZ BN ];
+define register offset=0x120 size=4 [ LC LS LE ];
+define register offset=0x200 size=16 [ contextreg ];
+
+# Hardware loops: the loop start and end are written with movts from registers, so mov/movt
+# record the constant they build (kreg, kval, kok) in flowing context, movts ls keeps it
+# (lsv, lsok), and movts le marks the loop end with the start (lpend, lpsa) for the root.
+define context contextreg
+  phase = (0,0)
+  lpend = (1,1) noflow
+  lsok  = (2,2)
+  kok   = (3,3)
+  kreg  = (8,13)
+  lpsa  = (32,63) noflow
+  kval  = (64,95)
+  lsv   = (96,127)
+;
 
 define token i16(16)
   op4   = (0,3)
@@ -31,6 +47,7 @@ define token i16(16)
   rn3   = (10,12)
   rd3   = (13,15)
   tnum  = (10,15)
+  sn3   = (10,12)
   simm8 = (8,15) signed
 ;
 attach variables [ rm3 rn3 rd3 ] [ r0 r1 r2 r3 r4 r5 r6 r7 ];
@@ -178,6 +195,284 @@ XCC: "blte" is xcond=13 { local c:1 = BN || BZ; export c; }
 REL8: dest is simm8 [ dest = inst_start + simm8 * 2; ] { export *:4 dest; }
 REL24: dest is simm24 [ dest = inst_start + simm24 * 2; ] { export *:4 dest; }
 
+SN6: val is rnx & xrn3 [ val = (rnx << 3) | xrn3; ] { export *[const]:1 val; }
+# Special (core) registers for movts/movfs, named as binutils prints them. lc, ls and le
+# are real registers (their own constructors below); the others stay read/write_special.
+SR16: "config" is sn3=0 { }
+SR16: "status" is sn3=1 { }
+SR16: "pc" is sn3=2 { }
+SR16: "debug" is sn3=3 { }
+SR16: "iab" is sn3=4 { }
+SR32: "config" is xg2120=0 & rnx=0 & xrn3=0 { }
+SR32: "status" is xg2120=0 & rnx=0 & xrn3=1 { }
+SR32: "pc" is xg2120=0 & rnx=0 & xrn3=2 { }
+SR32: "debug" is xg2120=0 & rnx=0 & xrn3=3 { }
+SR32: "iab" is xg2120=0 & rnx=0 & xrn3=4 { }
+SR32: "iret" is xg2120=0 & rnx=1 & xrn3=0 { }
+SR32: "imask" is xg2120=0 & rnx=1 & xrn3=1 { }
+SR32: "ilat" is xg2120=0 & rnx=1 & xrn3=2 { }
+SR32: "ilatst" is xg2120=0 & rnx=1 & xrn3=3 { }
+SR32: "ilatcl" is xg2120=0 & rnx=1 & xrn3=4 { }
+SR32: "ipend" is xg2120=0 & rnx=1 & xrn3=5 { }
+SR32: "ctimer0" is xg2120=0 & rnx=1 & xrn3=6 { }
+SR32: "ctimer1" is xg2120=0 & rnx=1 & xrn3=7 { }
+SR32: "hstatus" is xg2120=0 & rnx=2 & xrn3=0 { }
+SR32: "dma0config" is xg2120=1 & rnx=0 & xrn3=0 { }
+SR32: "dma0stride" is xg2120=1 & rnx=0 & xrn3=1 { }
+SR32: "dma0count" is xg2120=1 & rnx=0 & xrn3=2 { }
+SR32: "dma0srcaddr" is xg2120=1 & rnx=0 & xrn3=3 { }
+SR32: "dma0dstaddr" is xg2120=1 & rnx=0 & xrn3=4 { }
+SR32: "dma0auto0" is xg2120=1 & rnx=0 & xrn3=5 { }
+SR32: "dma0auto1" is xg2120=1 & rnx=0 & xrn3=6 { }
+SR32: "dma0status" is xg2120=1 & rnx=0 & xrn3=7 { }
+SR32: "dma1config" is xg2120=1 & rnx=1 & xrn3=0 { }
+SR32: "dma1stride" is xg2120=1 & rnx=1 & xrn3=1 { }
+SR32: "dma1count" is xg2120=1 & rnx=1 & xrn3=2 { }
+SR32: "dma1srcaddr" is xg2120=1 & rnx=1 & xrn3=3 { }
+SR32: "dma1dstaddr" is xg2120=1 & rnx=1 & xrn3=4 { }
+SR32: "dma1auto0" is xg2120=1 & rnx=1 & xrn3=5 { }
+SR32: "dma1auto1" is xg2120=1 & rnx=1 & xrn3=6 { }
+SR32: "dma1status" is xg2120=1 & rnx=1 & xrn3=7 { }
+SR32: "memconfig" is xg2120=2 & rnx=0 & xrn3=0 { }
+SR32: "memstatus" is xg2120=2 & rnx=0 & xrn3=1 { }
+SR32: "memprotect" is xg2120=2 & rnx=0 & xrn3=2 { }
+SR32: "memreserve" is xg2120=2 & rnx=0 & xrn3=3 { }
+SR32: "meshconfig" is xg2120=3 & rnx=0 & xrn3=0 { }
+SR32: "coreid" is xg2120=3 & rnx=0 & xrn3=1 { }
+SR32: "meshmulticast" is xg2120=3 & rnx=0 & xrn3=2 { }
+SR32: "swreset" is xg2120=3 & rnx=0 & xrn3=3 { }
+SR32: "0,"^SN6 is xg2120=0 & rnx=2 & SN6 { }
+SR32: "0,"^SN6 is xg2120=0 & rnx=3 & SN6 { }
+SR32: "0,"^SN6 is xg2120=0 & rnx=4 & SN6 { }
+SR32: "0,"^SN6 is xg2120=0 & rnx=5 & SN6 { }
+SR32: "0,"^SN6 is xg2120=0 & rnx=6 & SN6 { }
+SR32: "0,"^SN6 is xg2120=0 & rnx=7 & SN6 { }
+SR32: "1,"^SN6 is xg2120=1 & SN6 { }
+SR32: "2,"^SN6 is xg2120=2 & SN6 { }
+SR32: "3,"^SN6 is xg2120=3 & SN6 { }
+
+KADDR: is kval { export *[ram]:4 kval; }
+LPS: is lpsa { export *[ram]:4 lpsa; }
+KT: is kok=1 & kreg=0 & rdx=0 & xrd3=0 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=1 & rdx=0 & xrd3=1 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=2 & rdx=0 & xrd3=2 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=3 & rdx=0 & xrd3=3 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=4 & rdx=0 & xrd3=4 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=5 & rdx=0 & xrd3=5 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=6 & rdx=0 & xrd3=6 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=7 & rdx=0 & xrd3=7 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=8 & rdx=1 & xrd3=0 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=9 & rdx=1 & xrd3=1 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=10 & rdx=1 & xrd3=2 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=11 & rdx=1 & xrd3=3 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=12 & rdx=1 & xrd3=4 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=13 & rdx=1 & xrd3=5 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=14 & rdx=1 & xrd3=6 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=15 & rdx=1 & xrd3=7 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=16 & rdx=2 & xrd3=0 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=17 & rdx=2 & xrd3=1 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=18 & rdx=2 & xrd3=2 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=19 & rdx=2 & xrd3=3 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=20 & rdx=2 & xrd3=4 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=21 & rdx=2 & xrd3=5 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=22 & rdx=2 & xrd3=6 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=23 & rdx=2 & xrd3=7 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=24 & rdx=3 & xrd3=0 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=25 & rdx=3 & xrd3=1 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=26 & rdx=3 & xrd3=2 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=27 & rdx=3 & xrd3=3 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=28 & rdx=3 & xrd3=4 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=29 & rdx=3 & xrd3=5 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=30 & rdx=3 & xrd3=6 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=31 & rdx=3 & xrd3=7 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=32 & rdx=4 & xrd3=0 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=33 & rdx=4 & xrd3=1 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=34 & rdx=4 & xrd3=2 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=35 & rdx=4 & xrd3=3 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=36 & rdx=4 & xrd3=4 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=37 & rdx=4 & xrd3=5 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=38 & rdx=4 & xrd3=6 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=39 & rdx=4 & xrd3=7 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=40 & rdx=5 & xrd3=0 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=41 & rdx=5 & xrd3=1 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=42 & rdx=5 & xrd3=2 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=43 & rdx=5 & xrd3=3 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=44 & rdx=5 & xrd3=4 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=45 & rdx=5 & xrd3=5 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=46 & rdx=5 & xrd3=6 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=47 & rdx=5 & xrd3=7 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=48 & rdx=6 & xrd3=0 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=49 & rdx=6 & xrd3=1 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=50 & rdx=6 & xrd3=2 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=51 & rdx=6 & xrd3=3 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=52 & rdx=6 & xrd3=4 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=53 & rdx=6 & xrd3=5 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=54 & rdx=6 & xrd3=6 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=55 & rdx=6 & xrd3=7 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=56 & rdx=7 & xrd3=0 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=57 & rdx=7 & xrd3=1 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=58 & rdx=7 & xrd3=2 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=59 & rdx=7 & xrd3=3 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=60 & rdx=7 & xrd3=4 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=61 & rdx=7 & xrd3=5 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=62 & rdx=7 & xrd3=6 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is kok=1 & kreg=63 & rdx=7 & xrd3=7 & ximmhi & ximm8 [ kval = (kval & 0xffff) | (((ximmhi << 8) | ximm8) << 16); globalset(inst_next, kval); ] { }
+KT: is xrd3 [ kok = 0; globalset(inst_next, kok); ] { }
+LSK16: is kok=1 & kreg=0 & rd3=0 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK16: is kok=1 & kreg=1 & rd3=1 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK16: is kok=1 & kreg=2 & rd3=2 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK16: is kok=1 & kreg=3 & rd3=3 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK16: is kok=1 & kreg=4 & rd3=4 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK16: is kok=1 & kreg=5 & rd3=5 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK16: is kok=1 & kreg=6 & rd3=6 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK16: is kok=1 & kreg=7 & rd3=7 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK16: is rd3 [ lsok = 0; globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=0 & rdx=0 & xrd3=0 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=1 & rdx=0 & xrd3=1 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=2 & rdx=0 & xrd3=2 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=3 & rdx=0 & xrd3=3 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=4 & rdx=0 & xrd3=4 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=5 & rdx=0 & xrd3=5 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=6 & rdx=0 & xrd3=6 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=7 & rdx=0 & xrd3=7 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=8 & rdx=1 & xrd3=0 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=9 & rdx=1 & xrd3=1 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=10 & rdx=1 & xrd3=2 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=11 & rdx=1 & xrd3=3 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=12 & rdx=1 & xrd3=4 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=13 & rdx=1 & xrd3=5 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=14 & rdx=1 & xrd3=6 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=15 & rdx=1 & xrd3=7 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=16 & rdx=2 & xrd3=0 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=17 & rdx=2 & xrd3=1 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=18 & rdx=2 & xrd3=2 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=19 & rdx=2 & xrd3=3 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=20 & rdx=2 & xrd3=4 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=21 & rdx=2 & xrd3=5 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=22 & rdx=2 & xrd3=6 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=23 & rdx=2 & xrd3=7 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=24 & rdx=3 & xrd3=0 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=25 & rdx=3 & xrd3=1 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=26 & rdx=3 & xrd3=2 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=27 & rdx=3 & xrd3=3 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=28 & rdx=3 & xrd3=4 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=29 & rdx=3 & xrd3=5 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=30 & rdx=3 & xrd3=6 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=31 & rdx=3 & xrd3=7 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=32 & rdx=4 & xrd3=0 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=33 & rdx=4 & xrd3=1 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=34 & rdx=4 & xrd3=2 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=35 & rdx=4 & xrd3=3 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=36 & rdx=4 & xrd3=4 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=37 & rdx=4 & xrd3=5 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=38 & rdx=4 & xrd3=6 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=39 & rdx=4 & xrd3=7 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=40 & rdx=5 & xrd3=0 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=41 & rdx=5 & xrd3=1 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=42 & rdx=5 & xrd3=2 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=43 & rdx=5 & xrd3=3 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=44 & rdx=5 & xrd3=4 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=45 & rdx=5 & xrd3=5 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=46 & rdx=5 & xrd3=6 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=47 & rdx=5 & xrd3=7 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=48 & rdx=6 & xrd3=0 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=49 & rdx=6 & xrd3=1 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=50 & rdx=6 & xrd3=2 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=51 & rdx=6 & xrd3=3 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=52 & rdx=6 & xrd3=4 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=53 & rdx=6 & xrd3=5 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=54 & rdx=6 & xrd3=6 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=55 & rdx=6 & xrd3=7 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=56 & rdx=7 & xrd3=0 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=57 & rdx=7 & xrd3=1 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=58 & rdx=7 & xrd3=2 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=59 & rdx=7 & xrd3=3 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=60 & rdx=7 & xrd3=4 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=61 & rdx=7 & xrd3=5 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=62 & rdx=7 & xrd3=6 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is kok=1 & kreg=63 & rdx=7 & xrd3=7 [ lsv = kval; lsok = 1; globalset(inst_next, lsv); globalset(inst_next, lsok); ] { }
+LSK32: is xrd3 [ lsok = 0; globalset(inst_next, lsok); ] { }
+LEK16: is lsok=1 & kok=1 & kreg=0 & rd3=0 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK16: is lsok=1 & kok=1 & kreg=1 & rd3=1 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK16: is lsok=1 & kok=1 & kreg=2 & rd3=2 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK16: is lsok=1 & kok=1 & kreg=3 & rd3=3 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK16: is lsok=1 & kok=1 & kreg=4 & rd3=4 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK16: is lsok=1 & kok=1 & kreg=5 & rd3=5 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK16: is lsok=1 & kok=1 & kreg=6 & rd3=6 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK16: is lsok=1 & kok=1 & kreg=7 & rd3=7 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK16: is rd3 { }
+LEK32: is lsok=1 & kok=1 & kreg=0 & rdx=0 & xrd3=0 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=1 & rdx=0 & xrd3=1 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=2 & rdx=0 & xrd3=2 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=3 & rdx=0 & xrd3=3 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=4 & rdx=0 & xrd3=4 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=5 & rdx=0 & xrd3=5 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=6 & rdx=0 & xrd3=6 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=7 & rdx=0 & xrd3=7 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=8 & rdx=1 & xrd3=0 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=9 & rdx=1 & xrd3=1 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=10 & rdx=1 & xrd3=2 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=11 & rdx=1 & xrd3=3 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=12 & rdx=1 & xrd3=4 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=13 & rdx=1 & xrd3=5 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=14 & rdx=1 & xrd3=6 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=15 & rdx=1 & xrd3=7 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=16 & rdx=2 & xrd3=0 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=17 & rdx=2 & xrd3=1 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=18 & rdx=2 & xrd3=2 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=19 & rdx=2 & xrd3=3 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=20 & rdx=2 & xrd3=4 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=21 & rdx=2 & xrd3=5 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=22 & rdx=2 & xrd3=6 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=23 & rdx=2 & xrd3=7 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=24 & rdx=3 & xrd3=0 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=25 & rdx=3 & xrd3=1 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=26 & rdx=3 & xrd3=2 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=27 & rdx=3 & xrd3=3 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=28 & rdx=3 & xrd3=4 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=29 & rdx=3 & xrd3=5 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=30 & rdx=3 & xrd3=6 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=31 & rdx=3 & xrd3=7 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=32 & rdx=4 & xrd3=0 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=33 & rdx=4 & xrd3=1 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=34 & rdx=4 & xrd3=2 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=35 & rdx=4 & xrd3=3 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=36 & rdx=4 & xrd3=4 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=37 & rdx=4 & xrd3=5 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=38 & rdx=4 & xrd3=6 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=39 & rdx=4 & xrd3=7 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=40 & rdx=5 & xrd3=0 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=41 & rdx=5 & xrd3=1 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=42 & rdx=5 & xrd3=2 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=43 & rdx=5 & xrd3=3 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=44 & rdx=5 & xrd3=4 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=45 & rdx=5 & xrd3=5 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=46 & rdx=5 & xrd3=6 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=47 & rdx=5 & xrd3=7 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=48 & rdx=6 & xrd3=0 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=49 & rdx=6 & xrd3=1 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=50 & rdx=6 & xrd3=2 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=51 & rdx=6 & xrd3=3 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=52 & rdx=6 & xrd3=4 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=53 & rdx=6 & xrd3=5 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=54 & rdx=6 & xrd3=6 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=55 & rdx=6 & xrd3=7 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=56 & rdx=7 & xrd3=0 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=57 & rdx=7 & xrd3=1 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=58 & rdx=7 & xrd3=2 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=59 & rdx=7 & xrd3=3 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=60 & rdx=7 & xrd3=4 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=61 & rdx=7 & xrd3=5 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=62 & rdx=7 & xrd3=6 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is lsok=1 & kok=1 & kreg=63 & rdx=7 & xrd3=7 & KADDR [ lpend = 1; lpsa = lsv; globalset(KADDR, lpend); globalset(KADDR, lpsa); ] { }
+LEK32: is xrd3 { }
+
+# The last instruction of a hardware loop (address LE) counts LC down and, while it is not
+# zero, returns to LS (the CGEN model in binutils cpu/epiphany.cpu).
+:^instruction is phase=0 & lpend=0 & instruction [ phase = 1; ] { build instruction; }
+:^instruction is phase=0 & lpend=1 & LPS & instruction [ phase = 1; ] { build instruction; LC = LC - 1; if (LC == 0) goto inst_next; goto LPS; }
+
+with : phase=1 {
 # Branches
 :b^CC^".s" REL8 is op4=0 & CC & REL8 { if (CC) goto REL8; }
 :b^".s" REL8 is op4=0 & cond=14 & REL8 { goto REL8; }
@@ -214,17 +509,28 @@ REL24: dest is simm24 [ dest = inst_start + simm24 * 2; ] { export *:4 dest; }
 :mov RD6, RN6 is xop4=15 & xb8=0 & xb9=0 & xo194=2 & x2522=0 & rmx=0 & xcond=14 & RD6 & RN6 { RD6 = RN6; }
 
 # Special registers (core, DMA, memory-protection and mesh groups)
-:movts tnum, rd3 is op4=2 & o85=0x10 & b9=0 & tnum & rd3 { write_special(0:1, tnum:1, rd3); }
-:movfs rd3, tnum is op4=2 & o85=0x11 & b9=0 & tnum & rd3 { rd3 = read_special(0:1, tnum:1); }
-SN6: val is rnx & xrn3 [ val = (rnx << 3) | xrn3; ] { export *[const]:1 val; }
-:movts xg2120, SN6, RD6 is xop4=15 & xo85=0x10 & xb9=0 & xo194=2 & xg2120 & SN6 & RD6 { write_special(xg2120:1, SN6, RD6); }
-:movfs RD6, xg2120, SN6 is xop4=15 & xo85=0x11 & xb9=0 & xo194=2 & xg2120 & SN6 & RD6 { RD6 = read_special(xg2120:1, SN6); }
+:movts SR16, rd3 is op4=2 & o85=0x10 & b9=0 & SR16 & sn3 & rd3 { write_special(0:1, sn3:1, rd3); }
+:movts "lc", rd3 is op4=2 & o85=0x10 & b9=0 & sn3=5 & rd3 { LC = rd3; }
+:movts "ls", rd3 is op4=2 & o85=0x10 & b9=0 & sn3=6 & rd3 & LSK16 { LS = rd3; }
+:movts "le", rd3 is op4=2 & o85=0x10 & b9=0 & sn3=7 & rd3 & LEK16 { LE = rd3; }
+:movfs rd3, SR16 is op4=2 & o85=0x11 & b9=0 & SR16 & sn3 & rd3 { rd3 = read_special(0:1, sn3:1); }
+:movfs rd3, "lc" is op4=2 & o85=0x11 & b9=0 & sn3=5 & rd3 { rd3 = LC; }
+:movfs rd3, "ls" is op4=2 & o85=0x11 & b9=0 & sn3=6 & rd3 { rd3 = LS; }
+:movfs rd3, "le" is op4=2 & o85=0x11 & b9=0 & sn3=7 & rd3 { rd3 = LE; }
+:movts SR32, RD6 is xop4=15 & xo85=0x10 & xb9=0 & xo194=2 & SR32 & xg2120 & SN6 & RD6 { write_special(xg2120:1, SN6, RD6); }
+:movts "lc", RD6 is xop4=15 & xo85=0x10 & xb9=0 & xo194=2 & xg2120=0 & rnx=0 & xrn3=5 & RD6 { LC = RD6; }
+:movts "ls", RD6 is xop4=15 & xo85=0x10 & xb9=0 & xo194=2 & xg2120=0 & rnx=0 & xrn3=6 & RD6 & LSK32 { LS = RD6; }
+:movts "le", RD6 is xop4=15 & xo85=0x10 & xb9=0 & xo194=2 & xg2120=0 & rnx=0 & xrn3=7 & RD6 & LEK32 { LE = RD6; }
+:movfs RD6, SR32 is xop4=15 & xo85=0x11 & xb9=0 & xo194=2 & SR32 & xg2120 & SN6 & RD6 { RD6 = read_special(xg2120:1, SN6); }
+:movfs RD6, "lc" is xop4=15 & xo85=0x11 & xb9=0 & xo194=2 & xg2120=0 & rnx=0 & xrn3=5 & RD6 { RD6 = LC; }
+:movfs RD6, "ls" is xop4=15 & xo85=0x11 & xb9=0 & xo194=2 & xg2120=0 & rnx=0 & xrn3=6 & RD6 { RD6 = LS; }
+:movfs RD6, "le" is xop4=15 & xo85=0x11 & xb9=0 & xo194=2 & xg2120=0 & rnx=0 & xrn3=7 & RD6 { RD6 = LE; }
 
 # Immediates
-:mov rd3, imm8 is op4=3 & b4=0 & rd3 & imm8 { rd3 = imm8; }
+:mov rd3, imm8 is op4=3 & b4=0 & rd3 & imm8 [ kreg = rd3; kval = imm8; kok = 1; globalset(inst_next, kreg); globalset(inst_next, kval); globalset(inst_next, kok); ] { rd3 = imm8; }
 IMM16: val is ximm8 & ximmhi [ val = (ximmhi << 8) | ximm8; ] { export *[const]:4 val; }
-:mov RD6, IMM16 is xop4=11 & xb4=0 & xb28=0 & xo194=2 & RD6 & IMM16 { RD6 = IMM16; }
-:movt RD6, IMM16 is xop4=11 & xb4=0 & xb28=1 & xo194=2 & RD6 & IMM16 { RD6 = (RD6 & 0xffff) | (IMM16 << 16); }
+:mov RD6, IMM16 is xop4=11 & xb4=0 & xb28=0 & xo194=2 & RD6 & IMM16 & rdx & xrd3 & ximmhi & ximm8 [ kreg = (rdx << 3) | xrd3; kval = (ximmhi << 8) | ximm8; kok = 1; globalset(inst_next, kreg); globalset(inst_next, kval); globalset(inst_next, kok); ] { RD6 = IMM16; }
+:movt RD6, IMM16 is xop4=11 & xb4=0 & xb28=1 & xo194=2 & RD6 & IMM16 & KT { RD6 = (RD6 & 0xffff) | (IMM16 << 16); }
 
 macro addflags(a, b, r) { AC = carry(a, b); AV = scarry(a, b); AZ = r == 0; AN = r s< 0; }
 macro subflags(a, b, r) { AC = a >= b; AV = sborrow(a, b); AZ = r == 0; AN = r s< 0; }
@@ -373,3 +679,4 @@ macro fflags(r) { BZ = r f== 0; BN = r f< 0; }
 :strd RD6, [RN6, "-"^D11] is xop4=12 & xws=3 & xb4=1 & xpm=0 & xsub=1 & RD6 & RN6 & D11 & RD6N { local ea = RN6 - 8*D11; *:4 ea = RD6; *:4 (ea + 4) = RD6N; }
 :strd RD6, [RN6], "+"^D11 is xop4=12 & xws=3 & xb4=1 & xpm=1 & xsub=0 & RD6 & RN6 & D11 & RD6N { local ea = RN6; *:4 ea = RD6; *:4 (ea + 4) = RD6N; RN6 = ea + 8*D11; }
 :strd RD6, [RN6], "-"^D11 is xop4=12 & xws=3 & xb4=1 & xpm=1 & xsub=1 & RD6 & RN6 & D11 & RD6N { local ea = RN6; *:4 ea = RD6; *:4 (ea + 4) = RD6N; RN6 = ea - 8*D11; }
+}

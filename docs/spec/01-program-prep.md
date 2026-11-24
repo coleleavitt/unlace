@@ -3056,6 +3056,15 @@ A Mach-O image also carries its dependency list and run paths, read from the thi
 
 (unlace) **A Lua `luac` chunk parses into its prototype tree.** (#1263, first step: the container only. No option: nothing loads it yet, so no output changes.) `crates/unlace-analysis/src/loader/format/lua.rs (LuaChunk::parse)` reads a chunk of Lua 5.1 to 5.4 into plain tables: the header and its byte order, every prototype in dump order with its source name (NULL means the enclosing function's), line-defined range, parameters, vararg flag and stack size, the raw instruction words, the constant pool (nil, boolean, integer, float and raw-byte string), upvalue descriptors (5.2 and later), nested prototypes, and the debug lines, 5.4 absolute line anchors, locals and upvalue names. Each release's field order and tag values follow its own dumper; 5.3 writes float as tag 3 and integer as 0x13, the reverse of 5.4. Every count is checked against the bytes left before anything is stored, nesting stops at 200 levels, and a truncated or malformed chunk is an error. A 5.2 header carries no byte-order mark, so a big-endian 5.2 chunk is read as little-endian; 5.3 and 5.4 chunks take their byte order from `LUAC_INT`. Decoding the instructions and naming the functions from the parsed tree are the next steps.
 
+**PE resource tree.** `crates/unlace-analysis/src/pe_resources.rs (resource_entries)`
+walks `IMAGE_DIRECTORY_ENTRY_RESOURCE` through `object`'s `ResourceDirectory` API
+and returns one flat record per leaf: type, name and language ids, then the data's
+RVA and size. Named (string) entries read as id 0. The walk is depth-capped at 8
+and bounded at 65536 records, so a hostile directory cannot recurse or allocate
+without limit. It is a reader only: nothing in the decompile path consumes it
+yet, so no default output changes and it needs no option. The version-info strings
+still come from the UTF-16 key scan in `unlace-cli`'s `sbom/pever.rs`.
+
 ## 1.3 Loader markup
 
 Import naming exists because a CALL into a linkage stub carries no symbol: without

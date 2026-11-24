@@ -7252,6 +7252,15 @@ every other binary's pass list is byte-identical to before the pass existed):
   of one code pointer per slot (`mod.rs (type_vftable_labels)`): as an untyped
   label it took the `code` type, and a constructor's store of its address
   printed as a store of the label's value (`this->__vftable = (C_vtbl *)vftable`).
+  A function several classes' vftables hold is named once, for the holder that is a
+  base of every other holder (`mod.rs (SlotNames::emit)`, the bases read from each
+  class's `BaseClassArray`): a derived class that does not override a method keeps
+  its base's entry, so the method is the base's. Named per holder, the shortest
+  name won, and USBCAN-Driver.dll's `std::exception::what` read
+  `std::bad_alloc::vfunc_1`, Holley's `PEGRP32F.dll` `CDialog::DoModal`
+  `MaxDlg::vfunc_83` (38 such functions there against IDA 9.5). With no such
+  holder (unrelated classes sharing `_purecall` or an identical-code fold) every
+  holder names it, as before.
 
   The pass runs at every PE load whatever its gate says (its facts are committed
   only when it is on), so its cost is paid by every command on a C++ DLL. Both of

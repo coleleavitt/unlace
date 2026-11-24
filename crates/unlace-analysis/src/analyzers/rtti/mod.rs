@@ -218,20 +218,79 @@ fn emit_classes(
     out: &mut AnalysisOutput,
 ) {
     let (cols, meta_slots) = find_cols(img, rk, tds);
-    // The vftables cut where a walk ran into the table after them
-    // (`kuna_msvcvtabletypes.rs (trim_overruns)`), by first slot.
-    let cut: FxHashMap<u64, Vec<u64>> =
-        kuna_msvcvtabletypes::recover_from(img, rk, text, &cols, &meta_slots)
+    let mut named = SlotNames {
+        cut: kuna_msvcvtabletypes::recover_from(img, rk, text, &cols, &meta_slots)
             .into_values()
             .flat_map(|c| c.tables)
             .map(|t| (t.vt.base, t.vt.slots))
-            .collect();
+            .collect(),
+        ..SlotNames::default()
+    };
     for col in &cols {
         let slots = meta_slots
             .get(&col.addr)
             .map(Vec::as_slice)
             .unwrap_or_default();
-        emit_for_col(img, rk, text, col, slots, &cut, out);
+        emit_for_col(img, rk, text, col, slots, &mut named, out);
+    }
+    named.emit(out);
+}
+
+/// The vftable slots to name, and each class's bases (itself included), so
+/// a function several vftables hold is named once, for the class defining it.
+#[derive(Default)]
+struct SlotNames {
+    /// The vftables cut where a walk ran into the table after them
+    /// (`kuna_msvcvtabletypes.rs (trim_overruns)`), by first slot.
+    cut: FxHashMap<u64, Vec<u64>>,
+    /// `(target, class, slot)` in walk order.
+    slots: Vec<(u64, String, usize)>,
+    bases: FxHashMap<String, FxHashSet<String>>,
+}
+
+impl SlotNames {
+    /// Name every slot target. A function the vftables of several classes hold
+    /// is named for the holder that is a base of every other holder: a derived
+    /// class that does not override a method keeps its base's entry, so the
+    /// method is the base's (`std::exception::vfunc_1`, not the
+    /// `std::bad_alloc` that inherits it). With no such holder (unrelated
+    /// classes sharing one function, as `_purecall` or an identical-code fold
+    /// is shared) every holder names it.
+    fn emit(self, out: &mut AnalysisOutput) {
+        let mut order: Vec<u64> = Vec::new();
+        let mut by_addr: FxHashMap<u64, Vec<usize>> = FxHashMap::default();
+        for (i, (addr, _, _)) in self.slots.iter().enumerate() {
+            by_addr
+                .entry(*addr)
+                .or_insert_with(|| {
+                    order.push(*addr);
+                    Vec::new()
+                })
+                .push(i);
+        }
+        let is_base = |base: &str, of: &str| {
+            base == of || self.bases.get(of).is_some_and(|set| set.contains(base))
+        };
+        for addr in order {
+            let holders = &by_addr[&addr];
+            let owner = holders.iter().copied().find(|&h| {
+                holders
+                    .iter()
+                    .all(|&o| is_base(&self.slots[h].1, &self.slots[o].1))
+            });
+            let chosen: Vec<usize> = match owner {
+                Some(h) => vec![h],
+                None => holders.clone(),
+            };
+            for i in chosen {
+                let (_, class, slot) = &self.slots[i];
+                out.symbols.push(SymFact {
+                    addr,
+                    name: vfunc_name(class, *slot),
+                    kind: SymKind::Function,
+                });
+            }
+        }
     }
 }
 
@@ -360,7 +419,7 @@ fn emit_for_col(
     text: &TextRanges,
     col: &CompleteObjectLocator,
     meta_slots: &[u64],
-    cut: &FxHashMap<u64, Vec<u64>>,
+    named: &mut SlotNames,
     out: &mut AnalysisOutput,
 ) {
     // The COL's own class name (RTTI0 it points at).
@@ -399,7 +458,7 @@ fn emit_for_col(
         // R3: walk the vftable's slots, naming each virtual-method function
         // `<Class>::vfunc_<i>` and marking the slot array read-only. The virtual
         // dispatch (an unnamed `DAT_*` slot before) now resolves to a named function.
-        let vt = match cut.get(&vftable_base) {
+        let vt = match named.cut.get(&vftable_base) {
             Some(slots) if !slots.is_empty() => Some(vftable::VfTable {
                 base: vftable_base,
                 slots: slots.clone(),
@@ -407,7 +466,7 @@ fn emit_for_col(
             _ => walk_vftable(img, rk, text, vftable_base),
         };
         if let Some(vt) = vt {
-            emit_vftable_methods(&self_class, &vt, rk, out);
+            emit_vftable_methods(&self_class, &vt, rk, named, out);
         }
     }
 
@@ -421,6 +480,11 @@ fn emit_for_col(
         };
         if let Some(base_class) = demangle_rtti_class_name(&base_td.mangled_name) {
             emit_type_descriptor_label(&base_class, base_td.addr, out);
+            named
+                .bases
+                .entry(self_class.clone())
+                .or_default()
+                .insert(base_class);
         }
     }
 }
@@ -444,7 +508,8 @@ fn vfunc_name(class: &str, slot: usize) -> String {
 
 /// Emit the per-slot virtual-method facts for a recovered vftable (R3):
 ///   - one `Function` [`SymFact`] per slot, named [`vfunc_name`] at the slot's
-///     target VA (the virtual method the dispatch jumps to);
+///     target VA (the virtual method the dispatch jumps to), staged in `named`
+///     so a shared target is named for its defining class ([`SlotNames::emit`]);
 ///   - the slot array's VMA range as read-only ([`AnalysisOutput::readonly`]).
 /// The `SymFact{Function}` commit is an idempotent ADD (`find_function`-gated), so a
 /// slot target that already carries a real `.symtab`/import name keeps it; only a
@@ -453,14 +518,11 @@ fn emit_vftable_methods(
     class: &str,
     vt: &vftable::VfTable,
     rk: &RefKind,
+    named: &mut SlotNames,
     out: &mut AnalysisOutput,
 ) {
     for (i, &fn_addr) in vt.slots.iter().enumerate() {
-        out.symbols.push(SymFact {
-            addr: fn_addr,
-            name: vfunc_name(class, i),
-            kind: SymKind::Function,
-        });
+        named.slots.push((fn_addr, class.to_string(), i));
     }
     // The slot array itself is constant data — mark it read-only so a load of a vtable
     // slot can fold (the `out.readonly` commit arm ORs `Varnode::readonly` over it).
@@ -595,6 +657,50 @@ mod tests {
         assert!(
             elapsed < std::time::Duration::from_secs(30),
             "{CLASSES} classes took {elapsed:?}"
+        );
+    }
+
+    /// A method a derived class inherits sits in both classes' vftables and is
+    /// named once, for the base; an override keeps the derived class's name, and
+    /// a function unrelated classes share keeps every holder's name.
+    #[test]
+    fn shared_slot_is_named_for_the_defining_base() {
+        let mut named = SlotNames::default();
+        for (addr, class, slot) in [
+            (0x10, "std::bad_alloc", 1),
+            (0x20, "std::bad_alloc", 0),
+            (0x10, "std::exception", 1),
+            (0x30, "std::exception", 0),
+            (0x40, "A", 0),
+            (0x40, "B", 0),
+        ] {
+            named.slots.push((addr, class.to_string(), slot));
+        }
+        for (class, bases) in [
+            ("std::bad_alloc", &["std::bad_alloc", "std::exception"][..]),
+            ("std::exception", &["std::exception"][..]),
+        ] {
+            named.bases.insert(
+                class.to_string(),
+                bases.iter().map(|b| b.to_string()).collect(),
+            );
+        }
+        let mut out = AnalysisOutput::default();
+        named.emit(&mut out);
+        let names: Vec<(u64, &str)> = out
+            .symbols
+            .iter()
+            .map(|s| (s.addr, s.name.as_str()))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                (0x10, "std::exception::vfunc_1"),
+                (0x20, "std::bad_alloc::vfunc_0"),
+                (0x30, "std::exception::vfunc_0"),
+                (0x40, "A::vfunc_0"),
+                (0x40, "B::vfunc_0"),
+            ]
         );
     }
 

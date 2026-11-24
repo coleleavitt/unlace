@@ -9396,7 +9396,13 @@ impl PrintC {
                     .and_then(|v| fd.vbank().get(v))
                     .map(|v| v.get_size())
                     .unwrap_or(0);
-                if let Some((intr, args)) = crate::avxintrin::intrinsic(&nm, size) {
+                let src = (nin >= 2)
+                    .then(|| fd.obank().get(op).and_then(|o| o.get_in(nin - 1)))
+                    .flatten()
+                    .and_then(|v| fd.vbank().get(v))
+                    .map(|v| v.get_size())
+                    .unwrap_or(0);
+                if let Some((intr, args)) = crate::avxintrin::intrinsic_sized(&nm, size, src) {
                     if args.len() == order.len() {
                         nm = intr;
                         order = args.iter().map(|&a| a as int4 + 1).collect();
@@ -10574,6 +10580,9 @@ impl PrintC {
             self.push_cast_close(&target);
             return;
         }
+        if self.push_part_macro(fd, arch, op) {
+            return;
+        }
         // Non-special-print SUBPIECE (printc.cc:892-897): isSubpieceCast decides
         // between opTypeCast and opFunc.
         // The cast arm was previously gated out because it tripped a spurious
@@ -11441,7 +11450,19 @@ impl PrintC {
         {
             let callee = self.call_callee_name(fd, op);
             if let Some(throw) = super::msvcthrow::recover(fd, arch, op, &callee) {
-                self.push_msvc_throw(fd, arch, op, throw);
+                self.push_throw_call(fd, arch, op, throw);
+                return;
+            }
+        }
+        if self.out_lang == crate::lang::OutLang::C
+            && arch
+                .unlace_options
+                .get::<crate::coreoptions::ItaniumEh>()
+                .on
+        {
+            let callee = self.call_callee_name(fd, op);
+            if let Some(throw) = super::itaniumthrow::recover(fd, arch, op, &callee) {
+                self.push_throw_call(fd, arch, op, throw);
                 return;
             }
         }
@@ -11712,7 +11733,7 @@ impl PrintC {
     /// (unlace `msvceh`) `throw obj` or `throw` for a `_CxxThrowException` call: the
     /// object is printed as a load through the first argument would be, so
     /// `&local` reads as `local`.
-    fn push_msvc_throw(
+    fn push_throw_call(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

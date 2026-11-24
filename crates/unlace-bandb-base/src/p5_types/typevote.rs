@@ -17,6 +17,11 @@
 //! signed, unsigned or winning float vote stays undefined, so arithmetic that
 //! does not say a signedness claims none.
 //!
+//! When a variable gets both signed and unsigned votes, `UNLACE_TYPEVOTE_TRACE`
+//! prints the counterexample that separates the two readings: the sign-bit
+//! witness of its width, read signed and unsigned, and the side the vote chose.
+//! It changes nothing.
+//!
 //! The prototype is not changed: a value that reaches a RETURN is skipped,
 //! and a parameter takes only an unsigned vote, since an undefined parameter
 //! already prints as unsigned in the signature. Type-locked variables are
@@ -115,6 +120,35 @@ fn reaches_return(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
     })
 }
 
+/// Is the `UNLACE_TYPEVOTE_TRACE` dump on?
+fn trace_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| unlace_base::env::var_os("UNLACE_TYPEVOTE_TRACE").is_some())
+}
+
+/// Print the witness for an ambiguous signedness vote (both signed and unsigned
+/// votes present) when `UNLACE_TYPEVOTE_TRACE` is set. The witness is the
+/// sign bit of the variable's width: the signed reading is negative and the
+/// unsigned reading is the large positive value, so the two candidates disagree
+/// on it by construction.
+fn trace_signedness_witness(size: i32, v: &Votes, chosen: type_metatype) {
+    if !trace_on() || v.signed == 0 || v.unsigned == 0 {
+        return;
+    }
+    let bits = (size.clamp(1, 8) as u32) * 8;
+    let witness: u64 = 1u64 << (bits - 1);
+    let signed = ((witness << (64 - bits)) as i64) >> (64 - bits);
+    let side = if chosen == type_metatype::TYPE_UINT {
+        "uint"
+    } else {
+        "int"
+    };
+    eprintln!(
+        "typevote: undefined{size} signed {} vs unsigned {}: witness {witness:#x} reads {signed} signed, {witness} unsigned; chose {side}",
+        v.signed, v.unsigned
+    );
+}
+
 /// The voted type for the variable made of `instances`, all of `size` bytes.
 fn vote(data: &Funcdata, instances: &[VarnodeId], size: i32) -> Option<Rc<Datatype>> {
     let mut v = Votes::default();
@@ -144,6 +178,7 @@ fn vote(data: &Funcdata, instances: &[VarnodeId], size: i32) -> Option<Rc<Dataty
     } else {
         type_metatype::TYPE_INT
     };
+    trace_signedness_witness(size, &v, meta);
     types.get_base(size, meta).ok()
 }
 

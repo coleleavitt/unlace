@@ -346,7 +346,7 @@ pub fn stated_bytes_consumed(data: &Funcdata, fc: &FuncCallSpecs, slot: usize) -
     if general { *psize } else { 0 }
 }
 
-/// Is the decision trace on (`KUNA_NARROWARGS_TRACE=1`)?
+/// Is the decision trace on (`UNLACE_NARROWARGS_TRACE=1`)?
 fn trace() -> bool {
     unlace_base::env::var("UNLACE_NARROWARGS_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }

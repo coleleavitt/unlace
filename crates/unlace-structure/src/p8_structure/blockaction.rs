@@ -1528,7 +1528,7 @@ pub struct CollapseStructure<'a> {
     /// start address.  Precomputed by `ActionBlockStructure::apply`; see
     /// [`crate::kuna_ifnoexit`].
     exitleaf_facts: crate::kuna_ifnoexit::ExitLeafFacts,
-    /// (kuna) `KUNA_RS_DEBUG` decision trace for `rule_block_if_no_exit`.
+    /// (kuna) `UNLACE_RS_DEBUG` decision trace for `rule_block_if_no_exit`.
     dbg_ifne: bool,
     /// (kuna) `ActionBlockStructure::apply` invocation index, for the trace.
     dbg_apply: u32,

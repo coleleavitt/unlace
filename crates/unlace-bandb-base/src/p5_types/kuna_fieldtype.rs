@@ -590,7 +590,7 @@ fn choose(
     }
 }
 
-/// Is the `KUNA_FIELDTYPE_TRACE` dump on?  One line per synthesized field:
+/// Is the `UNLACE_FIELDTYPE_TRACE` dump on?  One line per synthesized field:
 /// function, base, offset, width, declared type, and every access of that width
 /// with what the program does with its value (`+` held as a pointer, `#` used
 /// as a number).  Changes nothing.

@@ -379,7 +379,7 @@ impl Cache {
 #[doc(hidden)]
 pub const CUT: u8 = u8::MAX;
 
-/// (kuna) Is `KUNA_CALLEEPURGE_DEBUG` set? Then every callee walk says on
+/// (kuna) Is `UNLACE_CALLEEPURGE_DEBUG` set? Then every callee walk says on
 /// stderr where it first gives up on each property (the pop, the stack-argument
 /// extent) and why, and each call site what extent it was given.
 fn debug_on() -> bool {
@@ -387,7 +387,7 @@ fn debug_on() -> bool {
     *ON.get_or_init(|| unlace_base::env::var_os("UNLACE_CALLEEPURGE_DEBUG").is_some())
 }
 
-/// Print one `KUNA_CALLEEPURGE_DEBUG` line, built only when the trace is on.
+/// Print one `UNLACE_CALLEEPURGE_DEBUG` line, built only when the trace is on.
 fn trace(line: impl FnOnce() -> String) {
     if debug_on() {
         eprintln!("calleepurge: {}", line());

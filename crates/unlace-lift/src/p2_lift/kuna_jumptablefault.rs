@@ -1,4 +1,4 @@
-//! (kuna) Test-only jump-table fault: `KUNA_JUMPTABLE_FAULT=<addr>` (`0x` hex
+//! (kuna) Test-only jump-table fault: `UNLACE_JUMPTABLE_FAULT=<addr>` (`0x` hex
 //! or decimal) panics the jump-table recovery pipeline of the function whose
 //! entry is `<addr>`. It exists so a test can check that a panic while
 //! recovering a table is that function's error, in a serial run and under
@@ -6,7 +6,7 @@
 
 use std::sync::OnceLock;
 
-pub const JUMPTABLE_FAULT_ENV: &str = "KUNA_JUMPTABLE_FAULT";
+pub const JUMPTABLE_FAULT_ENV: &str = "UNLACE_JUMPTABLE_FAULT";
 
 fn armed() -> Option<u64> {
     static AT: OnceLock<Option<u64>> = OnceLock::new();

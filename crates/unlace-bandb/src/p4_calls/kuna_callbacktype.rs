@@ -602,7 +602,7 @@ impl Decline {
     }
 }
 
-/// Is the decision trace on (`KUNA_CALLBACKTYPE_TRACE=1`)?
+/// Is the decision trace on (`UNLACE_CALLBACKTYPE_TRACE=1`)?
 pub fn trace() -> bool {
     unlace_base::env::var("UNLACE_CALLBACKTYPE_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }

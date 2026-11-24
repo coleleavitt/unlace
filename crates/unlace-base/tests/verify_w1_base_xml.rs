@@ -17,7 +17,7 @@
 //! differential run).
 //!
 //! To regenerate the corpus input files for the C++ harness:
-//!   KUNA_XML_VERIFY_DUMP=/tmp/corpus cargo test -p unlace-base \
+//!   UNLACE_XML_VERIFY_DUMP=/tmp/corpus cargo test -p unlace-base \
 //!       --test integration -- --ignored verify_w1_base_xml::dump_corpus
 
 use unlace_base::xml::{Attributes, ContentHandler, Element, xml_escape, xml_parse, xml_tree};

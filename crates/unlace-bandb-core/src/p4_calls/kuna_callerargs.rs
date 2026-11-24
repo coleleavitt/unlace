@@ -589,7 +589,7 @@ pub fn input_vote(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> Option<Rc<Da
     data.get_arch().types()?.get_base(p.width, meta).ok()
 }
 
-/// Is the decision trace on (`KUNA_CALLERARGS_TRACE=1`)?
+/// Is the decision trace on (`UNLACE_CALLERARGS_TRACE=1`)?
 pub fn trace() -> bool {
     unlace_base::env::var("UNLACE_CALLERARGS_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }

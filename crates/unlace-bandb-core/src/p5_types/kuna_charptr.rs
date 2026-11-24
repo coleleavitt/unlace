@@ -68,7 +68,7 @@
 //! is the fold over every Varnode of the merged variable.  So a slot walked with
 //! byte evidence in one flow and refused in another prints the commitment --
 //! grep -O0 `sub_6fdd`'s stack slot at -0x20 is walked eight times with `byte`
-//! evidence and four times refused (`KUNA_CHARPTR_CENSUS=1`).  The refusals are
+//! evidence and four times refused (`UNLACE_CHARPTR_CENSUS=1`).  The refusals are
 //! about element WIDTH and contradicting declarations, not about arithmetic
 //! shape: a constant-stride walk is never refused, because a literal-addend
 //! `INT_ADD` only marks the value as offset from its base.  coreutils od -O2
@@ -98,7 +98,7 @@ use unlace_num::opcodes::OpCode;
 /// [`crate::kuna_ptrfromuse`] uses.
 const HOP_CAP: usize = 10;
 
-/// What the walk found.  Kept per kind so the `KUNA_CHARPTR_CENSUS` dump can
+/// What the walk found.  Kept per kind so the `UNLACE_CHARPTR_CENSUS` dump can
 /// report which evidence a candidate rests on, and which use refused it.
 #[derive(Default)]
 #[doc(hidden)]
@@ -147,7 +147,7 @@ impl Evidence {
     }
 }
 
-/// Is the `KUNA_CHARPTR_CENSUS` dump on?  Read once; it prints one line per
+/// Is the `UNLACE_CHARPTR_CENSUS` dump on?  Read once; it prints one line per
 /// candidate the rule considers and changes nothing about the decompile.
 fn census_on() -> bool {
     use std::sync::OnceLock;

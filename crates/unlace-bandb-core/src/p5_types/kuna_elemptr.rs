@@ -106,7 +106,7 @@ impl OptionElemPtr {
     }
 }
 
-/// Is the `KUNA_ELEMPTR_TRACE` dump on?  One line per candidate the walk
+/// Is the `UNLACE_ELEMPTR_TRACE` dump on?  One line per candidate the walk
 /// reaches a verdict on; changes nothing about the decompile.
 fn trace_on() -> bool {
     use std::sync::OnceLock;

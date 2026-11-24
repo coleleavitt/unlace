@@ -733,7 +733,7 @@ pub fn widened_read(data: &Funcdata, out: VarnodeId) -> VarnodeId {
     out
 }
 
-/// Is the decision trace on (`KUNA_NARROWRET_TRACE=1`)?
+/// Is the decision trace on (`UNLACE_NARROWRET_TRACE=1`)?
 fn trace() -> bool {
     unlace_base::env::var("UNLACE_NARROWRET_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }

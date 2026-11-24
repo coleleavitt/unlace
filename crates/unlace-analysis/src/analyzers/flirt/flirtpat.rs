@@ -7,6 +7,9 @@
 //! turned into a `lea`, a TLS sequence) are variable too. Functions that only
 //! have a local symbol, compiler-generated names and functions with fewer than
 //! [`MIN_FIXED`] fixed bytes in the leading [`PATTERN_LEN`] yield no pattern.
+//! The exception is the GCC `crtstuff.c` helpers in [`CRT_HELPERS`]: they are
+//! static in every crt object, so a function of that name is named from its
+//! local symbol.
 //!
 //! [`write_pat`] renders the patterns as `.pat` text; the `.sig` tree is
 //! [`super::flirtsig`].
@@ -23,6 +26,16 @@ use super::flirtbranch::near_branches;
 
 /// The leading pattern a function is keyed on in a `.pat` line and in a `.sig` group.
 type Head = [Option<u8>; PATTERN_LEN];
+
+/// The static helpers GCC's `crtstuff.c` puts in `crtbeginS.o`, `crtbegin.o` and
+/// `crtbeginT.o`. Each is a local symbol, so a stripped executable has no name for
+/// it; a `flirt make` of a crt object names them from that local symbol.
+pub const CRT_HELPERS: [&str; 4] = [
+    "deregister_tm_clones",
+    "register_tm_clones",
+    "__do_global_dtors_aux",
+    "frame_dummy",
+];
 
 /// Leading bytes of a function that form its tree pattern.
 pub const PATTERN_LEN: usize = 32;
@@ -125,7 +138,7 @@ pub fn patterns_from_object(data: &[u8]) -> Result<ObjectPatterns, String> {
             let size = sizes.entry((index.0, addr)).or_insert(0);
             *size = (*size).max(sym.size());
         }
-        if sym.is_global() && !is_generated(name) {
+        if (sym.is_global() || CRT_HELPERS.contains(&name)) && !is_generated(name) {
             starts
                 .entry((index.0, addr))
                 .or_default()

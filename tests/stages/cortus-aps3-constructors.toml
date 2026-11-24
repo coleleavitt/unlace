@@ -54,6 +54,7 @@ hex = 'e1f0'
 
 [script]
 commands = [
+    'option boolreturn off',
     'lo fu FUN_0',
     'decompile',
     'print C',

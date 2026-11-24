@@ -64,6 +64,7 @@ f30f1efa554889e5897dfc8975f88955f4894df0837dfc007512837df8007413
 
 [script]
 commands = [
+    'option boolreturn off',
     'lo fu t',
     'decompile',
     'print C',

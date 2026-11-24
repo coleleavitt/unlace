@@ -1,0 +1,4 @@
+LIBRARY dl.dll
+EXPORTS
+  dl_add
+  dl_mul

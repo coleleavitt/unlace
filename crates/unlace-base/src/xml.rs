@@ -2331,7 +2331,8 @@ mod tests {
         // and kuna-itaniumeh-arm / ARM EHABI landing pads print as try/catch (option itaniumeh)
         // and kuna-itaniumeh-clang / a clang call-site range that starts before its call (option itaniumeh)
         // and kuna-itaniumeh-sharedpad / a landing pad folded into the handler it jumps to prints as a try
-        assert_eq!(count, 1001, "corpus file count drifted");
+        // and kuna-peloadconfig / PE load configuration function tables, guard slots and delay-load imports (option guarddispatch)
+        assert_eq!(count, 1002, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

@@ -5,6 +5,14 @@ from `fixtures/dex/Hello.java` as its header says) and checks the Java output
 with `dexmodel` and `jumpassist` off and on. `kuna-dex-apk.xml` loads
 `fixtures/dex/two.apk`, that file plus the DEX of `fixtures/dex/Other.java`.
 `kuna-dex-javanew.xml` checks `new T(args)` with `javanew` off and on.
+
+`kuna-peloadconfig.xml` checks the PE load configuration. The SafeSEH handlers
+of a PE32 and the functions the Control Flow Guard table of a PE32+ lists
+are functions, and the security cookie and guard slots are named. A call
+through the guard dispatch slot calls the function pointer it guards (option
+`guarddispatch`; off keeps the call through the slot). Delay-loaded imports
+name their IAT slots and their load thunks.
+
 `kuna-narrowed-call-input.xml` checks a call through a typed field whose
 argument was narrowed to two bytes before the field's prototype was forced on
 the call: the function decompiles and passes the sum widened to the parameter.

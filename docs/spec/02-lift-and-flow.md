@@ -5125,6 +5125,18 @@ function and are called by the runtime with EBP already the parent's, so the pad
 only drops ESP by 4 (no RDX), and a block is used when it ends in
 `mov eax, <continuation in the function>; ret`, whose `ret` then branches there.
 
+Cleanup funclets are pads too (`kuna_msvcfuncinfo.rs (splice_sites)`,
+`kuna_msvcseh.rs (finally_pads)`): a region whose state no try guards gets a
+`Cleanup` record into that state's unwind (destructor) funclet (every FH3
+unwind action, an FH4 unwind entry of type RVA), and an x64 `__finally`
+scope gets one over its `[BeginAddress, EndAddress)` into its termination
+funclet. They are entered like catch funclets (RDX from the parent's frame, the
+stack pointer down by 8), but after a cleanup the exception keeps propagating,
+so each `ret` decoded inside a cleanup funclet's `[entry, end)` from a parent
+becomes a no-return halt (`return_to_halt`), and the pad comment says
+`cleanup, then the exception propagates`. Under `itaniumeh catch` cleanup
+records get no edge, as Itanium cleanup pads do not.
+
 **(kuna) x64 SEH `__except` blocks as pads** (`msvceh`;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvcseh.rs (x64_scopes)`).
 An x64 `__C_specific_handler` scope record's `__except` block lies inside

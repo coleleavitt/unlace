@@ -7796,6 +7796,7 @@ fn commit_analysis_output(
                     frame_offset: f.frame_offset,
                     returns: f.returns.clone(),
                     x86: f.x86,
+                    cleanup_end: f.cleanup_end,
                 })
                 .collect();
             table = table.with_msvc(out.msvc_eh_sites.clone(), funclets);

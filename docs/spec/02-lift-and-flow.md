@@ -5182,10 +5182,12 @@ FPSIZE 64, the only FLEN any RISC-V language uses.
 - `fsgnj*` build the result from the sign and magnitude bits. The `rs2 = rs1` aliases `fmv`,
   `fneg` and `fabs` (constructors with `op1519=op2024`) are a copy, `f-` and `abs()`.
 - Single-precision results are written NaN-boxed (`0xffffffff00000000 | zext(v)`), as `fassignS`
-  does. Single-precision sources are read as the low 32 bits of the register (`--unbox truncate`),
-  as the hand-written files did. A register that does not hold a boxed value therefore reads as
-  that value instead of the canonical NaN. Compiled code never produces that state, and the
-  exact read is held back until the decompiler can fold it away for values it knows are boxed.
+  does. That includes the user operations, whose result is the low word: `frd = 0xffffffff00000000 |
+  zext(fadd_s(...))`. Single-precision sources are NaN-unboxed as the ISA requires
+  (`--unbox exact`): a register whose upper 32 bits are not all ones reads as the canonical NaN.
+  `boxedcompare` (§3) folds the test for values written boxed or loaded boxed. Under
+  `fpargboxed` it also folds the test for the FP argument registers on entry, so compiled code
+  prints no unboxing except on a call's return value.
 
 The generated file decodes what LLVM decodes: 2496/2496 RV64 and 2176/2176 RV32 sampled words, plus
 every near miss. The hand-written files rejected `fcvt.d.s`, `fcvt.d.w` and `fcvt.d.wu` with a

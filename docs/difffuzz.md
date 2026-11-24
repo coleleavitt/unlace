@@ -19,7 +19,7 @@ python3 -m venv ~/.local/share/difffuzz-venv
 `--arch` is `x86-64`, `aarch64`, `riscv64`, `arm` (A32), `thumb` (T32), `mips` (MIPS32 big-endian),
 `mips64`, `mips64r6`, `mipsr6` (MIPS64, MIPS64 Release 6 and MIPS32 Release 6, big-endian; use
 `--oracle qemu`), `ppc` (PowerPC 32 big-endian), `tricore`, or (QEMU oracle only) `ppc64`, `ppc64le`, `ppc64-isa`,
-`ppc64le-isa`, `s390x` and `loongarch64`. `--sleighpath DIR` lifts with the `.sla`
+`ppc64le-isa`, `s390x`, `s390x-vec` and `loongarch64`. `--sleighpath DIR` lifts with the `.sla`
 files under `DIR` instead of the built-in ones, so a spec edit can be checked right after
 `slacomp` without rebuilding unlace. The summary on stdout counts each outcome and lists the
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
@@ -140,12 +140,17 @@ afterwards. The register file is unchanged.
   in an FPR is compared in its low word only (bits 63:32 are undefined; QEMU NaN-boxes them),
   and a fused multiply-add's result is not compared. LSX/LASX, LBT, CSR, FCSR moves, timer,
   `ll`/`sc` and privileged instructions are left out.
-- s390x: r0..r15 and f0..f15 are seeded and compared; the condition code is set with `spm` and
-  read back with `ipm`, and is seeded one-hot into `CC0`..`CC3` with `CCA`/`CCB` to match. The
-  table address is kept in a register the instruction does not write. Vector, decimal, hexadecimal
-  FP and privileged instructions are left out, as are `ex`/`exrl` and the interruptible
-  storage-to-storage instructions. `stmh` is skipped: QEMU 10.2 stores the low word shifted
-  left by 32 (that is, zero) instead of bits 0-31 of each register.
+- s390x: r0..r15 and v0..v31 (`vl`/`vst`; `f0`..`f15` are their leftmost doublewords) are seeded and
+  compared; the condition code is set with `spm` and read back with `ipm`, and is seeded one-hot
+  into `CC0`..`CC3` with `CCA`/`CCB` to match. The table address is kept in a register the
+  instruction does not write. `s390x-vec` draws `E7`/`E6` (vector) encodings. A scalar (W) vector
+  instruction is compared in element 0 of its target only (the rest is unpredictable; the SLEIGH
+  mnemonic decides, since Capstone 5 prints newer W forms as their generic V form); fused
+  multiply-adds are not compared, nor an integer-to-float conversion with a rounding mode other
+  than 0 or 4. Decimal, hexadecimal FP and privileged instructions are left out of `s390x`, as
+  are `ex`/`exrl` and the interruptible storage-to-storage instructions. `stmh` is skipped: QEMU
+  10.2 stores the low word shifted left by 32 (that is, zero) instead of bits 0-31 of each register.
+- `CEIL`, `FLOOR` and `ROUND` keep the sign of their operand (`ceil(-0.3)` is `-0.0`).
 - A `LOAD` from the constant space (a dynamic export such as `export *[const]:8 tmp`) reads
   its pointer as the value.
 
@@ -406,5 +411,25 @@ scalar float arithmetic, integer and flag semantics are compared.
 ```
 
 `tools/x86_avx512_sweep.py --enc EncVEX` / `--enc EncNormal` (with VEX or legacy `--predicates`) is the
-matching decode check against `llvm-objdump` for those encodings. x87 is not compared: the p-code
-emulator has no 80-bit float.
+matching decode check against `llvm-objdump` for those encodings.
+
+### x87 (`--arch x86-64-x87`)
+
+`pcode_emu.py` computes every float op with an 80-bit operand or result exactly (`softfloat.py`:
+values decoded to fractions, one round-to-nearest-even into the destination format, subnormals
+included; an x87 unnormal or pseudo-NaN counts as a NaN operand, which is `unmodeled`).
+`--arch x86-64-x87 --oracle native` draws only the D8-DF escapes; the harness `FXRSTOR`s an image
+with control word 0x37F (64-bit precision, nearest, exceptions masked), ST0-ST6 holding random
+values (normal, integer, zero, infinity, denormal), ST7 empty and C0-C3 random, and `FXSAVE`s it
+after the instruction. ST0-ST7 (except a register the CPU tags empty) and C0-C3 are compared; a case
+where the CPU reports a stack fault (SF) is `undefined`. Not compared: C1 of the rounding
+instructions (the round-up indicator) and of FCOMI/FUCOMI(P) and FCMOVcc (cleared by the SDM, left
+unchanged by this CPU), ST0 of FPREM/FPREM1 and of the five constant loads (see
+`docs/spec/02-lift-and-flow.md`). FLDCW and the environment loads and stores are denied. The
+`x86-64-native` configuration loads no x87 state and compares none: natively an MMX write sets bits
+79:64 of its register to ones, which the MMX lifts leave alone.
+
+```sh
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch x86-64-x87 --oracle native \
+    --count 3000 --seed 7 --unlace <unlace> --sleighpath specs
+```

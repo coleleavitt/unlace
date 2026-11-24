@@ -662,13 +662,13 @@ def sz_rxy(op, r, base, disp):
 
 
 class S390xHarness:
-    """r0..r15 at 8*i, the condition code (IPM layout) at 128, f0..f15 at 144 + 8*i. A scratch
-    register the instruction does not write holds the table address; SPM/IPM move the
-    condition code."""
+    """r0..r15 at 8*i, the condition code (IPM layout) at 128, v0..v31 at 144 + 16*i (f0..f15 are
+    the leftmost doublewords of v0..v15). A scratch register the instruction does not write holds
+    the table address; SPM/IPM move the condition code, VL/VST the vector registers."""
     qemu = ("qemu-s390x", ["-cpu", "max"])
     machine = 22
     big = True
-    table_size = 144 + 128
+    table_size = 144 + 512
     marker_at = 136
 
     def __init__(self):
@@ -689,8 +689,8 @@ class S390xHarness:
     def prologue(self, target):
         s, t = self.scratch, self._temp()
         c = sz_llilf(s, TABLES) + sz_rxy(0x04, t, s, 128) + bytes([0x04, t << 4])    # lg t; spm t
-        for i in range(16):
-            c += bytes([0x68, i << 4, s << 4 | (144 + 8 * i) >> 8, (144 + 8 * i) & 0xFF])  # ld fi
+        for i in range(32):
+            c += bytes([0xE7, (i & 15) << 4, s << 4 | (144 + 16 * i) >> 8, (144 + 16 * i) & 0xFF, 0x08 if i >= 16 else 0, 0x06])  # vl vi
         for i in range(16):
             if i != s:
                 c += sz_rxy(0x04, i, s, 8 * i)
@@ -706,8 +706,8 @@ class S390xHarness:
             if i != s:
                 c += sz_rxy(0x24, i, s, 8 * i)                                          # stg
         c += bytes([0xB2, 0x22, 0x00, t << 4]) + sz_rxy(0x24, t, s, 128)               # ipm t
-        for i in range(16):
-            c += bytes([0x60, i << 4, s << 4 | (144 + 8 * i) >> 8, (144 + 8 * i) & 0xFF])  # std fi
+        for i in range(32):
+            c += bytes([0xE7, (i & 15) << 4, s << 4 | (144 + 16 * i) >> 8, (144 + 16 * i) & 0xFF, 0x08 if i >= 16 else 0, 0x0E])  # vst vi
         c += sz_llilf(t, marker) + sz_rxy(0x24, t, s, self.marker_at)
         for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
             c += bytes([0xA7, 0x29, 0x00, 0x01]) + sz_llilf(3, base) + sz_llilf(4, size) + bytes([0x0A, 0x04])  # write
@@ -720,8 +720,8 @@ class S390xHarness:
             struct.pack_into(">Q", t, 8 * i, init.get(f"r{i}", 0) & (2 ** 64 - 1))
         cc = next((k for k in range(4) if init.get(f"CC{k}")), 0)
         struct.pack_into(">Q", t, 128, cc << 28)
-        for i in range(16):
-            struct.pack_into(">Q", t, 144 + 8 * i, init_vec.get(f"f{i}", 0) & (2 ** 64 - 1))
+        for i in range(32):
+            t[144 + 16 * i:160 + 16 * i] = (init_vec.get(f"v{i}", 0) & (2 ** 128 - 1)).to_bytes(16, "big")
         return bytes(t)
 
     def parse(self, arch, out):
@@ -730,8 +730,8 @@ class S390xHarness:
         for k in range(4):
             regs[f"CC{k}"] = int(cc == k)
         regs["CCA"], regs["CCB"] = int(cc >= 2), cc & 1
-        for i in range(16):
-            regs[f"f{i}"] = struct.unpack_from(">Q", out, 144 + 8 * i)[0]
+        for i in range(32):
+            regs[f"v{i}"] = int.from_bytes(out[144 + 16 * i:160 + 16 * i], "big")
         return regs, 0
 
 
@@ -1012,7 +1012,7 @@ HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "r
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness}
+             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness}
 
 
 def qemu_path(name):
@@ -1166,11 +1166,14 @@ class X86NativeHarness:
     qemu = None
     machine = 62
     big = False
-    table_size = 192 + 512 + 16
+    # an FXSAVE image at 768 (FCW 0x37F, the C0-C3 bits, ST0..ST6 valid, ST7 empty, MXCSR 0x1F80)
+    fx_at = 768
+    table_size = 768 + 512
     marker_at = 192 + 512
 
     def prologue(self, target):
         c = b"\x48\xB8" + struct.pack("<Q", TABLES)                      # movabs rax, TABLES
+        c += b"\x48\x0F\xAE\x88" + struct.pack("<i", self.fx_at)            # fxrstor64 [rax+fx_at]
         for i in range(16):
             c += _x86_vmovdqu(i, 192 + 32 * i, False)
         c += b"\xFF\xB0" + struct.pack("<i", 128) + b"\x9D"              # push [rax+128]; popfq
@@ -1189,6 +1192,7 @@ class X86NativeHarness:
         c += b"\x9C\x5B" + _x86_mov_store(3, 128)                        # pushfq; pop rbx; store
         for i in range(16):
             c += _x86_vmovdqu(i, 192 + 32 * i, True)
+        c += b"\x48\x0F\xAE\x80" + struct.pack("<i", self.fx_at)            # fxsave64 [rax+fx_at]
         c += b"\x48\xC7\x80" + struct.pack("<iI", self.marker_at, marker)
         for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
             c += b"\xB8\x01\x00\x00\x00\xBF\x01\x00\x00\x00"              # eax=1 (write); edi=1
@@ -1205,16 +1209,35 @@ class X86NativeHarness:
         for i in range(16):
             v = init_vec.get(f"YMM{i}", 0)
             t[192 + 32 * i:224 + 32 * i] = (v & (2 ** 256 - 1)).to_bytes(32, "little")
+        fx = self.fx_at
+        fsw = (init.get("C0", 0) << 8) | (init.get("C1", 0) << 9) | (init.get("C2", 0) << 10) | (init.get("C3", 0) << 14)
+        struct.pack_into("<HHB", t, fx, 0x37F, fsw, 0x7F)
+        struct.pack_into("<I", t, fx + 24, 0x1F80)
+        for i in range(8):
+            t[fx + 32 + 16 * i:fx + 42 + 16 * i] = (init.get(f"ST{i}", 0) & (2 ** 80 - 1)).to_bytes(10, "little")
         return bytes(t)
 
     def parse(self, arch, out):
         regs = {n: struct.unpack_from("<Q", out, 8 * i)[0] for i, (n, _) in enumerate(arch.gprs)}
         for i in range(16):
             regs[f"YMM{i}"] = int.from_bytes(out[192 + 32 * i:224 + 32 * i], "little")
+        fx = self.fx_at
+        fsw, ftw = struct.unpack_from("<HB", out, fx + 2)
+        top = (fsw >> 11) & 7
+        for n, b in (("C0", 8), ("C1", 9), ("C2", 10), ("C3", 14)):
+            regs[n] = (fsw >> b) & 1
+        regs["_invalid"] = set()
+        for i in range(8):
+            regs[f"ST{i}"] = int.from_bytes(out[fx + 32 + 16 * i:fx + 42 + 16 * i], "little")
+            if not (ftw >> ((top + i) & 7)) & 1:
+                regs["_invalid"].add(f"ST{i}")        # an empty register holds no value
+        # a stack fault (push onto a full stack, pop or read of an empty one): not modelled by SLEIGH
+        regs["_undefined"] = bool(fsw & 0x40)
         return regs, struct.unpack_from("<Q", out, 128)[0]
 
 
 HARNESSES["x86-64-native"] = X86NativeHarness
+HARNESSES["x86-64-x87"] = X86NativeHarness
 
 
 def available(arch):
@@ -1238,6 +1261,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     else:
         bits_ = {n: rng.getrandbits(1) for n in getattr(arch, "qemu_bits", ())}
     init.update(bits_)
+    extra = arch.extra_init(rng) if hasattr(arch, "extra_init") else {}
+    init.update(extra)
     for n, _ in arch.vecs:
         if n in regs and regs[n][1] < 16:
             init_vec[n] &= (1 << (8 * regs[n][1])) - 1
@@ -1258,6 +1283,9 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         st.set(n, init[n])
     for n in bits_:
         st.set(n, bits_[n])
+    for n, v in extra.items():
+        if n in regs:
+            st.set(n, v)
     for n, _ in arch.vecs:
         if n in regs:
             st.set(n, init_vec[n])
@@ -1365,8 +1393,21 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         for n in h.scratch_names:
             ref[n] = init[n]
 
+    if ref.get("_undefined"):
+        return {"status": "undefined"}
     diffs = {}
-    partial = arch.partial(cand["mnemonic"], cand["op_str"]) if hasattr(arch, "partial") else {}
+    if not hasattr(arch, "partial"):
+        partial = {}
+    elif getattr(arch, "partial_uses_sleigh", False):
+        partial = arch.partial(cand["mnemonic"], cand["op_str"], row)
+    else:
+        partial = arch.partial(cand["mnemonic"], cand["op_str"])
+    for n in extra:
+        if n in ignore or n not in regs or n not in ref or n in ref.get("_invalid", ()):
+            continue
+        w = (1 << (8 * regs[n][1])) - 1
+        if st.get(n) & w != ref[n] & w:
+            diffs[n] = (st.get(n) & w, ref[n] & w)
     for n, _ in arch.gprs + arch.vecs + [(b, None) for b in bits_]:
         if n in ignore or n not in regs:
             continue

@@ -9908,6 +9908,16 @@ both
   under two names. The `.pat` is written unchanged, but `flirt make` lists each
   group of functions that share a pattern and CRC under different names as a
   `collision in` line on stderr before the `.sig` is built.
+- **FLIRT and type-library inspector** (`unlace flirt inspect`, read-only; no
+  option, no decompile reaches it;
+  `crates/unlace-analysis/src/analyzers/flirt/inspect.rs (summarize_sig)`,
+  `crates/unlace-analysis/src/analyzers/protos/til.rs` (`Til::parse`)): reads one IDA
+  `.sig` (magic `IDASGN`) or `.til` file and reports its header (for a
+  signature: library name, version, processor, file formats, flags, pattern
+  length, module count; for a type library: title, compiler, `int`/`bool`/
+  `enum`/`long double` sizes, pointer size, symbol and type counts) and the
+  first `--limit` names (default 20, `0` for all). It matches and writes
+  nothing. Any other file is refused with exit 1.
 - **Format strings** (`formatstring off|static|full`, default `static`;
   `crates/unlace-analysis/src/analyzers/formatstring/mod.rs`): what a
   `printf`/`scanf`-family call does with its variadic arguments is stated by its

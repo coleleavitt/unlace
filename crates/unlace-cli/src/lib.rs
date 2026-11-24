@@ -218,6 +218,7 @@ fn usage() {
          unlace fid build <lib.a|*.o ...> -o <out.fid> --lang <id> --cspec <id>\n\
          unlace fid query <binary> --db <file.fid> --addr <address> [--addr <address> ...] --json\n\
          unlace flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]\n\
+         unlace flirt inspect <file.sig|file.til> [--limit N] [--json]\n\
          unlace rust-signatures check [--manifest PATH] [--json]\n\
          unlace lumina hash|pull|push <binary> [--server HOST:PORT] [--json] ...   unlace lumina serve --db FILE [--bind ADDR]\n\
          unlace sbom <binary> [--json] [--format cyclonedx|spdx] [-o FILE] [--slice ARCH]\n\

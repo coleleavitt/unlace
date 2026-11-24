@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/processor_spec.rxg -->
+
+<processor_spec>
+  <programcounter register="PC"/>
+  <volatile outputop="write" inputop="read">
+    <!-- I/O registers $F0-$FF (test, control, DSP address/data, ports, timers, counters) -->
+    <range space="ram" first="0xf0" last="0xff"/>
+  </volatile>
+</processor_spec>

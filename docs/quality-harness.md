@@ -252,6 +252,17 @@ SELECT opt, compiler, avg(value), count(*) FROM scores
 WHERE label = 'baseline' AND metric = 'proto_exact' GROUP BY opt, compiler;
 ```
 
+## Output-shape sanity counters
+
+Five source-free counters (`null_deref_sites`, `impossible_lvalue_sites`,
+`lost_frame_offset_sites`, `leaked_temp_decls`, `stale_return_result`) count text
+shapes in the emitted C: a `*(T *)(0LL)` literal, a load or store at an address under
+0x1000, a frame-relative `rsp`/`rbp`/`sp`/`fp`/`bp` address left as pointer arithmetic,
+a `vN` temporary declared with `// temp`, and a `return result;` whose `result` is never
+declared or assigned. They need no DWARF, so binaries without debug info still get a
+signal. Lower is better. They are regex matches: a function that really does stack-pointer
+arithmetic (rare, usually inline asm) counts too.
+
 ## Adding a metric
 
 Add a row to `METRICS` in `scripts/quality/metrics.py` (name, direction,

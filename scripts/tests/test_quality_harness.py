@@ -86,6 +86,21 @@ class MetricTests(unittest.TestCase):
         self.assertEqual(card["addr_coverage"], 1.0)
         self.assertEqual(metrics.score(fn, None, {}), {"found": 0.0})
 
+    def test_output_sanity_counters(self):
+        code = ("int f(void)\n{\n  long v3; // temp\n  long v_12; // temp\n"
+                "  *(_QWORD *)(0LL) = 1;\n  *(_DWORD *)0x10 = 2;\n"
+                "  x = *(_QWORD *)(rsp + 0x8);\n  return result;\n}\n")
+        card = metrics.source_free({"code": code})
+        self.assertEqual(card["null_deref_sites"], 1.0)
+        self.assertEqual(card["impossible_lvalue_sites"], 1.0)
+        self.assertEqual(card["lost_frame_offset_sites"], 1.0)
+        self.assertEqual(card["leaked_temp_decls"], 2.0)
+        self.assertEqual(card["stale_return_result"], 1.0)
+        clean = "int f(void)\n{\n  int result;\n  result = 0;\n  return result;\n}\n"
+        card = metrics.source_free({"code": clean})
+        self.assertEqual(card["stale_return_result"], 0.0)
+        self.assertEqual(card["leaked_temp_decls"], 0.0)
+
     def test_every_metric_has_a_direction_entry(self):
         for name, (hib, text) in metrics.METRICS.items():
             self.assertIn(hib, (True, False, None), name)

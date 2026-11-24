@@ -54,10 +54,55 @@ METRICS: dict[str, tuple[bool | None, str]] = {
     "txt_leaked_temps": (False, "declarations the printer marks `// temp`"),
     "txt_register_carriers": (False, "declarations tied to a machine register (`// rax`, `// reg?`)"),
     "txt_raw_stack_accesses": (False, "`*(T *)(...)` dereferences addressed off the stack or frame pointer"),
+    "null_deref_sites": (False, "`*(T *)(0LL)` literals in the C (text shape, no ground truth)"),
+    "impossible_lvalue_sites": (False, "loads or stores whose address is a literal under 0x1000 in the C"),
+    "lost_frame_offset_sites": (False, "stack-frame-relative addresses (rsp/rbp/sp/fp/bp +/-) left in the C as pointer arithmetic"),
+    "leaked_temp_decls": (False, "`vN` temporaries declared in the C with a // temp comment"),
+    "stale_return_result": (False, "`return result;` sites whose result variable is not declared or not assigned"),
 }
 
 _CAST = re.compile(r"\(\s*(?:const\s+|unsigned\s+|signed\s+|struct\s+|volatile\s+)*[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*\s*\**\s*\)\s*(?=[\w(*&!~-])")
 _CAST_EXCLUDE = re.compile(r"\b(?:if|while|for|switch|return|sizeof)\s*$")
+
+
+_NULL_DEREF = re.compile(r"\*\([^)]*\*\)\(0LL\)")
+# A store or load whose address is a literal under 0x1000: leftover stack/SP
+# arithmetic that propagation folded to a constant. 0LL is the null-deref row.
+_IMPOSSIBLE_LVALUE = re.compile(r"\*\([^)]*\*\)\(?0x[0-9a-fA-F]{1,3}(?:LL?)?\)?\s*=")
+# Stack-frame-relative addresses (rsp/rbp/sp/fp/bp +/-) that reached the C as
+# pointer arithmetic. Text-shape: real inline asm can light it too.
+_LOST_FRAME = re.compile(r"\*\([^)]*\*\)\([^)]*\b(?:rsp|rbp|esp|ebp|sp|fp|bp)\b\s*[+\-]")
+_TEMP_NAME = re.compile(r"v_?[0-9]+")
+_RESULT_ASSIGNS = ("result =", "result +=", "result -=", "result *=", "result /=", "result &=",
+                   "result |=", "result ^=", "result <<=", "result >>=", "++result", "--result")
+
+
+def leaked_temp_decls(code: str) -> int:
+    """Declarations `vN` carrying a `// temp` comment: a temporary that was never named."""
+    n = 0
+    for line in code.splitlines():
+        trimmed = line.strip()
+        if "// temp" not in trimmed:
+            continue
+        decl = trimmed.split("//", 1)[0].rstrip()
+        if decl.endswith(";") and any(_TEMP_NAME.fullmatch(tok) for tok in re.split(r"[^A-Za-z0-9_]", decl)):
+            n += 1
+    return n
+
+
+def stale_return_results(code: str) -> int:
+    """`return result;` sites when `result` is never declared or never assigned."""
+    returns = code.count("return result;")
+    if returns == 0:
+        return 0
+    declared = any(
+        not line.lstrip().startswith("return ")
+        and any(s in line for s in (" result;", " result =", " result,"))
+        for line in code.splitlines()
+    )
+    if declared and any(s in code for s in _RESULT_ASSIGNS):
+        return 0
+    return returns
 
 
 def count_casts(code: str) -> int:
@@ -196,6 +241,11 @@ def source_free(rec: dict) -> dict:
         toks = cfg.tokenize(code)
         out["gotos"] = float(sum(1 for t in toks if t == "goto"))
         out["casts"] = float(count_casts(code))
+        out["null_deref_sites"] = float(len(_NULL_DEREF.findall(code)))
+        out["impossible_lvalue_sites"] = float(len(_IMPOSSIBLE_LVALUE.findall(code)))
+        out["lost_frame_offset_sites"] = float(len(_LOST_FRAME.findall(code)))
+        out["leaked_temp_decls"] = float(leaked_temp_decls(code))
+        out["stale_return_result"] = float(stale_return_results(code))
         out["lines"] = float(code.count("\n") + 1)
         for name, value in textmetrics.measure(code).items():
             out[f"txt_{name}"] = float(value)

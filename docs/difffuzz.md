@@ -223,3 +223,23 @@ and Capstone modes, the compared registers as `(sleigh name, unicorn constant)` 
 word and its bits, an instruction generator and the mnemonics to leave out. The hooks
 `ignored`, `skip`, `normalize`, `classify_decode` and `operand_mismatch` hold the
 architecture's undefined results and the reference's known quirks.
+
+## APX against a legacy reference
+
+Unicorn has no Intel APX, so `tools/difffuzz/apxcheck.py` checks the APX instructions of a real
+binary another way: it rewrites each one into legacy x86-64 code with the same effect and runs that
+in Unicorn, while the lifted p-code of the original runs from the same state. An extended GPR
+(R16-R31) is renamed to an R8-R15 register the instruction does not use; a new-data-destination
+form `op dst, src1, src2` becomes `mov T, src1; op T, src2; mov dst, T` through a free temporary
+(zero-extending an 8- or 16-bit result, as APX does); `{nf}` must leave every flag unchanged in the
+p-code; SETcc.zu/IMUL.zu add the zero-extension; PUSH2/POP2 become two PUSHes/POPs. CCMP/CTEST,
+CFCMOVcc, JMPABS, branches and RIP-relative operands are skipped.
+
+```sh
+clang -O2 -mapxf -fPIC -shared -o lib.so *.c
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/apxcheck.py lib.so --unlace <unlace> --sleighpath specs
+```
+
+On Lua 5.3 and zlib built with clang 22 and gcc 15 (`-O2 -mapxf`), 3131 of the 3272 distinct APX
+encodings were verified (at least one trial with in-range addresses) and none differed; replacing
+the NF ADD's sum with a difference in `apx_map4.sinc` makes the check report it.

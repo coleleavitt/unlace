@@ -3893,8 +3893,10 @@ RISC-V only) an input in an FP argument register (`fa0`..`fa7`) has the bits tha
 the register's upper 32 known as ones: the whole register, or the `fa0+4:4` upper word that
 heritage splits off. The same holds for the `fa0`/`fa1` output of a `CALL` or `CALLIND`. The
 psABI passes and returns a float narrower than FLEN NaN-boxed. Only those
-upper bits are claimed, so a test of a float's own bits is never folded, and a half-precision
-parameter's 48-bit test stays. *Rewrite:* the
+upper bits are claimed, so a test of a float's own bits is never folded. The half-precision
+unboxing test reads exactly bits 16..63: the `fa0+2:6` piece, or a 6-byte `SUBPIECE` at byte 2
+of the whole boxed register (or at byte 0 of it shifted right by 16). Those 48 bits count as all
+ones, as the psABI boxes a half argument or result the same way. *Rewrite:* the
 compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
 unboxing dies. Exact, so always on.
 
@@ -3917,7 +3919,9 @@ reads a constant) on one out-edge of its immediate dominator's branch (the selec
 test `pow2select` uses), whose innermost input is `FLOAT_TRUNC(x)` at the join's width or the
 low word of a 64-bit one. The branches test `x` against float constants or `NAN(x)`. This is how
 `riscv.fd.sinc` lifts an `rtz` `fcvt.w*`/`fcvt.l*`. *Proof:* the ladder is evaluated at NaN,
-both infinities, 0, -0.5, -1 and every threshold with its two neighbours. It must equal C's
+both infinities, 0, -0.5, -1 and every threshold with its two neighbours in the threshold's own
+format (half, single or double, the format `x` has: a half ladder clamps below -65504, the
+largest finite half, and no half input lies between it and -inf). It must equal C's
 saturating conversion at the join's width, signed or unsigned: NaN and values at or above the
 range give the maximum, values below it the minimum. Between thresholds no test changes, so those
 points cover every input. *Rewrite:* the join's readers read the truncation, the clamps die, and

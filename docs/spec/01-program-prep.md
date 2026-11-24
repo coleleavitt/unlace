@@ -1115,7 +1115,20 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   absolute, relative, PLT-relative, and image-offset fields at 8/16/32/64 bits in
   the object's byte order (an s390x `*DBL` field, `PC32DBL`/`PLT32DBL` and their
   16-bit forms, holds `(S + A - P) >> 1` and rejects an odd value), plus the instruction fields and ABI formulas for ARM
-  `CALL`/`JUMP24`/Thumb branches/`REL32`/`PREL31`, AArch64 branch/page/low-12
+  `CALL`/`JUMP24`/Thumb branches/`REL32`/`PREL31`, Xtensa `SLOT0_OP` on
+  little-endian cores (the operand of the relocated instruction by its opcode:
+  `L32R`'s negative literal word offset from `(P + 3) & !3`, `CALLn`'s word
+  offset from `(P & !3) + 4`, and the `J`, `BRI12`, `BRI8`/`RRI8`, `LOOP` and
+  narrow `beqz.n`/`bnez.n` byte offsets from `P + 4`; `ASM_EXPAND`,
+  `ASM_SIMPLIFY` and the `DIFF*` relaxation records are no-ops), OpenRISC (`EM_OPENRISC`,
+  told apart by `e_machine`) `INSN_REL_26`/`PLT26` jumps and calls, the
+  `HI_16_IN_INSN`/`AHI16`/`LO_16_IN_INSN` halves, the split `SLO16` store
+  immediate and the `32`/`32_PCREL` words, C-SKY `bsr32`
+  (`PCREL_IMM26BY2`: `(S + A - P) >> 1` in the low 26 bits, the instruction's
+  two halfwords high first), the A32 and Thumb-2
+  `MOVW`/`MOVT` pairs (`MOVW_ABS_NC`/`MOVT_ABS` and the `PREL` forms, 43..50:
+  the low half of `(S + A) | T` or the high half of `S + A`, less `P` for
+  `PREL`, with `A` the REL addend already in the imm16; sweep re-run), AArch64 branch/page/low-12
   forms, PowerPC `REL24`/`PLTREL24`/`LOCAL24PC`/`ADDR24` calls (32- and 64-bit;
   a `-fPIC` object's `PLTREL24` addend locates the caller's `.got2` for the
   linker's call stub and is not added to the target), the 14-bit conditional
@@ -7272,7 +7285,10 @@ every other binary's pass list is byte-identical to before the pass existed):
   to 64 hops, and the call site is the source position at that instruction.
   With `lines`, a second pass (`gopcln_lines`) also comments `<file>:<line>`
   at each PC where the position changes, the Go counterpart of `dwarf_lines`.
-  Both passes read the option themselves, so a default run decodes nothing;
+  Both passes run at the commit point, only when the option is on
+  (`crates/unlace-analysis/src/passes.rs (run_gopcln)`): a load-time pass sees
+  the option's constructor default, so registered at load they never wrote a
+  comment. A default run decodes nothing;
   a function is read only when its entry lies in executable bytes, and at most
   2,000,000 comments are written per image. The comments go through the same
   comment database as `dwarf_lines`, so they appear in the C text and in the
@@ -7489,7 +7505,25 @@ every other binary's pass list is byte-identical to before the pass existed):
   or two that are not neighbours — and none of that class's slots is named. A
   deleting destructor that only tail-calls `operator delete` (clang drops a
   complete destructor's dead stores from it) cannot be told from an ordinary method,
-  so such a class keeps its slot names. A destructor takes only `this`, while a
+  so such a class keeps its slot names, unless its base says where they are. GCC
+  writes the destructor slots of an abstract class as two null words: its vtable is
+  only installed while a derived object is built or destroyed, when neither is called
+  through it. A primary vtable that walks to no slot because its first two words are
+  0, neither covered by a dynamic relocation, followed by a method (code, or an
+  imported slot such as `__cxa_pure_virtual`), is such a class's
+  (`kuna_itaniumrtti.rs (null_dtor_pair)`); the class keeps that vptr and has a
+  virtual destructor at slot 0. Under single inheritance a class's primary vtable
+  extends its base's, so a class whose own slots show no destructor, on a single
+  inheritance chain (every two ancestors one the other's), takes its `D1` and `D0`
+  from the slots of the nearest ancestor whose destructors are known (from the null
+  pair or the shapes above): both slots its own, not the ancestor's entries, holding
+  two different functions no other class's slots hold
+  (`kuna_itaniumctors.rs (inherited_destructor_slots)`). That names the destructors a
+  GCC `-O2` build drops every vptr store from (a final class whose destructor only
+  frees members) and those that store only the vptr of the base destructor they
+  inlined: apfs-fuse's `PLString`, `PLInteger`, `PLData`, `PLDict` and `PLArray`
+  under the abstract `PLObject`, and `BTreeNodeVar`/`BTreeNodeFix` under `BTreeNode`.
+  A destructor takes only `this`, while a
   virtual method returning its own class by value builds the result in a return
   slot passed as its first parameter, reads its own `this` from the second, and
   hands the slot's address back, so its first store is the class's vptr through
@@ -12514,7 +12548,11 @@ function start, with no entry lost.
 when a FID or FLIRT rename (the FLIRT pass is described under §1.4 above)
 replaces a placeholder, the function also gets the libc prototype of its name
 (or a `nameladder` spelling) and the no-return flag when the no-return lists
-name it, as IDA applies the type and `noret.cfg` on a FLIRT rename.
+name it, as IDA applies the type and `noret.cfg` on a FLIRT rename. The lists
+read there are the ELF, PE/Mach-O and Windows-only ones together
+(`crates/unlace-analysis/src/loader/noreturn.rs (listed_noreturn)`): FLIRT names a
+statically linked MSVC CRT `__CxxThrowException@8` or `___report_gsfailure`,
+which only the Windows list carries.
 
 **Data-object width** (`globalwidth`, default-on; kuna;
 `crates/unlace-analysis/src/listing/kuna_accesswidth.rs (access_widths)`):
@@ -12545,6 +12583,16 @@ AIF-only entry whose first word a literal load reads is dropped too (the
 `poolentry` fixture's `F`, the split shape its corpus measurement disclosed). On the stripped
 Lua (x86-64, AArch64), ld.so, llvm-nm and llvm-objdump images it removes
 nothing; on the fixture it removes the function-shaped table the code reads.
+The veto also drops a discovered or AIF entry whose bytes are a string
+(`crates/unlace-analysis/src/analyzers/aif/kuna_aifstringveto.rs (is_string)`):
+at least six printable characters, ASCII or UTF-16LE, and then the NUL that ends
+them, followed by `int3` padding or another string of at least four characters
+(printable code up to a zero byte, `push ebx; push 0xa; push 0x2b67`, goes on
+with more code). A Windows driver keeps its `DbgPrint` formats in the code
+sections it pages with the code and pushes their addresses as immediates, which
+read as function pointers. In the Silicon Labs CP210x bus enumerator (x86) 109 of
+its 227 functions were such strings. Over 85,000 functions of /usr/bin,
+/usr/lib64 and the Holley PEs the test holds for 111 entries, each a string.
 **Incremental walk** (`incrementalwalk`, default-on): the x86 callback rounds
 resume the Listing from the accepted roots instead of rebuilding it, the
 `addrtakenentry` way; on a 300-callback i386 fixture the function set is
@@ -14586,7 +14634,12 @@ the path from the conditional check to `runtime.gopanic`.
 DIV-22 as in Ghidra): a callee is concluded no-return when at least **3** of its
 call sites (`EVIDENCE_THRESHOLD`) show no valid fall-through, plus a bounded
 fixpoint promotion for a caller whose body contains a terminal call to an
-already-concluded callee and no RETURN anywhere. The threshold buys robustness to
+already-concluded callee and no returning path anywhere: no RETURN, no jump out of
+the function to a callee not known no-return, no computed jump and no
+fall-through-less call to such a callee (a tail call returns when its target does;
+trustd's `_GetAssetFileURL` returns through `b _objc_autoreleaseReturnValue`, and
+only its landing pad ends in `bl _Unwind_Resume`, which made every call to it
+print `// no-return`). The threshold buys robustness to
 disassembly noise at the price of blindness to rarely-called functions; and the
 predicate has a structural blind spot: a no-return call followed by alignment **NOP
 padding** reads as a valid fall-through and contributes no evidence at all.

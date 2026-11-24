@@ -165,6 +165,9 @@ pub struct ClassVtables {
     pub primary_slots: Vec<Option<u64>>,
     /// Every vptr value of this class: the primary first, then each secondary.
     pub vptrs: Vec<u64>,
+    /// The primary vtable starts with two null slots, GCC's destructor pair of an
+    /// abstract class (`kuna_itaniumrtti.rs (null_dtor_pair)`).
+    pub null_dtor_pair: bool,
 }
 
 /// Every `(D1 or D0 entry, class)` pair, as facts, plus the classes found to have
@@ -188,6 +191,14 @@ fn destructor_slots(walker: &Walker, classes: &[ClassVtables]) -> (Vec<SymFact>,
     };
     let mut out: Vec<SymFact> = Vec::new();
     let mut has_virtual_dtor: HashSet<usize> = HashSet::new();
+    // The slot index of each class's complete destructor, where known.
+    let mut dtor_at: HashMap<usize, usize> = HashMap::new();
+    for (c, cls) in classes.iter().enumerate() {
+        if cls.null_dtor_pair {
+            has_virtual_dtor.insert(c);
+            dtor_at.insert(c, 0);
+        }
+    }
     for (c, cls) in classes.iter().enumerate() {
         let slots = &cls.primary_slots;
         let mut shaped: Vec<(usize, u64)> = Vec::new();
@@ -224,6 +235,9 @@ fn destructor_slots(walker: &Walker, classes: &[ClassVtables]) -> (Vec<SymFact>,
             continue;
         }
         has_virtual_dtor.insert(c);
+        if let Some(&(i, _)) = shaped.first() {
+            dtor_at.entry(c).or_insert(i);
+        }
         let name = dtor_name(&cls.name);
         for (i, f) in shaped {
             out.push(SymFact {
@@ -244,8 +258,79 @@ fn destructor_slots(walker: &Walker, classes: &[ClassVtables]) -> (Vec<SymFact>,
             }
         }
     }
+    inherited_destructor_slots(classes, &mut dtor_at, &mut has_virtual_dtor, &mut out);
     dedup(&mut out);
     (out, has_virtual_dtor)
+}
+
+/// The destructors of a class whose own slots do not show them (a `D1` that
+/// stores no vptr because nothing in it can observe one, or only a base's vptr
+/// from the base destructor it inlined), from where its base keeps them: under
+/// single inheritance a class's primary vtable extends its base's, so the base's
+/// destructor slots are its own `D1` and `D0`, the destructors every class
+/// derived from one with a virtual destructor has. Taken only on a single
+/// inheritance chain (every two ancestors one the other's), when both slots are
+/// the class's own (not the base's entries) and hold different functions, and
+/// when no other class's slots claim them.
+fn inherited_destructor_slots(
+    classes: &[ClassVtables],
+    dtor_at: &mut HashMap<usize, usize>,
+    has_virtual_dtor: &mut HashSet<usize>,
+    out: &mut Vec<SymFact>,
+) {
+    let named: HashSet<u64> = out.iter().map(|s| s.addr).collect();
+    let mut order: Vec<usize> = (0..classes.len()).collect();
+    order.sort_by_key(|&c| (classes[c].ancestors.len(), c));
+    let chain = |c: usize| {
+        let a = &classes[c].ancestors;
+        a.iter().all(|&x| {
+            a.iter().all(|&y| {
+                x == y || classes[x].ancestors.contains(&y) || classes[y].ancestors.contains(&x)
+            })
+        })
+    };
+    let mut found: Vec<(usize, u64, u64)> = Vec::new();
+    for c in order {
+        if dtor_at.contains_key(&c) || !chain(c) {
+            continue;
+        }
+        let Some((a, k)) = classes[c]
+            .ancestors
+            .iter()
+            .filter_map(|&a| dtor_at.get(&a).map(|&k| (a, k)))
+            .max_by_key(|&(a, _)| classes[a].ancestors.len())
+        else {
+            continue;
+        };
+        let slots = &classes[c].primary_slots;
+        let (Some(Some(d1)), Some(Some(d0))) = (slots.get(k), slots.get(k + 1)) else {
+            continue;
+        };
+        let base = &classes[a].primary_slots;
+        if d1 == d0 || base.get(k) == Some(&Some(*d1)) || base.get(k + 1) == Some(&Some(*d0)) {
+            continue;
+        }
+        dtor_at.insert(c, k);
+        has_virtual_dtor.insert(c);
+        found.push((c, *d1, *d0));
+    }
+    let mut claims: HashMap<u64, usize> = HashMap::new();
+    for cls in classes {
+        for f in cls.primary_slots.iter().flatten() {
+            *claims.entry(*f).or_default() += 1;
+        }
+    }
+    for (c, d1, d0) in found {
+        for f in [d1, d0] {
+            if claims.get(&f) == Some(&1) && !named.contains(&f) {
+                out.push(SymFact {
+                    addr: f,
+                    name: dtor_name(&classes[c].name),
+                    kind: SymKind::Function,
+                });
+            }
+        }
+    }
 }
 
 /// The constructor names of `classes`: functions in no vtable whose `this` stores
@@ -914,7 +999,41 @@ mod tests {
             ancestors: ancestors.iter().copied().collect(),
             primary_slots: Vec::new(),
             vptrs: vptrs.to_vec(),
+            null_dtor_pair: false,
         }
+    }
+
+    /// A class derived from an abstract base whose destructor slots are null
+    /// keeps its own destructors there; a class with two unrelated bases, or a
+    /// slot its base's vtable holds too, is left alone.
+    #[test]
+    fn destructors_follow_the_base_null_slots() {
+        let mut base = class("PLObject", &[], &[0x9000]);
+        base.null_dtor_pair = true;
+        let mut string = class("PLString", &[0], &[0x9100]);
+        string.primary_slots = vec![Some(0x100), Some(0x110), Some(0x120)];
+        let mut deeper = class("PLText", &[0, 1], &[0x9200]);
+        deeper.primary_slots = vec![Some(0x200), Some(0x210), Some(0x120)];
+        let other = class("Other", &[], &[0x9300]);
+        let mut both = class("Both", &[0, 3], &[0x9400]);
+        both.primary_slots = vec![Some(0x300), Some(0x310)];
+        let classes = vec![base, string, deeper, other, both];
+        let mut dtor_at = HashMap::from([(0usize, 0usize)]);
+        let mut has = HashSet::from([0usize]);
+        let mut out = Vec::new();
+        inherited_destructor_slots(&classes, &mut dtor_at, &mut has, &mut out);
+        dedup(&mut out);
+        let names: Vec<(u64, &str)> = out.iter().map(|s| (s.addr, s.name.as_str())).collect();
+        assert_eq!(
+            names,
+            [
+                (0x100, "PLString::~PLString"),
+                (0x110, "PLString::~PLString"),
+                (0x200, "PLText::~PLText"),
+                (0x210, "PLText::~PLText"),
+            ]
+        );
+        assert!(has.contains(&2) && !has.contains(&4));
     }
 
     #[test]

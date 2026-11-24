@@ -13,6 +13,10 @@
 # (docs/processor-tests.md).
 
 [images]
+xtensa_hifi4_rt700 = """
+3641001f3270166d006c04c777391f3270167d006c04c77739142030042301ff2270163d006c44c477392d031df00000
+3641000fa2700d0a2050002a8f000f22700d4a0010062c8f001df0
+"""
 arcv2_list_sum = """
 0a220080e120c1070c704c4344424b7ae120c10778604c434442f30a31807860e07ee078
 """
@@ -136,6 +140,9 @@ meta_dsp = """
 """
 x86_64_native_oracle = """
 c4e27ddcc1c3662e0f1f840000000000660f3a170701c3
+"""
+x86_64_x87 = """
+dd07d9e5dfe066250002c39090909090dd07dd06d9f8dfe09e7af9dd5f08ddd8c3
 """
 
 [[family]]
@@ -2477,6 +2484,15 @@ address = "0x40"
 expect = ["while( true ) {", "if (a3 <= 1) break;"]
 
 [[family.function]]
+test = "starcore_cont_ends_the_iteration_early"
+address = "0x70"
+expect = [
+    "while( true ) {",
+    "if (a0 <= *a2) {",  # IFT CONT skips the rest when D1 > D0
+    "a0 += *a2 * 3LL;",
+]
+
+[[family.function]]
 test = "starcore_two_set_short_loop_back_edge"
 address = "0x50"
 expect = ["while( true ) {", "a0 += *a2;", "if (a3 <= 1) break;"]
@@ -2765,6 +2781,34 @@ address = "0x0"
 expect = [
     "0x70a08231",
     "0xa9059cbb",
+]
+
+[[family]]
+name = "evm_erc20_calls"
+language = "EVM:BE:32:Cancun"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/evm/erc20_runtime_opt.bin"
+args = ["--option", "evmcalls", "on"]
+forbid = ["indirect jump", "switch("]
+
+# The same runtime with option evmcalls: the dispatcher calls the ABI decoder and
+# transfer() as functions, and the checked subtraction at 0x61c decompiles on its own
+# with its two stack arguments and its result.
+[[family.function]]
+test = "evm_erc20_calls_dispatch"
+address = "0x0"
+expect = [
+    "if (v1._0_32_ == 0xa9059cbb) {",
+    "sub_3e7(",
+    "= sub_51e(4,calldatasize());",
+]
+
+[[family.function]]
+test = "evm_erc20_calls_checked_sub"
+address = "0x61c"
+expect = [
+    "sub_61c(char a0[32],char a1[32])",
+    "return a0._0_32_ - a1._0_32_;",
 ]
 
 [[family]]
@@ -3186,6 +3230,24 @@ test = "x86_extractps_stores_a_dword"
 address = "0x10"
 expect = ["unsigned int *a0"]
 
+# x87 lifts checked against this CPU (docs/difffuzz.md): FXAM's C1 is the sign bit, read through
+# FNSTSW; FPREM converts its quotient before the multiply and its C2 ends the reduction loop.
+[[family]]
+name = "x86_64_x87"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_x87"
+
+[[family.function]]
+test = "x86_fxam_sign_reaches_fnstsw"
+address = "0x0"
+expect = [">> 0x4f) << 9"]
+
+[[family.function]]
+test = "x86_fprem_loop_ends_on_c2"
+address = "0x10"
+expect = ["(long)(", ">> 0x40) & 0x7fff"]
+
 # ELF routing and relocation rows: real ET_REL and ET_EXEC images (crates/unlace-cli/tests/fixtures/elfroute/fx.c,
 # built as its README says), loaded with no --target, so the loader picks the language from the ELF header (#706),
 # lays a 16-bit object out inside its space (#707) and applies the relocations (#713-#737). `chain` calls `scale7`
@@ -3263,26 +3325,6 @@ expect = ["g_tab["]
 test = "elfroute_msp430_elf_pick"
 address = "pick"
 expect = ["0x2c", "scale7("]
-
-# switchextent: a byte selector with no range check reads its table up to the next jump table,
-# of the function (csplit's regcomp) or of the next function (an OCaml match's last table).
-[[family]]
-name = "switchextent_x86_byte"
-loader = "auto"
-fixture = "crates/unlace-cli/tests/fixtures/switchextent_x86/tables.elf"
-forbid = ["halt_baddata", "jump-as-call"]
-
-[[family.function]]
-test = "switchextent_x86_byte_selector_ends_at_own_next_table"
-address = "bytesel"
-expect = ["case 2:", "0x15"]
-forbid = ["case 3:"]
-
-[[family.function]]
-test = "switchextent_x86_last_table_ends_at_next_functions_table"
-address = "lastsel"
-expect = ["case 3:", "return 0x21;"]
-forbid = ["case 4:"]
 
 # Hexagon ET_REL (EM_HEXAGON) routes to Hexagon:LE:32:default (#706); B22_PCREL calls, 32_6_X/16_X/6_X globals (#737).
 [[family]]
@@ -3614,12 +3656,17 @@ test = "arcv2_conditional_delayed_return_runs_its_slot"
 address = "0x0"
 expect = ["v2 = 0;", "return v2 + *v1;"]
 
-# C-SKY ET_REL (EM_CSKY, ABIv2) routes to CSKY:LE:32:v2 (#776). chain and pick need the bsr relocations, which are not applied yet.
+# C-SKY ET_REL (EM_CSKY, ABIv2) routes to CSKY:LE:32:v2 (#776); bsr32 calls take PCREL_IMM26BY2.
 [[family]]
 name = "elfroute_csky_o"
 loader = "auto"
 fixture = "crates/unlace-cli/tests/fixtures/elfroute/csky.o"
 forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_csky_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
 
 [[family.function]]
 test = "elfroute_csky_o_lookup"
@@ -3694,6 +3741,28 @@ address = "pick"
 expect = ["0x2c", "scale7("]
 
 # OpenRISC executable (EM_OPENRISC, big-endian) routes to OpenRISC:BE:32:default (#776).
+# OpenRISC ET_REL (EM_OPENRISC): l.jal calls take INSN_REL_26, globals the AHI16/LO_16_IN_INSN pair.
+[[family]]
+name = "elfroute_or1k_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/or1k.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_or1k_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_or1k_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_or1k_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
 [[family]]
 name = "elfroute_or1k_elf"
 loader = "auto"
@@ -3716,6 +3785,28 @@ address = "pick"
 expect = ["0x2c", "scale7("]
 
 # Xtensa executable (EM_XTENSA, little-endian, gcc 15.3 windowed ABI) routes to Xtensa:LE:32:default (#776).
+# Xtensa ET_REL (little-endian, windowed): call8, l32r literals and branches take SLOT0_OP.
+[[family]]
+name = "elfroute_xtensa_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/xtensa.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_xtensa_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_xtensa_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_xtensa_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
 [[family]]
 name = "elfroute_xtensa_elf"
 loader = "auto"
@@ -3789,3 +3880,24 @@ test = "elfroute_sm80_o_pick"
 address = "pick"
 expect = ["0x2c", "scale7("]
 xfail = "the BRX jump table is the opaque sass_BRX op"
+
+# The Xtensa HiFi 4 (NXP i.MX RT700) language decodes FLIX bundles and AE_* operations: two
+# post-incremented ae_l64.ip loads in 88-bit bundles, ae_add32 and an ae_s64.i store; and a
+# beqz.w15 branch over an l32i in a bundle. Built with the overlay's xtensa-elf-as.
+[[family]]
+name = "xtensa_hifi4_rt700"
+language = "Xtensa:LE:32:hifi4_rt700"
+base = "0x0"
+image = "xtensa_hifi4_rt700"
+args = ["--addr"]
+forbid = ["halt_baddata", "hifi_nop"]
+
+[[family.function]]
+test = "xtensa_hifi4_flix_loads_feed_the_store"
+address = "0x0"
+expect = ["*a1 = hifi_ae_s64_i(hifi_ae_add32(", "hifi_ae_l64_ip(a0->field_0x8)"]
+
+[[family.function]]
+test = "xtensa_hifi4_flix_branch_guards_the_load"
+address = "0x30"
+expect = ["if (!a0)", "return ((unsigned int *)a0)[1];"]

@@ -14,7 +14,7 @@
   `<target>-gcc -O2 -fno-inline-functions -c fx.c` with GNU gcc 15.3 for `csky-elf`,
   `m68k-elf`, `or1k-elf` and `xtensa-elf` (the xtensa core built with `XCHAL_HAVE_BE 0`, windowed
   ABI). Linked with `<target>-ld -e 0 -Ttext=0x10000` and stripped with `--strip-debug`.
-  `or1k.o` and `xtensa.o` are not kept, because their ET_REL relocations are not applied yet.
+  `or1k.o` and `xtensa.o` are the unlinked objects.
 - `sparc64_float.o`: `zig cc -target sparc64-freestanding -O2 -c sparc64_float.c`, single and double float
   returns under the V9 ABI (#765).
 - `sm80.o`: `clang --target=nvptx64-nvidia-cuda -march=sm_80 -O2 -fno-inline-functions -S fx.c` (LLVM 22),

@@ -224,7 +224,7 @@ Test-module writes (`#[cfg(test)]` blocks inside `src`, not a production path):
 
 | Where | Reads | Class | Disposition |
 |---|---|---|---|
-| `unlace-lift/src/p1_partition/goreg.rs:73` `goroutine_register` | `UNLACE_GOVERSION` | c | shadows the `version` argument (the image's release, from `Architecture::go_version`) with the environment; the argument is used, the environment is not |
+| `unlace-lift/src/p1_partition/goreg.rs:73` `goroutine_register` | `UNLACE_GOVERSION` | c | fixed: it re-read `UNLACE_GOVERSION` after the `version` argument (the image's release, from `Architecture::go_version`) and shadowed it; the argument is now the only source |
 | `unlace-console/src/engine.rs:9667` `arm_isa_from_env` | `UNLACE_ARM_ISA` | c | read by `ifacedecomp.rs:1431` (`load raw`), `bootstrap.rs:301` and the `bootstrap_from_*` helpers; no `LoadOptions` field, so moving it needs an `arm_isa` field and Bootstrap plumbing; not moved here |
 | `unlace-middle/src/p0_knowledge/objcsdk.rs:26` `sdk_path_from_env`, `unlace-analysis/src/analyzers/pdb/locate.rs:65` `pdb_path_from_env`, `unlace-middle/src/p0_knowledge/sourcelang.rs:106` `forced_from_env`, `unlace-middle/src/p0_knowledge/options.rs:624` `env_toggle` | their variables | c | environment-only readers that skip the scope; no caller in `src`, so they are dead code to delete |
 

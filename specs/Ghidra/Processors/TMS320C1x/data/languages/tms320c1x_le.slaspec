@@ -1,0 +1,3 @@
+# TMS320C1x, 16-bit words stored low byte first.
+@define ENDIAN "little"
+@include "tms320c1x.sinc"

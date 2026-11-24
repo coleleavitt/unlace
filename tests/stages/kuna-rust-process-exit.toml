@@ -1,3 +1,7 @@
+# `kuna-rust-process-exit.toml` preserves exit status and preceding stores while removing dead
+# trap flow after a known Rust standard-library process exit. Different namespaces and a longer
+# similarly named function retain their callers.
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

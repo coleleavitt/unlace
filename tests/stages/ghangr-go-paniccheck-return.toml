@@ -1,3 +1,7 @@
+# `ghangr-go-paniccheck-return.toml` checks that a returning Go panic helper falls through to the
+# terminal `runtime.gopanic` call. It also checks the helper's conditional throw and shows the
+# caller's sentinel with the known no-return analysis disabled.
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

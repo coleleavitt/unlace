@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<processor_spec>
+  <programcounter register="PC"/>
+  <context_data>
+    <context_set space="prog">
+      <!-- ARP and DP are unknown at reset: operands read the registers until LARP/LDPK or an
+           indirect ",ARn" makes them known -->
+      <set name="arp_k" val="0"/>
+      <set name="dp_k" val="0"/>
+    </context_set>
+  </context_data>
+  <register_data>
+    <register name="contextreg" hidden="true"/>
+    <register name="SP" hidden="true"/>
+  </register_data>
+  <default_symbols>
+    <symbol name="RS_VECTOR" address="prog:0000" entry="true"/>
+    <symbol name="INT_VECTOR" address="prog:0002"/>
+  </default_symbols>
+</processor_spec>

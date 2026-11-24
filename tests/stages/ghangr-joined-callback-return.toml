@@ -1,3 +1,7 @@
+# `ghangr-joined-callback-return.toml` covers late typed callbacks returning an integer pair:
+# either component, a narrowed high component, both components, whole forwarding, and scalar and
+# void callback controls.
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

@@ -735,7 +735,7 @@ pub fn widened_read(data: &Funcdata, out: VarnodeId) -> VarnodeId {
 
 /// Is the decision trace on (`KUNA_NARROWRET_TRACE=1`)?
 fn trace() -> bool {
-    std::env::var("KUNA_NARROWRET_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
+    unlace_base::env::var("UNLACE_NARROWRET_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }
 
 /// (kuna) Make a call to a callee that returns a narrow value zero-extended

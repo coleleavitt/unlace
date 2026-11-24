@@ -11,7 +11,7 @@ pub const JUMPTABLE_FAULT_ENV: &str = "KUNA_JUMPTABLE_FAULT";
 fn armed() -> Option<u64> {
     static AT: OnceLock<Option<u64>> = OnceLock::new();
     *AT.get_or_init(|| {
-        let raw = std::env::var(JUMPTABLE_FAULT_ENV).ok()?;
+        let raw = unlace_base::env::var(JUMPTABLE_FAULT_ENV).ok()?;
         let raw = raw.trim();
         match raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X")) {
             Some(hex) => u64::from_str_radix(hex, 16).ok(),

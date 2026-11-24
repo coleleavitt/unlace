@@ -751,7 +751,7 @@ impl FunctionTestCollection {
 
         // KUNA_DUMP triage hook (the C++ (kuna) addition), even on error.
         let mut results = String::new();
-        if std::env::var_os("KUNA_DUMP").is_some() {
+        if unlace_base::env::var_os("UNLACE_DUMP").is_some() {
             results.push_str(&format!("===KUNA_DUMP_BEGIN {}===\n", self.file_name));
             results.push_str(&bulkout);
             results.push_str("\n===KUNA_DUMP_MID===\n");

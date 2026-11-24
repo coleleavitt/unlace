@@ -47,7 +47,7 @@ fn repo_root() -> PathBuf {
 
 fn specs() -> Vec<String> {
     vec![
-        std::env::var("KUNA_SPECS")
+        unlace_base::env::var("UNLACE_SPECS")
             .unwrap_or_else(|_| repo_root().join("specs").to_string_lossy().into_owned()),
     ]
 }

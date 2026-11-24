@@ -1,3 +1,7 @@
+# `ghangr-rust-boolean-expressions.toml` checks bitwise expressions over merged Boolean locals.
+# Its CLI companion executes complete emitted C and Rust functions against independent result
+# formulas, callback traces and store canaries at O0/O2.
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

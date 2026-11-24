@@ -1,3 +1,7 @@
+# `kuna-ppc32picimports-reversed-save.toml` preserves the returning continuation when an unaligned
+# reversed store overlaps the saved PIC base. Its CLI companion covers both byte orders and a
+# neighboring-store control that still recovers the terminal import.
+
 [image]
 arch = 'PowerPC:LE:32:default'
 symbols = [

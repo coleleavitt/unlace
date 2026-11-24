@@ -1,3 +1,9 @@
+# `kuna-global-load-call-order.toml` keeps a post-call memory-loaded global write after the
+# getter, including a later call, a loop marker and a no-final-call control. The CLI roundtrips
+# check an impure getter, a computed-value reload control and overlapping x86-64 SIMD reads using
+# GCC/Clang at O0/O2. - `kuna-register-pair-call-args.toml`: overwritten wide-return register
+# components at an undeclared call, with single-half and unchanged-pair controls.
+
 [image]
 arch = 'sparc:BE:32:default'
 symbols = [

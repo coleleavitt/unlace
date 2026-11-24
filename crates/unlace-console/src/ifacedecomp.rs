@@ -1364,7 +1364,7 @@ decomp_command!(
             .split(',')
             .map(parse_raw_address)
             .collect::<Result<Vec<_>, _>>()?;
-        let isa = std::env::var(crate::engine::ARM_ISA_ENV)
+        let isa = unlace_base::env::var(crate::engine::ARM_ISA_ENV)
             .ok()
             .map(|value| ArmIsa::parse(&value))
             .transpose()

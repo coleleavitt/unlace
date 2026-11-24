@@ -9560,7 +9560,7 @@ pub(crate) fn classify_file(path: &str) -> KunaResult<FileInput> {
 /// The ARM decode mode named by [`ARM_ISA_ENV`], for the entry points that
 /// take none.
 pub(crate) fn arm_isa_from_env() -> KunaResult<Option<ArmIsa>> {
-    std::env::var(ARM_ISA_ENV)
+    unlace_base::env::var(ARM_ISA_ENV)
         .ok()
         .map(|value| ArmIsa::parse(&value))
         .transpose()
@@ -10090,7 +10090,7 @@ mod symbolstream_tests {
 fn trace_entry_sources(id: &str, out: &unlace_analysis::pass::AnalysisOutput) {
     static WANT: std::sync::OnceLock<Option<Option<u64>>> = std::sync::OnceLock::new();
     let want = WANT.get_or_init(|| {
-        std::env::var("KUNA_ENTRY_TRACE").ok().map(|v| {
+        unlace_base::env::var("UNLACE_ENTRY_TRACE").ok().map(|v| {
             u64::from_str_radix(v.trim().trim_start_matches("0x"), 16)
                 .ok()
                 .filter(|_| v.trim().starts_with("0x"))

@@ -21,6 +21,10 @@ teak_oak_acc_store = """
 oakdsp_acc_to_pointer = """
 185e21001858401b80450000
 """
+# TMS320C1x (BE): ldpk 0; lark ar0,0x20; lark ar1,7; zac; loop: larp 0; add *+,ar1; banz loop; sacl 0x10; ret
+tms320c1x_sum = """
+6e00702071077f89688000a1f400000450107f8d
+"""
 c28x_epwm1_tbprd = """
 1f76010123283412060000000000000000000000
 """
@@ -4682,3 +4686,20 @@ image = "oakdsp_acc_to_pointer"
 test = "oakdsp_accumulator_register_move_decompiles"
 address = "0x1000"
 expect = ["= 0x21;"]
+
+# TMS320C1x: a BANZ loop that sums eight words through AR0 (*+) while AR1 counts. ARP and DP are
+# flow context, so the store is a fixed address and the counter a fixed register.
+[[family]]
+name = "tms320c1x"
+language = "TMS320C1x:BE:16:default"
+base = "0x0"
+image = "tms320c1x_sum"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "tms320c1x_banz_sum"
+address = "0x0"
+expect = [
+    "} while (",    # BANZ on AR1 closes the loop
+    "dat_20 = ",    # SACL 0x10 (word 0x10 = byte 0x20) on page 0
+]

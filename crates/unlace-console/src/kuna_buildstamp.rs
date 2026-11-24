@@ -65,7 +65,7 @@ pub fn identity(kind: ChildKind) -> &'static str {
 /// The child half: answer a parent whose identity differs from ours.
 pub fn answer_parent(kind: ChildKind) {
     let ours = identity(kind);
-    if let Some(parent) = std::env::var_os(PARENT_ENV) {
+    if let Some(parent) = unlace_base::env::var_os(PARENT_ENV) {
         if parent != ours {
             eprintln!("{REPLY}{ours}");
         }

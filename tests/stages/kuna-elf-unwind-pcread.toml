@@ -1,3 +1,7 @@
+# `kuna-elf-unwind-pcread.toml` checks an authored PowerPC PC-relative literal read: with FDE
+# ownership disabled it remains a call; with ownership enabled the complete body returns `a0 * 3 +
+# 7`. The fixture generator is `crates/unlace-cli/tests/fixtures/elf_unwind_fixture.rs`.
+
 [image]
 arch = 'PowerPC:BE:32:default:gcc'
 symbols = [

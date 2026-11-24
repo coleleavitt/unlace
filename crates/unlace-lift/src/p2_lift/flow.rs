@@ -5322,7 +5322,7 @@ truncating the fall-through here"
                     &mut shared_partial,
                 );
                 crate::kuna_budget::deadline_passed_in("jump-table recovery");
-                if std::env::var_os("KUNA_JUMPTABLE_TRACE").is_some() {
+                if unlace_base::env::var_os("UNLACE_JUMPTABLE_TRACE").is_some() {
                     eprintln!(
                         "jumptable: recovery at {at:#x}: {}",
                         match &mode {

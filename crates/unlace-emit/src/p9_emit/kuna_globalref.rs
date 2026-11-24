@@ -237,7 +237,7 @@ pub fn plan(fd: &Funcdata, arch: &Architecture, on: bool, is_c: bool) -> Plan {
             });
         }
     }
-    let trace = std::env::var_os("KUNA_GLOBALREF_TRACE").is_some();
+    let trace = unlace_base::env::var_os("UNLACE_GLOBALREF_TRACE").is_some();
     Plan {
         on: true,
         trace,

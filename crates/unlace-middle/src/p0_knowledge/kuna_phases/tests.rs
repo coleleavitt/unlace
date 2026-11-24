@@ -1022,7 +1022,8 @@ fn option_values_live_value_present_for_129() {
     // +1 for `armhoist` (live_field = arm_hoist).
     // +1 for `javasync` (live_field = java_sync).
     // +1 for `egraph` (live_field = egraph).
-    assert_eq!(with_live, 147);
+    // +2 for `fpargboxed` (fp_arg_boxed) and `satconvert` (sat_convert).
+    assert_eq!(with_live, 149);
 }
 
 #[test]

@@ -1120,7 +1120,10 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   `L32R`'s negative literal word offset from `(P + 3) & !3`, `CALLn`'s word
   offset from `(P & !3) + 4`, and the `J`, `BRI12`, `BRI8`/`RRI8`, `LOOP` and
   narrow `beqz.n`/`bnez.n` byte offsets from `P + 4`; `ASM_EXPAND`,
-  `ASM_SIMPLIFY` and the `DIFF*` relaxation records are no-ops), OpenRISC (`EM_OPENRISC`,
+  `ASM_SIMPLIFY` and the `DIFF*` relaxation records are no-ops; `R_XTENSA_32` is
+  partial-inplace, so the word it patches keeps the part of the addend GNU `as`
+  left there, such as a jump-table row's case offset, and receives `S + A` plus
+  that word), OpenRISC (`EM_OPENRISC`,
   told apart by `e_machine`) `INSN_REL_26`/`PLT26` jumps and calls, the
   `HI_16_IN_INSN`/`AHI16`/`LO_16_IN_INSN` halves, the split `SLO16` store
   immediate and the `32`/`32_PCREL` words, C-SKY `bsr32`

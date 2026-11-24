@@ -122,6 +122,10 @@ specs/Ghidra/Processors/H8 vendors the Hitachi H8/300, H8/300H, H8S SLEIGH speci
 aleph-void/ghidra-h8-300 (https://github.com/aleph-void/ghidra-h8-300), a fork of shizmob/ghidra-h8-300, released under the
 WTFPL (Do What The F*ck You Want To Public License) (its license file is in that directory).
 
+specs/Ghidra/Processors/JieLi vendors the JieLi audio SoC SLEIGH specification of
+aleph-void/ghidra-jieli (https://github.com/aleph-void/ghidra-jieli), a fork of quarkslab/ghidra-jieli, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

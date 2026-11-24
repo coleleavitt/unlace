@@ -1,0 +1,117 @@
+# JieLi pi32 (ELF machine 240): generated from the instruction table inferred from JieLi's own objdump, see tools/ and
+# GHIDRA-RARE.md.  The hand-written constructors of the original module are replaced by tools/gen_jl.py's output.
+define endian    = little;
+define alignment = 2;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+
+# General purpose registers (r15 is the stack pointer and prints as sp)
+define register offset=0x0 size=4
+	[ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 sp ];
+
+# Special function registers
+define register offset=0x100 size=4
+	[ reti rete sfr2 sfr3 maccl macch rets psr
+	  sfr8 sfr9 ie1  ssp  ie0   icfg  pc   usp ];
+
+# Multiply accumulator (maccl + macch)
+define register offset=0x110 size=8
+	[ macc ];
+
+# Internal state for the if blocks and rep loops
+define register offset=0x200 size=4
+	[ cres rep_count rep_start ];
+
+define register offset=0x300 size=8 [ contextreg ];
+
+define context contextreg
+	# if/else blocks: the instructions after an if opener are conditional (cres) until both branches are used up
+	ifblock      = (0,0) noflow
+	thenbranch   = (1,3) noflow
+	elsebranch   = (4,6) noflow
+	closebracket = (7,7) noflow
+	# 0 while the wrapper constructors below are matched, 1 for the instruction itself
+	phase        = (14,14)
+	# rep loops: the number of body instructions still to come
+	repcount     = (8,11) noflow
+	# the register that counts the rep loop down (0..15), 16: rep_count (a numeric count)
+	repreg       = (15,19) noflow
+;
+
+# PSR bits
+@define V	"psr[0,1]"	# overflow
+@define C	"psr[1,1]"	# carry
+@define Z	"psr[2,1]"	# zero
+@define N	"psr[3,1]"	# negative
+
+@include "pi32_gen.sinc"
+
+
+#############################################################################
+# if / else blocks
+#
+# The block fields are noflow: a branch out of the middle of a block must not carry the block state to its target.  So every
+# step re-sets, for the next instruction only, what it needs.
+#
+# `ifs (nzcv == 0) {` makes the next A+1 instructions conditional on cres (the condition computed by the opener) and the B after
+# them conditional on its negation.  Context marks which instruction is which; objdump prints the braces, so does the display.
+#############################################################################
+theninst:^instruction is instruction
+[ thenbranch = thenbranch - 1; globalset(inst_next, thenbranch); globalset(inst_next, elsebranch); globalset(inst_next, ifblock); ]
+{
+	if (cres != 1) goto inst_next;
+	build instruction;
+}
+
+elseinst:^instruction is instruction
+[ elsebranch = elsebranch - 1; globalset(inst_next, elsebranch); globalset(inst_next, thenbranch); globalset(inst_next, ifblock); ]
+{
+	if (cres == 1) goto inst_next;
+	build instruction;
+}
+
+cdtinst:^theninst is thenbranch>1 & theninst {}
+
+# last instruction of the then part, an else part follows: the next instruction opens it
+cdtinst:^theninst is thenbranch=1 & theninst & elsebranch>0
+	[ closebracket = 1; globalset(inst_next, closebracket); ] {}
+
+# last instruction of the then part and no else part: the block is closed (no context may be left behind: the instruction
+# after the block is also reached by branches, and flows with different context give "inconsistent instruction prototype")
+cdtinst:^theninst is thenbranch=1 & theninst & elsebranch=0
+	[ ifblock = 0; globalset(inst_next, ifblock); ] {}
+
+cdtinst:^"} else { " elseinst is thenbranch=0 & elsebranch>1 & elseinst & closebracket=1
+	[ closebracket = 0; globalset(inst_next, closebracket); ] {}
+
+cdtinst:^"} else { " elseinst is thenbranch=0 & elsebranch=1 & elseinst & closebracket=1
+	[ ifblock = 0; globalset(inst_next, ifblock); closebracket = 0; globalset(inst_next, closebracket); ] {}
+
+cdtinst:^elseinst is thenbranch=0 & elsebranch>1 & closebracket=0 & elseinst {}
+
+cdtinst:^elseinst is thenbranch=0 & elsebranch=1 & elseinst & closebracket=0
+	[ ifblock = 0; globalset(inst_next, ifblock); ] {}
+
+ifinst:^cdtinst is ifblock=1 & cdtinst {}
+ifinst:^instruction is ifblock=0 & instruction {}
+
+#############################################################################
+# rep loops
+#
+# `rep N, count {` repeats the next N instructions count times.  The opener loads rep_count/rep_start and puts N in the
+# context; the last body instruction decrements the counter and jumps back to the first one while it is not zero.
+#############################################################################
+repinst:^ifinst is repcount>1 & ifinst
+	[ repcount = repcount - 1; globalset(inst_next, repcount); globalset(inst_next, repreg); ]
+{
+	build ifinst;
+}
+
+# last body instruction: the loop-back, one constructor per counter register (generated).  A body instruction repcount > 1 only
+# passes the count on.
+@include "pi32_rep.sinc"
+
+repinst:^ifinst is repcount=0 & ifinst {}
+
+:^repinst is phase=0 & repinst [ phase = 1; ] {}

@@ -4191,6 +4191,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `8008` | Intel 8008 | `8008:LE:16:default` | aleph-void/ghidra-8008 @ `71c3e7378c`, Apache-2.0 |
 | `F8` | Fairchild F8 | `F8:BE:16:default`, `F8:BE:16:F3850`, `F8:BE:16:MK3870`, `F8:BE:16:F3870`, `F8:BE:16:MK3873` | aleph-void/ghidra-f8 @ `bad5887f84`, Apache-2.0 |
 | `H8` | Hitachi H8/300, H8/300H, H8S | `h8_300:BE:16:normal`, `h8_300l:BE:16:normal`, `h8_300h:BE:32:normal`, `h8_300h:BE:32:advanced`, `h8s:BE:32:normal`, `h8s:BE:32:advanced`, `h8sx:BE:32:normal`, `h8sx:BE:32:middle`, `h8sx:BE:32:advanced`, `h8sx:BE:32:maximum` | aleph-void/ghidra-h8-300 (fork of shizmob/ghidra-h8-300) @ `480471258a`, WTFPL |
+| `JieLi` | JieLi audio SoC | `pi32:LE:32:default`, `pi32v2:LE:32:default`, `q32s:LE:32:default` | aleph-void/ghidra-jieli (fork of quarkslab/ghidra-jieli) @ `a69a59056f`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

@@ -1,0 +1,24 @@
+# JieLi q32s (ELF machine 242): generated from the instruction table inferred from JieLi's own objdump, see tools/ and
+# GHIDRA-RARE.md.  The hand-written constructors of the original module are replaced by tools/gen_jl.py's output.
+define endian    = little;
+define alignment = 2;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+
+# General purpose registers
+define register offset=0x0 size=4
+	[ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+
+# Special function registers (sr14 is the stack pointer)
+define register offset=0x100 size=4
+	[ reti rete retx rets sr4 psr cnum sr7
+	  sr8  sr9  sr10 icfg usp ssp sp   pc ];
+
+# PSR bits
+@define V	"psr[0,1]"	# overflow
+@define C	"psr[1,1]"	# carry
+@define Z	"psr[2,1]"	# zero
+@define N	"psr[3,1]"	# negative
+
+@include "q32s_gen.sinc"

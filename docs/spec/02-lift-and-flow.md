@@ -5615,6 +5615,19 @@ Found by `tools/difffuzz --oracle qemu`.
   (`float2float`); it converted the bit pattern as an integer.
 - `SABD v.4S` read lane 2 of its doubled difference from bit 94.
 
+### MIPS64 and Release 6 lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz --oracle qemu` (`mips64`, `mips64r6`, `mipsr6`).
+
+- The Release 6 compact branch-and-link instructions (`BLEZALC`, `BGEZALC`, `BGTZALC`,
+  `BLTZALC`, `BEQZALC`, `BNEZALC`, in `mips32Instructions.sinc` and `mipsmicro.sinc`) write the
+  return address whether or not they branch; they wrote it only on the taken path. `BEQZALC`
+  tested `rt s> 0` instead of `rt != 0`.
+- `DSLLV`, `DSRLV` and `DSRAV` shift by the low six bits of rs; `DROTRV` rotates by
+  `64 - shift` (it used 32).
+- On MIPS64, `INS` inserts into the low 32 bits and sign-extends the 32-bit result, as every
+  32-bit operation does; it worked on the full 64-bit register.
+
 ## 2.9 Go stack-growth prologue folding
 
 **(kuna) `option gomorestack off|auto|always`, default auto,

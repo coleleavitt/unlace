@@ -17,7 +17,8 @@ python3 -m venv ~/.local/share/difffuzz-venv
 ```
 
 `--arch` is `x86-64`, `aarch64`, `riscv64`, `arm` (A32), `thumb` (T32), `mips` (MIPS32 big-endian),
-`ppc` (PowerPC 32 big-endian) or `tricore`. `--sleighpath DIR` lifts with the `.sla`
+`mips64`, `mips64r6`, `mipsr6` (MIPS64, MIPS64 Release 6 and MIPS32 Release 6, big-endian; use
+`--oracle qemu`), `ppc` (PowerPC 32 big-endian) or `tricore`. `--sleighpath DIR` lifts with the `.sla`
 files under `DIR` instead of the built-in ones, so a spec edit can be checked right after
 `slacomp` without rebuilding unlace. The summary on stdout counts each outcome and lists the
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
@@ -27,7 +28,8 @@ input registers and the differing values.
 
 `--oracle qemu` replaces Unicorn with the installed QEMU user-mode binaries
 (`tools/difffuzz/qemu_backend.py`) for `aarch64` (`qemu-aarch64 -cpu max`), `riscv64`
-(`qemu-riscv64 -cpu max`) and `mips` (`qemu-mips64 -cpu MIPS64R2-generic`). QEMU 10 implements
+(`qemu-riscv64 -cpu max`), `mips` and `mips64` (`qemu-mips64 -cpu MIPS64R2-generic`), and `mipsr6`
+and `mips64r6` (`qemu-mips64 -cpu I6400`, an R6 ELF with no HI/LO in the harness). QEMU 10 implements
 what Unicorn's older QEMU core lacks or gets wrong: BF16, I8MM (`usdot`/`sudot`), MOPS,
 `fcmla`/`fcadd`, and RISC-V NaN-boxing.
 
@@ -54,7 +56,11 @@ afterwards. The register file is unchanged.
   back as its input.
 - MIPS: the installed QEMU has no 32-bit MIPS user binary, so MIPS32 code runs on a MIPS64 core
   with every register sign-extended from its 32-bit value (the state in which MIPS64 runs a
-  MIPS32 instruction as MIPS32 does). Only the low 32 bits are compared.
+  MIPS32 instruction as MIPS32 does). Only the low 32 bits are compared. `mips64` loads and
+  compares the full 64 bits. A `mipsr6` access must stay below 0x80000000, since the 64-bit core
+  sign-extends the address. Release 6 compact branches (`b*c`, `j*c`) are compared; their target
+  goes to a second epilogue. Unaligned loads and stores trap on QEMU and count as reference
+  exceptions.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

@@ -2933,7 +2933,8 @@ the case targets.
    or a dispatch retried after an earlier recovery, is not re-run, so a
    recovery that fails for its own reasons costs one extent scan and no
    second pipeline. A function's last table has
-   no such bound and is left as it was: an object the function merely reads
+   no such bound here (an unguarded one ends at the next function's table
+   below): an object the function merely reads
    may sit anywhere in the section, and a bound taken from one could run the
    table on into another function's, whose entries are plausible code
    addresses measured from the wrong base. The discovery Listing applies the
@@ -2969,12 +2970,18 @@ the case targets.
    functions' tables measured from the wrong base: they land all over the
    next functions and back inside this one, so the run-on cut, which keeps
    every row until the first that leaves the function, keeps them all and
-   the 45-case switch printed 1,200 lines of phantom cases. When the run-on
-   cut leaves an unguarded table whose rows leave the function,
-   `jumptable.rs (JumpBasicModel::kuna_next_table_rows)` reads its table and
-   stride as above and ends it at the lowest jump table above it in the same
-   section, of this function or of the next ones, when that leaves at least
-   two rows. The next functions' tables come from the flow: the sanity check
+   the 45-case switch printed 1,200 lines of phantom cases. A byte selector
+   with no range check is the same shape on x86-64 when the rows past the
+   table stay inside the function: gnulib's regcomp (csplit `sub_13330`)
+   reads its `unsigned char` token type straight into a 37-entry table and
+   OCaml compiles an exhaustive match the same way, so the next table's
+   offsets, measured from the wrong base, became cases that land mid-instruction.
+   For every unguarded table (no guard, or guards that leave its
+   selector's top open), `jumptable.rs (JumpBasicModel::kuna_next_table_rows)`
+   reads its table and stride as above and ends it at the lowest jump table
+   above it in the same section, of this function or of the next ones, when
+   that leaves at least two rows and fewer than the rows kept so far; the
+   run-on cut applies when no table ends it sooner. The next functions' tables come from the flow: the sanity check
    inside the recovery partial records the table it wants
    (`Funcdata::kuna_later_wanted`) and fails, and
    `flow.rs (FlowInfo::recover_jump_tables)` decodes the extents after this
@@ -2987,9 +2994,8 @@ the case targets.
    request can also come from the retry the function's own tables bound
    (a row of the bounded table lies in the next known function); the flow
    then answers it in a second round. Either way the request never leaves
-   a table unrecovered. A table whose rows all stay
-   inside the function costs nothing, and the decode runs only for a table
-   already unguarded and leaving the function.
+   a table unrecovered. A guarded table costs nothing; an unguarded one
+   costs the extent decodes and one more recovery, once per function.
 
    **Guards that leave the top open (always on).**
    `jumptable.rs (JumpBasicModel::analyze_guards)` records the

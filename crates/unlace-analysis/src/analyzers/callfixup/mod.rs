@@ -70,6 +70,7 @@ use unlace_decomp::inject_sleigh::SleighPayload;
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
+pub mod kuna_armgscookiesig;
 pub mod kuna_msvcftolsig;
 pub mod kuna_thumb1casesig;
 
@@ -261,6 +262,7 @@ impl AnalysisPass for CallFixupPass {
         let mut out = scan_call_fixups(ctx.file, ctx.bytes, ctx.arch);
         kuna_msvcftolsig::scan(ctx.file, &mut out);
         kuna_thumb1casesig::scan(ctx.file, &mut out);
+        kuna_armgscookiesig::scan(ctx.file, &mut out);
         out
     }
 }

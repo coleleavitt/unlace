@@ -358,7 +358,116 @@ def elf32(segments, entry, machine, big=False, flags=0):
     return img + b"\0" * (PAGE - len(img)) + blobs
 
 
-HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "nios2": Nios2Harness}
+# ---------------------------------------------------------------- SuperH SH-4 (16-bit, ELF32)
+
+def _pick_free(arch, regs, written, names, count):
+    """count registers from names whose SLEIGH storage the instruction does not write."""
+    out = []
+    for n in names:
+        if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+            out.append(n)
+            if len(out) == count:
+                return out
+    return None
+
+
+def halfwords(hs, big=False):
+    return b"".join(struct.pack(">H" if big else "<H", h & 0xFFFF) for h in hs)
+
+
+class Sh4Harness:
+    """r0..r15 at 4*i, GBR/MACH/MACL/PR at 64..76, words for Q (bit 31), M (bit 31) and T (bit 0)
+    at 80..88, T read back at 92. The instruction sits within a BRA's reach of the prologue
+    (Sh4.base), and the BRA's delay slot restores the table register. S starts clear; Q, M and S
+    cannot be read from user mode and are not compared."""
+    qemu = ("qemu-sh4", [])
+    machine = 42
+    big = False
+    elf32 = True
+    table_size = 96 + 8
+    marker_at = 96
+
+    def __init__(self):
+        self.s, self.x, self.y = 14, 13, 12
+        self.scratch_names = []
+
+    def choose_scratch(self, arch, regs, written):
+        got = _pick_free(arch, regs, written, [f"r{i}" for i in (14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)], 1)
+        if not got:
+            return False
+        self.s = int(got[0][1:])
+        self.x, self.y = [r for r in (1, 2, 3) if r != self.s][:2]
+        self.scratch_names = got
+        return True
+
+    @staticmethod
+    def li32(r, v, t):
+        c = [0xE000 | r << 8]                                                       # mov #0, r
+        for sh in (24, 16, 8, 0):
+            c += [0x4018 | r << 8, 0xE000 | t << 8 | ((v >> sh) & 0xFF), 0x600C | t << 8 | t << 4, 0x200B | r << 8 | t << 4]
+        return c                                                                    # shll8; mov #b,t; extu.b t,t; or t,r
+
+    def prologue(self, target):
+        s, x, y = self.s, self.x, self.y
+        c = [0xE000 | s << 8 | 0x3E, 0x4028 | s << 8]                               # mov #0x3e,s; shll16 s
+        c += [0x7000 | s << 8 | 64]                                                 # add #64, s
+        c += [0x5000 | x << 8 | s << 4 | 0, 0x401E | x << 8]                        # GBR
+        c += [0x5000 | x << 8 | s << 4 | 1, 0x400A | x << 8]                        # MACH
+        c += [0x5000 | x << 8 | s << 4 | 2, 0x401A | x << 8]                        # MACL
+        c += [0x5000 | x << 8 | s << 4 | 3, 0x402A | x << 8]                        # PR
+        c += [0x5000 | x << 8 | s << 4 | 4, 0x5000 | y << 8 | s << 4 | 5, 0x2007 | x << 8 | y << 4]  # div0s y,x: Q, M
+        c += [0x5000 | x << 8 | s << 4 | 6, 0x4001 | x << 8]                        # shlr x: T
+        c += [0x0048]                                                               # clrs
+        c += [0x7000 | s << 8 | 0xC0]                                               # add #-64, s
+        for i in range(16):
+            if i != s:
+                c.append(0x5000 | i << 8 | s << 4 | i)                              # mov.l @(4i,s), ri
+        # slide to the end of the page with NOPs so the BRA reaches the next page's instructions
+        c += [0x0009] * ((PAGE - 4) // 2 - len(c))
+        here = PROLOGUE + 2 * len(c)
+        disp = (target - (here + 4)) >> 1
+        c += [0xA000 | (disp & 0xFFF), 0x5000 | s << 8 | s << 4 | s]                # bra target; mov.l @(4s,s),s
+        return halfwords(c)
+
+    def epilogue(self, dumps, marker):
+        s = self.s
+        x = next(r for r in (1, 2, 3, 4) if r != s)
+        t = next(r for r in (2, 3, 4, 5) if r not in (s, x))
+        c = [0xE000 | s << 8 | 0x3E, 0x4018 | s << 8, 0x7000 | s << 8 | 0x08, 0x4018 | s << 8]  # s = OUT
+        for i in range(16):
+            if i != s:
+                c.append(0x1000 | s << 8 | i << 4 | i)                              # mov.l ri,@(4i,s)
+        c += [0x7000 | s << 8 | 64]
+        c += [0x0012 | x << 8, 0x1000 | s << 8 | x << 4 | 0]                        # stc GBR,x
+        c += [0x000A | x << 8, 0x1000 | s << 8 | x << 4 | 1]                        # sts MACH,x
+        c += [0x001A | x << 8, 0x1000 | s << 8 | x << 4 | 2]                        # sts MACL,x
+        c += [0x002A | x << 8, 0x1000 | s << 8 | x << 4 | 3]                        # sts PR,x
+        c += [0x0029 | x << 8, 0x1000 | s << 8 | x << 4 | 7]                        # movt x
+        c += self.li32(x, marker, t) + [0x1000 | s << 8 | x << 4 | 8]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [0xE304, 0xE401] + self.li32(5, base, 1) + self.li32(6, size, 1) + [0xC313]   # write(1, base, size)
+        c += [0xE301, 0xE400, 0xC311]                                               # exit(0)
+        return halfwords(c)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i in range(16):
+            struct.pack_into("<I", t, 4 * i, init.get(f"r{i}", 0) & 0xFFFFFFFF)
+        for k, n in enumerate(("GBR", "MACH", "MACL", "PR")):
+            struct.pack_into("<I", t, 64 + 4 * k, init.get(n, 0) & 0xFFFFFFFF)
+        struct.pack_into("<I", t, 80, ((flagword >> 8) & 1) << 31)                  # Q
+        struct.pack_into("<I", t, 84, ((flagword >> 9) & 1) << 31)                  # M
+        struct.pack_into("<I", t, 88, flagword & 1)                                 # T
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {f"r{i}": struct.unpack_from("<I", out, 4 * i)[0] for i in range(16)}
+        for k, n in enumerate(("GBR", "MACH", "MACL", "PR")):
+            regs[n] = struct.unpack_from("<I", out, 64 + 4 * k)[0]
+        return regs, struct.unpack_from("<I", out, 92)[0] & 1
+
+
+HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "nios2": Nios2Harness, "sh4": Sh4Harness}
 
 
 def available(arch):
@@ -427,6 +536,14 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
                 break
         else:
             return {"status": "unmodeled", "why": "no register left for the harness"}
+    elif hasattr(h, "choose_scratch"):
+        written = set()
+        for o in row["ops"]:
+            out = o.get("output")
+            if out and out["space"] == "register":
+                written.update(range(out["offset"], out["offset"] + out["size"]))
+        if not h.choose_scratch(arch, regs, written):
+            return {"status": "unmodeled", "why": "no register left for the harness"}
     epi_at = addr + size
     target = nxt & ((1 << bits) - 1)
     # a second epilogue where the p-code says control goes, so a taken branch is compared too
@@ -474,7 +591,7 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     except subprocess.TimeoutExpired:
         return {"status": "ref-exception", "why": "qemu timeout"}
     want = h.table_size + PAGE * len(data_pages)
-    if b"Unable to find" in p.stderr or b"Unable to reserve" in p.stderr or b"Error mapping" in p.stderr:
+    if b"Unable to find" in p.stderr or b"Unable to reserve" in p.stderr or b"Error mapping" in p.stderr or b"requires more than" in p.stderr:
         return {"status": "bad-address"}
     if p.returncode != 0 or len(p.stdout) != want:
         why = p.stderr.decode(errors="replace").strip().splitlines()
@@ -482,6 +599,9 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     ref, ref_flags = h.parse(arch, p.stdout[:h.table_size])
     if arch.name in ("riscv64", "mips", "nios2"):
         ref[arch.gprs[h.scratch - 1][0]] = init[arch.gprs[h.scratch - 1][0]]
+    elif hasattr(h, "choose_scratch"):
+        for n in h.scratch_names:
+            ref[n] = init[n]
 
     diffs = {}
     for n, _ in arch.gprs + arch.vecs:

@@ -65,6 +65,16 @@ afterwards. The register file is unchanged.
   naming ra and branch offsets off a word boundary are reserved and not generated; DIV/DIVU by
   zero and DIV of INT_MIN by -1 are undefined; addresses at or above 0x7FFF0000 are outside
   QEMU's guest space. First run (seed 7, 2000 encodings, 3 trials): 4977 matches, no mismatches.
+- SuperH SH-4 (`--arch sh4`, `SuperH4:LE:32:default`, `--oracle qemu` with `qemu-sh4` from QEMU 8.2):
+  the instruction sits on the page after the prologue (`Sh4.base`), which slides on NOPs to a BRA
+  at its last word so the 12-bit branch reaches; the BRA's delay slot restores the table register.
+  T is compared; S starts clear and Q, M, S are not compared (user mode cannot read SR). Not
+  generated: delay-slot branches, privileged, cache, FPU and MAC instructions, and the SH-2A/SH4A
+  encodings Capstone's SH4 mode accepts. QEMU 8.2 quirks skipped: ROTL/ROTR clear T, DIV1 Rn,Rn
+  reads Rm after the shift, DIV1 by 0 gets the carry wrong. Fixed in the SH-4 module after the
+  first run: `MOV.x @Rm+,Rn` with m = n keeps the loaded value (no increment), `MOV.x Rm,@-Rn`
+  with m = n stores Rm's value before the decrement (QEMU's reading). Seed 3, 6000 encodings:
+  13481 matches, no mismatches left.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

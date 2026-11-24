@@ -10576,11 +10576,12 @@ function symbol names its start, no direct `call rel32` targets it, every direct
 before that owner, and its start is off the 16-byte alignment GCC and Clang give
 a function at -O2 but not a cold part. The last two tests keep a real function
 that only one other function tail-calls. The bodies go out on the `ehcold`
-channel, so the commit drops every entry inside one; the owner's flow then
-follows its jumps into the part like into any block of its own, so the unlikely
-path prints in place. Against IDA 9.5's own databases of its loaders, a
-byte-scan prototype of the rule selects 54 of 62 FDE-backed tails on pe.so, 135 of 154 on elf.so, 21 of 24 on
-coff.so and 128 of 140 on dex.so, and one function IDA keeps (pe.so 0x62fe).
+channel, so the commit drops every entry inside one; the owner's flow decodes
+the part as before. Against IDA 9.5's own databases of its loaders, the IDA
+tail chunks kuna lists as functions drop from 9/51/4/18 to 2/12/0/5
+(pe/elf/coff/dex.so), and one function IDA keeps is lost (pe.so 0x62fe). The
+owners' C does not change, since their flow already decoded the parts; the parts
+stop being decompiled as functions of their own.
 x86/x86-64 ELF only.
 
 **(kuna) The pads that stay hidden are named** (`ehnote`, default-**on**;

@@ -2574,7 +2574,23 @@ truncating the fall-through here"
                     .funclet(self.data.get_address().get_offset())
                     .is_some();
                 let cont = table.funclet_return(off).filter(|_| !in_funclet);
-                if !sites.is_empty() || cont.is_some() {
+                let cleanup_ret = !in_funclet && table.in_cleanup_funclet(off);
+                let catch_only = self
+                    .data
+                    .get_arch()
+                    .kuna_options
+                    .get::<crate::kuna_itaniumeh::ItaniumEh>()
+                    .catch_only;
+                let sites: Vec<_> = sites
+                    .into_iter()
+                    .filter(|s| {
+                        !catch_only
+                            || s.clauses
+                                .iter()
+                                .any(|c| *c != crate::kuna_itaniumeh::EhClause::Cleanup)
+                    })
+                    .collect();
+                if !sites.is_empty() || cont.is_some() || cleanup_ret {
                     let mut insn = Vec::new();
                     let mut cursor = Some(firstop);
                     while let Some(op) = cursor {
@@ -2603,6 +2619,8 @@ truncating the fall-through here"
                     if let Some(cont) = cont {
                         let to = Address::new(space, cont);
                         crate::kuna_itaniumeh::return_to_continuation(&mut self.data, &insn, &to)?;
+                    } else if cleanup_ret {
+                        crate::kuna_itaniumeh::return_to_halt(&mut self.data, &insn)?;
                     }
                 }
             }

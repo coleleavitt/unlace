@@ -156,7 +156,11 @@ fn x64_scopes(file: &object::File, bytes: &[u8], img: &ImageBytes, out: &mut Ana
     let names = parent_names(file);
     let mut named = FxHashSet::<u64>::default();
     let mut entries = FxHashSet::<u64>::default();
-    for (func, _, unwind) in runtime_functions(&pe, bytes, base) {
+    let records = runtime_functions(&pe, bytes, base);
+    let ends: unlace_decomp::kuna_fasthash::FxHashMap<u64, u64> =
+        records.iter().map(|&(b, e, _)| (b, e)).collect();
+    let mut finals = FxHashSet::<u64>::default();
+    for &(func, _, unwind) in &records {
         let Some((handler, data)) = language_handler(img, base, unwind) else {
             continue;
         };
@@ -167,6 +171,7 @@ fn x64_scopes(file: &object::File, bytes: &[u8], img: &ImageBytes, out: &mut Ana
             continue;
         };
         scope_notes(func, &scopes, true, out);
+        finally_pads(img, func, unwind, &scopes, &ends, &mut finals, out);
         let mut code_filters = 0usize;
         for s in &scopes {
             let (Some((start, end)), SehKind::Except { filter, handler }) = (s.range, &s.kind)
@@ -219,6 +224,57 @@ fn x64_scopes(file: &object::File, bytes: &[u8], img: &ImageBytes, out: &mut Ana
         }
     }
 }
+
+/// (kuna `msvceh`) Each x64 `__finally` funclet as a cleanup pad of its scope:
+/// one cleanup record over the guarded range, entered with the parent's frame
+/// like a catch funclet, its `ret`s ending the path (the exception propagates).
+fn finally_pads(
+    img: &ImageBytes,
+    func: u64,
+    unwind: u64,
+    scopes: &[SehScope],
+    ends: &unlace_decomp::kuna_fasthash::FxHashMap<u64, u64>,
+    finals: &mut FxHashSet<u64>,
+    out: &mut AnalysisOutput,
+) {
+    let (frame_reg, frame_offset) = match img.read(unwind, 4) {
+        Some(h) if h[3] & 0x0f != 0 => (
+            Some(X64_REG_NAMES[(h[3] & 0x0f) as usize].to_string()),
+            (h[3] >> 4) as u64 * 16,
+        ),
+        _ => (None, 0),
+    };
+    for s in scopes {
+        let (Some((start, end)), SehKind::Finally { handler }) = (s.range, &s.kind) else {
+            continue;
+        };
+        let Some(&fend) = ends.get(handler) else {
+            continue;
+        };
+        if finals.insert(*handler) {
+            out.msvc_funclets.push(MsvcFunclet {
+                pad: *handler,
+                frame_reg: frame_reg.clone(),
+                frame_offset,
+                returns: Vec::new(),
+                x86: false,
+                cleanup_end: Some(fend),
+            });
+        }
+        out.msvc_eh_sites.push(EhCallSite {
+            start,
+            end,
+            pad: *handler,
+            clauses: vec![EhClause::Cleanup],
+        });
+    }
+}
+
+/// The x64 registers by `UNWIND_INFO` number.
+const X64_REG_NAMES: [&str; 16] = [
+    "RAX", "RCX", "RDX", "RBX", "RSP", "RBP", "RSI", "RDI", "R8", "R9", "R10", "R11", "R12", "R13",
+    "R14", "R15",
+];
 
 /// A constant filter expression by its `excpt.h` name.
 pub fn constant_filter(c: i32) -> String {
@@ -289,6 +345,7 @@ fn x86_splice(
                     frame_offset: 0,
                     returns,
                     x86: true,
+                    cleanup_end: None,
                 });
             }
             let selector = k as i64 + 1;

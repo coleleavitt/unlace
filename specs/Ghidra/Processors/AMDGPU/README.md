@@ -67,14 +67,63 @@ and the true16 `v_mov_b16`/`v_not_b16` with `.l`/`.h` halves. The scheduling, wa
 cache-control instructions new in these generations (`s_clause`, `s_delay_alu`,
 `s_waitcnt_*cnt`, `s_inst_prefetch`, ...) decode as no-ops.
 
-Gaps beyond GFX9's: most true16 VOP3
-forms and op_sel, MIMG/NSA, the gfx11 export and LDS-direct instructions and the RDNA-only
-dot/WMMA operations are not decoded.
+Gaps beyond GFX9's: on gfx10, VOP3P (packed math), MIMG and the dot operations are not decoded;
+on both, the export and LDS-direct instructions are not. gfx11's true16 forms, VOP3P,
+WMMA and MIMG come from the generated includes below.
 
 Oracle: `fixtures/amdgpu/gfx900_kernels.cl` and the four GFX9 test kernels built with clang
 -O2 for gfx1030 and gfx1100, plus `fixtures/amdgpu/gfx1100_vopd.cl` at -O3 (four VOPD
 instructions): every function decompiles with no bad instruction and `llvm-objdump` lists no
 mnemonic the specs lack.
+
+## GFX11 generated includes: true16, VOP3P/WMMA, MIMG
+
+`amdgcn_gfx11.slaspec` includes three generated files; `tools/amdgpu_gfx11_probe.py` reads
+their opcode tables out of `llvm-objdump` (LLVM 22, `-mcpu=gfx1100`, which decodes real
+true16), and the generators write the p-code:
+
+- `amdgcn_gfx11_valu.sinc` (`tools/gen_amdgpu_gfx11_valu.py`, from `probe vop3` and
+  `probe e32`): every VOP3 opcode the base spec lacks or whose LLVM form names a VGPR half,
+  and the VOPC/VOP1/VOP2 e32 forms with halves. In VOP3, op_sel bits 0-2 pick the half of
+  each 16-bit source and bit 3 that of the destination (one constructor per combination); in
+  e32 forms bit 7 of the 8-bit VGPR number does. A 16-bit write keeps the other half. Float
+  halves take the VOP3 abs/neg modifiers. This covers the f16/i16/u16 compares (VOPC e64 and
+  e32, cmpx writing EXEC only), the f16 VOP1/VOP2 operations and their e64 forms, fma/mad/
+  min3/max3/med3/maxmin on halves, the u16/i16 adds, shifts and conversions, and the remaining
+  VOP3-only opcodes (cube*, xor3, xnor, maxmin/minmax, div_fixup, mqsad/qsad, dot2 f16/bf16,
+  pack, the dx9-zero fma, v_cndmask_b16 and v_div_scale_f64).
+- `amdgcn_gfx11_vop3p.sinc` (`tools/gen_amdgpu_gfx11_vop3p.py`): the packed 16-bit
+  integer and float operations, each lane's source half picked by op_sel (low lane) and
+  op_sel_hi (high lane) as constants in the p-code; the dot2/dot4/dot8 and fma_mix forms as
+  user-ops; and the six WMMA operations, whose 2-, 4- and 8-VGPR tile operands are tuple
+  registers passed to the `wmma` user-op.
+- `amdgcn_gfx11_mimg.sinc` (`tools/gen_amdgpu_gfx11_mimg.py`, from `probe mimg`): every
+  image opcode with the address VGPR count LLVM gives each opcode, dim and a16, as a range or,
+  with NSA, as up to four more single VGPRs in a third word (a fifth and later address share
+  its last byte as a tuple), plus the two BVH ray queries. The data count is the dmask's bit
+  count (four for gather4 and msaa_load), halved with d16, plus one with tfe; a table on
+  dmask/d16/tfe/lwe stores it in the context field `mi_vdn`, which picks the data tuple. Each
+  operation is a user-op on the resource, the sampler and the first address; the data passes
+  through the `mimg_data` register.
+
+Rerun a generator after changing it, and the probe and the valu generator after adding VOP3
+constructors to the base spec (the probe skips opcodes the base already decodes unless LLVM
+prints a half for them); then rerun `gen_amdgpu_wave64.py`.
+
+Oracle: the probe encodings against `llvm-objdump`. Of the 436 valid VOP3 encodings, 430 print
+the same mnemonic (the rest: `v_mqsad_u32_u8` and `v_permlane16/x16_b32`, not decoded, and the
+base spec's `v_add/sub/subrev_co_u32_e64` spelling), and 132 of the 133 that name a half print
+the same text (the other is the probe's VGPR as a `v_cndmask_b16` mask); of the 496 VOPC, VOP1
+and VOP2 encodings with halves, all but `v_swap_b16` and the base spec's `v_mov_b16`/`v_not_b16`
+spelling print the same text; all 34 VOP3P encodings print the same mnemonic; and 3,632 MIMG
+encodings (every opcode, dim, a16 and NSA form with random dmask and modifiers, kept when
+`llvm-mc` assembles LLVM's text back to the same bytes) print the same text. Under
+`AMDGPU:LE:64:GFX11-W64` the VOP3 counts are the same against `--mattr=+wavefrontsize64`.
+`fixtures/amdgpu/gfx1100_true16.cl` (wave32 and wave64) and `fixtures/amdgpu/gfx1100_image.ll`
+decompile with no bad instruction.
+
+Gaps: `v_mqsad_u32_u8` (128-bit sources), `v_swap_b16`, `v_permlane16/x16_b32`, the clamp and
+output modifiers, and NSA forms of the BVH queries.
 
 ## Wave64: `AMDGPU:LE:64:GFX10-W64` and `AMDGPU:LE:64:GFX11-W64`
 

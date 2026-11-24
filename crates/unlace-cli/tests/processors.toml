@@ -1733,6 +1733,55 @@ expect = [
     "v6 = v5 + 1.0f;",
 ]
 
+# `fixtures/amdgpu/gfx1100_true16.cl` at -O2 (real true16): 16-bit values live in VGPR
+# halves (`v0.l`/`v0.h`), chosen by op_sel in VOP3 and by bit 7 of the register in e32 forms.
+[[family]]
+name = "amdgpu_gfx11_true16"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_true16.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+# `hfma`: v_cmp_lt_f16_e32 on two halves of v0, v_fma_f16 with op_sel, v_sub_f16 with |src|.
+[[family.function]]
+test = "amdgpu_gfx11_true16_half_math_decompiles"
+address = "0x0"
+expect = ["if (v2 < v3)", "- ABS(v3);"]
+
+# `hpk`: v_pk_fma_f16 multiplies and adds both lanes.
+[[family.function]]
+test = "amdgpu_gfx11_packed_fma_decompiles"
+address = "0x300"
+expect = ["CONCAT22(v2 *"]
+
+# `umax`: v_max_u16 and v_mad_u16 on halves.
+[[family.function]]
+test = "amdgpu_gfx11_true16_u16_decompiles"
+address = "0x600"
+expect = ["v3 * 3 + (v1 >> 2);"]
+
+# `mm`: v_wmma_f32_16x16x16_f16 reads two 8-VGPR tiles and the accumulator.
+[[family.function]]
+test = "amdgpu_gfx11_wmma_decompiles"
+address = "0x900"
+expect = ["= wmma("]
+
+# `fixtures/amdgpu/gfx1100_image.ll`: MIMG load, sample, an NSA sample_d with five address
+# operands, store and a returning atomic.
+[[family]]
+name = "amdgpu_gfx11_image"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_image.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx11_image_ops_decompile"
+address = "0x0"
+expect = ["image_sample_d(a0,a4,a5)", "image_store(", "image_atomic_add("]
+
 # Wave64 RDNA code (clang -mwavefrontsize64): lane masks are SGPR pairs. `vote` passes a
 # ballot (v_cmp into VCC, then vcc_lo and vcc_hi as a 64-bit argument); under the wave64
 # language the high half is the compare's zero, not a stale vcc_hi.
@@ -1786,6 +1835,21 @@ forbid = ["vcc_hi"]
 test = "amdgpu_gfx11_w64_uniform_branch_decompiles"
 address = "0x400"
 expect = ["<= -1)"]
+
+# `fixtures/amdgpu/gfx1100_true16.cl` built with -mwavefrontsize64 -DW64: the true16 compare
+# writes the VCC pair.
+[[family]]
+name = "amdgpu_gfx11_w64_true16"
+language = "AMDGPU:LE:64:GFX11-W64"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_w64_true16.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx11_w64_true16_half_math_decompiles"
+address = "0x0"
+expect = ["if (v2 < v3)", "- ABS(v3);"]
 
 # The CPython 3.12 bytecode language decompiles a function's co_code from a raw image:
 # fast locals become parameters and variables, the value stack folds away, and objects,

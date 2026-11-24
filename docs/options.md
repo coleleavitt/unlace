@@ -41,6 +41,9 @@ Three tiers:
 | v = x + 3; if (0 <= x) v = x; return v >> 2; where the source divides by 4 | [`pow2select`](#pow2select----on--off-default-on) |
 | a signed remainder by a power of two prints as a select between x & m and -(-x & m) | [`pow2select`](#pow2select----on--off-default-on) |
 | (x + ((unsigned)(x >> 31) >> 30)) >> 2 instead of x / 4 | [`pow2select`](#pow2select----on--off-default-on) |
+| v = NAN; if ((int)(x >> 0x20) == -1) v = x; around a float parameter on RISC-V | [`fpargboxed`](#fpargboxed----on--off-default-on) |
+| a RISC-V float function starts with one NAN test per float argument | [`fpargboxed`](#fpargboxed----on--off-default-on) |
+| an unused int variable named after fa0 or fa1 beside a float parameter | [`fpargboxed`](#fpargboxed----on--off-default-on) |
 | a < b or a == b printed as two tests where a <= b would do | [`cmpmerge`](#cmpmerge----on--off-default-off) |
 | a0 != a1 && !(a0 < a1) on floats | [`cmpmerge`](#cmpmerge----on--off-default-off) |
 | two branches in a row test the same value against neighbouring constants and jump to one place | [`cmpmerge`](#cmpmerge----on--off-default-off) |
@@ -1419,6 +1422,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default: 0/675 datatest assertions move; four stage assertions that pinned the select (`kuna-storealias` #1/#2/#4, `kuna-globalvalue` #17, whose fixtures return `gi / 16`) now read the division. Flip off to see the select or shift the compiler emitted. Measured over 4,072 functions in ten x86-64 binaries (gcc/clang -O2 and gcc -O0 Lua 5.4.8 and bzip2 1.0.8, -O2 zlib, libexpat, libyaml): 15 functions change, ` / ` 142 -> 166, `if` statements 22,188 -> 22,163, lines 184,891 -> 184,802, e.g. bzip2 sendMTFValues `nBytes / 8` and fallbackSort `nblock / 32`. Near misses (a test other than the sign, a bias other than 2^k - 1, `-(-x & 7)` chosen only below -4) keep their select.
 - **Where / provenance:** P3/simplification-quiescence · kuna · transform · kuna-pow2select
 - **Example:** `option pow2select off`
+
+### `fpargboxed` -- on | off, default `on`
+
+- **Symptoms:** v = NAN; if ((int)(x >> 0x20) == -1) v = x; around a float parameter on RISC-V; a RISC-V float function starts with one NAN test per float argument; an unused int variable named after fa0 or fa1 beside a float parameter.
+- **What it does:** On RISC-V, take the upper 32 bits of an FP argument register (`fa0`..`fa7`) on entry as all ones: a NaN-boxed value. The RISC-V psABI's hardware floating-point calling convention passes a floating-point argument narrower than FLEN NaN-boxed, and every F/D/Zfh instruction that writes a single or half writes it boxed. A single- or half-precision read of an f register NaN-unboxes it: when the upper bits are not all ones the instruction reads the canonical NaN, so an exact lift (`riscv.zfa.sinc`, and `riscv.fd.sinc` with `--unbox exact`) prints `v = NAN; if ((int)(x >> 0x20) == -1) v = x;` around each read. `RuleBoxedCompare` (oppool1, `kuna_boxedcompare.rs`) folds that test whenever its known-ones walk proves the upper half all ones (a boxed write, a boxed load, a constant, a join of them); with this option the walk also counts an FP argument register input as boxed, so a function's own float parameters lose the test too. Only the 32 upper bits are claimed, so a test of a float's own bits (its exponent, a sign) is never folded; a half-precision parameter's 48-bit test is left alone. Inert on every other processor.
+- **When to flip:** On by default: the psABI guarantees it and compiled code never passes an unboxed float, so it only removes NaN-unboxing tests no ABI-conforming caller can fail. Flip off for hand-written assembly or a caller that may pass a raw bit pattern in an f register, to see every unboxing test of a parameter.
+- **Where / provenance:** P3/simplification-quiescence · kuna · presentation-default · unlace-fpargboxed
+- **Example:** `option fpargboxed off`
 
 ### `cmpmerge` -- on | off, default `off`
 

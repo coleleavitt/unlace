@@ -1,0 +1,107 @@
+# kuna_atomics (option llscfold, docs/spec/02-lift-and-flow.md) on 32-bit ARM:
+# clang's rotated compare-exchange loop (ldrex; cmp; bne fail; dmb; L: strex;
+# cmp; beq done; ldrex; cmp; beq L) and the ldrexd/strexd doubleword loops of a
+# 64-bit fetch_add (adds/adc), fetch_or and exchange fold into __sync builtins;
+# with llscfold off the monitor calls stay.
+#
+# Source (C), clang 22 --target=armv7a-linux-gnueabihf -marm -O2 -c; the bytes of
+# each function verbatim:
+#   int cas32(int *p, int o, int n) { return __sync_val_compare_and_swap(p, o, n); }
+#   int fadd(int *p, int x) { return __sync_fetch_and_add(p, x); }
+#   long long add64(long long *p, long long x) { return __sync_fetch_and_add(p, x); }
+#   long long or64(long long *p, long long x) { return __sync_fetch_and_or(p, x); }
+#   long long xchg64(long long *p, long long x) { return __atomic_exchange_n(p, x, 5); }
+
+[image]
+arch = 'ARM:LE:32:v8:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'cas32' },
+    { space = 'ram', offset = '0x100100', name = 'fadd' },
+    { space = 'ram', offset = '0x100200', name = 'add64' },
+    { space = 'ram', offset = '0x100300', name = 'or64' },
+    { space = 'ram', offset = '0x100400', name = 'xchg64' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '00c0a0e19f0f90e1010050e10600001a5bf07ff5923f8ce1000053e30300000a9f0f9ce1010050e1f9ffff0a1ff07ff55bf07ff51eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100100'
+readonly = true
+hex = '5bf07ff59fcf90e101308ce0932f80e1000052e3faffff1a0c00a0e15bf07ff51eff2fe1'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100200'
+readonly = true
+hex = '30482de900c0a0e15bf07ff59f0fbce1024090e00350a1e094eface100005ee3f9ffff1a5bf07ff53088bde8'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100300'
+readonly = true
+hex = '30482de900c0a0e15bf07ff59f0fbce1024080e1035081e194eface100005ee3f9ffff1a5bf07ff53088bde8'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100400'
+readonly = true
+hex = '00482de900c0a0e15bf07ff59f0fbce192eface100005ee3fbffff1a5bf07ff50088bde8'
+
+[script]
+commands = [
+    'option atomics gcc',
+    'option llscfold on',
+    'load function cas32',
+    'decompile',
+    'print C',
+    'load function fadd',
+    'decompile',
+    'print C',
+    'load function add64',
+    'decompile',
+    'print C',
+    'load function or64',
+    'decompile',
+    'print C',
+    'load function xchg64',
+    'decompile',
+    'print C',
+    'option llscfold off',
+    'load function cas32',
+    'decompile',
+    'print C',
+    'load function add64',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'the rotated compare-exchange loop folds'
+count = 1
+regex = '__sync_val_compare_and_swap\('
+
+[[match]]
+name = 'the word and doubleword fetch_add loops fold'
+count = 2
+regex = '__sync_fetch_and_add\('
+
+[[match]]
+name = 'the doubleword fetch_or loop folds'
+count = 1
+regex = '__sync_fetch_and_or\('
+
+[[match]]
+name = 'the doubleword exchange loop folds'
+count = 1
+regex = '__sync_lock_test_and_set\('
+
+[[match]]
+name = 'llscfold off keeps the monitor test'
+min = 2
+max = 8
+regex = 'hasExclusiveAccess'

@@ -153,6 +153,7 @@ pub mod gobuildinfo;
 pub mod noreturn;
 pub mod pe_iat;
 // (kuna) `armfloatreturn`: does an ARM ELF state the VFP procedure-call standard?
+pub mod kuna_armbasepcs;
 pub mod kuna_armfloatabi;
 // (kuna `armfuncmode`) an even ARM function symbol starts A32 code.
 pub mod kuna_armfuncmode;

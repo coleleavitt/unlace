@@ -891,6 +891,7 @@ Ghidra's partitioning; leaving it off restores the inert stub exactly, and
 `indirectonly` then has no writer and both readers take their more-variables
 branch.
 
+**Shadow MULTIEQUALs** (`coreaction_render.rs (ActionShadowVar)`, group `analysis`, flags `0`, always on; Ghidra `ActionShadowVar::apply`, `coreaction.cc:907`). Per basic block, the pass looks at the MULTIEQUALs that open at the block's start address. The first one to present a given first input marks it; a later MULTIEQUAL whose first input is already marked is queued as a shadow. Each queued op then walks back through every earlier MULTIEQUAL in the block, and each one whose inputs match slot for slot turns the queued op into a COPY of that earlier op's output. The walk does not stop at the first match, as in Ghidra, and the count increments once per collapse. A shadow is a second phi that merges the same values as one already in the block, so collapsing it removes a duplicate merge that the variable pass would otherwise print as a repeated assignment. The pass changes printed output in any function where it fires.
 **Shadow copies** (`hideshadow.rs (hide_shadow_copies)` driving
 `merge.rs (Merge::hide_shadows)`, scheduled as `coreaction_cleanup.rs
 (ActionHideShadow)` immediately ahead of the copy marker, always on). Two Varnodes reached from one ancestor through COPYs alone

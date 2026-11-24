@@ -717,33 +717,66 @@ impl Action for ActionShadowVar {
             base: self.base.clone(),
         }))
     }
-    fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+    fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // C++ coreaction.cc:907 — ActionShadowVar::apply
-        //   for (i = 0; i < bblocks.getSize(); ++i):                    // gather shadows
-        //       vnlist.clear(); bl = bblocks.getBlock(i);
-        //       startoffset = bl->getStart().getOffset();
-        //       for (op in bl->beginOp()..endOp()):
-        //           if (op->getAddr().getOffset() != startoffset) break;  // first-address ops only
-        //           if (op->code() != CPUI_MULTIEQUAL) continue;
-        //           vn = op->getIn(0);
-        //           if (vn->isMark()) oplist.push_back(op);
-        //           else { vn->setMark(); vnlist.push_back(vn); }
-        //       for (v in vnlist): v->clearMark();
-        //   for (op in oplist):                                        // resolve shadows
-        //       for (op2 = op->previousOp(); op2; op2 = op2->previousOp()):
-        //           if (op2->code() != CPUI_MULTIEQUAL) continue;
-        //           if (all op->getIn(i) == op2->getIn(i)):            // every branch matches
-        //               plist = [op2->getOut()];
-        //               data.opSetOpcode(op, CPUI_COPY);               // collapse shadow to COPY
-        //               data.opSetAllInput(op, plist);
-        //               count += 1;
-        //               break;
-        //   return 0;
-        //
-        // STUB(W8-funcdata): the block graph, the MULTIEQUAL input-set comparison,
-        // the Varnode mark bit, and the shadow->COPY collapse
-        // (`opSetOpcode`/`opSetAllInput`) are not in the merged tree.  Body
-        // transcribed; no change applied (count stays 0).
+        let mut oplist: Vec<OpId> = Vec::new();
+        let size = data.bblocks_get_size();
+        for index in 0..size {
+            let bl = data.bblocks_get_block(index);
+            let startoffset = data.bblocks_block_start(bl).get_offset();
+            let mut vnlist: Vec<VarnodeId> = Vec::new();
+            for op in data.bb_ops(bl) {
+                let Some(pcode) = data.obank().get(op) else {
+                    continue;
+                };
+                if pcode.get_addr().get_offset() != startoffset {
+                    break;
+                }
+                if pcode.code() != OpCode::CPUI_MULTIEQUAL {
+                    continue;
+                }
+                let Some(vn) = pcode.get_in(0) else {
+                    continue;
+                };
+                if data.vbank().get(vn).is_some_and(|v| v.is_mark()) {
+                    oplist.push(op);
+                } else {
+                    if let Some(v) = data.vbank_mut().get_mut(vn) {
+                        v.set_mark();
+                    }
+                    vnlist.push(vn);
+                }
+            }
+            for vn in vnlist {
+                if let Some(v) = data.vbank_mut().get_mut(vn) {
+                    v.clear_mark();
+                }
+            }
+        }
+        for op in oplist {
+            let mut op2 = data.op_previous_op(op);
+            while let Some(prev) = op2 {
+                op2 = data.op_previous_op(prev);
+                if data.obank().get(prev).map(|p| p.code()) != Some(OpCode::CPUI_MULTIEQUAL) {
+                    continue;
+                }
+                let numinput = data.obank().get(op).map_or(0, |p| p.num_input());
+                let matched = (0..numinput).all(|slot| {
+                    data.obank().get(op).and_then(|p| p.get_in(slot))
+                        == data.obank().get(prev).and_then(|p| p.get_in(slot))
+                });
+                if !matched {
+                    continue;
+                }
+                let Some(out) = data.obank().get(prev).and_then(|p| p.get_out()) else {
+                    continue;
+                };
+                data.op_set_opcode_code(op, OpCode::CPUI_COPY);
+                if data.op_set_all_input(op, &[out]).is_ok() {
+                    self.base_mut().count += 1;
+                }
+            }
+        }
         0
     }
 }

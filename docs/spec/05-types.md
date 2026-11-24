@@ -1934,7 +1934,9 @@ all. A one-field record answers only for its own shape in the ledger below, and
 it gives way to the record every caller passes (`points_at_lone_record`).
 
 **A record read past its start (`structheadless`).** "No access at offset 0"
-has a second exception, off by default. Under `closed` a parameter read at two
+has a second exception, on by default (`closed`; issue #9 printer sweep: pointer casts
+-6.6% on twelve DecBench O2-noinline binaries, GED unchanged on the 555 changed functions
+that score). Under `closed` a parameter read at two
 or more constant offsets, none of them zero, is a record in the same closed
 functions the lone field is (`kuna_structheadless.rs (admits)`), when nothing
 outside the function gave the parameter its pointee (`pointee_is_given`, as

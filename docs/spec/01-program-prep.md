@@ -10489,7 +10489,14 @@ continuations, SEH handlers) do not start with a frame. GCC and MinGW encode
 `mov ebp,esp` as `89 E5`, so their SJLJ landing pads never match either; those
 are why `addrtakenentry` stays x86-64-only. On PEGRP32F.dll it finds 1,255
 targets, every one an IDA 9.5 function start, and 452 of them were missing from
-the inventory. Code built with frame-pointer omission gives it nothing.
+the inventory. Code built with frame-pointer omission has no prologue to test,
+so a second form is read for it. The relocated immediate of a
+`mov r/m32, imm32` (`C7 /0` with a memory operand) in code whose target follows
+a `ret` (`C3`, or `C2 iw` with a pop below 256) is a function pointer stored
+into a structure, aimed just past another function's end. MSVC loads its own
+mid-function labels with `mov eax, imm32` or pushes them (catch continuations,
+SEH handlers), and those forms are not read. On PEGRP32F.dll the second form gives
+264 targets, every one an IDA start, and 109 of them were new.
 
 **(kuna) MSVC throw metadata is labelled** (`msvceh`, default-**off**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_msvceh.rs (find_throw_infos)`).

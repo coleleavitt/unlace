@@ -92,7 +92,9 @@ impl AnalysisPass for PdbInteriorPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         AnalysisOutput {
-            pdb_bodies: eligible_pdb_bodies(ctx.file, ctx.bytes, ctx.image_path),
+            pdb_bodies: super::guarded("pdbinterior", || {
+                eligible_pdb_bodies(ctx.file, ctx.bytes, ctx.image_path)
+            }),
             ..AnalysisOutput::default()
         }
     }

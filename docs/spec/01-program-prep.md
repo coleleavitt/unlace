@@ -4725,7 +4725,24 @@ moves.
   present is read (`_win10`, then `_win81`, `_win8`, `_win7`, `_vista`,
   `_ws03`, `_xp`, `_2000`, `_nt`, then the bare name), and a user-mode or
   native image also reads the newest Native API library (`ntapi`,
-  `ntapi64`). Which files were read, and any that could not be, is said once on
+  `ntapi64`); an AArch64 EFI image reads `arm/uefi64`.
+
+  An ELF or Mach-O image reads the libraries `TypeLibPass` names for it
+  (`kuna_typelib.rs (til_slots)`, carried as `TypeLibFacts::til_slots`): per
+  slot a list of candidate paths relative to the `til` directory, of which the
+  first present is read (or, when the variable names a subdirectory such as
+  `til/arm`, the first present by file name). A Linux ELF reads
+  `gnulnx_<arch>` and the `gnuunx` (32-bit) or `gnuunx64` library it is built
+  on (x86, x86-64, ARM, AArch64, 32-bit PowerPC; PowerPC64's `gnulnx_ppc64`
+  stands alone). An ELF whose loader is `/system/bin/linker[64]`, or which
+  imports from `libc.so` under Bionic's `LIBC` version, reads `android_arm` or
+  `android_arm64` instead. A Mach-O reads one SDK library: for iOS (the
+  `LC_BUILD_VERSION` or `LC_VERSION_MIN_IPHONEOS` platform, simulator
+  included) `iphoneos64_sdkNN` on AArch64 and `iphoneos_sdk12` on 32-bit ARM;
+  otherwise `macosNN_sdk00_arm64` or `macosNN_sdk00_x64` (an x86-64 image
+  built with a 10.x SDK first tries `macosx64_sdk15`/`sdk14`). The library
+  for the major SDK version the image names is preferred, then older ones,
+  then newer ones (`by_preference`). Which files were read, and any that could not be, is said once on
   stderr (`[kuna typelib] UNLACE_TIL_DIR: read ...`); an unreadable library is
   skipped, where a listed file that cannot be read is an error.
 

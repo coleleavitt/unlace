@@ -1,0 +1,189 @@
+# Motorola/Freescale DSP56300 family (DSP56301/303/311/321/362/367/371/372/374/721 ...)
+#
+# 24-bit word machine with three memory spaces:
+#   P  program memory       (instructions, 1 or 2 words each)
+#   X  data memory
+#   Y  data memory
+# All three are word addressed (one address = one 24-bit word).  Words are
+# stored little-endian, three bytes per word, in the loaded image.
+#
+# The hardware system stack (SSH:SSL pairs) is modelled as its own space, SS,
+# addressed in bytes by the internal register 'ssp' (= 6 * SP).  JSR/RTS and
+# DO/ENDDO push and pop through it, which lets the decompiler treat loop
+# save/restore and return addresses as ordinary stack traffic.
+#
+# The data ALU follows the SR mode bits: scaling (S1:S0) for the limiter,
+# rounding position and the E/U/S flags, the rounding mode RM, and the
+# arithmetic saturation mode SM.  The default language updates address
+# registers linearly (Mn = $FFFFFF); the modulo variant (AGU_MODULO) applies
+# the Mn modifier (linear, reverse carry, modulo, multiple wrap-around).
+# The 16-bit modes SA and SC are not modelled (see GHIDRA-RARE.md).
+
+define endian=little;
+define alignment=3;
+
+define space P        type=ram_space      size=3 wordsize=3 default;
+define space X        type=ram_space      size=3 wordsize=3;
+define space Y        type=ram_space      size=3 wordsize=3;
+define space SS       type=ram_space      size=2;
+define space register type=register_space size=4;
+
+# ---------------------------------------------------------------- registers
+# Data ALU input registers: x = x1:x0, y = y1:y0 (little-endian register file)
+define register offset=0x00 size=3 [ x0 x1 y0 y1 ];
+define register offset=0x00 size=6 [ x _ y ];
+
+# Accumulators a = a2:a1:a0 (8:24:24 = 56 bits), a10 = a1:a0
+define register offset=0x10 size=3 [ a0 a1 ];
+define register offset=0x16 size=1 [ a2 ];
+define register offset=0x10 size=7 [ a ];
+define register offset=0x10 size=6 [ a10 ];
+define register offset=0x18 size=3 [ b0 b1 ];
+define register offset=0x1e size=1 [ b2 ];
+define register offset=0x18 size=7 [ b ];
+define register offset=0x18 size=6 [ b10 ];
+
+# AGU
+define register offset=0x20 size=3 [ r0 r1 r2 r3 r4 r5 r6 r7 ];
+define register offset=0x38 size=3 [ n0 n1 n2 n3 n4 n5 n6 n7 ];
+define register offset=0x50 size=3 [ m0 m1 m2 m3 m4 m5 m6 m7 ];
+
+# Program control unit
+define register offset=0x68 size=3 [ pc sr omr la lc vba sc sz ep ];
+define register offset=0x88 size=2 [ ssp ];
+
+# Condition code register bits, kept apart from sr so that the decompiler can
+# follow them individually.  sr holds the MR/EMR bits.
+define register offset=0x90 size=1 [ C V Z N U E L S ];
+
+# Internal temporaries used to sequence parallel instructions
+define register offset=0xa0 size=3 [ mv1 mv2 rep_lc ];
+define register offset=0xb0 size=7 [ alu_r ];
+define register offset=0xb8 size=1 [ alu_c alu_v ];
+
+define register offset=0x100 size=4 contextreg;
+define context contextreg
+  lbot  = (0,0) noflow     # this address is the last word of a DO loop
+  lfor  = (1,1) noflow     #   ... of a DO FOREVER loop
+  rpt   = (2,2) noflow     # this instruction is repeated by a preceding REP
+  lbot2 = (3,3) noflow     # LA-1: the loop may end with a two-word instruction here
+  lfor2 = (4,4) noflow
+  ltop  = (8,31) noflow    # loop start address for lbot/lbot2
+;
+
+define pcodeop halt_stop;
+define pcodeop halt_wait;
+define pcodeop reset_peripherals;
+define pcodeop software_interrupt;
+define pcodeop debug_request;
+define pcodeop cache_control;
+define pcodeop illegal_instruction;
+
+# ------------------------------------------------------------------ helpers
+macro packSR(v) {
+	v = (sr & 0xffff00) | zext(C) | (zext(V) << 1) | (zext(Z) << 2) | (zext(N) << 3)
+	    | (zext(U) << 4) | (zext(E) << 5) | (zext(L) << 6) | (zext(S) << 7);
+}
+
+macro unpackCCR(v) {
+	C = (v & 1) != 0;  V = (v & 2) != 0;  Z = (v & 4) != 0;  N = (v & 8) != 0;
+	U = (v & 0x10) != 0; E = (v & 0x20) != 0; L = (v & 0x40) != 0; S = (v & 0x80) != 0;
+}
+
+macro unpackSR(v) {
+	unpackCCR(v);
+	sr = v & 0xffff00;
+}
+
+# SR mode bits (Family Manual Table 5-1): S1:S0 = 11:10, SC 13, DM 14, LF 15,
+# FV 16, SA 17, SM 20, RM 21.
+# Scaling: adj = +1 scale down (S1:S0 = 01), -1 scale up (10), 0 otherwise.
+macro scaleAdj(adj) {
+	local sm:3 = (sr >> 10) & 3;
+	adj = zext(sm == 1) - zext(sm == 2);
+}
+
+# N, Z, E, U from a 56-bit result; E and U follow the scaling mode
+macro nzeu(r) {
+	local adj:1;
+	scaleAdj(adj);
+	local sv:8 = sext(r);
+	local hi:8 = sv s>> (47 + adj);
+	E = (hi != 0) && (hi != -1);
+	U = ((sv >> (47 + adj)) & 1) == ((sv >> (46 + adj)) & 1);
+	N = sv s< 0;
+	Z = r == 0;
+}
+
+# Data shifter/limiter (section 3.1.6): an accumulator read onto one 24-bit
+# bus is scaled, then limited to $7FFFFF/$800000 if the integer portion is in
+# use; L latches the limiting, S is the scaling-bit equation of Table 5-1.
+macro sat24(acc, out) {
+	local adj:1;
+	scaleAdj(adj);
+	local sv:8 = sext(acc);
+	local hi:8 = sv s>> (47 + adj);
+	local ok:1 = (hi == 0) || (hi == -1);
+	local sh:8 = sv s>> (24 + adj);
+	local lim:3 = 0x7fffff + zext(sv s< 0);
+	out = (sh:3 * zext(ok)) + (lim * zext(!ok));
+	L = L || !ok;
+	S = S || (((sv >> (46 + adj)) & 1) != ((sv >> (45 + adj)) & 1));
+}
+
+# the same for a long-word (48-bit) read: $7FFFFF:FFFFFF / $800000:000000
+macro sat48(acc, out) {
+	local adj:1;
+	scaleAdj(adj);
+	local sv:8 = sext(acc);
+	local hi:8 = sv s>> (47 + adj);
+	local ok:1 = (hi == 0) || (hi == -1);
+	local sh:8 = (sv << 1) s>> (1 + adj);
+	local lim:6 = 0x7fffffffffff + zext(sv s< 0);
+	out = (sh:6 * zext(ok)) + (lim * zext(!ok));
+	L = L || !ok;
+	S = S || (((sv >> (46 + adj)) & 1) != ((sv >> (45 + adj)) & 1));
+}
+
+# Rounding (section 3.2.2) at bit 23 (+adj): convergent (RM = 0) or two's
+# complement (RM = 1); the bits below the rounding position are cleared.
+macro rnd56(v, out) {
+	local adj:1;
+	scaleAdj(adj);
+	local one:7 = 1;
+	local rc:7 = one << (23 + adj);
+	local low:7 = (rc << 1) - 1;
+	local t:7 = (v + rc) & ~low;
+	local conv:1 = (sr & 0x200000) == 0;
+	local half:1 = conv && ((v & low) == rc);
+	out = t & ~((rc << 1) * zext(half));
+}
+
+# Arithmetic saturation mode (SM, section 3.2.3, Table 3-1): a result whose
+# bits 55, 48 and 47 differ is replaced by $00:7FFFFF:FFFFFF or
+# $FF:800000:000000 (by bit 55), and V and L are set.
+macro smsat(r) {
+	local on:1 = (sr & 0x100000) != 0;
+	local b55:1 = ((r >> 55) & 1) != 0;
+	local b48:1 = ((r >> 48) & 1) != 0;
+	local b47:1 = ((r >> 47) & 1) != 0;
+	local bad:1 = on && ((b55 != b48) || (b55 != b47));
+	local lim:7 = 0x007fffffffffff + (zext(b55) * 0xff000000000001);
+	r = (r * zext(!bad)) + (lim * zext(bad));
+	V = V || bad;
+}
+
+# N, Z from bits 47..24 (logical operations on a1/b1)
+macro nz24(r) {
+	N = r s< 0;
+	Z = r == 0;
+	V = 0;
+}
+
+# 24-bit fraction aligned into the 56-bit accumulator format
+macro fr56(dst, s) {
+	local t:7 = sext(s);
+	dst = t << 24;
+}
+
+@include "dsp56300.sinc"

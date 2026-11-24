@@ -82,6 +82,10 @@ specs/Ghidra/Processors/Allegrex vendors the PSP Allegrex (with VFPU) SLEIGH spe
 aleph-void/ghidra-allegrex (https://github.com/aleph-void/ghidra-allegrex), a fork of kotcrab/ghidra-allegrex, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/DSP56300 vendors the Motorola DSP563xx SLEIGH specification of
+aleph-void/ghidra-dsp56300 (https://github.com/aleph-void/ghidra-dsp56300), a fork of roblg/ghidra-dsp56300, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

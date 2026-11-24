@@ -4530,11 +4530,16 @@ bitwise ops: Apple's CoreADI writes `x ^ 0xcedb25b9` as
 statements (`v = ((2*x & 0xff9fb7f8) ^ 0xd5101720) + (x ^ 0x1547f06d)`, then
 `(v - ((2*v + 0x604808) & 0x4cc9184e)) + 0x2694b02b`, which is
 `x ^ 0xcceca7b6`). Above, `2*x` read by `|` is a leaf, so no linear reading
-exists. When neither collection folds, the tree is collected a third time with
-every arithmetic op under a bitwise op and every op with several readers
-inlined (still at most 48 nodes) and constants kept as numbers rather than
-leaves. It goes on only when it did inline such an arithmetic op and has at
-most three leaves. Its candidates, a small table tried cheapest first:
+exists. When neither collection folds a tree that has both a bitwise and an
+arithmetic op, the tree is collected a third time with every arithmetic op
+under a bitwise op and every op with several readers inlined (still at most 48
+nodes) and constants kept as numbers rather than leaves, and it goes on when it
+has at most three leaves. Constants as numbers also catch keys a compiler split
+apart: `(x ^ 0xc0d76561) + 2*(x & 0x40d76561)` (the top bit of the and-mask
+shifted out) and `(x ^ 0x40d76561) + 0x80000000` are `x + 0xc0d76561` and
+`x ^ 0xc0d76561`, but as leaves the two masks are unrelated. An `INT_LEFT` by a
+constant below the width is read as a multiply by its power of two, in every
+collection (AArch64 keeps `(x & m) << 1` where x86 has `x * 2`). Its candidates, a small table tried cheapest first:
 
 - the linear MBA built from its values on the 0/1 points (the candidates
   above), which covers `x + c`, `c - x` and any linear MBA;

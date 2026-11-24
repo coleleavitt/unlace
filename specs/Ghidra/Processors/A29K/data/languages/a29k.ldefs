@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="a29k"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="a29k_le.sla"
+            processorspec="a29k.pspec"
+            id="a29k:LE:32:default">
+    <description>AMD 29K (Am29000/29005/29030/29035/29050/29200 family), little-endian</description>
+    <compiler name="default" spec="a29k.cspec" id="default"/>
+    <external_name tool="gnu" name="a29k"/>
+  </language>
+  <language processor="a29k"
+            endian="big"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="a29k_be.sla"
+            processorspec="a29k.pspec"
+            id="a29k:BE:32:default">
+    <description>AMD 29K (Am29000/29005/29030/29035/29050/29200 family), big-endian</description>
+    <compiler name="default" spec="a29k.cspec" id="default"/>
+    <external_name tool="gnu" name="a29k"/>
+  </language>
+</language_definitions>

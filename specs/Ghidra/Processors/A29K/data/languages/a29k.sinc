@@ -1,0 +1,1331 @@
+# AMD Am29000 family (29K): Am29000, Am29005, Am29030/35, Am29050, Am29200/205/240/243/245.
+#
+# Originally written by mumbel (https://github.com/mumbel/ghidra_a29k, Apache-2.0); reworked by
+# the Ghidra-Rare project from AMD's Am29000 User's Manual (1987) and Am29050 Microprocessor
+# User's Manual (1991). See CREDITS.md.
+#
+# Register model
+# --------------
+# Global registers gr0-gr127 live in the register space. gr0 is not a register: as an operand
+# it means "the register whose number is in IPA, IPB or IPC" (for RA, RB, RC).
+#
+# Local registers lr0-lr127 are the processor's stack cache: lrN is absolute register
+# 128 + ((gr1 >> 2) + N) mod 128, and it holds the run-time stack word at address gr1 + 4*N
+# (the absolute register number is bits 8-2 of that address; the stack-cache spill and fill
+# trap handlers keep the two consistent). This module models lrN as that memory word,
+# *[ram]:4 (gr1 + 4*N). This is what makes calls work in Ghidra: a callee allocates its frame
+# with "sub gr1,gr1,n", so the caller's lr2 becomes the callee's lr(n/4+2); with the memory
+# view both are the same stack word (gr1 at entry + 8), i.e. an ordinary stack parameter, and
+# the return address that "call lr0,..." writes is the word at gr1 at entry.
+# Consequence: an operand gr0 whose indirect pointer names a local register reaches a separate
+# absolute local register file (lra0-lra127), not the memory view; only trap handlers and
+# context-switch code do that.
+#
+# Booleans: the 29K's TRUE is bit 31 set (compare instructions write 0x80000000 or 0; jumps
+# test bit 31).
+
+define alignment=4;
+
+define space ram type=ram_space size=4 default;
+define space io type=ram_space size=4;
+define space register type=register_space size=4;
+
+define register offset=0x0000 size=4 [
+	gr0 gr1 gr2 gr3 gr4 gr5 gr6 gr7
+	gr8 gr9 gr10 gr11 gr12 gr13 gr14 gr15
+	gr16 gr17 gr18 gr19 gr20 gr21 gr22 gr23
+	gr24 gr25 gr26 gr27 gr28 gr29 gr30 gr31
+	gr32 gr33 gr34 gr35 gr36 gr37 gr38 gr39
+	gr40 gr41 gr42 gr43 gr44 gr45 gr46 gr47
+	gr48 gr49 gr50 gr51 gr52 gr53 gr54 gr55
+	gr56 gr57 gr58 gr59 gr60 gr61 gr62 gr63
+	gr64 gr65 gr66 gr67 gr68 gr69 gr70 gr71
+	gr72 gr73 gr74 gr75 gr76 gr77 gr78 gr79
+	gr80 gr81 gr82 gr83 gr84 gr85 gr86 gr87
+	gr88 gr89 gr90 gr91 gr92 gr93 gr94 gr95
+	gr96 gr97 gr98 gr99 gr100 gr101 gr102 gr103
+	gr104 gr105 gr106 gr107 gr108 gr109 gr110 gr111
+	gr112 gr113 gr114 gr115 gr116 gr117 gr118 gr119
+	gr120 gr121 gr122 gr123 gr124 gr125 gr126 gr127
+];
+# absolute local register file, reached only through gr0 (IPA/IPB/IPC); see the notes above
+define register offset=0x0200 size=4 [
+	lra0 lra1 lra2 lra3 lra4 lra5 lra6 lra7
+	lra8 lra9 lra10 lra11 lra12 lra13 lra14 lra15
+	lra16 lra17 lra18 lra19 lra20 lra21 lra22 lra23
+	lra24 lra25 lra26 lra27 lra28 lra29 lra30 lra31
+	lra32 lra33 lra34 lra35 lra36 lra37 lra38 lra39
+	lra40 lra41 lra42 lra43 lra44 lra45 lra46 lra47
+	lra48 lra49 lra50 lra51 lra52 lra53 lra54 lra55
+	lra56 lra57 lra58 lra59 lra60 lra61 lra62 lra63
+	lra64 lra65 lra66 lra67 lra68 lra69 lra70 lra71
+	lra72 lra73 lra74 lra75 lra76 lra77 lra78 lra79
+	lra80 lra81 lra82 lra83 lra84 lra85 lra86 lra87
+	lra88 lra89 lra90 lra91 lra92 lra93 lra94 lra95
+	lra96 lra97 lra98 lra99 lra100 lra101 lra102 lra103
+	lra104 lra105 lra106 lra107 lra108 lra109 lra110 lra111
+	lra112 lra113 lra114 lra115 lra116 lra117 lra118 lra119
+	lra120 lra121 lra122 lra123 lra124 lra125 lra126 lra127
+];
+define register offset=0x1000 size=4 [
+	vab ops cps cfg cha chd chc rbp
+	tmc tmr pc0 pc1 pc2 mmu lru rsn
+	rma0 rmc0 rma1 rmc1 spc0 spc1 spc2 iba0
+	ibc0 iba1 ibc1 dba dbc cir cdr sr31
+	sr32 sr33 sr34 sr35 sr36 sr37 sr38 sr39
+	sr40 sr41 sr42 sr43 sr44 sr45 sr46 sr47
+	sr48 sr49 sr50 sr51 sr52 sr53 sr54 sr55
+	sr56 sr57 sr58 sr59 sr60 sr61 sr62 sr63
+	sr64 sr65 sr66 sr67 sr68 sr69 sr70 sr71
+	sr72 sr73 sr74 sr75 sr76 sr77 sr78 sr79
+	sr80 sr81 sr82 sr83 sr84 sr85 sr86 sr87
+	sr88 sr89 sr90 sr91 sr92 sr93 sr94 sr95
+	sr96 sr97 sr98 sr99 sr100 sr101 sr102 sr103
+	sr104 sr105 sr106 sr107 sr108 sr109 sr110 sr111
+	sr112 sr113 sr114 sr115 sr116 sr117 sr118 sr119
+	sr120 sr121 sr122 sr123 sr124 sr125 sr126 sr127
+	ipc ipa ipb q alu bp fc cr
+	sr136 sr137 sr138 sr139 sr140 sr141 sr142 sr143
+	sr144 sr145 sr146 sr147 sr148 sr149 sr150 sr151
+	sr152 sr153 sr154 sr155 sr156 sr157 sr158 sr159
+	fpe inte fps sr163 exop sr165 sr166 sr167
+	sr168 sr169 sr170 sr171 sr172 sr173 sr174 sr175
+	sr176 sr177 sr178 sr179 sr180 sr181 sr182 sr183
+	sr184 sr185 sr186 sr187 sr188 sr189 sr190 sr191
+	sr192 sr193 sr194 sr195 sr196 sr197 sr198 sr199
+	sr200 sr201 sr202 sr203 sr204 sr205 sr206 sr207
+	sr208 sr209 sr210 sr211 sr212 sr213 sr214 sr215
+	sr216 sr217 sr218 sr219 sr220 sr221 sr222 sr223
+	sr224 sr225 sr226 sr227 sr228 sr229 sr230 sr231
+	sr232 sr233 sr234 sr235 sr236 sr237 sr238 sr239
+	sr240 sr241 sr242 sr243 sr244 sr245 sr246 sr247
+	sr248 sr249 sr250 sr251 sr252 sr253 sr254 sr255
+];
+define register offset=0x3000 size=4 [
+	tlb0 tlb1 tlb2 tlb3 tlb4 tlb5 tlb6 tlb7
+	tlb8 tlb9 tlb10 tlb11 tlb12 tlb13 tlb14 tlb15
+	tlb16 tlb17 tlb18 tlb19 tlb20 tlb21 tlb22 tlb23
+	tlb24 tlb25 tlb26 tlb27 tlb28 tlb29 tlb30 tlb31
+	tlb32 tlb33 tlb34 tlb35 tlb36 tlb37 tlb38 tlb39
+	tlb40 tlb41 tlb42 tlb43 tlb44 tlb45 tlb46 tlb47
+	tlb48 tlb49 tlb50 tlb51 tlb52 tlb53 tlb54 tlb55
+	tlb56 tlb57 tlb58 tlb59 tlb60 tlb61 tlb62 tlb63
+	tlb64 tlb65 tlb66 tlb67 tlb68 tlb69 tlb70 tlb71
+	tlb72 tlb73 tlb74 tlb75 tlb76 tlb77 tlb78 tlb79
+	tlb80 tlb81 tlb82 tlb83 tlb84 tlb85 tlb86 tlb87
+	tlb88 tlb89 tlb90 tlb91 tlb92 tlb93 tlb94 tlb95
+	tlb96 tlb97 tlb98 tlb99 tlb100 tlb101 tlb102 tlb103
+	tlb104 tlb105 tlb106 tlb107 tlb108 tlb109 tlb110 tlb111
+	tlb112 tlb113 tlb114 tlb115 tlb116 tlb117 tlb118 tlb119
+	tlb120 tlb121 tlb122 tlb123 tlb124 tlb125 tlb126 tlb127
+];
+
+
+# ALU Status Register (special register 132) fields: DF, V, N, Z, C (bits 11-7), BP (6-5),
+# FC (4-0). BP and FC are also special registers 133 and 134.
+define register offset=0x2000 size=1 [ DF V N Z C ];
+define register offset=0x2010 size=4 [ BPr FCr CRr ];
+
+# Am29050 floating-point accumulators (double precision)
+define register offset=0x4000 size=8 [ acc0 acc1 acc2 acc3 ];
+
+define register offset=0x5000 size=4 [ pc ];
+define register offset=0x6000 size=4 [ contextreg ];
+
+define token instr (32)
+	op = (24,31)
+	op7 = (25,31)
+	m = (24,24)
+	rc = (16,23)
+	rc_l = (23,23)
+	rc_n = (16,22) dec
+	rc_g = (16,22)
+	ra = (8,15)
+	ra_l = (15,15)
+	ra_n = (8,14) dec
+	ra_g = (8,14)
+	rb = (0,7)
+	rb_l = (7,7)
+	rb_n = (0,6) dec
+	rb_g = (0,6)
+	i8 = (0,7)
+	i8dec = (0,7) dec
+	ihi = (16,23)
+	ihis = (16,23) signed
+	vn = (16,23)
+	sa = (8,15)
+	ce = (23,23) dec
+	cntl = (16,22)
+	as = (22,22)
+	pa = (21,21)
+	sb = (20,20)
+	ua = (19,19)
+	opt = (16,18)
+	b23_16 = (16,23)
+	b15_8 = (8,15)
+	b7_0 = (0,7)
+	b7_4 = (4,7)
+	ui = (7,7) dec
+	rnd = (4,6) dec
+	fd = (2,3) dec
+	fs = (0,1) dec
+	fmt = (2,3) dec
+	acn = (0,1) dec
+	func = (18,21) dec
+	f3 = (21,21)
+	f2 = (20,20)
+	f1 = (19,19)
+	f0 = (18,18)
+	acn16 = (16,17) dec
+	id = (16,17) dec
+	b23_22 = (22,23)
+	cev = (23,23)
+	uiv = (7,7)
+	fdv = (2,3)
+	fsv = (0,1)
+	fmtv = (2,3)
+	idv = (16,17)
+	acnv16 = (16,17)
+	b23_18 = (18,23)
+	b15_2 = (2,15)
+;
+
+define context contextreg
+	unused = (0,0)
+;
+
+attach variables [ ra_g rb_g rc_g ] [
+	_ gr1 gr2 gr3 gr4 gr5 gr6 gr7
+	gr8 gr9 gr10 gr11 gr12 gr13 gr14 gr15
+	gr16 gr17 gr18 gr19 gr20 gr21 gr22 gr23
+	gr24 gr25 gr26 gr27 gr28 gr29 gr30 gr31
+	gr32 gr33 gr34 gr35 gr36 gr37 gr38 gr39
+	gr40 gr41 gr42 gr43 gr44 gr45 gr46 gr47
+	gr48 gr49 gr50 gr51 gr52 gr53 gr54 gr55
+	gr56 gr57 gr58 gr59 gr60 gr61 gr62 gr63
+	gr64 gr65 gr66 gr67 gr68 gr69 gr70 gr71
+	gr72 gr73 gr74 gr75 gr76 gr77 gr78 gr79
+	gr80 gr81 gr82 gr83 gr84 gr85 gr86 gr87
+	gr88 gr89 gr90 gr91 gr92 gr93 gr94 gr95
+	gr96 gr97 gr98 gr99 gr100 gr101 gr102 gr103
+	gr104 gr105 gr106 gr107 gr108 gr109 gr110 gr111
+	gr112 gr113 gr114 gr115 gr116 gr117 gr118 gr119
+	gr120 gr121 gr122 gr123 gr124 gr125 gr126 gr127
+];
+attach names [ ra_n rb_n rc_n ] [ "lr0" "lr1" "lr2" "lr3" "lr4" "lr5" "lr6" "lr7" "lr8" "lr9" "lr10" "lr11" "lr12" "lr13" "lr14" "lr15" "lr16" "lr17" "lr18" "lr19" "lr20" "lr21" "lr22" "lr23" "lr24" "lr25" "lr26" "lr27" "lr28" "lr29" "lr30" "lr31" "lr32" "lr33" "lr34" "lr35" "lr36" "lr37" "lr38" "lr39" "lr40" "lr41" "lr42" "lr43" "lr44" "lr45" "lr46" "lr47" "lr48" "lr49" "lr50" "lr51" "lr52" "lr53" "lr54" "lr55" "lr56" "lr57" "lr58" "lr59" "lr60" "lr61" "lr62" "lr63" "lr64" "lr65" "lr66" "lr67" "lr68" "lr69" "lr70" "lr71" "lr72" "lr73" "lr74" "lr75" "lr76" "lr77" "lr78" "lr79" "lr80" "lr81" "lr82" "lr83" "lr84" "lr85" "lr86" "lr87" "lr88" "lr89" "lr90" "lr91" "lr92" "lr93" "lr94" "lr95" "lr96" "lr97" "lr98" "lr99" "lr100" "lr101" "lr102" "lr103" "lr104" "lr105" "lr106" "lr107" "lr108" "lr109" "lr110" "lr111" "lr112" "lr113" "lr114" "lr115" "lr116" "lr117" "lr118" "lr119" "lr120" "lr121" "lr122" "lr123" "lr124" "lr125" "lr126" "lr127" ];
+
+attach variables [ sa ] [
+	vab ops cps cfg cha chd chc rbp
+	tmc tmr pc0 pc1 pc2 mmu lru rsn
+	rma0 rmc0 rma1 rmc1 spc0 spc1 spc2 iba0
+	ibc0 iba1 ibc1 dba dbc cir cdr sr31
+	sr32 sr33 sr34 sr35 sr36 sr37 sr38 sr39
+	sr40 sr41 sr42 sr43 sr44 sr45 sr46 sr47
+	sr48 sr49 sr50 sr51 sr52 sr53 sr54 sr55
+	sr56 sr57 sr58 sr59 sr60 sr61 sr62 sr63
+	sr64 sr65 sr66 sr67 sr68 sr69 sr70 sr71
+	sr72 sr73 sr74 sr75 sr76 sr77 sr78 sr79
+	sr80 sr81 sr82 sr83 sr84 sr85 sr86 sr87
+	sr88 sr89 sr90 sr91 sr92 sr93 sr94 sr95
+	sr96 sr97 sr98 sr99 sr100 sr101 sr102 sr103
+	sr104 sr105 sr106 sr107 sr108 sr109 sr110 sr111
+	sr112 sr113 sr114 sr115 sr116 sr117 sr118 sr119
+	sr120 sr121 sr122 sr123 sr124 sr125 sr126 sr127
+	ipc ipa ipb q alu bp fc cr
+	sr136 sr137 sr138 sr139 sr140 sr141 sr142 sr143
+	sr144 sr145 sr146 sr147 sr148 sr149 sr150 sr151
+	sr152 sr153 sr154 sr155 sr156 sr157 sr158 sr159
+	fpe inte fps sr163 exop sr165 sr166 sr167
+	sr168 sr169 sr170 sr171 sr172 sr173 sr174 sr175
+	sr176 sr177 sr178 sr179 sr180 sr181 sr182 sr183
+	sr184 sr185 sr186 sr187 sr188 sr189 sr190 sr191
+	sr192 sr193 sr194 sr195 sr196 sr197 sr198 sr199
+	sr200 sr201 sr202 sr203 sr204 sr205 sr206 sr207
+	sr208 sr209 sr210 sr211 sr212 sr213 sr214 sr215
+	sr216 sr217 sr218 sr219 sr220 sr221 sr222 sr223
+	sr224 sr225 sr226 sr227 sr228 sr229 sr230 sr231
+	sr232 sr233 sr234 sr235 sr236 sr237 sr238 sr239
+	sr240 sr241 sr242 sr243 sr244 sr245 sr246 sr247
+	sr248 sr249 sr250 sr251 sr252 sr253 sr254 sr255
+];
+
+define pcodeop trap;
+define pcodeop halt;
+define pcodeop invalidate;
+define pcodeop coprocessorLoad;
+define pcodeop coprocessorStore;
+
+########################################################################################
+# Register operands. Each exports a 4-byte location; R?T is the "twin" (next register),
+# used with R? for double-precision and 64-bit operands (R? holds the high word).
+########################################################################################
+
+RA: ra_g is ra_l=0 & ra_g { export ra_g; }
+RA: "gr0" is ra=0 { local p:4 = ipa & 0x3fc; export *[register]:4 p; }
+RA: ra_n is ra_l=1 & ra_n { local a:4 = gr1 + ra_n * 4; export *[ram]:4 a; }
+RB: rb_g is rb_l=0 & rb_g { export rb_g; }
+RB: "gr0" is rb=0 { local p:4 = ipb & 0x3fc; export *[register]:4 p; }
+RB: rb_n is rb_l=1 & rb_n { local a:4 = gr1 + rb_n * 4; export *[ram]:4 a; }
+RC: rc_g is rc_l=0 & rc_g { export rc_g; }
+RC: "gr0" is rc=0 { local p:4 = ipc & 0x3fc; export *[register]:4 p; }
+RC: rc_n is rc_l=1 & rc_n { local a:4 = gr1 + rc_n * 4; export *[ram]:4 a; }
+
+RAT: is ra_l=0 & ra_n { local p:4 = ((ra_n + 1) & 0x7f) * 4; export *[register]:4 p; }
+RAT: is ra=0 { local p:4 = (ipa + 4) & 0x3fc; export *[register]:4 p; }
+RAT: is ra_l=1 & ra_n { local a:4 = gr1 + ra_n * 4 + 4; export *[ram]:4 a; }
+RBT: is rb_l=0 & rb_n { local p:4 = ((rb_n + 1) & 0x7f) * 4; export *[register]:4 p; }
+RBT: is rb=0 { local p:4 = (ipb + 4) & 0x3fc; export *[register]:4 p; }
+RBT: is rb_l=1 & rb_n { local a:4 = gr1 + rb_n * 4 + 4; export *[ram]:4 a; }
+RCT: is rc_l=0 & rc_n { local p:4 = ((rc_n + 1) & 0x7f) * 4; export *[register]:4 p; }
+RCT: is rc=0 { local p:4 = (ipc + 4) & 0x3fc; export *[register]:4 p; }
+RCT: is rc_l=1 & rc_n { local a:4 = gr1 + rc_n * 4 + 4; export *[ram]:4 a; }
+
+# 64-bit values of a register and its twin
+DA: RA is RA & RAT { local v:8 = (zext(RA) << 32) | zext(RAT); export v; }
+DB: RB is RB & RBT { local v:8 = (zext(RB) << 32) | zext(RBT); export v; }
+
+# absolute register numbers (as written to IPA/IPB/IPC, bits 9-2)
+NA: is ra_l=0 & ra { local n:4 = ra; export n; }
+NA: is ra=0 { local n:4 = (ipa >> 2) & 0xff; export n; }
+NA: is ra_l=1 & ra_n { local n:4 = 128 + (((gr1 >> 2) + ra_n) & 0x7f); export n; }
+NB: is rb_l=0 & rb { local n:4 = rb; export n; }
+NB: is rb=0 { local n:4 = (ipb >> 2) & 0xff; export n; }
+NB: is rb_l=1 & rb_n { local n:4 = 128 + (((gr1 >> 2) + rb_n) & 0x7f); export n; }
+NC: is rc_l=0 & rc { local n:4 = rc; export n; }
+NC: is rc=0 { local n:4 = (ipc >> 2) & 0xff; export n; }
+NC: is rc_l=1 & rc_n { local n:4 = 128 + (((gr1 >> 2) + rc_n) & 0x7f); export n; }
+
+SRCB: RB is m=0 & RB { export RB; }
+SRCB: i8dec is m=1 & i8dec { local v:4 = i8dec; export v; }
+
+# 16-bit constants: bits 23-16 and 7-0
+I16: val is ihi & i8 [ val = (ihi << 8) | i8; ] { local v:4 = val; export v; }
+I16H: val is ihi & i8 [ val = ((ihi << 8) | i8) << 16; ] { local v:4 = val; export v; }
+I16N: val is ihi & i8 [ val = 0xffff0000 | (ihi << 8) | i8; ] { local v:4 = val; export v; }
+# constn displays the negative value, as GNU as writes it
+I16ND: sval is ihi & i8 [ sval = (0xffff0000 | (ihi << 8) | i8) - 0x100000000; ] { local v:4 = sval; export v; }
+
+# branch targets: bits 23-16 and 7-0 are bits 17-10 and 9-2 of a word offset (A=0, sign-extended,
+# PC-relative) or of an absolute address (A=1)
+TARGET: dest is m=0 & ihis & i8 [ dest = inst_start + ((ihis << 10) | (i8 << 2)); ] { export *[ram]:4 dest; }
+TARGET: dest is m=1 & ihi & i8 [ dest = (ihi << 10) | (i8 << 2); ] { export *[ram]:4 dest; }
+
+VN: vn is vn { local v:4 = vn; export v; }
+
+########################################################################################
+# Status macros. V, N, Z, C as section 8.2: arithmetic sets all four from the add,
+# logical operations set N and Z.
+########################################################################################
+
+macro logicflags(r) {
+	N = r s< 0;
+	Z = r == 0;
+}
+
+# a + b + cin
+macro addflags(a, b, cin, r) {
+	C = carry(a, b) || carry(a + b, zext(cin));
+	V = (((~(a ^ b)) & (a ^ r)) s< 0);
+	N = r s< 0;
+	Z = r == 0;
+}
+
+# a + ~b + cin (subtract)
+macro subflags(a, b, cin, r) {
+	local nb:4 = ~b;
+	C = carry(a, nb) || carry(a + nb, zext(cin));
+	V = ((((a ^ b)) & (a ^ r)) s< 0);
+	N = r s< 0;
+	Z = r == 0;
+}
+
+# Out of Range trap (vector 2): instructions that can trap end with
+#   local oor:1 = <condition>; if (!oor) goto <nooor>; trap(2:4); <nooor>
+# (not a macro with "goto inst_next", which would leave a branch's delay slot). The result is
+# written before the trap is taken.
+
+# byte and half-word selection by BP and the byte order (Am29050 manual 3.4.5)
+@if ENDIAN == "big"
+macro byteShift(sh) { sh = (3 - (BPr & 3)) * 8; }
+macro halfShift(sh) { sh = (1 - ((BPr >> 1) & 1)) * 16; }
+@define BPHW "3"
+@else
+macro byteShift(sh) { sh = (BPr & 3) * 8; }
+macro halfShift(sh) { sh = ((BPr >> 1) & 1) * 16; }
+@define BPHW "0"
+@endif
+
+macro true32(cond, dst) {
+	dst = zext(cond) << 31;
+}
+
+########################################################################################
+# Integer arithmetic
+########################################################################################
+
+:add RC,RA,SRCB is (op=0x14 | op=0x15) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local r = a + b; addflags(a, b, 0:1, r); RC = r; }
+:adds RC,RA,SRCB is (op=0x10 | op=0x11) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local r = a + b; addflags(a, b, 0:1, r); RC = r; local oor:1 = V; if (!oor) goto <nooor>; trap(2:4); <nooor> }
+:addu RC,RA,SRCB is (op=0x12 | op=0x13) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local r = a + b; addflags(a, b, 0:1, r); RC = r; local oor:1 = C; if (!oor) goto <nooor>; trap(2:4); <nooor> }
+:addc RC,RA,SRCB is (op=0x1c | op=0x1d) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local cin = C; local r = a + b + zext(cin); addflags(a, b, cin, r); RC = r; }
+:addcs RC,RA,SRCB is (op=0x18 | op=0x19) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local cin = C; local r = a + b + zext(cin); addflags(a, b, cin, r); RC = r; local oor:1 = V; if (!oor) goto <nooor>; trap(2:4); <nooor> }
+:addcu RC,RA,SRCB is (op=0x1a | op=0x1b) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local cin = C; local r = a + b + zext(cin); addflags(a, b, cin, r); RC = r; local oor:1 = C; if (!oor) goto <nooor>; trap(2:4); <nooor> }
+
+:sub RC,RA,SRCB is (op=0x24 | op=0x25) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local r = a - b; subflags(a, b, 1:1, r); RC = r; }
+:subs RC,RA,SRCB is (op=0x20 | op=0x21) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local r = a - b; subflags(a, b, 1:1, r); RC = r; local oor:1 = V; if (!oor) goto <nooor>; trap(2:4); <nooor> }
+:subu RC,RA,SRCB is (op=0x22 | op=0x23) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local r = a - b; subflags(a, b, 1:1, r); RC = r; local oor:1 = !C; if (!oor) goto <nooor>; trap(2:4); <nooor> }
+:subc RC,RA,SRCB is (op=0x2c | op=0x2d) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local cin = C; local r = a - b - 1 + zext(cin); subflags(a, b, cin, r); RC = r; }
+:subcs RC,RA,SRCB is (op=0x28 | op=0x29) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local cin = C; local r = a - b - 1 + zext(cin); subflags(a, b, cin, r); RC = r; local oor:1 = V; if (!oor) goto <nooor>; trap(2:4); <nooor> }
+:subcu RC,RA,SRCB is (op=0x2a | op=0x2b) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local cin = C; local r = a - b - 1 + zext(cin); subflags(a, b, cin, r); RC = r; local oor:1 = !C; if (!oor) goto <nooor>; trap(2:4); <nooor> }
+
+:subr RC,RA,SRCB is (op=0x34 | op=0x35) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local r = b - a; subflags(b, a, 1:1, r); RC = r; }
+:subrs RC,RA,SRCB is (op=0x30 | op=0x31) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local r = b - a; subflags(b, a, 1:1, r); RC = r; local oor:1 = V; if (!oor) goto <nooor>; trap(2:4); <nooor> }
+:subru RC,RA,SRCB is (op=0x32 | op=0x33) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local r = b - a; subflags(b, a, 1:1, r); RC = r; local oor:1 = !C; if (!oor) goto <nooor>; trap(2:4); <nooor> }
+:subrc RC,RA,SRCB is (op=0x3c | op=0x3d) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local cin = C; local r = b - a - 1 + zext(cin); subflags(b, a, cin, r); RC = r; }
+:subrcs RC,RA,SRCB is (op=0x38 | op=0x39) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local cin = C; local r = b - a - 1 + zext(cin); subflags(b, a, cin, r); RC = r; local oor:1 = V; if (!oor) goto <nooor>; trap(2:4); <nooor> }
+:subrcu RC,RA,SRCB is (op=0x3a | op=0x3b) & RC & RA & SRCB
+{ local a = RA; local b = SRCB; local cin = C; local r = b - a - 1 + zext(cin); subflags(b, a, cin, r); RC = r; local oor:1 = !C; if (!oor) goto <nooor>; trap(2:4); <nooor> }
+
+# multiply steps (Am29000 compatibility): Q is the multiplier, shifted right one bit per step
+:mul RC,RA,SRCB is (op=0x64 | op=0x65) & RC & RA & SRCB
+{
+	local qb:1 = (q & 1) != 0; local a:4 = RA * zext(qb);
+	local b:4 = SRCB;
+	local s:4 = a + b;
+	C = carry(a, b);
+	V = (((~(a ^ b)) & (a ^ s)) s< 0);
+	N = s s< 0;
+	local sgn:4 = zext(N != V);
+	local t:8 = (zext(s) << 32) | zext(q);
+	t = (t >> 1) | (zext(sgn) << 63);
+	RC = t(4);
+	q = t:4;
+	local hi:4 = t(4); Z = hi == 0;
+}
+:mull RC,RA,SRCB is (op=0x66 | op=0x67) & RC & RA & SRCB
+{
+	local qb:1 = (q & 1) != 0; local a:4 = RA * zext(qb);
+	local b:4 = SRCB;
+	local s:4 = b - a;
+	C = carry(b, ~a) || carry(b + ~a, 1);
+	V = ((((b ^ a)) & (b ^ s)) s< 0);
+	N = s s< 0;
+	local sgn:4 = zext(N != V);
+	local t:8 = (zext(s) << 32) | zext(q);
+	t = (t >> 1) | (zext(sgn) << 63);
+	RC = t(4);
+	q = t:4;
+	local hi:4 = t(4); Z = hi == 0;
+}
+:mulu RC,RA,SRCB is (op=0x74 | op=0x75) & RC & RA & SRCB
+{
+	local qb:1 = (q & 1) != 0; local a:4 = RA * zext(qb);
+	local b:4 = SRCB;
+	local s:4 = a + b;
+	C = carry(a, b);
+	V = (((~(a ^ b)) & (a ^ s)) s< 0);
+	N = s s< 0;
+	local t:8 = (zext(s) << 32) | zext(q);
+	t = (t >> 1) | (zext(C) << 63);
+	RC = t(4);
+	q = t:4;
+	local hi:4 = t(4); Z = hi == 0;
+}
+
+# divide steps (unsigned non-restoring division): Q holds the dividend's low word and
+# collects the quotient bits
+:div0 RC,SRCB is (op=0x68 | op=0x69) & RC & SRCB
+{
+	local b:4 = SRCB;
+	DF = 1;
+	N = b s< 0;
+	V = 0;
+	C = 0;
+	local t:8 = ((zext(b) << 32) | zext(q)) << 1;
+	RC = t(4);
+	q = t:4;
+	local hi:4 = t(4); Z = hi == 0;
+}
+macro divstep(a, b, s) {
+	# DF=1: a - b (a + ~b + 1); DF=0: a + b
+	local bb:4 = b ^ (0 - zext(DF));
+	local cout:1 = carry(a, bb) || carry(a + bb, zext(DF));
+	s = a + bb + zext(DF);
+	V = (((~(a ^ bb)) & (a ^ s)) s< 0);
+	C = cout;
+	DF = !(cout ^ DF ^ N);
+	N = s s< 0;
+}
+:div RC,RA,SRCB is (op=0x6a | op=0x6b) & RC & RA & SRCB
+{
+	local a:4 = RA;
+	local b:4 = SRCB;
+	local s:4 = 0;
+	divstep(a, b, s);
+	local t:8 = (((zext(s) << 32) | zext(q)) << 1) | zext(DF);
+	RC = t(4);
+	q = t:4;
+	local hi:4 = t(4); Z = hi == 0;
+}
+:divl RC,RA,SRCB is (op=0x6c | op=0x6d) & RC & RA & SRCB
+{
+	local a:4 = RA;
+	local b:4 = SRCB;
+	local s:4 = 0;
+	divstep(a, b, s);
+	RC = s;
+	q = (q << 1) | zext(DF);
+	Z = s == 0;
+}
+:divrem RC,RA,SRCB is (op=0x6e | op=0x6f) & RC & RA & SRCB
+{
+	local a:4 = RA;
+	local b:4 = SRCB;
+	local r:4 = a;
+	if (DF == 1) goto <done>;
+	r = a + b;
+	C = carry(a, b);
+	V = (((~(a ^ b)) & (a ^ r)) s< 0);
+	<done>
+	N = r s< 0;
+	Z = r == 0;
+	RC = r;
+}
+
+# Am29050 integer multiply and divide (Am29000: traps to an emulation routine with the same
+# effect). A zero divisor raises Out of Range. The overflow traps controlled by INTE.MO/DO are
+# not modelled (they would put a trap test after every multiply in the decompiled code); Q is
+# undefined after a multiply and left unchanged here.
+:multiply RC,RA,RB is op=0xe0 & RC & RA & RB
+{
+	local p:8 = sext(RA) * sext(RB);
+	RC = p:4;
+}
+:multiplu RC,RA,RB is op=0xe2 & RC & RA & RB
+{
+	local p:8 = zext(RA) * zext(RB);
+	RC = p:4;
+}
+:multm RC,RA,RB is op=0xde & RC & RA & RB
+{ local p:8 = sext(RA) * sext(RB); RC = p(4); }
+:multmu RC,RA,RB is op=0xdf & RC & RA & RB
+{ local p:8 = zext(RA) * zext(RB); RC = p(4); }
+:divide RC,RA,RB is op=0xe1 & RC & RA & RB
+{
+	local n:8 = (zext(q) << 32) | zext(RA);
+	local d:8 = sext(RB);
+	local dz:1 = d == 0;
+	local dd:8 = d + zext(dz);
+	local quo:8 = n s/ dd;
+	local rem:8 = n s% dd;
+	RC = quo:4;
+	q = rem:4;
+	local oor:1 = dz; if (!oor) goto <nooor>; trap(2:4); <nooor>
+}
+:dividu RC,RA,RB is op=0xe3 & RC & RA & RB
+{
+	local n:8 = (zext(q) << 32) | zext(RA);
+	local d:8 = zext(RB);
+	local dz:1 = d == 0;
+	local dd:8 = d + zext(dz);
+	local quo:8 = n / dd;
+	local rem:8 = n % dd;
+	RC = quo:4;
+	q = rem:4;
+	local oor:1 = dz; if (!oor) goto <nooor>; trap(2:4); <nooor>
+}
+
+########################################################################################
+# Compare and assert: TRUE is bit 31
+########################################################################################
+
+CC: "lt"  is (op7=0x20 | op7=0x28) & RA & SRCB { local c:1 = RA s< SRCB; export c; }
+CC: "ltu" is (op7=0x21 | op7=0x29) & RA & SRCB { local c:1 = RA < SRCB; export c; }
+CC: "le"  is (op7=0x22 | op7=0x2a) & RA & SRCB { local c:1 = RA s<= SRCB; export c; }
+CC: "leu" is (op7=0x23 | op7=0x2b) & RA & SRCB { local c:1 = RA <= SRCB; export c; }
+CC: "gt"  is (op7=0x24 | op7=0x2c) & RA & SRCB { local c:1 = RA s> SRCB; export c; }
+CC: "gtu" is (op7=0x25 | op7=0x2d) & RA & SRCB { local c:1 = RA > SRCB; export c; }
+CC: "ge"  is (op7=0x26 | op7=0x2e) & RA & SRCB { local c:1 = RA s>= SRCB; export c; }
+CC: "geu" is (op7=0x27 | op7=0x2f) & RA & SRCB { local c:1 = RA >= SRCB; export c; }
+CC: "eq"  is (op7=0x30 | op7=0x38) & RA & SRCB { local c:1 = RA == SRCB; export c; }
+CC: "neq" is (op7=0x31 | op7=0x39) & RA & SRCB { local c:1 = RA != SRCB; export c; }
+
+:cp^CC RC,RA,SRCB is (op7=0x20 | op7=0x21 | op7=0x22 | op7=0x23 | op7=0x24 | op7=0x25 | op7=0x26 |
+	op7=0x27 | op7=0x30 | op7=0x31) & CC & RC & RA & SRCB
+{ local r:4 = 0; true32(CC, r); RC = r; }
+
+# "aseq 0x40,gr1,gr1" is the canonical no-op
+:nop is op=0x70 & vn=0x40 & ra=1 & rb=1 { }
+
+# Vectors 64 and 65 of asgeu/asleu are the stack-cache spill and fill traps of AMD's calling
+# convention (V_SPILL, V_FILL). They move local registers between the register file and the
+# stack words that this module already uses for the local registers, so they have no effect
+# in this model.
+:as^CC VN,RA,SRCB is op7=0x2f & (vn=64 | vn=65) & CC & VN & RA & SRCB { }
+:as^CC VN,RA,SRCB is op7=0x2b & (vn=64 | vn=65) & CC & VN & RA & SRCB { }
+:as^CC VN,RA,SRCB is (op7=0x28 | op7=0x29 | op7=0x2a | op7=0x2b | op7=0x2c | op7=0x2d | op7=0x2e |
+	op7=0x2f | op7=0x38 | op7=0x39) & CC & VN & RA & SRCB
+{
+	if (CC) goto <ok>;
+	trap(VN);
+	<ok>
+}
+
+:cpbyte RC,RA,SRCB is (op=0x2e | op=0x2f) & RC & RA & SRCB
+{
+	local a:4 = RA;
+	local b:4 = SRCB;
+	local x:4 = a ^ b;
+	local hit:1 = (x[0,8] == 0) || (x[8,8] == 0) || (x[16,8] == 0) || (x[24,8] == 0);
+	local r:4 = 0;
+	true32(hit, r);
+	RC = r;
+}
+
+########################################################################################
+# Logical and shift
+########################################################################################
+
+:and RC,RA,SRCB is (op=0x90 | op=0x91) & RC & RA & SRCB { local r = RA & SRCB; logicflags(r); RC = r; }
+:andn RC,RA,SRCB is (op=0x9c | op=0x9d) & RC & RA & SRCB { local r = RA & ~SRCB; logicflags(r); RC = r; }
+:nand RC,RA,SRCB is (op=0x9a | op=0x9b) & RC & RA & SRCB { local r = ~(RA & SRCB); logicflags(r); RC = r; }
+:nor RC,RA,SRCB is (op=0x98 | op=0x99) & RC & RA & SRCB { local r = ~(RA | SRCB); logicflags(r); RC = r; }
+:or RC,RA,SRCB is (op=0x92 | op=0x93) & RC & RA & SRCB { local r = RA | SRCB; logicflags(r); RC = r; }
+:orn RC,RA,SRCB is (op=0xaa | op=0xab) & RC & RA & SRCB { local r = RA | ~SRCB; logicflags(r); RC = r; }
+:xnor RC,RA,SRCB is (op=0x96 | op=0x97) & RC & RA & SRCB { local r = ~(RA ^ SRCB); logicflags(r); RC = r; }
+:xor RC,RA,SRCB is (op=0x94 | op=0x95) & RC & RA & SRCB { local r = RA ^ SRCB; logicflags(r); RC = r; }
+
+:sll RC,RA,SRCB is (op=0x80 | op=0x81) & RC & RA & SRCB { RC = RA << (SRCB & 31); }
+:srl RC,RA,SRCB is (op=0x82 | op=0x83) & RC & RA & SRCB { RC = RA >> (SRCB & 31); }
+:sra RC,RA,SRCB is (op=0x86 | op=0x87) & RC & RA & SRCB { RC = RA s>> (SRCB & 31); }
+
+:clz RC,SRCB is (op=0x08 | op=0x09) & RC & SRCB { RC = lzcount(SRCB); }
+
+# funnel shift: high word of (SRCA:SRCB) << FC
+:extract RC,RA,SRCB is (op=0x7a | op=0x7b) & RC & RA & SRCB
+{
+	local t:8 = ((zext(RA) << 32) | zext(SRCB)) << (FCr & 31);
+	RC = t(4);
+}
+
+########################################################################################
+# Byte and half-word operations (byte selected by BP and the byte order)
+########################################################################################
+
+:exbyte RC,RA,SRCB is (op=0x0a | op=0x0b) & RC & RA & SRCB
+{ local sh:4 = 0; byteShift(sh); RC = (SRCB & 0xffffff00) | ((RA >> sh) & 0xff); }
+:exhw RC,RA,SRCB is (op=0x7c | op=0x7d) & RC & RA & SRCB
+{ local sh:4 = 0; halfShift(sh); RC = (SRCB & 0xffff0000) | ((RA >> sh) & 0xffff); }
+:exhws RC,RA is op=0x7e & RC & RA
+{ local sh:4 = 0; halfShift(sh); local t:4 = RA >> sh; local h:2 = t:2; RC = sext(h); }
+:inbyte RC,RA,SRCB is (op=0x0c | op=0x0d) & RC & RA & SRCB
+{ local sh:4 = 0; byteShift(sh); RC = (RA & ~(0xff << sh)) | ((SRCB & 0xff) << sh); }
+:inhw RC,RA,SRCB is (op=0x78 | op=0x79) & RC & RA & SRCB
+{ local sh:4 = 0; halfShift(sh); RC = (RA & ~(0xffff << sh)) | ((SRCB & 0xffff) << sh); }
+
+########################################################################################
+# Constants and special registers
+########################################################################################
+
+:const RA,I16 is op=0x03 & RA & I16 { RA = I16; }
+:consth RA,I16H is op=0x02 & RA & I16H { RA = (RA & 0xffff) | I16H; }
+:consthz RA,I16H is op=0x05 & RA & I16H { RA = I16H; }
+:constn RA,I16ND is op=0x01 & RA & I16ND & I16N { RA = I16N; }
+
+ALUVAL: is epsilon
+{
+	local v:4 = (zext(DF) << 11) | (zext(V) << 10) | (zext(N) << 9) | (zext(Z) << 8) | (zext(C) << 7) |
+		((BPr & 3) << 5) | (FCr & 31);
+	export v;
+}
+macro setALU(v) {
+	DF = ((v >> 11) & 1) != 0;
+	V = ((v >> 10) & 1) != 0;
+	N = ((v >> 9) & 1) != 0;
+	Z = ((v >> 8) & 1) != 0;
+	C = ((v >> 7) & 1) != 0;
+	BPr = (v >> 5) & 3;
+	FCr = v & 31;
+}
+
+:mfsr RC,sa is op=0xc6 & RC & sa & b7_0 { RC = sa; }
+:mfsr RC,sa is op=0xc6 & RC & sa & sa=132 & ALUVAL { RC = ALUVAL; }
+:mfsr RC,sa is op=0xc6 & RC & sa & sa=133 { RC = BPr & 3; }
+:mfsr RC,sa is op=0xc6 & RC & sa & sa=134 { RC = FCr & 31; }
+:mfsr RC,sa is op=0xc6 & RC & sa & sa=135 { RC = CRr & 0xff; }
+# the CR field also appears as bits 23-16 of the Channel Control Register (6)
+:mfsr RC,sa is op=0xc6 & RC & sa & sa=6 { RC = (chc & 0xff00ffff) | ((CRr & 0xff) << 16); }
+
+:mtsr sa,RB is op=0xce & sa & RB { sa = RB; }
+:mtsr sa,RB is op=0xce & sa & sa=132 & RB { local v:4 = RB; setALU(v); }
+:mtsr sa,RB is op=0xce & sa & sa=133 & RB { BPr = RB & 3; }
+:mtsr sa,RB is op=0xce & sa & sa=134 & RB { FCr = RB & 31; }
+:mtsr sa,RB is op=0xce & sa & sa=135 & RB { CRr = RB & 0xff; }
+:mtsr sa,RB is op=0xce & sa & sa=6 & RB { local v:4 = RB; chc = v; CRr = (v >> 16) & 0xff; }
+
+:mtsrim sa,I16 is op=0x04 & sa & I16 { sa = I16; }
+:mtsrim sa,I16 is op=0x04 & sa & sa=132 & I16 { local v:4 = I16; setALU(v); }
+:mtsrim sa,I16 is op=0x04 & sa & sa=133 & I16 { BPr = I16 & 3; }
+:mtsrim sa,I16 is op=0x04 & sa & sa=134 & I16 { FCr = I16 & 31; }
+:mtsrim sa,I16 is op=0x04 & sa & sa=135 & I16 { CRr = I16 & 0xff; }
+:mtsrim sa,I16 is op=0x04 & sa & sa=6 & I16 { local v:4 = I16; chc = v; CRr = 0; }
+
+:setip RC,RA,RB is op=0x9e & RC & RA & RB & NA & NB & NC
+{ ipa = NA << 2; ipb = NB << 2; ipc = NC << 2; }
+
+:mftlb RC,RA is op=0xb6 & RC & RA { local p:4 = 0x3000 + (RA & 0x7f) * 4; RC = *[register]:4 p; }
+:mttlb RA,RB is op=0xbe & RA & RB { local p:4 = 0x3000 + (RA & 0x7f) * 4; *[register]:4 p = RB; }
+
+########################################################################################
+# Branches (one delay slot)
+########################################################################################
+
+:jmp TARGET is (op=0xa0 | op=0xa1) & TARGET { delayslot(1); goto TARGET; }
+:jmpf RA,TARGET is (op=0xa4 | op=0xa5) & RA & TARGET
+{ local c:1 = (RA & 0x80000000) == 0; delayslot(1); if (c) goto TARGET; }
+:jmpt RA,TARGET is (op=0xac | op=0xad) & RA & TARGET
+{ local c:1 = (RA & 0x80000000) != 0; delayslot(1); if (c) goto TARGET; }
+:jmpfdec RA,TARGET is (op=0xb4 | op=0xb5) & RA & TARGET
+{ local c:1 = (RA & 0x80000000) == 0; RA = RA - 1; delayslot(1); if (c) goto TARGET; }
+
+:jmpi RB is op=0xc0 & RB { local t:4 = RB; delayslot(1); goto [t]; }
+# jmpi lr0: return (lr0 holds the address the caller's call wrote)
+:jmpi RB is op=0xc0 & RB & rb=0x80 { local t:4 = RB; delayslot(1); return [t]; }
+:jmpfi RA,RB is op=0xc4 & RA & RB
+{ local c:1 = (RA & 0x80000000) == 0; local t:4 = RB; delayslot(1); if (!c) goto <skip>; goto [t]; <skip> }
+:jmpti RA,RB is op=0xcc & RA & RB
+{ local c:1 = (RA & 0x80000000) != 0; local t:4 = RB; delayslot(1); if (!c) goto <skip>; goto [t]; <skip> }
+# jmpfi/jmpti on lr0 are conditional returns
+:jmpfi RA,RB is op=0xc4 & RA & RB & rb=0x80
+{ local c:1 = (RA & 0x80000000) == 0; local t:4 = RB; delayslot(1); if (!c) goto <skip>; return [t]; <skip> }
+:jmpti RA,RB is op=0xcc & RA & RB & rb=0x80
+{ local c:1 = (RA & 0x80000000) != 0; local t:4 = RB; delayslot(1); if (!c) goto <skip>; return [t]; <skip> }
+
+:call RA,TARGET is (op=0xa8 | op=0xa9) & RA & TARGET
+{ RA = inst_start + 8; delayslot(1); call TARGET; }
+:calli RA,RB is op=0xc8 & RA & RB
+{ local t:4 = RB; RA = inst_start + 8; delayslot(1); call [t]; }
+
+########################################################################################
+# Loads and stores. CNTL bits: AS (22, input/output space), PA (21), SB (20), UA (19),
+# OPT (18-16): 000 word, 001 byte, 010 half-word (hardware byte/half-word accesses, DW=1: SB
+# sign-extends a loaded byte or half-word and sets BP to the complement of the byte order).
+# CE=1 transfers to/from the coprocessor.
+########################################################################################
+
+ADDR: SRCB is SRCB { export SRCB; }
+
+macro setbp() { BPr = $(BPHW); }
+
+LDV: is cev=0 & as=0 & opt=1 & sb=0 & ADDR { local v:4 = zext(*[ram]:1 ADDR); export v; }
+LDV: is cev=0 & as=0 & opt=1 & sb=1 & ADDR { local v:4 = sext(*[ram]:1 ADDR); setbp(); export v; }
+LDV: is cev=0 & as=0 & opt=2 & sb=0 & ADDR { local v:4 = zext(*[ram]:2 ADDR); export v; }
+LDV: is cev=0 & as=0 & opt=2 & sb=1 & ADDR { local v:4 = sext(*[ram]:2 ADDR); setbp(); export v; }
+LDV: is cev=0 & as=0 & sb=0 & ADDR { local v:4 = *[ram]:4 ADDR; export v; }
+LDV: is cev=0 & as=0 & sb=1 & ADDR { local v:4 = *[ram]:4 ADDR; setbp(); export v; }
+LDV: is cev=0 & as=1 & opt=1 & sb=0 & ADDR { local v:4 = zext(*[io]:1 ADDR); export v; }
+LDV: is cev=0 & as=1 & opt=1 & sb=1 & ADDR { local v:4 = sext(*[io]:1 ADDR); setbp(); export v; }
+LDV: is cev=0 & as=1 & opt=2 & sb=0 & ADDR { local v:4 = zext(*[io]:2 ADDR); export v; }
+LDV: is cev=0 & as=1 & opt=2 & sb=1 & ADDR { local v:4 = sext(*[io]:2 ADDR); setbp(); export v; }
+LDV: is cev=0 & as=1 & sb=0 & ADDR { local v:4 = *[io]:4 ADDR; export v; }
+LDV: is cev=0 & as=1 & sb=1 & ADDR { local v:4 = *[io]:4 ADDR; setbp(); export v; }
+LDV: is cev=1 & cntl & ADDR { local c:4 = cntl; local v:4 = coprocessorLoad(c, ADDR); export v; }
+
+CNTL: cntl is cntl { }
+
+:load ce,CNTL,RA,ADDR is (op=0x16 | op=0x17) & ce & CNTL & RA & ADDR & LDV { RA = LDV; }
+:loadl ce,CNTL,RA,ADDR is (op=0x06 | op=0x07) & ce & CNTL & RA & ADDR & LDV { RA = LDV; }
+:loadset ce,CNTL,RA,ADDR is (op=0x26 | op=0x27) & ce & cev=0 & CNTL & RA & ADDR & as=0
+{ local a:4 = ADDR; RA = *[ram]:4 a; *[ram]:4 a = 0xffffffff; }
+:loadset ce,CNTL,RA,ADDR is (op=0x26 | op=0x27) & ce & cev=0 & CNTL & RA & ADDR & as=1
+{ local a:4 = ADDR; RA = *[io]:4 a; *[io]:4 a = 0xffffffff; }
+:loadset ce,CNTL,RA,ADDR is (op=0x26 | op=0x27) & ce & cev=1 & CNTL & RA & ADDR & cntl
+{ local c:4 = cntl; RA = coprocessorLoad(c, ADDR); }
+
+STV: is cev=0 & as=0 & opt=1 & ADDR & RA { *[ram]:1 ADDR = RA:1; }
+STV: is cev=0 & as=0 & opt=2 & ADDR & RA { *[ram]:2 ADDR = RA:2; }
+STV: is cev=0 & as=0 & ADDR & RA { *[ram]:4 ADDR = RA; }
+STV: is cev=0 & as=1 & opt=1 & ADDR & RA { *[io]:1 ADDR = RA:1; }
+STV: is cev=0 & as=1 & opt=2 & ADDR & RA { *[io]:2 ADDR = RA:2; }
+STV: is cev=0 & as=1 & ADDR & RA { *[io]:4 ADDR = RA; }
+STV: is cev=1 & cntl & ADDR & RA { local c:4 = cntl; coprocessorStore(c, ADDR, RA); }
+STBP: is cev=0 & sb=1 { setbp(); }
+STBP: is epsilon { }
+
+:store ce,CNTL,RA,ADDR is (op=0x1e | op=0x1f) & ce & CNTL & RA & ADDR & STV & STBP { build STV; build STBP; }
+:storel ce,CNTL,RA,ADDR is (op=0x0e | op=0x0f) & ce & CNTL & RA & ADDR & STV & STBP { build STV; build STBP; }
+
+# load/store multiple: CR + 1 words between consecutive registers and consecutive words
+# (local registers: consecutive stack words; global registers: consecutive register numbers).
+# The first 8 transfers are written out so that the usual short sequences (doubles, small
+# structures, CR set just before by mtsrim) decompile as plain register moves.
+MREG: is ra=0 { local p:4 = ipa & 0x3fc; export p; }
+
+:loadm ce,CNTL,RA,ADDR is (op=0x36 | op=0x37) & ce & cev=0 & CNTL & RA & ADDR & as=0 & ra_l=1 & ra_n
+{
+	local a:4 = ADDR; local n:4 = CRr & 0xff;
+	*[ram]:4 (gr1 + (ra_n + 0) * 4) = *[ram]:4 (a + 0);
+	if (n < 1) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 1) * 4) = *[ram]:4 (a + 4);
+	if (n < 2) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 2) * 4) = *[ram]:4 (a + 8);
+	if (n < 3) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 3) * 4) = *[ram]:4 (a + 12);
+	if (n < 4) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 4) * 4) = *[ram]:4 (a + 16);
+	if (n < 5) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 5) * 4) = *[ram]:4 (a + 20);
+	if (n < 6) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 6) * 4) = *[ram]:4 (a + 24);
+	if (n < 7) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 7) * 4) = *[ram]:4 (a + 28);
+	if (n < 8) goto <done>;
+	local r:4 = gr1 + (ra_n + 8) * 4;
+	local mp:4 = a + 32; local k:4 = n - 7;
+	<loop>
+	*[ram]:4 r = *[ram]:4 mp;
+	r = r + 4; mp = mp + 4; k = k - 1;
+	if (k != 0) goto <loop>;
+	<done>
+	CRr = 0;
+}
+
+:loadm ce,CNTL,RA,ADDR is (op=0x36 | op=0x37) & ce & cev=0 & CNTL & RA & ADDR & as=0 & ra_l=0 & ra_n
+{
+	local a:4 = ADDR; local n:4 = CRr & 0xff;
+	*[register]:4 (((ra_n + 0) & 0x7f:4) * 4) = *[ram]:4 (a + 0);
+	if (n < 1) goto <done>;
+	*[register]:4 (((ra_n + 1) & 0x7f:4) * 4) = *[ram]:4 (a + 4);
+	if (n < 2) goto <done>;
+	*[register]:4 (((ra_n + 2) & 0x7f:4) * 4) = *[ram]:4 (a + 8);
+	if (n < 3) goto <done>;
+	*[register]:4 (((ra_n + 3) & 0x7f:4) * 4) = *[ram]:4 (a + 12);
+	if (n < 4) goto <done>;
+	*[register]:4 (((ra_n + 4) & 0x7f:4) * 4) = *[ram]:4 (a + 16);
+	if (n < 5) goto <done>;
+	*[register]:4 (((ra_n + 5) & 0x7f:4) * 4) = *[ram]:4 (a + 20);
+	if (n < 6) goto <done>;
+	*[register]:4 (((ra_n + 6) & 0x7f:4) * 4) = *[ram]:4 (a + 24);
+	if (n < 7) goto <done>;
+	*[register]:4 (((ra_n + 7) & 0x7f:4) * 4) = *[ram]:4 (a + 28);
+	if (n < 8) goto <done>;
+	local r:4 = ((ra_n + 8) & 0x7f) * 4;
+	local mp:4 = a + 32; local k:4 = n - 7;
+	<loop>
+	*[register]:4 r = *[ram]:4 mp;
+	r = (r + 4) & 0x1fc; mp = mp + 4; k = k - 1;
+	if (k != 0) goto <loop>;
+	<done>
+	CRr = 0;
+}
+
+:loadm ce,CNTL,RA,ADDR is (op=0x36 | op=0x37) & ce & cev=0 & CNTL & RA & ADDR & as=0 & MREG
+{
+	local src:4 = ADDR; local p:4 = MREG; local n:4 = (CRr & 0xff) + 1;
+	<loop>
+	*[register]:4 p = *[ram]:4 src;
+	src = src + 4; p = (p + 4) & 0x3fc; n = n - 1;
+	if (n != 0) goto <loop>;
+	CRr = 0;
+}
+
+:loadm ce,CNTL,RA,ADDR is (op=0x36 | op=0x37) & ce & cev=0 & CNTL & RA & ADDR & as=1 & ra_l=1 & ra_n
+{
+	local a:4 = ADDR; local n:4 = CRr & 0xff;
+	*[ram]:4 (gr1 + (ra_n + 0) * 4) = *[io]:4 (a + 0);
+	if (n < 1) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 1) * 4) = *[io]:4 (a + 4);
+	if (n < 2) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 2) * 4) = *[io]:4 (a + 8);
+	if (n < 3) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 3) * 4) = *[io]:4 (a + 12);
+	if (n < 4) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 4) * 4) = *[io]:4 (a + 16);
+	if (n < 5) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 5) * 4) = *[io]:4 (a + 20);
+	if (n < 6) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 6) * 4) = *[io]:4 (a + 24);
+	if (n < 7) goto <done>;
+	*[ram]:4 (gr1 + (ra_n + 7) * 4) = *[io]:4 (a + 28);
+	if (n < 8) goto <done>;
+	local r:4 = gr1 + (ra_n + 8) * 4;
+	local mp:4 = a + 32; local k:4 = n - 7;
+	<loop>
+	*[ram]:4 r = *[io]:4 mp;
+	r = r + 4; mp = mp + 4; k = k - 1;
+	if (k != 0) goto <loop>;
+	<done>
+	CRr = 0;
+}
+
+:loadm ce,CNTL,RA,ADDR is (op=0x36 | op=0x37) & ce & cev=0 & CNTL & RA & ADDR & as=1 & ra_l=0 & ra_n
+{
+	local a:4 = ADDR; local n:4 = CRr & 0xff;
+	*[register]:4 (((ra_n + 0) & 0x7f:4) * 4) = *[io]:4 (a + 0);
+	if (n < 1) goto <done>;
+	*[register]:4 (((ra_n + 1) & 0x7f:4) * 4) = *[io]:4 (a + 4);
+	if (n < 2) goto <done>;
+	*[register]:4 (((ra_n + 2) & 0x7f:4) * 4) = *[io]:4 (a + 8);
+	if (n < 3) goto <done>;
+	*[register]:4 (((ra_n + 3) & 0x7f:4) * 4) = *[io]:4 (a + 12);
+	if (n < 4) goto <done>;
+	*[register]:4 (((ra_n + 4) & 0x7f:4) * 4) = *[io]:4 (a + 16);
+	if (n < 5) goto <done>;
+	*[register]:4 (((ra_n + 5) & 0x7f:4) * 4) = *[io]:4 (a + 20);
+	if (n < 6) goto <done>;
+	*[register]:4 (((ra_n + 6) & 0x7f:4) * 4) = *[io]:4 (a + 24);
+	if (n < 7) goto <done>;
+	*[register]:4 (((ra_n + 7) & 0x7f:4) * 4) = *[io]:4 (a + 28);
+	if (n < 8) goto <done>;
+	local r:4 = ((ra_n + 8) & 0x7f) * 4;
+	local mp:4 = a + 32; local k:4 = n - 7;
+	<loop>
+	*[register]:4 r = *[io]:4 mp;
+	r = (r + 4) & 0x1fc; mp = mp + 4; k = k - 1;
+	if (k != 0) goto <loop>;
+	<done>
+	CRr = 0;
+}
+
+:loadm ce,CNTL,RA,ADDR is (op=0x36 | op=0x37) & ce & cev=0 & CNTL & RA & ADDR & as=1 & MREG
+{
+	local src:4 = ADDR; local p:4 = MREG; local n:4 = (CRr & 0xff) + 1;
+	<loop>
+	*[register]:4 p = *[io]:4 src;
+	src = src + 4; p = (p + 4) & 0x3fc; n = n - 1;
+	if (n != 0) goto <loop>;
+	CRr = 0;
+}
+
+:storem ce,CNTL,RA,ADDR is (op=0x3e | op=0x3f) & ce & cev=0 & CNTL & RA & ADDR & as=0 & ra_l=1 & ra_n
+{
+	local a:4 = ADDR; local n:4 = CRr & 0xff;
+	*[ram]:4 (a + 0) = *[ram]:4 (gr1 + (ra_n + 0) * 4);
+	if (n < 1) goto <done>;
+	*[ram]:4 (a + 4) = *[ram]:4 (gr1 + (ra_n + 1) * 4);
+	if (n < 2) goto <done>;
+	*[ram]:4 (a + 8) = *[ram]:4 (gr1 + (ra_n + 2) * 4);
+	if (n < 3) goto <done>;
+	*[ram]:4 (a + 12) = *[ram]:4 (gr1 + (ra_n + 3) * 4);
+	if (n < 4) goto <done>;
+	*[ram]:4 (a + 16) = *[ram]:4 (gr1 + (ra_n + 4) * 4);
+	if (n < 5) goto <done>;
+	*[ram]:4 (a + 20) = *[ram]:4 (gr1 + (ra_n + 5) * 4);
+	if (n < 6) goto <done>;
+	*[ram]:4 (a + 24) = *[ram]:4 (gr1 + (ra_n + 6) * 4);
+	if (n < 7) goto <done>;
+	*[ram]:4 (a + 28) = *[ram]:4 (gr1 + (ra_n + 7) * 4);
+	if (n < 8) goto <done>;
+	local r:4 = gr1 + (ra_n + 8) * 4;
+	local mp:4 = a + 32; local k:4 = n - 7;
+	<loop>
+	*[ram]:4 mp = *[ram]:4 r;
+	r = r + 4; mp = mp + 4; k = k - 1;
+	if (k != 0) goto <loop>;
+	<done>
+	CRr = 0;
+}
+
+:storem ce,CNTL,RA,ADDR is (op=0x3e | op=0x3f) & ce & cev=0 & CNTL & RA & ADDR & as=0 & ra_l=0 & ra_n
+{
+	local a:4 = ADDR; local n:4 = CRr & 0xff;
+	*[ram]:4 (a + 0) = *[register]:4 (((ra_n + 0) & 0x7f:4) * 4);
+	if (n < 1) goto <done>;
+	*[ram]:4 (a + 4) = *[register]:4 (((ra_n + 1) & 0x7f:4) * 4);
+	if (n < 2) goto <done>;
+	*[ram]:4 (a + 8) = *[register]:4 (((ra_n + 2) & 0x7f:4) * 4);
+	if (n < 3) goto <done>;
+	*[ram]:4 (a + 12) = *[register]:4 (((ra_n + 3) & 0x7f:4) * 4);
+	if (n < 4) goto <done>;
+	*[ram]:4 (a + 16) = *[register]:4 (((ra_n + 4) & 0x7f:4) * 4);
+	if (n < 5) goto <done>;
+	*[ram]:4 (a + 20) = *[register]:4 (((ra_n + 5) & 0x7f:4) * 4);
+	if (n < 6) goto <done>;
+	*[ram]:4 (a + 24) = *[register]:4 (((ra_n + 6) & 0x7f:4) * 4);
+	if (n < 7) goto <done>;
+	*[ram]:4 (a + 28) = *[register]:4 (((ra_n + 7) & 0x7f:4) * 4);
+	if (n < 8) goto <done>;
+	local r:4 = ((ra_n + 8) & 0x7f) * 4;
+	local mp:4 = a + 32; local k:4 = n - 7;
+	<loop>
+	*[ram]:4 mp = *[register]:4 r;
+	r = (r + 4) & 0x1fc; mp = mp + 4; k = k - 1;
+	if (k != 0) goto <loop>;
+	<done>
+	CRr = 0;
+}
+
+:storem ce,CNTL,RA,ADDR is (op=0x3e | op=0x3f) & ce & cev=0 & CNTL & RA & ADDR & as=0 & MREG
+{
+	local dst:4 = ADDR; local p:4 = MREG; local n:4 = (CRr & 0xff) + 1;
+	<loop>
+	*[ram]:4 dst = *[register]:4 p;
+	dst = dst + 4; p = (p + 4) & 0x3fc; n = n - 1;
+	if (n != 0) goto <loop>;
+	CRr = 0;
+}
+
+:storem ce,CNTL,RA,ADDR is (op=0x3e | op=0x3f) & ce & cev=0 & CNTL & RA & ADDR & as=1 & ra_l=1 & ra_n
+{
+	local a:4 = ADDR; local n:4 = CRr & 0xff;
+	*[io]:4 (a + 0) = *[ram]:4 (gr1 + (ra_n + 0) * 4);
+	if (n < 1) goto <done>;
+	*[io]:4 (a + 4) = *[ram]:4 (gr1 + (ra_n + 1) * 4);
+	if (n < 2) goto <done>;
+	*[io]:4 (a + 8) = *[ram]:4 (gr1 + (ra_n + 2) * 4);
+	if (n < 3) goto <done>;
+	*[io]:4 (a + 12) = *[ram]:4 (gr1 + (ra_n + 3) * 4);
+	if (n < 4) goto <done>;
+	*[io]:4 (a + 16) = *[ram]:4 (gr1 + (ra_n + 4) * 4);
+	if (n < 5) goto <done>;
+	*[io]:4 (a + 20) = *[ram]:4 (gr1 + (ra_n + 5) * 4);
+	if (n < 6) goto <done>;
+	*[io]:4 (a + 24) = *[ram]:4 (gr1 + (ra_n + 6) * 4);
+	if (n < 7) goto <done>;
+	*[io]:4 (a + 28) = *[ram]:4 (gr1 + (ra_n + 7) * 4);
+	if (n < 8) goto <done>;
+	local r:4 = gr1 + (ra_n + 8) * 4;
+	local mp:4 = a + 32; local k:4 = n - 7;
+	<loop>
+	*[io]:4 mp = *[ram]:4 r;
+	r = r + 4; mp = mp + 4; k = k - 1;
+	if (k != 0) goto <loop>;
+	<done>
+	CRr = 0;
+}
+
+:storem ce,CNTL,RA,ADDR is (op=0x3e | op=0x3f) & ce & cev=0 & CNTL & RA & ADDR & as=1 & ra_l=0 & ra_n
+{
+	local a:4 = ADDR; local n:4 = CRr & 0xff;
+	*[io]:4 (a + 0) = *[register]:4 (((ra_n + 0) & 0x7f:4) * 4);
+	if (n < 1) goto <done>;
+	*[io]:4 (a + 4) = *[register]:4 (((ra_n + 1) & 0x7f:4) * 4);
+	if (n < 2) goto <done>;
+	*[io]:4 (a + 8) = *[register]:4 (((ra_n + 2) & 0x7f:4) * 4);
+	if (n < 3) goto <done>;
+	*[io]:4 (a + 12) = *[register]:4 (((ra_n + 3) & 0x7f:4) * 4);
+	if (n < 4) goto <done>;
+	*[io]:4 (a + 16) = *[register]:4 (((ra_n + 4) & 0x7f:4) * 4);
+	if (n < 5) goto <done>;
+	*[io]:4 (a + 20) = *[register]:4 (((ra_n + 5) & 0x7f:4) * 4);
+	if (n < 6) goto <done>;
+	*[io]:4 (a + 24) = *[register]:4 (((ra_n + 6) & 0x7f:4) * 4);
+	if (n < 7) goto <done>;
+	*[io]:4 (a + 28) = *[register]:4 (((ra_n + 7) & 0x7f:4) * 4);
+	if (n < 8) goto <done>;
+	local r:4 = ((ra_n + 8) & 0x7f) * 4;
+	local mp:4 = a + 32; local k:4 = n - 7;
+	<loop>
+	*[io]:4 mp = *[register]:4 r;
+	r = (r + 4) & 0x1fc; mp = mp + 4; k = k - 1;
+	if (k != 0) goto <loop>;
+	<done>
+	CRr = 0;
+}
+
+:storem ce,CNTL,RA,ADDR is (op=0x3e | op=0x3f) & ce & cev=0 & CNTL & RA & ADDR & as=1 & MREG
+{
+	local dst:4 = ADDR; local p:4 = MREG; local n:4 = (CRr & 0xff) + 1;
+	<loop>
+	*[io]:4 dst = *[register]:4 p;
+	dst = dst + 4; p = (p + 4) & 0x3fc; n = n - 1;
+	if (n != 0) goto <loop>;
+	CRr = 0;
+}
+
+:loadm ce,CNTL,RA,ADDR is (op=0x36 | op=0x37) & ce & cev=1 & CNTL & cntl & RA & ADDR
+{ local c:4 = cntl; RA = coprocessorLoad(c, ADDR, CRr); CRr = 0; }
+:storem ce,CNTL,RA,ADDR is (op=0x3e | op=0x3f) & ce & cev=1 & CNTL & cntl & RA & ADDR
+{ local c:4 = cntl; coprocessorStore(c, ADDR, RA, CRr); CRr = 0; }
+
+########################################################################################
+# Traps, interrupts, system
+########################################################################################
+
+:emulate VN,RA,RB is op=0xd7 & VN & RA & RB & NA & NB
+{ ipa = NA << 2; ipb = NB << 2; trap(VN); }
+
+# interrupt return: CPS from OPS, execution resumes at PC1 (then PC0)
+:iret is op=0x88 { cps = ops; local t:4 = pc1; return [t]; }
+:iretinv is op=0x8c & id & idv=0 { invalidate(id:1); cps = ops; local t:4 = pc1; return [t]; }
+:iretinv id is op=0x8c & id & (idv=1 | idv=2 | idv=3) { invalidate(id:1); cps = ops; local t:4 = pc1; return [t]; }
+:inv is op=0x9f & id & idv=0 { invalidate(id:1); }
+:inv id is op=0x9f & id & (idv=1 | idv=2 | idv=3) { invalidate(id:1); }
+:halt is op=0x89 { halt(); }
+
+########################################################################################
+# Floating point (Am29050; the other 29K processors trap to emulation routines that
+# implement the same operations). Double-precision operands are a register and its twin,
+# the register holding the high word. Exceptions set the sticky bits of FPS when masked in
+# FPE, and otherwise their trap status bits (the trap itself is not raised, see FP_TRAP): invalid operation
+# (NS, bit 0), overflow (VS, bit 2), divide by zero (DS, bit 5). P-code float operations do
+# not report inexact or underflow results, so XS/US are not set.
+########################################################################################
+
+# exception "bit" (FPS sticky bit = FPE mask bit; the trap status bit is bit << 8)
+macro fpexc(cond, bit, tr) {
+	local masked:1 = (fpe & bit) != 0;
+	fps = fps | (zext(cond && masked) * bit) | (zext(cond && !masked) * (bit << 8));
+	tr = tr || (cond && !masked);
+}
+# An unmasked exception sets its trap status bit (bit << 8) in FPS. The Floating-Point Exception
+# trap itself (vector 22) is not raised: a conditional trap after every floating-point operation
+# buried the decompiled arithmetic under exception tests (tried). FP_TRAP marks where it would go.
+@define FP_TRAP ""
+
+macro fpchk(a, b, r, tr) {
+	fpexc(nan(r) && !nan(a) && !nan(b), 1:4, tr);
+	local inf:1 = (r f== (r f+ r)) && (r f!= int2float(0:4));
+	local ainf:1 = (a f== (a f+ a)) && (a f!= int2float(0:4));
+	local binf:1 = (b f== (b f+ b)) && (b f!= int2float(0:4));
+	fpexc(inf && !ainf && !binf, 4:4, tr);
+}
+
+macro setD(hi, lo, v) {
+	hi = v(4);
+	lo = v:4;
+}
+
+:fadd RC,RA,RB is op=0xf0 & RC & RA & RB
+{ local tr:1 = 0; local a:4 = RA; local b:4 = RB; local r:4 = a f+ b; fpchk(a, b, r, tr); RC = r; $(FP_TRAP) }
+:fsub RC,RA,RB is op=0xf2 & RC & RA & RB
+{ local tr:1 = 0; local a:4 = RA; local b:4 = RB; local r:4 = a f- b; fpchk(a, b, r, tr); RC = r; $(FP_TRAP) }
+:fmul RC,RA,RB is op=0xf4 & RC & RA & RB
+{ local tr:1 = 0; local a:4 = RA; local b:4 = RB; local r:4 = a f* b; fpchk(a, b, r, tr); RC = r; $(FP_TRAP) }
+:fdiv RC,RA,RB is op=0xf6 & RC & RA & RB
+{
+	local tr:1 = 0;
+	local a:4 = RA; local b:4 = RB;
+	fpexc((b f== int2float(0:4)) && (a f!= int2float(0:4)) && !nan(a) && ((a f+ a) f!= a), 32:4, tr);
+	local r:4 = a f/ b;
+	local zd:1 = (b f== int2float(0:4));
+	fpexc(nan(r) && !nan(a) && !nan(b), 1:4, tr);
+	local rinf:1 = (r f== (r f+ r)) && (r f!= int2float(0:4));
+	local ainf:1 = (a f== (a f+ a)) && (a f!= int2float(0:4));
+	fpexc(rinf && !ainf && !zd, 4:4, tr);
+	RC = r;
+	$(FP_TRAP)
+}
+:fdmul RC,RA,RB is op=0xf9 & RC & RA & RB & RCT
+{
+	local tr:1 = 0;
+	local a:8 = float2float(RA); local b:8 = float2float(RB); local r:8 = a f* b;
+	fpchk(a, b, r, tr); setD(RC, RCT, r);
+	$(FP_TRAP)
+}
+:dadd RC,DA,DB is op=0xf1 & RC & DA & DB & RCT
+{ local tr:1 = 0; local a:8 = DA; local b:8 = DB; local r:8 = a f+ b; fpchk(a, b, r, tr); setD(RC, RCT, r); $(FP_TRAP) }
+:dsub RC,DA,DB is op=0xf3 & RC & DA & DB & RCT
+{ local tr:1 = 0; local a:8 = DA; local b:8 = DB; local r:8 = a f- b; fpchk(a, b, r, tr); setD(RC, RCT, r); $(FP_TRAP) }
+:dmul RC,DA,DB is op=0xf5 & RC & DA & DB & RCT
+{ local tr:1 = 0; local a:8 = DA; local b:8 = DB; local r:8 = a f* b; fpchk(a, b, r, tr); setD(RC, RCT, r); $(FP_TRAP) }
+:ddiv RC,DA,DB is op=0xf7 & RC & DA & DB & RCT
+{
+	local tr:1 = 0;
+	local a:8 = DA; local b:8 = DB;
+	fpexc((b f== int2float(0:4)) && (a f!= int2float(0:4)) && !nan(a) && ((a f+ a) f!= a), 32:4, tr);
+	local r:8 = a f/ b;
+	local zd:1 = (b f== int2float(0:4));
+	fpexc(nan(r) && !nan(a) && !nan(b), 1:4, tr);
+	local rinf:1 = (r f== (r f+ r)) && (r f!= int2float(0:4));
+	local ainf:1 = (a f== (a f+ a)) && (a f!= int2float(0:4));
+	fpexc(rinf && !ainf && !zd, 4:4, tr);
+	setD(RC, RCT, r);
+	$(FP_TRAP)
+}
+
+# comparisons: TRUE (bit 31) or FALSE; unordered operands compare false and are invalid
+:feq RC,RA,RB is op=0xea & RC & RA & RB
+{ local tr:1 = 0; local a:4 = RA; local b:4 = RB; fpexc(nan(a) || nan(b), 1:4, tr); local r:4 = 0; true32(a f== b, r); RC = r; $(FP_TRAP) }
+:fgt RC,RA,RB is op=0xec & RC & RA & RB
+{ local tr:1 = 0; local a:4 = RA; local b:4 = RB; fpexc(nan(a) || nan(b), 1:4, tr); local r:4 = 0; true32(a f> b, r); RC = r; $(FP_TRAP) }
+:fge RC,RA,RB is op=0xee & RC & RA & RB
+{ local tr:1 = 0; local a:4 = RA; local b:4 = RB; fpexc(nan(a) || nan(b), 1:4, tr); local r:4 = 0; true32(a f>= b, r); RC = r; $(FP_TRAP) }
+:deq RC,DA,DB is op=0xeb & RC & DA & DB
+{ local tr:1 = 0; local a:8 = DA; local b:8 = DB; fpexc(nan(a) || nan(b), 1:4, tr); local r:4 = 0; true32(a f== b, r); RC = r; $(FP_TRAP) }
+:dgt RC,DA,DB is op=0xed & RC & DA & DB
+{ local tr:1 = 0; local a:8 = DA; local b:8 = DB; fpexc(nan(a) || nan(b), 1:4, tr); local r:4 = 0; true32(a f> b, r); RC = r; $(FP_TRAP) }
+:dge RC,DA,DB is op=0xef & RC & DA & DB
+{ local tr:1 = 0; local a:8 = DA; local b:8 = DB; fpexc(nan(a) || nan(b), 1:4, tr); local r:4 = 0; true32(a f>= b, r); RC = r; $(FP_TRAP) }
+
+# CONVERT rc,ra,UI,RND,FD,FS. Formats: 0 integer, 1 single, 2 double. Rounding to an integer:
+# 0 nearest, 1 toward -inf, 2 toward +inf, 3 toward zero, 4 the FPE round mode (FRM, bits 7-6)
+FRND4: is epsilon { local fm:4 = (fpe >> 6) & 3; export fm; }
+RNDM: is rnd=4 & FRND4 { export FRND4; }
+RNDM: is rnd { local rm:4 = rnd; export rm; }
+
+# round to nearest even, toward -inf, toward +inf, toward zero (result as a double)
+macro roundToInt(x, mode, r) {
+	local fl:8 = floor(x);
+	local d:8 = x f- fl;
+	local one:8 = int2float(1:4);
+	local two:8 = int2float(2:4);
+	local half:8 = one f/ two;
+	local fi:8 = trunc(fl);
+	local up:1 = (d f> half) || ((d f== half) && ((fi & 1) != 0));
+	local upi:4 = zext(up);
+	local upf:8 = int2float(upi);
+	local nr:8 = fl f+ upf;
+	local m0:8 = 0 - zext(mode == 0 || mode > 3);
+	local m1:8 = 0 - zext(mode == 1);
+	local m2:8 = 0 - zext(mode == 2);
+	local m3:8 = 0 - zext(mode == 3);
+	local ti:8 = trunc(x);
+	local tz:8 = int2float(ti);
+	r = (nr & m0) | (fl & m1) | (ceil(x) & m2) | (tz & m3);
+}
+
+CVSRC: is fsv=0 & uiv=0 & RA { local v:8 = int2float(RA); export v; }
+CVSRC: is fsv=0 & uiv=1 & RA { local u:8 = zext(RA); local v:8 = int2float(u); export v; }
+CVSRC: is fsv=1 & RA { local v:8 = float2float(RA); export v; }
+CVSRC: is fsv=2 & DA { export DA; }
+
+:convert RC,RA,ui,rnd,fd,fs is op=0xe4 & RC & RA & ui & rnd & fd & fdv=1 & fs & (fsv=0 | fsv=2) & CVSRC
+{ RC = float2float(CVSRC); }
+:convert RC,RA,ui,rnd,fd,fs is op=0xe4 & RC & RA & ui & rnd & fd & fdv=2 & fs & (fsv=0 | fsv=1) & CVSRC & RCT
+{ local v:8 = CVSRC; setD(RC, RCT, v); }
+:convert RC,RA,ui,rnd,fd,fs is op=0xe4 & RC & RA & ui & uiv=0 & rnd & fd & fdv=0 & fs & (fsv=1 | fsv=2) & CVSRC & RNDM
+{
+	local tr:1 = 0;
+	local x:8 = CVSRC; local r:8 = 0; roundToInt(x, RNDM, r);
+	local lim:8 = int2float(0x80000000:8); local nlim:8 = int2float(-0x80000000:8);
+	fpexc(nan(x) || (r f>= lim) || (r f< nlim), 1:4, tr);
+	local i:8 = trunc(r); RC = i:4;
+	$(FP_TRAP)
+}
+:convert RC,RA,ui,rnd,fd,fs is op=0xe4 & RC & RA & ui & uiv=1 & rnd & fd & fdv=0 & fs & (fsv=1 | fsv=2) & CVSRC & RNDM
+{
+	local tr:1 = 0;
+	local x:8 = CVSRC; local r:8 = 0; roundToInt(x, RNDM, r);
+	local lim:8 = int2float(0x100000000:8); local nlim:8 = int2float(0:8);
+	fpexc(nan(x) || (r f>= lim) || (r f< nlim), 1:4, tr);
+	local i:8 = trunc(r); RC = i:4;
+	$(FP_TRAP)
+}
+# other format combinations (same format, reserved formats) raise the CONVERT trap (36)
+:convert RC,RA,ui,rnd,fd,fs is op=0xe4 & RC & RA & ui & rnd & fd & fs { trap(36:4); }
+
+:sqrt RC,RA,fs is op=0xe5 & RC & RA & fs & fsv=1
+{ local tr:1 = 0; local a:4 = RA; fpexc(a f< int2float(0:4), 1:4, tr); RC = sqrt(a); $(FP_TRAP) }
+:sqrt RC,RA,fs is op=0xe5 & RC & RA & fs & fsv=2 & DA & RCT
+{ local tr:1 = 0; local a:8 = DA; fpexc(a f< int2float(0:4), 1:4, tr); local r:8 = sqrt(a); setD(RC, RCT, r); $(FP_TRAP) }
+:sqrt RC,RA,fs is op=0xe5 & RC & RA & fs { trap(37:4); }
+
+# CLASS: bit 5 sign, bits 4-0 exponent/fraction class (Am29050 manual, CLASS)
+macro classify(sgn, bexp, frac, maxexp, fracmax, fracmsb, r) {
+	local e:4 = 0;
+	e = 0x02 * zext(bexp == 0 && frac != 0 && frac != fracmax) +
+		0x03 * zext(bexp == 0 && frac == fracmax) +
+		0x08 * zext(bexp != 0 && bexp < maxexp && frac == 0) +
+		0x0a * zext(bexp != 0 && bexp < maxexp && frac != 0 && frac != fracmax) +
+		0x0b * zext(bexp != 0 && bexp < maxexp && frac == fracmax) +
+		0x0c * zext(bexp == maxexp && frac == 0) +
+		0x0e * zext(bexp == maxexp && frac != 0 && frac != fracmax) +
+		0x0f * zext(bexp == maxexp && frac == fracmax) +
+		0x10 * zext(bexp == maxexp + 1 && frac == 0) +
+		0x12 * zext(bexp == maxexp + 1 && frac != 0 && (frac & fracmsb) == 0) +
+		0x13 * zext(bexp == maxexp + 1 && (frac & fracmsb) != 0);
+	r = (zext(sgn) << 5) | e;
+}
+:class RC,RA,fs is op=0xe6 & RC & RA & fs & fsv=1
+{
+	local a:4 = RA; local r:4 = 0;
+	local bexp:4 = (a >> 23) & 0xff; local frac:4 = a & 0x7fffff;
+	classify(a s< 0, bexp, frac, 254:4, 0x7fffff:4, 0x400000:4, r);
+	RC = r;
+}
+:class RC,RA,fs is op=0xe6 & RC & RA & fs & fsv=2 & DA
+{
+	local a:8 = DA; local r:4 = 0;
+	local bexp:8 = (a >> 52) & 0x7ff; local frac:8 = a & 0xfffffffffffff;
+	classify(a s< 0, bexp, frac, 2046:8, 0xfffffffffffff:8, 0x8000000000000:8, r);
+	RC = r;
+}
+:class RC,RA,fs is op=0xe6 & RC & RA & fs { trap(38:4); }
+
+# Accumulators: kept as doubles; when the FPE accumulator format ACF (bits 10-9) is 01 (single
+# precision) every value written to an accumulator is rounded to single precision.
+macro accRound(r) {
+	local sgl:1 = ((fpe >> 9) & 3) == 1;
+	local rs:4 = float2float(r);
+	local rd:8 = float2float(rs);
+	r = (rd & (0 - zext(sgl))) | (r & (0 - zext(!sgl)));
+}
+ACC: is acnv16=0 { export acc0; }
+ACC: is acnv16=1 { export acc1; }
+ACC: is acnv16=2 { export acc2; }
+ACC: is acnv16=3 { export acc3; }
+ACCL: is acn=0 { export acc0; }
+ACCL: is acn=1 { export acc1; }
+ACCL: is acn=2 { export acc2; }
+ACCL: is acn=3 { export acc3; }
+
+# FUNC (bits 21-18): bit 3 multiplier 1.0 instead of SRCB, bit 0 negate the multiplier,
+# bit 2 third operand 0.0 instead of ACC, bit 1 subtract the third operand
+MULS: is f3=0 & f0=0 & RB { local mv:8 = float2float(RB); export mv; }
+MULS: is f3=0 & f0=1 & RB { local mv:8 = f- float2float(RB); export mv; }
+MULD: is f3=0 & f0=0 & DB { export DB; }
+MULD: is f3=0 & f0=1 & DB { local mv:8 = f- DB; export mv; }
+MULS: is f3=1 & f0=0 { local mv:8 = int2float(1:4); export mv; }
+MULS: is f3=1 & f0=1 { local mv:8 = int2float(-1:4); export mv; }
+MULD: is f3=1 & f0=0 { local mv:8 = int2float(1:4); export mv; }
+MULD: is f3=1 & f0=1 { local mv:8 = int2float(-1:4); export mv; }
+OP3: is f2=0 & ACC { export ACC; }
+OP3: is f2=1 { local z:8 = int2float(0:4); export z; }
+
+:fmac func,acn16,RA,RB is op=0xd8 & func & acn16 & ACC & RA & RB & MULS & OP3 & f1=0
+{ local a:8 = float2float(RA); local r:8 = (a f* MULS) f+ OP3; accRound(r); ACC = r; }
+:fmac func,acn16,RA,RB is op=0xd8 & func & acn16 & ACC & RA & RB & MULS & OP3 & f1=1
+{ local a:8 = float2float(RA); local r:8 = (a f* MULS) f- OP3; accRound(r); ACC = r; }
+:dmac func,acn16,RA,RB is op=0xd9 & func & acn16 & ACC & RA & RB & DA & MULD & OP3 & f1=0
+{ local r:8 = (DA f* MULD) f+ OP3; accRound(r); ACC = r; }
+:dmac func,acn16,RA,RB is op=0xd9 & func & acn16 & ACC & RA & RB & DA & MULD & OP3 & f1=1
+{ local r:8 = (DA f* MULD) f- OP3; accRound(r); ACC = r; }
+:fmsm RC,RA,RB is op=0xda & RC & RA & RB
+{ local r:8 = (float2float(RA) f* acc0) f+ float2float(RB); RC = float2float(r); }
+:dmsm RC,DA,DB is op=0xdb & RC & DA & DB & RCT
+{ local r:8 = (DA f* acc0) f+ DB; setD(RC, RCT, r); }
+
+:mtacc RA,fmt,acn is op=0xe8 & b23_16=1 & RA & fmt & fmtv=1 & acn & ACCL
+{ local r:8 = float2float(RA); accRound(r); ACCL = r; }
+:mtacc RA,fmt,acn is op=0xe8 & b23_16=1 & RA & fmt & fmtv=2 & acn & ACCL & DA
+{ local r:8 = DA; accRound(r); ACCL = r; }
+# FMT 0: the source has the accumulator format
+:mtacc RA,fmt,acn is op=0xe8 & b23_16=1 & RA & fmt & fmtv=0 & acn & ACCL & DA
+{
+	local r:8 = DA;
+	if (((fpe >> 9) & 3) != 1) goto <dbl>;
+	r = float2float(RA);
+	<dbl>
+	accRound(r); ACCL = r;
+}
+:mfacc RC,fmt,acn is op=0xe9 & RC & b15_8=1 & fmt & fmtv=1 & acn & ACCL
+{ RC = float2float(ACCL); }
+:mfacc RC,fmt,acn is op=0xe9 & RC & b15_8=1 & fmt & fmtv=2 & acn & ACCL & RCT
+{ local v:8 = ACCL; setD(RC, RCT, v); }
+:mfacc RC,fmt,acn is op=0xe9 & RC & b15_8=1 & fmt & fmtv=0 & acn & ACCL & RCT
+{
+	local v:8 = ACCL;
+	if (((fpe >> 9) & 3) == 1) goto <sgl>;
+	setD(RC, RCT, v);
+	goto <done>;
+	<sgl>
+	RC = float2float(v);
+	<done>
+}

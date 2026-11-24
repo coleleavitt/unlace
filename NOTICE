@@ -90,6 +90,10 @@ specs/Ghidra/Processors/NS32000 vendors the National Semiconductor NS32000 SLEIG
 aleph-void/ghidra-NS32016 (https://github.com/aleph-void/ghidra-NS32016), a fork of raybellis/ghidra-NS32016, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/A29K vendors the AMD Am29000 SLEIGH specification of
+aleph-void/ghidra_a29k (https://github.com/aleph-void/ghidra_a29k), a fork of mumbel/ghidra_a29k, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

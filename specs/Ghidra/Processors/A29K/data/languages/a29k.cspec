@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- AMD 29K calling convention (AMD's 29K family calling convention, as used by GCC):
+     - gr1 is the register stack pointer. Local register lrN is the stack word at gr1 + 4*N (see
+       a29k.sinc), so the caller's outgoing argument registers lr2-lr17 are stack words 8-0x44
+       above gr1 at the call, and "call lr0,f" stores the return address in the word at gr1.
+     - Results in gr96-gr111 (gr96, gr96:gr97 for 64-bit values).
+     - gr96-gr124 are not preserved across calls; gr1 and the memory stack pointer gr125
+       (msp), gr126 (rab) and gr127 (rfb) are.
+     - Arguments beyond the first 16 words, and structures passed by value, go on the memory
+       stack (gr125); this cspec cannot express a second stack, so those arguments appear as
+       memory accesses through gr125. -->
+<compiler_spec>
+  <data_organization>
+    <default_pointer_alignment value="4"/>
+    <pointer_size value="4"/>
+    <short_size value="2"/>
+    <integer_size value="4"/>
+    <long_size value="4"/>
+    <long_long_size value="8"/>
+    <float_size value="4"/>
+    <double_size value="8"/>
+    <long_double_size value="8"/>
+    <size_alignment_map>
+      <entry size="1" alignment="1"/>
+      <entry size="2" alignment="2"/>
+      <entry size="4" alignment="4"/>
+      <entry size="8" alignment="4"/>
+    </size_alignment_map>
+  </data_organization>
+  <global>
+    <range space="ram"/>
+    <range space="io"/>
+  </global>
+  <stackpointer register="gr1" space="ram" growth="negative"/>
+  <returnaddress>
+    <varnode space="stack" offset="0" size="4"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="__stdcall" extrapop="0" stackshift="0">
+      <input>
+        <pentry minsize="1" maxsize="500" align="4">
+          <addr offset="8" space="stack"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="4">
+          <register name="gr96"/>
+        </pentry>
+        <pentry minsize="5" maxsize="8">
+          <addr space="join" piece1="gr96" piece2="gr97"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="gr1"/>
+        <register name="gr125"/>
+        <register name="gr126"/>
+        <register name="gr127"/>
+      </unaffected>
+      <killedbycall>
+        <register name="gr97"/>
+        <register name="gr98"/>
+        <register name="gr99"/>
+        <register name="gr100"/>
+        <register name="gr101"/>
+        <register name="gr102"/>
+        <register name="gr103"/>
+        <register name="gr104"/>
+        <register name="gr105"/>
+        <register name="gr106"/>
+        <register name="gr107"/>
+        <register name="gr108"/>
+        <register name="gr109"/>
+        <register name="gr110"/>
+        <register name="gr111"/>
+        <register name="gr112"/>
+        <register name="gr113"/>
+        <register name="gr114"/>
+        <register name="gr115"/>
+        <register name="gr116"/>
+        <register name="gr117"/>
+        <register name="gr118"/>
+        <register name="gr119"/>
+        <register name="gr120"/>
+        <register name="gr121"/>
+        <register name="gr122"/>
+        <register name="gr123"/>
+        <register name="gr124"/>
+        <register name="ipa"/>
+        <register name="ipb"/>
+        <register name="ipc"/>
+        <register name="q"/>
+        <register name="V"/>
+        <register name="N"/>
+        <register name="Z"/>
+        <register name="C"/>
+        <register name="DF"/>
+      </killedbycall>
+    </prototype>
+  </default_proto>
+</compiler_spec>

@@ -1,0 +1,261 @@
+# RISC-V cache-block, hint, may-be-operation and control-flow-integrity
+# extensions: Zicbom, Zicboz, Zicbop (CMO 1.0), Zawrs, Zihintpause, Zihintntl,
+# Ztso's fence.tso, Zimop and Zcmop, and Zicfiss/Zicfilp (CFI 1.0), which reuse
+# may-be-operation and auipc encodings. Encodings checked against LLVM's RISC-V
+# assembler and disassembler.
+
+define pcodeop cbo.clean;
+define pcodeop cbo.flush;
+define pcodeop cbo.inval;
+define pcodeop cbo.zero;
+define pcodeop wrs.nto;
+define pcodeop wrs.sto;
+define pcodeop pause;
+define pcodeop ssrdp;
+
+prefetchoff: off is sop2531 [ off = sop2531 << 5; ] { local tmp:$(XLEN) = off; export tmp; }
+
+moprn: "0" is op3030=0 & op2627=0 & op2121=0 & op2020=0 {}
+moprn: "1" is op3030=0 & op2627=0 & op2121=0 & op2020=1 {}
+moprn: "2" is op3030=0 & op2627=0 & op2121=1 & op2020=0 {}
+moprn: "3" is op3030=0 & op2627=0 & op2121=1 & op2020=1 {}
+moprn: "4" is op3030=0 & op2627=1 & op2121=0 & op2020=0 {}
+moprn: "5" is op3030=0 & op2627=1 & op2121=0 & op2020=1 {}
+moprn: "6" is op3030=0 & op2627=1 & op2121=1 & op2020=0 {}
+moprn: "7" is op3030=0 & op2627=1 & op2121=1 & op2020=1 {}
+moprn: "8" is op3030=0 & op2627=2 & op2121=0 & op2020=0 {}
+moprn: "9" is op3030=0 & op2627=2 & op2121=0 & op2020=1 {}
+moprn: "10" is op3030=0 & op2627=2 & op2121=1 & op2020=0 {}
+moprn: "11" is op3030=0 & op2627=2 & op2121=1 & op2020=1 {}
+moprn: "12" is op3030=0 & op2627=3 & op2121=0 & op2020=0 {}
+moprn: "13" is op3030=0 & op2627=3 & op2121=0 & op2020=1 {}
+moprn: "14" is op3030=0 & op2627=3 & op2121=1 & op2020=0 {}
+moprn: "15" is op3030=0 & op2627=3 & op2121=1 & op2020=1 {}
+moprn: "16" is op3030=1 & op2627=0 & op2121=0 & op2020=0 {}
+moprn: "17" is op3030=1 & op2627=0 & op2121=0 & op2020=1 {}
+moprn: "18" is op3030=1 & op2627=0 & op2121=1 & op2020=0 {}
+moprn: "19" is op3030=1 & op2627=0 & op2121=1 & op2020=1 {}
+moprn: "20" is op3030=1 & op2627=1 & op2121=0 & op2020=0 {}
+moprn: "21" is op3030=1 & op2627=1 & op2121=0 & op2020=1 {}
+moprn: "22" is op3030=1 & op2627=1 & op2121=1 & op2020=0 {}
+moprn: "23" is op3030=1 & op2627=1 & op2121=1 & op2020=1 {}
+moprn: "24" is op3030=1 & op2627=2 & op2121=0 & op2020=0 {}
+moprn: "25" is op3030=1 & op2627=2 & op2121=0 & op2020=1 {}
+moprn: "26" is op3030=1 & op2627=2 & op2121=1 & op2020=0 {}
+moprn: "27" is op3030=1 & op2627=2 & op2121=1 & op2020=1 {}
+moprn: "28" is op3030=1 & op2627=3 & op2121=0 & op2020=0 {}
+moprn: "29" is op3030=1 & op2627=3 & op2121=0 & op2020=1 {}
+moprn: "30" is op3030=1 & op2627=3 & op2121=1 & op2020=0 {}
+moprn: "31" is op3030=1 & op2627=3 & op2121=1 & op2020=1 {}
+
+moprrn: "0" is op3030=0 & op2627=0 {}
+moprrn: "1" is op3030=0 & op2627=1 {}
+moprrn: "2" is op3030=0 & op2627=2 {}
+moprrn: "3" is op3030=0 & op2627=3 {}
+moprrn: "4" is op3030=1 & op2627=0 {}
+moprrn: "5" is op3030=1 & op2627=1 {}
+moprrn: "6" is op3030=1 & op2627=2 {}
+moprrn: "7" is op3030=1 & op2627=3 {}
+
+cmopn: "1" is cop0910=0 & cop0808=0 {}
+cmopn: "3" is cop0910=0 & cop0808=1 {}
+cmopn: "5" is cop0910=1 & cop0808=0 {}
+cmopn: "7" is cop0910=1 & cop0808=1 {}
+cmopn: "9" is cop0910=2 & cop0808=0 {}
+cmopn: "11" is cop0910=2 & cop0808=1 {}
+cmopn: "13" is cop0910=3 & cop0808=0 {}
+cmopn: "15" is cop0910=3 & cop0808=1 {}
+
+# Zicbom / Zicboz: cache-block management on the block holding (rs1).
+
+:cbo.clean (rs1) is rs1 & op0006=0x0f & funct3=0x2 & op0711=0x0 & op2031=0x001
+{
+	cbo.clean(rs1);
+}
+
+:cbo.flush (rs1) is rs1 & op0006=0x0f & funct3=0x2 & op0711=0x0 & op2031=0x002
+{
+	cbo.flush(rs1);
+}
+
+:cbo.inval (rs1) is rs1 & op0006=0x0f & funct3=0x2 & op0711=0x0 & op2031=0x000
+{
+	cbo.inval(rs1);
+}
+
+:cbo.zero (rs1) is rs1 & op0006=0x0f & funct3=0x2 & op0711=0x0 & op2031=0x004
+{
+	cbo.zero(rs1);
+}
+
+# Zicbop: prefetch hints in the ori x0 encoding space; no architectural effect.
+
+:prefetch.i prefetchoff(rs1) is prefetchoff & rs1 & op0006=0x13 & funct3=0x6 & op0711=0x0 & op2024=0x0
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:prefetch.r prefetchoff(rs1) is prefetchoff & rs1 & op0006=0x13 & funct3=0x6 & op0711=0x0 & op2024=0x1
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:prefetch.w prefetchoff(rs1) is prefetchoff & rs1 & op0006=0x13 & funct3=0x6 & op0711=0x0 & op2024=0x3
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+# Zawrs, Zihintpause, Ztso
+
+:wrs.nto is op0006=0x73 & funct3=0x0 & op0711=0x0 & op1531=0x01a0
+{
+	wrs.nto();
+}
+
+:wrs.sto is op0006=0x73 & funct3=0x0 & op0711=0x0 & op1531=0x03a0
+{
+	wrs.sto();
+}
+
+:pause is op0006=0x0f & funct3=0x0 & op0711=0x0 & op1519=0x0 & fm=0x0 & pred=0x1 & succ=0x0
+{
+	pause();
+}
+
+:fence.tso is op0006=0x0f & funct3=0x0 & op0711=0x0 & op1519=0x0 & fm=0x8 & pred=0x3 & succ=0x3
+{
+	fence();
+}
+
+# Zihintntl: non-temporal locality hints in the add x0,x0,rs2 / c.add x0,rs2
+# HINT space; no architectural effect.
+
+:ntl.p1 is op0006=0x33 & funct3=0x0 & funct7=0x0 & op0711=0x0 & op1519=0x0 & op2024=0x2
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:ntl.pall is op0006=0x33 & funct3=0x0 & funct7=0x0 & op0711=0x0 & op1519=0x0 & op2024=0x3
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:ntl.s1 is op0006=0x33 & funct3=0x0 & funct7=0x0 & op0711=0x0 & op1519=0x0 & op2024=0x4
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:ntl.all is op0006=0x33 & funct3=0x0 & funct7=0x0 & op0711=0x0 & op1519=0x0 & op2024=0x5
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:c.ntl.p1 is cop0001=0x2 & cop1315=0x4 & cop1212=0x1 & cop0711=0x0 & cop0206=0x2
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:c.ntl.pall is cop0001=0x2 & cop1315=0x4 & cop1212=0x1 & cop0711=0x0 & cop0206=0x3
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:c.ntl.s1 is cop0001=0x2 & cop1315=0x4 & cop1212=0x1 & cop0711=0x0 & cop0206=0x4
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:c.ntl.all is cop0001=0x2 & cop1315=0x4 & cop1212=0x1 & cop0711=0x0 & cop0206=0x5
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+# Zimop / Zcmop: may-be-operations. Unless an extension redefines one, mop.r.n
+# and mop.rr.n write zero to rd and c.mop.n does nothing.
+
+:mop.r.^moprn rd,rs1 is moprn & rd & rs1 & op0006=0x73 & funct3=0x4 & op3131=1 & op2829=0 & op2525=0 & op2424=1 & op2323=1 & op2222=1
+{
+	rd = 0;
+}
+
+:mop.rr.^moprrn rd,rs1,rs2 is moprrn & rd & rs1 & rs2 & op0006=0x73 & funct3=0x4 & op3131=1 & op2829=0 & op2525=1
+{
+	rd = 0;
+}
+
+:c.mop.^cmopn is cmopn & cop0001=0x1 & cop1315=0x3 & cop1212=0x0 & cop1111=0x0 & cop0707=0x1 & cop0206=0x0
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+# Zicfiss shadow stack (in the mop encodings) and Zicfilp landing pads. The
+# shadow-stack push and check and the landing pad have no effect on the
+# program's own data flow and lift as no-ops (as x86 endbr64 does);
+# ssrdp reads the shadow-stack pointer through a user operation.
+
+:sspush rs2 is rs2 & op0006=0x73 & funct3=0x4 & op0711=0x0 & op1519=0x0 & op2531=0x67 & (op2024=0x1 | op2024=0x5)
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:sspopchk rs1 is rs1 & op0006=0x73 & funct3=0x4 & op0711=0x0 & op2031=0xcdc & (op1519=0x1 | op1519=0x5)
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:ssrdp rd is rd & op0006=0x73 & funct3=0x4 & op1519=0x0 & op2031=0xcdc
+{
+	rd = ssrdp();
+}
+
+:c.sspush ra is ra & cop0001=0x1 & cop1315=0x3 & cop1212=0x0 & cop0711=0x1 & cop0206=0x0
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:c.sspopchk t0 is t0 & cop0001=0x1 & cop1315=0x3 & cop1212=0x0 & cop0711=0x5 & cop0206=0x0
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:lpad op1231 is op1231 & op0006=0x17 & op0711=0x0
+{
+	local NOP:1 = 0;
+	NOP = NOP;
+}
+
+:ssamoswap.w^aqrl rd,rs2W,(rs1) is rs1 & rs2W & rd & op0006=0x2f & funct3=0x2 & op2731=0x9 & aqrl
+{
+	local tmprs1 = rs1;
+	local tmprs2 = rs2W;
+	local tmp:4 = *[ram]:4 tmprs1;
+	assignW(rd, tmp);
+	*[ram]:4 tmprs1 = tmprs2;
+}
+
+@if ADDRSIZE == "64"
+:ssamoswap.d^aqrl rdL,rs2L,(rs1) is rs1 & rs2L & rdL & op0006=0x2f & funct3=0x3 & op2731=0x9 & aqrl
+{
+	local tmprs1 = rs1;
+	local tmprs2 = rs2L;
+	local tmp:8 = *[ram]:8 tmprs1;
+	rdL = tmp;
+	*[ram]:8 tmprs1 = tmprs2;
+}
+@endif

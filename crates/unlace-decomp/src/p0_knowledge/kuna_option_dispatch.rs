@@ -414,6 +414,7 @@ kuna_options! { self, p1;
     "tlsnames" => registered!(crate::kuna_tlsnames::Tlsnames),
     "uefi" => registered!(crate::kuna_analysisgates::Uefi),
     "cortexmscs" => registered!(crate::kuna_analysisgates::Cortexmscs),
+    "com" => registered!(crate::kuna_analysisgates::Com),
     "strings" => registered!(crate::kuna_analysisgates::Strings),
     "widestrings" => {
         registered!(crate::kuna_analysisgates::Widestrings)
@@ -650,6 +651,8 @@ kuna_options! { self, p1;
     "swiftruntime" => registered!(crate::kuna_analysisgates::Swiftruntime),
     "typelib" => registered!(crate::kuna_typelib::TypeLib),
     "pdb" => registered!(crate::kuna_analysisgates::Pdb),
+    "pdbtypes" => registered!(crate::kuna_analysisgates::Pdbtypes),
+    "pdblines" => registered!(crate::kuna_analysisgates::Pdblines),
     "ctree" => registered!(crate::kuna_ctree::Ctree),
     "boolreturn" => registered!(crate::kuna_ctree::Boolreturn),
     "noretfirst" => registered!(crate::kuna_ctree::Noretfirst),

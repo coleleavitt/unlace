@@ -570,7 +570,7 @@ So the residual exposure is precise: a parameter used *only* to subscript an
 unnamed byte-element table would be declined (nothing tells the walk it is a
 base, but nothing gives it a base either), and a parameter used both as such a
 subscript and as a real memory base is typed on the strength of the second use.
-`tests/stages/kuna-ptrfromuse.xml` pins both grades, as `globalindex` and
+`tests/stages/kuna-ptrfromuse.toml` pins both grades, as `globalindex` and
 `blindindex`.
 
 The candidate is **folded** into `get_local_type`'s result by
@@ -1481,7 +1481,7 @@ register, so a store through a pointer loaded from the TEB
 (`mov eax,fs:[0x18]; mov [eax],esp`) is typed as `teb->Self->ExceptionList = ...`.
 And `auto` needs the loader fact, which only the object loader writes, so it never
 fires in the Ghidra front-end; `on` does. Exercised by
-`tests/stages/kuna-pebnames.xml`, `tests/stages/kuna-pebnames-x86.xml` (both
+`tests/stages/kuna-pebnames.toml`, `tests/stages/kuna-pebnames-x86.toml` (both
 with near misses that must not gain a name, and x86 SEH and MSVC C++ EH frames that
 must render exactly as with the option off) and
 `crates/unlace-console/tests/verify_pebnames.rs`.

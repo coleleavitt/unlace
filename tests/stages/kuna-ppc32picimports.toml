@@ -1,0 +1,51 @@
+[image]
+arch = 'PowerPC:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '4e800020'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/ppc32-pic-cache-swapped.elf',
+    'read symbols',
+    'option ppc32picimports off',
+    'load function check',
+    'decompile',
+    'print C',
+    'option ppc32picimports on',
+    'load function check',
+    'decompile',
+    'print C',
+    'option ppc32picimports off',
+    'load function check',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'PIC off and restored off keep the unnamed stub'
+count = 2
+literal = 'sub_1800('
+
+[[match]]
+name = 'PIC on names the proved terminal call'
+count = 1
+literal = '__stack_chk_fail('
+
+[[match]]
+name = 'off retains the unproved continuation'
+count = 2
+literal = 'return 7;'
+
+[[match]]
+name = 'terminal call has a local contract'
+count = 1
+literal = 'no-return'

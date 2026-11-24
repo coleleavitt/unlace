@@ -1,0 +1,156 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'wide_names' },
+    { space = 'ram', offset = '0x401030', name = 'wide_source' },
+    { space = 'ram', offset = '0x40103b', name = 'observe_wide' },
+    { space = 'ram', offset = '0x403000', name = 'multiply_names' },
+    { space = 'ram', offset = '0x403076', name = 'observe_number' },
+    { space = 'ram', offset = '0x405000', name = 'register_parameter_reuse' },
+    { space = 'ram', offset = '0x40502d', name = 'consume_key' },
+    { space = 'ram', offset = '0x408000', name = 'value_domains' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '5341544883ec08e8240000004889c34989d44889df4c89e6e81e0000004889df4c89e6e8130000004883c408415c5bc3b80d000000ba37000000c34801f748013dbb0f0000c3e8b5ffffff31ff48813da80f000088000000400f94c783f701b83c0000000f05'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+hex = '0000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x403000'
+hex = '53415441554889f8ba0700000048f7e24889c34989d44889c7e8580000004c89e7e8500000004889dfe8480000004c89e7e840000000415d415c5bc3534154415589f8ba07000000f7e24889c34989d44889c7e81e0000004c89e7e8160000004889dfe80e0000004c89e7e806000000415d415c5bc348013d830f0000c3bf0d000000e878ffffff48813d6d0f0000b6000000753148c705600f000000000000bfffffffffe892ffffff48b8feffffff01000000483905450f0000750931ffb83c0000000f05bf01000000b83c0000000f05'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x404000'
+hex = '0000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x405000'
+hex = '81ffc8000000740f81ff8e000000751abf3a000000eb05bf640000004883ec08e8080000004883c408c389f8c38d043fc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x408000'
+hex = '4989f94989f249b8b3010000000100000fb647114c0fafc00fb647124931c085c974054889f0eb034889f8488902410fb641134931c04c8905fb0f00004c89d0c3488d3db80f0000488d35c90f0000488d15da0f000031c9e8a3ffffff488d35b40f00004839f07559488d3d900f000048393db90f0000754949b8b3010000000100004d6bc0564983f0344983f0124c3905a20f0000752a488d15910f0000b901000000e857ffffff488d35680f00004839f0750d483935740f0000750431ffeb05bf01000000b83c0000000f05'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x409000'
+hex = '00000000000000000000000000000000785634120000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+
+[script]
+commands = [
+    'parse line typedef struct LifetimeWide { unsigned long long x; unsigned long long y; } LifetimeWide;',
+    'parse line typedef struct LifetimeWide LifetimeWideAlias;',
+    'parse line extern void wide_names(void);',
+    'parse line extern struct LifetimeWide wide_source(void);',
+    'parse line extern void observe_wide(struct LifetimeWide value);',
+    'lo fu wide_names',
+    'decompile',
+    'print C',
+    'rename value recovered_wide',
+    'decompile',
+    'print C',
+    'retype recovered_wide LifetimeWideAlias',
+    'decompile',
+    'print C',
+    'parse line extern void multiply_names(unsigned long long input);',
+    'parse line extern void observe_number(unsigned long long value);',
+    'option impliedrefs 0',
+    'lo fu multiply_names',
+    'decompile',
+    'print C',
+    'rename v1 operand',
+    'decompile',
+    'print C',
+    'rename v2 multiplier',
+    'decompile',
+    'print C',
+    'option impliedrefs 2',
+    'parse line extern int4 register_parameter_reuse(int4 property);',
+    'parse line extern int4 consume_key(int4 key);',
+    'lo fu register_parameter_reuse',
+    'decompile',
+    'print C',
+    'rename property_00 cleared_property',
+    'decompile',
+    'print C',
+    'parse line struct Node { struct Node *next; struct Node *previous; uint4 identity; uint1 padding[4]; };',
+    'map addr r0x409038 uint8 observed_hash',
+    'lo fu value_domains',
+    'decompile',
+    'print C',
+    'parse line extern struct Node *value_domains(struct Node *first,struct Node *last,struct Node **selected,uint4 choose_last);',
+    'lo fu value_domains',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'register lifetimes: native join baseline remains readable'
+count = 2
+literal = 'observe_wide(value);'
+
+[[match]]
+name = 'register lifetimes: a join rename is attached across recovery'
+count = 4
+literal = 'observe_wide(recovered_wide);'
+
+[[match]]
+name = 'register lifetimes: a locked join type survives recovery'
+count = 1
+literal = 'LifetimeWideAlias recovered_wide;'
+
+[[match]]
+name = 'register lifetimes: an anonymous widened operand starts as a value'
+count = 1
+literal = 'v1 = ZEXT816(input);'
+
+[[match]]
+name = 'register lifetimes: a temporary name survives each rebuild'
+count = 2
+literal = 'operand = ZEXT816(input);'
+
+[[match]]
+name = 'register lifetimes: a second temporary remains independently named'
+count = 1
+literal = 'multiplier = ZEXT816(7);'
+
+[[match]]
+name = 'register lifetimes: a later rename keeps incoming branch conditions'
+count = 2
+literal = 'if (property != 200)'
+
+[[match]]
+name = 'register lifetimes: a later rename keeps the incoming return value'
+count = 2
+literal = 'return property;'
+
+[[match]]
+name = 'register lifetimes: the dispatched key has its requested name'
+count = 1
+literal = 'consume_key(cleared_property)'
+
+[[match]]
+name = 'register lifetimes: byte operands leave the pointer return independent'
+count = 1
+literal = 'return last;'
+
+[[match]]
+name = 'register lifetimes: inferred return contracts preserve the final pointer'
+count = 1
+literal = 'return a1;'
+
+[[match]]
+name = 'register lifetimes: an inferred scalar destination keeps the pointer bits'
+count = 1
+regex = '\*a2 = \(unsigned long\)v[0-9]+;'

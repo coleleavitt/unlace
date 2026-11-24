@@ -1,0 +1,75 @@
+[image]
+arch = 'ARM:LE:32:v8:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '1eff2fe1'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/retypestackptr_arm_le32',
+    'read symbols',
+    'parse line struct Opaque;',
+    'load function probe',
+    'decompile',
+    'print C',
+    'retype v1 Opaque *',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/retypestackptr_ppc32',
+    'read symbols',
+    'parse line struct Opaque;',
+    'load function probe',
+    'decompile',
+    'print C',
+    'retype v2 Opaque *',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Opaque pointer retype #1'
+count = 1
+literal = 'Opaque *v1; // r4'
+
+[[match]]
+name = 'Opaque pointer retype #2'
+count = 1
+literal = 'v1 = (Opaque *)&v2[1];'
+
+[[match]]
+name = 'Opaque pointer retype #3'
+count = 8
+literal = 'consume(v1);'
+
+[[match]]
+name = 'Opaque pointer retype #4'
+count = 2
+literal = 'int4 v2 [6]; // r0 | r3 | stack - 0x28'
+
+[[match]]
+name = 'Opaque pointer retype #5'
+count = 1
+literal = 'Opaque *v2; // r29'
+
+[[match]]
+name = 'Opaque pointer retype #6'
+count = 1
+literal = 'v2 = (Opaque *)&v1[1];'
+
+[[match]]
+name = 'Opaque pointer retype #7'
+count = 8
+literal = 'sub_210(v2);'
+
+[[match]]
+name = 'Opaque pointer retype #8'
+count = 2
+literal = 'int4 v1 [11]; // r3 | r9 | stack - 0x38'

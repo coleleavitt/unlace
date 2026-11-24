@@ -5709,7 +5709,7 @@ the access is not a stack byte copy, and the statement holding the access is
 the one printed right before the step in the same block. `v = *p; p = &p[1];`
 prints `v = *p++;`, `*d = c; d = &d[1];` prints `*d++ = c;`. A step that goes
 through a copy the loop also compares (`v2 = &a0[1]; v1 += *a0; a0 = v2;`) is
-left as it is (`tests/stages/kuna-postinc.xml`).
+left as it is (`tests/stages/kuna-postinc.toml`).
 
 ### MSVC throws (`msvceh`)
 
@@ -5879,7 +5879,7 @@ its negation) and `x` (`c ? 1 : x` is `c || x`, `c ? x : 1` is `!c || x`,
 its `ONLY_BRANCH` render, an arm as its `RETURN`'s value, and `?`/`:`/`&&`/`||`
 between operands.
 
-With `option noretfirst on` (C output; default off; the option also breaks
+With `option noretfirst on` (C output; default on; the option also breaks
 P8's terminal-arm tie toward the no-return arm, `docs/spec/08-structuring.md`),
 the pass then takes an
 `if`/`else` without a goto, neither rewritten above, whose structured arms

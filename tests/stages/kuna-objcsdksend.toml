@@ -1,0 +1,117 @@
+# Objective-C message sends to a class the image only imports, resolved and
+# typed from the SDK declarations (`option objcresolve`, `option objcsdk`).
+#
+# Issue: an app reaches a Foundation class through a __got slot bound to
+# `_OBJC_CLASS_$_<name>`. `objcresolve` knew only the image's own classes,
+# so `[KNumber numberWithLongLong:v]` printed
+# `objc_msgSend$numberWithLongLong:(&OBJC_CLASS_$_KNumber,v)`, the send to its
+# result `objc_msgSend$stringValue(...)`, and an undeclared factory's result
+# `[KNumber numberWithInt:7]` an untyped `unsigned long`.
+#
+# Fix: the ObjC analysis adds the classes the image imports or subclasses,
+# with their superclasses, from the headers `objcsdk` names; a data import
+# slot bound to a class object is a class receiver. The class send resolves
+# to `+[KNumber numberWithLongLong:]`, the instance send along the superclass
+# chain to `-[KValue stringValue]`, and a factory whose leading noun is the
+# class's (`numberWith...` on `KNumber`) returns `KNumber *`.
+# The fixture header objc_sdk_sends/KNumber.h is hand-written.
+#
+# The receiver is followed by its value: through `objc_opt_self` and the
+# other runtime functions returning their argument, a value a call leaves
+# alone, and a join whose inputs all name the class (`send_via_self`,
+# `send_joined`).
+#
+# Pass 1 (`objcresolve off`, `objcrettype off`): the runtime stubs and `unsigned long v2`.
+# Pass 2 (default): the methods and `KNumber *v2`.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'option objcsdk crates/unlace-analysis/tests/fixtures/objc_sdk_sends',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objcsdksend_arm64',
+    'option objc on',
+    'option objcresolve off',
+    'option objcrettype off',
+    'read symbols',
+    'load addr 0x100000600',
+    'decompile',
+    'print C',
+    'load addr 0x100000660',
+    'decompile',
+    'print C',
+    'load addr 0x1000006ac',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objcsdksend_arm64',
+    'option objc on',
+    'read symbols',
+    'load addr 0x100000600',
+    'decompile',
+    'print C',
+    'load addr 0x100000660',
+    'decompile',
+    'print C',
+    'load addr 0x1000006ac',
+    'decompile',
+    'print C',
+    'option objcsdk off',
+    'quit',
+]
+
+[[match]]
+name = 'OBJCSDKSEND #1: off, the class send is the runtime stub'
+count = 1
+literal = 'objc_msgSend$numberWithLongLong:(&OBJC_CLASS_$_KNumber,'
+
+[[match]]
+name = "OBJCSDKSEND #2: off, the undeclared factory's result is untyped"
+count = 1
+literal = 'unsigned long v2;'
+
+[[match]]
+name = 'OBJCSDKSEND #3: default, the class send to the imported class names the declared method'
+count = 1
+literal = '+[KNumber numberWithLongLong:](&OBJC_CLASS_$_KNumber,'
+
+[[match]]
+name = 'OBJCSDKSEND #4: default, the send to its result resolves along the superclass chain'
+count = 3
+literal = '-[KValue stringValue]('
+
+[[match]]
+name = 'OBJCSDKSEND #5: default, a factory of the class returns the class'
+count = 1
+literal = 'KNumber *v2;'
+
+[[match]]
+name = 'OBJCSDKSEND #6: an undeclared selector keeps the runtime stub'
+count = 2
+literal = 'objc_msgSend$numberWithInt:('
+
+[[match]]
+name = 'OBJCSDKSEND #7: off, a class through objc_opt_self stays the runtime stub'
+count = 1
+literal = 'objc_msgSend$numberWithLongLong:(objc_opt_self('
+
+[[match]]
+name = 'OBJCSDKSEND #8: default, objc_opt_self returns its class argument'
+count = 1
+literal = '+[KNumber numberWithLongLong:](objc_opt_self(&OBJC_CLASS_$_KNumber),a0)'
+
+[[match]]
+name = 'OBJCSDKSEND #9: default, a join of two paths naming the same class is that class'
+count = 1
+literal = '+[KNumber numberWithLongLong:](self,a1)'

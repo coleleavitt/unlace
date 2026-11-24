@@ -1,0 +1,57 @@
+# pushimmediateret: recover a one-store PUSH-immediate/RET as a terminal
+# branch, without defining the encrypted target as a function.
+#
+# Layout (x86-32):
+#   push_immediate_ret @ 0x100000:
+#     call unpacker
+#     push 0x200000
+#     ret
+#   unpacker @ 0x100020:
+#     mov eax,0x1111
+#     ret
+#   0x200000:
+#     deliberately unmapped, like an encrypted runtime target the static
+#     flow follower must not decode as a function
+#
+# The unpacker call remains and the pushed target appears as an indirect tail
+# transfer instead of dying with RETURN. The target match includes the
+# complete C statement, so a warning containing only the address cannot
+# satisfy it. The C printer spells a terminal branch to an untyped
+# destination as an indirect tail call.
+
+[image]
+arch = 'x86:LE:32:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'push_immediate_ret' },
+    { space = 'ram', offset = '0x100020', name = 'unpacker' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'e81b0000006800002000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100020'
+readonly = true
+hex = 'b811110000c3'
+
+[script]
+commands = [
+    'lo fu push_immediate_ret',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'PUSHIMMEDIATERET #1: the unpacker call is preserved'
+count = 1
+literal = 'unpacker();'
+
+[[match]]
+name = 'PUSHIMMEDIATERET #2: the complete tail-transfer statement is emitted'
+count = 1
+literal = '(*(code *)0x200000)();'

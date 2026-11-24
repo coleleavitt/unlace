@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="PC"/>
+  <context_data>
+    <context_set space="ram">
+      <set name="mflag" val="0"/>
+      <set name="xflag" val="0"/>
+      <set name="dmode" val="0"/>
+    </context_set>
+  </context_data>
+  <default_symbols>
+    <symbol name="RESET" address="ram:0xfffe" type="code_ptr"/>
+  </default_symbols>
+</processor_spec>

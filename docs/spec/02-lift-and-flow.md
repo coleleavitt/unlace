@@ -4699,7 +4699,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `2650` | Signetics 2650 / 2650A / 2650B | `2650:BE:16:default` | Signetics 2650 Microprocessor manual, 2650 data sheet | `unlace-cli/tests/s2650_raw.rs` |
 | `MeP` | Toshiba MeP-c4 core, both byte orders | `MeP:BE:32:default`, `MeP:LE:32:default` | binutils `cpu/mep-core.cpu` (CGEN), GCC `mep.h` | `unlace-cli/tests/mep.rs` |
 | `V810` | NEC V810 (Virtual Boy, PC-FX) | `V810:LE:32:default` | NEC uPD70732 user's manual, Virtual Boy development manual, MAME `v810` | `unlace-cli/tests/v810.rs` |
-| `Lua` | Lua 5.4 VM bytecode (one function's code array) | `Lua:LE:32:5.4` | Lua 5.4 `lopcodes.h`/`lvm.c` (MIT), reference manual; oracle `luac5.4 -l -l` | `unlace-cli/tests/lua54.rs` |
+| `Lua` | Lua 5.1, 5.2, 5.3 and 5.4 VM bytecode (one function's code array) | `Lua:LE:32:5.1`, `Lua:LE:32:5.2`, `Lua:LE:32:5.3`, `Lua:LE:32:5.4` | each release's `lopcodes.h`/`lvm.c` (MIT), reference manual; oracle `luac -l` of 5.1.5, 5.2.4, 5.3.6, 5.4.8 | `unlace-cli/tests/lua54.rs`, `processors.toml` (`lua5x`) |
 | `CDP1802` | RCA CDP1802 COSMAC | `CDP1802:BE:16:default`, `CDP1802:BE:16:SCRT` | RCA CDP1802 data sheet, User Manual MPM-201 | `unlace-cli/tests/cdp1802_raw.rs` |
 | `IQ2000` | Vitesse IQ2000 | `iq2000:BE:32:default` | binutils CGEN `cpu/iq2000.cpu` and `cpu/iq2000m.cpu`, GCC `config/iq2000` | `unlace-cli/tests/iq2000_raw.rs` |
 | `SCMP` | National SC/MP, INS8060 SC/MP II | `SCMP:LE:16:default` | National SC/MP Technical Description, INS8060 data sheet | `unlace-cli/tests/scmp_raw.rs` |
@@ -4751,6 +4751,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `S1C6200` | Seiko Epson S1C6200 / E0C6200 / E0C6200A 4-bit core | `S1C6200:BE:16:default` | Epson E0C6200/6200A Core CPU Manual (MF297-06a); checked against MAME `e0c6200` on all 4,096 encodings | `unlace-cli/tests/processors.toml` (`s1c6200`) |
 | `Propeller` (P2) | Parallax Propeller 2 (P2X8C4M64P), hub execution | `propeller2:LE:32:default` | Parallax "Propeller 2 Instructions" table v35 (encodings, operations, flags); checked against the flexspin assembler | `unlace-cli/tests/processors.toml` (`propeller2`) |
 | `S1C88` | Seiko Epson S1C88 8-bit core (Pokemon mini CPU) | `S1C88:LE:16:default` | Epson S1C88 Core CPU Manual (MF658-05); checked against MAME `minx` on all 768 opcode slots | `unlace-cli/tests/processors.toml` (`s1c88`) |
+| `M7700` | Mitsubishi/Renesas 7700 Family (M37700/M37702/M37710, 7750/7751 additions) | `M7700:LE:24:default` | Renesas 7700 Family Software Manual (chapter 4 instruction pages, Appendix 2 code tables) | `unlace-cli/tests/processors.toml` (`m7700`) |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -5672,7 +5673,7 @@ left to fall through to.
 pre-SSA, registered after `gowritebarrier` in the same window. The `eor` and
 the `x30` read lose their only reader and die to dead-code elimination.
 `off` keeps the checks, to audit where the compiler authenticates. Pinned by
-`tests/stages/kuna-ptrauthtrap.xml` (two passes over the `macho_arm64e_auth`
+`tests/stages/kuna-ptrauthtrap.toml` (two passes over the `macho_arm64e_auth`
 fixture, one over `macho_arm64e_brk`, whose `brk #0xc470` and `brk #0xc472`
 traps sit behind a `w0` compare and an `x0` bit test and stay, and plain-AArch64
 bytechunks of the real check, the same compare, a `mov x30` forgery in the
@@ -5749,7 +5750,7 @@ clone keeps the fragment's own RETURN as the caller's. A fragment whose flow
 reaches unmapped memory, which happens in a dyld-cache extract when it
 tail-branches into another library, is not inlined and stays a call. The
 detection is name based, like IDA's: a stripped image keeps its fragments as
-calls. Pinned by `tests/stages/kuna-outlined.xml`.
+calls. Pinned by `tests/stages/kuna-outlined.toml`.
 
 ## 2.14 AArch64 system registers and Apple instructions
 

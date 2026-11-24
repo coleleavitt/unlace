@@ -83,6 +83,20 @@ impl<'a> ImageBytes<'a> {
         None
     }
 
+    /// Up to `max` bytes from `vma` to the end of the section that holds it.
+    pub fn read_up_to(&self, vma: u64, max: usize) -> Option<&'a [u8]> {
+        for &(base, data) in &self.sections {
+            if vma < base {
+                continue;
+            }
+            let off = (vma - base) as usize;
+            if off < data.len() {
+                return Some(&data[off..data.len().min(off.saturating_add(max))]);
+            }
+        }
+        None
+    }
+
     /// Read a NUL-terminated ASCII string starting at `vma`, capped at `max` bytes.
     pub fn read_cstr(&self, vma: u64, max: usize) -> Option<String> {
         for &(base, data) in &self.sections {

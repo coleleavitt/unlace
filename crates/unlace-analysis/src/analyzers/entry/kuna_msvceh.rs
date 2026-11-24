@@ -17,8 +17,8 @@
 //! the imported `_CxxThrowException` whose `rdx` is loaded with a known
 //! `ThrowInfo` (or zeroed with `rcx`, a rethrow) gets an instruction comment in
 //! the function `.pdata` places it in. References are image-relative on x64 and
-//! absolute on x86 ([`RefKind`]). Catch-side metadata (`FuncInfo`, FH4,
-//! funclets) and x86 SEH scope tables are not read here.
+//! absolute on x86 ([`RefKind`]). The x64 catch side (`FuncInfo`, FH4,
+//! funclets) is [`super::kuna_msvcfuncinfo`], run from the same pass.
 
 use object::{BinaryFormat, Object, ObjectSection, SectionKind};
 use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
@@ -125,11 +125,12 @@ pub fn collect<'a>(file: &'a object::File<'a>, bytes: &[u8]) -> AnalysisOutput {
     let text = TextRanges::new(file);
     let code = exec_sections(file);
     let targets = throw_targets(file, bytes);
+    out.merge(super::kuna_msvcfuncinfo::collect(file, bytes, &img));
     let infos = find_throw_infos(&img, &rk, &text);
     if infos.is_empty() && targets.is_empty() {
         return out;
     }
-    out.symbols = label_symbols(&infos);
+    out.symbols.extend(label_symbols(&infos));
     if file.architecture() == object::Architecture::X86_64 && !targets.is_empty() {
         let by_addr: FxHashMap<u64, &ThrowInfo> = infos.iter().map(|ti| (ti.addr, ti)).collect();
         let sites = find_throw_sites(&code, true, &targets, &by_addr.keys().copied().collect());

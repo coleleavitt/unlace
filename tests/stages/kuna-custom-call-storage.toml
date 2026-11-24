@@ -1,0 +1,195 @@
+# Authored one-formal custom-storage call transport, P5 callable types.
+# probe preserves its object in RCX and moves getter's EAX return into EDX
+# before calling mapper. mapper reads EDX only. The explicit slot-0 storage
+# must override MSABI's normal ECX slot without introducing a dummy receiver.
+# This is a correctness fix; the ordinary two-slot declaration is a control.
+#
+# The additional authored callee returns its EDI argument plus seven. A
+# return-only EAX declaration must retain that inferred argument through
+# rebuilds, and its caller must keep passing eleven. Explicit parameter
+# storage and a fully declared zero-input function calibrate the boundary.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'probe' },
+    { space = 'ram', offset = '0x100100', name = 'getter' },
+    { space = 'ram', offset = '0x100200', name = 'mapper' },
+    { space = 'ram', offset = '0x100300', name = 'return_only' },
+    { space = 'ram', offset = '0x100310', name = 'return_only_caller' },
+    { space = 'ram', offset = '0x100320', name = 'no_inputs' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '534883ec204889cbe8f30000004889d989c2e8e90100004883c4205bc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100100'
+readonly = true
+hex = '8b4110c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100200'
+readonly = true
+hex = '8d4203c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100300'
+readonly = true
+hex = '8d4707c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100310'
+readonly = true
+hex = 'bf0b000000e8e6ffffffc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100320'
+readonly = true
+hex = 'b805000000c3'
+
+[script]
+commands = [
+    'parse line extern int4 MSABI probe(void *object);',
+    'parse line extern int4 MSABI getter(void *object);',
+    'parse line extern int4 MSABI mapper(int4 raw_type);',
+    'map param mapper::0 %EDX int4 raw_type',
+    'lo fu probe',
+    'decompile',
+    'print C',
+    'decompile',
+    'print C',
+    'lo fu mapper',
+    'decompile',
+    'print C',
+    'parse line extern int4 MSABI mapper(void *unused_receiver,int4 raw_type);',
+    'lo fu probe',
+    'decompile',
+    'print C',
+    'map prototype return_only_caller int4 return_only_caller(void);',
+    'lo fu return_only',
+    'decompile',
+    'print C',
+    'lo fu return_only_caller',
+    'decompile',
+    'print C',
+    'map return 0x100300::%EAX int4',
+    'decompile',
+    'print C',
+    'lo fu return_only',
+    'decompile',
+    'print C',
+    'decompile',
+    'print C',
+    'lo fu return_only_caller',
+    'decompile',
+    'print C',
+    'option outlang go',
+    'lo fu return_only',
+    'decompile',
+    'print C',
+    'option outlang rust',
+    'decompile',
+    'print C',
+    'option outlang c',
+    'map param return_only::0 %EDI int4 retained',
+    'decompile',
+    'print C',
+    'lo fu return_only_caller',
+    'decompile',
+    'print C',
+    'map prototype no_inputs int4 no_inputs(void);',
+    'map return no_inputs::%EAX int4',
+    'lo fu no_inputs',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #1: getter supplies the one-formal call across rebuilds'
+count = 2
+literal = 'return mapper(raw_type);'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #2: the callee has exactly one formal'
+count = 1
+regex = '^int4 mapper\(int4 raw_type\)$'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #3: the callee reads its declared input'
+count = 1
+literal = 'return raw_type + 3;'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #4: the ordinary two-slot control passes getter as argument two'
+count = 1
+literal = 'return mapper(object,raw_type);'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #5: the custom call never reads the receiver as an integer'
+count = 0
+literal = 'mapper((int4)object)'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #6: all three caller runs retain the getter result'
+count = 3
+literal = 'raw_type = getter(object);'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #7: return-only declaration keeps the inferred input across rebuilds'
+count = 3
+regex = '^int4 return_only\(int4 a0\)$'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #8: return-only body retains its incoming value'
+count = 4
+regex = 'return (a0 \+ 7|i32::wrapping_add\(a0,7\));'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #9: return-only declaration never claims no inputs'
+count = 0
+regex = '^int4 return_only\(void\)$'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #10: return-only input never becomes an uninitialized local'
+count = 0
+regex = 'int4 v[0-9]+; // edi'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #11: caller retains its argument before and after the edit'
+count = 4
+regex = '^  return return_only\(0xb\);$'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #12: an explicit input still supplies its locked name'
+count = 1
+regex = '^int4 return_only\(int4 retained\)$'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #13: an explicit input still supplies its value'
+count = 1
+literal = 'return retained + 7;'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #14: a full empty signature remains empty'
+count = 1
+regex = '^int4 no_inputs\(void\)$'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #15: Go output retains the inferred input'
+count = 1
+regex = '^func return_only\(a0 int32\) int32'
+
+[[match]]
+name = 'CUSTOM-CALL-STORAGE #16: Rust output retains the inferred input'
+count = 1
+regex = '^unsafe fn return_only\(mut a0: i32\) -> i32'

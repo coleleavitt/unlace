@@ -105,3 +105,17 @@ fn folded_hard_float_double_helpers_print_as_operators_and_casts() {
         assert!(!out.contains("__aeabi"), "{function}: {out}");
     }
 }
+
+#[test]
+fn a_double_moved_back_to_d0_prints_whole() {
+    for (function, line, options) in [
+        ("dadd", "return __aeabi_dadd(a,b);", &[][..]),
+        ("i2d", "return __aeabi_i2d(a);", &[][..]),
+        ("dadd", "return a + b;", &FOLD[..]),
+        ("i2d", "return (double)a;", &FOLD[..]),
+    ] {
+        let out = decompile_with("thumbv7em-hf.o", function, options);
+        assert!(out.contains(line), "{function}: {out}");
+        assert!(!out.contains("0xffffffff00000000"), "{function}: {out}");
+    }
+}

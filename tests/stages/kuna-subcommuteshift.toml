@@ -1,17 +1,23 @@
-<decompilertest>
-<binaryimage arch="x86:LE:64:default:gcc">
-<!--
-    RE-friction need `cancelling-byte-arithmetic-splits`, exact 9,024-byte
-    crackme_shroud.exe function sub_1406fa160.  The byte at usage[0xf] is
-    `-2*x + (x << 1) + 0x77` modulo 256, but upstream RuleSubCommute refuses
-    to push the low-byte SUBPIECE through the left shift because x is produced
-    by INT_AND rather than ZEXT/PIECE.
+# RE-friction need `cancelling-byte-arithmetic-splits`, exact 9,024-byte
+# crackme_shroud.exe function sub_1406fa160.  The byte at usage[0xf] is
+# `-2*x + (x << 1) + 0x77` modulo 256, but upstream RuleSubCommute refuses
+# to push the low-byte SUBPIECE through the left shift because x is produced
+# by INT_AND rather than ZEXT/PIECE.
+#
+# P3 simplification-quiescence; the cancellation fold is always on and
+# pins the complete joined copy, proving that the computed store and the
+# following five-byte copy both survive.
 
-    P3 simplification-quiescence; the cancellation fold is always on and
-    pins the complete joined copy, proving that the computed store and the
-    following five-byte copy both survive.
--->
-<bytechunk space="ram" offset="0x1406fa160">
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1406fa160', name = 'cancel_byte_arithmetic' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1406fa160'
+hex = '''
 56448b05a06e1f00448b0d9d6e1f004489c24421ca4589c24129d24589cb4129d331c94429d94429d129d183e9016bc11d4169f3fbffffff01f089ce4401de69
 f6efffffff01f0416bf22201f089ce4401d669f6fcffffff01f089ce4401de4401d669f6e2ffffff01f069f2d8ffffff01f089ce01d66bf60f01f04489de01d6
 6bf61801f089ce4401de01d6c1e60001f04489d601d669f6e1ffffff01f089ce4401d601d6c1e60201f04489de4401d601d66bf61901f04401d94401d101d169
@@ -153,18 +159,33 @@ f04489d601d669f6feffffff01f089ce4401d601d6c1e60201f04489de4401d601d66bf61901f044
 4421ca4129d04129d131c94429c94429c129d183e90169c1d5ffffff4569d1e1ffffff4401d04569d0deffffff4401d04189ca4501c2456bd2224401d04469d2
 d9ffffff4401d04189ca4101d24569d2d1ffffff4401d04589ca4101d2456bd2294401d04189ca4501ca4101d2456bd22d4401d04589c24101d2456bd22c4401
 d04189ca4501c24101d2456bd20b4401d04589ca4501c24101d24569d2c9ffffff4401d04401c94401c101d169c9dfffffff01c88805c3561f005ec3cccccccc
-</bytechunk>
-<symbol space="ram" offset="0x1406fa160" name="cancel_byte_arithmetic"/>
-</binaryimage>
-<script>
-  <com>map address r0x1408f1c08 char usage[22]</com>
-  <com>lo fu cancel_byte_arithmetic</com>
-  <com>decompile</com>
-  <com>print C</com>
-  <com>quit</com>
-</script>
-<stringmatch name="CANCELBYTEARITHMETIC #1: the computed byte never splits the two copies" min="0" max="0">usage\[0xf\] = [^;]*&lt;&lt; 1</stringmatch>
-<stringmatch name="CANCELBYTEARITHMETIC #2: no fifteen-byte prefix copy" min="0" max="0">builtin_strncpy\(usage,&quot;Usage: %s &lt;pass&quot;,0xf\);</stringmatch>
-<stringmatch name="CANCELBYTEARITHMETIC #3: no five-byte suffix copy" min="0" max="0">builtin_strncpy\(&amp;usage\[0x10\],&quot;ord&gt;\\n&quot;,5\);</stringmatch>
-<stringmatch name="CANCELBYTEARITHMETIC #4: every byte is preserved as one complete copy" min="1" max="1">builtin_strncpy\(usage,&quot;Usage: %s &lt;password&gt;\\n&quot;,0x15\);</stringmatch>
-</decompilertest>
+'''
+
+[script]
+commands = [
+    'map address r0x1408f1c08 char usage[22]',
+    'lo fu cancel_byte_arithmetic',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CANCELBYTEARITHMETIC #1: the computed byte never splits the two copies'
+count = 0
+regex = 'usage\[0xf\] = [^;]*<< 1'
+
+[[match]]
+name = 'CANCELBYTEARITHMETIC #2: no fifteen-byte prefix copy'
+count = 0
+literal = 'builtin_strncpy(usage,"Usage: %s <pass",0xf);'
+
+[[match]]
+name = 'CANCELBYTEARITHMETIC #3: no five-byte suffix copy'
+count = 0
+literal = 'builtin_strncpy(&usage[0x10],"ord>\n",5);'
+
+[[match]]
+name = 'CANCELBYTEARITHMETIC #4: every byte is preserved as one complete copy'
+count = 1
+literal = 'builtin_strncpy(usage,"Usage: %s <password>\n",0x15);'

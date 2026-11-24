@@ -1454,7 +1454,7 @@ class ObjdumpDis:
             os.unlink(name)
         got = {}
         for line in out.splitlines():
-            m = re.match(r"\s*([0-9a-f]+):\t((?:[0-9a-f]{2} )+)\s*\t?(.*)$", line)
+            m = re.match(r"\s*([0-9a-f]+):\t([0-9a-f]{2}(?: ?[0-9a-f]{2})*) *\t(.*)$", line)
             if not m:
                 continue
             off = int(m.group(1), 16)
@@ -1637,4 +1637,63 @@ class Or1k(ObjdumpArch):
         return {"OV", "CY"} if mnemonic == "l.mulu" else {"OV"}
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k())}
+MICROBLAZE_DENY = re.compile(
+    r"^(br.*|b[a-z]+|rt[sibe]d|brk.*|mts|mfs|mfse|msrset|msrclr|n?a?e?c?t?get[d]?|n?a?e?c?t?put[d]?|.*get.*|.*put.*|"
+    r"wdc.*|wic|lwx|swx|imm|imml|sleep|hibernate|suspend|mbar|f.*|nop|tneaget.*)$"
+)
+
+
+class MicroBlaze(ObjdumpArch):
+    """MicroBlaze (32-bit, big endian) against qemu-microblaze (--oracle qemu), decoded by binutils.
+    The carry is compared. Branches, returns, traps, special-register moves, stream (FSL),
+    cache, exclusive-access, imm prefixes and floating-point instructions are not generated."""
+    name = "microblaze"
+    lang = "MicroBlaze:BE:32:default"
+    elf_machine = 189
+    big = True
+    pc = "pc"
+    gprs = [(f"r{i}", None) for i in range(1, 32)]
+    pc_const = None
+    flags_reg = "msr"
+    flag_bits = {"C": 0}
+    deny = MICROBLAZE_DENY
+    objdump_machine = "microblaze"
+
+    def unicorn(self):
+        raise NotImplementedError("microblaze runs with --oracle qemu")
+
+    # register (type A) forms with their reserved low bits: (opcode, low 11 bits)
+    TYPE_A = ([(op, 0) for op in range(8)] + [(0x05, 1), (0x05, 3)] +
+              [(0x10, k) for k in (0, 1, 2, 3)] + [(0x11, k) for k in (0, 0x200, 0x400)] +
+              [(0x12, k) for k in (0, 2)] + [(0x20, 0), (0x20, 0x400), (0x21, 0), (0x22, 0), (0x22, 0x400),
+                                              (0x23, 0), (0x23, 0x400)] +
+              [(0x24, k) for k in (0x1, 0x21, 0x41, 0x60, 0x61, 0xE0, 0x1E0, 0x1E2)] +
+              [(op, k) for op in (0x30, 0x31, 0x32, 0x34, 0x35, 0x36) for k in (0, 0x200)])
+
+    def canonical(self, cand):
+        w = int.from_bytes(cand["bytes"][:4], "big" if self.big else "little")
+        op, low = w >> 26, w & 0x7FF
+        if op in {o for o, _ in self.TYPE_A}:
+            allowed = {k for o, k in self.TYPE_A if o == op}
+            if low not in allowed:
+                return False                             # reserved bits of a register form
+            if op == 0x24 and (w >> 11) & 0x1F:
+                return False                             # sra/src/srl/sext/clz/swap take no rB
+        return True
+
+    def draw(self, rng):
+        w = rng.getrandbits(32)
+        if rng.random() < 0.6:
+            op, low = rng.choice(self.TYPE_A)
+            w = op << 26 | (w & 0x03FFF800) | low
+        return w.to_bytes(4, "big" if self.big else "little")
+
+
+class MicroBlazeEl(MicroBlaze):
+    """MicroBlaze, little endian, against qemu-microblazeel."""
+    name = "microblazeel"
+    lang = "MicroBlaze:LE:32:default"
+    big = False
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl())}

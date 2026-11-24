@@ -39,6 +39,9 @@ Three tiers:
 | a register field is extracted with a shift and an AND | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
 | a flag field is set with a clear-mask OR and a shifted insert | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
 | packed descriptor or hardware register fields print as shift and mask arithmetic | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
+| a float add of +0.0 or a float multiply by 1.0 survives in the output | [`floatidentity`](#floatidentity----on--off-default-off) |
+| a float subtraction of a negated operand prints as a subtraction of a negation | [`floatidentity`](#floatidentity----on--off-default-off) |
+| a float add of a negated operand prints as (-x) + y | [`floatidentity`](#floatidentity----on--off-default-off) |
 | memcpy(d, s, strlen(s) + 1) is printed instead of strcpy(d, s) | [`helperroles`](#helperroles----on--off-default-on) |
 | an inlined strcpy shows as a strlen call followed by a memcpy | [`helperroles`](#helperroles----on--off-default-on) |
 | a variable-length array prints as &(&Stack[-8])[-n] | [`dynalloca`](#dynalloca----on--off-default-off) |
@@ -1546,6 +1549,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default: it prints bitfield_get and bitfield_set calls, which are not C and carry no field names. Turn it on to read register-level packing (flag words, descriptor fields, hardware registers) as one access per field instead of shift-and-mask arithmetic.
 - **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-bitfieldarith
 - **Example:** `option bitfieldarith on`
+
+### `floatidentity` -- on | off, default `off`
+
+- **Symptoms:** a float add of +0.0 or a float multiply by 1.0 survives in the output; a float subtraction of a negated operand prints as a subtraction of a negation; a float add of a negated operand prints as (-x) + y.
+- **What it does:** Fold the float identities a compiler leaves behind: x + +0.0 and x - +0.0 to x, x * 1.0, 1.0 * x and x / 1.0 to x, (-x) + y to y - x, x + (-y) to x - y and x - (-y) to x + y. The constant folds run only where floatquiet allows the NaN quieting an arithmetic op performs to be dropped. x + +0.0 also turns -0.0 into +0.0, so the rule is not exact for that one input.
+- **When to flip:** Off by default: x + +0.0 changes the sign of a -0.0 input, so a few results differ from the source. Turn it on for float code where accumulators start from +0.0 or scale by 1.0 and sign flips arrive as (-x) + y, which otherwise print as the identity and the negation.
+- **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-1270
+- **Example:** `option floatidentity on`
 
 ### `helperroles` -- on | off, default `on`
 

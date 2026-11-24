@@ -24,6 +24,7 @@ pub mod deadcascade;
 pub mod devectorize;
 pub mod egraph; // (unlace `egraph`) equality saturation over MBA trees
 pub mod flagcompare;
+pub mod floatidentity;
 pub mod floatnegation;
 pub mod floatnegpiece;
 pub mod floatquiet;

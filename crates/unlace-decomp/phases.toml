@@ -7632,6 +7632,25 @@ tier = "analysis"
 symptoms = "swift methods named by swiftmetadata read self from an unnamed x20 or r13|calls to swift methods drop the self they pass|a try? error path or a do/catch after a throwing call folds away|swift struct mutating methods write through an untyped register"
 
 [[settable]]
+option = "swiftcallers"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P1"
+subphase = "external-refinement"
+strength = "HARD"
+rewind = "P1"
+issue = "ida-gap-apple-3"
+summary = "The caller arm of the swiftcall pass (inert unless swiftmetadata, swifttypes and swiftcall are on): give __swiftcall, with no signature, to every function that calls a Swift runtime entry point, and __swiftcall_throws to one that calls swift_willThrow. A closure, a partial-apply forwarder, a heap-object destroyer or an outlined copy has no symbol and no metadata placement, so the type and symbol arms never bind it, yet it takes its context in swiftself (x20 / r13): under the C model x20 is callee-saved and its read is an unassigned local. IDA's swift module ORs the swiftcall flag into every function with a code reference to a swift_* symbol, through thunks; this does the same with a byte scan of the code for direct bl/b (arm64) or call/jmp rel32 (x86-64) to a swift_* import stub or to a local function whose first instruction jumps to one (three levels), each call credited to the nearest entry oracle or text symbol at or below it. A placement by the other arms wins. The model declares self only where the body reads the register, and call sites pass it only where the caller set it, so a caller that does not read x20 is unchanged."
+use_when = "Off by default. Turn it on for a Swift image where many functions read an unassigned x20 (or r13) local and pass it on to swift_release, swift_deallocObject or a callee: closures, partial-apply forwarders and outlined copies, which IDA prints with a self parameter."
+example = "--option swiftcallers on"
+source_decompiler = "ida"
+inspiration = "IDA 9.5 swift module: sub_1A320 collects the code references to every swift_* symbol through thunks (sub_13FC0) and ORs swiftcall, swift_willThrow adding throws (sub_13C90); notes/ida-gap/apple-objc-macho.md task 3"
+change_kind = "new-analysis"
+tier = "analysis"
+symptoms = "a Swift closure or forwarder reads a register local that nothing assigns and passes it to swift_release|a function that calls swift_willThrow does not hand back the error register|IDA shows a self parameter on a stripped Swift closure and kuna shows none"
+
+[[settable]]
 option = "swiftruntime"
 values = "on|off"
 default = "on"

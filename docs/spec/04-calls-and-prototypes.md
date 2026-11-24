@@ -5153,6 +5153,17 @@ bytes the indirect result register stands, as in C. On x86-64 the default
 model's output is an explicit `join_dual_class` rule rather than a register
 list, so only the threshold changes there.
 
+(kuna `swiftcallers`, default off) A function that calls a Swift runtime entry
+point takes `__swiftcall` with no signature, `__swiftcall_throws` when it calls
+`swift_willThrow` (`crates/unlace-analysis/src/analyzers/swift/kuna_swiftcall.rs
+(runtime_callers)`): IDA's caller rule, which reaches the closures, partial-apply
+forwarders, heap-object destroyers and outlined copies that no symbol or metadata
+places. A call is a direct `bl`/`b` or `call`/`jmp rel32` to a `swift_*` import
+stub, or to a local function whose first instruction jumps to one (three levels),
+credited to the nearest entry oracle or text symbol at or below it; a binding from
+the type and symbol arms wins, and the binding is `maybe_self`, so a call site
+passes `self` only where it set the register.
+
 A convention can be bound to a function without a signature: the analysis
 tier's `(addr, model)` facts land in `Architecture::loader_proto_models` and
 reach every function's handle as `ArchContext::bound_proto_models`

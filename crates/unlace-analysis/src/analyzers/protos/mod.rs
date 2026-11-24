@@ -38,6 +38,7 @@ use unlace_decomp::fspec::PrototypePieces;
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
+pub mod kuna_aeabisigs;
 pub mod kuna_importvote;
 mod kuna_libcnames;
 pub mod kuna_libcsigs;
@@ -73,6 +74,8 @@ enum Ty {
     Long,
     /// Signed DI-mode integer (exactly eight bytes in the compiler runtime ABI).
     Int64,
+    /// Unsigned DI-mode integer (exactly eight bytes in the compiler runtime ABI).
+    UInt64,
     /// `char *`.
     CharPtr,
     /// `char **`.
@@ -536,6 +539,7 @@ fn build_ty(
         Ty::Size => types.get_base(ptr, type_metatype::TYPE_UINT),
         Ty::Long => types.get_base(ptr, type_metatype::TYPE_INT),
         Ty::Int64 => types.get_base(8, type_metatype::TYPE_INT),
+        Ty::UInt64 => types.get_base(8, type_metatype::TYPE_UINT),
         Ty::CharPtr => {
             let c = types.get_type_char(types.get_size_of_char())?;
             types.get_type_pointer(ptr, c, word_size)

@@ -43,9 +43,9 @@ commands = [
 ]
 
 [[match]]
-name = 'RAWSWITCH LOOP #1: the default pass keeps the computed call'
+name = 'RAWSWITCH LOOP #1: only the default pass keeps the computed call'
 count = 1
-regex = 'jump-as-call'
+regex = '\(\*\(code \*\)'
 
 [[match]]
 name = 'RAWSWITCH LOOP #2: rawswitch on labels the cases by the mode'

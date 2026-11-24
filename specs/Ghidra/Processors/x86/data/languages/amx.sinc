@@ -1,0 +1,125 @@
+# Intel AMX (Advanced Matrix Extensions): AMX-TILE, AMX-INT8, AMX-BF16,
+# AMX-FP16 and AMX-COMPLEX. 64-bit mode only, VEX.128 map 0F38, W0. The eight
+# tile registers TMM0-TMM7 (up to 1 KiB each) and the tile configuration are
+# not modelled as varnodes: tiles are passed to user operations by number,
+# ldtilecfg/sttilecfg read and write the 64-byte configuration in memory, and
+# tileloadd/tilestored take the [base + index*scale] address (the index register
+# is the row stride). Encodings from the Intel SDM (Vol. 2, "Intel AMX
+# Instructions").
+@ifdef IA64
+define pcodeop ldtilecfg;
+define pcodeop sttilecfg;
+define pcodeop tilerelease;
+define pcodeop tilezero;
+define pcodeop tileloadd;
+define pcodeop tileloaddt1;
+define pcodeop tilestored;
+define pcodeop tdpbssd;
+define pcodeop tdpbsud;
+define pcodeop tdpbusd;
+define pcodeop tdpbuud;
+define pcodeop tdpbf16ps;
+define pcodeop tdpfp16ps;
+define pcodeop tcmmimfp16ps;
+define pcodeop tcmmrlfp16ps;
+
+amxTreg: "TMM0" is reg_opcode=0 { export 0:1; }
+amxTreg: "TMM1" is reg_opcode=1 { export 1:1; }
+amxTreg: "TMM2" is reg_opcode=2 { export 2:1; }
+amxTreg: "TMM3" is reg_opcode=3 { export 3:1; }
+amxTreg: "TMM4" is reg_opcode=4 { export 4:1; }
+amxTreg: "TMM5" is reg_opcode=5 { export 5:1; }
+amxTreg: "TMM6" is reg_opcode=6 { export 6:1; }
+amxTreg: "TMM7" is reg_opcode=7 { export 7:1; }
+amxTrm: "TMM0" is r_m=0 { export 0:1; }
+amxTrm: "TMM1" is r_m=1 { export 1:1; }
+amxTrm: "TMM2" is r_m=2 { export 2:1; }
+amxTrm: "TMM3" is r_m=3 { export 3:1; }
+amxTrm: "TMM4" is r_m=4 { export 4:1; }
+amxTrm: "TMM5" is r_m=5 { export 5:1; }
+amxTrm: "TMM6" is r_m=6 { export 6:1; }
+amxTrm: "TMM7" is r_m=7 { export 7:1; }
+amxTvvvv: "TMM0" is vexVVVV=0 { export 0:1; }
+amxTvvvv: "TMM1" is vexVVVV=1 { export 1:1; }
+amxTvvvv: "TMM2" is vexVVVV=2 { export 2:1; }
+amxTvvvv: "TMM3" is vexVVVV=3 { export 3:1; }
+amxTvvvv: "TMM4" is vexVVVV=4 { export 4:1; }
+amxTvvvv: "TMM5" is vexVVVV=5 { export 5:1; }
+amxTvvvv: "TMM6" is vexVVVV=6 { export 6:1; }
+amxTvvvv: "TMM7" is vexVVVV=7 { export 7:1; }
+
+:LDTILECFG m512 is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0); byte=0x49; (mod != 0b11 & reg_opcode=0) ... & m512
+{
+	ldtilecfg(m512);
+}
+
+:STTILECFG m512 is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x49; (mod != 0b11 & reg_opcode=0) ... & m512
+{
+	m512 = sttilecfg();
+}
+
+:TILERELEASE is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0); byte=0x49; byte=0xc0
+{
+	tilerelease();
+}
+
+:TILEZERO amxTreg is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0); byte=0x49; mod=0b11 & r_m=0 & amxTreg
+{
+	tilezero(amxTreg);
+}
+
+:TILELOADD amxTreg, Mem is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0); byte=0x4b; (mod != 0b11 & r_m=4 & amxTreg) ... & Mem
+{
+	tileloadd(amxTreg, Mem);
+}
+
+:TILELOADDT1 amxTreg, Mem is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x4b; (mod != 0b11 & r_m=4 & amxTreg) ... & Mem
+{
+	tileloaddt1(amxTreg, Mem);
+}
+
+:TILESTORED Mem, amxTreg is $(LONGMODE_ON) & $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0); byte=0x4b; (mod != 0b11 & r_m=4 & amxTreg) ... & Mem
+{
+	tilestored(Mem, amxTreg);
+}
+
+:TDPBSSD amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x5e; mod=0b11 & amxTreg & amxTrm
+{
+	tdpbssd(amxTreg, amxTrm, amxTvvvv);
+}
+
+:TDPBSUD amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x5e; mod=0b11 & amxTreg & amxTrm
+{
+	tdpbsud(amxTreg, amxTrm, amxTvvvv);
+}
+
+:TDPBUSD amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x5e; mod=0b11 & amxTreg & amxTrm
+{
+	tdpbusd(amxTreg, amxTrm, amxTvvvv);
+}
+
+:TDPBUUD amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x5e; mod=0b11 & amxTreg & amxTrm
+{
+	tdpbuud(amxTreg, amxTrm, amxTvvvv);
+}
+
+:TDPBF16PS amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x5c; mod=0b11 & amxTreg & amxTrm
+{
+	tdpbf16ps(amxTreg, amxTrm, amxTvvvv);
+}
+
+:TDPFP16PS amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x5c; mod=0b11 & amxTreg & amxTrm
+{
+	tdpfp16ps(amxTreg, amxTrm, amxTvvvv);
+}
+
+:TCMMIMFP16PS amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x6c; mod=0b11 & amxTreg & amxTrm
+{
+	tcmmimfp16ps(amxTreg, amxTrm, amxTvvvv);
+}
+
+:TCMMRLFP16PS amxTreg, amxTrm, amxTvvvv is $(LONGMODE_ON) & $(VEX_NDS) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & amxTvvvv; byte=0x6c; mod=0b11 & amxTreg & amxTrm
+{
+	tcmmrlfp16ps(amxTreg, amxTrm, amxTvvvv);
+}
+@endif

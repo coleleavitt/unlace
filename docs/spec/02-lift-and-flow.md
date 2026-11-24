@@ -4487,6 +4487,21 @@ the same operand (`vMem32z`), so the qword-index gathers still decode in
 VSIB operand. Exercised by
 `tests/stages/gh1627-x86-senduipi-gatherpf.xml`.
 
+In 64-bit mode the x86 spec also decodes Intel AMX (`amx.sinc`, #98):
+AMX-TILE `LDTILECFG`, `STTILECFG`, `TILERELEASE`, `TILEZERO`, `TILELOADD`,
+`TILELOADDT1`, `TILESTORED`; AMX-INT8 `TDPBSSD`/`TDPBSUD`/`TDPBUSD`/`TDPBUUD`;
+AMX-BF16 `TDPBF16PS`; AMX-FP16 `TDPFP16PS`; AMX-COMPLEX `TCMMIMFP16PS` and
+`TCMMRLFP16PS` (VEX.128 map 0F38, W0, opcodes 49, 4B, 5C, 5E and 6C, the
+mandatory prefix in VEX.pp selecting the variant; the dot products take the
+destination tile in ModRM.reg, the first source in ModRM.rm and the second in
+VEX.vvvv). The tile registers are not varnodes: each instruction is a user
+operation that takes tile numbers (displayed `TMM0`..`TMM7`), `LDTILECFG`
+reads and `STTILECFG` writes the 64-byte configuration in memory, and the tile
+loads and stores take the `[base + index*scale]` address whose index register
+is the row stride. Before, each was a bad instruction. Exercised by
+`unlace-cli/tests/x86_amx.rs` (every instruction against the LLVM-assembled
+probe, and a tile int8 multiply kernel that decompiles to the user operations).
+
 The x86 VMX lifts report the instruction's outcome the way the hardware does
 (Intel SDM 31.2, "Conventions"): each of `VMLAUNCH`, `VMRESUME`, `VMXOFF`,
 `VMXON`, `VMPTRLD`, `VMCLEAR`, `VMWRITE`, `INVEPT` and `INVVPID` is a user-op

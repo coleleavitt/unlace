@@ -28,6 +28,8 @@ mod riscv_zfh;
 mod rust_signature_summary;
 #[path = "sparc_prologue_start.rs"]
 mod sparc_prologue_start;
+#[path = "x86_amx.rs"]
+mod x86_amx;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

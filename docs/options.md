@@ -1108,6 +1108,11 @@ Three tiers:
 | a PEIM entry is typed (EFI_HANDLE, EFI_SYSTEM_TABLE *) | [`uefi`](#uefi----on--off-default-on) |
 | an SMM driver calls through an untyped gSmst | [`uefi`](#uefi----on--off-default-on) |
 | which module implements the protocol this driver locates | [`uefi`](#uefi----on--off-default-on) |
+| a DXE driver entry point is named _ModuleEntryPoint, not ModuleEntryPoint | [`uefientry`](#uefientry----on--off-default-off) |
+| a DXE core entry has no DxeMain name or HobStart argument | [`uefientry`](#uefientry----on--off-default-off) |
+| a PEI core entry has no PeiCore name | [`uefientry`](#uefientry----on--off-default-off) |
+| a combined MM_DXE module's entry is named _ModuleEntryPoint | [`uefientry`](#uefientry----on--off-default-off) |
+| a combined PEIM driver or MM_DXE module has no label saying which kinds it combines | [`uefientry`](#uefientry----on--off-default-off) |
 | SCB, NVIC or SysTick registers of Cortex-M firmware print as dat_e000ed08 or dat_e000e010 | [`cortexmscs`](#cortexmscs----on--off-default-on) |
 | an interrupt enable is a store through a computed pointer near -0x1fff1f00 | [`cortexmscs`](#cortexmscs----on--off-default-on) |
 | a vendor HAL startup routine is a list of stores to raw 0xe000xxxx addresses | [`cortexmscs`](#cortexmscs----on--off-default-on) |
@@ -3896,6 +3901,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** On by default; it only acts on EFI-subsystem PE images, so every other input is byte-identical. Flip off to see the module without the EFI types: the entry then takes two untyped words and every service call is an indirect call through an offset. To link protocol lookups to their implementations across a firmware image, unpack it with `unlace unpack FIRMWARE --protocols` and decompile the modules in the directory it wrote. `UNLACE_UEFI_DEBUG=1` prints every service call the pass read.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida95-53
 - **Example:** `option uefi off`
+
+### `uefientry` -- on | off, default `off`
+
+- **Symptoms:** a DXE driver entry point is named _ModuleEntryPoint, not ModuleEntryPoint; a DXE core entry has no DxeMain name or HobStart argument; a PEI core entry has no PeiCore name; a combined MM_DXE module's entry is named _ModuleEntryPoint; a combined PEIM driver or MM_DXE module has no label saying which kinds it combines.
+- **What it does:** Name a firmware module's entry point by its FFS file type, as IDA's uefi_fv loader does, when the module sits in an unpacked volume beside its unlace-uefi.index (`unlace unpack <firmware> --protocols`). A PEIM and a combined PEIM driver enter as `PeimEntryPoint(EFI_PEI_FILE_HANDLE, EFI_PEI_SERVICES **)`, the PEI core as `PeiCore(VOID *SecCoreData, VOID *PpList)`, the DXE core as `DxeMain(VOID *HobStart)`, a standalone MM module as `StandaloneMmEntryPoint(EFI_HANDLE, EFI_MM_SYSTEM_TABLE *)`, and every other module (driver, application, MM, combined MM_DXE) as `ModuleEntryPoint(EFI_HANDLE, EFI_SYSTEM_TABLE *)`. A combined file's entry gets a comment naming its FFS type (COMBINED_PEIM_DRIVER, COMBINED_MM_DXE). Without this option, a PEIM and a standalone MM module keep the names the index gives them; every other entry keeps `_ModuleEntryPoint`. Needs `uefi` on.
+- **When to flip:** Off by default. Turn it on after `unlace unpack FIRMWARE --protocols`, when you decompile the modules from the directory it wrote, to see each entry named for its phase. A module loaded alone has no FFS type, so nothing changes for it. The walk still seeds a PEI or DXE core's parameters from the phase its file type gives, so the second parameter of DxeMain or PeiCore may print with that phase's table type.
+- **Where / provenance:** P1/external-refinement · ida · analysis-enablement · unlace-1164
+- **Example:** `option uefientry on`
 
 ### `cortexmscs` -- on | off, default `on`
 

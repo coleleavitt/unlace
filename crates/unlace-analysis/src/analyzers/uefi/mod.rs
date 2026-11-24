@@ -26,6 +26,7 @@
 //! The pass decodes the module, so it runs at the commit point
 //! ([`crate::passes::run_uefi`]) rather than in the load-time list.
 
+mod entry;
 mod flow;
 pub mod index;
 mod protocols;
@@ -40,8 +41,11 @@ use std::collections::BTreeMap;
 use std::sync::OnceLock;
 use unlace_decomp::uefiprotocols::InstalledInterface;
 
-/// The UEFI module pass.
-pub struct UefiPass;
+/// The UEFI module pass. `entry_names` is option `uefientry`: name the entry by the
+/// module's FFS file type.
+pub struct UefiPass {
+    pub entry_names: bool,
+}
 
 const SIGNATURES: &[(&[u8; 8], &str, &str)] = &[
     (b"IBI SYST", "EFI_SYSTEM_TABLE", "mSystemTable"),
@@ -186,12 +190,32 @@ impl AnalysisPass for UefiPass {
             }
         }
         if entry != 0 {
-            let entry_name = volume
-                .as_ref()
-                .zip(ctx.image_path)
-                .and_then(|(v, p)| v.entry_name(p))
-                .unwrap_or("_ModuleEntryPoint");
-            function_fact(&mut out, &efi, entry, entry_name, Some(kind.entry_decl()));
+            let file_type = match (volume.as_ref(), ctx.image_path) {
+                (Some(v), Some(path)) => v.file_type_of(path),
+                _ => None,
+            };
+            let named = file_type
+                .filter(|_| self.entry_names)
+                .and_then(|t| entry::named(t, kind));
+            let (name, decl) = match &named {
+                Some(n) => (n.name, n.decl),
+                None => (
+                    volume
+                        .as_ref()
+                        .zip(ctx.image_path)
+                        .and_then(|(v, p)| v.entry_name(p))
+                        .unwrap_or("_ModuleEntryPoint"),
+                    kind.entry_decl(),
+                ),
+            };
+            function_fact(&mut out, &efi, entry, name, Some(decl));
+            if let Some(label) = named.as_ref().and_then(|n| n.label) {
+                out.comments.push(CommentFact {
+                    func_addr: entry,
+                    addr: entry,
+                    text: format!("module kind {label}"),
+                });
+            }
         }
 
         let mut claimed: Vec<(u64, u64)> = Vec::new();

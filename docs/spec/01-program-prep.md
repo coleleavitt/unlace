@@ -5468,6 +5468,22 @@ moves.
   signature reads as text), so the commit skips such a string. The model is IDA
   9.5's `uefi.so` load-time half.
 
+  With option `uefientry on` (default off), the entry point is named by the
+  module's FFS file type when the index `unlace unpack --protocols` wrote is
+  beside the image (`analyzers/uefi/entry.rs (named)`). A PEIM (file type 0x06)
+  and a combined PEIM driver (0x08) get `PeimEntryPoint` with the PEIM
+  prototype; the PEI core (0x04) gets `PeiCore(VOID *SecCoreData, VOID
+  *PpList)`; the DXE core (0x05) gets `DxeMain(VOID *HobStart)`; a standalone
+  MM module (0x0e, 0x0f) gets `StandaloneMmEntryPoint` with the MM prototype;
+  and a driver, application, MM, MM core or combined MM_DXE module (0x07, 0x09,
+  0x0a, 0x0d, 0x0c) gets `ModuleEntryPoint` with the DXE prototype. A combined
+  file's entry also carries a comment naming its kinds (`module kind
+  COMBINED_PEIM_DRIVER`, `module kind COMBINED_MM_DXE`). Without this option, a PEIM
+  and a standalone MM module keep the names the index gives them (see below), and every other entry keeps
+  `_ModuleEntryPoint`. The walk still
+  seeds a PEI or DXE core's parameters from the phase the index's kind gives
+  (PEI or DXE), so only the entry's name and prototype follow the file type.
+
   The pass then follows the service tables through the code
   (`crates/unlace-analysis/src/analyzers/uefi/flow.rs (Walk)`). It
   decodes, so it runs at the analysis commit

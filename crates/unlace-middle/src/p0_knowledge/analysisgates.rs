@@ -69,6 +69,17 @@ crate::unlace_flag!(
 );
 
 crate::unlace_flag!(
+    /// (unlace) Name a firmware module's entry point by its FFS file type and type
+    /// its prototype (`uefientry`); default off. Acts only with an unpacked
+    /// volume's index beside the module.
+    Uefientry,
+    "uefientry",
+    "UEFI module entry names by FFS file type",
+    unset: false,
+    shipped: false
+);
+
+crate::unlace_flag!(
     /// (unlace) Gate the COM id and interface pass (`com`); default on.
     Com,
     "com",

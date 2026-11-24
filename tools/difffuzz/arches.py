@@ -461,6 +461,79 @@ class Mips32(Arch32):
         return set()
 
 
+MIPS64_DENY = re.compile(
+    r"^(b.*|j.*|syscall|break|sdbbp|eret.*|deret|wait|ssnop|ehb|pause|sync.*|cache.*|pref.*|ll.*|sc.*|lld|scd|"
+    r"[ls][wd][lr]|tlb.*|[dm]f[ch]0|[dm]t[ch]0|di|ei|rdhwr|rdpgpr|wrpgpr|t(eq|ge|geu|lt|ltu|ne)i?|sigrie|"
+    r"c\..*|cfc1|ctc1|[dm]f[ch]1|[dm]t[ch]1|ldc.*|sdc.*|lwc.*|swc.*|.*\.(s|d|ps|w|l|b|h|v)|cop.*|mfhc.*|mthc.*|"
+    r"[ls][wdu]xc1|bc.*|bal.*|nal|auipc|aluipc|addiupc|lwpc|lwupc|ldpc|crc32.*|ginvi|ginvt|evp|dvp)$"
+)
+
+
+class Mips64(Arch):
+    """MIPS64 big-endian (n64 registers). Use --oracle qemu: Unicorn maps kuseg differently, so
+    its loads and stores are not comparable."""
+    name = "mips64"
+    lang = "MIPS:BE:64:default"
+    elf_machine = 8
+    big = True
+    pc = "pc"
+    gprs = [(n, getattr(mips, f"UC_MIPS_REG_{i}")) for i, n in enumerate(MIPS_NAMES)][1:] + [
+        ("hi", mips.UC_MIPS_REG_HI), ("lo", mips.UC_MIPS_REG_LO)]
+    pc_const = mips.UC_MIPS_REG_PC
+    deny = MIPS64_DENY
+    until = 0x7FFFFFFFFFFFFFFF
+    cs_mode = cs.CS_MODE_MIPS64
+
+    def unicorn(self):
+        emu = uc.Uc(uc.UC_ARCH_MIPS, uc.UC_MODE_MIPS64 | uc.UC_MODE_BIG_ENDIAN)
+        return emu
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_MIPS, self.cs_mode | cs.CS_MODE_BIG_ENDIAN)
+
+    def ignored(self, mnemonic, operands, state):
+        # HI/LO after a divide by zero, and any division-by-zero result, are UNPREDICTABLE.
+        if mnemonic in ("div", "divu", "ddiv", "ddivu"):
+            return {"hi", "lo"}
+        return set()
+
+
+# Release 6 compact branches (no delay slot) are compared; delay-slot branches are not.
+MIPSR6_DENY = re.compile(MIPS64_DENY.pattern.replace("^(b.*|j.*|", "^(b(?!\\w*c$).*|j(?!\\w*c$).*|").replace("|bc.*|bal.*|", "|"))
+
+
+class Mips64R6(Mips64):
+    """MIPS64 Release 6 (MIPS:BE:64:R6): no HI/LO, new compact branches and multiply/divide."""
+    name = "mips64r6"
+    lang = "MIPS:BE:64:R6"
+    gprs = Mips64.gprs[:31]
+    cs_mode = cs.CS_MODE_MIPS64 | cs.CS_MODE_MIPS32R6
+    deny = MIPSR6_DENY
+
+    def ignored(self, mnemonic, operands, state):
+        if re.match(r"^d?(div|mod)u?$", mnemonic):
+            return {"*"} if re.search(r"\$zero$", operands) else set()
+        return set()
+
+
+class Mips32R6(Mips32):
+    """MIPS32 Release 6 (MIPS:BE:32:R6) on a MIPS64R6 core."""
+    name = "mipsr6"
+    lang = "MIPS:BE:32:R6"
+    gprs = Mips32.gprs[:31]
+    deny = MIPSR6_DENY
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_MIPS, cs.CS_MODE_MIPS32 | cs.CS_MODE_MIPS32R6 | cs.CS_MODE_BIG_ENDIAN)
+
+    def ignored(self, mnemonic, operands, state):
+        return Mips64R6.ignored(self, mnemonic, operands, state)
+
+    def addr_ok(self, a):
+        # The MIPS64 core sign-extends a 32-bit address, so only the low half of kuseg is the same.
+        return a < 0x80000000
+
+
 PPC_DENY = re.compile(
     r"^(sc|t[wd]i?.*|rfi|rfci|rfmci|mtmsr.*|mfmsr|mtspr|mfspr|mfsr.*|mtsr.*|mftb.*|wrtee.*|isync|sync|lwsync|eieio|"
     r"mbar|msync|dcb.*|icb.*|tlb.*|lwarx|stwcx\.|ldarx|stdcx\.|lbarx|stbcx\.|lharx|sthcx\.|b.*|"
@@ -677,4 +750,4 @@ class Nios2(Arch32):
         return set()
 
 
-ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Ppc32(), TriCore(), Nios2())}
+ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), TriCore(), Nios2())}

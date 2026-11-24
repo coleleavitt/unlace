@@ -35,16 +35,38 @@ Languages:
 - LD/LDB/LDL in every mode, the short LDB #imm8 form, LDK, LDA, CP/LD/PUSH immediate to
   memory, EX/EXB, PUSH/POP/PUSHL/POPL, static bit ops (BIT/SET/RES), the static
   shifts (SLA/SRA/SLL/SRL in byte, word, long) and the rotates RL/RR by 1 or 2.
+- Register-numbered bit ops (BIT/SET/RES Rd,Rs: bit number in the low 4 bits of Rs, second
+  word 0000 dddd 0000 0000), BIT/SET/RES on direct addresses, the dynamic shifts
+  SDA/SDL/SDAB/SDLB/SDAL/SDLL (signed count in the low byte of a register: positive left,
+  negative right, with the last bit shifted out in C), RLC/RRC (byte and word, by 1 or 2,
+  through carry), RLDB/RRDB (digit rotates, flags from the link byte), TCC/TCCB.
+- PC-relative LDR/LDRB/LDRL (load and store), LDAR, LDM (IR, DA and X forms, a p-code loop
+  over the register file), LDPS (named pcodeop `loadProgramStatus`, then a jump).
+- Block instructions with real p-code (one step, and a repeat back to the instruction
+  start for the R forms): LDI/LDIR/LDD/LDDR and byte forms, CPI/CPIR/CPD/CPDR,
+  CPSI/CPSIR/CPSD/CPSDR (byte and word, the condition in the second word sets Z, V = count
+  exhausted), TRIB/TRIRB/TRDB/TRDRB and the TRT forms (RH1 and Z), and the block I/O
+  INI/INIR/IND/INDR/OUTI/OTIR/OUTD/OTDR with their special-I/O (SIN*/SOUT*) variants through
+  `ioIn`/`ioOut`/`specialIoIn`/`specialIoOut`; IN/OUT through a port register (3C-3F),
+  SIN/SOUT direct.
+- MSET/MRES/MBIT/MREQ as named pcodeops (`multiMicroSet`, `multiMicroReset`,
+  `multiMicroBit`, `multiMicroRequest`), the EPU opcodes 0E/0F/8E/8F as
+  `extendedInstruction` (one word, as MAME decodes them).
 - JP cc, JR cc, CALL, CALR, RET cc, DJNZ/DBJNZ, IRET, SC, HALT, DI/EI, LDCTL, IN/OUT direct
   (named pcodeops for the privileged and I/O side effects).
 
 ## Gaps
 
-Not decoded yet (they decode as bad instructions): dynamic bit ops and shifts (SDA/SDL),
-RLC/RRC and RLDB/RRDB, the block move/compare/translate/I/O families (LDIR, CPIR, TRIB,
-INIR...), TCC, LDR/LDAR (PC-relative loads, 0x31xx/0x34xx with mode 00), LDM, the
-special I/O instructions, MBIT/MREQ/MRES/MSET, LDPS, and the EPU extended instructions.
-The flag effects of DAB and the decimal-adjust H/D flags are left to the pcodeop.
+- Based-address modes (BA/BX: LD/LDB/LDL/LDA Rd,Rs(#disp) and Rs(Rx) with mode 00/01 and
+  op 0x30-0x37 with a nonzero register field, 0x70-0x77) are not decoded.
+- EPU instructions: only the one-word 0E/0F/8E/8F forms are decoded; their operand words
+  and the 4E/4F/CE/CF forms are not.
+- In the Z8001 variant, block-instruction and LDM pointer updates add to the whole register
+  pair, so a carry out of the 16-bit offset reaches the segment number (the CPU wraps the
+  offset). LDM's register-file loop shows as stores through a small pointer in the
+  decompiled C.
+- The flag effects of DAB and the decimal-adjust H/D flags are left to the pcodeop; block
+  instructions model only Z and V (and the compare flags for CP*).
 
 ## Test vectors
 
@@ -65,4 +87,10 @@ void sub_1000(short a0,short a1)
 Spot-checked with small snippets against MAME's tables: LDB short (C5 12), LD #imm
 (21 03), CALL (5F 00), CALR (D0 02), LDK (BD 25), INC (A9 30), CLR (8D 48), PUSH/POP
 (93 F3 / 97 F5), ADD #imm (01 03), RLB (B2 30), SLAB (B2 39), SRA (B3 39), LDA (76 03),
-DJNZ (F1 82, a do/while loop).
+DJNZ (F1 82, a do/while loop). Round 2 snippet (decompiled, no bad instruction):
+RESB RH5,R3 (22 03 05 00), RESB 0x2000,#1 (62 01 20 00), SDLB (B2 53 07 00), SDA
+(B3 3B 02 00), SDAL (B3 CF 04 00), RLC (B3 28), RRCB (B2 2E), RLDB (BE 12), TCC EQ
+(AF 36), LDR (31 04 ...), LDAR (34 06 ...), LDM (1C 31 04 03, 5C 09 02 01 30 00), LDIR /
+LDI (BB 11 05 20 / 05 28, a do/while copy), CPIRB (BA 14 05 36), TRIB (B8 10 05 60), INI /
+INIRB (3B 20, 3A 10), MBIT (7B 0A), MREQ (7B 3D), LDPS (39 10), EXT8E (8E 12), INB @R5
+(3C 52), TCCB (AE 58).

@@ -6366,12 +6366,21 @@ pub(crate) fn bootstrap_te_bytes(
 /// other values override the object-derived id (so an unmapped machine can still
 /// be driven), exactly as the C++
 /// `getTarget()` path takes precedence over the loader's arch type.
+///
+/// The load-time options are the environment's, read once at the load
+/// ([`LoadOptions::from_env_for_load`]); the ARM decode mode is [`ARM_ISA_ENV`]'s.
 pub fn bootstrap_from_object(
     path: &str,
     target: &str,
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
-    Bootstrap::new(spec_roots).target(target).object(path)
+    let isa = arm_isa_from_env()?;
+    let options = LoadOptions::from_env_for_load();
+    Bootstrap::new(spec_roots)
+        .target(target)
+        .arm_isa(isa)
+        .options(&options)
+        .object(path)
 }
 
 /// The MIPS t9 entry probe: the PIC-setup seed for `entry`, truncated to the
@@ -6401,17 +6410,20 @@ fn mips_t9_probe(
 }
 
 /// Explicit-input-context form of [`bootstrap_from_object`]: the ARM decode
-/// mode comes from `isa`, the load-time options from the environment.
-/// [`Bootstrap`] takes both explicitly.
+/// mode comes from `isa`, the load-time options from the environment, read
+/// once at the load ([`LoadOptions::from_env_for_load`]). [`Bootstrap`] takes
+/// both explicitly.
 pub fn bootstrap_from_object_with_isa(
     path: &str,
     target: &str,
     spec_roots: &[String],
     isa: Option<ArmIsa>,
 ) -> UnlaceResult<ConsoleProgram> {
+    let options = LoadOptions::from_env_for_load();
     Bootstrap::new(spec_roots)
         .target(target)
         .arm_isa(isa)
+        .options(&options)
         .object(path)
 }
 

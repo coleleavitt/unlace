@@ -30,6 +30,13 @@ use crate::options::env_toggle;
 /// Carries `calltargettype` to the DWARF type mapper, which runs at `load file`
 /// before any option is applied; the CLI exports it ahead of the load.
 pub const CALLTARGETTYPE_ENV: &str = "KUNA_CALLTARGETTYPE";
+/// Carries `codestrings` to the string-literal pass, which runs at `load file`.
+pub const CODESTRINGS_ENV: &str = "KUNA_CODESTRINGS";
+/// Carries `nameladder` to the load-time prototype and no-return passes.
+pub const NAMELADDER_ENV: &str = "KUNA_NAMELADDER";
+/// Carries `swifttypes` to the Objective-C pass, which leaves a Swift class's
+/// layout to the Swift pass when it is on.
+pub const SWIFTTYPES_ENV: &str = "KUNA_SWIFTTYPES";
 /// The `--slice` fat Mach-O slice override.
 pub const MACHO_SLICE_ENV: &str = "KUNA_MACHO_SLICE";
 /// The external `.pdb` file to apply.
@@ -103,6 +110,12 @@ pub struct LoadOptions {
     pub load_strings: bool,
     /// Map a thin Mach-O read-only rather than copy it into memory.
     pub load_mmap: bool,
+    /// `codestrings`: keep only long strings inside code sections.
+    pub codestrings: bool,
+    /// `nameladder`: look a name up under its undecorated spellings.
+    pub nameladder: bool,
+    /// `swifttypes`: a Swift image's class layouts come from its field descriptors.
+    pub swifttypes: bool,
 }
 
 impl Default for LoadOptions {
@@ -133,6 +146,9 @@ impl Default for LoadOptions {
             load_objc: true,
             load_strings: true,
             load_mmap: true,
+            codestrings: true,
+            nameladder: true,
+            swifttypes: true,
         }
     }
 }
@@ -167,6 +183,9 @@ impl LoadOptions {
             load_objc: env::load_objc(),
             load_strings: env::load_strings(),
             load_mmap: env::load_mmap(),
+            codestrings: env::codestrings(),
+            nameladder: env::nameladder(),
+            swifttypes: env::swifttypes(),
         }
     }
 
@@ -230,6 +249,9 @@ impl LoadOptions {
                 kuna_dyldcache::set_dyldimage_env(self.dyldimage.as_deref().unwrap_or("none"))
             }
             "dyldcrossrefs" => kuna_dyldcache::set_dyldcrossrefs_env(self.dyldcrossrefs),
+            "codestrings" => set_toggle_env(CODESTRINGS_ENV, self.codestrings),
+            "nameladder" => set_toggle_env(NAMELADDER_ENV, self.nameladder),
+            "swifttypes" => set_toggle_env(SWIFTTYPES_ENV, self.swifttypes),
             _ => {}
         }
     }
@@ -292,6 +314,28 @@ pub fn scoped<T>(read: impl FnOnce(&LoadOptions) -> T) -> Option<T> {
         FALLBACKS.with(|count| count.set(count.get() + 1));
     }
     read
+}
+
+/// The load-time half of `codestrings`: the string-literal pass runs at
+/// `load file`, before any `option` command, so the CLI carries the value
+/// in [`CODESTRINGS_ENV`].
+pub fn codestrings_enabled() -> bool {
+    scoped(|o| o.codestrings).unwrap_or_else(env::codestrings)
+}
+
+/// The load-time half of `nameladder` ([`NAMELADDER_ENV`]).
+pub fn nameladder_enabled() -> bool {
+    scoped(|o| o.nameladder).unwrap_or_else(env::nameladder)
+}
+
+/// The load-time half of `swifttypes` ([`SWIFTTYPES_ENV`]).
+pub fn swifttypes_enabled() -> bool {
+    scoped(|o| o.swifttypes).unwrap_or_else(env::swifttypes)
+}
+
+fn set_toggle_env(name: &str, on: bool) {
+    // FIXME: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(name, if on { "on" } else { "off" }) };
 }
 
 /// How many reads of the options on this thread found no scope in force and
@@ -392,6 +436,18 @@ pub mod env {
 
     pub fn sourcelang() -> Option<SourceLang> {
         SourceLang::parse_forced(&std::env::var(crate::kuna_sourcelang::SOURCELANG_ENV).ok()?)
+    }
+
+    pub fn codestrings() -> bool {
+        env_toggle(super::CODESTRINGS_ENV, true)
+    }
+
+    pub fn nameladder() -> bool {
+        env_toggle(super::NAMELADDER_ENV, true)
+    }
+
+    pub fn swifttypes() -> bool {
+        env_toggle(super::SWIFTTYPES_ENV, true)
     }
 
     pub fn objcivars() -> bool {
@@ -565,9 +621,15 @@ mod tests {
             dyldimage: Some("libfoo.dylib".into()),
             dyldcrossrefs: false,
             cil: false,
+            codestrings: false,
+            nameladder: false,
+            swifttypes: false,
             ..LoadOptions::default()
         };
         let _scope = options.enter();
+        assert!(!crate::kuna_loadoptions::codestrings_enabled());
+        assert!(!crate::kuna_loadoptions::nameladder_enabled());
+        assert!(!crate::kuna_loadoptions::swifttypes_enabled());
         assert!(!crate::kuna_ifuncfpret::ifuncfpret_enabled());
         assert!(crate::kuna_ppcapu::ppcapu_enabled());
         assert_eq!(KernelcacheChoice::in_force(), KernelcacheChoice::Off);

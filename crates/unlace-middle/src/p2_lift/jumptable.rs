@@ -72,6 +72,17 @@ use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::kuna_emulatefunction::EmulateFunction;
 
+/// (kuna) With `KUNA_JUMPTABLE_TRACE` set, say on stderr what the basic
+/// jump-table model found at each indirect jump: the index range, the guards
+/// and whether the rows could be labelled (why a table stays unbounded).
+macro_rules! jt_trace {
+    ($($arg:tt)*) => {
+        if std::env::var_os("KUNA_JUMPTABLE_TRACE").is_some() {
+            eprintln!("jumptable: {}", format_args!($($arg)*));
+        }
+    };
+}
+
 // ---------------------------------------------------------------------------
 // Marshaling identifiers (jumptable.cc:24-33)
 // ---------------------------------------------------------------------------
@@ -3250,6 +3261,17 @@ impl JumpBasicModel {
         self.rows_rejected = !unbounded
             && !self.can_label_rows(fd, indop)
             && !self.label_by_deeper_variable(fd, indop, maxtablesize);
+        jt_trace!(
+            "basic model at {:#x}: range size {} (max {}), {} guard(s), unbounded {}, rows rejected {}",
+            fd.obank()
+                .get(indop)
+                .map_or(0, |o| o.get_addr().get_offset()),
+            self.jrange().get_size(),
+            maxtablesize,
+            self.selectguards.len(),
+            unbounded,
+            self.rows_rejected
+        );
         if unbounded || self.rows_rejected {
             // (kuna) GH-9191: the basic model could not bound the table.  When
             // `option switchmodbound on`, look for a modulo/and-mask bound on the

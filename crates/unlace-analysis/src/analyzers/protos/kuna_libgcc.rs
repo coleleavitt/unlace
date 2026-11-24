@@ -108,10 +108,7 @@ impl AnalysisPass for LibgccSigsPass {
             types,
             word_size,
             L,
-            ctx.arch
-                .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
-                .0,
+            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(&mut out, &imports, SIGNATURES, types, word_size, L);
         out

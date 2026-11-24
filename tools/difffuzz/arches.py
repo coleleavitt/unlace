@@ -514,7 +514,7 @@ class Arm32(Arch32):
         Keep an encoding only when Keystone assembles Capstone's text back to the same bytes, and an
         LDRD/STRD only with an even first register below lr. T32: a shifted-register data-processing
         op with bit 15 of its second halfword set, or a saturate/bit-field op with bit 10 of its
-        first, is UNPREDICTABLE."""
+        first or bit 5 of its second, is UNPREDICTABLE."""
         b = cand["bytes"]
         if self.thumb:
             if len(b) != 4:
@@ -522,7 +522,7 @@ class Arm32(Arch32):
             hw1 = b[1] << 8 | b[0]
             if (hw1 & 0xFE00) == 0xEA00 and b[3] & 0x80:
                 return False
-            return not ((hw1 & 0xFA00) == 0xF200 and not b[3] & 0x80 and (hw1 >> 4) & 0x10 and hw1 & 0x400)
+            return not ((hw1 & 0xFA00) == 0xF200 and not b[3] & 0x80 and (hw1 >> 4) & 0x10 and (hw1 & 0x400 or b[2] & 0x20))
         m = re.match(r"^(?:ld|st)rd\w*$", cand["mnemonic"]) and re.match(r"(\w+),", cand["op_str"])
         if m:
             n = {"sb": 9, "sl": 10, "fp": 11, "ip": 12, "sp": 13, "lr": 14}.get(m.group(1))
@@ -1427,7 +1427,7 @@ class _Insn:
         self.bytes, self.mnemonic, self.op_str = raw, mnemonic, op_str
 
 
-class ObjdumpDis:
+class BinutilsDis:
     """A fixed-width decoder over a multi-target binutils objdump ($DIFFFUZZ_OBJDUMP, default
     ~/.local/share/difffuzz-binutils/bin/objdump, built with --enable-targets=all) for the
     architectures Capstone 5 lacks. prime() decodes a batch of encodings in one objdump run."""
@@ -1445,7 +1445,7 @@ class ObjdumpDis:
         if not todo:
             return
         with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
-            f.write(b"".join(todo))
+            f.write(b"".join(self.pack(r) for r in todo))
             name = f.name
         try:
             cmd = [self.path(), "-D", "-b", "binary", "-m", self.machine, "-EB" if self.big else "-EL", *self.opts, name]
@@ -1454,7 +1454,7 @@ class ObjdumpDis:
             os.unlink(name)
         got = {}
         for line in out.splitlines():
-            m = re.match(r"\s*([0-9a-f]+):\t((?:[0-9a-f]{2} )+)\s*\t?(.*)$", line)
+            m = re.match(r"\s*([0-9a-f]+):\t([0-9a-f]{2}(?: ?[0-9a-f]{2})*) *\t(.*)$", line)
             if not m:
                 continue
             off = int(m.group(1), 16)
@@ -1466,17 +1466,24 @@ class ObjdumpDis:
         for i, r in enumerate(todo):
             self.cache[r] = got.get(i)
 
+    def pack(self, raw):
+        """The bytes one candidate occupies in the batch (width bytes)."""
+        return raw
+
+    def length(self, raw):
+        return self.width
+
     def disasm(self, raw, addr):
-        raw = bytes(raw[:self.width])
+        raw = bytes(raw)
         if raw not in self.cache:
             self.prime([raw])
         e = self.cache[raw]
         if e is not None:
-            yield _Insn(raw, e[0], e[1])
+            yield _Insn(raw[:self.length(raw)], e[0], e[1])
 
 
 class ObjdumpArch(Arch32):
-    """An architecture decoded by ObjdumpDis; gen() draws encodings in batches and primes them."""
+    """An architecture decoded by BinutilsDis; gen() draws encodings in batches and primes them."""
     objdump_machine = ""
     objdump_opts = ()
     _dis = None
@@ -1484,7 +1491,7 @@ class ObjdumpArch(Arch32):
 
     def capstone(self):
         if self._dis is None:
-            self._dis = ObjdumpDis(self.objdump_machine, self.big, 4, self.objdump_opts)
+            self._dis = BinutilsDis(self.objdump_machine, self.big, 4, self.objdump_opts)
         return self._dis
 
     def draw(self, rng):
@@ -1637,4 +1644,127 @@ class Or1k(ObjdumpArch):
         return {"OV", "CY"} if mnemonic == "l.mulu" else {"OV"}
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k())}
+MICROBLAZE_DENY = re.compile(
+    r"^(br.*|b[a-z]+|rt[sibe]d|brk.*|mts|mfs|mfse|msrset|msrclr|n?a?e?c?t?get[d]?|n?a?e?c?t?put[d]?|.*get.*|.*put.*|"
+    r"wdc.*|wic|lwx|swx|imm|imml|sleep|hibernate|suspend|mbar|f.*|nop|tneaget.*)$"
+)
+
+
+class MicroBlaze(ObjdumpArch):
+    """MicroBlaze (32-bit, big endian) against qemu-microblaze (--oracle qemu), decoded by binutils.
+    The carry is compared. Branches, returns, traps, special-register moves, stream (FSL),
+    cache, exclusive-access, imm prefixes and floating-point instructions are not generated."""
+    name = "microblaze"
+    lang = "MicroBlaze:BE:32:default"
+    elf_machine = 189
+    big = True
+    pc = "pc"
+    gprs = [(f"r{i}", None) for i in range(1, 32)]
+    pc_const = None
+    flags_reg = "msr"
+    flag_bits = {"C": 0}
+    deny = MICROBLAZE_DENY
+    objdump_machine = "microblaze"
+
+    def unicorn(self):
+        raise NotImplementedError("microblaze runs with --oracle qemu")
+
+    # register (type A) forms with their reserved low bits: (opcode, low 11 bits)
+    TYPE_A = ([(op, 0) for op in range(8)] + [(0x05, 1), (0x05, 3)] +
+              [(0x10, k) for k in (0, 1, 2, 3)] + [(0x11, k) for k in (0, 0x200, 0x400)] +
+              [(0x12, k) for k in (0, 2)] + [(0x20, 0), (0x20, 0x400), (0x21, 0), (0x22, 0), (0x22, 0x400),
+                                              (0x23, 0), (0x23, 0x400)] +
+              [(0x24, k) for k in (0x1, 0x21, 0x41, 0x60, 0x61, 0xE0, 0x1E0, 0x1E2)] +
+              [(op, k) for op in (0x30, 0x31, 0x32, 0x34, 0x35, 0x36) for k in (0, 0x200)])
+
+    def canonical(self, cand):
+        w = int.from_bytes(cand["bytes"][:4], "big" if self.big else "little")
+        op, low = w >> 26, w & 0x7FF
+        if op in {o for o, _ in self.TYPE_A}:
+            allowed = {k for o, k in self.TYPE_A if o == op}
+            if low not in allowed:
+                return False                             # reserved bits of a register form
+            if op == 0x24 and (w >> 11) & 0x1F:
+                return False                             # sra/src/srl/sext/clz/swap take no rB
+        return True
+
+    def draw(self, rng):
+        w = rng.getrandbits(32)
+        if rng.random() < 0.6:
+            op, low = rng.choice(self.TYPE_A)
+            w = op << 26 | (w & 0x03FFF800) | low
+        return w.to_bytes(4, "big" if self.big else "little")
+
+
+class MicroBlazeEl(MicroBlaze):
+    """MicroBlaze, little endian, against qemu-microblazeel."""
+    name = "microblazeel"
+    lang = "MicroBlaze:LE:32:default"
+    big = False
+
+
+class XtensaDis(BinutilsDis):
+    """Xtensa candidates are 2 or 3 bytes (op0 8..13 is a narrow instruction); each sits in an
+    8-byte slot padded with NOP / NOP.N so objdump starts every slot in step."""
+
+    def __init__(self, big):
+        BinutilsDis.__init__(self, "xtensa", big, 8)
+
+    def length(self, raw):
+        op0 = (raw[0] >> 4) if self.big else (raw[0] & 0xF)
+        return 2 if 8 <= op0 <= 13 else 3
+
+    def pack(self, raw):
+        n = self.length(raw)
+        nop, nopn = (b"\x00\x02\x0f", b"\xd0\x3f") if self.big else (b"\xf0\x20\x00", b"\x3d\xf0")
+        return raw[:n] + (nop + nopn if n == 3 else nop + nop)
+
+
+XTENSA_DENY = re.compile(
+    r"^(j|jx|j\.l|b[a-z]+(\.n)?|beqz|bnez|bgez|bltz|beqzi?|call\d*|callx\d*|ret(w)?(\.n)?|entry|rotw|movsp|"
+    r"loop[a-z]*|l32e|s32e|rf[a-z]+|rfi|syscall|break(\.n)?|simcall|waiti|ill(\.n)?|nop(\.n)?|memw|extw|isync|"
+    r"rsync|esync|dsync|excw|rsr.*|wsr.*|xsr.*|rur.*|wur.*|rer|wer|ldct|sdct|ii[a-z]*|ih[a-z]*|ip[a-z]*|di[a-z]*|"
+    r"dh[a-z]*|dp[a-z]*|iii|idtlb|iitlb|pdtlb|pitlb|rdtlb\d|ritlb\d|wdtlb|witlb|l32ai|s32ri|s32c1i|l32ex|s32ex|"
+    r"getex|clrex|lsi.*|ssi.*|lsx.*|ssx.*|[a-z.]*\.s|[a-z.]*\.d|mula.*|muls\..*|mul\.[ad].*|umul\..*|lddec|ldinc|"
+    r"const16|all[48]|any[48]|andb.*|orb.*|xorb|movf|movt|rfr|wfr|mov\.s|neg\.s|abs\.s|l32r|\{|mul[us]h|rsil|lic[tw]|sic[tw]|ldpte|hww[id]tlba|wptlb|pptlb|rptlb\d)$"
+)
+
+
+class Xtensa(ObjdumpArch):
+    """Xtensa (base ISA with the density, MUL32, DIV32, MINMAX, NSA, SEXT, CLAMPS options) against
+    qemu-xtensa (--oracle qemu, its default dc232b core, which has no MUL32_HIGH), decoded by binutils. a0..a15 and SAR are
+    compared. Branches, calls, window, loop, system, cache, atomic, MAC16, boolean and
+    floating-point instructions are not generated."""
+    name = "xtensa"
+    lang = "Xtensa:LE:32:default"
+    elf_machine = 94
+    big = False
+    pc = "pc"
+    gprs = [(f"a{i}", None) for i in range(16)] + [("SAR", None)]
+    pc_const = None
+    deny = XTENSA_DENY
+    max_len = 3
+
+    def unicorn(self):
+        raise NotImplementedError("xtensa runs with --oracle qemu")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = XtensaDis(self.big)
+        return self._dis
+
+    def draw(self, rng):
+        # mostly the RRR (op0 0) and LSAI (op0 2) formats; FLIX (op0 14, 15) is not generated
+        op0 = rng.choice([0] * 50 + [2] * 15 + [8, 9, 10, 11, 12, 13] * 2 + [1, 3, 4, 5, 6, 7])
+        w = (rng.getrandbits(20) << 4) | op0
+        return w.to_bytes(3, "little")
+
+    def fix_inputs(self, init, rng):
+        init["SAR"] &= 0x3F
+
+    def canonical(self, cand):
+        # SLLI's encoded amount 0 stands for a shift of 32, outside its 1..31 range
+        return not (cand["mnemonic"] == "slli" and cand["op_str"].endswith(", 32"))
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa())}

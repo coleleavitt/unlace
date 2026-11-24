@@ -13,6 +13,10 @@
 # (docs/processor-tests.md).
 
 [images]
+xtensa_esp32s3_rom_divsf3 = """
+3621005012fa5023fa7032fab042fa3051fa30546a0063fa0072fab021fa60656a3051fa3000fa6082fa60546a30086a
+d071fa60656a00846a3031fa60346a60086a6022fa60636a00246af007fae067fa60027a4020fa1df0000000
+"""
 xtensa_hifi1_rt700 = """
 3641002001a82011a83411042d031df03641001f3200c00228121df0
 """
@@ -2148,6 +2152,73 @@ test = "amdgpu_real_gfx1200_matmul_loop_decompiles"
 address = "0x0"
 expect = ["} while ("]
 
+# CDNA 2 (gfx90a, MI200): `fixtures/amdgpu/cdna_kernels.cl` at -O3. MFMA results and accumulators
+# live in AGPR tuples (a[0:15]) or VGPR tuples, read back with v_accvgpr_read_b32.
+[[family]]
+name = "amdgpu_gfx90a_mfma"
+language = "AMDGPU:LE:64:GFX90A"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/cdna_gfx90a.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+# `gemm_tile`: a v_mfma_f32_32x32x8f16 accumulating over a loop.
+[[family.function]]
+test = "amdgpu_gfx90a_mfma_loop_decompiles"
+address = "0x0"
+expect = ["= mfma_f32_32x32x8f16(", "} while ("]
+
+[[family.function]]
+test = "amdgpu_gfx90a_mfma_f32_decompiles"
+address = "0x400"
+expect = ["mfma_f32_32x32x1f32("]
+
+# `fixtures/amdgpu/real_kernels.cl` built with clang -O2 for gfx90a: f64 division uses v_fmac_f64.
+[[family]]
+name = "amdgpu_real_gfx90a"
+language = "AMDGPU:LE:64:GFX90A"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/real_gfx90a.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_real_gfx90a_f64_division_decompiles"
+address = "0x22c0"
+expect = ["div_fixup(", "cmp_class("]
+
+# CDNA 3 (gfx942, MI300): the same kernels; MFMA mnemonics carry the block counts
+# (v_mfma_f32_32x32x8_f16) and `sparse` is a v_smfmac_f32_16x16x32_f16 with its index VGPR.
+[[family]]
+name = "amdgpu_gfx942_mfma"
+language = "AMDGPU:LE:64:GFX942"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/cdna_gfx942.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx942_mfma_loop_decompiles"
+address = "0x0"
+expect = ["= mfma_f32_32x32x8_f16("]
+
+[[family.function]]
+test = "amdgpu_gfx942_smfmac_decompiles"
+address = "0xb00"
+expect = ["= smfmac_f32_16x16x32_f16("]
+
+[[family]]
+name = "amdgpu_real_gfx942"
+language = "AMDGPU:LE:64:GFX942"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/real_gfx942.bin"
+forbid = ["halt_baddata"]
+
+# v_lshl_add_u64 builds the 64-bit addresses on gfx942.
+[[family.function]]
+test = "amdgpu_real_gfx942_f64_division_decompiles"
+address = "0x21b4"
+expect = ["div_fixup(", "cmp_class("]
+
 # Wave64 RDNA code (clang -mwavefrontsize64): lane masks are SGPR pairs. `vote` passes a
 # ballot (v_cmp into VCC, then vcc_lo and vcc_hi as a 64-bit argument); under the wave64
 # language the high half is the compare's zero, not a stale vcc_hi.
@@ -3960,3 +4031,50 @@ forbid = ["halt_baddata", "hifi_nop"]
 test = "xtensa_hifi5_mt8196_loads_feed_the_store"
 address = "0x0"
 expect = ["*a1 = hifi_ae_s64_i(hifi_ae_l64_ip(a0->field_0x8));"]
+
+[[family]]
+name = "amdgpu_permlane_gfx1030"
+language = "AMDGPU:LE:64:GFX10"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/permlane_gfx1030.bin"
+
+# `fixtures/amdgpu/permlane.s` assembled for gfx1030: the VOP3-only v_*_co_u32 forms and
+# v_permlane16_b32/v_permlanex16_b32 decode.
+[[family.function]]
+test = "amdgpu_permlane_gfx1030_decode"
+address = "0x0"
+expect = [
+    "permlane16(permlanex16(permlane16(",
+    "v1 = a7 < a6;",
+]
+
+[[family]]
+name = "amdgpu_permlane_gfx1100"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/permlane_gfx1100.bin"
+
+# `fixtures/amdgpu/permlane.s` assembled for gfx1100: the VOP3-only v_*_co_u32 forms and
+# v_permlane16_b32/v_permlanex16_b32 decode.
+[[family.function]]
+test = "amdgpu_permlane_gfx1100_decode"
+address = "0x0"
+expect = [
+    "permlane16(permlanex16(permlane16(",
+    "v1 = a7 < a6;",
+]
+
+# ESP32-S3 ROM __divsf3 (espressif/esp-rom-elfs 20260528, esp32s3_rev0_rom.elf, Apache-2.0): the
+# FP divide steps div0.s, nexp01.s, const.s, maddn.s, mkdadj.s, addexp(m).s and divn.s.
+[[family]]
+name = "xtensa_esp32s3_rom_divsf3"
+language = "Xtensa:LE:32:esp32s3"
+base = "0x40056124"
+image = "xtensa_esp32s3_rom_divsf3"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "xtensa_esp32s3_rom_divsf3_decodes_the_divide_steps"
+address = "0x40056124"
+expect = ["div0_s(a1)", "return divn_s("]

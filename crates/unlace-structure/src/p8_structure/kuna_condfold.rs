@@ -720,13 +720,13 @@ pub struct ShapeVerdict {
 /// used to: the CBRANCH was charged at its own early `continue`, so a block measured
 /// at 6 listed 5 ops and the trace could not be reconciled at all.
 fn trace_ops() -> bool {
-    std::env::var_os("KUNA_CONDFOLD_DEBUG").is_some_and(|v| v == "ops")
+    unlace_base::env::var_os("UNLACE_CONDFOLD_DEBUG").is_some_and(|v| v == "ops")
 }
 
 /// Trace a Rule-B decline under `KUNA_CONDFOLD_DEBUG=1` (stderr; use `decomp_dbg`
 /// directly, the `unlace` CLI drops the child's stderr).
 fn trace(bb: BlockId, reason: &str) {
-    if std::env::var_os("KUNA_CONDFOLD_DEBUG").is_some() {
+    if unlace_base::env::var_os("UNLACE_CONDFOLD_DEBUG").is_some() {
         eprintln!("[condfold] decline {bb:?}: {reason}");
     }
 }
@@ -737,7 +737,7 @@ fn trace(bb: BlockId, reason: &str) {
 /// one runs on a given function depends on whether the region structurer converges,
 /// so this is how a witness for either half is confirmed.
 pub fn trace_admit_fold(engine: &str, rule: &str, bl: BlockId, orblock: BlockId) {
-    if std::env::var_os("KUNA_CONDFOLD_DEBUG").is_some() {
+    if unlace_base::env::var_os("UNLACE_CONDFOLD_DEBUG").is_some() {
         eprintln!("[condfold] {engine}/{rule}: fold {bl:?} with complex {orblock:?}");
     }
 }
@@ -828,7 +828,7 @@ pub fn compute_condfold_sets(data: &Funcdata, max_stmts: int4) -> CondFoldSets {
     if max_stmts <= 0 {
         return out;
     }
-    let debug = std::env::var_os("KUNA_CONDFOLD_DEBUG").is_some();
+    let debug = unlace_base::env::var_os("UNLACE_CONDFOLD_DEBUG").is_some();
     let nbb = data.bblocks_get_size();
     for i in 0..nbb {
         let bb = data.bblocks_get_block(i);

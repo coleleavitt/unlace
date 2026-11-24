@@ -70,7 +70,7 @@ pub fn goroutine_register(archid: &str, version: Option<(u16, u16)>) -> Option<&
     }
     // Before the register ABI reached the CPU (go1.17 on amd64, go1.18 on
     // arm64) `g` lived in thread-local storage and the register was ordinary.
-    let version = std::env::var(GOVERSION_ENV).ok().and_then(|v| {
+    let version = unlace_base::env::var(GOVERSION_ENV).ok().and_then(|v| {
         let mut it = v.trim().split('.');
         Some((
             it.next()?.parse::<u16>().ok()?,

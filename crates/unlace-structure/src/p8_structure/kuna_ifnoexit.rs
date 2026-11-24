@@ -82,7 +82,7 @@ pub fn halt_str(flags: uint4) -> String {
 
 /// Whether the `KUNA_RS_DEBUG` decision trace is enabled.
 pub fn trace_enabled() -> bool {
-    std::env::var_os("KUNA_RS_DEBUG").is_some()
+    unlace_base::env::var_os("UNLACE_RS_DEBUG").is_some()
 }
 
 //===========================================================================

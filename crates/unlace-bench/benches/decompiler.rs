@@ -28,7 +28,8 @@ fn repo_root() -> PathBuf {
 }
 
 fn specs_dir() -> PathBuf {
-    std::env::var_os("KUNA_SPECS").map_or_else(|| repo_root().join("specs"), PathBuf::from)
+    unlace_base::env::var_os("UNLACE_SPECS")
+        .map_or_else(|| repo_root().join("specs"), PathBuf::from)
 }
 
 fn fixture(name: &str) -> String {

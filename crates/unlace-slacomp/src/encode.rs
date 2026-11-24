@@ -19,7 +19,7 @@ pub fn encode_sleigh(base: &SleighBase, encoder: &mut dyn OpcodeEncoder) -> Kuna
 
 /// Write the `sla\x04` header and compressed packed element stream.
 pub fn encode_to_sla_writer<W: Write>(base: &SleighBase, w: W) -> KunaResult<()> {
-    if let Ok(path) = std::env::var("KUNA_DUMP_XML") {
+    if let Ok(path) = unlace_base::env::var("UNLACE_DUMP_XML") {
         let _ = std::fs::write(path, encode_to_xml_bytes(base)?);
     }
     let mut encoder = FormatEncode::new(w, -1);

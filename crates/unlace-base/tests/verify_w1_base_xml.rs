@@ -644,7 +644,7 @@ fn verify_xml_deep_nesting_beyond_oracle_envelope_f1() {
 #[test]
 #[ignore]
 fn dump_corpus() {
-    let dir = match std::env::var("KUNA_XML_VERIFY_DUMP") {
+    let dir = match unlace_base::env::var("UNLACE_XML_VERIFY_DUMP") {
         Ok(d) => d,
         Err(_) => return,
     };

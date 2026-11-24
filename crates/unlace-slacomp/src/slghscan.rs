@@ -1556,12 +1556,50 @@ fn match_keyword_sem(rest: &[u8]) -> Option<(TokenKind, usize)> {
     ];
     let len = match_identifier(rest)?;
     let word = &rest[..len];
-    for &(kw, kind) in TABLE {
-        if word == kw {
-            return Some((kind, len));
-        }
+    let kind = TABLE.iter().find(|(kw, _)| word == *kw)?.1;
+    if is_intrinsic(kind) && !applied(&rest[len..]) {
+        return None;
     }
-    None
+    Some((kind, len))
+}
+
+/// (kuna) The p-code intrinsics spelled as words (`zext` .. `lzcount`).
+fn is_intrinsic(kind: TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::OpZext
+            | TokenKind::OpCarry
+            | TokenKind::OpBorrow
+            | TokenKind::OpSext
+            | TokenKind::OpScarry
+            | TokenKind::OpSborrow
+            | TokenKind::OpNan
+            | TokenKind::OpAbs
+            | TokenKind::OpSqrt
+            | TokenKind::OpCeil
+            | TokenKind::OpFloor
+            | TokenKind::OpRound
+            | TokenKind::OpInt2Float
+            | TokenKind::OpFloat2Float
+            | TokenKind::OpTrunc
+            | TokenKind::OpCpoolref
+            | TokenKind::OpNew
+            | TokenKind::OpPopcount
+            | TokenKind::OpLzcount
+    )
+}
+
+/// (kuna) Whether the text after an intrinsic's name applies it: its next
+/// non-space byte is `(`. Ghidra's Java SleighCompiler lexes these names as
+/// identifiers and treats one as an intrinsic only in a call
+/// (`PcodeCompile.findInternalFunction`), so a register, macro parameter or
+/// label named `carry`, `borrow` or `nan` reads as that symbol; the C++
+/// scanner made each word a keyword everywhere.
+fn applied(after: &[u8]) -> bool {
+    after
+        .iter()
+        .find(|c| !matches!(c, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+        == Some(&b'(')
 }
 
 /// sem-state multi-character operators (slghscan.l:596-621).  Ordered so the

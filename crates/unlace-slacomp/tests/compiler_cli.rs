@@ -301,3 +301,16 @@ fn define_values_follow_the_java_preprocessor() {
     );
     assert_compiled(result, &destination);
 }
+
+#[test]
+fn intrinsic_names_are_symbols_unless_applied() {
+    let scratch = tempfile::tempdir().unwrap();
+    let (result, destination) = compile_body(
+        scratch.path(),
+        "define register offset=0x10 size=1 carry;\n\
+         macro sub3(a, borrow) { r0 = a - zext(borrow); }\n\
+         :inst is op=3 { carry = carry(r0, r1); if (carry == 0) goto <nan>; \
+         sub3(r0, carry); <nan> r1 = 0; }\n",
+    );
+    assert_compiled(result, &destination);
+}

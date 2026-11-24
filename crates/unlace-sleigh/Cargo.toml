@@ -13,6 +13,7 @@ unlace-base.workspace = true
 unlace-num.workspace = true
 
 [dev-dependencies]
+unlace-stagefile.workspace = true
 unlace-slacomp.workspace = true
 
 [lints]

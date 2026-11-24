@@ -1340,7 +1340,7 @@ recovered switch table.
   by stub and slot address: `id objc_retain(id)`, `void objc_storeStrong(id *, id)`,
   `id objc_alloc_init(Class)`, …, and `id objc_retain_x19(id obj @ x19)` returning
   in `x0`), so `obj = objc_retainAutoreleasedReturnValue((objc_object *)objc_msgSend(arg1,sel_inner))`
-  reads with its argument. The stage test `tests/stages/kuna-objcarc.xml` runs
+  reads with its argument. The stage test `tests/stages/kuna-objcarc.toml` runs
   `macho_objc_arc_arm64` (clang `-fobjc-arc -O2`) both ways: default,
   `-[Holder total:]` is `v1 = objc_msgSend(arg1,sel_count); v2 = objc_msgSend(arg1,sel_inner); return objc_msgSend(v2,sel_count) + v1;`
   with no release left; off, the five ARC calls are shown typed.
@@ -5651,7 +5651,7 @@ or `f0`, the return address in `r14`. A `float` is the leftmost four bytes of
 its register, so each floating-point register is listed as its short view and
 then whole. The caller's 160-byte register save area at `0(r15)` is in the
 callee's local range, because the callee's prologue stores into it.
-Exercised by `tests/stages/kuna-s390x.xml`.
+Exercised by `tests/stages/kuna-s390x.toml`.
 
 The module also decodes, with exact p-code: the high-word facility (`aih`, `alsih`,
 `alsihn`, `ahhhr`/`ahhlr`, `alhhhr`/`alhhlr`, `shhhr`/`shhlr`, `slhhhr`/`slhhlr`,
@@ -6256,8 +6256,8 @@ fixture), `tests/stages/kuna-itaniumeh-cold.toml` (the partitioned build),
 `tests/stages/kuna-itaniumeh-a64.toml` (AArch64, x0/x1),
 `tests/stages/kuna-itaniumeh-arm.toml` (ARM32 and stripped Thumb EHABI tables,
 a type named only by its `type_info` string) and
-`tests/stages/kuna-itaniumeh-clang.xml` (clang ranges that start before the
-call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.xml`
+`tests/stages/kuna-itaniumeh-clang.toml` (clang ranges that start before the
+call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.toml`
 (pads folded into a shared handler).
 
 **(kuna) MSVC x64 catch funclets as pads** (`option msvceh on`, with

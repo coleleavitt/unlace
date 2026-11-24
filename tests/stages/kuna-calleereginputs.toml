@@ -1,0 +1,482 @@
+# The register inputs of an x86-32 callee read off its own code (option
+# calleereginputs, default on on x86-32 Windows). Each fixture is decompiled
+# twice: `option calleereginputs off` (the bug), then the shipped default.
+#
+# x86win.cspec's default model, __stdcall, has no register parameters, so a
+# __thiscall call to a function with no declared prototype dropped `this`
+# (ECX), and the stack stores the caller had made for its own locals were
+# taken as the callee's stack arguments instead.
+#
+# thiscall_pe_i386.exe (VC8 /O2 C++, build notes in thiscall_pe_i386.s): use
+# (0x401040) constructs a local B (B::B at 0x401020, this = &buf) and calls
+# V::len2 on a local V through a `jmp` stub (0x4010a8, this = &v).
+#
+# calleereginputs_pe_i386.exe (clean-room asm, notes in
+# calleereginputs_pe_i386.asm): calls where the caller's own data flow does
+# not show the register is an argument, so an ECX the callee reads must not
+# cost the call its stack arguments (#16 pins that none is lost). forward
+# passes its own `this` through without touching ECX; inherited loads ECX
+# from an ESI it never set; reload pushes p for a __cdecl call and loads the
+# pushed slot back as the next call's `this`; drift's stack solution rests on
+# guessed pops (an import, a callee whose pop is not applied), and a `this`
+# formed past the guess must not alias the import's argument slot;
+# fastcaller passes ECX and EDX to a __fastcall callee. partial calls
+# low_word after a call that clobbers ECX; low_word sets CX before it copies
+# all of ECX, so it reads no register and the call takes only its stack
+# argument (#17), not the ECX the earlier call left behind.
+#
+# vcall_pe_i386.exe (clean-room, source and recipe in vcall_pe_i386.s): calls
+# through the vtable of the object in ECX. vcall (0x401000) is a virtual
+# member taking one push; comcall (0x401010) a COM method, which pushes the
+# interface as its first argument; reserve (0x401020) a virtual member whose
+# `push ecx` only reserves the slot a float store fills; ctable (0x401040)
+# a C __cdecl function pointer in a table reached through ECX, cleaned up
+# by the caller; comcopy (0x401050) a COM method whose interface is pushed
+# from the register ECX was copied from; comesi (0x401060) five COM calls
+# through ESI, copied from ECX before the first of them; crosscall
+# (0x4010a0) a C table reached through ESI, copied from ECX before a call
+# that clobbers ECX; ecxcopy (0x4010c0) a virtual member whose ECX is copied
+# from ESI before the vtable is loaded from ESI; gccsret (0x4010d0) a GCC
+# (before 4.7) __cdecl member returning a class, whose this is stored at
+# [esp+4] behind the hidden return pointer while ECX holds it too; latecopy
+# (0x4011f0) a virtual member whose vtable is loaded from EBX before ECX is
+# copied from EBX after the pushes; lateother (0x401210) loads the vtable
+# from EBX and then a second object into ECX; vepilog (0x401230) a virtual
+# member followed by another call, after which the epilogue frees a frame
+# slot with `pop ecx`; vouter (0x401250) o->child()->take(1, 2), whose
+# pushes for take precede the virtual child() call; vseh (0x401270) a
+# virtual member under an SEH frame, whose epilogue unlinks it and frees a
+# slot with `pop ecx` right after the call; vdefer (0x4012c0) a C table call
+# through ECX whose cleanup is deferred past the next __cdecl call. By default
+# the virtual members get their receiver (#29); the COM methods keep their
+# pushed interface, once; the C calls and the GCC member get no receiver
+# (#26, #27, #30). A last pass with C types (`ctypes`,
+# `calltargettype`) types the virtual call's target as a function pointer
+# whose first parameter is `this` (#25). latecopy gets its receiver by
+# default (#31, #32); lateother gets none in either pass (#33). A pop
+# after a later call is no cleanup of the virtual call: vepilog and vouter
+# get their receiver by default (#34-#37), and so does vseh: the SEH unlink
+# ends the cleanup scan (#38, #39). A pop that also removes the later
+# call's pushes is a cleanup: vdefer gets no receiver in either pass (#40).
+
+[image]
+arch = 'x86:LE:32:default:windows'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/thiscall_pe_i386.exe',
+    'option calleereginputs off',
+    'read symbols',
+    'function bounds 0x401040 as use',
+    'load function use',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/thiscall_pe_i386.exe',
+    'read symbols',
+    'function bounds 0x401040 as use',
+    'load function use',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/calleereginputs_pe_i386.exe',
+    'option calleereginputs off',
+    'read symbols',
+    'function bounds 0x401050 as forward',
+    'load function forward',
+    'decompile',
+    'print C',
+    'function bounds 0x401060 as inherited',
+    'load function inherited',
+    'decompile',
+    'print C',
+    'function bounds 0x4010f0 as reload',
+    'load function reload',
+    'decompile',
+    'print C',
+    'function bounds 0x401090 as drift',
+    'load function drift',
+    'decompile',
+    'print C',
+    'function bounds 0x4010c0 as fastcaller',
+    'load function fastcaller',
+    'decompile',
+    'print C',
+    'function bounds 0x401130 as partial',
+    'load function partial',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/calleereginputs_pe_i386.exe',
+    'read symbols',
+    'function bounds 0x401050 as forward',
+    'load function forward',
+    'decompile',
+    'print C',
+    'function bounds 0x401060 as inherited',
+    'load function inherited',
+    'decompile',
+    'print C',
+    'function bounds 0x4010f0 as reload',
+    'load function reload',
+    'decompile',
+    'print C',
+    'function bounds 0x401090 as drift',
+    'load function drift',
+    'decompile',
+    'print C',
+    'function bounds 0x4010c0 as fastcaller',
+    'load function fastcaller',
+    'decompile',
+    'print C',
+    'function bounds 0x401130 as partial',
+    'load function partial',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/vcall_pe_i386.exe',
+    'option calleereginputs off',
+    'read symbols',
+    'function bounds 0x401000 as vcall',
+    'load function vcall',
+    'decompile',
+    'print C',
+    'function bounds 0x401010 as comcall',
+    'load function comcall',
+    'decompile',
+    'print C',
+    'function bounds 0x401020 as reserve',
+    'load function reserve',
+    'decompile',
+    'print C',
+    'function bounds 0x401040 as ctable',
+    'load function ctable',
+    'decompile',
+    'print C',
+    'function bounds 0x401050 as comcopy',
+    'load function comcopy',
+    'decompile',
+    'print C',
+    'function bounds 0x401060 as comesi',
+    'load function comesi',
+    'decompile',
+    'print C',
+    'function bounds 0x4010a0 as crosscall',
+    'load function crosscall',
+    'decompile',
+    'print C',
+    'function bounds 0x4010c0 as ecxcopy',
+    'load function ecxcopy',
+    'decompile',
+    'print C',
+    'function bounds 0x4010d0 as gccsret',
+    'load function gccsret',
+    'decompile',
+    'print C',
+    'function bounds 0x4011f0 as latecopy',
+    'load function latecopy',
+    'decompile',
+    'print C',
+    'function bounds 0x401210 as lateother',
+    'load function lateother',
+    'decompile',
+    'print C',
+    'function bounds 0x401230 as vepilog',
+    'load function vepilog',
+    'decompile',
+    'print C',
+    'function bounds 0x401250 as vouter',
+    'load function vouter',
+    'decompile',
+    'print C',
+    'function bounds 0x401270 as vseh',
+    'load function vseh',
+    'decompile',
+    'print C',
+    'function bounds 0x4012c0 as vdefer',
+    'load function vdefer',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/vcall_pe_i386.exe',
+    'read symbols',
+    'function bounds 0x401000 as vcall',
+    'load function vcall',
+    'decompile',
+    'print C',
+    'function bounds 0x401010 as comcall',
+    'load function comcall',
+    'decompile',
+    'print C',
+    'function bounds 0x401020 as reserve',
+    'load function reserve',
+    'decompile',
+    'print C',
+    'function bounds 0x401040 as ctable',
+    'load function ctable',
+    'decompile',
+    'print C',
+    'function bounds 0x401050 as comcopy',
+    'load function comcopy',
+    'decompile',
+    'print C',
+    'function bounds 0x401060 as comesi',
+    'load function comesi',
+    'decompile',
+    'print C',
+    'function bounds 0x4010a0 as crosscall',
+    'load function crosscall',
+    'decompile',
+    'print C',
+    'function bounds 0x4010c0 as ecxcopy',
+    'load function ecxcopy',
+    'decompile',
+    'print C',
+    'function bounds 0x4010d0 as gccsret',
+    'load function gccsret',
+    'decompile',
+    'print C',
+    'function bounds 0x4011f0 as latecopy',
+    'load function latecopy',
+    'decompile',
+    'print C',
+    'function bounds 0x401210 as lateother',
+    'load function lateother',
+    'decompile',
+    'print C',
+    'function bounds 0x401230 as vepilog',
+    'load function vepilog',
+    'decompile',
+    'print C',
+    'function bounds 0x401250 as vouter',
+    'load function vouter',
+    'decompile',
+    'print C',
+    'function bounds 0x401270 as vseh',
+    'load function vseh',
+    'decompile',
+    'print C',
+    'function bounds 0x4012c0 as vdefer',
+    'load function vdefer',
+    'decompile',
+    'print C',
+    'option ctypes on',
+    'option calltargettype on',
+    'function bounds 0x401000 as vcall_c',
+    'load function vcall_c',
+    'decompile',
+    'print C',
+    'option calltargettype off',
+    'option ctypes off',
+    'quit',
+]
+
+[[match]]
+name = "CALLEEREGINPUTS #1: off, the constructor is handed v's fields"
+count = 1
+literal = 'sub_401020(a0,a1,0);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #2: off, the method reached through a stub gets nothing'
+count = 1
+literal = 'sub_4010a8()'
+
+[[match]]
+name = 'CALLEEREGINPUTS #3: default, the constructor gets this and nothing else'
+count = 1
+regex = '^  sub_401020\(v[0-9]+\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #4: default, the method reached through a stub gets this'
+count = 1
+regex = 'sub_4010a8\(&v[0-9]+\)'
+
+[[match]]
+name = 'CALLEEREGINPUTS #5: default, the constructed field is read back'
+count = 1
+regex = '\+ \(float10\)v[0-9]+\[0\]\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #6: off, forward hands obj_set only the stack argument'
+count = 1
+regex = '^  sub_401000\(a0\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #7: default, forward takes this in ECX'
+count = 1
+regex = '^void forward\(unsigned int a0,unsigned int a1\)'
+
+[[match]]
+name = 'CALLEEREGINPUTS #8: default, forward passes its own this through and keeps the stack argument'
+count = 1
+regex = '^  sub_401000\(a0,a1\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #9: off, inherited hands obj_set only 5'
+count = 1
+regex = '^  sub_401000\(5\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #10: default, inherited passes the inherited ESI and keeps 5'
+count = 1
+regex = '^  sub_401000\(v[0-9]+,5\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #11: both, reload keeps the cdecl argument whose slot is the next this'
+count = 2
+regex = '^  sub_4010e0\(a0\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #12: default, reload passes the reloaded slot as this'
+count = 1
+regex = '^  sub_401000\(v[0-9]+,2\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #13: both, drift keeps the import argument'
+count = 2
+regex = '^  FooBar\(3\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #14: default, drift passes the local to obj_init'
+count = 1
+regex = '^  sub_401010\(&[A-Za-z0-9_]+\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #15: default, fastcaller passes ECX and EDX'
+count = 1
+literal = '= sub_401020(1,2);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #16: no call loses its stack arguments to a register the callee reads'
+count = 0
+regex = 'sub_401000\(\);|sub_4010e0\(\);|FooBar\(\);|sub_401110\(\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #17: both, a callee that sets CX before reading ECX takes no register'
+count = 2
+regex = '^  sub_401110\(a0\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #18: off, the virtual call gets no receiver'
+count = 1
+literal = '(*a0 + 8))(5);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #19: default, the virtual call gets the object in ECX as this'
+count = 2
+literal = '(*a0 + 8))(a0,5);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #20: the COM call keeps its pushed interface in both passes'
+count = 2
+literal = '(*a0 + 0xc))(a0,7);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #21: default, a push ecx that only reserves a float slot does not hide this'
+count = 1
+literal = '(*a0 + 4))(a0,1,a1);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #22: no call takes its object twice'
+count = 0
+literal = '(a0,a0,'
+
+[[match]]
+name = 'CALLEEREGINPUTS #23: both, a C table call the caller cleans up after gets no receiver'
+count = 2
+literal = '(*a0 + 0x10))(5);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #24: both, a COM call pushing the register ECX copies keeps one interface'
+count = 2
+literal = '(*a0 + 0x14))(a0,7);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #25: default, with C types the virtual call is made through a function pointer type'
+count = 1
+literal = '(**(void (**)(int *,unsigned int))(*a0 + 8))(a0,5);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #26: both, COM calls through a register copied from ECX before earlier calls keep one interface'
+count = 2
+regex = '\(\*v[0-9]+ \+ 0x18\)\)\(v[0-9]+,v[0-9]+\);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #27: both, a C table call through a register copied from ECX before a call gets no receiver'
+count = 2
+regex = '\(\*v[0-9]+ \+ 8\)\)\(5\);'
+
+[[match]]
+name = "CALLEEREGINPUTS #28: off, the call with ECX copied from the vtable's register gets no receiver"
+count = 1
+literal = '(*a0 + 0x24))(6);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #29: default, ECX copied from the register the vtable is then loaded from passes this'
+count = 1
+literal = '(*a0 + 0x24))(a0,6);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #30: both, a GCC __cdecl member whose this is stored at [esp+4] behind the hidden return pointer gets no receiver'
+count = 2
+literal = '(*a1 + 0x28))(a0,a1);'
+
+[[match]]
+name = "CALLEEREGINPUTS #31: off, ECX copied from the vtable's register after the pushes gets no receiver"
+count = 1
+literal = '(*a0 + 0x30))(6);'
+
+[[match]]
+name = "CALLEEREGINPUTS #32: default, ECX copied from the vtable's register after the pushes passes this"
+count = 1
+literal = '(*a0 + 0x30))(a0,6);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #33: both, ECX loaded with another object after the vtable gets no receiver'
+count = 2
+literal = '(*a0 + 0x2c))(6);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #34: off, the virtual call before another call gets no receiver'
+count = 1
+literal = '(*a0 + 0x34))(7);'
+
+[[match]]
+name = 'CALLEEREGINPUTS #35: default, a frame pop after a later call does not hide this'
+count = 1
+literal = '(*a0 + 0x34))(a0,7);'
+
+[[match]]
+name = "CALLEEREGINPUTS #36: off, the virtual call yielding the next call's object gets no receiver"
+count = 1
+literal = '(*a0 + 0x38))(1'
+
+[[match]]
+name = 'CALLEEREGINPUTS #37: default, a later callee popping the earlier pushes does not hide this'
+count = 1
+literal = '(*a0 + 0x38))(a0,'
+
+[[match]]
+name = 'CALLEEREGINPUTS #38: off, the virtual call under an SEH frame gets no receiver'
+count = 1
+literal = '[7] + 0x3c))(7'
+
+[[match]]
+name = 'CALLEEREGINPUTS #39: default, the pop after the SEH unlink does not hide this'
+count = 1
+literal = '[7] + 0x3c))(((int4 **)a0)[7],7'
+
+[[match]]
+name = 'CALLEEREGINPUTS #40: both, a C table call whose cleanup is deferred past the next call gets no receiver'
+count = 2
+literal = '(*a0 + 0x40))(5);'

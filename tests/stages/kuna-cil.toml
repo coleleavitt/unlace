@@ -1,0 +1,81 @@
+# Kuna #1633: a managed .NET assembly decompiles from its CIL method
+# bodies. Stage: P1 environment binding (the loader picks the CIL language
+# and reads the ECMA-335 metadata) and P2 lift (CIL.slaspec, decoded under
+# the stack depth and operand class the loader paints as context).
+# P0 assertion: option cil on|off (default on).
+#
+# The script loads the committed fixture
+# crates/unlace-analysis/tests/fixtures/cil_hello.dll (source
+# cil_hello.cs): a top-level statement that sums an int array through a
+# local function.
+#
+# Pass 1 (cil off) is the gap: the PE loads as x86 and its one function is
+# the _CorExeMain stub (assert #1). Pass 2 (default) is the fix: the local
+# function is named from the metadata and typed from its signature
+# (assert #2) and decompiles to a loop over the array (asserts #3-#4);
+# the entry point allocates the array and calls it by name, the call
+# token resolved to the method (asserts #5-#6).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'option cil off',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/cil_hello.dll',
+    'read symbols',
+    'load addr 0x4027f6',
+    'decompile',
+    'print C',
+    'option cil on',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/cil_hello.dll',
+    'read symbols',
+    'load addr 0x402084',
+    'decompile',
+    'print C',
+    'load addr 0x402051',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'cil #1: off shows only the native stub'
+count = 1
+regex = '^  _CorExeMain\(\);'
+
+[[match]]
+name = 'cil #2: the method is named and typed from the metadata'
+count = 1
+regex = '^int4 Program::<<Main>\$>g__Sum\|0_0\(int4 \*a\)'
+
+[[match]]
+name = 'cil #3: the body is a loop bounded by the array length'
+count = 1
+literal = 'for (v1 = 0; v1 < (int4)ldlen(a); v1 = v1 + 1) {'
+
+[[match]]
+name = 'cil #4: that adds the elements'
+count = 1
+regex = '^    v2 \+= a\[v1\];'
+
+[[match]]
+name = 'cil #5: the entry point allocates the array'
+count = 1
+literal = 'a = (int4 *)newarr(3,4);'
+
+[[match]]
+name = 'cil #6: and calls the method its token names'
+count = 1
+literal = 'System.Console::WriteLine(Program::<<Main>$>g__Sum|0_0(a));'

@@ -658,7 +658,7 @@ that option is on (`ArchContext::libctypes`), and only about the vote. It never
 touches a type that arrives by another road: a call's OUTPUT (`getpwnam`'s
 `passwd *`), or propagation between Varnodes that are later merged into one
 variable, which is how bash's `glob_vector` still prints one `DIR *` local that
-also holds an unrelated `sh_malloc` result. `tests/stages/kuna-libctypes.xml`
+also holds an unrelated `sh_malloc` result. `tests/stages/kuna-libctypes.toml`
 pass 13 pins the obstack and mutex shapes and a control that keeps its name.
 
 (kuna) **A variadic argument in a floating-point register.** The variadic part

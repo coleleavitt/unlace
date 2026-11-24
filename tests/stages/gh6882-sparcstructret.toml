@@ -1,0 +1,113 @@
+# GH-6882: SPARC struct-return `unimp N` after a call mis-handled.
+# https://github.com/NationalSecurityAgency/ghidra/issues/6882
+#
+# The SPARC ABI for a function returning a structure has the callee return
+# to caller+12 (not caller+8), and the compiler plants an `unimp <structsize>`
+# instruction in the gap (caller+8) as a struct-size hint.  Per the SPARC
+# SLEIGH spec (SparcV9.sinc), `unimp`/`illtrap` lifts to
+#
+#     dest = IllegalInstructionTrap(N);
+#     goto [dest];                       # "trap should not fall thru by default"
+#
+# i.e. a CALLOTHER feeding a BRANCHIND.  Jump-table recovery cannot resolve
+# the indirect target, so flow.cc::truncateIndirectJump rewrites the BRANCHIND
+# into a non-returning CALLIND ("Does not return") and the C renders a bogus
+# indirect call `(*pcVar1)()`; and, because the trap is treated as a
+# terminator, the rest of the function (the second call, the return) is lost.
+#
+# Two functions are present.  `f` @0x0 is a struct-return function whose body
+# ends with the struct-return tail `jmp %i7+12 ; restore` (SparcV9.sinc line
+# 1026 already lifts this to `return`).  `p` @0x10 calls `f`, and the compiler
+# planted `unimp 0x8` right after the call (image 0x30); `p` then makes a
+# second call and returns normally.
+#
+# Stage model: S2 "flow-classification" sub-stage (call-vs-branch / terminator
+# classification).  The mis-classification of the post-call `unimp` BRANCHIND
+# as a non-returning indirect call starves the rest of the function.
+#
+# Fix surface = a default-off ArchOption (sparcstructret) that, at flow time
+# (FlowInfo::xrefControlFlow), recognises the SPARC struct-return idiom (a
+# BRANCHIND whose target is the result of an IllegalInstructionTrap CALLOTHER
+# in the same instruction) and makes it fall through instead of becoming a
+# non-returning CALLIND, so the rest of the function is recovered.
+#
+# Pass 1 (default, option off): assertion #1 proves the bug reproduces; the
+# post-call `unimp` renders as a computed call to a function pointer
+# `(*pcVar1)()` and the function tail is lost.
+# Pass 2 (option sparcstructret on): assertion #2 proves the fix; the `unimp`
+# falls through, the rest of the function is recovered, and `p` renders its
+# real return tail (the bogus `(*pcVar1)()` is gone).  The two assertions are
+# over the cumulative two-pass output: `(*pcVar1)()` appears exactly once
+# (pass 1 only) and the recovered tail exactly once (pass 2 only).
+#
+# NOTE on assertion #2's text, revision 1: it used to look for `return CONCAT44`,
+# because the recovered tail arrived as a spurious o0:o1 join, the GH-6990
+# artifact: `p` returns normally and has no struct return.
+# `kuna_returnuncomputed` now drops that passive half by default, so the tail
+# rendered as `return v1 + a0`.  The assertion names the expression directly: it
+# tests the thing the option is for (the tail exists at all) rather than a
+# symptom of a second, unrelated bug.
+#
+# NOTE on assertion #2's text, revision 2 (callsitestackargs): the expected text
+# is now `return v1[0] + a0`.  THE OLD TEXT WAS WRONG, and this is not a
+# re-record of a regression.  `f` is a struct-return function, so its caller
+# passes a hidden pointer to an 8-byte return buffer.  kuna was dropping that
+# pointer along with every other stack-passed call argument (the mis-ported
+# localrange probe in check_input_trial_use), so `p` rendered `f()` with no
+# arguments at all and the buffer degenerated to a scalar `int4 v1`.  With
+# `callsitestackargs` on (the default) the pointer is passed, `f(v2)` where
+# `v2 = v1`, the buffer types correctly as `int4 v1 [2]`, and the tail reads its
+# first word: `return v1[0] + a0`.  Both halves of the output got MORE correct;
+# only the pinned expression text had to follow.
+#
+# NOTE on assertion #2's text, revision 3 (issue #862): the expected text is
+# now `return v2[0] + v1` with `v1 = f(v3)`.  The old text, `return v1[0] + a0`,
+# pinned the SPARC dropped-call-result bug: the tail is `restore %i0,%o0,%o0`,
+# and %o0 there is the second call's result, not a value from before the
+# call.  SparcV9_32.cspec now kills %o0 at a call, so the call's output is
+# recovered and added.
+
+[image]
+arch = 'sparc:BE:32:default'
+symbols = [
+    { space = 'ram', offset = '0x0', name = 'f' },
+    { space = 'ram', offset = '0x10', name = 'p' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x0'
+hex = '9de3bfa0f007a04081c7e00c81e800009de3bf98b007bff87ffffffaf023a04000000008f007bff87ffffff6f027bff4f007bff481c7e00891ee0008'
+
+[script]
+commands = [
+    # kuna: the 9 angr structuring/switch flags below are now default-on (DIV-13); this stage test asserts the pre-sweep (flags-off) baseline in pass 1, so pass 1 turns them all OFF (each pass-2 'option <flag> on' re-enables only the flag under test)
+    'option gotoreduce off',
+    'option crossjumprevert off',
+    'option dedupitetail off',
+    'option regionlooprefine off',
+    'option ifelseflatten off',
+    'option switchmultipred off',
+    'option tailcalljump off',
+    'option foldcallret off',
+    'option branchflip off',
+    'option sparcstructret off',
+    'lo fu p',
+    'decompile',
+    'print C',
+    'option sparcstructret on',
+    'lo fu p',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'GH6882 #1: post-call unimp renders as a computed call (bug reproduced)'
+count = 1
+literal = '(*v1)()'
+
+[[match]]
+name = 'GH6882 #2: sparcstructret on recovers the function tail (the real return expression)'
+count = 1
+literal = 'return v2[0] + v1;'

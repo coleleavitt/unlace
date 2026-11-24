@@ -658,7 +658,7 @@ the recursive region-order visit of every leaf block. Each invocation builds a
 (`kuna_console.rs (build_region_identifier)`), so the dumps can never disagree
 with the current CFG, and writes to the bulk-output stream — assertable from
 datatests and capturable via `openfile write`. The dump grammar is a stable
-contract, pinned by `tests/stages/kuna-regions.xml`: 2-space indent per
+contract, pinned by `tests/stages/kuna-regions.toml`: 2-space indent per
 nesting level; `region head=0x<hex> nodes=<N>[ cyclic]` per region; `block
 0x<hex>` per leaf (a merged `Multi` chain prints one `block` line per member);
 one bracketed `[0x<hex>, ...]` line per flat region; `walk 0x<hex>` per

@@ -1,0 +1,135 @@
+# The Swift convention of functions the metadata did not bind (`option
+# swiftcall on|off`).
+#
+# Issue: the `swiftcall` arm bound `__swiftcall` only to functions Swift
+# metadata places in a type. A closure's partial-apply forwarder kept the C
+# model, so the context it reads from swiftself (r13 / x20) was an
+# uninitialised local (`long v2; // r13`), and a two-word Swift result was a
+# 128-bit integer split by `SUB168(v1,0)` / `SUB168(v1,8)`.
+#
+# Stage / sub-stage: P4 prototype recovery. The decompile drive decodes the
+# function and its direct callees (`p4_calls/kuna_swiftinfer.rs (seed)`); a
+# body that reads swiftself on entry for anything but saving it decompiles
+# under `__swiftcall` with the input named `swiftself`. The call-output type
+# (`TypeOpCall::getOutputLocal`) of a two-word join whose words are read apart
+# is `swift.pair`.
+#
+# The fixture `swift_infer_elf` is a stripped swiftc 6.3 build of
+# `swift_infer_elf.swift` (recipe in the fixtures README): 0x24b0 is the
+# partial-apply forwarder of `makeAdder`'s closure, 0x2840 is `usePair`, which
+# reads both words `split` returns. The fixture `swift_pairret_elf` (recipe
+# in the same README) holds a stripped `CustomStringConvertible.description`
+# witness at 0x2140 that returns one string literal per path in rdx:rax: a
+# function's own two-word result built by a `PIECE` of its words takes
+# `swift.pair` as the return's input type (`TypeOpReturn::getInputLocal`,
+# `pair_return_type`), where it was an `undefined16` returned through
+# `*(unsigned __int128 *)v1`. Pass 1 (`option swiftcall off`) is the BUG,
+# pass 2 (the default) the FIX.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_infer_elf',
+    'option swiftmetadata on',
+    'option swiftcall off',
+    'read symbols',
+    'load addr 0x24b0',
+    'decompile',
+    'print C',
+    'load addr 0x2840',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_pairret_elf',
+    'option swiftmetadata on',
+    'option swiftcall off',
+    'read symbols',
+    'load addr 0x2140',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_infer_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x24b0',
+    'decompile',
+    'print C',
+    'load addr 0x2840',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_pairret_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x2140',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'swiftcall off: the closure reads an uninitialised r13'
+count = 1
+literal = 'int8 v2; // r13'
+
+[[match]]
+name = 'swiftcall off: the pair is a 128-bit integer split apart'
+count = 1
+literal = 'return SUB168(v1,0) - SUB168(v1,8);'
+
+[[match]]
+name = 'swiftcall on: the closure takes its context as swiftself'
+count = 1
+literal = 'int8 sub_24b0(void *swiftself)'
+
+[[match]]
+name = 'swiftcall on: the context is read through swiftself'
+count = 1
+literal = 'return ((int8 *)swiftself)[2] + 1;'
+
+[[match]]
+name = "swiftcall on: the two-word call result (and the getter's first returned pair) is a swift.pair"
+count = 2
+literal = 'swift.pair v1; // rdx:rax'
+
+[[match]]
+name = 'swiftcall on: its words are read as fields'
+count = 1
+literal = 'return v1._0 - v1._1;'
+
+[[match]]
+name = 'swiftcall off: the returned string is a 128-bit integer'
+count = 1
+regex = 'undefined16 .pairfix\.Key:Swift\.CustomStringConvertible.\.description\.getter'
+
+[[match]]
+name = 'swiftcall off: each path returns the join through a byte array'
+count = 3
+regex = 'return \*\(unsigned __int128 \*\)v[0-9];'
+
+[[match]]
+name = 'swiftcall on: the getter returns a swift.pair'
+count = 1
+regex = 'swift\.pair .pairfix\.Key:Swift\.CustomStringConvertible.\.description\.getter\(char \*self\)'
+
+[[match]]
+name = 'swiftcall on: the literal is written to the object field'
+count = 1
+regex = 'v[0-9]\._1 = \(unsigned long\)"hasNextPage";'
+
+[[match]]
+name = 'swiftcall on: each path returns its pair'
+count = 3
+regex = 'return v[0-9];'

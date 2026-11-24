@@ -25,7 +25,7 @@ use unlace_analysis::loader::macho_fat::SlicePref;
 use unlace_base::address::Address;
 use unlace_console::engine::{
     ArmIsa, ConsoleProgram, EntryLookupError, EntrySelector, FunctionEntry, ObjectLocation,
-    bootstrap_from_image_with_isa, bootstrap_from_raw,
+    bootstrap_from_image_with_isa, bootstrap_from_raw, bootstrap_from_raw_segments,
 };
 // The decompile loop + result shape live in the shared decompile-project core
 // (`unlace_console::project` — also reused by the `unlace_wasm` front-end).
@@ -1367,12 +1367,11 @@ fn run_summary(args: &Args, filters: &Filters) -> i32 {
     };
     let loaded = match request {
         Some(request) => {
-            load_program_with_rust_profiles(args, DriverDefaults::Functions, Some(request)).map(
-                |prog| {
+            load_program_with_rust_profiles(args, DriverDefaults::Functions, Some(request), None)
+                .map(|prog| {
                     let all = prog.function_entries_canonical();
                     (prog, all)
-                },
-            )
+                })
         }
         None => list_functions(args),
     };
@@ -1923,13 +1922,28 @@ pub(crate) fn load_program(
             crate::rust_signatures::load(std::path::Path::new(path)).map(|(request, _)| request)
         })
         .transpose()?;
-    load_program_with_rust_profiles(args, defaults, request)
+    load_program_with_rust_profiles(args, defaults, request, None)
+}
+
+/// [`load_program`] over disjoint runs of bytes an embedding caller already
+/// holds, each `(address, bytes, flags)`, in place of `args.binary`'s bytes.
+/// `args` must be a raw-image parse; its file still sizes the `auto` mode.
+pub(crate) fn load_program_segments(
+    args: &Args,
+    defaults: DriverDefaults,
+    runs: Vec<(u64, Vec<u8>, u32)>,
+) -> Result<ConsoleProgram, String> {
+    if !args.raw_image {
+        return Err("segments load only as a raw image".to_string());
+    }
+    load_program_with_rust_profiles(args, defaults, None, Some(runs))
 }
 
 fn load_program_with_rust_profiles(
     args: &Args,
     defaults: DriverDefaults,
     request: Option<unlace_analysis::flirt::kuna_rustprofiles::Request>,
+    segments: Option<Vec<(u64, Vec<u8>, u32)>>,
 ) -> Result<ConsoleProgram, String> {
     let binary = std::fs::canonicalize(&args.binary)
         .map_err(|_| format!("binary not found: {}", args.binary))?
@@ -1970,14 +1984,19 @@ fn load_program_with_rust_profiles(
                 _ => None,
             })
             .collect();
-        bootstrap_from_raw(
-            &binary,
-            target,
-            args.base.expect("raw parser requires --base"),
-            &entries,
-            args.isa,
-            &spec_roots,
-        )
+        match segments {
+            Some(runs) => {
+                bootstrap_from_raw_segments(&binary, target, runs, &entries, args.isa, &spec_roots)
+            }
+            None => bootstrap_from_raw(
+                &binary,
+                target,
+                args.base.expect("raw parser requires --base"),
+                &entries,
+                args.isa,
+                &spec_roots,
+            ),
+        }
     } else {
         bootstrap_from_image_with_isa(&binary, target, &spec_roots, args.isa)
     }

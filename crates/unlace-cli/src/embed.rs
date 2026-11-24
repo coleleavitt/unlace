@@ -47,6 +47,11 @@ pub struct Request {
     pub max_fn_memory: Option<u64>,
     /// `--omit` keys.
     pub omit: Vec<String>,
+    /// `--project`: a project file whose stored overrides apply first.
+    pub project: Option<String>,
+    /// Functions that never return, in the target's address units; each is
+    /// declared a function first when nothing starts there.
+    pub noreturn: Vec<u64>,
 }
 
 /// `--raw-image --base BASE --entry E...`.
@@ -56,6 +61,9 @@ pub struct Raw {
     pub base: u64,
     /// Where code starts (`--entry`), in the target's address units.
     pub entries: Vec<u64>,
+    /// Disjoint runs of bytes, each `(byte address, bytes, section flags)`,
+    /// loaded in place of the file's bytes; `base` is then the lowest address.
+    pub segments: Option<Vec<(u64, Vec<u8>, u32)>>,
 }
 
 impl Request {
@@ -82,6 +90,7 @@ impl Request {
             ("--isa", &self.isa),
             ("--mode", &self.mode),
             ("--language", &self.language),
+            ("--project", &self.project),
         ] {
             if let Some(value) = value {
                 push(&mut argv, flag, value.clone());
@@ -107,6 +116,15 @@ impl Request {
         }
         argv
     }
+}
+
+/// The [`section_flags`](unlace_sleigh::loadimage::section_flags) of a raw
+/// segment with these access rights: code or data, and read-only unless
+/// writable.
+pub fn segment_flags(execute: bool, write: bool) -> u32 {
+    use unlace_sleigh::loadimage::section_flags::{CODE, DATA, READONLY};
+    let kind = if execute { CODE } else { DATA };
+    if write { kind } else { kind | READONLY }
 }
 
 fn push(argv: &mut Vec<String>, flag: &str, value: String) {
@@ -178,14 +196,46 @@ pub struct Session {
 pub fn load(request: &Request) -> Result<Session, LoadError> {
     let args =
         decompile_all::parse_args(&request.argv(), "decompile").map_err(LoadError::Arguments)?;
-    let prog =
-        decompile_all::load_program(&args, DriverDefaults::Decompile).map_err(LoadError::Load)?;
+    let segments = request.raw.as_ref().and_then(|raw| raw.segments.clone());
+    let mut prog = match segments {
+        Some(runs) => decompile_all::load_program_segments(&args, DriverDefaults::Decompile, runs),
+        None => decompile_all::load_program(&args, DriverDefaults::Decompile),
+    }
+    .map_err(LoadError::Load)?;
+    for &address in &request.noreturn {
+        declare_no_return(&mut prog, address).map_err(LoadError::Load)?;
+    }
     let declared = Declared::of(&prog);
     Ok(Session {
         args,
         prog,
         declared,
     })
+}
+
+/// Flag the function at `address` no-return, declaring one there first when
+/// nothing starts at it.
+fn declare_no_return(prog: &mut ConsoleProgram, address: u64) -> Result<(), String> {
+    let fail = |detail: &str| format!("noreturn {address:#x}: {detail}");
+    let offset = prog
+        .input_code_offset(address)
+        .map_err(|e| fail(e.explain()))?;
+    if prog.declare_no_return(offset) {
+        return Ok(());
+    }
+    let space = prog
+        .arch()
+        .manage()
+        .get_default_code_space()
+        .cloned()
+        .ok_or_else(|| fail("the loaded program has no default code space"))?;
+    prog.declare_function(unlace_base::address::Address::new(space, offset), None, 0)
+        .map_err(|e| fail(e.explain()))?;
+    if prog.declare_no_return(offset) {
+        Ok(())
+    } else {
+        Err(fail("no function could be declared there"))
+    }
 }
 
 impl Session {

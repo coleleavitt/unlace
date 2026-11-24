@@ -790,7 +790,7 @@ class Ppc64(Ppc32):
             out.add("cr0")  # LT/GT/EQ undefined in 64-bit mode; SO is still compared via xer_so
         if mnemonic.startswith("f") and mnemonic.endswith("."):
             out.add("cr1")  # copies FPSCR[FX,FEX,VX,OX]; the FPSCR exception bits are not modelled
-            if re.match(r"^f(n?m(add|sub)s?|sel)\.$", mnemonic):
+            if re.match(r"^f(n?m(add|sub)s?|sel|(add|sub|mul|div|sqrt)s?|res|rsqrtes?)\.$", mnemonic):
                 out.add("cr3")  # QEMU 10.2 also sets CR bit 14 for the A-form record forms
         if re.match(r"^f(n?m(add|sub))s?\.?$", mnemonic):
             out.add(operands.split(",")[0].strip())  # fused multiply-add: p-code rounds twice
@@ -843,6 +843,211 @@ class Ppc64Isa(Ppc64):
 class Ppc64leIsa(Ppc64le):
     name = "ppc64le-isa"
     lang = "PowerPC:LE:64:A2ALT"
+
+
+PPC_DENY_P10 = re.compile(
+    r"^(sc|scv|t[wd]i?.*|rfi.*|rfci|rfmci|hrfid|rfscv|mtmsr.*|mfmsr|mfsr.*|mtsr.*|mftb.*|wrtee.*|"
+    r"mbar|msync|dcb.*|icb.*|tlb.*|slb.*|[lst][bhwdq]arx|st[bhwdq]cx\.|mfdcr|mtdcr|attn|wait.*|"
+    r"mffs.*|mtfs.*|mcrfs|ev.*|dss.*|dst.*|mfvscr|mtvscr|darn|copy|paste.*|cp_abort|cpabort|msgsnd.*|msgclr.*|"
+    r"lq|stq|ldat|lwat|stdat|stwat|mfbhrbe|clrbhrb|rfebb|bctar.*|.*ep[xX]|ld[bc]ix|st[bc]ix|lwzcix|lhzcix|"
+    r"stwcix|sthcix|hashst.*|hashchk.*|sync|lwsync|ptesync|phwsync|plwsync|stbcx.*|isync|eieio|"
+    r"lvsl|lvsr|lve[bhw]x|stve[bhw]x|lvxl?|stvxl?|xscvdpspn|xscvspdpn|dcffixqq|dctfixqq|bcd.*|"
+    r"xs.*qp.*|xs.*qpo|xsrqpi.*|xsxsigqp|xsxexpqp|xsiexpqp|xsabsqp|xsnabsqp|xsnegqp|xscpsgnqp|"
+    # instructions LLVM decodes for a future ISA (IsISAFuture), which QEMU's power10 lacks
+    r"dm.*|pmdm.*|lxvp?rll?|stxvp?rll?|lxvpb32x|stxvpb32x|mtlpl|paddis|ptesyncio|subfus\.?|tlb.*io|tlbiep|"
+    r"vucmpr.*|vupk.*to.*|xsadd(add|sub)s?uqm|xsmerge.*|xsrebase.*|xv(add|sub|mul)u[hw]m|xvmulh[su][hw]|xvrlw|"
+    r"xxaes.*|xxgfmul128.*|xxmulmul.*|xxssumudm.*)$"
+)
+
+
+class LlvmPpcDis:
+    """A Capstone stand-in that knows the Power ISA 3.1 prefixed instructions: llvm-objdump
+    -mcpu=pwr10 ($DIFFFUZZ_PPC_OBJDUMP, or llvm-objdump on PATH, with the PowerPC target)
+    decodes 8-byte slots in batches, cached by encoding."""
+
+    def __init__(self, big):
+        import os
+        import shutil
+        self.big, self.cache = big, {}
+        self.tool = os.environ.get("DIFFFUZZ_PPC_OBJDUMP") or shutil.which("llvm-objdump")
+        self.objcopy = os.path.join(os.path.dirname(self.tool), "llvm-objcopy")
+
+    def prime(self, encs):
+        import os
+        import subprocess
+        import tempfile
+        todo = sorted({self._key(e) for e in encs} - set(self.cache))
+        if not todo:
+            return
+        with tempfile.TemporaryDirectory() as d:
+            raw, obj = os.path.join(d, "t.bin"), os.path.join(d, "t.o")
+            open(raw, "wb").write(b"".join(todo))
+            fmt = "elf64-powerpc" if self.big else "elf64-powerpcle"
+            subprocess.run([self.objcopy, "-I", "binary", "-O", fmt, raw, obj], check=True)
+            out = subprocess.run([self.tool, "-d", "-D", "-j", ".data", "--mcpu=pwr10", "--no-show-raw-insn", obj],
+                                 capture_output=True, text=True, check=True).stdout
+        got = {}
+        for line in out.splitlines():
+            m = re.match(r"\s*([0-9a-f]+):\s+(\S+)\s*(.*)$", line)
+            if m:
+                got[int(m.group(1), 16)] = (m.group(2), m.group(3).strip())
+        for i, e in enumerate(todo):
+            hit = got.get(8 * i)
+            if hit is None or hit[0].startswith(("<", ".")):
+                self.cache[e] = None
+                continue
+            size = 8 if (8 * i + 4) not in got else 4
+            self.cache[e] = (e[:size], hit[0], hit[1])
+
+    def _key(self, raw):
+        e = bytes(raw[:8])
+        return e if len(e) == 8 else e + (0x60000000).to_bytes(4, "big" if self.big else "little")
+
+    def disasm(self, raw, addr):
+        e = self._key(raw)
+        if e not in self.cache:
+            self.prime([e])
+        hit = self.cache[e]
+        if hit and len(raw) >= len(hit[0]):
+            yield _ObjdumpIns(hit[0], hit[1], hit[2])
+
+
+_PPC_P10_RECORDS = None
+
+
+def _ppc_p10_records():
+    global _PPC_P10_RECORDS
+    if _PPC_P10_RECORDS is None:
+        import json
+        from pathlib import Path
+        p = Path(__file__).resolve().parents[2] / "specs/Ghidra/Processors/PowerPC/isa31_insts.json"
+        _PPC_P10_RECORDS = json.loads(p.read_text())
+    return _PPC_P10_RECORDS
+
+
+class Ppc64P10(Ppc64Isa):
+    """The Power ISA 3.0/3.1 (POWER9/POWER10) instructions against qemu-ppc64 -cpu power10: the
+    generator draws the LLVM PowerPC encodings in specs/.../PowerPC/isa31_insts.json (prefixed
+    8-byte instructions, MMA, the new VMX/VSX/fixed-point ones) and random VMX/VSX words, and the
+    QEMU harness seeds and compares vs0..vs63."""
+    name = "ppc64-p10"
+    deny = PPC_DENY_P10
+    vecs = [(f"vs{i}", None) for i in range(64)]
+    max_len = 8
+    _dis = None
+
+    def addr_ok(self, a):
+        # the harness epilogue builds page addresses with lis/ori (below 2^31)
+        return a < (1 << 31)
+
+    def capstone(self):
+        if type(self)._dis is None:
+            type(self)._dis = LlvmPpcDis(self.big)
+        return type(self)._dis
+
+    def _enc(self, rng):
+        if rng.random() < 0.75:
+            ins = rng.choice(_ppc_p10_records())
+            w = 0
+            for pos, b in enumerate(ins["bits"]):
+                w |= (b if isinstance(b, int) else rng.getrandbits(1)) << (ins["size"] - 1 - pos)
+            if ins["size"] == 64 and rng.random() < 0.7:
+                w &= ~(0x3FFFF << 32)  # small displacements, so more loads and stores land in mapped pages
+            words = [w >> 32, w & 0xFFFFFFFF] if ins["size"] == 64 else [w]
+        else:
+            words = [rng.choice((4, 60, 60, 61, 31, 57, 61)) << 26 | rng.getrandbits(26)]
+        return b"".join(x.to_bytes(4, "big" if self.big else "little") for x in words)
+
+    def gen(self, rng):
+        pool = getattr(self, "_pool", None)
+        if not pool:
+            pool = [self._enc(rng) for _ in range(512)]
+            self.capstone().prime(pool)
+            self._pool = pool
+        return pool.pop()
+
+    @staticmethod
+    def _names(mnemonic, operands):
+        """llvm-objdump prints bare register numbers: name the first (destination) operand."""
+        parts = [p.strip() for p in operands.split(",")]
+        if not parts or not parts[0].isdigit():
+            return operands
+        n = int(parts[0])
+        if re.match(r"^(x|lx|stx|plx|pstx|m[tf]vsr)", mnemonic) and not re.match(r"^(lxsd|lxssp|stxsd|stxssp|plxsd|plxssp|pstxsd|pstxssp)$", mnemonic):
+            parts[0] = f"vs{n}"
+        elif re.match(r"^(lxsd|lxssp|stxsd|stxssp|plxsd|plxssp|pstxsd|pstxssp|v)", mnemonic):
+            parts[0] = f"vs{n + 32}"
+        elif re.match(r"^(f|lf|stf|plf|pstf)", mnemonic):
+            parts[0] = f"vs{n}"
+        else:
+            parts[0] = f"r{n}"
+        return ", ".join(parts)
+
+    def ignored(self, mnemonic, operands, state):
+        import struct
+        ops = self._names(mnemonic, operands)
+        if re.match(r"^(stfsu?x?|stxsspx?|pstfs|pstxssp)$", mnemonic):
+            v = state.get(ops.split(",")[0].strip()) >> 64
+            d = struct.unpack("<d", struct.pack("<Q", v))[0]
+            try:
+                exact = struct.unpack("<f", struct.pack("<f", d))[0] == d
+            except OverflowError:
+                exact = False
+            # a double outside single precision: the ISA stores truncated bits, p-code rounds
+            return {"*"} if not exact else set()
+        if re.match(r"^(lfsu?x?|plfs|lxsspx?|plxssp)$", mnemonic):
+            return set()
+        parts = [p.strip() for p in operands.split(",")]
+        m = re.match(r"^v(div|mod)(e?)(s|u)(w|d|q)$", mnemonic)
+        if m and len(parts) == 3 and parts[2].isdigit():
+            e = {"w": 4, "d": 8, "q": 16}[m.group(4)]
+            a, b = state.get(f"vs{int(parts[1]) + 32}"), state.get(f"vs{int(parts[2]) + 32}")
+            for i in range(16 // e):
+                x, y = (a >> (8 * e * i)) & ((1 << 8 * e) - 1), (b >> (8 * e * i)) & ((1 << 8 * e) - 1)
+                if y == 0 or (m.group(3) == "s" and x == 1 << (8 * e - 1) and y == (1 << 8 * e) - 1) or m.group(2):
+                    return {"*"}  # a zero divisor or an overflowing quotient: the lane is undefined
+        m = re.match(r"^div([wd])e(u?)o?\.?$", mnemonic)
+        if m and len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+            bits = 32 if m.group(1) == "w" else 64
+            a, b = state.get(f"r{parts[1]}") & ((1 << bits) - 1), state.get(f"r{parts[2]}") & ((1 << bits) - 1)
+            if m.group(2):
+                bad = b == 0 or a >= b
+            else:
+                sa, sb = a - (a >> (bits - 1) << bits), b - (b >> (bits - 1) << bits)
+                bad = sb == 0 or not -(1 << (bits - 1)) <= int((sa << bits) / sb) < (1 << (bits - 1))
+            if bad:
+                return {"*"}  # the extended quotient does not fit: the result is undefined
+        if re.match(r"^xx(extractuw|insertw)$", mnemonic) and parts[-1].isdigit() and int(parts[-1]) > 12:
+            return {"*"}
+        out = super().ignored(mnemonic, ops, state)
+        if re.match(r"^x[sv]n?m(add|sub)[am][sd]p$", mnemonic):
+            out.add(ops.split(",")[0].strip())  # fused multiply-add: p-code rounds twice
+        return out
+
+    def partial(self, mnemonic, operands):
+        operands = self._names(mnemonic, operands)
+        out = super().partial(mnemonic, operands)
+        if re.match(r"^xs(?!.*qp)(?!cmp[eu]|cmpo|cmpexp|tst|xexp|xsig)[a-z]*(dp|sp|hp|ws|wz|ds|dz|xs|xd|sxds|uxds)?$", mnemonic)                 or re.match(r"^(lxssp|lxsd|lxsspx|lxsdx|lxsiwax|lxsiwzx|lxsibzx|lxsihzx|plxsd|plxssp|mtvsrd|mtvsrwa|mtvsrwz|xscvdpspn)$", mnemonic) \
+                or re.match(r"^(f|lf|plf)", mnemonic):
+            # scalar results: doubleword 1 of the target is undefined
+            dst = operands.split(",")[0].strip()
+            out[dst] = ((1 << 64) - 1) << 64
+        return out
+
+    def order(self, cands):
+        # a prefixed instruction may not cross a 64-byte boundary: 8-byte ones go first in a batch
+        return sorted(cands, key=lambda c: -len(c["bytes"]))
+
+    def canonical(self, cand):
+        if len(cand["bytes"]) == 8:
+            return True
+        return super().canonical(cand)
+
+
+class Ppc64leP10(Ppc64P10):
+    name = "ppc64le-p10"
+    lang = "PowerPC:LE:64:A2ALT"
+    big = False
 
 
 S390X_DENY = re.compile(
@@ -1637,4 +1842,4 @@ class Or1k(ObjdumpArch):
         return {"OV", "CY"} if mnemonic == "l.mulu" else {"OV"}
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k())}
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k())}

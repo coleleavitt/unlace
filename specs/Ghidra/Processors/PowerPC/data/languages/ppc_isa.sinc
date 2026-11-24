@@ -174,9 +174,36 @@ define pcodeop rvwinkleOp;
 # binutils: power7.d:  d8:      7e 27 d9 f8     bpermd  r7,r17,r27
 # name	 bpermd	 code	 7c0001f8	 mask	 ff0700fc00000000	 flags	 @POWER7 @A2 	 operands	31	 3b	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
 define pcodeop BitPermuteDoubleword;
-:bpermd A,S,B is $(NOTVLE) & OP=31 & S & A & B & XOP_1_10=252 &  BIT_0=0 { 
-	BitPermuteDoubleword(A,S,B);
-} 
+:bpermd A,S,B is $(NOTVLE) & OP=31 & S & A & B & XOP_1_10=252 &  BIT_0=0 {
+	local l_s:8 = S;
+	local l_b:8 = B;
+	local l_r:8 = 0;
+	local l_i0:8 = (l_s >> 56) & 0xff;
+	local l_k0:8 = zext(l_i0 < 64) * ((l_b >> ((63 - l_i0) & 63)) & 1);
+	l_r = l_r | (l_k0 << 7);
+	local l_i1:8 = (l_s >> 48) & 0xff;
+	local l_k1:8 = zext(l_i1 < 64) * ((l_b >> ((63 - l_i1) & 63)) & 1);
+	l_r = l_r | (l_k1 << 6);
+	local l_i2:8 = (l_s >> 40) & 0xff;
+	local l_k2:8 = zext(l_i2 < 64) * ((l_b >> ((63 - l_i2) & 63)) & 1);
+	l_r = l_r | (l_k2 << 5);
+	local l_i3:8 = (l_s >> 32) & 0xff;
+	local l_k3:8 = zext(l_i3 < 64) * ((l_b >> ((63 - l_i3) & 63)) & 1);
+	l_r = l_r | (l_k3 << 4);
+	local l_i4:8 = (l_s >> 24) & 0xff;
+	local l_k4:8 = zext(l_i4 < 64) * ((l_b >> ((63 - l_i4) & 63)) & 1);
+	l_r = l_r | (l_k4 << 3);
+	local l_i5:8 = (l_s >> 16) & 0xff;
+	local l_k5:8 = zext(l_i5 < 64) * ((l_b >> ((63 - l_i5) & 63)) & 1);
+	l_r = l_r | (l_k5 << 2);
+	local l_i6:8 = (l_s >> 8) & 0xff;
+	local l_k6:8 = zext(l_i6 < 64) * ((l_b >> ((63 - l_i6) & 63)) & 1);
+	l_r = l_r | (l_k6 << 1);
+	local l_i7:8 = (l_s >> 0) & 0xff;
+	local l_k7:8 = zext(l_i7 < 64) * ((l_b >> ((63 - l_i7) & 63)) & 1);
+	l_r = l_r | (l_k7 << 0);
+	A = l_r;
+}
 
 # PowerISA II: 3.3.12 Fixed-Point Logical Instructions
 # CMT: Population Count Words [Category: Server] [Category: Embedded.Phased-In]
@@ -270,23 +297,10 @@ define pcodeop AddAndGenerateSixes;
 # binutils: power7.d:  b8:      7d 4b 63 56     divwe   r10,r11,r12
 # name	 divwe	 code	 7c000356	 mask	 ff0700fc00000000	 flags	 @POWER7 @A2 	 operands	 3b	31	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
 :divwe   TH,A,B is $(NOTVLE) & OP=31 & TH & A  & B & OE=0 & XOP_1_9=427 & Rc=0 {
-    tmp:8 = 0;
-
-	# A high 4 bytes to a
-	tmp = tmp >> 32;
-	a:4 = tmp:4;
-
-    # B high 4 bytes to b
-	tmp = tmp >> 32;
-	b:4 = tmp:4;
-
-    # C 
-    c:4 = (a s/ b);
-
-    # C low 4 bytes to TH high 4 bytes
-    tmp = zext(c);
-    tmp = tmp << 32;
-    TH = tmp;
+	local l_n:8 = zext(A:4) << 32;
+	local l_d:8 = sext(B:4);
+	local l_q:8 = l_n s/ l_d;
+	TH = zext(l_q:4);
 }
 
 
@@ -295,26 +309,12 @@ define pcodeop AddAndGenerateSixes;
 # FORM: XO-form
 # binutils: power7.d:  bc:      7d 6c 6b 57     divwe.  r11,r12,r13
 # name	 divwe.	 code	 7c000357	 mask	 ff0700fc00000000	 flags	 @POWER7 @A2 	 operands	 3b	31	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
-:divwe.  TH,A,B is $(NOTVLE) & OP=31 & TH & A  & B & OE=0 & XOP_1_9=427 & Rc=1 { 
-    tmp:8 = 0;
-
-	# A high 4 bytes to a
-	tmp = tmp >> 32;
-	a:4 = tmp:4;
-
-    # B high 4 bytes to b
-	tmp = tmp >> 32;
-	b:4 = tmp:4;
-
-    # C 
-    c:4 = (a s/ b);
-
-    # C low 4 bytes to TH high 4 bytes
-    tmp = zext(c);
-    tmp = tmp << 32;
-    TH = tmp;
-
-    cr0flags(TH);
+:divwe.  TH,A,B is $(NOTVLE) & OP=31 & TH & A  & B & OE=0 & XOP_1_9=427 & Rc=1 {
+	local l_n:8 = zext(A:4) << 32;
+	local l_d:8 = sext(B:4);
+	local l_q:8 = l_n s/ l_d;
+	TH = zext(l_q:4);
+	cr0flags(TH);
 }
 
 # PowerISA II: 3.3.8 Fixed-Point Arithmetic Instructions
@@ -322,25 +322,14 @@ define pcodeop AddAndGenerateSixes;
 # FORM: XO-form
 # binutils: power7.d:  c0:      7d 8d 77 56     divweo  r12,r13,r14
 # name	 divweo	 code	 7c000756	 mask	 ff0700fc00000000	 flags	 @POWER7 @A2 	 operands	 3b	31	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
-:divweo  TH,A,B is $(NOTVLE) & OP=31 & TH & A  & B & OE=1 & XOP_1_9=427 & Rc=0 { 
-    tmp:8 = 0;
-
-	# A high 4 bytes to a
-	tmp = tmp >> 32;
-	a:4 = tmp:4;
-
-    # B high 4 bytes to b
-	tmp = tmp >> 32;
-	b:4 = tmp:4;
-
-    # C 
-    c:4 = (a s/ b);
-
-    # C low 4 bytes to TH high 4 bytes
-    tmp = zext(c);
-    tmp = tmp << 32;
-    divOverflow(A,B);
-    TH = tmp;
+:divweo  TH,A,B is $(NOTVLE) & OP=31 & TH & A  & B & OE=1 & XOP_1_9=427 & Rc=0 {
+	local l_n:8 = zext(A:4) << 32;
+	local l_d:8 = sext(B:4);
+	local l_q:8 = l_n s/ l_d;
+	local l_t:4 = l_q:4;
+	xer_ov = (l_d == 0) || (sext(l_t) != l_q);
+	xer_so = xer_so || xer_ov;
+	TH = zext(l_q:4);
 }
 
 # PowerISA II: 3.3.8 Fixed-Point Arithmetic Instructions
@@ -349,27 +338,15 @@ define pcodeop AddAndGenerateSixes;
 # binutils: power7.d:  c4:      7d ae 7f 57     divweo. r13,r14,r15
 # name	 divweo.	 code	 7c000757	 mask	 ff0700fc00000000	 flags	 @POWER7 @A2 	 operands	 3b	31	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
 define pcodeop DivideWordExtended4;
-:divweo. TH,A,B is $(NOTVLE) & OP=31 & TH & A  & B & OE=1 & XOP_1_9=427 & Rc=1 { 
-    tmp:8 = 0;
-
-	# A high 4 bytes to a
-	tmp = tmp >> 32;
-	a:4 = tmp:4;
-
-    # B high 4 bytes to b
-	tmp = tmp >> 32;
-	b:4 = tmp:4;
-
-    # C 
-    c:4 = (a s/ b);
-
-    # C low 4 bytes to TH high 4 bytes
-    tmp = zext(c);
-    tmp = tmp << 32;
-    divOverflow(A,B);
-    TH = tmp;
-
-    cr0flags(TH);
+:divweo. TH,A,B is $(NOTVLE) & OP=31 & TH & A  & B & OE=1 & XOP_1_9=427 & Rc=1 {
+	local l_n:8 = zext(A:4) << 32;
+	local l_d:8 = sext(B:4);
+	local l_q:8 = l_n s/ l_d;
+	local l_t:4 = l_q:4;
+	xer_ov = (l_d == 0) || (sext(l_t) != l_q);
+	xer_so = xer_so || xer_ov;
+	TH = zext(l_q:4);
+	cr0flags(TH);
 }
 
 # PowerISA II: 3.3.8 Fixed-Point Arithmetic Instructions
@@ -377,24 +354,11 @@ define pcodeop DivideWordExtended4;
 # FORM: XO-form
 # binutils: power7.d:  c8:      7d 4b 63 16     divweu  r10,r11,r12
 # name	 divweu	 code	 7c000316	 mask	 ff0700fc00000000	 flags	 @POWER7 @A2 	 operands	 3b	31	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
-:divweu TH,A,B is $(NOTVLE) & OP=31 & TH & A & B & OE=0 & Rc=0 & XOP_1_9=395 { 
-    tmp:8 = 0;
-
-	# A high 4 bytes to a
-	tmp = tmp >> 32;
-	a:4 = tmp:4;
-
-    # B high 4 bytes to b
-	tmp = tmp >> 32;
-	b:4 = tmp:4;
-
-    # C 
-    c:4 = (a / b);
-
-    # C low 4 bytes to TH high 4 bytes
-    tmp = zext(c);
-    tmp = tmp << 32;
-    TH = tmp;
+:divweu TH,A,B is $(NOTVLE) & OP=31 & TH & A & B & OE=0 & Rc=0 & XOP_1_9=395 {
+	local l_n:8 = zext(A:4) << 32;
+	local l_d:8 = zext(B:4);
+	local l_q:8 = l_n / l_d;
+	TH = zext(l_q:4);
 }
 
 # PowerISA II: 3.3.8 Fixed-Point Arithmetic Instructions
@@ -402,26 +366,12 @@ define pcodeop DivideWordExtended4;
 # FORM: XO-form
 # binutils: power7.d:  cc:      7d 6c 6b 17     divweu. r11,r12,r13
 # name	 divweu.	 code	 7c000317	 mask	 ff0700fc00000000	 flags	 @POWER7 @A2 	 operands	 3b	31	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
-:divweu. TH,A,B is $(NOTVLE) & OP=31 & TH & A & B & OE=0 & Rc=1 & XOP_1_9=395 { 
-    tmp:8 = 0;
-
-	# A high 4 bytes to a
-	tmp = tmp >> 32;
-	a:4 = tmp:4;
-
-    # B high 4 bytes to b
-	tmp = tmp >> 32;
-	b:4 = tmp:4;
-
-    # C 
-    c:4 = (a / b);
-
-    # C low 4 bytes to TH high 4 bytes
-    tmp = zext(c);
-    tmp = tmp << 32;
-    TH = tmp;
-
-    cr0flags(TH);
+:divweu. TH,A,B is $(NOTVLE) & OP=31 & TH & A & B & OE=0 & Rc=1 & XOP_1_9=395 {
+	local l_n:8 = zext(A:4) << 32;
+	local l_d:8 = zext(B:4);
+	local l_q:8 = l_n / l_d;
+	TH = zext(l_q:4);
+	cr0flags(TH);
 }
 
 # PowerISA II: 3.3.8 Fixed-Point Arithmetic Instructions
@@ -429,25 +379,13 @@ define pcodeop DivideWordExtended4;
 # FORM: XO-form
 # binutils: power7.d:  d0:      7d 8d 77 16     divweuo r12,r13,r14
 # name	 divweuo	 code	 7c000716	 mask	 ff0700fc00000000	 flags	 @POWER7 @A2 	 operands	 3b	31	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
-:divweuo TH,A,B is $(NOTVLE) & OP=31 & TH & A & B & OE=1 & Rc=0 & XOP_1_9=395 {  
-    tmp:8 = 0;
-
-	# A high 4 bytes to a
-	tmp = tmp >> 32;
-	a:4 = tmp:4;
-
-    # B high 4 bytes to b
-	tmp = tmp >> 32;
-	b:4 = tmp:4;
-
-    # C 
-    c:4 = (a / b);
-
-    # C low 4 bytes to TH high 4 bytes
-    tmp = zext(c);
-    tmp = tmp << 32;
-    divOverflow(A,B);
-    TH = tmp;
+:divweuo TH,A,B is $(NOTVLE) & OP=31 & TH & A & B & OE=1 & Rc=0 & XOP_1_9=395 {
+	local l_n:8 = zext(A:4) << 32;
+	local l_d:8 = zext(B:4);
+	local l_q:8 = l_n / l_d;
+	xer_ov = (l_d == 0) || (l_q > 0xffffffff);
+	xer_so = xer_so || xer_ov;
+	TH = zext(l_q:4);
 }
 
 # PowerISA II: 3.3.8 Fixed-Point Arithmetic Instructions
@@ -455,27 +393,14 @@ define pcodeop DivideWordExtended4;
 # FORM: XO-form
 # binutils: power7.d:  d4:      7d ae 7f 17     divweuo. r13,r14,r15
 # name	 divweuo.	 code	 7c000717	 mask	 ff0700fc00000000	 flags	 @POWER7 @A2 	 operands	 3b	31	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
-:divweuo. TH,A,B is $(NOTVLE) & OP=31 & TH & A & B & OE=1 & Rc=1 & XOP_1_9=395 { 
-    tmp:8 = 0;
-
-	# A high 4 bytes to a
-	tmp = tmp >> 32;
-	a:4 = tmp:4;
-
-    # B high 4 bytes to b
-	tmp = tmp >> 32;
-	b:4 = tmp:4;
-
-    # C 
-    c:4 = (a / b);
-
-    # C low 4 bytes to TH high 4 bytes
-    tmp = zext(c);
-    tmp = tmp << 32;
-    divOverflow(A,B);
-    TH = tmp;
-
-    cr0flags(TH);
+:divweuo. TH,A,B is $(NOTVLE) & OP=31 & TH & A & B & OE=1 & Rc=1 & XOP_1_9=395 {
+	local l_n:8 = zext(A:4) << 32;
+	local l_d:8 = zext(B:4);
+	local l_q:8 = l_n / l_d;
+	xer_ov = (l_d == 0) || (l_q > 0xffffffff);
+	xer_so = xer_so || xer_ov;
+	TH = zext(l_q:4);
+	cr0flags(TH);
 }
 
 # =======================================================================
@@ -1316,6 +1241,9 @@ define pcodeop daddqDotOp;
 # xxswapd T,A 		=>		xxpermdi T,A,A,0b10
 
 @include "vsx.sinc"
+@ifndef SPE2
+@include "ppc_isa31.sinc"
+@endif
 
 # binutils-descr: "brinc",	VX (4, 527),	VX_MASK,     PPCSPE,	PPCNONE,	{RS, RA, RB}
 define pcodeop brincOp;
@@ -1377,30 +1305,42 @@ define pcodeop cbcdtdOp;
 # binutils-descr: "divdeu",	XO(31,393,0,0),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}
 define pcodeop divdeuOp;
 # binutils: mytest.d:    4:	7c 64 2b 12 	divdeu  r3,r4,r5
-:divdeu RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=393 & OE=0 & Rc=0 & RT & A & B  { 
-	RT = A/B;
+:divdeu RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=393 & OE=0 & Rc=0 & RT & A & B  {
+	local l_n:16 = zext(A) << 64;
+	local l_d:16 = zext(B);
+	local l_q:16 = l_n / l_d;
+	RT = l_q:8;
 } 
 
 # binutils-descr: "divdeu.",	XO(31,393,0,1),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}
 define pcodeop divdeuDotOp;
 # binutils: mytest.d:    8:	7c 64 2b 13 	divdeu. r3,r4,r5
-:divdeu. RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=393 & OE=0 & Rc=1 & RT & A & B  { 
-	RT = A/B;
+:divdeu. RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=393 & OE=0 & Rc=1 & RT & A & B  {
+	local l_n:16 = zext(A) << 64;
+	local l_d:16 = zext(B);
+	local l_q:16 = l_n / l_d;
+	RT = l_q:8;
 	cr0flags(RT);
 } 
 
 # binutils-descr: "divde",	XO(31,425,0,0),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}
 define pcodeop divdeOp;
 # binutils: mytest.d:    c:	7c 64 2b 52 	divde   r3,r4,r5
-:divde RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=425 & OE=0 & Rc=0 & RT & A & B  { 
-	RT = A s/ B;
+:divde RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=425 & OE=0 & Rc=0 & RT & A & B  {
+	local l_n:16 = zext(A) << 64;
+	local l_d:16 = sext(B);
+	local l_q:16 = l_n s/ l_d;
+	RT = l_q:8;
 } 
 
 # binutils-descr: "divde.",	XO(31,425,0,1),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}
 define pcodeop divdeDotOp;
 # binutils: mytest.d:   10:	7c 64 2b 53 	divde.  r3,r4,r5
-:divde. RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=425 & OE=0 & Rc=1 & RT & A & B  { 
-	RT = A s/ B;
+:divde. RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=425 & OE=0 & Rc=1 & RT & A & B  {
+	local l_n:16 = zext(A) << 64;
+	local l_d:16 = sext(B);
+	local l_q:16 = l_n s/ l_d;
+	RT = l_q:8;
 	cr0flags(RT);
 } 
 
@@ -1519,17 +1459,25 @@ define pcodeop lbzcixOp;
 
 # binutils-descr: "divdeuo",	XO(31,393,1,0),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}
 # binutils: mytest.d:   28:	7c 64 2f 12 	divdeuo r3,r4,r5
-:divdeuo RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=393 & OE=1 & Rc=0 & RT & A & B  { 
-	divOverflow(A,B);
-	RT = A/B;
+:divdeuo RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=393 & OE=1 & Rc=0 & RT & A & B  {
+	local l_n:16 = zext(A) << 64;
+	local l_d:16 = zext(B);
+	local l_q:16 = l_n / l_d;
+	xer_ov = (l_d == 0) || (l_q > 0xffffffffffffffff);
+	xer_so = xer_so || xer_ov;
+	RT = l_q:8;
 } 
 
 # binutils-descr: "divdeuo.",	XO(31,393,1,1),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}
 define pcodeop divdeuoDotOp;
 # binutils: mytest.d:   2c:	7c 64 2f 13 	divdeuo. r3,r4,r5
-:divdeuo. RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=393 & OE=1 & Rc=1 & RT & A & B  { 
-	divOverflow(A,B);
-	RT = A/B;
+:divdeuo. RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=393 & OE=1 & Rc=1 & RT & A & B  {
+	local l_n:16 = zext(A) << 64;
+	local l_d:16 = zext(B);
+	local l_q:16 = l_n / l_d;
+	xer_ov = (l_d == 0) || (l_q > 0xffffffffffffffff);
+	xer_so = xer_so || xer_ov;
+	RT = l_q:8;
 	cr0flags(RT);
 } 
 
@@ -1562,17 +1510,27 @@ define pcodeop stfddxOp;
 # binutils-descr: "divdeo",	XO(31,425,1,0),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}
 define pcodeop divdeoOp;
 # binutils: mytest.d:   38:	7c 64 2f 52 	divdeo  r3,r4,r5
-:divdeo RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=425 & OE=1 & Rc=0 & RT & A & B  { 
-	divOverflow(A,B);
-	RT = A s/ B;
+:divdeo RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=425 & OE=1 & Rc=0 & RT & A & B  {
+	local l_n:16 = zext(A) << 64;
+	local l_d:16 = sext(B);
+	local l_q:16 = l_n s/ l_d;
+	local l_t:8 = l_q:8;
+	xer_ov = (l_d == 0) || (sext(l_t) != l_q);
+	xer_so = xer_so || xer_ov;
+	RT = l_q:8;
 } 
 
 # binutils-descr: "divdeo.",	XO(31,425,1,1),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}
 define pcodeop divdeoDotOp;
 # binutils: mytest.d:   3c:	7c 64 2f 53 	divdeo. r3,r4,r5
-:divdeo. RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=425 & OE=1 & Rc=1 & RT & A & B  { 
-	divOverflow(A,B);
-	RT = A s/ B;
+:divdeo. RT,A,B is $(NOTVLE) & OP=31 & XOP_1_9=425 & OE=1 & Rc=1 & RT & A & B  {
+	local l_n:16 = zext(A) << 64;
+	local l_d:16 = sext(B);
+	local l_q:16 = l_n s/ l_d;
+	local l_t:8 = l_q:8;
+	xer_ov = (l_d == 0) || (sext(l_t) != l_q);
+	xer_so = xer_so || xer_ov;
+	RT = l_q:8;
 	cr0flags(RT);
 } 
 

@@ -131,6 +131,10 @@ cccc406663c7c3
 ppc_xenon_vmx128 = """
 100018cb102020cb14400c1a1462049a106029cb4e800020
 """
+ppc64le_power10 = """
+341200067856803800000006640063383601637c1422637c2000804e000000600020237c0003607c2000804e00000060
+00000004100043cc00000004200044dc2000804e
+"""
 x86_64_avx512_disp8 = """
 62f27d4878470162f17e487f06c5f877c3
 """
@@ -2521,6 +2525,30 @@ expect = [
     "void sub_82000000(unsigned int a0,unsigned int a1,unsigned int a2)",
     "*(char (*)[16])(a2 & 0xfffffff0) = vmx128_vmulfp(vmx128_vaddfp(",
 ]
+# Power ISA 3.1 (POWER10) on ppc64le, assembled by zig cc -mcpu=pwr10: pli/paddi (8-byte
+# prefixed) and brw, a cmpd + setbc, and a prefixed plxv/pstxv vector copy.
+[[family]]
+name = "ppc64le_power10"
+language = "PowerPC:LE:64:A2ALT"
+base = "0x1000"
+image = "ppc64le_power10"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "ppc64le_power10_prefixed_immediates_decompile"
+address = "0x1000"
+expect = ["a0 += 100;", "+ 0x12345678;"]
+
+[[family.function]]
+test = "ppc64le_power10_setbc_decompiles"
+address = "0x1020"
+expect = ["return a0 < a1;"]
+
+[[family.function]]
+test = "ppc64le_power10_prefixed_vector_copy_decompiles"
+address = "0x1030"
+expect = ["((unsigned long *)a1)[4] = ((unsigned long *)a0)[2];"]
+
 # The S1C6200 (E0C6200) language decompiles 12-bit instructions in big-endian words, assembled
 # by hand from the core manual: a carry-tested add, a caller that CALLs it within the page,
 # and an add bracketed by SDF/RDF, which decodes with the decimal adjustment.

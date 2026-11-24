@@ -33,6 +33,8 @@ mod aarch64_rme;
 mod aarch64_sme;
 #[path = "aarch64_sve2.rs"]
 mod aarch64_sve2;
+#[path = "aarch64_svemm.rs"]
+mod aarch64_svemm;
 #[path = "ppc_gekko.rs"]
 mod ppc_gekko;
 #[path = "ppc_spe2.rs"]

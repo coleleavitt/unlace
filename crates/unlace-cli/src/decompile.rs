@@ -802,6 +802,14 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
         for note in stderr_text.lines().filter(forwarded) {
             unlace_base::notes::say_once(&binary, note);
         }
+        if std::env::var_os("KUNA_CALLEEPURGE_DEBUG").is_some() {
+            for line in stderr_text
+                .lines()
+                .filter(|l| l.starts_with("calleepurge: "))
+            {
+                eprintln!("{line}");
+            }
+        }
         let combined = format!("{stdout_text}\n{stderr_text}");
         for sentence in unlace_console::kuna_declaredbytes::from_transcript(&stdout_text) {
             unlace_base::notes::say_once(&binary, &format!("warning: {sentence}"));

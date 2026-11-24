@@ -4,7 +4,7 @@
 //! discriminant, that the concatenation is still found after the rule pool
 //! reshapes it, and that the gate fails closed. The end-to-end witness -- a
 //! rustc `Result<u32,u32>` producer and the `match` that consumes it -- lives in
-//! `tests/stages/kuna-rustabi.xml` and
+//! `tests/stages/kuna-rustabi.toml` and
 //! `unlace-console/tests/verify_rustabi_pair.rs`.
 
 use super::*;

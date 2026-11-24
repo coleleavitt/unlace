@@ -1,7 +1,7 @@
 //! Regression fence for an explicit two-byte `wchar_t` data declaration at a
 //! short UTF-16 string. Operand-reference analysis once mapped the string's first
 //! unit as a one-byte short string; it now declines a run that opens an array of
-//! 2-byte character codes, and `tests/stages/kuna-short-utf16-window.xml` keeps
+//! 2-byte character codes, and `tests/stages/kuna-short-utf16-window.toml` keeps
 //! the collision of the two mappings.
 
 use std::path::PathBuf;

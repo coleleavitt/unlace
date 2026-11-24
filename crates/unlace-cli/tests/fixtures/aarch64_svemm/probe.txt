@@ -1,0 +1,32 @@
+bfcvtnt z0.h, p0/m, z0.s
+bfcvt z0.h, p0/m, z0.s
+bfdot z0.s, z0.h, z0.h[0]
+bfdot z0.s, z0.h, z0.h
+bfmlalb z0.s, z0.h, z0.h
+bfmlalb z0.s, z0.h, z0.h[0]
+bfmlalt z0.s, z0.h, z0.h
+bfmlalt z0.s, z0.h, z0.h[0]
+bfmmla z0.s, z0.h, z0.h
+fmmla z0.s, z0.h, z0.h
+fmmla z0.d, z0.d, z0.d
+fmmla z0.s, z0.s, z0.s
+ld1rob { z0.b }, p0/z, [x0, x0]
+ld1rob { z0.b }, p0/z, [x0, #0]
+ld1rod { z0.d }, p0/z, [x0, x0, lsl #3]
+ld1rod { z0.d }, p0/z, [x0, #0]
+ld1roh { z0.h }, p0/z, [x0, x0, lsl #1]
+ld1roh { z0.h }, p0/z, [x0, #0]
+ld1row { z0.s }, p0/z, [x0, x0, lsl #2]
+ld1row { z0.s }, p0/z, [x0, #0]
+smmla z0.s, z0.b, z0.b
+sudot z0.s, z0.b, z0.b[0]
+trn1 z0.q, z0.q, z0.q
+trn2 z0.q, z0.q, z0.q
+ummla z0.s, z0.b, z0.b
+usdot z0.s, z0.b, z0.b
+usdot z0.s, z0.b, z0.b[0]
+usmmla z0.s, z0.b, z0.b
+uzp1 z0.q, z0.q, z0.q
+uzp2 z0.q, z0.q, z0.q
+zip1 z0.q, z0.q, z0.q
+zip2 z0.q, z0.q, z0.q

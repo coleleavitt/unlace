@@ -28,9 +28,12 @@
 #     unsigned cvtwus(float f) { return (unsigned)f; }
 #
 # #1-#3: the fmv.x.d / fmv.x.w results are the FP register's bits (the
-# call result in e13 and fwplus).  #4-#5: the fcvt.w* results reach a0
-# (the unsigned forms convert through a 64-bit integer, so values in
-# [2^31, 2^32) keep their bits).  #6-#7: neither the 0x900 read nor a
+# call result in e13 and fwplus).  #4-#5: the fcvt.w* results reach a0,
+# truncated and saturated as the ISA defines (riscv.fd.sinc, generated from
+# the Sail model): the signed forms clamp to INT_MIN below the range, the
+# unsigned forms to 0 at or below -1, and NaN or values above the range give
+# the maximum; the unsigned forms convert through a 64-bit integer, so values
+# in [2^31, 2^32) keep their bits.  #6-#7: neither the 0x900 read nor a
 # void conversion function remains.
 
 [image]
@@ -107,12 +110,12 @@ regex = 'return .*\{ \.from = gf\(a0\) \}\)\.to \+ 1;'
 [[match]]
 name = 'GH831 rv64 #4: fcvt.w.d and fcvt.w.s write a0'
 count = 2
-literal = 'return (int4)a0;'
+literal = 'v1 = -0x80000000;'
 
 [[match]]
 name = 'GH831 rv64 #5: fcvt.wu.d and fcvt.wu.s write a0'
 count = 2
-literal = 'return (int4)(int8)a0;'
+literal = 'if (a0 <= -1.0'
 
 [[match]]
 name = 'GH831 rv64 #6: no read of register offset 0x900'

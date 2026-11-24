@@ -1,0 +1,54 @@
+# A logical object name must preserve pointer-field loads through its shared backing.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'group_fields' },
+    { space = 'ram', offset = '0x40101c', name = 'construct_set' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '4883ec284889e7e810000000488b442408488b008b40104883c428c3488d05dd0f000048894708b801000000c3e8ceffffff31ff83f81f400f95c7b83c0000000f05'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+hex = '182040000000000000000000000000000700000000000000000000000000000000000000000000001f00000000000000'
+
+[script]
+commands = [
+    'parse line struct FieldNode { FieldNode *next; FieldNode *previous; int4 value; uint1 padding[4]; };',
+    'parse line struct FieldSet { float4 load; uint1 padding[4]; FieldNode *head; uint8 count; };',
+    'parse line extern int4 group_fields(void);',
+    'parse line extern bool construct_set(FieldSet *set);',
+    'option stackalias off',
+    'option stackviews off',
+    'lo fu group_fields',
+    'decompile',
+    'print C',
+    'option stackviews on',
+    'lo fu group_fields',
+    'decompile',
+    'print C',
+    'rename object_401007_1 target_set',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'pointer fields: native next loads survive naming'
+count = 3
+regex = 'return \(v1\.(view_FieldSet\.)?head\)->next->value;'
+
+[[match]]
+name = 'pointer fields: name selects shared member'
+count = 1
+literal = 'construct_set(&v1.target_set);'
+
+[[match]]
+name = 'pointer fields: no unresolved pointer expressions'
+count = 0
+literal = 'PTRSUB('

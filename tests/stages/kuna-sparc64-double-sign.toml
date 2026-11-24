@@ -1,0 +1,40 @@
+# Independently assembled binary64 sign-word negation.
+# .text
+# .global negate_double64
+# .type negate_double64,@function
+# negate_double64:
+#  fnegs %f0, %f0
+#  retl
+#  nop
+# .size negate_double64, .-negate_double64
+
+[image]
+arch = 'sparc:BE:64:default:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'negate_double64' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '81a000a081c3e00801000000'
+
+[script]
+commands = [
+    'parse line extern double negate_double64(double x);',
+    'lo fu negate_double64',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'sparc64-double-sign #1 restores unary negation'
+count = 1
+literal = 'return -x;'
+
+[[match]]
+name = 'sparc64-double-sign #2 has no numeric high-word conversion'
+count = 0
+regex = 'CONCAT44|\(float\)|SUB84'

@@ -1,0 +1,64 @@
+# A function whose flow runs on into another function's body is not made
+# `async` by that body's calls to the task runtime.
+#
+# Issue: a function the metadata does not bind is `async` when it calls
+# the task runtime's entry points (`swift_task_alloc`, `swift_task_switch`,
+# ...). The calls were taken from the whole recovered flow, so a plain
+# function whose flow reached into an async neighbour (a jump table read
+# past its end, a branch into a shared tail) got that neighbour's
+# `async_context` as its first parameter. Seen on an arm64 iOS app: an
+# enum-to-string switch whose unchecked byte-indexed table ran on into
+# unrelated code printed as `sub_102cafa90(swift.type_metadata
+# *async_context,...)`.
+#
+# Stage / sub-stage: P4 prototype models (`kuna_swiftcall.rs`
+# `callee_evidence`): only the calls between the function's entry and
+# the next known entry count.
+#
+# Assertions: `kuna_pick` (0x2c90) branches past the prologue of
+# `kuna_alloc` (0x2ca0), so its flow holds that function's call to
+# `swift_task_alloc` and the store through r14 after it; it takes the
+# selector alone. `kuna_alloc` itself calls `swift_task_alloc` and
+# keeps its context.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_runon_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x2c90',
+    'decompile',
+    'print C',
+    'load addr 0x2ca0',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'a run-on into an async body does not make the function async'
+count = 1
+literal = 'void * kuna_pick(int4 a0)'
+
+[[match]]
+name = "the run-on still reaches the neighbour's call"
+count = 2
+literal = 'swift_task_alloc(0x40)'
+
+[[match]]
+name = 'the async neighbour keeps its context'
+count = 1
+literal = 'kuna_alloc(swift.AsyncContext *async_context)'

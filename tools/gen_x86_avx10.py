@@ -402,8 +402,14 @@ def main():
     out += ["define pcodeop %s;" % o for o in g.ops]
     out += [""] + ['avx10CmpBf16: "VCMP%sBF16" is imm8=%d { }' % (p, i) for i, p in enumerate(CMP_PRED)] + [
             'avx10CmpBf16: "VCMPBF16" is imm8 { }', "",
+            "# The rounding mode: the EVEX.b pre-parse in ia.sinc keeps it in evexRcMode (16-bit x86 has no pre-parse).",
+            "@ifdef IA16",
             'avx10Rc: "{rn-sae}" is evexL=0 { }', 'avx10Rc: "{rd-sae}" is evexL=1 { }',
-            'avx10Rc: "{ru-sae}" is evexL=2 { }', 'avx10Rc: "{rz-sae}" is evexL=3 { }', ""]
+            'avx10Rc: "{ru-sae}" is evexL=2 { }', 'avx10Rc: "{rz-sae}" is evexL=3 { }',
+            "@else",
+            'avx10Rc: "{rn-sae}" is evexRcMode=0 { }', 'avx10Rc: "{rd-sae}" is evexRcMode=1 { }',
+            'avx10Rc: "{ru-sae}" is evexRcMode=2 { }', 'avx10Rc: "{rz-sae}" is evexRcMode=3 { }',
+            "@endif", ""]
     out += list(g.memtabs.values()) + [""]
     out += common
     out += ["# EVEX.U (rexX4) selects the 256-bit {sae} forms; 16-bit x86 keeps no U bit and has the 512-bit ones only.",

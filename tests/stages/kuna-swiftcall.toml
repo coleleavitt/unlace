@@ -1,0 +1,365 @@
+# Swift's calling convention on methods and witnesses (`option swiftcall
+# on|off`, the calling-convention arm of `swiftmetadata`).
+#
+# Issue: Swift passes a method's `self` in the swiftself register (r13 on
+# x86-64, x20 on arm64) and a throwing function's error in the swifterror
+# register (r12 / x21), which the C model neither reads as a parameter nor
+# hands back from a call. A method's `self` is an unnamed register read
+# (`int8 *v3; // r13`), a call drops the `self` it passes, and a caller's
+# test of the error register after a throwing call reads the zero it
+# stored before it, so `try?`'s error path folds away. Only a getter,
+# whose arity is known, had its `self` typed (8,560 on a large
+# third-party iOS app).
+#
+# Stage / sub-stage: P1 external-refinement, the Swift metadata pass
+# (`unlace-analysis/src/analyzers/swift/kuna_swiftcall.rs`), with the model
+# binding read in P4 (`ActionDefaultParams`, the decompile drive) and the
+# `self` hint in P5 type inference.
+#
+# P0 assertion: `option swiftcall on|off` (default on; inert unless
+# `swiftmetadata` is on).
+#
+# The fixtures are one swiftc 6.3 build of `swift_call_elf.swift`:
+# `swift_call_elf` stripped, `swift_call_syms_elf` with its symbols. Pass 1
+# (`option swiftcall off`, stripped) reproduces the BUG: the class method
+# `vtable#7.method` (`deposit(_:fee:)`) takes two parameters and reads its
+# `self` from an unnamed `r13`, the struct witness reads `v1 + 8`, and
+# `run` passes no `self` to its virtual calls and returns the throwing
+# call's result unchecked. Pass 2 (the default, stripped) is the FIX: the
+# method takes `callfix.Account *self` first and passes it on to the
+# virtual calls it makes on itself, the struct witness writes
+# `self->step`, the class witness takes `callfix.Account **self` (a
+# witness gets the address of the value), and `run` keeps the error path
+# (`if (v5) { swift_release(v5); v3 = -1; }`) and passes the `self` it
+# sets to both virtual calls. Pass 3 (the default, with symbols) types the
+# mutating struct method by its name
+# (`callfix.Counter.advance(by:times:)(callfix.Counter *self,...)`) and
+# `run`'s call passes it `self`, while the non-mutating `peek`, whose
+# `self` is exploded into its trailing arguments, gains none; the final
+# method `settle` hands its own, untouched `self` to `fee(for:)` before
+# and after a call. Pass 4 (`swiftcall off`, with symbols) shows `settle`
+# calling `fee(for:)` without it.
+#
+# `swift_call_helper_elf` calls the mutating `Counter.bump()` after
+# `swift_beginAccess`, a C runtime helper that runs between the caller
+# setting r13 and the call and preserves the register. Pass 5 (`swiftcall
+# off`) passes no `self`; pass 6 (the default) passes `a0` to both calls,
+# straight-line and in a loop.
+#
+# `swift_call_leaf_elf` calls the mutating `Counter.bump(_:)`, which has no
+# declared signature (its argument is an enum), after the Swift leaf
+# `tick(_:)`, which runs between the caller setting r13 and the call and
+# never reads the register. Pass 7 (the default) passes `a0`; before the
+# callee bodies were read, any earlier Swift call made the value stale and
+# the call passed `(v1,0)`.
+#
+# `swift_call_free_elf` makes the same call after `spin(_:)`, a function of
+# the module whose body branches, so its body is not read as leaving r13
+# alone; its symbol names it a function of the module, not a member, which
+# takes no `self`. Pass 8 (the default) passes `a0`; before, `(v1,0)`.
+#
+# `swift_call_spill_elf`'s `spill_test` zeroes r12, calls a throwing Swift
+# function, spills r12 to the stack, reuses the register and tests the
+# value it reloads. Pass 9 (the default) keeps its error path (`return
+# 0xffffffffffffffff;`); before the spill was followed it folded away and
+# the function was `return sub_2800();`. `spill_moved` moves rsp between the
+# spill and the reload, which then reads another slot.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_call_elf',
+    'option swiftmetadata on',
+    'option swiftcall off',
+    'read symbols',
+    'load addr 0x3830',
+    'decompile',
+    'print C',
+    'load addr 0x2ff0',
+    'decompile',
+    'print C',
+    'load addr 0x3490',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_call_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x3830',
+    'decompile',
+    'print C',
+    'load addr 0x2ff0',
+    'decompile',
+    'print C',
+    'load addr 0x3060',
+    'decompile',
+    'print C',
+    'load addr 0x3490',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_call_syms_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x3660',
+    'decompile',
+    'print C',
+    'load addr 0x3490',
+    'decompile',
+    'print C',
+    'load addr 0x35e0',
+    'decompile',
+    'print C',
+    'load addr 0x3870',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_call_syms_elf',
+    'option swiftmetadata on',
+    'option swiftcall off',
+    'read symbols',
+    'load addr 0x35e0',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_call_helper_elf',
+    'option swiftmetadata on',
+    'option swiftcall off',
+    'read symbols',
+    'load addr 0x2440',
+    'decompile',
+    'print C',
+    'load addr 0x2480',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_call_helper_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x2440',
+    'decompile',
+    'print C',
+    'load addr 0x2480',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_call_native_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x10dc',
+    'decompile',
+    'print C',
+    'load addr 0x10fe',
+    'decompile',
+    'print C',
+    'load addr 0xe70',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_call_leaf_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x2630',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_call_free_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x2610',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_call_spill_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x2836',
+    'decompile',
+    'print C',
+    'load addr 0x2874',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'swiftcall off: the class method takes no self'
+count = 1
+literal = 'vtable#7.method(int8 a0,int8 a1)'
+
+[[match]]
+name = 'swiftcall off: self is an unnamed register read'
+count = 2
+literal = 'int8 *v3; // r13'
+
+[[match]]
+name = 'swiftcall off: the struct witness writes through an unnamed register'
+count = 1
+literal = '*(int8 *)(v1 + 8) = *(int8 *)(v1 + 8) + a0;'
+
+[[match]]
+name = "swiftcall off: the throwing call's error path folds away"
+count = 1
+literal = 'v3 = (**(code **)(*a0 + 0x88))();'
+
+[[match]]
+name = 'swiftcall off: the virtual call drops the self it is passed'
+count = 1
+literal = 'v2 = (**(code **)(*a0 + 0x80))(a2,2);'
+
+[[match]]
+name = 'swiftcall off: a final method calls another without its self'
+count = 1
+literal = 'v1 = callfix.Account.fee(for:)(a0);'
+
+[[match]]
+name = "swiftcall on: the class method takes the class's self first"
+count = 1
+literal = 'callfix.Account.vtable#7.method(callfix.Account *self,int8 a1,int8 a2)'
+
+[[match]]
+name = 'swiftcall on: a virtual call on self passes self'
+count = 2
+literal = '(*((code **)self->isa)[9])(self);'
+
+[[match]]
+name = 'swiftcall on: the struct witness writes a field of self'
+count = 1
+literal = 'self->step = self->step + a1;'
+
+[[match]]
+name = 'swiftcall on: a class witness takes the address of the reference'
+count = 1
+literal = 'requirement#1(callfix.Account **self,int8 a1)'
+
+[[match]]
+name = 'swiftcall on: the virtual call passes the self it set'
+count = 1
+literal = 'v2 = (**(code **)(*a0 + 0x80))(a0,a2,2);'
+
+[[match]]
+name = 'swiftcall on: the throwing virtual call passes self'
+count = 1
+literal = 'v3 = (**(code **)(*a0 + 0x88))(a0);'
+
+[[match]]
+name = 'swiftcall on, symbols: a free function is declared from its name'
+count = 1
+literal = 'callfix.run(_:_:_:)(callfix.Account *a0,callfix.Counter *a1,int8 a2)'
+
+[[match]]
+name = 'swiftcall on, symbols: the virtual call on a declared class goes through its isa'
+count = 1
+literal = 'v2 = (*((code **)a0->isa)[0x10])(a0,a2,2);'
+
+[[match]]
+name = 'swiftcall on: the error path survives'
+count = 2
+literal = 'swift_release(v5);'
+
+[[match]]
+name = "swiftcall on: the throwing call's error is read as a call result"
+count = 2
+literal = 'v5 = swift_error();'
+
+[[match]]
+name = 'swiftcall on, symbols: the throwing function hands its error back'
+count = 1
+literal = 'swift_throw(v5);'
+
+[[match]]
+name = "swiftcall on, symbols: the mutating struct method takes the struct's self by address"
+count = 1
+literal = 'callfix.Counter.advance(by:times:)(int8 by,int8 times,callfix.Counter *self)'
+
+[[match]]
+name = "swiftcall on, symbols: the mutating method's body reads self's fields"
+count = 1
+literal = 'self->value = v1 + times + self->value;'
+
+[[match]]
+name = "swiftcall on, symbols: the call passes the struct's address as self"
+count = 1
+literal = 'callfix.Counter.advance(by:times:)(a2,3,a1);'
+
+[[match]]
+name = 'swiftcall on, symbols: the non-mutating method takes self by value'
+count = 1
+literal = 'callfix.Counter.peek(_:)(a2,*a1)'
+
+[[match]]
+name = 'swiftcall on, symbols: a final method hands its own self on'
+count = 1
+literal = 'v1 = callfix.Account.fee(for:)(a0,self);'
+
+[[match]]
+name = 'swiftcall on, symbols: and again after a call'
+count = 1
+literal = 'return callfix.Account.fee(for:)(for_,self) + v1;'
+
+[[match]]
+name = 'swiftcall off: the call after a runtime helper passes no self'
+count = 2
+literal = 'helperfix.Counter.bump()();'
+
+[[match]]
+name = 'swiftcall on: a runtime helper call leaves the self the caller set'
+count = 2
+literal = 'helperfix.Counter.bump()(a0);'
+
+[[match]]
+name = 'swiftcall on: the zeroed r12 of a C function stays a constant across its call'
+count = 1
+literal = 'return sub_10d2(a0) + 5;'
+
+[[match]]
+name = "swiftcall on: reading it after the call is not the callee's error"
+count = 1
+literal = 'return 1;'
+
+[[match]]
+name = "swiftcall on: a class-bound protocol's class witness takes the reference"
+count = 1
+literal = 'requirement#0(swift.type_metadata *Self,void *witness_table,nativefix.Impl *self)'
+
+[[match]]
+name = 'swiftcall on: and reads a field through it'
+count = 1
+literal = 'return self->v;'
+
+[[match]]
+name = 'swiftcall on: no class-bound witness is typed as a reference to a reference'
+count = 0
+literal = 'nativefix.Impl **self'
+
+[[match]]
+name = 'swiftcall on: a leaf call that never reads r13 leaves the self the caller set'
+count = 1
+literal = 'leaffix.Counter.bump(_:)(a0,v1,0);'
+
+[[match]]
+name = 'swiftcall on: a call to a module function leaves the self the caller set'
+count = 1
+literal = 'freefix.Counter.bump(_:)(a0,v1,0);'
+
+[[match]]
+name = 'swiftcall on: a spilled and reloaded error register keeps the error path, as the moved slot does'
+count = 2
+literal = 'return 0xffffffffffffffff;'
+
+[[match]]
+name = "swiftcall on: the throwing call's result is not returned unchecked"
+count = 0
+literal = 'return sub_2800();'

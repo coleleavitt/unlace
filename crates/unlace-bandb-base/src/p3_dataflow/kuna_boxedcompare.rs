@@ -24,13 +24,15 @@ crate::kuna_flag!(
     shipped: true
 );
 
-/// The upper-half ones a RISC-V FP argument register (`fa0`..`fa7`) carries on entry
-/// under `fpargboxed`, for an input varnode.
+/// The bits of an input varnode known to be 1 because it lies in the upper half of a RISC-V FP
+/// argument register (`fa0`..`fa7`, 8 bytes) under `fpargboxed`. Heritage often splits the
+/// register, so the input can be the upper word alone.
 fn boxed_argument(data: &Funcdata, vn: VarnodeId) -> u64 {
     let Some(v) = data.vbank().get(vn) else {
         return 0;
     };
-    if !v.is_input() || v.get_size() != 8 {
+    let size = v.get_size();
+    if !v.is_input() || !(1..=8).contains(&size) {
         return 0;
     }
     let arch = data.get_arch();
@@ -39,12 +41,31 @@ fn boxed_argument(data: &Funcdata, vn: VarnodeId) -> u64 {
     {
         return 0;
     }
-    let name = arch.get_register_name(v.get_space(), v.get_offset(), 8);
-    let argument = name
-        .strip_prefix("fa")
-        .and_then(|n| n.parse::<u32>().ok())
-        .is_some_and(|n| n < 8);
-    if argument { 0xffff_ffff_0000_0000 } else { 0 }
+    let space = v.get_space();
+    let offset = v.get_offset();
+    for start in 0..8u64 {
+        let Some(base) = offset.checked_sub(start) else {
+            break;
+        };
+        if start + size as u64 > 8 {
+            continue;
+        }
+        let name = arch.get_register_name(space, base, 8);
+        let argument = name
+            .strip_prefix("fa")
+            .and_then(|n| n.parse::<u32>().ok())
+            .is_some_and(|n| n < 8);
+        if !argument {
+            continue;
+        }
+        // register bit 8 * start + i is varnode bit i; bits 32..63 of the register are ones
+        let low = 32u64.saturating_sub(8 * start);
+        if low >= 64 {
+            return unlace_base::address::calc_mask(size);
+        }
+        return (u64::MAX << low) & unlace_base::address::calc_mask(size);
+    }
+    0
 }
 
 /// Bits of `vn` that are 1 on every path through bit operations, shifts by a constant,

@@ -638,6 +638,10 @@ Three tiers:
 | condfold on and --mode aggressive do not fold a chain of call-result tests | [`condcallpush`](#condcallpush----on--off-default-on) |
 | an if condition assigns a call result with a comma operand where the source wrote a separate statement and guard | [`orchainlive`](#orchainlive----on--off-default-off) |
 | guard clauses returning the same constant print as one && chain | [`orchainlive`](#orchainlive----on--off-default-off) |
+| guard clauses returning the same error constant print as one && /  | [`orchainbool`](#orchainbool----on--off-default-off) |
+|  | [`orchainbool`](#orchainbool----on--off-default-off) |
+|  chain | [`orchainbool`](#orchainbool----on--off-default-off) |
+| a null check and an unrelated field test are folded into one condition before a shared return -1 | [`orchainbool`](#orchainbool----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -2752,6 +2756,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on when guard clauses that return the same constant print as one `&&`/`||` chain whose operand assigns a call result used later. Leave off to keep the DIV-69 protection for every fold.
 - **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
 - **Example:** `option orchainlive on`
+
+### `orchainbool` -- on | off, default `off`
+
+- **Symptoms:** guard clauses returning the same error constant print as one && / ; ;  chain; a null check and an unrelated field test are folded into one condition before a shared return -1.
+- **What it does:** Limit the short-circuit protection of `returndup` (`kuna_orchain.rs`, DIV-69) to shared returns of 0 or 1. The protection keeps a shared constant-return block whole when `rule_block_or` could fold through it, which is right for the operand chain of a boolean expression (`return a || (b && c);`). A shared return of any other constant (`return -1`) is the exit of guard clauses the source wrote one by one (`if (!p) return -1; if (p->mode != R && p->mode != W) return -1;`). With this option such a block (its returned value is constants only, at least one of them neither 0 nor 1) does not stop `returndup` from splitting, so the guards print as early returns instead of one `&&`/`||` chain over unrelated tests.
+- **When to flip:** Turn on when guard clauses that return the same non-boolean constant (-1, an error code) print as one chain `if ((p) && (p->x == K || p->x == L)) {...} return -1;`. Leave off to keep the DIV-69 protection for every shared constant return.
+- **Where / provenance:** P8/goto-quality · kuna · structure-recovery · unlace-10-andorchain
+- **Example:** `option orchainbool on`
 
 ## Analysis & loader passes
 

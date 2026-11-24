@@ -289,6 +289,7 @@ kuna_options! { self, p1;
     "regionedgeorder" => registered!(crate::region_structurer::RegionEdgeOrder),
     "outline" => registered!(crate::kuna_outline::OutlineOption),
     "condfold" => registered!(crate::kuna_condfold::CondFold),
+    "orchainbool" => registered!(crate::kuna_orchainbool::OrchainBool),
     "orchainlive" => registered!(crate::kuna_orchain::OrchainLive),
     "implweight" => registered!(crate::coreaction_cleanup::ImplWeight),
     "condstmts" => registered!(crate::kuna_condstmts::CondStmts),

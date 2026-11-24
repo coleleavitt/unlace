@@ -1325,7 +1325,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `condcallpush`; its P8 row is last: 352 rows, 351 commas.
     // +1 for `comcfg`; its P1 row follows `com`: 353 rows, 352 commas.
     // +1 for `orchainlive`: 355 rows, 354 commas.
-    assert_eq!(json.matches("},\n").count(), 354);
+    // +1 for `orchainbool`: 356 rows, 355 commas.
+    assert_eq!(json.matches("},\n").count(), 355);
 }
 
 #[test]

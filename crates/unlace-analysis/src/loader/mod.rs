@@ -55,7 +55,9 @@ pub mod noretrules;
 // (unlace `debuglink`) separate debug files and MiniDebugInfo for stripped ELFs.
 pub mod elf_debuglink;
 // (unlace `debuglink`) a Mach-O image's `.dSYM` bundle, matched by LC_UUID.
+// (unlace) A Mach-O image's dependency list and `LC_RPATH` run paths.
 pub mod macho_dsym;
+pub mod macho_dylibs;
 // (unlace `globalref`) The sections a program's own data objects live in.
 pub mod elfv1;
 mod elfv1_imports;

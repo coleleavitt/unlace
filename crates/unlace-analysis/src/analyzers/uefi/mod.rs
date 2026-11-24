@@ -172,8 +172,16 @@ impl AnalysisPass for UefiPass {
             .as_ref()
             .map(index::Index::foreign)
             .unwrap_or_default();
+        let file_type = match (volume.as_ref(), ctx.image_path) {
+            (Some(v), Some(path)) => v.file_type_of(path),
+            _ => None,
+        };
+        let core = forced
+            .zip(file_type)
+            .filter(|_| self.entry_names)
+            .and_then(|(kind, t)| flow::core_seeds(t, kind));
         let (kind, found) = match flow::Walk::new(ctx, &efi, &foreign, &getters, entry) {
-            Some(walk) if entry != 0 => walk.run(forced),
+            Some(walk) if entry != 0 => walk.run(forced, core),
             _ => (forced.unwrap_or(flow::Kind::Dxe), flow::Found::default()),
         };
         if unlace_base::env::var_os("UNLACE_UEFI_DEBUG").is_some() {
@@ -190,10 +198,6 @@ impl AnalysisPass for UefiPass {
             }
         }
         if entry != 0 {
-            let file_type = match (volume.as_ref(), ctx.image_path) {
-                (Some(v), Some(path)) => v.file_type_of(path),
-                _ => None,
-            };
             let named = file_type
                 .filter(|_| self.entry_names)
                 .and_then(|t| entry::named(t, kind));

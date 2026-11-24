@@ -9664,7 +9664,11 @@ both
   there: a branch or call target or, on x86, the address its 32-bit field encodes
   (an `ifunc` resolver references its implementations with `lea`, which the Listing
   records as no flow). A module with a reference is accepted only when the
-  reference's target already carries that name, so matching runs up to three
+  reference's target already carries that name, or when the target is not named
+  yet and its own bytes match a reference-free signature of that name (the callee's
+  own signature, `callee_named`; a callee discovery never created, reached only
+  by a tail `jmp`, resolves this way). Such a target counts as an agreeing site
+  in the arbitration below. Matching runs up to three
   rounds and names found in one round satisfy references in the next.
   The version-11 reference sites decide the rest. A module that lies wholly inside
   the trie prefix has no CRC to tell it apart, so it is dropped when one of its

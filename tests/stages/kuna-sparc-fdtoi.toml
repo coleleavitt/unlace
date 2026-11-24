@@ -1,0 +1,103 @@
+# Independent assembly regression.
+# Stage: P2 lift/flow.
+# Strict correctness fix; no option. Every assertion checks the corrected behavior.
+# .text
+# .global fdtoi_word
+# .type fdtoi_word,@function
+# fdtoi_word:
+#  save %sp, -112, %sp
+#  st %i0, [%fp-8]
+#  st %i1, [%fp-4]
+#  ldd [%fp-8], %f2
+#  fdtoi %f2, %f4
+#  st %f4, [%fp-12]
+#  ld [%fp-12], %i0
+#  ret
+#  restore
+# .size fdtoi_word, .-fdtoi_word
+#
+# .text
+# .global carrier_conversion
+# .type carrier_conversion,@function
+# carrier_conversion:
+#  save %sp, -128, %sp
+#  call carrier
+#  nop
+#  std %f0, [%fp-16]
+#  call correction
+#  nop
+#  fstod %f0, %f6
+#  ldd [%fp-16], %f2
+#  fmuld %f2, %f6, %f8
+#  fdtoi %f8, %f5
+#  st %f5, [%fp-4]
+#  ld [%fp-4], %l0
+#  sth %l0, [%i0]
+#  ret
+#  restore
+# .global carrier
+# .type carrier,@function
+# carrier:
+#  retl
+#  nop
+# .size carrier, .-carrier
+# .global correction
+# .type correction,@function
+# correction:
+#  retl
+#  nop
+# .size correction, .-correction
+# .size carrier_conversion, .-carrier_conversion
+
+[image]
+arch = 'sparc:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 'fdtoi_word' },
+    { space = 'ram', offset = '0x11000', name = 'carrier_conversion' },
+    { space = 'ram', offset = '0x1103c', name = 'carrier' },
+    { space = 'ram', offset = '0x11044', name = 'correction' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+readonly = true
+hex = '''
+9de3bf90f027bff8f227bffcc51fbff889a01a42c927bff4f007bff481c7e008
+81e80000
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x11000'
+readonly = true
+hex = '''
+9de3bf804000000e01000000c13fbff04000000d010000008da01920c51fbff0
+91a089468ba01a48cb27bffce007bffce036000081c7e00881e8000081c3e008
+0100000081c3e00801000000
+'''
+
+[script]
+commands = [
+    'parse line extern int fdtoi_word(double x);',
+    'parse line extern void carrier_conversion(short *output);',
+    'parse line extern double carrier(void);',
+    'parse line extern float correction(void);',
+    'lo fu fdtoi_word',
+    'decompile',
+    'print C',
+    'lo fu carrier_conversion',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'word conversion reaches return'
+count = 1
+literal = 'return (int4)x;'
+
+[[match]]
+name = 'odd destination reaches the halfword store'
+count = 1
+literal = '*output = (int2)(int4)(v1 * (float8)correction());'

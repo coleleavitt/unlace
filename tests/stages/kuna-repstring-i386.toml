@@ -1,0 +1,193 @@
+# kuna GH-1650 `repstring`: SLEIGH lifts an x86 repeat prefix as a loop
+# inside the one instruction, so an inlined copy, fill or compare printed as
+# `while (n) { *p = *q; n -= 1; ... }` or
+# `do { if (!n) return 1; ... } while (x == y);`.
+#
+# Stage / sub-stage: P3 "simplification-quiescence".  The P0 assertion
+# `option repstring on|off` decides whether the proved loop becomes
+# `builtin_memcpy`, `builtin_memset`, `builtin_memset32` or `builtin_memcmp`.
+#
+# The bytes are .rodata and .text of crates/unlace-analysis/tests/
+# fixtures/repstring_i386, built from repstring.c by gcc 15.3
+# (-m32 -Os -minline-all-stringops -fno-pic): fill32 (`rep stosd` of a word
+# whose bytes differ), zero32 (of zero), fill8 (`rep stosb`), copy32 and
+# copy_end (`rep movsd`, the second returning the final destination), isdash
+# (`strcmp(s, "-") == 0` inlined as `repz cmpsb`), order and below (a
+# `memcmp` result built from the carry and zero flags), same_n (a run-time
+# length), same5 (no flags set up before the instruction) and mismatch (the
+# final pointer is returned, so it is no memcmp).
+#
+# Pass 1 runs with no option line, so it pins the shipped default.  Pass 2
+# (`option repstring off`) reproduces the bug: every instruction is a loop.
+
+[image]
+arch = 'x86:LE:32:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x4012a0', name = 'fill32' },
+    { space = 'ram', offset = '0x4012b4', name = 'zero32' },
+    { space = 'ram', offset = '0x4012c5', name = 'fill8' },
+    { space = 'ram', offset = '0x4012d7', name = 'copy32' },
+    { space = 'ram', offset = '0x4012eb', name = 'copy_end' },
+    { space = 'ram', offset = '0x401301', name = 'isdash' },
+    { space = 'ram', offset = '0x401326', name = 'order' },
+    { space = 'ram', offset = '0x40134b', name = 'below' },
+    { space = 'ram', offset = '0x401373', name = 'same_n' },
+    { space = 'ram', offset = '0x40138f', name = 'same5' },
+    { space = 'ram', offset = '0x4013ab', name = 'mismatch' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x4000d4'
+readonly = true
+hex = '2d00'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x4012a0'
+hex = '''
+55b80403020189e5578b4d0c8b7d08f3ab5f5dc35531c089e5578b4d0c8b7d08f3ab5f5dc35589e5578b4d108b7d088b450cf3aa5f5dc35589e5578b4d108b7d
+08568b750cf3a55e5f5dc35589e5578b4d108b7d08568b750cf3a589f85e5f5dc355b802000000b90200000039c089e557bfd4004000568b7508f3a65e5f5d0f
+94c00fb6c0c355b805000000b90500000039c089e557568b7d0c8b7508f3a65e5f5d0f97c01c000fbec0c355b807000000b90700000039c089e557568b7d0c8b
+7508f3a65e5f5d0f97c01c000fbec0c1e81fc35589e5578b4d108b7d0c568b750839c9f3a65e5f5d0f94c00fb6c0c355b90500000089e5578b7d0c568b7508f3
+a60f94c05e0fb6c05f5dc355b90800000089e5578b7d0c568b7508f3a689f05e5f5dc3
+'''
+
+[script]
+commands = [
+    'lo fu fill32',
+    'decompile',
+    'print C',
+    'lo fu zero32',
+    'decompile',
+    'print C',
+    'lo fu fill8',
+    'decompile',
+    'print C',
+    'lo fu copy32',
+    'decompile',
+    'print C',
+    'lo fu copy_end',
+    'decompile',
+    'print C',
+    'lo fu isdash',
+    'decompile',
+    'print C',
+    'lo fu order',
+    'decompile',
+    'print C',
+    'lo fu below',
+    'decompile',
+    'print C',
+    'lo fu same_n',
+    'decompile',
+    'print C',
+    'lo fu same5',
+    'decompile',
+    'print C',
+    'lo fu mismatch',
+    'decompile',
+    'print C',
+    'option repstring off',
+    'lo fu fill32',
+    'decompile',
+    'print C',
+    'lo fu zero32',
+    'decompile',
+    'print C',
+    'lo fu fill8',
+    'decompile',
+    'print C',
+    'lo fu copy32',
+    'decompile',
+    'print C',
+    'lo fu copy_end',
+    'decompile',
+    'print C',
+    'lo fu isdash',
+    'decompile',
+    'print C',
+    'lo fu order',
+    'decompile',
+    'print C',
+    'lo fu below',
+    'decompile',
+    'print C',
+    'lo fu same_n',
+    'decompile',
+    'print C',
+    'lo fu same5',
+    'decompile',
+    'print C',
+    'lo fu mismatch',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'repstring #1: with no option line (the shipped default) a fill of a mixed word is a 4-byte fill'
+count = 1
+regex = '^  builtin_memset32\(a0,0x1020304,'
+
+[[match]]
+name = 'repstring #2: a fill of zero words is a memset of n * 4 bytes'
+count = 1
+regex = '^  builtin_memset\(a0,0,a1 \* 4\);'
+
+[[match]]
+name = 'repstring #3: a byte fill is a memset of its run-time byte'
+count = 1
+regex = '^  builtin_memset\(a0,a1,'
+
+[[match]]
+name = 'repstring #4: a copy is a memcpy of n * 4 bytes, in both copies'
+count = 2
+regex = '^  builtin_memcpy\(a0,a1,a2 \* 4\);'
+
+[[match]]
+name = 'repstring #5: the destination read after a copy is its end'
+count = 1
+regex = '^  return &\(\(char \*\)a0\)\[a2 \* 4\];'
+
+[[match]]
+name = 'repstring #6: an inlined strcmp with a short constant is a memcmp of the string'
+count = 1
+regex = '^  return builtin_memcmp\(a0,"-",2\) == 0;'
+
+[[match]]
+name = 'repstring #7: the carry and zero flags after a compare are the sign of its result'
+count = 1
+regex = [
+    '^  v1 = builtin_memcmp\(a0,a1,5\);',
+    '^  return \(char\)\(\(0 < v1\) - \(v1 < 0\)\);',
+]
+
+[[match]]
+name = 'repstring #8: a compare of a run-time length'
+count = 1
+regex = '^  return builtin_memcmp\(a0,a1,a2\) == 0;'
+
+[[match]]
+name = 'repstring #9: a compare with no flags set before it, of a constant length'
+count = 1
+regex = '^  return builtin_memcmp\(a0,a1,5\) == 0;'
+
+[[match]]
+name = 'repstring #10: ten builtins in the default pass, none with the option off'
+count = 10
+literal = 'builtin_mem'
+
+[[match]]
+name = 'repstring #11: a compare whose final pointer is returned keeps its loop by default, as do four compares with the option off'
+count = 5
+regex = '^  \} while \(v2 == v4\);'
+
+[[match]]
+name = 'repstring #12: with the option off every copy and fill is an element loop -- the bug'
+count = 5
+regex = '^  while \('
+
+[[match]]
+name = 'repstring #13: and an ordered compare is a loop over two flags -- the bug'
+count = 2
+regex = '^  \} while \(v5\);'

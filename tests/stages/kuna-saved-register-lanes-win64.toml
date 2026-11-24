@@ -1,0 +1,70 @@
+# Asset-free regression for 4-byte SLEIGH lanes of unaffected 16-byte XMM
+# effects. The two caller-local rectangles are disjoint from the save slots.
+
+[image]
+arch = 'x86:LE:64:default:windows'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'fixture_observed_lane' },
+    { space = 'ram', offset = '0x401136', name = 'fixture_copy_rect' },
+    { space = 'ram', offset = '0x401215', name = 'fixture_spills_rect' },
+    { space = 'ram', offset = '0x401300', name = 'fixture_read_saved_lane' },
+    { space = 'ram', offset = '0x402020', name = 'rect_source' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401136'
+hex = 'f30f1efa0f10020f1101c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401215'
+hex = '4881ec880000000f297424400f297c2450440f29442460440f294c2470488d4c2420488d15e20d0000e8f3fefffff30f10442420f30f584424240f287424400f287c2450440f28442460440f284c24704881c488000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402020'
+hex = '0000a03f00002040000088410000b841'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '4881ecb80000000f29742420488d4c2420e8ea0200000f287424204881c4b8000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401300'
+hex = '488b01c3'
+
+[script]
+commands = [
+    'parse line struct Rect { float x; float y; float width; float height; };',
+    'map prototype 0x401215 float fixture_spills_rect(void)',
+    'map prototype 0x401136 void fixture_copy_rect(Rect *destination, const Rect *source)',
+    'map prototype 0x401000 unsigned long long fixture_observed_lane(void)',
+    'map prototype 0x401300 unsigned long long fixture_read_saved_lane(const unsigned long long *source)',
+    'map addr r0x402020 Rect rect_source',
+    'option stackviews on',
+    'lo fu fixture_spills_rect',
+    'decompile',
+    'print C',
+    'lo fu fixture_observed_lane',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'SAVED-XMM-WIN64 fixture #1: unaffected XMM6-9 lane spills are absent from the local frame'
+count = 0
+regex = 'stack - 0x(?:48|44|40|3c|38|34|30|2c|28|24|20|1c|18|14|10|c)'
+
+[[match]]
+name = 'SAVED-XMM-WIN64 fixture #2: the disjoint caller-owned Rect still reaches its helper and return'
+count = 1
+regex = 'return v[0-9]+(\[0\])?\.x \+ v[0-9]+(\[0\])?\.y;'
+
+[[match]]
+name = 'SAVED-XMM-WIN64 fixture #3: an observed XMM spill stays mapped at its frame slot'
+count = 1
+literal = 'stack - 0x98'

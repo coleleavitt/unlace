@@ -1,0 +1,73 @@
+# short-utf-16-window: caller-declared data must replace an exact-address
+# string mapping discovered earlier in the analysis commit.
+#
+# The first map models operand_refs reading the low byte of UTF-16 "ID" and
+# planting char[2].  The second is the strict `data` assertion's console form.
+# Before the fix both symbols coexisted, smallest-container lookup selected
+# char[2], and the local rendered as "I" despite the explicit wchar_t[3].
+#
+# The other two calls are width controls: an adjacent UTF-16 literal and an
+# ordinary ASCII literal must retain their existing spelling.
+
+[image]
+arch = 'x86:LE:64:default:windows'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'entry' },
+    { space = 'ram', offset = '0x401040', name = 'find_window' },
+    { space = 'ram', offset = '0x401043', name = 'use_ascii' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '''
+4883ec2848c7c0002040004889442420
+488b4c242031d2e82400000048c7c108
+20400031d2e81600000048c7c1182040
+00e80d0000004883c428c30f1f440000
+31c0c3c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+readonly = true
+hex = '''
+490044000000ffff4f004c004c005900
+44004200470000004153434949000000
+'''
+
+[script]
+commands = [
+    'map address r0x402000 char automatic_short_string[2]',
+    'map address r0x402000 wchar_t window_class[3]',
+    'map address r0x402008 wchar_t adjacent_wide[8]',
+    'map address r0x402018 char ascii_text[6]',
+    'parse line extern void entry(void);',
+    'parse line extern void find_window(wchar_t *,wchar_t *);',
+    'parse line extern void use_ascii(char *);',
+    'lo fu entry',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'short UTF-16 #1: explicit wchar_t mapping replaces narrow exact-address data'
+count = 1
+literal = 'L"ID"'
+
+[[match]]
+name = 'short UTF-16 #2: the one-byte rendering is gone'
+count = 0
+literal = '"I"'
+
+[[match]]
+name = 'short UTF-16 #3: adjacent wide literal is preserved'
+count = 1
+literal = 'L"OLLYDBG"'
+
+[[match]]
+name = 'short UTF-16 #4: ordinary ASCII literal is preserved'
+count = 1
+literal = '"ASCII"'

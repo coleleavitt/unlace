@@ -1,0 +1,84 @@
+# sharedpush-regparm: a declared parameter list the callee's own code
+# contradicts is no evidence that a pushed slot is shared.
+# wine's MSVCRT_longjmp (msvcr70.dll 0x10014d30, MinGW GCC) calls the static
+# msvcrt_local_unwind2 with its three arguments in EAX, EDX and ECX, but the
+# debug information lists them as ordinary parameters, so the declared list
+# places a parameter on the padding slot `push edx; push edx` leaves after
+# IsBadReadPtr. The sharedpush rule took that parameter as proof the slot is
+# an argument on both arms and gave it to the undeclared `call eax` too,
+# which printed `(*jmp->UnwindFunc)(jmp,frame)`; the callee pops one slot.
+# Stage / sub-stage: P4 call-site input recovery (`check_call_double_use`,
+# `p4_calls/kuna_sharedpush.rs`). A strict fix, always on.
+# The fixture `sharedpush_regparm_pe_i386.exe` is assembled from
+# `sharedpush_regparm_pe_i386.asm` (see the fixtures README). local_unwind
+# and stack_free are declared here the way debug information declares them.
+# 0x401060 is the longjmp shape: the call through jmp->unwind takes jmp alone
+# (1-2). 0x401040 pushes p above a branch for stack_free, whose code reads
+# its stack argument, and for a call through a register: both still take p
+# (3-4). 0x4010f0 does the same for this_free, a __thiscall member that reads
+# ECX and takes p on the stack, declared (as from a mangled name) with `this`
+# as a stack parameter: one register read leaves one stack argument, so the
+# call through the register still takes p (4-5).
+# Every PE pass sets `option typelib off`: the test pins what call-site
+# recovery finds, not the prototypes the Windows type library declares.
+
+[image]
+arch = 'x86:LE:32:default:windows'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/sharedpush_regparm_pe_i386.exe',
+    'option typelib off',
+    'read symbols',
+    'map function r0x401000 local_unwind',
+    'map function r0x401030 stack_free',
+    'map function r0x4010e0 this_free',
+    'parse line extern void local_unwind(int *frame,int level,void *ebp);',
+    'parse line extern void stack_free(int *p);',
+    'parse line extern void this_free(void *this,int *p);',
+    'load addr 0x401060',
+    'decompile',
+    'print C',
+    'load addr 0x401040',
+    'decompile',
+    'print C',
+    'load addr 0x4010f0',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'SHAREDPUSH-REGPARM #1: the call through the unwind slot takes the buffer alone'
+count = 1
+literal = '(*((code **)v1)[9])(v1);'
+
+[[match]]
+name = 'SHAREDPUSH-REGPARM #2: it is never handed the padding slot'
+count = 0
+regex = '\)\(v1,[^)]*\);'
+
+[[match]]
+name = 'SHAREDPUSH-REGPARM #3: stack_free keeps its push'
+count = 1
+literal = 'stack_free(a1);'
+
+[[match]]
+name = 'SHAREDPUSH-REGPARM #4: the call through the register takes it too, beside stack_free and beside this_free'
+count = 2
+literal = '(*a0)(a1);'
+
+[[match]]
+name = 'SHAREDPUSH-REGPARM #5: this_free keeps its push'
+count = 1
+literal = 'this_free(a1'

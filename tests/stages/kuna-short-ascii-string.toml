@@ -1,0 +1,56 @@
+# Four visible ASCII characters are enough to identify a NUL-terminated
+# string (option strings, default on).
+#
+# The XML wrapper only supplies the harness architecture. Both passes load
+# the same in-tree ELF fixture through the object loader. Its main function
+# copies the five bytes "xyzw\0" from rodata into a stack object.
+#
+# Pass 1 turns string analysis off and reproduces the missing literal: the
+# four data bytes and terminator are emitted as separate raw data symbols.
+# Pass 2 uses the default analyzer and plants a char[5], allowing the existing
+# constant-copy rule to render one builtin_strncpy with the complete literal.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/callrettype_clang_O0_x86_64',
+    'option strings off',
+    'read symbols',
+    'load function main',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/callrettype_clang_O0_x86_64',
+    'read symbols',
+    'load function main',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'SHORT ASCII STRING #1: off, the four bytes remain a raw data word'
+count = 1
+literal = 'v9 = dat_2013;'
+
+[[match]]
+name = 'SHORT ASCII STRING #2: default, the four-byte literal is one string copy'
+count = 1
+literal = 'builtin_strncpy(&v10,"xyzw",5);'
+
+[[match]]
+name = 'SHORT ASCII STRING #3: both passes preserve the surrounding string transform'
+count = 2
+literal = 'upper_after_blanks'

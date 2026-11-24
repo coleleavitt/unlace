@@ -1,0 +1,101 @@
+# Kuna #810. P3 callee-memory summaries / P6 physical-write liveness. stackviews off retains the first initializer; on removes two unread initializers while hidden and branch readers retain theirs. Const write control must not return the stale 12.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x402008', name = '__bss_start' },
+    { space = 'ram', offset = '0x402008', name = '_edata' },
+    { space = 'ram', offset = '0x402008', name = '_end' },
+    { space = 'ram', offset = '0x401167', name = '_start' },
+    { space = 'ram', offset = '0x40115e', name = 'callee_const_write' },
+    { space = 'ram', offset = '0x401149', name = 'callee_hidden_read' },
+    { space = 'ram', offset = '0x401143', name = 'callee_no_memory' },
+    { space = 'ram', offset = '0x401153', name = 'callee_read_choice' },
+    { space = 'ram', offset = '0x401139', name = 'callee_read_pair' },
+    { space = 'ram', offset = '0x40113f', name = 'callee_read_second' },
+    { space = 'ram', offset = '0x402000', name = 'callee_saved_pointer' },
+    { space = 'ram', offset = '0x4010a6', name = 'overwrite_after_branch_read' },
+    { space = 'ram', offset = '0x4010dd', name = 'overwrite_after_const_write' },
+    { space = 'ram', offset = '0x40106a', name = 'overwrite_after_hidden_read' },
+    { space = 'ram', offset = '0x401035', name = 'overwrite_after_no_memory' },
+    { space = 'ram', offset = '0x401000', name = 'overwrite_after_read_second' },
+    { space = 'ram', offset = '0x401112', name = 'read_after_const_write' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '534883ec10c7042405000000c7442404070000004889e7e82301000089c3c70424090000004889e7e80c01000001d84883c4105bc3534883ec10c7042405000000c7442404070000004889e7e8f200000089c3c70424090000004889e7e8d700000001d84883c4105bc3534883ec10c7042405000000c7442404070000004889257b0f00004889e7e8bc00000089c3c70424090000004889e7e89b00000001d84883c4105bc3534883ec1089fec7042405000000c7442404070000004889e7e88f00000089c3c70424090000004889e7e86400000001d84883c4105bc3534883ec10c7042405000000c7442404070000004889e7e86500000089c3c70424090000004889e7e82f00000001d84883c4105bc34883ec18c7042405000000c7442404070000004889e7e8310000008b0424034424044883c418c38b07034704c38b4704c3b803000000c3488b05b00e00008b00c385f675038b07c38b4704c3c7070900000031c0c3e894feffff83f8177547e8bffeffff83f813753de8eafeffff83f815753331ffe81affffff83f8157527bf01000000e80bffffff83f8177518e838ffffff83f810750ee863ffffff83f810750431ffeb05bf01000000b83c0000000f05'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+hex = '0000000000000000'
+
+[script]
+commands = [
+    'parse line typedef struct CalleePair { int first; int second; } CalleePair;',
+    'parse line extern int overwrite_after_read_second(void);',
+    'parse line extern int overwrite_after_no_memory(void);',
+    'parse line extern int overwrite_after_hidden_read(void);',
+    'parse line extern int overwrite_after_branch_read(int condition);',
+    'parse line extern int overwrite_after_const_write(void);',
+    'parse line extern int read_after_const_write(void);',
+    'parse line extern int callee_read_pair(const struct CalleePair *pair);',
+    'parse line extern int callee_read_second(const struct CalleePair *pair);',
+    'parse line extern int callee_no_memory(const struct CalleePair *pair);',
+    'parse line extern int callee_hidden_read(const struct CalleePair *pair);',
+    'parse line extern int callee_read_choice(const struct CalleePair *pair, int condition);',
+    'parse line extern int callee_const_write(const struct CalleePair *pair);',
+    'map addr r0x402000 struct CalleePair *callee_saved_pointer',
+    'option stackalias off',
+    'option stackviews off',
+    'lo fu overwrite_after_read_second',
+    'decompile',
+    'print C',
+    'option stackviews on',
+    'lo fu overwrite_after_read_second',
+    'decompile',
+    'print C',
+    'lo fu overwrite_after_no_memory',
+    'decompile',
+    'print C',
+    'lo fu overwrite_after_hidden_read',
+    'decompile',
+    'print C',
+    'lo fu overwrite_after_branch_read',
+    'decompile',
+    'print C',
+    'lo fu overwrite_after_const_write',
+    'decompile',
+    'print C',
+    'lo fu read_after_const_write',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'callee lifetimes: off and conservative first-word writes remain'
+count = 5
+literal = '= 5;'
+
+[[match]]
+name = 'callee lifetimes: every second-word initializer remains'
+count = 7
+literal = '= 7;'
+
+[[match]]
+name = 'callee lifetimes: later first-word overwrites remain'
+count = 6
+literal = '= 9;'
+
+[[match]]
+name = 'callee lifetimes: a body write defeats a const pointee promise'
+count = 0
+literal = 'return 12;'
+
+[[match]]
+name = 'callee lifetimes: the bounded reader still receives a typed object'
+count = 1
+literal = 'callee_read_second(&v2.view_CalleePair)'

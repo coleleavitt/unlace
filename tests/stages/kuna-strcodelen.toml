@@ -1,0 +1,71 @@
+# Kuna (IDA 9.5 rust.so 0xd200 string-length finder): P1 external
+# refinement, option strcodelen (default on). The script loads the committed
+# strcodelen/strs_x86_64.elf (a no_std rustc build, source and command beside
+# it). greet() passes "hello there" and "general kenobi" as (ptr, len) pairs;
+# rustc lays them out back to back with no NUL, and no static record holds
+# their lengths. keep() passes the first pointer alone.
+#
+# Assert #1 is the off pass: keep's pointer stays a bare address (the bytes
+# run into the next literal with no NUL, so no string covers them).
+# Asserts #2-#3 are the on pass: the pass bounds both literals by the lengths
+# greet loads beside them, so keep's pointer alone prints only its own text
+# and never the glued "hello theregeneral kenobi" (a char[N] symbol prints
+# at most N bytes). Assert #4: greet's calls
+# print their literals in both passes (the decompiler-side fatstr rule).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/strcodelen/strs_x86_64.elf',
+    'option strcodelen off',
+    'read symbols',
+    'load function greet',
+    'decompile',
+    'print C',
+    'load function keep',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/strcodelen/strs_x86_64.elf',
+    'option strcodelen on',
+    'read symbols',
+    'load function greet',
+    'decompile',
+    'print C',
+    'load function keep',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "strcodelen #1: off leaves keep's pointer as an address"
+count = 1
+literal = 'sink_ptr(0x200158);'
+
+[[match]]
+name = "strcodelen #2: on prints keep's pointer as its own literal"
+count = 1
+literal = 'sink_ptr("hello there");'
+
+[[match]]
+name = 'strcodelen #3: no literal is glued to the next'
+count = 0
+literal = 'hello theregeneral'
+
+[[match]]
+name = "strcodelen #4: greet's pairs print their literals in both passes"
+count = 2
+literal = 'sink("general kenobi",0xe);'

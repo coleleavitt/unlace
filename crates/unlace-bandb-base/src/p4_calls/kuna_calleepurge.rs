@@ -855,7 +855,8 @@ pub struct Step {
     pub call: Option<Call>,
     /// An indirect jump: the walk cannot follow it.
     pub unknown: bool,
-    /// A software interrupt (`int3`, `int 0x29`).
+    /// A software interrupt (`int3`, `int 0x29`). One whose p-code ends in
+    /// a constant `RETURN` (`int3`, `int1`) ends the path.
     pub interrupt: bool,
     /// The callee-saved registers ([`CALLEE_SAVED`] bits) the instruction writes.
     pub writes: u8,
@@ -1097,6 +1098,8 @@ pub fn step_with(
                     let at = s.state.0[SP].unwrap_or(Val::Opaque { own: true });
                     s.ret = Some((start_sp, at));
                     s.ret_pop = Some(sp_adds);
+                    s.falls_through = false;
+                } else if s.interrupt {
                     s.falls_through = false;
                 }
                 None

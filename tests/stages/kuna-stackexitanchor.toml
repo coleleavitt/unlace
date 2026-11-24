@@ -1,0 +1,58 @@
+# kuna stackexitanchor: the epilogue settles an unknown callee's purge.
+#
+# A hand-written __stdcall caller (x86win, so every call's extrapop is
+# unknown and StackSolver runs):
+#     f:  push 2 ; push 1 ; mov eax,[esp+0xc] ; call eax      ; callee pops 8
+#         mov ecx,[esp+4] ; mov eax,[esp+8] ; add eax,ecx ; ret 8
+# The callee is reached through a pointer, so nothing states its cleanup and
+# the push-run guess credits it with one argument.  Every stack reference
+# after the call is then 4 bytes off: the second argument reads the return
+# address slot.  The return instruction pops the caller's return address, so
+# the stack pointer entering it equals the entry one; with the option on that
+# is an exact equation, and the call's purge is solved backward from it.
+#
+# Stage: P6 stack-pointer flow, option stackexitanchor off|on.  Pass 1 (off)
+# pins the bug, pass 2 (on, the default) pins the fix.
+
+[image]
+arch = 'x86:LE:32:default:windows'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'f' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '6a026a018b44240cffd08b4c24048b44240801c8c20800'
+
+[script]
+commands = [
+    'option stackexitanchor off',
+    'lo fu f',
+    'decompile',
+    'print C',
+    'option stackexitanchor on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'STACKEXITANCHOR #1: off, the call is credited with one argument'
+count = 1
+regex = '^  \(\*a0\)\(1\);$'
+
+[[match]]
+name = 'STACKEXITANCHOR #2: off, the sum reads the return-address slot'
+count = 1
+literal = 'int4 v1; // eax | stack + 0x0'
+
+[[match]]
+name = 'STACKEXITANCHOR #3: on, the call takes both pushed arguments'
+count = 1
+regex = '^  \(\*a0\)\(1,2\);$'
+
+[[match]]
+name = "STACKEXITANCHOR #4: on, f returns its two arguments' sum"
+count = 1
+regex = '^  return &a0\[a1\];$'

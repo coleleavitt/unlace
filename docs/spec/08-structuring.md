@@ -1692,7 +1692,7 @@ cannot tell the two apart. Over a decbench sample (12 projects, 126 slices,
 decoders, whose source is the one-block `if` the option prints. Because the
 O2 aggregate rises, the option ships off and is a member of the `aggressive`
 preset, which `--mode auto` selects under 500 KiB.
-`tests/stages/kuna-rettriangle.xml` decompiles gcc -O0 functions with the
+`tests/stages/kuna-rettriangle.toml` decompiles gcc -O0 functions with the
 default and with the option on, and
 `unlace-cli/tests/rettriangle_round_trip.rs` compiles the printed C of gcc
 -O0/-O2 and clang -O0 builds beside the source and checks each function

@@ -1,0 +1,55 @@
+# Independent branch: FSTOI bits and an unsigned fallback join before SRL.
+
+[image]
+arch = 'sparc:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 'unsigned_join' },
+    { space = 'ram', offset = '0x10100', name = 'signed_join' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+readonly = true
+hex = '03000080c1004000c300600481a80a21194800050100000081a01a20c1206008d00060089132200381c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10100'
+readonly = true
+hex = '03000080c1004000c300600481a80a21194800050100000081a01a20c1206008d0006008913a200381c3e00801000000'
+
+[script]
+commands = [
+    'parse line extern unsigned int unsigned_join(unsigned int fallback);',
+    'parse line extern int signed_join(int retained);',
+    'map address r0x20000 float sample',
+    'map address r0x20004 float limit',
+    'lo fu unsigned_join',
+    'decompile',
+    'print C',
+    'lo fu signed_join',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'unsigned merge retains signed conversion'
+count = 1
+literal = 'fallback = (uint4)(int4)sample;'
+
+[[match]]
+name = 'logical shift retains unsigned destination'
+count = 1
+literal = 'return fallback >> 3;'
+
+[[match]]
+name = 'signed merge retains signed conversion'
+count = 1
+literal = 'retained = (int4)sample;'
+
+[[match]]
+name = 'signed shift stays signed'
+count = 1
+literal = 'return retained >> 3;'

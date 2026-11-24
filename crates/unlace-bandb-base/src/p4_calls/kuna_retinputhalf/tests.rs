@@ -2,7 +2,7 @@
 //!
 //! These pin the *predicate* on a hand-built `Funcdata`; the end-to-end witness
 //! (a `wide`/`w2` pair whose only difference is copy-vs-arithmetic in the high
-//! half) lives in `tests/stages/kuna-retinputhalf.xml`. The negative control —
+//! half) lives in `tests/stages/kuna-retinputhalf.toml`. The negative control —
 //! that the callee-saved-restore phantom this carve-out sits inside stays killed —
 //! is `unlace-console/tests/verify_return_uncomputed.rs`.
 

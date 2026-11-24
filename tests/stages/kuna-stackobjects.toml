@@ -1,0 +1,533 @@
+# Kuna #810 / P6 alias-facets. stackviews off has no logical objects;
+# on distinguishes contents at typed uses. Native tests preserve physical behavior.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'read_pair' },
+    { space = 'ram', offset = '0x401006', name = 'obj_repeat' },
+    { space = 'ram', offset = '0x401034', name = 'obj_reuse' },
+    { space = 'ram', offset = '0x401071', name = 'obj_branch' },
+    { space = 'ram', offset = '0x4010a6', name = 'obj_loop' },
+    { space = 'ram', offset = '0x4010e6', name = 'obj_partial' },
+    { space = 'ram', offset = '0x402000', name = 'param_reuse' },
+    { space = 'ram', offset = '0x402040', name = 'read_key' },
+    { space = 'ram', offset = '0x403000', name = 'param_pair' },
+    { space = 'ram', offset = '0x40304b', name = 'param_incoming' },
+    { space = 'ram', offset = '0x403088', name = 'param_mutation' },
+    { space = 'ram', offset = '0x4030ca', name = 'param_escaped' },
+    { space = 'ram', offset = '0x403113', name = 'parameter_read_pair' },
+    { space = 'ram', offset = '0x403119', name = 'parameter_read_incoming_pair' },
+    { space = 'ram', offset = '0x403120', name = 'parameter_read_handle' },
+    { space = 'ram', offset = '0x403126', name = 'parameter_read_saved_handle' },
+    { space = 'ram', offset = '0x405000', name = 'param_scalar_escaped' },
+    { space = 'ram', offset = '0x40504c', name = 'variant_read_word' },
+    { space = 'ram', offset = '0x40504f', name = 'variant_read_saved_word' },
+    { space = 'ram', offset = '0x405059', name = 'param_equal_float' },
+    { space = 'ram', offset = '0x405086', name = 'variant_read_float_handle' },
+    { space = 'ram', offset = '0x40508c', name = 'param_multiple' },
+    { space = 'ram', offset = '0x4050bb', name = 'variant_read_parameter_pair' },
+    { space = 'ram', offset = '0x4050c2', name = 'variant_read_parameter_handle' },
+    { space = 'ram', offset = '0x4050c8', name = 'param_multiple_interior' },
+    { space = 'ram', offset = '0x4050f7', name = 'param_word_partial' },
+    { space = 'ram', offset = '0x407000', name = 'parameter_dynamic_reuse' },
+    { space = 'ram', offset = '0x407057', name = 'parameter_dynamic_observe' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '8b07034704c3534883ec10c7042405000000c7442404070000004889e7e8deffffff89c34889e7e8d4ffffff01d84883c4105bc3534883ec10c7042405000000c7442404070000004889e7e8b0ffffff89c3c7042409000000c74424040b0000004889e7e897ffffff01d84883c4105bc34883ec1885ff7411c7042405000000c744240407000000eb0fc7042409000000c74424040b0000004889e7e85fffffff4883c418c3535541544883ec1031ed41bc02000000c7042405000000c7442404070000004889e7e833ffffff01c5c704240900000041ffcc75ea89e84883c410415c5d5bc3534883ec10c7042405000000c7442404070000004889e7e8fefeffff89c3c6442401aa4889e7e8effeffff01d84883c4105bc3e8e8feffff83f818753fe80cffffff83f820753531ffe83dffffff83f8147529bf01000000e82effffff83f80c751ae859ffffff83f81c7510e88fffffff3d18aa0000750431ffeb05bf01000000b83c0000000f05'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+hex = '807c2408007533534883ec10c74424200a000000488d7c2420e82200000089c3c74424200b000000488d7c2420e80e00000001d84883c4105bc3b863000000c38b07c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x403000'
+hex = '807c240800753e534883ec1048b805000000070000004889442420488d7c2420e8ee00000089c3488d05d20f00004889442420488d7c2420e8e300000001d84883c4105bc3b863000000c3534883ec10c744242407000000488d7c2420e8b700000089c3488d05950f00004889442420488d7c2420e8a600000001d84883c4105bc3b863000000c3534883ec10c644242001c744242407000000488d7c2420e87500000089c3488d05530f00004889442420488d7c2420e86400000001d84883c4105bc3b863000000c3534883ec10488d4424204889052d0f0000c744242407000000488d7c2420e82c00000089c3488d050a0f00004889442420488d7c2420e82100000001d84883c4105bc3b863000000c38b07034704c30fb607034704c3488b078b00c3488b05db0e0000488b008b00c34883ec08c7042400000000e8bdfeffff83f843757bc7042401000000e8acfeffff83f863756ac7042400000000e8e6feffff83f83e7559c7042401000000e8d5feffff83f83f7548c7042400000000e801ffffff83f83f7537c7042401000000e8f0feffff83f83f7526c7042400000000e821ffffff83f83e7515c7042401000000e810ffffff83f83f750431ffeb05bf01000000b83c0000000f05'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x404000'
+hex = '37000000000000000000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x405000'
+hex = '807c240800753f534883ec10488d442420488905e80f0000c74424200a000000488d7c2420e82200000089c3c74424200b000000488d7c2420e81100000001d84883c4105bc3b863000000c38b07c3488b05aa0f00008b00c3534883ec10f20f10442420f20f2cd8488d05990f00004889442420488d7c2420e80800000001d84883c4105bc3488b078b00c3534883ec10488d7c2420e82000000089c3488d05640f00004889442420488d7c2420e80f00000001d84883c4105bc30fb607034708c3488b078b00c3534883ec10488d7c2420e8e4ffffff89c3488d05280f00004889442428488d7c2428e8d3ffffff01d84883c4105bc3534883ec10488d7c2424e846ffffff89c3488d05f90e00004889442420488d7c2420e8a4ffffff01d84883c4105bc34883ec1048c7042400000000e8c9feffff83f8150f85f200000048c7042401000000e8b3feffff83f8630f85dc00000048b80000000000002a4048890424e8f0feffff83f8440f85c000000048b8000000000000314048890424e8d4feffff83f8480f85a400000048c704240000000048c74424080d000000e8e8feffff83f8440f858500000048c704240100000048c744240811000000e8c9feffff83f849756a48c704240000000048c74424080d000000e8eafeffff83f844754f48c704240100000048c744240811000000e8cffeffff83f849753448b8010000000d00000048890424e8e6feffff83f844751c48b8010000001100000048890424e8cefeffff83f848750431ffeb05bf01000000b83c0000000f05'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x406000'
+hex = '000000000000000037000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x407000'
+hex = '534154415541564883ec284989fc4189f54189d60fb65c2450b80700000085db752944896c2450488d7424504c89e7e823000000418d450789442450488d7424504c89e7e80e00000031c04883c428415e415d415c5bc38b064c63074983f80673054a8944c708ff07c3'
+
+[script]
+commands = [
+    'parse line struct LifetimePair { int4 x; int4 y; };',
+    'parse line extern int4 read_pair(LifetimePair *pair);',
+    'parse line extern int4 obj_repeat(void);',
+    'parse line extern int4 obj_reuse(void);',
+    'parse line extern int4 obj_branch(int4 condition);',
+    'parse line extern int4 obj_loop(void);',
+    'parse line extern int4 obj_partial(void);',
+    'option stackviews off',
+    'lo fu obj_repeat',
+    'decompile',
+    'print stack objects',
+    'option stackviews on',
+    'option stackalias off',
+    'lo fu obj_repeat',
+    'decompile',
+    'print stack objects',
+    'lo fu obj_reuse',
+    'decompile',
+    'print stack objects',
+    'lo fu obj_branch',
+    'decompile',
+    'print stack objects',
+    'lo fu obj_loop',
+    'decompile',
+    'print stack objects',
+    'lo fu obj_partial',
+    'decompile',
+    'print stack objects',
+    'parse line struct SemanticPair { int4 left; int4 right; };',
+    'lo fu obj_reuse',
+    'decompile',
+    'rename object_40104b_1 initial',
+    'decompile',
+    'rename object_401064_1 replacement',
+    'retype initial SemanticPair',
+    'decompile',
+    'print C',
+    'rename initial first_pair',
+    'decompile',
+    'print C',
+    'lo fu obj_repeat',
+    'map addr s0xffffffffffffffe8 LifetimePair protected_pair',
+    'decompile',
+    'rename object_40101d_1 repeat_pair',
+    'decompile',
+    'print C',
+    'parse line extern int4 param_reuse(int4 a, int4 b, int4 c, int4 d, int4 e, int4 f, bool prepare_only);',
+    'parse line extern int4 read_key(int4 *key);',
+    'option protoorder off',
+    'option stackviews off',
+    'lo fu param_reuse',
+    'decompile',
+    'print C',
+    'option stackviews on',
+    'lo fu param_reuse',
+    'decompile',
+    'print stack objects',
+    'print C',
+    'rename v2 key_storage',
+    'decompile',
+    'print C',
+    'rename object_402019_1 first_key',
+    'rename object_40202d_1 second_key',
+    'decompile',
+    'print C',
+    'parse line struct LifetimeIncomingPair { bool x; uint1 padding[3]; int4 y; };',
+    'parse line struct LifetimeHandle { int4 *value; };',
+    'parse line extern int4 parameter_read_pair(LifetimePair *pair);',
+    'parse line extern int4 parameter_read_incoming_pair(LifetimeIncomingPair *pair);',
+    'parse line extern int4 parameter_read_handle(LifetimeHandle *handle);',
+    'parse line extern int4 parameter_read_saved_handle(void);',
+    'parse line extern int4 param_pair(int4 a, int4 b, int4 c, int4 d, int4 e, int4 f, bool prepare_only);',
+    'parse line extern int4 param_incoming(int4 a, int4 b, int4 c, int4 d, int4 e, int4 f, bool prepare_only);',
+    'parse line extern int4 param_mutation(int4 a, int4 b, int4 c, int4 d, int4 e, int4 f, bool prepare_only);',
+    'parse line extern int4 param_escaped(int4 a, int4 b, int4 c, int4 d, int4 e, int4 f, bool prepare_only);',
+    'map addr r0x404000 int4 parameter_datum',
+    'map addr r0x404008 void *parameter_escaped_pointer',
+    'option stackviews off',
+    'lo fu param_incoming',
+    'decompile',
+    'print C',
+    'option stackviews on',
+    'lo fu param_pair',
+    'decompile',
+    'print stack objects',
+    'lo fu param_incoming',
+    'decompile',
+    'print stack objects',
+    'print C',
+    'rename object_40305d_1 incoming_view',
+    'decompile',
+    'print C',
+    'rename object_403075_1 handle_view',
+    'decompile',
+    'print C',
+    'lo fu param_mutation',
+    'decompile',
+    'print C',
+    'lo fu param_escaped',
+    'decompile',
+    'print C',
+    'rename object_4030e8_1 escaped_view',
+    'decompile',
+    'print C',
+    'parse line struct LifetimeParameterPair { bool x; uint1 padding[7]; int8 y; };',
+    'parse line extern int4 param_scalar_escaped(int4 a, int4 b, int4 c, int4 d, int4 e, int4 f, bool prepare_only);',
+    'parse line extern int4 param_equal_float(float8 a, float8 b, float8 c, float8 d, float8 e, float8 f, float8 g, float8 h, float8 prepared_value);',
+    'parse line extern int4 param_multiple(int4 a, int4 b, int4 c, int4 d, int4 e, int4 f, bool prepare_only, int8 carried_value);',
+    'parse line extern int4 param_multiple_interior(int4 a, int4 b, int4 c, int4 d, int4 e, int4 f, bool prepare_only, int8 carried_value);',
+    'parse line extern int4 param_word_partial(int4 a, int4 b, int4 c, int4 d, int4 e, int4 f, int8 incoming_word);',
+    'parse line extern int4 variant_read_word(int4 *word);',
+    'parse line extern int4 variant_read_saved_word(void);',
+    'parse line extern int4 variant_read_float_handle(LifetimeHandle *handle);',
+    'parse line extern int4 variant_read_parameter_pair(LifetimeParameterPair *pair);',
+    'parse line extern int4 variant_read_parameter_handle(LifetimeHandle *handle);',
+    'map addr r0x406000 void *variant_escaped_pointer',
+    'map addr r0x406008 int4 variant_datum',
+    'option stackviews off',
+    'lo fu param_scalar_escaped',
+    'decompile',
+    'print C',
+    'lo fu param_equal_float',
+    'decompile',
+    'print C',
+    'option stackviews on',
+    'lo fu param_scalar_escaped',
+    'decompile',
+    'print stack objects',
+    'print C',
+    'lo fu param_equal_float',
+    'decompile',
+    'print stack objects',
+    'print C',
+    'lo fu param_multiple',
+    'decompile',
+    'print stack objects',
+    'print C',
+    'lo fu param_multiple_interior',
+    'decompile',
+    'print stack objects',
+    'print C',
+    'lo fu param_word_partial',
+    'decompile',
+    'print stack objects',
+    'print C',
+    'lo fu param_multiple_interior',
+    'decompile',
+    'rename object_4050ea_1 interior_handle',
+    'decompile',
+    'print C',
+    'lo fu param_scalar_escaped',
+    'decompile',
+    'rename prepare_only source_flag',
+    'decompile',
+    'print C',
+    'decompile',
+    'print C',
+    'parse line extern int4 parameter_dynamic_reuse(void *context,int4 b,int4 c,int4 d,int4 e,int4 f,bool carried);',
+    'parse line extern int4 parameter_dynamic_observe(void *context,uint4 *key);',
+    'option stackviews off',
+    'lo fu parameter_dynamic_reuse',
+    'decompile',
+    'print C',
+    'option stackviews on',
+    'lo fu parameter_dynamic_reuse',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'one identity for unchanged contents'
+count = 1
+regex = '^object_40101d_1 stack=-0x18 size=8 state=defined$'
+
+[[match]]
+name = 'both uses of unchanged contents retained'
+count = 1
+regex = '^  use 0x401027:1 LifetimePair$'
+
+[[match]]
+name = 'two identities despite the same layout and address'
+count = 2
+regex = '^object_4010(4b|64)_1 stack=-0x18 size=8 state=defined$'
+
+[[match]]
+name = 'branch alternatives are defined'
+count = 1
+regex = '^  bytes 0..4 0x401079\|0x40108a$'
+
+[[match]]
+name = 'loop initial and backedge definitions share a family'
+count = 1
+regex = '^  bytes 0..4 0x4010b6\|0x4010cf$'
+
+[[match]]
+name = 'partial update retains the first byte'
+count = 1
+regex = '^  bytes 0..1 0x4010eb$'
+
+[[match]]
+name = 'partial update changes only the second byte'
+count = 1
+regex = '^  bytes 1..2 0x401104$'
+
+[[match]]
+name = 'partial update retains the other bytes'
+count = 1
+regex = '^  bytes 2..4 0x4010eb$'
+
+[[match]]
+name = 'partial update retains the second word across both uses'
+count = 2
+regex = '^  bytes 4..8 0x4010f2$'
+
+[[match]]
+name = 'all seven families are defined and option off adds none'
+count = 7
+regex = '^object_[0-9a-f]+_1 stack=-0x[0-9a-f]+ size=8 state=defined$'
+
+[[match]]
+name = 'known read-only calls do not add uncertain effects'
+count = 0
+regex = '^(object_4010[0-9a-f]+_1 .*state=uncertain|  bytes .*effect@)'
+
+[[match]]
+name = 'logical assertion selects the first initializer fields'
+count = 1
+literal = 'initial.left = 5;'
+
+[[match]]
+name = 'logical assertion selects the later initializer fields'
+count = 2
+literal = 'replacement.x = 9;'
+
+[[match]]
+name = 'logical retype keeps the first call at the named physical view'
+count = 1
+regex = 'read_pair\(\(LifetimePair \*\)&v[0-9]+\.initial\)'
+
+[[match]]
+name = 'later incarnation retains its independent named call view'
+count = 2
+regex = 'read_pair\(&v[0-9]+\.replacement\)'
+
+[[match]]
+name = 'rename after rebuilding updates initializer fields'
+count = 1
+literal = 'first_pair.left = 5;'
+
+[[match]]
+name = 'rename after rebuilding updates the call view'
+count = 1
+regex = 'read_pair\(\(LifetimePair \*\)&v[0-9]+\.first_pair\)'
+
+[[match]]
+name = 'late logical bindings never emit an undefined frame name'
+count = 0
+literal = '&Stackffffffffffffffe8'
+
+[[match]]
+name = 'locked layouts keep their declared physical object'
+count = 1
+literal = 'LifetimePair protected_pair;'
+
+[[match]]
+name = 'locked layouts expose one pointer per logical view'
+count = 1
+literal = 'LifetimePair *repeat_pair_view;'
+
+[[match]]
+name = 'logical pointers refer to the protected physical object'
+count = 1
+regex = 'repeat_pair_view = (\(LifetimePair \*\))?&protected_pair;'
+
+[[match]]
+name = 'unchanged contents reuse one logical pointer at both calls'
+count = 2
+literal = 'read_pair(repeat_pair_view)'
+
+# Historical option-off labels below now forbid the old narrow parameter addresses.
+[[match]]
+name = 'option off still takes the incoming parameter address'
+count = 0
+literal = 'read_key((int4 *)&prepare_only)'
+
+[[match]]
+name = 'reused parameter bytes have complete native definitions'
+count = 2
+regex = '^object_4020(19|2d)_1 stack=0x8 size=4 state=defined$'
+
+[[match]]
+name = 'input condition survives local rename and logical naming'
+count = 6
+literal = 'if (!prepare_only)'
+
+[[match]]
+name = 'wider local rename keeps both native key stores'
+count = 4
+regex = 'key_storage = (10|0xb);'
+
+[[match]]
+name = 'first object name selects the wider parameter slot local'
+count = 1
+literal = 'first_key_view = (int4 *)&key_storage;'
+
+[[match]]
+name = 'second object name selects the same physical word'
+count = 1
+literal = 'second_key_view = (int4 *)&key_storage;'
+
+[[match]]
+name = 'option off aggregate still addresses the smaller parameter'
+count = 1
+literal = 'parameter_read_incoming_pair((LifetimeIncomingPair *)&prepare_only)'
+
+[[match]]
+name = 'fully overwritten aggregate parameter objects retain native definitions'
+count = 2
+regex = '^object_4030(20|38)_1 stack=0x8 size=8 state=defined$'
+
+[[match]]
+name = 'partial parameter object retains its incoming family'
+count = 1
+regex = '^object_40305d_1 stack=0x8 size=8 state=uncertain$'
+
+[[match]]
+name = 'synthetic initialization does not claim a native write'
+count = 2
+regex = '^  bytes 0..4 incoming$'
+
+[[match]]
+name = 'backing initialization reads the actual ABI parameter'
+count = 12
+regex = 'v[0-9]+\.view_bool = prepare_only;'
+
+[[match]]
+name = 'narrow writes target the physical backing'
+count = 1
+regex = 'v[0-9]+\.bytes\[0\] = 1;'
+
+[[match]]
+name = 'narrow writes do not name the formal parameter as a union'
+count = 0
+literal = 'prepare_only.bytes'
+
+[[match]]
+name = 'escaped addresses retain the shared backing'
+count = 2
+regex = 'dat_404008 = &v[0-9]+;'
+
+[[match]]
+name = 'named incoming families retain the same backing at their use'
+count = 2
+regex = 'parameter_read_incoming_pair\(&\(\(stack_views_40304b_p8_[0-9]+ \*\)&v[0-9]+\)->incoming_view\)'
+
+[[match]]
+name = 'named replacement retains its exact backing symbol'
+count = 1
+regex = 'parameter_read_handle\(&\(\(stack_views_40304b_p8_[0-9]+ \*\)&v[0-9]+\)->handle_view\)'
+
+[[match]]
+name = 'option off scalar escape names the incoming value'
+count = 0
+literal = 'dat_406000 = &prepare_only;'
+
+[[match]]
+name = 'option off equal-width reuse addresses the incoming float'
+count = 1
+literal = 'variant_read_float_handle((LifetimeHandle *)&prepared_value)'
+
+[[match]]
+name = 'escaped scalar storage keeps one physical backing'
+count = 4
+regex = 'dat_406000 = &v[0-9]+;'
+
+[[match]]
+name = 'equal-width float initializes from its formal input'
+count = 1
+regex = 'v[0-9]+\.view_float8 = prepared_value;'
+
+[[match]]
+name = 'equal-width input has no uninitialized shadow local'
+count = 0
+regex = 'float8 prepared_value_[0-9]+;'
+
+[[match]]
+name = 'both interior formals initialize the shared extent'
+count = 3
+regex = 'v[0-9]+\.view_int8_at8\.value = carried_value;'
+
+[[match]]
+name = 'partial input read receives the whole incoming word'
+count = 1
+regex = 'v[0-9]+\.view_int8 = incoming_word;'
+
+[[match]]
+name = 'larger objects preserve incoming rather than synthetic definitions'
+count = 2
+regex = '^object_4050(96|d2)_1 stack=0x8 size=16 state=uncertain$'
+
+[[match]]
+name = 'interior replacement retains its native definition'
+count = 1
+regex = '^object_4050ea_1 stack=0x10 size=8 state=defined$'
+
+[[match]]
+name = 'partial input read selects its offset view'
+count = 1
+regex = 'variant_read_word\(&v[0-9]+\.view_int4_at4\.value\)'
+
+[[match]]
+name = 'ordinary interior use selects its offset view'
+count = 1
+regex = 'variant_read_parameter_handle\(.*view_LifetimeHandle_at8\)\.value\)'
+
+[[match]]
+name = 'named interior use stays on its shared backing'
+count = 1
+regex = 'variant_read_parameter_handle\(.*interior_handle\)\.value\)'
+
+[[match]]
+name = 'named interior use never takes the formal address'
+count = 0
+regex = 'interior_handle_view = .*&carried_value;'
+
+[[match]]
+name = 'interior uses never emit undefined storage or partial tokens'
+count = 0
+regex = '(&Stack000000|Register00000020|\._8_8_)'
+
+[[match]]
+name = 'formal rename survives consecutive rebuilds in the signature'
+count = 2
+literal = 'bool source_flag)'
+
+[[match]]
+name = 'formal rename survives consecutive backing initializers'
+count = 2
+regex = 'v[0-9]+\.view_bool = source_flag;'
+
+[[match]]
+name = 'formal rename does not produce an uninitialized body shadow'
+count = 0
+literal = 'bool source_flag;'
+
+[[match]]
+name = 'dynamic first store survives before the first observer'
+count = 2
+regex = 'v[0-9]+\.view_uint4 = b;'
+
+[[match]]
+name = 'dynamic later store shares the backing'
+count = 2
+regex = 'v[0-9]+\.view_(u)?int4 = b \+ 7;'
+
+[[match]]
+name = 'dynamic observers never address the narrow input'
+count = 0
+literal = 'parameter_dynamic_observe(context,(uint4 *)&carried)'

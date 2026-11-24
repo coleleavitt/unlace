@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<compiler_spec>
+  <data_organization>
+    <pointer_size value="2"/>
+    <integer_size value="2"/>
+  </data_organization>
+  <global>
+    <range space="RAM"/>
+    <range space="sfr"/>
+  </global>
+  <stackpointer register="SP" space="RAM" growth="negative"/>
+  <returnaddress>
+    <varnode space="stack" offset="0" size="2"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="__asm" extrapop="2" stackshift="2" strategy="register">
+      <input>
+        <pentry minsize="1" maxsize="1">
+          <register name="A"/>
+        </pentry>
+        <pentry minsize="2" maxsize="2">
+          <register name="BC"/>
+        </pentry>
+        <pentry minsize="2" maxsize="2">
+          <register name="DE"/>
+        </pentry>
+        <pentry minsize="2" maxsize="2">
+          <register name="HL"/>
+        </pentry>
+        <pentry minsize="2" maxsize="2">
+          <register name="EA"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="1">
+          <register name="A"/>
+        </pentry>
+        <pentry minsize="2" maxsize="2">
+          <register name="EA"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="SP"/>
+      </unaffected>
+    </prototype>
+  </default_proto>
+</compiler_spec>

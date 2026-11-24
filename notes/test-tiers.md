@@ -29,6 +29,7 @@ baseline (last night) and cannot gate a PR.
 | `scripts/check_determinism.py` (lint) / `--run` | T3 | `tidy` / `gates` |
 | Crate unit tests and integration suites (`unlace-cli` 398 test files, `unlace-console` 233, `unlace-decomp` 168, `unlace-sleigh` 35, others) | mostly T2; T4 where they compile output | workspace suite (nextest `ci`, 3 partitions) |
 | Tests that build and run what the decompiler emitted (about 129 test files call `cc`/`clang`/`zig`/`rustc`/`go`, nearly all in `unlace-cli/tests`) | T4 | workspace suite |
+| `tools/semantic`: each function of 12 construct programs, decompiled, recompiled in place of the original and run (gcc, clang, zig aarch64; -O0, -O2), vs `tools/semantic/baseline.json` | T4 (corpus) | manual; proposed `nightly.yml` job (`tools/semantic/README.md`), results in `notes/semantic-results.md` |
 | `tests/bug-repro`, `tests/hang-repro` binaries | T5 inputs (a regression check once an issue is fixed) | through the CLI tests that name them |
 | decbench sample (`nightly.yml` `decbench`, `scripts/nightly`), `scripts/quality` | T5 | nightly.yml, manual dispatch only (no schedule yet) |
 | CodSpeed benchmarks (`unlace-bench`) | T5 (speed) | codspeed.yml, every PR and push |
@@ -70,5 +71,9 @@ baseline (last night) and cannot gate a PR.
   time: any stage file over 10 s (`vaarg-loop-gcc.toml` is 6 MB and is the first to measure)
   can move to a nightly-only corpus directory; the T4 tests over 30 s on a CI runner join the
   nightly profile. A move needs the measured time in its PR.
+- **T4 as a corpus:** `tools/semantic/run.py --baseline tools/semantic/baseline.json` in its own
+  nightly job with pinned compilers; a row that stops passing fails it. Its x86_64-gcc subset
+  (about 4 s) is the candidate for the per-PR gates once its known failures are fixed or recorded
+  (proposal in `tools/semantic/README.md`).
 - **Not moved:** T1 and T2 stay per PR. They are the gates that catch a regression at the PR that
   causes it, and per-file selection and the times artifact make them cheap to iterate on locally.

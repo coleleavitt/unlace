@@ -4672,10 +4672,12 @@ below.
 
 ### RISC-V ratified bit manipulation and Zicond (#98)
 
-`riscv.rv32b.sinc` (forms common to RV32 and RV64) and `riscv.rv64b.sinc`
-(RV64-only forms) decode the ratified Zba, Zbb, Zbc and Zbs extensions
-(Bitmanip 1.0.0), Zbkb and Zbkx (Scalar Crypto 1.0.1) and Zicond (1.0). They
-replace the 0.92 bitmanip draft those files carried, whose constructors were
+`riscv.zb.sinc` decodes the ratified Zba, Zbb, Zbc and Zbs extensions
+(Bitmanip 1.0.0), Zbkb and Zbkx (Scalar Crypto 1.0.1) and Zicond (1.0). It
+is generated from the Sail RISC-V model by `tools/gen_riscv_sail.py`
+(`docs/sleigh-from-isa-specs.md` has the command and the comparison with the
+hand-written `riscv.rv32b.sinc` and `riscv.rv64b.sinc` it replaced, which
+decoded every word the same way). Those files had replaced the 0.92 bitmanip draft they carried, whose constructors were
 all `unimpl` and whose names and encodings differ from the ratified ones: the
 RVA22 profile's `cpop` decoded as the draft `pcnt`, `bset` as `sbset`,
 `rev8` and `orc.b` as `grevi`/`gorci`, and Zicond's `czero.eqz` as the
@@ -4699,17 +4701,23 @@ to a rotate) on other architectures. The Zbs single-bit operations mask the regi
 to the register width. `pack`, `packh` and `packw` concatenate the low
 halves (bytes for `packh`; `packw` sign-extends its 32-bit result).
 `max`, `maxu`, `min`, `minu` and Zicond's `czero.eqz`/`czero.nez` lift
-as a write of one operand and a conditional branch to the next instruction
-around a write of the other, the shape x86 `cmov` lifts to, so the
-structurer prints a conditional assignment. Operations p-code cannot state in
-a few operators are user operations that keep the data flow:
-`clmul`, `clmulh`, `clmulr` (carry-less multiply), `orc_b`, `brev8`,
-`zip`, `unzip` (RV32 only), `xperm4` and `xperm8`.
+as a copy of the Sail `if` expression's then-value into a temporary, a
+conditional branch around a copy of the else-value, and one write of `rd`,
+so the structurer prints a conditional assignment. `xperm4` and `xperm8`
+lift to one such select per nibble or byte (an in-range index picks that
+lane of `rs1`, any other gives 0), and `zip`/`unzip` (RV32 only) to their
+bit-by-bit shuffles, which the hand-written file had as user operations.
+The user operations left are `carryless_mul` (`clmul` is its low half,
+`clmulh` its high half), `carryless_mulr` and `brev8`, whose inlined
+p-code would exceed the generator's budget, and `orc_b`, kept opaque so a
+string scan reads `orc_b(x)` rather than eight byte tests. `zext.w` is the
+riscv-opcodes display alias of `add.uw` with `rs2 = x0`.
 
 The encodings that depend on XLEN are guarded by `ADDRSIZE`: `rev8` is
 `0x698` on RV32 and `0x6b8` on RV64, `zext.h` is `pack rd, rs1, x0` on
 RV32 (OP) and `packw rd, rs1, x0` on RV64 (OP-32), and the immediate shifts
-take a 6-bit amount whose top bit must be clear on RV32 (`shamt6`). The
+take a 6-bit amount whose top bit must be clear on RV32 (on RV32 the
+generator fixes bit 25 to 0 and the amount is `op2024`). The
 default RISC-V languages decode all of them, as the GNU and LLVM
 disassemblers do without an `-march` restriction, because no other standard
 or draft instruction in these languages shares their encodings. Exercised by

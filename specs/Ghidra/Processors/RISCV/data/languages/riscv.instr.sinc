@@ -4,7 +4,7 @@
 @include "riscv.rv32i.sinc"
 @include "riscv.rv32a.sinc"
 @include "riscv.rv32m.sinc"
-@include "riscv.rv32b.sinc"
+@include "riscv.zb.sinc"
 @include "riscv.rv32p.sinc"
 @include "riscv.rv32k.sinc"
 
@@ -25,7 +25,6 @@
 @include "riscv.rv64i.sinc"
 @include "riscv.rv64a.sinc"
 @include "riscv.rv64m.sinc"
-@include "riscv.rv64b.sinc"
 @include "riscv.rv64p.sinc"
 
 @if FPSIZE == "32" || FPSIZE == "64" || FPSIZE == "128"

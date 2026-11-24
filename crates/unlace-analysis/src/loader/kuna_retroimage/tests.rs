@@ -575,8 +575,8 @@ fn truncated_and_corrupted_containers_never_panic() {
     }
 }
 
-/// The five probes read a few header bytes each; none may claim a file of a
-/// format another loader owns.
+/// The probes read a few header bytes each; none may claim a file of a format
+/// another loader owns.
 #[test]
 fn no_other_fixture_is_claimed() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -590,7 +590,7 @@ fn no_other_fixture_is_claimed() {
         for entry in std::fs::read_dir(&dir).unwrap().flatten() {
             let path = entry.path();
             if path.is_dir() {
-                if !path.ends_with("retro-formats") {
+                if !path.ends_with("retro-formats") && !path.ends_with("win16-omf") {
                     pending.push(path);
                 }
                 continue;
@@ -608,4 +608,186 @@ fn no_other_fixture_is_claimed() {
         seen > 1000,
         "the walk reached the fixture corpus ({seen} files)"
     );
+}
+
+macro_rules! win16_fixture {
+    ($name:literal) => {
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/win16-omf/",
+            $name
+        ))
+    };
+}
+
+fn u16_at(image: &RetroImage, address: u64) -> u16 {
+    let at = (address - image.base) as usize;
+    u16::from_le_bytes([image.module[at], image.module[at + 1]])
+}
+
+fn load_full(name: &str, bytes: &[u8]) -> RetroImage {
+    assert!(is_retro_image(bytes), "{name} is claimed");
+    parse(name, bytes).unwrap_or_else(|error| panic!("{name}: {}", error.explain()))
+}
+
+/// Segment n at n * 0x10000 with selector n; every relocation names its
+/// target's selector and offset; an import is a RETF slot after the segments.
+#[test]
+fn ne_places_each_segment_at_its_selector_and_patches_its_relocations() {
+    let bytes = win16_fixture!("hello.exe");
+    assert!(
+        !is_retro_image(&bytes[..RETRO_PROBE_LEN]),
+        "the prefix does not reach the NE header"
+    );
+    let image = load_full("hello.exe", bytes);
+    assert_eq!(
+        (image.format, image.language),
+        ("NE", "x86:LE:16:Protected Mode:default")
+    );
+    assert_eq!((image.base, image.entry), (0x1_0000, 0x1_0000));
+    assert_eq!(image.tracked, vec![("DS", 2), ("SS", 2)]);
+    assert_eq!(address(&image, "START"), 0x1_0000);
+    assert_eq!(address(&image, "HELPER"), 0x1_001e);
+    assert_eq!(address(&image, "KERNEL_91"), 0x3_0000);
+    assert_eq!(address(&image, "MESSAGEBOX"), 0x3_0002);
+    assert_eq!(image.module[0x2_0000], 0xcb, "an import slot is a RETF");
+    assert_eq!(
+        u16_at(&image, 0x1_0001),
+        2,
+        "SEGMENT relocation: the data selector"
+    );
+    for (site, selector, offset) in [
+        (0x1_000a, 3, 0),    // KERNEL.91, head of the chain
+        (0x1_0019, 3, 0),    // KERNEL.91, the chain's second site
+        (0x1_000f, 3, 2),    // USER!MESSAGEBOX
+        (0x1_0014, 1, 0x1e), // movable entry 1, HELPER
+    ] {
+        assert_eq!(
+            (u16_at(&image, site + 2), u16_at(&image, site)),
+            (selector, offset),
+            "{site:#x}"
+        );
+    }
+    assert_eq!(
+        &image.module[0x1_0000..0x1_0006],
+        b"hello\0",
+        "segment 2 holds the data"
+    );
+    let kinds: Vec<_> = image
+        .sections
+        .iter()
+        .map(|section| (section.name.as_str(), section.kind))
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            ("seg1", SectionKind::Text),
+            ("seg2", SectionKind::Data),
+            ("imports", SectionKind::Text)
+        ]
+    );
+}
+
+/// Segments laid out one after another from paragraph 0x1000; each fixup is
+/// applied relative to its frame; externals get named slots.
+#[test]
+fn omf_object_lays_out_segments_and_applies_fixups() {
+    let image = load_full("hello16.obj", win16_fixture!("hello16.obj"));
+    assert_eq!(
+        (image.format, image.language),
+        ("OMF", "x86:LE:16:Real Mode:default")
+    );
+    assert_eq!(image.base, 0x1_0000);
+    assert_eq!(image.entry, 0x1_000b, "MODEND names _main");
+    assert_eq!(address(&image, "_sum"), 0x1_0000);
+    assert_eq!(address(&image, "_main"), 0x1_000b);
+    assert_eq!(address(&image, "_puts"), 0x1_0040);
+    assert_eq!(address(&image, "far_helper"), 0x1_0050);
+    assert_eq!(
+        image.tracked,
+        vec![("DS", 0x1003)],
+        "DGROUP is _DATA at 0x10030"
+    );
+    assert_eq!(u16_at(&image, 0x1_000c), 0x1003, "seg msg");
+    assert_eq!(u16_at(&image, 0x1_001b), 0, "msg wrt DGROUP");
+    assert_eq!(
+        u16_at(&image, 0x1_001f),
+        0x001f,
+        "near call to the _puts slot"
+    );
+    assert_eq!(
+        (u16_at(&image, 0x1_0027), u16_at(&image, 0x1_0025)),
+        (0x1005, 0),
+        "far call"
+    );
+    assert_eq!(u16_at(&image, 0x1_002a), 6, "counter wrt DGROUP");
+    assert_eq!(
+        image.module[0x50], 0xcb,
+        "a slot a far pointer names is a RETF"
+    );
+    assert_eq!(image.module[0x40], 0xc3);
+}
+
+#[test]
+fn omf_library_resolves_externals_between_its_modules() {
+    let image = load_full("hello.lib", win16_fixture!("hello.lib"));
+    assert_eq!(image.entry, 0x1_000b);
+    assert_eq!(
+        address(&image, "far_helper"),
+        0x1_0040,
+        "helper16's _TEXT follows hello16's _DATA"
+    );
+    assert_eq!(address(&image, "_puts"), 0x1_0050);
+    assert_eq!(
+        (u16_at(&image, 0x1_0027), u16_at(&image, 0x1_0025)),
+        (0x1004, 0)
+    );
+    assert!(
+        image.notes.iter().any(|note| note.contains("2 modules")),
+        "{:?}",
+        image.notes
+    );
+}
+
+#[test]
+fn omf_use32_object_is_flat() {
+    let image = load_full("hello32.obj", win16_fixture!("hello32.obj"));
+    assert_eq!(
+        (image.language, image.base),
+        ("x86:LE:32:default:windows", 0x40_0000)
+    );
+    assert_eq!(
+        image.entry, 0x40_0000,
+        "no start address: the first code public"
+    );
+    assert_eq!(address(&image, "_printf"), 0x40_0040);
+    assert_eq!(
+        word(&image.module, 0x1d, false),
+        Some(0x40_0030),
+        "push fmt"
+    );
+    assert_eq!(word(&image.module, 0x22, false), Some(0x1a), "call _printf");
+    assert_eq!(
+        word(&image.module, 0x2a, false),
+        Some(0x40_0034),
+        "mov eax, [total]"
+    );
+    assert!(image.tracked.is_empty());
+}
+
+#[test]
+fn omf_and_ne_probes_reject_near_misses() {
+    let object = win16_fixture!("hello16.obj");
+    let mut wrong_name = object.to_vec();
+    wrong_name[3] = 0x20;
+    assert!(
+        !omf::probe(&wrong_name),
+        "the name does not fit the THEADR record"
+    );
+    let mut header = win16_fixture!("hello.lib").to_vec();
+    header[12] = 1;
+    assert!(!omf::probe(&header), "library header padding must be zero");
+    let mut exe = win16_fixture!("hello.exe").to_vec();
+    exe[0x40] = b'L';
+    assert!(!ne::probe(&exe));
 }

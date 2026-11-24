@@ -316,7 +316,7 @@ fn borrowed_builder_cursor_uses_target_tree_and_cross_addresses() {
         cur: WalkCursor::new(),
         cur_ctx: 0,
         cross_ctx: Some(1),
-        contexts: &contexts,
+        contexts,
         table: &table,
         engine: &engine,
         const_space: Rc::clone(&space),

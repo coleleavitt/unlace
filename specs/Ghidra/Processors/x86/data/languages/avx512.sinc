@@ -10493,7 +10493,7 @@ define pcodeop vbroadcasti64x4_avx512f ;
 VPCMPB_mon: "VPCMPEQB" is imm8=0x0 { }
 VPCMPB_mon: "VPCMPLTB" is imm8=0x1 { }
 VPCMPB_mon: "VPCMPLEB" is imm8=0x2 { }
-VPCMPB_mon: "VPCMPEQB" is imm8=0x4 { }
+VPCMPB_mon: "VPCMPNEQB" is imm8=0x4 { }
 VPCMPB_mon: "VPCMPNLTB" is imm8=0x5 { }
 VPCMPB_mon: "VPCMPNLEB" is imm8=0x6 { }
 VPCMPB_op: "" is imm8=0 { local tmp:1 = 0; export *[const]:1 tmp; }
@@ -10537,7 +10537,7 @@ define pcodeop vpcmpb_avx512bw ;
 VPCMPUB_mon: "VPCMPEQUB" is imm8=0x0 { }
 VPCMPUB_mon: "VPCMPLTUB" is imm8=0x1 { }
 VPCMPUB_mon: "VPCMPLEUB" is imm8=0x2 { }
-VPCMPUB_mon: "VPCMPEQUB" is imm8=0x4 { }
+VPCMPUB_mon: "VPCMPNEQUB" is imm8=0x4 { }
 VPCMPUB_mon: "VPCMPNLTUB" is imm8=0x5 { }
 VPCMPUB_mon: "VPCMPNLEUB" is imm8=0x6 { }
 VPCMPUB_op: "" is imm8=0 { local tmp:1 = 0; export *[const]:1 tmp; }
@@ -10581,7 +10581,7 @@ define pcodeop vpcmpub_avx512bw ;
 VPCMPD_mon: "VPCMPEQD" is imm8=0x0 { }
 VPCMPD_mon: "VPCMPLTD" is imm8=0x1 { }
 VPCMPD_mon: "VPCMPLED" is imm8=0x2 { }
-VPCMPD_mon: "VPCMPEQD" is imm8=0x4 { }
+VPCMPD_mon: "VPCMPNEQD" is imm8=0x4 { }
 VPCMPD_mon: "VPCMPNLTD" is imm8=0x5 { }
 VPCMPD_mon: "VPCMPNLED" is imm8=0x6 { }
 VPCMPD_op: "" is imm8=0 { local tmp:1 = 0; export *[const]:1 tmp; }
@@ -10624,7 +10624,7 @@ define pcodeop vpcmpd_avx512f ;
 VPCMPUD_mon: "VPCMPEQUD" is imm8=0x0 { }
 VPCMPUD_mon: "VPCMPLTUD" is imm8=0x1 { }
 VPCMPUD_mon: "VPCMPLEUD" is imm8=0x2 { }
-VPCMPUD_mon: "VPCMPEQUD" is imm8=0x4 { }
+VPCMPUD_mon: "VPCMPNEQUD" is imm8=0x4 { }
 VPCMPUD_mon: "VPCMPNLTUD" is imm8=0x5 { }
 VPCMPUD_mon: "VPCMPNLEUD" is imm8=0x6 { }
 VPCMPUD_op: "" is imm8=0 { local tmp:1 = 0; export *[const]:1 tmp; }
@@ -10666,7 +10666,7 @@ define pcodeop vpcmpud_avx512f ;
 VPCMPQ_mon: "VPCMPEQQ" is imm8=0x0 { }
 VPCMPQ_mon: "VPCMPLTQ" is imm8=0x1 { }
 VPCMPQ_mon: "VPCMPLEQ" is imm8=0x2 { }
-VPCMPQ_mon: "VPCMPEQQ" is imm8=0x4 { }
+VPCMPQ_mon: "VPCMPNEQQ" is imm8=0x4 { }
 VPCMPQ_mon: "VPCMPNLTQ" is imm8=0x5 { }
 VPCMPQ_mon: "VPCMPNLEQ" is imm8=0x6 { }
 VPCMPQ_op: "" is imm8=0 { local tmp:1 = 0; export *[const]:1 tmp; }
@@ -10709,7 +10709,7 @@ define pcodeop vpcmpq_avx512f ;
 VPCMPUQ_mon: "VPCMPEQUQ" is imm8=0x0 { }
 VPCMPUQ_mon: "VPCMPLTUQ" is imm8=0x1 { }
 VPCMPUQ_mon: "VPCMPLEUQ" is imm8=0x2 { }
-VPCMPUQ_mon: "VPCMPEQUQ" is imm8=0x4 { }
+VPCMPUQ_mon: "VPCMPNEQUQ" is imm8=0x4 { }
 VPCMPUQ_mon: "VPCMPNLTUQ" is imm8=0x5 { }
 VPCMPUQ_mon: "VPCMPNLEUQ" is imm8=0x6 { }
 VPCMPUQ_op: "" is imm8=0 { local tmp:1 = 0; export *[const]:1 tmp; }
@@ -10752,7 +10752,7 @@ define pcodeop vpcmpuq_avx512f ;
 VPCMPW_mon: "VPCMPEQW" is imm8=0x0 { }
 VPCMPW_mon: "VPCMPLTW" is imm8=0x1 { }
 VPCMPW_mon: "VPCMPLEW" is imm8=0x2 { }
-VPCMPW_mon: "VPCMPEQW" is imm8=0x4 { }
+VPCMPW_mon: "VPCMPNEQW" is imm8=0x4 { }
 VPCMPW_mon: "VPCMPNLTW" is imm8=0x5 { }
 VPCMPW_mon: "VPCMPNLEW" is imm8=0x6 { }
 VPCMPW_op: "" is imm8=0 { local tmp:1 = 0; export *[const]:1 tmp; }
@@ -10796,7 +10796,7 @@ define pcodeop vpcmpw_avx512bw ;
 VPCMPUW_mon: "VPCMPEQUW" is imm8=0x0 { }
 VPCMPUW_mon: "VPCMPLTUW" is imm8=0x1 { }
 VPCMPUW_mon: "VPCMPLEUW" is imm8=0x2 { }
-VPCMPUW_mon: "VPCMPEQUW" is imm8=0x4 { }
+VPCMPUW_mon: "VPCMPNEQUW" is imm8=0x4 { }
 VPCMPUW_mon: "VPCMPNLTUW" is imm8=0x5 { }
 VPCMPUW_mon: "VPCMPNLEUW" is imm8=0x6 { }
 VPCMPUW_op: "" is imm8=0 { local tmp:1 = 0; export *[const]:1 tmp; }

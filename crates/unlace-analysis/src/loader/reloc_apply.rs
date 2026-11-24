@@ -22,7 +22,8 @@
 //! `64_32` (the subprogram `call` displacement) and the `ABS`/`NODYLD` data
 //! words. Generic
 //! absolute, relative, PLT-relative, and image-offset relocations support
-//! 8/16/32/64-bit fields. Application preserves REL implicit addends and object
+//! 8/16/32/64-bit fields; an s390x `*DBL` field (`PC32DBL`, `PLT32DBL`, ...)
+//! holds the displacement in halfwords. Application preserves REL implicit addends and object
 //! endianness, and returns a specific failure classification rather than
 //! partially writing a field that is unresolved, malformed, misaligned, outside
 //! its range or section, or dependent on a linker veneer or missing TOC.
@@ -96,6 +97,24 @@ enum Specific {
     BpfImm64,
     BpfCall,
     Generic { bits: u8 },
+}
+
+impl Specific {
+    /// An AArch64 instruction field. A64 instructions are little-endian in a
+    /// big-endian image too; only data is big-endian there.
+    fn is_aarch64_instruction(self) -> bool {
+        matches!(
+            self,
+            Specific::Aarch64Branch26
+                | Specific::Aarch64AdrPage { .. }
+                | Specific::Aarch64AddLo12
+                | Specific::Aarch64LdstLo12 { .. }
+                | Specific::Aarch64AdrLo21
+                | Specific::Aarch64Imm19 { .. }
+                | Specific::Aarch64Imm14
+                | Specific::Aarch64Movw { .. }
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -590,6 +609,7 @@ fn apply_info(
     toc: Option<u64>,
 ) -> Result<(), RelocationFailure> {
     debug_assert_eq!(field.len(), spec.width);
+    let little_endian = little_endian || spec.specific.is_aarch64_instruction();
     match spec.specific {
         Specific::ArmBranch24 => arm_branch24(
             field,
@@ -1578,6 +1598,13 @@ fn generic(
         }
         _ => return Err(RelocationFailure::Unsupported),
     };
+    // s390x `*DBL` fields hold a halfword count: `(S + A - P) >> 1`.
+    let value = if matches!(reloc.encoding, RelocationEncoding::S390xDbl) {
+        require_aligned(value, 2)?;
+        value >> 1
+    } else {
+        value
+    };
     if matches!(
         reloc.kind,
         RelocationKind::Relative | RelocationKind::PltRelative
@@ -2079,6 +2106,37 @@ mod tests {
         .unwrap();
         assert_eq!(u32::from_le_bytes(page) & 0x1f, 0x13);
         assert_eq!(u32::from_le_bytes(page) & 0x9f00_0000, 0x9000_0000);
+    }
+
+    #[test]
+    fn aarch64_instructions_stay_little_endian_in_a_big_endian_object() {
+        // `b fib` in an aarch64_be object: data is big-endian, A64 code is not.
+        let jump = reloc(elf::R_AARCH64_JUMP26, false);
+        let spec = classify_info(Architecture::Aarch64, jump).unwrap().unwrap();
+        let mut branch = 0x1400_0000u32.to_le_bytes();
+        apply_info(
+            spec,
+            jump,
+            &mut branch,
+            false,
+            0x400164,
+            0x400160,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(u32::from_le_bytes(branch), 0x1400_0001);
+        let data = generic_reloc(
+            RelocationKind::Absolute,
+            RelocationEncoding::Generic,
+            64,
+            0,
+            false,
+        );
+        let spec = classify_info(Architecture::Aarch64, data).unwrap().unwrap();
+        let mut word = [0; 8];
+        apply_info(spec, data, &mut word, false, 0x400164, 0, None, None).unwrap();
+        assert_eq!(u64::from_be_bytes(word), 0x400164);
     }
 
     #[test]
@@ -2633,6 +2691,48 @@ mod tests {
                 Some(toc),
             ),
             Err(RelocationFailure::InvalidEncoding)
+        );
+    }
+
+    #[test]
+    fn s390x_dbl_relocations_count_halfwords() {
+        // `larl %r2, .rodata` at 0x4000da: the field is at +2 and the addend 2.
+        let info = generic_reloc(
+            RelocationKind::Relative,
+            RelocationEncoding::S390xDbl,
+            32,
+            2,
+            false,
+        );
+        let spec = classify_info(Architecture::S390x, info).unwrap().unwrap();
+        let mut field = [0; 4];
+        apply_info(
+            spec, info, &mut field, false, 0x40_0700, 0x40_00dc, None, None,
+        )
+        .unwrap();
+        assert_eq!(field, 0x313u32.to_be_bytes());
+        assert_eq!(0x40_00da + 2 * 0x313, 0x40_0700);
+        assert_eq!(
+            apply_info(
+                spec, info, &mut field, false, 0x40_0701, 0x40_00dc, None, None
+            ),
+            Err(RelocationFailure::Misaligned)
+        );
+        let call = generic_reloc(
+            RelocationKind::PltRelative,
+            RelocationEncoding::S390xDbl,
+            32,
+            2,
+            false,
+        );
+        let spec = classify_info(Architecture::S390x, call).unwrap().unwrap();
+        apply_info(
+            spec, call, &mut field, false, 0x40_0150, 0x40_010e, None, None,
+        )
+        .unwrap();
+        assert_eq!(
+            0x40_010c + 2 * i64::from(i32::from_be_bytes(field)),
+            0x40_0150
         );
     }
 

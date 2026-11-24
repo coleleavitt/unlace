@@ -7,7 +7,7 @@
 //! each way, and the agreement of the whole corpus with a `globalset` count over
 //! each language's own source closure (`.slaspec` plus every `.sinc` it
 //! `@include`s, transitively). Zero occurrences must mean `false`, and any
-//! occurrence must mean `true`, for all 450 vendored languages.
+//! occurrence must mean `true`, for all 453 vendored languages.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -176,9 +176,9 @@ fn has_commits(sla: &Path) -> bool {
 
 /// Every `.sla` under these processors must answer `false` for the context-
 /// commit gate. Delay-slot admission is a separate predicate.
-const ALL_FALSE: &[&str] = &["AARCH64", "RISCV", "Sparc", "SuperH", "Z80"];
-/// Every `.sla` under these must answer `true`.
-const ALL_TRUE: &[&str] = &["ARC", "ARM", "MIPS", "PowerPC", "PA-RISC"];
+const ALL_FALSE: &[&str] = &["AARCH64", "Sparc", "SuperH", "Z80"];
+/// Every `.sla` under these must answer `true` (RISC-V: vsetvli/vsetivli commit vtype).
+const ALL_TRUE: &[&str] = &["ARC", "ARM", "MIPS", "PowerPC", "PA-RISC", "RISCV"];
 /// These carry `globalset` in some of their languages but not all, so the
 /// processor-level claim is only that at least one answers `true`.
 /// (x86: `x86-16.sla` commits the real-mode code segment; `x86.sla` and
@@ -188,7 +188,7 @@ const SOME_TRUE: &[&str] = &["PIC", "M16C", "x86"];
 #[test]
 fn context_commits_agree_with_the_globalset_sources() {
     let corpus = vendored_sla();
-    assert_eq!(corpus.len(), 450, "the vendored language corpus changed");
+    assert_eq!(corpus.len(), 453, "the vendored language corpus changed");
 
     let mut answers: Vec<(String, String, bool, usize)> = Vec::new();
     for (processor, name, path) in &corpus {

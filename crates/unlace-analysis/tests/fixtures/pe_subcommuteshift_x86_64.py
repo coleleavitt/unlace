@@ -3,7 +3,7 @@
 
 The `.text` payload is the exact 9,024-byte `crackme_shroud.exe`
 `sub_1406fa160` bytechunk already pinned by
-`tests/stages/kuna-subcommuteshift.xml`.  It is mapped at its original VMA so
+`tests/stages/kuna-subcommuteshift.toml`.  It is mapped at its original VMA so
 all RIP-relative references retain their original meaning.  A virtual `.bss`
 section covers the referenced globals, including `usage` at `0x1408f1c08`.
 
@@ -14,6 +14,7 @@ Regenerate with:
 
 from pathlib import Path
 import re
+import tomllib
 import struct
 
 
@@ -31,16 +32,13 @@ def align(value: int, amount: int) -> int:
 
 
 def witness_bytes() -> bytes:
-    root = Path(__file__).resolve().parents[5]
-    stage = (root / "tests/stages/kuna-subcommuteshift.xml").read_text()
-    match = re.search(
-        r'<bytechunk space="ram" offset="0x1406fa160">(.*?)</bytechunk>',
-        stage,
-        re.DOTALL,
-    )
-    if match is None:
+    root = Path(__file__).resolve().parents[4]
+    stage = tomllib.loads((root / "tests/stages/kuna-subcommuteshift.toml").read_text())
+    chunks = [c for c in stage["image"].get("bytes", [])
+              if c["space"] == "ram" and c["offset"] == "0x1406fa160"]
+    if len(chunks) != 1:
         raise RuntimeError("exact cancelbytearithmetic stage bytechunk not found")
-    payload = bytes.fromhex(match.group(1))
+    payload = bytes.fromhex("".join(chunks[0]["hex"].split()))
     if len(payload) != 9024:
         raise RuntimeError(f"expected 9024 witness bytes, got {len(payload)}")
     return payload

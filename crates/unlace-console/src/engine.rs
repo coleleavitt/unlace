@@ -3617,6 +3617,15 @@ impl ConsoleProgram {
                 if analysis_pass_enabled(self.arch(), "dextrpc") {
                     merged.merge(unlace_analysis::passes::run_dextrpc(&bytes, self.arch()));
                 }
+                // (kuna `gopcln`) Go source-position comments; off by default,
+                // and its passes read the option, so they run only here.
+                if analysis_pass_enabled(self.arch(), "gopcln") {
+                    merged.merge(unlace_analysis::passes::run_gopcln(
+                        &path,
+                        &bytes,
+                        self.arch(),
+                    ));
+                }
                 // Deferred Listing build + consumer/fast-inventory run, gated
                 // on the matching option. The call-fixup seed list is the names
                 // the load-time pass flagged resolved to addresses via the

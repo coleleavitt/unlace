@@ -108,20 +108,26 @@ with : phase=1 {
 
 #STWS
 :STW^storeShortDispCmplt^storeCC RR,lse5^SRRB				is opfam=0x03 & subop=0xA & one=1 & storeShortDispCmplt & storeCC & lse5 & SRRB & RR {
+	local val = RR;
+	build storeShortDispCmplt;
 	addr:$(ADDRSIZE) = storeShortDispCmplt;
-	*[ram]:4 addr = RR:4; 
+	*[ram]:4 addr = val:4;
 }
 
 #STHS
 :STH^storeShortDispCmplt^storeCC RR,lse5^SRRB				is opfam=0x03 & subop=0x9 & one=1 & storeShortDispCmplt & storeCC & lse5 & SRRB & RR {
+	local val = RR;
+	build storeShortDispCmplt;
 	addr:$(ADDRSIZE) = storeShortDispCmplt;
-	*[ram]:2 addr = RR:2; 
+	*[ram]:2 addr = val:2;
 }
 
 #STBS
 :STB^storeShortDispCmplt^storeCC RR,lse5^SRRB				is opfam=0x03 & subop=0x8 & one=1 & storeShortDispCmplt & storeCC & lse5 & SRRB & RR {
+	local val = RR;
+	build storeShortDispCmplt;
 	addr:$(ADDRSIZE) = storeShortDispCmplt;
-	*[ram]:1 addr = RR:1; 
+	*[ram]:1 addr = val:1;
 }
 
 :LDWAS^shortDispCmplt^loadCC highlse5(RB),RT			is opfam=0x03 & subop=6 & one=1 & shortDispCmplt & loadCC & highlse5 & RB & RT {
@@ -142,43 +148,37 @@ with : phase=1 {
 
 # This is the "begin" version for big endian. I am not doing the little endian version.
 :STBYS^storeBytesShortCmplt^storeCC RR,lse5^SRRB 		is opfam=0x03 & subop=0xC & one=1 & storeBytesShortCmplt & storeCC & lse5 & SRRB & RR & u=0 {
-	# get the address, which is most likely not word aligned
+	# big endian: byte j of the word gets byte j of RR, for j from (addr & 3) to 3
+	local val = RR;
+	build storeBytesShortCmplt;
 	addr:$(ADDRSIZE) = storeBytesShortCmplt;
-	# figure out how many bytes need to be written
-	local numBytes = 4 - (addr & 0x3);
-	# this is the address where we stop (one byte past the last address to which we write)
-	local finalAddr = addr + numBytes;
-	# copy the contents of RR
-	data:$(REGSIZE) = RR >> ((4 - numBytes) * 8);
-	# use a for loop to write out the 1,2,3, or 4 bytes
+	local stbyW:$(ADDRSIZE) = addr & ~3:$(ADDRSIZE);
+	local stbyJ:$(ADDRSIZE) = addr & 3;
+	local stbyEnd:$(ADDRSIZE) = 4;
 	<LOOP>
-	if (addr == finalAddr) goto <DONE>;
-	*[ram]:1 addr = data:1;
-	data = data >> 8;
-	addr = addr + 1;
+	if (stbyJ == stbyEnd) goto <DONE>;
+	local stbySh:$(ADDRSIZE) = (3 - stbyJ) * 8;
+	local stbyV:$(REGSIZE) = val >> stbySh;
+	*[ram]:1 (stbyW + stbyJ) = stbyV:1;
+	stbyJ = stbyJ + 1;
 	goto <LOOP>;
 	<DONE>
 }
 
-# This is the "end" version for big endian. I am not doing the little endian version.
 :STBYS^storeBytesShortCmplt^storeCC RR,lse5^SRRB 		is opfam=0x03 & subop=0xC & one=1 & storeBytesShortCmplt & storeCC & lse5 & SRRB & RR & u=1 {
-	# get the address, which is most likely not word aligned
+	# big endian: byte j of the word gets byte j of RR, for j from 0 to (addr & 3) - 1
+	local val = RR;
+	build storeBytesShortCmplt;
 	addr:$(ADDRSIZE) = storeBytesShortCmplt;
-	# figure out how many bytes need to be written
-	local numBytes = (addr & 0x3);
-	# now make a word aligned address
-	addr = addr & 0x3;
-	# this is the address where we stop (one byte past the last address to which we write)
-	local finalAddr = addr + numBytes;
-	# copy the contents of RR
-	data:$(REGSIZE) = RR >> ((4 - numBytes) * 8);
-
-	# use a for loop to write out the 1,2,3, or 4 bytes
+	local stbyW:$(ADDRSIZE) = addr & ~3:$(ADDRSIZE);
+	local stbyJ:$(ADDRSIZE) = 0;
+	local stbyEnd:$(ADDRSIZE) = addr & 3;
 	<LOOP>
-	if (addr == finalAddr) goto <DONE>;
-	*[ram]:1 addr = data:1;
-	data = data >> 8;
-	addr = addr + 1;
+	if (stbyJ == stbyEnd) goto <DONE>;
+	local stbySh:$(ADDRSIZE) = (3 - stbyJ) * 8;
+	local stbyV:$(REGSIZE) = val >> stbySh;
+	*[ram]:1 (stbyW + stbyJ) = stbyV:1;
+	stbyJ = stbyJ + 1;
 	goto <LOOP>;
 	<DONE>
 }
@@ -788,21 +788,26 @@ define pcodeop getCurrentSpace;
 define pcodeop trap;
 
 :ADD^AddCondSym R1,R2,RT	is opfam=0x02 & op=0x18 & m=0 & R1 & R2 & RT & AddCondNullify & AddCondSym {
-	pswCB = carry(R1,R2);
-	RT = R1 + R2;
+	condA = R1; condB = R2; condCin = 0:1;
+	local wsum:8 = zext(R1) + zext(R2) + zext(0:1);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	build AddCondNullify;
 }
 
 # this version intentionally does not set the carry bits
 :ADD^",L"^AddCondSym R1,R2,RT	is opfam=0x02 & op=0x28 & m=0 & R1 & R2 & RT & AddCondNullify & AddCondSym {
+	condA = R1; condB = R2; condCin = 0:1;
 	RT = R1 + R2;
 	build AddCondNullify;
 }
 
 :ADDO^AddCondSym R1,R2,RT	is opfam=0x02 & op=0x38 & m=0 & R1 & R2 & RT & AddCondSym & AddCondNullify {
+	condA = R1; condB = R2; condCin = 0:1;
 	if (scarry(R1,R2)) goto <TRAP>;
-	pswCB = carry(R1,R2);
-	RT = R1 + R2;
+	local wsum:8 = zext(R1) + zext(R2) + zext(0:1);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
@@ -811,50 +816,53 @@ define pcodeop trap;
 }
 
 :ADD^",C"^AddCondSym R1,R2,RT	is opfam=0x02 & op=0x1C & m=0 & R1 & R2 & RT & AddCondSym & AddCondNullify {
-	local partialSum = R2 + zext(pswCB);
-	pswCB = carry(partialSum, R1);
-	RT = partialSum + R1;
+	condA = R1; condB = R2; condCin = pswCB;
+	local wsum:8 = zext(R1) + zext(R2) + zext(pswCB);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	build AddCondNullify;
 }
 
 # TODO This may need some work
 :ADD^",CO"^AddCondSym R1,R2,RT	is opfam=0x02 & op=0x3C & m=0 & R1 & R2 & RT & AddCondSym & AddCondNullify {
-	local partialSum = R2 + zext(pswCB);
-	partialCarry:1 = carry(R2, zext(pswCB));
-	partialOverflow:1 = scarry(R2, zext(pswCB));
-	takeTrap:1 = partialOverflow == 0x1:1; 
-	if (takeTrap) goto <TRAP>;
-	RT = partialSum + R1;
-	finalCarry:1 = carry(partialSum, R1);
-	finalOverflow:1 = scarry(partialSum, R1);
-	takeTrap = finalOverflow == 0x1:1;
-	if (takeTrap) goto <TRAP>;
+	condA = R1; condB = R2; condCin = pswCB;
+	local ovS:8 = sext(R1) + sext(R2) + zext(pswCB);
+	local ovR:4 = R1 + R2 + zext(pswCB);
+	local ovT:8 = sext(ovR);
+	if (ovS != ovT) goto <TRAP>;
+	local wsum:8 = zext(R1) + zext(R2) + zext(condCin);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
 	<DONE>
-	pswCB = partialCarry ^ finalCarry;
 	build AddCondNullify;
 }
 
 :SH1ADD^AddCondSym R1,R2,RT	is opfam=0x02 & op=0x19 & m=0 & R1 & R2 & RT & AddCond & AddCondSym & AddCondNullify {
 	local shiftedR1 = R1 << 1;
-	pswCB = carry(shiftedR1,R2);
-	RT = shiftedR1 + R2;
+	condA = shiftedR1; condB = R2; condCin = 0:1;
+	local wsum:8 = zext(shiftedR1) + zext(R2) + zext(0:1);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	build AddCondNullify;
 }
 
 :SH1ADDL^AddCondSym R1,R2,RT	is opfam=0x02 & op=0x29 & m=0 & R1 & R2 & RT & AddCondNullify & AddCondSym {
 	local shiftedR1 = R1 << 1;
+	condA = shiftedR1; condB = R2; condCin = 0:1;
 	RT = shiftedR1 + R2;
 	build AddCondNullify;
 }
 
 :SH1ADDO^SEDCondSym R1,R2,RT	is opfam=0x02 & op=0x39 & m=0 & R1 & R2 & RT & AddCondNullify & SEDCondSym {
 	local shiftedR1 = R1 << 1;
+	condA = shiftedR1; condB = R2; condCin = 0:1;
 	if (scarry(shiftedR1, R2)) goto <TRAP>;
-	pswCB = carry(shiftedR1,R2);
-	RT = shiftedR1 + R2;
+	local wsum:8 = zext(shiftedR1) + zext(R2) + zext(0:1);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
@@ -864,22 +872,27 @@ define pcodeop trap;
 
 :SH2ADD^SEDCondSym R1,R2,RT	is opfam=0x02 & op=0x1A & m=0 & R1 & R2 & RT & AddCondNullify & SEDCondSym {
 	local shiftedR1 = R1 << 2;
-	pswCB = carry(shiftedR1,R2);
-	RT = shiftedR1 + R2;
+	condA = shiftedR1; condB = R2; condCin = 0:1;
+	local wsum:8 = zext(shiftedR1) + zext(R2) + zext(0:1);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	build AddCondNullify;
 }
 
 :SH2ADDL^AddCondSym R1,R2,RT	is opfam=0x02 & op=0x2A & m=0 & R1 & R2 & RT & AddCondNullify & AddCondSym {
 	local shiftedR1 = R1 << 2;
+	condA = shiftedR1; condB = R2; condCin = 0:1;
 	RT = shiftedR1 + R2;
 	build AddCondNullify;
 }
 
 :SH2ADDO^AddCondSym R1,R2,RT	is opfam=0x02 & op=0x3A & m=0 & R1 & R2 & RT & AddCondNullify & AddCondSym {
 	local shiftedR1 = R1 << 2;
+	condA = shiftedR1; condB = R2; condCin = 0:1;
 	if (scarry(shiftedR1, R2)) goto <TRAP>;
-	pswCB = carry(shiftedR1,R2);
-	RT = shiftedR1 + R2;
+	local wsum:8 = zext(shiftedR1) + zext(R2) + zext(0:1);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
@@ -889,22 +902,27 @@ define pcodeop trap;
 
 :SH3ADD^AddCondSym R1,R2,RT	is opfam=0x02 & op=0x1B & m=0 & R1 & R2 & RT & AddCondNullify & AddCondSym {
 	local shiftedR1 = R1 << 3;
-	pswCB = carry(shiftedR1,R2);
-	RT = shiftedR1 + R2;
+	condA = shiftedR1; condB = R2; condCin = 0:1;
+	local wsum:8 = zext(shiftedR1) + zext(R2) + zext(0:1);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	build AddCondNullify;
 }
 
 :SH3ADDL^AddCondSym R1,R2,RT	is opfam=0x02 & op=0x2B & m=0 & R1 & R2 & RT & AddCondNullify & AddCondSym {
 	local shiftedR1 = R1 << 3;
+	condA = shiftedR1; condB = R2; condCin = 0:1;
 	RT = shiftedR1 + R2;
 	build AddCondNullify;
 }
 
 :SH3ADDO^AddCondSym R1,R2,RT	is opfam=0x02 & op=0x3B & m=0 & R1 & R2 & RT & AddCondNullify & AddCondSym {
 	local shiftedR1 = R1 << 3;
+	condA = shiftedR1; condB = R2; condCin = 0:1;
 	if (scarry(shiftedR1, R2)) goto <TRAP>;
-	pswCB = carry(shiftedR1,R2);
-	RT = shiftedR1 + R2;
+	local wsum:8 = zext(shiftedR1) + zext(R2) + zext(0:1);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
@@ -913,48 +931,60 @@ define pcodeop trap;
 }
 
 :SUB^CSCondSym R1,R2,RT	is opfam=0x02 & op=0x10 & m=0 & R1 & R2 & RT & CSCondSym & CSCondNullify {
-	pswCB = ! (R1 < R2);
-	RT = R1 - R2;
+	condA = R1; condB = R2; condCin = 1:1;
+	local wsum:8 = zext(R1) + zext(~R2) + zext(1:1);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	build CSCondNullify;
 }
 
 :SUB",O"^CSCondSym R1,R2,RT	is opfam=0x02 & op=0x30 & m=0 & R1 & R2 & RT & CSCondSym & CSCondNullify {
+	condA = R1; condB = R2; condCin = 1:1;
 	if (sborrow(R1,R2)) goto <TRAP>;
-	pswCB = ! (R1 < R2);
-	RT = R1 - R2;
-	build CSCondNullify;
+	local wsum:8 = zext(R1) + zext(~R2) + zext(1:1);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
 	<DONE>
+	build CSCondNullify;
 }
 
 :SUB",B"^CSCondSym R1,R2,RT	is opfam=0x02 & op=0x14 & m=0 & R1 & R2 & RT & CSCondSym & CSCondNullify {
-	right:$(REGSIZE) = ~R2 + zext(pswCB);
-	pswCB =  ! (R1 < right); #! carry(R1, right);
-	RT = R1 + right;
+	condA = R1; condB = R2; condCin = pswCB;
+	local wsum:8 = zext(R1) + zext(~R2) + zext(pswCB);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	build CSCondNullify;
 }
 
 :SUB",BO"^CSCondSym R1,R2,RT	is opfam=0x02 & op=0x34 & m=0 & R1 & R2 & RT & CSCondSym & CSCondNullify {
-	right:$(REGSIZE) = ~R2 + zext(pswCB);
-	if (sborrow(R1,right)) goto <TRAP>;
-	pswCB =  ! (R1 < right);
-	RT = R1 + right;
-	build CSCondNullify;
+	condA = R1; condB = R2; condCin = pswCB;
+	local nR2:4 = ~R2;
+	local ovS:8 = sext(R1) + sext(nR2) + zext(pswCB);
+	local ovR:4 = R1 + nR2 + zext(pswCB);
+	local ovT:8 = sext(ovR);
+	if (ovS != ovT) goto <TRAP>;
+	local wsum:8 = zext(R1) + zext(~R2) + zext(condCin);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
 	<DONE>
+	build CSCondNullify;
 }
 
 # subtract and trap on condition
 # this instruction does not have a nullify form
 :SUB",T"^CSCondSym R1,R2,RT	is opfam=0x02 & op=0x13 & m=0 & R1 & R2 & RT & CSCondSym & CSCond {
-	pswCB = ! (R1 < R2);
-	RT = R1 - R2;
+	condA = R1; condB = R2; condCin = 1:1;
 	build CSCond;
 	if (CSCond) goto <TRAP>;
+	local wsum:8 = zext(R1) + zext(~R2) + zext(1:1);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
@@ -962,11 +992,12 @@ define pcodeop trap;
 }
 
 :SUB",TO"^CSCondSym R1,R2,RT	is opfam=0x02 & op=0x33 & m=0 & R1 & R2 & RT & CSCondSym & CSCond {
-	if (sborrow(R1,R2)) goto <TRAP>;
-	pswCB = ! (R1<R2);
-	RT = R1 - R2;
+	condA = R1; condB = R2; condCin = 1:1;
 	build CSCond;
-	if (CSCond) goto <TRAP>;
+	if (CSCond || sborrow(R1,R2)) goto <TRAP>;
+	local wsum:8 = zext(R1) + zext(~R2) + zext(1:1);
+	pswCB = wsum[32,1];
+	RT = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
@@ -999,7 +1030,8 @@ define pcodeop trap;
 
 :CMPCLR^CSCondSym R1,R2,RT	is opfam=0x02 & op=0x22 & m=0 & R1 & R2 & RT & CSCondSym & CSCondNullify
 {
-	build CSCondNullify; # must do this before setting register
+	condA = R1; condB = R2; condCin = 1:1;
+	build CSCondNullify;
 	RT = 0;
 }
 
@@ -1032,19 +1064,25 @@ define pcodeop trap;
 }
 
 :UXOR^UnitCondSym R1,R2,RT		is opfam=0x02 & op=0x0E & m=0 & R1 & R2 & RT & UnitCondSym & UnitCondNullify {
-	RT = R1 ^ R2;
+	condA = R1; condB = R2; condCin = 0;
+	condRes = R1 ^ R2;
+	RT = condRes;
 	build UnitCondNullify;
 }
 
 :UADDCM^UnitCondSym R1,R2,RT	is opfam=0x02 & op=0x26 & m=0 & R1 & R2 & RT & UnitCondSym & UnitCondNullify {
-	RT = R1 + ~R2;
+	condA = R1; condB = ~R2; condCin = 0;
+	condRes = condA + condB;
+	RT = condRes;
 	build UnitCondNullify;
-	
 }
 
 :UADDCMT^UnitCondSym R1,R2,RT	is opfam=0x02 & op=0x27 & m=0 & R1 & R2 & RT & UnitCond & UnitCondSym {
+	condA = R1; condB = ~R2; condCin = 0;
+	condRes = condA + condB;
+	build UnitCond;
 	if (UnitCond) goto <TRAP>;
-	RT = R1 + ~R2;
+	RT = condRes;
 	goto <DONE>;
 	<TRAP>
 	trap();
@@ -1052,18 +1090,20 @@ define pcodeop trap;
 }
 
 :ADDI^AddCondSym lse11,R2,R1dst	is opfam=0x2D & bit11=0 & lse11 & R2 & R1dst & AddCondSym & AddCondI11Nullify {
-	tmp:$(REGSIZE) = R2; # Don't clobber the original value, when R1 is the same as R2
-	R1dst = R2 + lse11;
-	pswCB = carry(tmp,lse11);
+	condA = lse11; condB = R2; condCin = 0:1;
+	local wsum:8 = zext(lse11) + zext(R2) + zext(0:1);
+	pswCB = wsum[32,1];
+	R1dst = wsum:4;
 	build AddCondI11Nullify;
 }
 
 # PA1.1 this is ADDIO, PA2.0 is ADDI,TSV (trap on signed overflow)
 :ADDI^",TSV"^AddCondSym lse11,R2,R1dst	is opfam=0x2D & bit11=1 & lse11 & R2 & R1dst & AddCondSym & AddCondI11Nullify {
-        tmp:$(REGSIZE) = R2; # Don't clobber the original value, when R1 is the same as R2
-	if (scarry(R2, lse11) == 1:1) goto <TRAP>;
-	R1dst = R2 + lse11;
-	pswCB = carry(tmp,sext(lse11));
+	condA = lse11; condB = R2; condCin = 0:1;
+	if (scarry(condA, condB)) goto <TRAP>;
+	local wsum:8 = zext(condA) + zext(condB) + zext(0:1);
+	pswCB = wsum[32,1];
+	R1dst = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
@@ -1073,11 +1113,12 @@ define pcodeop trap;
 
 # PA11 this is ADDIT, PA2.0 this is ADDI,TC
 :ADDI^",TC"^AddCondSym lse11,R2,R1dst	is opfam=0x2C & bit11=0 & lse11 & R2 & R1dst & AddCondSym & AddCondI11 {
-        tmp:$(REGSIZE) = R2; # Don't clobber the original value, when R1 is the same as R2
-	R1dst = R2 + lse11;
+	condA = lse11; condB = R2; condCin = 0:1;
 	build AddCondI11;
 	if (AddCondI11) goto <TRAP>;
-	pswCB = carry(tmp,lse11);
+	local wsum:8 = zext(condA) + zext(condB) + zext(0:1);
+	pswCB = wsum[32,1];
+	R1dst = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
@@ -1086,12 +1127,12 @@ define pcodeop trap;
 
 # PA11 this is ADDITO, PA2.0 this is ADDI,TC,TSV
 :ADDI^",TC,TSV"^AddCondSym lse11,R2,R1dst	is opfam=0x2C & bit11=1 & lse11 & R2 & R1dst & AddCondSym & AddCondI11 {
-        tmp:$(REGSIZE) = R2; # Don't clobber the original value, when R1 is the same as R2
-	R1dst = R2 + lse11;
+	condA = lse11; condB = R2; condCin = 0:1;
 	build AddCondI11;
-	if (AddCondI11) goto <TRAP>;
-	if (scarry(tmp, lse11) == 1:1) goto <TRAP>;
-	pswCB = carry(tmp,lse11);
+	if (AddCondI11 || scarry(condA, condB)) goto <TRAP>;
+	local wsum:8 = zext(condA) + zext(condB) + zext(0:1);
+	pswCB = wsum[32,1];
+	R1dst = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
@@ -1099,17 +1140,19 @@ define pcodeop trap;
 }
 
 :SUBI^CSCondSym lse11,R2,R1dst		is opfam=0x25 & bit11=0 & lse11 & R2 & R1dst & CSCondI11Nullify & CSCondSym {
-        tmp:$(REGSIZE) = R2; # Don't clobber the original value, when R1 is the same as R2
-	R1dst = lse11 - R2;
-	pswCB = !(lse11 < tmp);
+	condA = lse11; condB = R2; condCin = 1:1;
+	local wsum:8 = zext(condA) + zext(~condB) + zext(1:1);
+	pswCB = wsum[32,1];
+	R1dst = wsum:4;
 	build CSCondI11Nullify;
 }
 
 :SUBI^",TSV"^CSCondSym lse11,R2,R1dst	is opfam=0x25 & bit11=1 & lse11 & R2 & R1dst & CSCondI11 & CSCondSym & CSCondI11Nullify {
-        tmp:$(REGSIZE) = R2; # Don't clobber the original value, when R1 is the same as R2
-	if (sborrow(lse11, R2) == 1:1) goto <TRAP>;
-	R1dst = lse11 - R2;
-	pswCB = !(lse11 < tmp);
+	condA = lse11; condB = R2; condCin = 1:1;
+	if (sborrow(condA, condB)) goto <TRAP>;
+	local wsum:8 = zext(condA) + zext(~condB) + zext(1:1);
+	pswCB = wsum[32,1];
+	R1dst = wsum:4;
 	goto <DONE>;
 	<TRAP>
 	trap();
@@ -1119,6 +1162,8 @@ define pcodeop trap;
 
 :CMPICLR^CSCondSym lse11,R2,R1dst	is opfam=0x24 & bit11=0 & lse11 & R2 & R1dst & CSCondI11Nullify & CSCondSym
 {
+	condA = lse11; condB = R2; condCin = 1:1;
+	build CSCondI11Nullify;
 	R1dst = 0;
 }
 

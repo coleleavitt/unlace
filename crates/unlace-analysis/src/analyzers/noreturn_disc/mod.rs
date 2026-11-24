@@ -173,7 +173,11 @@ fn skip_callee(listing: &Listing, callee: u64, terminal: &BTreeSet<u64>) -> bool
 /// Sound guard against false positives: we require BOTH (a) the function's
 /// instruction span `[entry, next_entry)` contains a terminal call to a function
 /// in `terminal` (a no-fall-through call to a no-return callee), AND (b) the
-/// function contains NO `RETURN` instruction (no path returns). A function with a
+/// function contains NO `RETURN` instruction, no jump out of its span or
+/// computed jump, and no fall-through-less call to a callee not known no-return
+/// (a tail call returns when its target does: trustd's `_GetAssetFileURL`
+/// returns through `b _objc_autoreleaseReturnValue` and only its landing pad
+/// ends in `bl _Unwind_Resume`). A function with a
 /// `ret` somewhere returns on that path and must not be promoted by this rule
 /// (the call-site evidence rule still applies to it independently). This is the
 /// cheap, Listing-faithful form of Ghidra's worklist feedback (a newly no-return
@@ -181,13 +185,34 @@ fn skip_callee(listing: &Listing, callee: u64, terminal: &BTreeSet<u64>) -> bool
 fn last_act_is_terminal_call(listing: &Listing, entry: u64, terminal: &BTreeSet<u64>) -> bool {
     let next = listing.next_function_after(entry).map(|f| f.entry);
     let mut has_terminal_call = false;
+    let outside = |t: u64| t < entry || next.is_some_and(|n| t >= n);
     for (&vma, insn) in listing.instructions_in_range(entry, next) {
         // (b) Any returning path disqualifies the function from this rule.
         if insn.flow.is_terminal {
             return false;
         }
+        // A jump out of the function to a callee not known no-return (a tail
+        // call: AArch64 `b _objc_retain`, x86 `jmp` to another entry) or a
+        // computed jump returns through the function it reaches, so it is a
+        // returning path too; `jmp exit` stays a terminal act.
+        if insn.flow.is_jump
+            && !insn.flow.is_call
+            && (insn.flow.is_computed
+                || insn.flow.is_indirect
+                || insn
+                    .flows
+                    .iter()
+                    .any(|&t| outside(t) && !terminal.contains(&t)))
+        {
+            return false;
+        }
         if !insn.flow.is_call {
             continue;
+        }
+        // A call with no fall-through to a callee not known to be no-return is
+        // a tail call lowered as a call: it returns when the callee does.
+        if insn.fall_through.is_none() && insn.flows.iter().any(|t| !terminal.contains(t)) {
+            return false;
         }
         // (a) A call whose static callee is already terminal AND which itself has
         // no valid fall-through (the call is a terminal flow of this function).

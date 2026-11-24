@@ -27,7 +27,7 @@ fn storage_transfers_preserve_float_bits_and_numeric_conversions_keep_their_valu
             "arm",
             Architecture::Arm,
             false,
-            include_str!("../../../tests/stages/kuna-bit-reinterpret-arm.xml"),
+            include_str!("../../../tests/stages/kuna-bit-reinterpret-arm.toml"),
             &[
                 ("bits32", 0, 12),
                 ("unbits32", 12, 8),
@@ -41,7 +41,7 @@ fn storage_transfers_preserve_float_bits_and_numeric_conversions_keep_their_valu
             "thumb",
             Architecture::Arm,
             true,
-            include_str!("../../../tests/stages/kuna-bit-reinterpret-thumb.xml"),
+            include_str!("../../../tests/stages/kuna-bit-reinterpret-thumb.toml"),
             &[
                 ("bits32", 0, 10),
                 ("unbits32", 12, 12),
@@ -55,7 +55,7 @@ fn storage_transfers_preserve_float_bits_and_numeric_conversions_keep_their_valu
             "x64",
             Architecture::X86_64,
             false,
-            include_str!("../../../tests/stages/kuna-bit-reinterpret-x64.xml"),
+            include_str!("../../../tests/stages/kuna-bit-reinterpret-x64.toml"),
             &[
                 ("bits32", 0, 15),
                 ("unbits32", 16, 9),
@@ -67,6 +67,7 @@ fn storage_transfers_preserve_float_bits_and_numeric_conversions_keep_their_valu
         ),
     ];
     for &(name, architecture, thumb, stage, symbols) in cases {
+        let stage = &unlace_stagefile::xml_of_toml(stage).unwrap();
         for signed in [false, true] {
             let hex = stage
                 .split("offset=\"0x1000\">")

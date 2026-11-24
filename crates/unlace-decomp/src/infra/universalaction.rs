@@ -579,6 +579,11 @@ pub fn universal_sched_hooked(
             crate::ruleaction_1::RuleOrCollapse::new("analysis")
         ),
         rrow!(
+            "maskjoin",
+            "analysis",
+            crate::kuna_maskjoin::RuleMaskJoin::new("analysis")
+        ),
+        rrow!(
             "andorlump",
             "analysis",
             crate::ruleaction_1::RuleAndOrLump::new("analysis")
@@ -1687,6 +1692,11 @@ pub fn universal_sched_hooked(
             act!(crate::kuna_linuxsyscall::ActionLinuxSyscall::boxed(
                 "protorecovery"
             )),
+            // (kuna) evmcalls (option `evmcalls`, default-OFF): each recovered
+            // EVM internal call removes its callee's stack effect, which has to
+            // be the call's extrapop before ActionExtraPopSetup reads it. Inert
+            // on every language without an `evmstack` space.
+            act!(crate::kuna_evmcalls::ActionEvmCalls::boxed("protorecovery")),
             // (kuna) x64syscall (option `x64syscall`, default-OFF): give the
             // x86-64 `SYSCALL` user-op the Linux ABI's register effects.  Here
             // for the same two reasons as its i386 neighbour above: the op is

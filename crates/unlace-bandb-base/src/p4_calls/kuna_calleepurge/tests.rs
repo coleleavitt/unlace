@@ -622,3 +622,19 @@ fn an_seh_unlink_restores_the_saved_stack_pointer() {
     let s = step(&unlink, &f.regs, state);
     assert_eq!(sp(&s), Val::exact(-0x20));
 }
+
+#[test]
+fn a_pop_restores_from_the_slot_its_push_saved() {
+    let mut f = fx();
+    f.regs.fs = Some(0x40);
+    let mut state = step(&f.push(6), &f.regs, State::at_entry()).state;
+    assert_eq!(state.4[2], Some(-4));
+    state.0[SP] = Some(Val::Stack {
+        lo: -INF,
+        hi: 0,
+        own: false,
+    });
+    let s = step(&f.pop(6), &f.regs, state);
+    assert_eq!(sp(&s), Val::exact(0));
+    assert!(!s.unplaced);
+}

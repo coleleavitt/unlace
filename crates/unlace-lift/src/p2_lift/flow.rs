@@ -109,6 +109,18 @@ pub enum FlowOverride {
     NONE,
 }
 
+/// (kuna `evmcalls`) A classified EVM `JUMP`.
+enum EvmJump {
+    /// A call to the function at this entry, and the return label when it is
+    /// not the next instruction.
+    /// `true` when the callee never returns.
+    Call(Address, Option<Address>, bool),
+    /// A return through the label the caller pushed.
+    Return,
+    /// A jump to a constant label.
+    Branch(Address),
+}
+
 /// Which kind of injection [`FlowInfo::do_injection`] is weaving in (C++
 /// `doInjection` resolves the payload differently for the two callers, but the
 /// weave-in tail is shared).
@@ -463,6 +475,13 @@ pub trait FlowEnvironment {
         false
     }
 
+    /// (kuna `evmcalls`) The image's classified EVM internal calls and
+    /// returns. See [`kuna_evmcalls`](crate::kuna_evmcalls). The default
+    /// shell has none.
+    fn evm_calls(&self) -> Option<std::rc::Rc<crate::kuna_evmcalls::EvmCallMap>> {
+        None
+    }
+
     /// Resolve a direct-call entry address to its callee symbol (C++
     /// `FlowInfo::queryCall` → `Scope::queryFunction(entryaddr)`,
     /// `flow.cc:674`): return the callee's display name (so the call renders
@@ -787,6 +806,11 @@ pub struct FlowInfo<'a, E: FlowEnvironment> {
     insn_count: uint4,
     /// Maximum number of instructions (C++ `insn_max`).
     insn_max: uint4,
+    /// (kuna `jumptablework`) Instructions flowed at each jump-table recovery,
+    /// summed.
+    kuna_jt_work: u64,
+    /// (kuna `jumptablework`) The bound was reached and warned about.
+    kuna_jt_work_spent: bool,
     /// Start of range in which we are allowed to flow (C++ `baddr`).
     baddr: Address,
     /// End of range in which we are allowed to flow (C++ `eaddr`).
@@ -938,6 +962,8 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
             block_edge2: Vec::new(),
             insn_count: 0,
             insn_max: !0u32,
+            kuna_jt_work: 0,
+            kuna_jt_work_spent: false,
             baddr,
             eaddr,
             minaddr: entry.clone(),
@@ -1721,6 +1747,71 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                     }
                 }
                 OpCode::CPUI_BRANCHIND => {
+                    if let Some(kind) = self.evm_jump(curop) {
+                        match kind {
+                            EvmJump::Return => {
+                                let ret = self.env.resolve_typeop(OpCode::CPUI_RETURN);
+                                self.data.op_set_opcode(curop, ret);
+                                if self.ends_instruction(curop, maxtime) {
+                                    self.delete_remaining_ops(cursor)?;
+                                    cursor = None;
+                                }
+                                *startbasic = true;
+                            }
+                            EvmJump::Branch(dest) => {
+                                let target = self.data.new_code_ref(&dest);
+                                self.data.op_set_input(curop, target, 0)?;
+                                let branch = self.env.resolve_typeop(OpCode::CPUI_BRANCH);
+                                self.data.op_set_opcode(curop, branch);
+                                self.new_address(curop, &dest)?;
+                                if self.ends_instruction(curop, maxtime) {
+                                    self.delete_remaining_ops(cursor)?;
+                                    cursor = None;
+                                }
+                                *startbasic = true;
+                            }
+                            EvmJump::Call(dest, ret, noreturn) => {
+                                let callee = self.data.new_code_ref(&dest);
+                                self.data.op_set_input(curop, callee, 0)?;
+                                let call = self.env.resolve_typeop(OpCode::CPUI_CALL);
+                                self.data.op_set_opcode(curop, call);
+                                if self.setup_call_specs(curop)? {
+                                    cursor = self.dead_next(curop);
+                                } else if noreturn {
+                                    let at = self
+                                        .data
+                                        .obank()
+                                        .get(curop)
+                                        .expect("evmcalls: stale call")
+                                        .get_addr()
+                                        .clone();
+                                    let halt =
+                                        self.artificial_halt(&at, pcodeop_flags::noreturn)?;
+                                    self.data.op_dead_insert_after(halt, curop);
+                                    cursor = Some(halt);
+                                } else if let Some(ret) = ret {
+                                    let at = self
+                                        .data
+                                        .obank()
+                                        .get(curop)
+                                        .expect("evmcalls: stale call")
+                                        .get_addr()
+                                        .clone();
+                                    let br = self.data.new_op(1, at);
+                                    let branch = self.env.resolve_typeop(OpCode::CPUI_BRANCH);
+                                    self.data.op_set_opcode(br, branch);
+                                    let label = self.data.new_code_ref(&ret);
+                                    self.data.op_set_input(br, label, 0)?;
+                                    self.data.op_dead_insert_after(br, curop);
+                                    self.new_address(br, &ret)?;
+                                    op = Some(br);
+                                    cursor = None;
+                                    *startbasic = true;
+                                }
+                            }
+                        }
+                        continue;
+                    }
                     // (kuna) GH-6882: SPARC struct-return `unimp` after a call.
                     if let Some(producer) =
                         self.env.sparc_struct_ret_trap_producer(&self.data, curop)
@@ -1895,6 +1986,31 @@ following this call as a branch"
             }
         }
         Ok(op)
+    }
+
+    /// (kuna `evmcalls`) What the EVM `JUMP` holding `op` is, when the image
+    /// classification says it calls a function whose return label is the next
+    /// instruction, or returns.
+    fn evm_jump(&self, op: OpId) -> Option<EvmJump> {
+        let map = self.env.evm_calls()?;
+        let at = self.data.obank().get(op)?.get_addr().clone();
+        let site = at.get_offset();
+        if map.returns.contains(&site) {
+            return Some(EvmJump::Return);
+        }
+        let space = std::rc::Rc::clone(at.get_space()?);
+        if let Some(target) = map.jumps.get(&site) {
+            return Some(EvmJump::Branch(Address::new(space, *target)));
+        }
+        let call = map.call_at(site)?;
+        let ret =
+            (call.ret != site + 1).then(|| Address::new(std::rc::Rc::clone(&space), call.ret));
+        let noreturn = map.noreturn.contains(&call.target);
+        Some(EvmJump::Call(
+            Address::new(space, call.target),
+            ret,
+            noreturn,
+        ))
     }
 
     /// (kuna) Is `op` past every op an earlier relative branch of its instruction
@@ -5137,7 +5253,9 @@ truncating the fall-through here"
                     .get_jump_table(idx as int4)
                     .kuna_keeps_recovered_targets()
             });
-            let mut mode = if crate::kuna_budget::deadline_passed_in("jump-table recovery") {
+            let mut mode = if crate::kuna_budget::deadline_passed_in("jump-table recovery")
+                || self.jt_work_exhausted(op)
+            {
                 Ok(None)
             } else {
                 let mode = self.data.recover_jump_table_flow(
@@ -5274,6 +5392,32 @@ truncating the fall-through here"
             }
         }
         Ok(new_tables)
+    }
+
+    /// (kuna `jumptablework`) Charge one recovery of the dispatch `op` the
+    /// instructions flowed so far; `true` (with a warning the first time) once
+    /// the function's recoveries have passed the bound.
+    fn jt_work_exhausted(&mut self, op: OpId) -> bool {
+        if !self.kuna_jt_work_spent {
+            self.kuna_jt_work = self.kuna_jt_work.saturating_add(self.visited.len() as u64);
+            let limit = self
+                .data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_jumptablework::JumpTableWork>()
+                .0;
+            if !crate::kuna_jumptablework::exhausted(limit, self.kuna_jt_work) {
+                return false;
+            }
+            self.kuna_jt_work_spent = true;
+            if let Some(addr) = self.data.obank().get(op).map(|o| o.get_addr().clone()) {
+                self.data.warning(
+                    "Jump-table recovery work bound reached (option jumptablework): later indirect jumps are not recovered",
+                    &addr,
+                );
+            }
+        }
+        true
     }
 
     /// (kuna `--assert callee`) Is the BRANCHIND `op` a jump the caller stated

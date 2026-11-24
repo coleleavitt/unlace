@@ -13,6 +13,10 @@
 # (docs/processor-tests.md).
 
 [images]
+xtensa_hifi4_rt700 = """
+3641001f3270166d006c04c777391f3270167d006c04c77739142030042301ff2270163d006c44c477392d031df00000
+3641000fa2700d0a2050002a8f000f22700d4a0010062c8f001df0
+"""
 arcv2_list_sum = """
 0a220080e120c1070c704c4344424b7ae120c10778604c434442f30a31807860e07ee078
 """
@@ -136,6 +140,9 @@ meta_dsp = """
 """
 x86_64_native_oracle = """
 c4e27ddcc1c3662e0f1f840000000000660f3a170701c3
+"""
+x86_64_x87 = """
+dd07d9e5dfe066250002c39090909090dd07dd06d9f8dfe09e7af9dd5f08ddd8c3
 """
 
 [[family]]
@@ -2024,6 +2031,114 @@ expect = [
     "v6 = v5 + 1.0f;",
 ]
 
+# `fixtures/amdgpu/gfx1100_true16.cl` at -O2 (real true16): 16-bit values live in VGPR
+# halves (`v0.l`/`v0.h`), chosen by op_sel in VOP3 and by bit 7 of the register in e32 forms.
+[[family]]
+name = "amdgpu_gfx11_true16"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_true16.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+# `hfma`: v_cmp_lt_f16_e32 on two halves of v0, v_fma_f16 with op_sel, v_sub_f16 with |src|.
+[[family.function]]
+test = "amdgpu_gfx11_true16_half_math_decompiles"
+address = "0x0"
+expect = ["if (v2 < v3)", "- ABS(v3);"]
+
+# `hpk`: v_pk_fma_f16 multiplies and adds both lanes.
+[[family.function]]
+test = "amdgpu_gfx11_packed_fma_decompiles"
+address = "0x300"
+expect = ["CONCAT22(v2 *"]
+
+# `umax`: v_max_u16 and v_mad_u16 on halves.
+[[family.function]]
+test = "amdgpu_gfx11_true16_u16_decompiles"
+address = "0x600"
+expect = ["v3 * 3 + (v1 >> 2);"]
+
+# `mm`: v_wmma_f32_16x16x16_f16 reads two 8-VGPR tiles and the accumulator.
+[[family.function]]
+test = "amdgpu_gfx11_wmma_decompiles"
+address = "0x900"
+expect = ["= wmma("]
+
+# `fixtures/amdgpu/gfx1100_image.ll`: MIMG load, sample, an NSA sample_d with five address
+# operands, store and a returning atomic.
+[[family]]
+name = "amdgpu_gfx11_image"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_image.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx11_image_ops_decompile"
+address = "0x0"
+expect = ["image_sample_d(a0,a4,a5)", "image_store(", "image_atomic_add("]
+
+# RDNA 4 (gfx1200, wave32): `fixtures/amdgpu/gfx1200_true16.cl` at -O2. Kernel arguments come in
+# through the GFX12 SMEM encoding, global accesses through VGLOBAL, and the 16-bit math uses
+# VGPR halves; `mm` is the GFX12 v_wmma_f32_16x16x16_f16 (4-VGPR A and B tiles).
+[[family]]
+name = "amdgpu_gfx12_true16"
+language = "AMDGPU:LE:64:GFX12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1200_true16.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx12_true16_half_math_decompiles"
+address = "0x0"
+expect = ["if (v3 < v4)", "- ABS(v4);"]
+
+[[family.function]]
+test = "amdgpu_gfx12_true16_u16_decompiles"
+address = "0x700"
+expect = ["v2 * 3 + (v3 >> 2);"]
+
+[[family.function]]
+test = "amdgpu_gfx12_wmma_decompiles"
+address = "0xb00"
+expect = ["= wmma("]
+
+# `fixtures/amdgpu/gfx1100_image.ll` built for gfx1200: VIMAGE load, store and atomic and
+# VSAMPLE sample and sample_d (the s_code_end padding after the return is s_endpgm).
+[[family]]
+name = "amdgpu_gfx12_image"
+language = "AMDGPU:LE:64:GFX12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1200_image.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx12_image_ops_decompile"
+address = "0x0"
+expect = ["image_sample_d(", "image_store(", "image_atomic_add_uint("]
+
+# `fixtures/amdgpu/real_kernels.cl` built with clang -O2 for gfx1200; `dbl` divides doubles.
+[[family]]
+name = "amdgpu_real_gfx1200"
+language = "AMDGPU:LE:64:GFX12"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/real_gfx1200.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_real_gfx1200_f64_division_decompiles"
+address = "0x2718"
+expect = ["div_fixup(", "cmp_class("]
+
+[[family.function]]
+test = "amdgpu_real_gfx1200_matmul_loop_decompiles"
+address = "0x0"
+expect = ["} while ("]
+
 # Wave64 RDNA code (clang -mwavefrontsize64): lane masks are SGPR pairs. `vote` passes a
 # ballot (v_cmp into VCC, then vcc_lo and vcc_hi as a 64-bit argument); under the wave64
 # language the high half is the compare's zero, not a stale vcc_hi.
@@ -2077,6 +2192,35 @@ forbid = ["vcc_hi"]
 test = "amdgpu_gfx11_w64_uniform_branch_decompiles"
 address = "0x400"
 expect = ["<= -1)"]
+
+# `fixtures/amdgpu/gfx1100_true16.cl` built with -mwavefrontsize64 -DW64: the true16 compare
+# writes the VCC pair.
+[[family]]
+name = "amdgpu_gfx11_w64_true16"
+language = "AMDGPU:LE:64:GFX11-W64"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1100_w64_true16.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx11_w64_true16_half_math_decompiles"
+address = "0x0"
+expect = ["if (v2 < v3)", "- ABS(v3);"]
+
+# `fixtures/amdgpu/gfx1200_true16.cl` built with -mwavefrontsize64 -DW64 for gfx1200.
+[[family]]
+name = "amdgpu_gfx12_w64_true16"
+language = "AMDGPU:LE:64:GFX12-W64"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx1200_w64_true16.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx12_w64_true16_half_math_decompiles"
+address = "0x0"
+expect = ["if (v3 < v4)", "- ABS(v4);"]
 
 # The CPython 3.12 bytecode language decompiles a function's co_code from a raw image:
 # fast locals become parameters and variables, the value stack folds away, and objects,
@@ -2338,6 +2482,15 @@ expect = [
 test = "starcore_short_loop_lpmarka_back_edge"
 address = "0x40"
 expect = ["while( true ) {", "if (a3 <= 1) break;"]
+
+[[family.function]]
+test = "starcore_cont_ends_the_iteration_early"
+address = "0x70"
+expect = [
+    "while( true ) {",
+    "if (a0 <= *a2) {",  # IFT CONT skips the rest when D1 > D0
+    "a0 += *a2 * 3LL;",
+]
 
 [[family.function]]
 test = "starcore_two_set_short_loop_back_edge"
@@ -2628,6 +2781,34 @@ address = "0x0"
 expect = [
     "0x70a08231",
     "0xa9059cbb",
+]
+
+[[family]]
+name = "evm_erc20_calls"
+language = "EVM:BE:32:Cancun"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/evm/erc20_runtime_opt.bin"
+args = ["--option", "evmcalls", "on"]
+forbid = ["indirect jump", "switch("]
+
+# The same runtime with option evmcalls: the dispatcher calls the ABI decoder and
+# transfer() as functions, and the checked subtraction at 0x61c decompiles on its own
+# with its two stack arguments and its result.
+[[family.function]]
+test = "evm_erc20_calls_dispatch"
+address = "0x0"
+expect = [
+    "if (v1._0_32_ == 0xa9059cbb) {",
+    "sub_3e7(",
+    "= sub_51e(4,calldatasize());",
+]
+
+[[family.function]]
+test = "evm_erc20_calls_checked_sub"
+address = "0x61c"
+expect = [
+    "sub_61c(char a0[32],char a1[32])",
+    "return a0._0_32_ - a1._0_32_;",
 ]
 
 [[family]]
@@ -3049,6 +3230,24 @@ test = "x86_extractps_stores_a_dword"
 address = "0x10"
 expect = ["unsigned int *a0"]
 
+# x87 lifts checked against this CPU (docs/difffuzz.md): FXAM's C1 is the sign bit, read through
+# FNSTSW; FPREM converts its quotient before the multiply and its C2 ends the reduction loop.
+[[family]]
+name = "x86_64_x87"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_x87"
+
+[[family.function]]
+test = "x86_fxam_sign_reaches_fnstsw"
+address = "0x0"
+expect = [">> 0x4f) << 9"]
+
+[[family.function]]
+test = "x86_fprem_loop_ends_on_c2"
+address = "0x10"
+expect = ["(long)(", ">> 0x40) & 0x7fff"]
+
 # ELF routing and relocation rows: real ET_REL and ET_EXEC images (crates/unlace-cli/tests/fixtures/elfroute/fx.c,
 # built as its README says), loaded with no --target, so the loader picks the language from the ELF header (#706),
 # lays a 16-bit object out inside its space (#707) and applies the relocations (#713-#737). `chain` calls `scale7`
@@ -3358,7 +3557,6 @@ forbid = ["halt_baddata", "halt_missing"]
 test = "elfroute_sparc64_elf_chain"
 address = "chain"
 expect = ["scale7(", "+ 1"]
-xfail = "#756: the linked image marks the leaf scale7 no-return"
 
 [[family.function]]
 test = "elfroute_sparc64_elf_lookup"
@@ -3458,12 +3656,17 @@ test = "arcv2_conditional_delayed_return_runs_its_slot"
 address = "0x0"
 expect = ["v2 = 0;", "return v2 + *v1;"]
 
-# C-SKY ET_REL (EM_CSKY, ABIv2) routes to CSKY:LE:32:v2 (#776). chain and pick need the bsr relocations, which are not applied yet.
+# C-SKY ET_REL (EM_CSKY, ABIv2) routes to CSKY:LE:32:v2 (#776); bsr32 calls take PCREL_IMM26BY2.
 [[family]]
 name = "elfroute_csky_o"
 loader = "auto"
 fixture = "crates/unlace-cli/tests/fixtures/elfroute/csky.o"
 forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_csky_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
 
 [[family.function]]
 test = "elfroute_csky_o_lookup"
@@ -3538,6 +3741,28 @@ address = "pick"
 expect = ["0x2c", "scale7("]
 
 # OpenRISC executable (EM_OPENRISC, big-endian) routes to OpenRISC:BE:32:default (#776).
+# OpenRISC ET_REL (EM_OPENRISC): l.jal calls take INSN_REL_26, globals the AHI16/LO_16_IN_INSN pair.
+[[family]]
+name = "elfroute_or1k_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/or1k.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_or1k_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_or1k_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_or1k_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
 [[family]]
 name = "elfroute_or1k_elf"
 loader = "auto"
@@ -3560,6 +3785,28 @@ address = "pick"
 expect = ["0x2c", "scale7("]
 
 # Xtensa executable (EM_XTENSA, little-endian, gcc 15.3 windowed ABI) routes to Xtensa:LE:32:default (#776).
+# Xtensa ET_REL (little-endian, windowed): call8, l32r literals and branches take SLOT0_OP.
+[[family]]
+name = "elfroute_xtensa_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/xtensa.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_xtensa_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_xtensa_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_xtensa_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
 [[family]]
 name = "elfroute_xtensa_elf"
 loader = "auto"
@@ -3608,3 +3855,49 @@ expect = ["return v * (double)n;"]
 test = "elfroute_sparc64_float_two_args"
 address = "f2"
 expect = ["return v * w;"]
+
+# CUDA cubin ET_REL (EM_CUDA, ELF ABI 8, sm_80) routes to SASS:LE:64:SM80 (#776); CALL.ABS targets
+# take R_CUDA_ABS47_34 (#783).
+[[family]]
+name = "elfroute_sm80_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/sm80.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_sm80_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_sm80_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+xfail = "the .nv.global data symbols are not named: g_tab prints as 0x400880"
+
+[[family.function]]
+test = "elfroute_sm80_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+xfail = "the BRX jump table is the opaque sass_BRX op"
+
+# The Xtensa HiFi 4 (NXP i.MX RT700) language decodes FLIX bundles and AE_* operations: two
+# post-incremented ae_l64.ip loads in 88-bit bundles, ae_add32 and an ae_s64.i store; and a
+# beqz.w15 branch over an l32i in a bundle. Built with the overlay's xtensa-elf-as.
+[[family]]
+name = "xtensa_hifi4_rt700"
+language = "Xtensa:LE:32:hifi4_rt700"
+base = "0x0"
+image = "xtensa_hifi4_rt700"
+args = ["--addr"]
+forbid = ["halt_baddata", "hifi_nop"]
+
+[[family.function]]
+test = "xtensa_hifi4_flix_loads_feed_the_store"
+address = "0x0"
+expect = ["*a1 = hifi_ae_s64_i(hifi_ae_add32(", "hifi_ae_l64_ip(a0->field_0x8)"]
+
+[[family.function]]
+test = "xtensa_hifi4_flix_branch_guards_the_load"
+address = "0x30"
+expect = ["if (!a0)", "return ((unsigned int *)a0)[1];"]

@@ -16,6 +16,7 @@ pub mod kuna_constselectjump; // (kuna) recover a BRANCHIND whose destination is
 pub mod kuna_cortexmpriv; // (kuna) fold the Cortex-M isCurrentModePrivileged() guard around MRS/MSR
 pub mod kuna_decodehalt; // (kuna) a halt planted where the decode failed says so instead of printing as an ordinary return
 pub mod kuna_entryretdispatch; // (kuna) recover an entry-point push/push/ret dispatch chain as calls
+pub mod kuna_evmcalls; // (kuna `evmcalls`) Solidity internal calls and returns in EVM bytecode
 pub mod kuna_fastfailnoreturn; // (kuna) a Windows `int 0x29` (__fastfail) ends the flow instead of unbalancing the stack
 pub mod kuna_fpuemu; // (kuna) decode the 8087 emulator's INT 34h-3Dh as the x87 instructions they stand for
 pub mod kuna_funcboundflow; // (kuna) bound fall-through at a known function entry (no cross-function merge)
@@ -29,6 +30,7 @@ pub mod kuna_javasync; // (kuna `javasync`) synchronized and finally from a DEX 
 pub mod kuna_javatry; // (kuna `javatry`) exception edges and try dispatches from a DEX method's try items
 pub mod kuna_jumpassist; // (kuna) the JumpAssisted model: switches computed by a <jumpassist> user-op
 pub mod kuna_jumptablefault;
+pub mod kuna_jumptablework; // (kuna `jumptablework`) bound the jump-table recovery work of one function's flow
 pub mod kuna_kernelbug; // (kuna) a Linux kernel __bug_table trap prints as BUG() or __WARN(file,line)
 pub mod kuna_lanefuse; // (kuna `lanefuse`) re-fuse per-lane vector p-code into one intrinsic op
 pub mod kuna_linuxsyscall; // (kuna) name the 32-bit Linux int 0x80 sites instead of calling through swi()

@@ -37,6 +37,17 @@
   <language processor="AMDGPU"
             endian="little"
             size="64"
+            variant="GFX12"
+            version="1.0"
+            slafile="amdgcn_gfx12.sla"
+            processorspec="amdgcn.pspec"
+            id="AMDGPU:LE:64:GFX12">
+    <description>AMD RDNA 4 (gfx12) shader ISA, wave32, one-lane lift</description>
+    <compiler name="default" spec="amdgcn.cspec" id="default"/>
+  </language>
+  <language processor="AMDGPU"
+            endian="little"
+            size="64"
             variant="GFX10-W64"
             version="1.0"
             slafile="amdgcn_gfx10_w64.sla"
@@ -54,6 +65,17 @@
             processorspec="amdgcn.pspec"
             id="AMDGPU:LE:64:GFX11-W64">
     <description>AMD RDNA 3 (gfx11) shader ISA, wave64, one-lane lift</description>
+    <compiler name="default" spec="amdgcn.cspec" id="default"/>
+  </language>
+  <language processor="AMDGPU"
+            endian="little"
+            size="64"
+            variant="GFX12-W64"
+            version="1.0"
+            slafile="amdgcn_gfx12_w64.sla"
+            processorspec="amdgcn.pspec"
+            id="AMDGPU:LE:64:GFX12-W64">
+    <description>AMD RDNA 4 (gfx12) shader ISA, wave64, one-lane lift</description>
     <compiler name="default" spec="amdgcn.cspec" id="default"/>
   </language>
 </language_definitions>

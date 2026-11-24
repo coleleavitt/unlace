@@ -275,8 +275,8 @@ def main():
                          "this CPU (native, --arch x86-64-native)")
     args = ap.parse_args()
     if args.oracle == "native":
-        if args.arch != "x86-64-native":
-            sys.exit("--oracle native needs --arch x86-64-native")
+        if args.arch not in ("x86-64-native", "x86-64-x87"):
+            sys.exit("--oracle native needs --arch x86-64-native or x86-64-x87")
         args.oracle = "qemu"
     vector = args.arch == "riscv64v"
     arch = ARCHES["riscv64" if vector else args.arch]
@@ -307,6 +307,8 @@ def main():
         for i in range(0, len(cands), args.batch):
             batch = cands[i:i + args.batch]
             rows, problems = lift(args.unlace, arch, batch, tmp, args.sleighpath)
+            if vector:
+                rvv_backend.lift_variants(args.unlace, arch, batch, tmp, args.seed, args.sleighpath)
             for c in batch:
                 if c["addr"] in problems:
                     kind, why = problems[c["addr"]]
@@ -337,6 +339,8 @@ def main():
                     else:
                         res = run_case(arch, regs, row, c, case_rng, args.seed + t)
                     counts[res["status"]] += 1
+                    if vector and res["status"] == "bad-address":
+                        refexc[c["mnemonic"] + ": bad-address"] += 1
                     if res["status"] == "ref-exception":
                         refexc[c["mnemonic"] + ": " + res["why"]] += 1
                         break

@@ -736,7 +736,10 @@ fn widen(old: Option<Val>, joined: Option<Val>, is_sp: bool) -> Option<Val> {
 /// ([`State::lost`]) and the stack slots below the return address
 /// ([`slot_bit`]) that may hold a stack address the walk no longer places,
 /// and (`calleeargsmsvc`) the frame slot an MSVC EH prologue saved the exact
-/// stack pointer in, with that value (`mov [ebp-0x10],esp`).
+/// stack pointer in, with that value (`mov [ebp-0x10],esp`), the exact slot
+/// each callee-saved register ([`CALLEE_SAVED`] order) was first pushed to
+/// while it still held its entry value, and ([`saved_bit`] bits) the
+/// callee-saved registers no path has written yet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[doc(hidden)]
 pub struct State(
@@ -744,6 +747,8 @@ pub struct State(
     pub u8,
     pub u64,
     pub Option<(i64, i64)>,
+    pub [Option<i64>; 4],
+    pub u8,
 );
 
 impl State {
@@ -752,7 +757,7 @@ impl State {
         let mut r = [None; 8];
         r[SP] = Some(Val::exact(0));
         r[BP] = Some(Val::CallerFrame);
-        State(r, 0, 0, None)
+        State(r, 0, 0, None, [None; 4], 0xf)
     }
 
     fn join(&self, other: &State) -> State {
@@ -765,6 +770,8 @@ impl State {
             self.1 | other.1,
             self.2 | other.2,
             self.3.filter(|_| self.3 == other.3),
+            std::array::from_fn(|i| self.4[i].filter(|_| self.4[i] == other.4[i])),
+            self.5 & other.5,
         )
     }
 
@@ -988,6 +995,52 @@ fn msvc_saved_sp(
     }
 }
 
+/// (`calleeargsmsvc`) Record the slot a push of a callee-saved register that
+/// still holds its entry value (`push esi` in the prologue) writes it to.
+fn note_saved_register(
+    state: &mut State,
+    regs: &Regs,
+    ins: &[VarnodeData],
+    at: Option<Val>,
+    size: u32,
+) {
+    let Some(r) = ins.get(2).and_then(|v| regs.exact(v)) else {
+        return;
+    };
+    let Some(i) = CALLEE_SAVED.iter().position(|&c| c == r) else {
+        return;
+    };
+    if let Some(o) = at.and_then(Val::as_exact).filter(|&o| o < 0 && size == 4) {
+        if state.5 & saved_bit(r) != 0 && state.4[i].is_none() {
+            trace(|| format!("msvc: {} saved in slot {o:#x}", GPRS[r]));
+            state.4[i] = Some(o);
+        }
+    }
+}
+
+/// (`calleeargsmsvc`) The slot a pop restores a callee-saved register from:
+/// a load into one of them at the current stack pointer, which calls the walk
+/// cannot read left only bounded, when the bounds contain the slot the
+/// prologue pushed that register to. Compiled code restores each register
+/// from where it saved it, so the stack pointer is there.
+fn restore_slot(
+    state: &State,
+    regs: &Regs,
+    out: Option<&VarnodeData>,
+    at: Option<Val>,
+) -> Option<i64> {
+    let r = regs.exact(out?)?;
+    let i = CALLEE_SAVED.iter().position(|&c| c == r)?;
+    let slot = state.4[i]?;
+    let Some(Val::Stack { lo, hi, own: false }) = state.0[SP] else {
+        return None;
+    };
+    (at == state.0[SP] && lo != hi && lo <= slot && slot <= hi).then(|| {
+        trace(|| format!("msvc: pop {} placed at slot {slot:#x}", GPRS[r]));
+        slot
+    })
+}
+
 fn saved_bit(r: usize) -> u8 {
     CALLEE_SAVED
         .iter()
@@ -1120,7 +1173,13 @@ pub fn step_with(
                     }
                 }
                 let size = out.as_ref().map_or(4, |o| o.size);
-                let at = vals.get(1).copied().flatten();
+                let mut at = vals.get(1).copied().flatten();
+                if regs.fs.is_some() {
+                    if let Some(slot) = restore_slot(&s.state, regs, out.as_ref(), at) {
+                        s.state.0[SP] = Some(Val::exact(slot));
+                        at = Some(Val::exact(slot));
+                    }
+                }
                 touch(at, size, &mut s.arg_end, &mut s.unplaced);
                 s.unplaced |= lost_at(1);
                 out_lost = track && s.state.2 & slots_in(at, size) != 0;
@@ -1137,6 +1196,7 @@ pub fn step_with(
                 escape(value, &mut s.unplaced);
                 if regs.fs.is_some() {
                     msvc_saved_sp(&mut s.state, regs, ins, at, value, size, &fs_temps);
+                    note_saved_register(&mut s.state, regs, ins, at, size);
                 }
                 if track {
                     s.unplaced |= lost_at(1);
@@ -1234,6 +1294,7 @@ pub fn step_with(
         let Some(o) = out else { continue };
         if let Some(r) = regs.exact(o) {
             s.writes |= saved_bit(r);
+            s.state.5 &= !saved_bit(r);
             s.state.0[r] = if r == SP {
                 Some(result.unwrap_or(Val::Opaque { own: true }))
             } else {
@@ -1261,6 +1322,7 @@ pub fn step_with(
             }
             for r in partial {
                 s.writes |= saved_bit(r);
+                s.state.5 &= !saved_bit(r);
                 s.state.0[r] = if s.state.0[r].is_some() || r == SP {
                     Some(Val::Opaque { own: true })
                 } else {
@@ -1495,6 +1557,7 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
                 Effect::Unbalanced => {
                     s.state.0[SP] = Some(Val::Opaque { own: false });
                     writes |= effect.writes;
+                    s.state.5 &= !effect.writes;
                     for (i, &r) in CALLEE_SAVED.iter().enumerate() {
                         if effect.writes & (1 << i) != 0 {
                             s.state.0[r] = Some(Val::Opaque { own: false });

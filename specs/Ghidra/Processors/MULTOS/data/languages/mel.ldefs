@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="MULTOS"
+            endian="big"
+            size="16"
+            variant="MEL"
+            version="1.0"
+            slafile="mel.sla"
+            processorspec="mel.pspec"
+            id="MULTOS:BE:16:MEL">
+    <description>MULTOS Executable Language (MEL) smart-card bytecode</description>
+    <compiler name="default" spec="mel.cspec" id="default"/>
+  </language>
+</language_definitions>

@@ -22,8 +22,8 @@
 #     unsigned cvtwus(float f) { return (unsigned)f; }
 #
 # #1-#2: fmv.x.w results are the FP register's bits.  #3-#5: each fcvt.w*
-# result reaches a0, truncated and saturated as the ISA defines (riscv.fd.sinc,
-# generated from the Sail model).  #6: no conversion function is void.
+# result reaches a0 (riscv.fd.sinc saturates as the ISA defines; satconvert
+# prints the exact ladder as the C cast).  #6: no conversion function is void.
 
 [image]
 arch = 'RISCV:LE:32:default'
@@ -86,17 +86,17 @@ regex = 'return .*\{ \.from = gf\(a0\) \}\)\.to \+ 1;'
 [[match]]
 name = 'GH831 rv32 #3: fcvt.w.d converts the call result'
 count = 1
-literal = 'v1 = (int4)(int8)v2;'
+literal = 'return (int4)gd(a0) + 3;'
 
 [[match]]
 name = 'GH831 rv32 #4: fcvt.w.s writes a0'
 count = 1
-literal = 'v1 = 0x80000000;'
+literal = 'return (int4)a0;'
 
 [[match]]
 name = 'GH831 rv32 #5: fcvt.wu.d and fcvt.wu.s write a0'
 count = 2
-literal = 'if (a0 <= -1.0'
+literal = 'return (int4)(int8)a0;'
 
 [[match]]
 name = 'GH831 rv32 #6: no conversion function lost its result'

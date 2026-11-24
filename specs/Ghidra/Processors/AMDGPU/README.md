@@ -61,13 +61,14 @@ OFFEN/IDXEN to the second word.
 
 Both languages are wave32: VCC and compare, carry and select masks are 32-bit (`vcc_lo` or one
 SGPR), `s_and_saveexec_b32` and the other `*_saveexec_b32`/`*_wrexec_b32` forms work on
-EXEC_LO, and the EXECZ/VCCZ branches test the low halves. gfx11 adds VOPD (two `v_dual_*`
+EXEC_LO, and the EXECZ/VCCZ branches test the low halves. From GFX10 on, `v_cmpx_*` writes only EXEC (the
+e64 form has no SDST: its destination field holds EXEC_LO); GFX9 `v_cmpx` also writes VCC. gfx11 adds VOPD (two `v_dual_*`
 operations that read all sources before writing), the D16 global loads into one register half,
 and the true16 `v_mov_b16`/`v_not_b16` with `.l`/`.h` halves. The scheduling, wait and
 cache-control instructions new in these generations (`s_clause`, `s_delay_alu`,
 `s_waitcnt_*cnt`, `s_inst_prefetch`, ...) decode as no-ops.
 
-Gaps beyond GFX9's: wave64 code (64-bit lane masks) is decoded as wave32; most true16 VOP3
+Gaps beyond GFX9's: most true16 VOP3
 forms and op_sel, MIMG/NSA, the gfx11 export and LDS-direct instructions and the RDNA-only
 dot/WMMA operations are not decoded.
 
@@ -75,3 +76,39 @@ Oracle: `fixtures/amdgpu/gfx900_kernels.cl` and the four GFX9 test kernels built
 -O2 for gfx1030 and gfx1100, plus `fixtures/amdgpu/gfx1100_vopd.cl` at -O3 (four VOPD
 instructions): every function decompiles with no bad instruction and `llvm-objdump` lists no
 mnemonic the specs lack.
+
+## Wave64: `AMDGPU:LE:64:GFX10-W64` and `AMDGPU:LE:64:GFX11-W64`
+
+RDNA runs either wave size; the wave size of a kernel is in its kernel descriptor, not in the
+ELF header, so wave64 code (`clang -mwavefrontsize64`, and much compute code) picks these
+languages explicitly. `amdgcn_gfx10_w64.slaspec` and `amdgcn_gfx11_w64.slaspec` are generated
+from the wave32 specs by `tools/gen_amdgpu_wave64.py`; edit the wave32 spec and regenerate. The
+encodings are identical; the generator widens every lane mask: VCC and EXEC are SGPR pairs
+(VOPC e32 and the e32 carry and `v_cndmask` forms write or read `vcc`, `v_cmpx` writes `exec`),
+the VOPC e64 and VOP3b carry-out destinations and the `v_cndmask_b32_e64`/`v_*_co_ci_u32_e64`
+mask sources name SGPR pairs (`null` is a 64-bit sink, or reads 0), and VCCZ, EXECZ and the
+`s_cbranch_vccz/execz` branches test the whole pair. The `*_saveexec_b32`/`*_wrexec_b32` forms
+keep EXEC_LO.
+
+Oracle: `fixtures/amdgpu/wave64_kernels.cl` and `fixtures/amdgpu/wave64_ballot.cl` built with
+clang -O2 `-mwavefrontsize64` for gfx1030 and gfx1100; every lane-mask operand of the 1,512
+listed instructions matches `llvm-objdump --mattr=+wavefrontsize64` (the remaining listing
+differences are the MUBUF scratch and `s_waitcnt_depctr` operand spellings), and every function
+decompiles with no bad instruction. Decoded as wave32 instead, a ballot's high half reads as an
+uninitialized `vcc_hi`.
+
+## Aperture sources and v_swap_b32
+
+Source operand codes 235-239 (`src_shared_base`, `src_shared_limit`, `src_private_base`,
+`src_private_limit`, `src_pops_exiting_wave_id`) decode on GFX9, GFX10 and GFX11 as the
+`aperture_register` user op (their values are set by the hardware), and GFX9 decodes
+`v_swap_b32` (VOP1 opcode 81). Found by the real-code sweep (`notes/real-code-sweep.md`):
+clang's gfx900 output reads `src_private_base` in every function that takes a stack address.
+
+## Real-code sweep fixes
+
+Kernels in `fixtures/amdgpu/real_kernels.cl` built with clang -O2/-O3 for gfx900, gfx1030 and
+gfx1100 showed four missing f64 instructions (`v_div_scale_f64`, `v_div_fmas_f64`,
+`v_div_fixup_f64`, `v_cmp_class_f64`, plus `v_cmp_class_f32` in both encodings) and gfx11's
+`s_sendmsg_rtn_b32`; they decode now. A 32-bit literal feeding a 64-bit float operand is the
+high half of the double (`7.0` is `0x401c0000`), which the specs now apply to every f64 source.

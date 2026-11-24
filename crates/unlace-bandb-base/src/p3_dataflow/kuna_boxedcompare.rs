@@ -3,8 +3,9 @@
 //! register with all ones; after a boxed write (`0xffffffff00000000 | zext(x)`), a boxed
 //! load or a join of such values that test is true, and folding it removes the canonical-NaN
 //! branch the unboxing would otherwise print. Under `fpargboxed` (RISC-V only) the upper half
-//! of an FP argument register on entry counts as all ones too, as the psABI requires a caller
-//! to NaN-box a float argument narrower than FLEN.
+//! of an FP argument register on entry, and of `fa0`/`fa1` written by a call, counts as all
+//! ones too, as the psABI requires a float argument or return value narrower than FLEN to be
+//! NaN-boxed.
 
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -15,8 +16,8 @@ use crate::database::TranslateAccess;
 use crate::funcdata::Funcdata;
 
 crate::kuna_flag!(
-    /// (kuna `fpargboxed`) A RISC-V FP argument register on entry holds a NaN-boxed value: its
-    /// upper 32 bits are all ones.
+    /// (kuna `fpargboxed`) A RISC-V FP argument register on entry, and an FP return register
+    /// after a call, holds a NaN-boxed value: its upper 32 bits are all ones.
     FpArgBoxed,
     "fpargboxed",
     "NaN-boxed RISC-V FP arguments",
@@ -24,17 +25,30 @@ crate::kuna_flag!(
     shipped: true
 );
 
-/// The bits of an input varnode known to be 1 because it lies in the upper half of a RISC-V FP
-/// argument register (`fa0`..`fa7`, 8 bytes) under `fpargboxed`. Heritage often splits the
-/// register, so the input can be the upper word alone.
-fn boxed_argument(data: &Funcdata, vn: VarnodeId) -> u64 {
+/// The bits of `vn` known to be 1 under `fpargboxed` because it lies in the upper half of a
+/// RISC-V FP register the psABI boxes: an argument register (`fa0`..`fa7`, 8 bytes) on entry,
+/// or a return register (`fa0`, `fa1`) written by a call. Heritage often splits the
+/// register, so the varnode can be the upper word alone.
+fn boxed_register(data: &Funcdata, vn: VarnodeId) -> u64 {
     let Some(v) = data.vbank().get(vn) else {
         return 0;
     };
     let size = v.get_size();
-    if !v.is_input() || !(1..=8).contains(&size) {
+    if !(1..=8).contains(&size) {
         return 0;
     }
+    let limit = if v.is_input() {
+        8
+    } else {
+        let call = v
+            .get_def()
+            .and_then(|d| data.obank().get(d))
+            .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND));
+        if !call {
+            return 0;
+        }
+        2
+    };
     let arch = data.get_arch();
     if arch.syscall_regs_family != Some(SyscallFamily::RiscV)
         || !arch.kuna_options.get::<FpArgBoxed>().0
@@ -54,7 +68,7 @@ fn boxed_argument(data: &Funcdata, vn: VarnodeId) -> u64 {
         let argument = name
             .strip_prefix("fa")
             .and_then(|n| n.parse::<u32>().ok())
-            .is_some_and(|n| n < 8);
+            .is_some_and(|n| n < limit);
         if !argument {
             continue;
         }
@@ -83,7 +97,7 @@ fn known_ones(data: &Funcdata, vn: VarnodeId, budget: &mut u32) -> u64 {
         return v.get_offset() & mask;
     }
     if v.is_input() {
-        return boxed_argument(data, vn) & mask;
+        return boxed_register(data, vn) & mask;
     }
     if *budget == 0 {
         return 0;
@@ -105,6 +119,7 @@ fn known_ones(data: &Funcdata, vn: VarnodeId, budget: &mut u32) -> u64 {
     };
     let mut input = |slot: int4| op.get_in(slot).map_or(0, |i| known_ones(data, i, budget));
     let ones = match op.code() {
+        OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => boxed_register(data, vn),
         OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT => input(0),
         OpCode::CPUI_INT_OR => input(0) | input(1),
         OpCode::CPUI_INT_AND => input(0) & input(1),

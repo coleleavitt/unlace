@@ -4914,6 +4914,52 @@ is retab__PACpart & b_1131=0b110101100101111100001 & b_0009=0b1111111111 & b_10=
 	return [pc];
 }
 
+# (kuna) FEAT_PAuth_LR (Armv9.5): PACIASPPC, PACIBSPPC, PACNBIASPPC, PACNBIBSPPC,
+# PACIA171615, PACIB171615, AUTIA171615, AUTIB171615, AUTIASPPC/AUTIBSPPC (label and
+# register), RETAASPPC/RETABSPPC (label and register) and PACM. Encodings from LLVM's
+# AArch64 TableGen records (HasPAuthLR).
+
+:paciasppc is paciasppc__PACpart & b_0031=0xdac1a3fe { build paciasppc__PACpart; }
+:pacibsppc is pacibsppc__PACpart & b_0031=0xdac1a7fe { build pacibsppc__PACpart; }
+:pacnbiasppc is paciasppc__PACpart & b_0031=0xdac183fe { build paciasppc__PACpart; }
+:pacnbibsppc is pacibsppc__PACpart & b_0031=0xdac187fe { build pacibsppc__PACpart; }
+:pacia171615 is pacia171615__PACpart & b_0031=0xdac18bfe { build pacia171615__PACpart; }
+:pacib171615 is pacib171615__PACpart & b_0031=0xdac18ffe { build pacib171615__PACpart; }
+:autia171615 is autia171615__PACpart & b_0031=0xdac1bbfe { build autia171615__PACpart; }
+:autib171615 is autib171615__PACpart & b_0031=0xdac1bffe { build autib171615__PACpart; }
+
+:autiasppc PACLRLabel is autiasppc__PACpart & PACLRLabel & b_2131=0x79c & b_0004=0x1f { build autiasppc__PACpart; }
+:autibsppc PACLRLabel is autibsppc__PACpart & PACLRLabel & b_2131=0x79d & b_0004=0x1f { build autibsppc__PACpart; }
+:autiasppcr Rn_GPR64 is autiasppcr__PACpart & Rn_GPR64 & b_1031=0x36b064 & b_0004=0x1e { build autiasppcr__PACpart; }
+:autibsppcr Rn_GPR64 is autibsppcr__PACpart & Rn_GPR64 & b_1031=0x36b065 & b_0004=0x1e { build autibsppcr__PACpart; }
+
+:retaasppc PACLRLabel is retaasppc__PACpart & PACLRLabel & b_2131=0x2a8 & b_0004=0x1f
+{
+	build retaasppc__PACpart;
+	pc = x30;
+	return [pc];
+}
+:retabsppc PACLRLabel is retabsppc__PACpart & PACLRLabel & b_2131=0x2a9 & b_0004=0x1f
+{
+	build retabsppc__PACpart;
+	pc = x30;
+	return [pc];
+}
+:retaasppcr Rd_GPR64 is retaasppcr__PACpart & Rd_GPR64 & b_0531=0x6b2f85f
+{
+	build retaasppcr__PACpart;
+	pc = x30;
+	return [pc];
+}
+:retabsppcr Rd_GPR64 is retabsppcr__PACpart & Rd_GPR64 & b_0531=0x6b2f87f
+{
+	build retabsppcr__PACpart;
+	pc = x30;
+	return [pc];
+}
+
+:pacm is b_0031=0xd50324ff { }
+
 # C6.2.256 REV page C6-1732 line 102201 MATCH x5ac00800/mask=x7ffff800
 # CONSTRUCT x5ac00800/mask=xfffffc00 MATCHED 1 DOCUMENTED OPCODES
 # AUNIT --inst x5ac00800/mask=xfffffc00 --status pass
@@ -5450,11 +5496,11 @@ is sf=1 & op.dp3_op54=0 & b_2428=0x1b & op.dp3_op31=1 & Rm_GPR32 & op.dp3_o0=1 &
 define pcodeop sveStreamingModeStart;
 define pcodeop sveStreamingModeStop;
 
-SVAmodeOp: "SM" is b_0911=0x1 & b_08 { svcr[0,1] = b_08; }
-SVAmodeOp: "ZA" is b_0911=0x2 & b_08 { svcr[1,1] = b_08; }
+SVAmodeOp: "sm" is b_0911=0x1 & b_08 { svcr[0,1] = b_08; }
+SVAmodeOp: "za" is b_0911=0x2 & b_08 { svcr[1,1] = b_08; }
 SVAmodeOp: ""   is b_0911=0x3 & b_08 { svcr[0,1] = b_08; svcr[1,1] = b_08; }
 
-:smstart "{"^SVAmodeOp^"}"
+:smstart SVAmodeOp
 is b_1131=0x1aa068 & SVAmodeOp & b_08=1 & b_0507=0x3 & op4=0x1f {
 	build SVAmodeOp;
 	sveStreamingModeStart();
@@ -5467,7 +5513,7 @@ is b_1131=0x1aa068 & SVAmodeOp & b_08=1 & b_0507=0x3 & op4=0x1f {
 # xd503407f/mask=xfffff9ff NOT MATCHED BY ANY CONSTRUCTOR
 # b_0031=110101010000001101000..001111111
 
-:smstop "{"^SVAmodeOp^"}"
+:smstop SVAmodeOp
 is b_1131=0x1aa068 & SVAmodeOp & b_08=0 & b_0507=0x3 & op4=0x1f {
 	sveStreamingModeStop();
 }
@@ -7437,7 +7483,7 @@ is b_1231=0b11010101000000000100 & b_0007=0b01011111
 # CONSTRUCT xd503241f/mask=xffffff1f MATCHED 2 DOCUMENTED OPCODES
 
 :bti BTI_BTITARGETS
-is BTI_BTITARGETS & b_1231=0xd5032 & b_0811=4 & b_0004=0x1f
+is BTI_BTITARGETS & b_1231=0xd5032 & b_0811=4 & b_05=0 & b_0004=0x1f
 {
 	# This instruction is a valid target for jumps, calls, or both; see the BTI_BTITARGETS table.
 }

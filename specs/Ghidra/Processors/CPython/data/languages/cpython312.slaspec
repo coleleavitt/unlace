@@ -452,7 +452,7 @@ FAST: argv is arg [ argv = (hiarg << 8) | arg; ] { a:4 = argv * 8; export *[fast
 
 RELF: tgt is arg [ tgt = inst_next + ((hiarg << 8) | arg) * 2; ] { export *:4 tgt; }
 RELB: tgt is arg [ tgt = inst_next - ((hiarg << 8) | arg) * 2; ] { export *:4 tgt; }
-FORT: tgt is arg [ tgt = inst_next + ((hiarg << 8) | arg) * 2 + 4; ] { export *:4 tgt; }
+FORT: tgt is arg [ tgt = inst_next + ((hiarg << 8) | arg) * 2 + 2; ] { export *:4 tgt; }
 SENDT: tgt is arg [ tgt = inst_next + ((hiarg << 8) | arg) * 2 + 2; ] { export *:4 tgt; }
 
 :JUMP_FORWARD RELF is op=110 & RELF { goto RELF; }
@@ -463,9 +463,8 @@ SENDT: tgt is arg [ tgt = inst_next + ((hiarg << 8) | arg) * 2 + 2; ] { export *
 :POP_JUMP_IF_NONE RELF is op=129 & RELF { v:8 = 0; pop(v); t:1 = py_is_none(v); if (t) goto RELF; }
 :POP_JUMP_IF_NOT_NONE RELF is op=128 & RELF { v:8 = 0; pop(v); t:1 = py_is_none(v); if (!t) goto RELF; }
 :FOR_ITER FORT is op=93 & FORT {
-  it:8 = *[pystack]:8 SP; d:1 = py_iter_done(it); if (!d) goto <more>; SP = SP + 8; goto FORT;
-<more>
-  r:8 = py_iter_next(it); push(r);
+  it:8 = *[pystack]:8 SP; d:1 = py_iter_done(it); r:8 = py_iter_next(it); push(r);
+  if (d) goto FORT;
 }
 :SEND SENDT is op=123 & SENDT {
   v:8 = 0; pop(v); g:8 = *[pystack]:8 SP; r:8 = py_send(g, v); push(r); d:1 = py_send_done(g); if (d) goto SENDT;

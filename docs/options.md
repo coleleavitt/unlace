@@ -44,6 +44,11 @@ Three tiers:
 | v = NAN; if ((int)(x >> 0x20) == -1) v = x; around a float parameter on RISC-V | [`fpargboxed`](#fpargboxed----on--off-default-on) |
 | a RISC-V float function starts with one NAN test per float argument | [`fpargboxed`](#fpargboxed----on--off-default-on) |
 | an unused int variable named after fa0 or fa1 beside a float parameter | [`fpargboxed`](#fpargboxed----on--off-default-on) |
+| v = NAN; if ((int)(r >> 0x20) == -1) v = r; after a RISC-V call that returns a float | [`fpargboxed`](#fpargboxed----on--off-default-on) |
+| if (NAN(x)) v = 0x7fffffff; after v = (int)x; | [`satconvert`](#satconvert----on--off-default-on) |
+| a float-to-int conversion followed by clamps to -0x80000000 and 0x7fffffff | [`satconvert`](#satconvert----on--off-default-on) |
+| v = 0; if (x <= -1.0) after an unsigned conversion | [`satconvert`](#satconvert----on--off-default-on) |
+| (int)x where the clamps for NaN and overflow should not print | [`satconvert`](#satconvert----on--off-default-on) |
 | a < b or a == b printed as two tests where a <= b would do | [`cmpmerge`](#cmpmerge----on--off-default-off) |
 | a0 != a1 && !(a0 < a1) on floats | [`cmpmerge`](#cmpmerge----on--off-default-off) |
 | two branches in a row test the same value against neighbouring constants and jump to one place | [`cmpmerge`](#cmpmerge----on--off-default-off) |
@@ -63,13 +68,13 @@ Three tiers:
 | rep movsq / rep stosd from -Os code printed as a loop instead of memcpy/memset | [`repstring`](#repstring----on--off-default-on) |
 | a struct copy prints as a 16-iteration word loop | [`repstring`](#repstring----on--off-default-on) |
 | a strcmp against a short constant prints as a do/while over two byte pointers and a count | [`repstring`](#repstring----on--off-default-on) |
-| LOCK(); and UNLOCK(); around a plain load and store | [`atomics`](#atomics----auto--msvc--gcc--off-default-off) |
-| a lock xadd, lock cmpxchg or lock inc prints as an ordinary update | [`atomics`](#atomics----auto--msvc--gcc--off-default-off) |
-| an AArch64 ldaddal, swpal or casal prints as a plain load and store with no sign of atomicity | [`atomics`](#atomics----auto--msvc--gcc--off-default-off) |
-| a compare-exchange retry loop whose compare and store moved out of the loop | [`atomics`](#atomics----auto--msvc--gcc--off-default-off) |
-| an AArch64 do/while loop around ExclusiveMonitorPass and ExclusiveMonitorsStatus | [`llscfold`](#llscfold----on--off-default-off) |
-| a shared_ptr or Arc reference count update prints as a loop with a char status variable | [`llscfold`](#llscfold----on--off-default-off) |
-| `if ((bool)ExclusiveMonitorPass(p,0x10))` in a loop | [`llscfold`](#llscfold----on--off-default-off) |
+| LOCK(); and UNLOCK(); around a plain load and store | [`atomics`](#atomics----auto--msvc--gcc--off-default-auto) |
+| a lock xadd, lock cmpxchg or lock inc prints as an ordinary update | [`atomics`](#atomics----auto--msvc--gcc--off-default-auto) |
+| an AArch64 ldaddal, swpal or casal prints as a plain load and store with no sign of atomicity | [`atomics`](#atomics----auto--msvc--gcc--off-default-auto) |
+| a compare-exchange retry loop whose compare and store moved out of the loop | [`atomics`](#atomics----auto--msvc--gcc--off-default-auto) |
+| an AArch64 do/while loop around ExclusiveMonitorPass and ExclusiveMonitorsStatus | [`llscfold`](#llscfold----on--off-default-on) |
+| a shared_ptr or Arc reference count update prints as a loop with a char status variable | [`llscfold`](#llscfold----on--off-default-on) |
+| `if ((bool)ExclusiveMonitorPass(p,0x10))` in a loop | [`llscfold`](#llscfold----on--off-default-on) |
 | a struct copy prints as eight paired assignments through a register | [`copyrun`](#copyrun----on--off-default-on) |
 | *a0 = *a1; a0[1] = v1; ... for a fixed-size memcpy | [`copyrun`](#copyrun----on--off-default-on) |
 | SSE xmm0 lanes shuttle a buffer one word at a time | [`copyrun`](#copyrun----on--off-default-on) |
@@ -989,10 +994,10 @@ Three tiers:
 | a DriverKit dext's metaclass globals render as dat_<addr> | [`osclassinfo`](#osclassinfo----on--off-default-on) |
 | a dext's class New functions are sub_<addr> | [`osclassinfo`](#osclassinfo----on--off-default-on) |
 | __osclassinfo records are unnamed data | [`osclassinfo`](#osclassinfo----on--off-default-on) |
-| a DriverKit _Dispatch prints as void C::_Dispatch(unsigned long a0,unsigned long *a1) | [`dextrpc`](#dextrpc----on--off-default-off) |
-| a dext's _Dispatch compares *(long *)IORPCMessageFromMach(...) against bare 64-bit hashes | [`dextrpc`](#dextrpc----on--off-default-off) |
-| a dext's M_Invoke results are dropped and _Dispatch returns nothing | [`dextrpc`](#dextrpc----on--off-default-off) |
-| a DriverKit init or M_Impl reads its ivars as ((long *)a0)[N] | [`dextrpc`](#dextrpc----on--off-default-off) |
+| a DriverKit _Dispatch prints as void C::_Dispatch(unsigned long a0,unsigned long *a1) | [`dextrpc`](#dextrpc----on--off-default-on) |
+| a dext's _Dispatch compares *(long *)IORPCMessageFromMach(...) against bare 64-bit hashes | [`dextrpc`](#dextrpc----on--off-default-on) |
+| a dext's M_Invoke results are dropped and _Dispatch returns nothing | [`dextrpc`](#dextrpc----on--off-default-on) |
+| a DriverKit init or M_Impl reads its ivars as ((long *)a0)[N] | [`dextrpc`](#dextrpc----on--off-default-on) |
 | a swift class method in a stripped app is named vtable#N.method | [`swiftobjcthunk`](#swiftobjcthunk----on--off-default-on) |
 | a swift property accessor prints as vtable#N.getter or vtable#N.setter | [`swiftobjcthunk`](#swiftobjcthunk----on--off-default-on) |
 | a call on a swift class instance prints the slot number instead of the method | [`swiftobjcthunk`](#swiftobjcthunk----on--off-default-on) |
@@ -1037,11 +1042,11 @@ Three tiers:
 | an interrupt enable is a store through a computed pointer near -0x1fff1f00 | [`cortexmscs`](#cortexmscs----on--off-default-on) |
 | a vendor HAL startup routine is a list of stores to raw 0xe000xxxx addresses | [`cortexmscs`](#cortexmscs----on--off-default-on) |
 | a polling loop on a System Control Space register folds away because the read is not volatile | [`cortexmscs`](#cortexmscs----on--off-default-on) |
-| a CLSID or IID in .rdata is an unnamed 16-byte blob | [`com`](#com----on--off-default-off) |
-| a COM method call renders as (**(code **)(*plVar1 + 0x58))(plVar1, ...) | [`com`](#com----on--off-default-off) |
-| CoCreateInstance(&dat_140003010, 0, 1, &dat_140003020, &local_18) with the ids unnamed | [`com`](#com----on--off-default-off) |
-| the object a QueryInterface or CoCreateInstance call returns is an untyped void * or long * | [`com`](#com----on--off-default-off) |
-| the MULTI_QI array of CoCreateInstanceEx is untyped and each pItf a void * | [`com`](#com----on--off-default-off) |
+| a CLSID or IID in .rdata is an unnamed 16-byte blob | [`com`](#com----on--off-default-on) |
+| a COM method call renders as (**(code **)(*plVar1 + 0x58))(plVar1, ...) | [`com`](#com----on--off-default-on) |
+| CoCreateInstance(&dat_140003010, 0, 1, &dat_140003020, &local_18) with the ids unnamed | [`com`](#com----on--off-default-on) |
+| the object a QueryInterface or CoCreateInstance call returns is an untyped void * or long * | [`com`](#com----on--off-default-on) |
+| the MULTI_QI array of CoCreateInstanceEx is untyped and each pItf a void * | [`com`](#com----on--off-default-on) |
 | with com on, a GUID in .rdata is still an unnamed 16-byte blob | [`comcfg`](#comcfg----off---default-off) |
 | a vendor CLSID or IID the built-in COM table does not know | [`comcfg`](#comcfg----off---default-off) |
 | a media or device GUID (MFMediaType_*, WPD_*, SENSOR_*) prints as an unnamed blob | [`comcfg`](#comcfg----off---default-off) |
@@ -1425,11 +1430,19 @@ The control surface: each of these can make output worse on the wrong source sha
 
 ### `fpargboxed` -- on | off, default `on`
 
-- **Symptoms:** v = NAN; if ((int)(x >> 0x20) == -1) v = x; around a float parameter on RISC-V; a RISC-V float function starts with one NAN test per float argument; an unused int variable named after fa0 or fa1 beside a float parameter.
-- **What it does:** On RISC-V, take the upper 32 bits of an FP argument register (`fa0`..`fa7`) on entry as all ones: a NaN-boxed value. The RISC-V psABI's hardware floating-point calling convention passes a floating-point argument narrower than FLEN NaN-boxed, and every F/D/Zfh instruction that writes a single or half writes it boxed. A single- or half-precision read of an f register NaN-unboxes it: when the upper bits are not all ones the instruction reads the canonical NaN, so an exact lift (`riscv.zfa.sinc`, and `riscv.fd.sinc` with `--unbox exact`) prints `v = NAN; if ((int)(x >> 0x20) == -1) v = x;` around each read. `RuleBoxedCompare` (oppool1, `kuna_boxedcompare.rs`) folds that test whenever its known-ones walk proves the upper half all ones (a boxed write, a boxed load, a constant, a join of them); with this option the walk also counts an FP argument register input as boxed, so a function's own float parameters lose the test too. Only the 32 upper bits are claimed, so a test of a float's own bits (its exponent, a sign) is never folded; a half-precision parameter's 48-bit test is left alone. Inert on every other processor.
-- **When to flip:** On by default: the psABI guarantees it and compiled code never passes an unboxed float, so it only removes NaN-unboxing tests no ABI-conforming caller can fail. Flip off for hand-written assembly or a caller that may pass a raw bit pattern in an f register, to see every unboxing test of a parameter.
+- **Symptoms:** v = NAN; if ((int)(x >> 0x20) == -1) v = x; around a float parameter on RISC-V; a RISC-V float function starts with one NAN test per float argument; an unused int variable named after fa0 or fa1 beside a float parameter; v = NAN; if ((int)(r >> 0x20) == -1) v = r; after a RISC-V call that returns a float.
+- **What it does:** On RISC-V, take the upper 32 bits of an FP argument register (`fa0`..`fa7`) on entry, and of `fa0`/`fa1` written by a call, as all ones: a NaN-boxed value. The RISC-V psABI's hardware floating-point calling convention passes and returns a floating-point value narrower than FLEN NaN-boxed, and every F/D/Zfh instruction that writes a single or half writes it boxed. A single- or half-precision read of an f register NaN-unboxes it: when the upper bits are not all ones the instruction reads the canonical NaN, so an exact lift (`riscv.zfa.sinc`, and `riscv.fd.sinc` with `--unbox exact`) prints `v = NAN; if ((int)(x >> 0x20) == -1) v = x;` around each read. `RuleBoxedCompare` (oppool1, `kuna_boxedcompare.rs`) folds that test whenever its known-ones walk proves the upper half all ones (a boxed write, a boxed load, a constant, a join of them); with this option the walk also counts an FP argument register input, and a call's `fa0`/`fa1` output, as boxed, so a function's own float parameters and the float results of its calls lose the test too. Only the 32 upper bits are claimed, so a test of a float's own bits (its exponent, a sign) is never folded; a half-precision parameter's 48-bit test is left alone. Inert on every other processor.
+- **When to flip:** On by default: the psABI guarantees it and compiled code never passes an unboxed float, so it only removes NaN-unboxing tests no ABI-conforming caller or callee can fail. Flip off for hand-written assembly, or a caller or callee that may pass or return a raw bit pattern in an f register, to see every unboxing test of a parameter or call result.
 - **Where / provenance:** P3/simplification-quiescence · kuna · presentation-default · unlace-fpargboxed
 - **Example:** `option fpargboxed off`
+
+### `satconvert` -- on | off, default `on`
+
+- **Symptoms:** if (NAN(x)) v = 0x7fffffff; after v = (int)x;; a float-to-int conversion followed by clamps to -0x80000000 and 0x7fffffff; v = 0; if (x <= -1.0) after an unsigned conversion; (int)x where the clamps for NaN and overflow should not print.
+- **What it does:** Print a float-to-integer conversion that saturates exactly as RISC-V `fcvt.w*`/`fcvt.l*` with `rtz` does as the C cast. `riscv.fd.sinc` lifts the instruction as the ISA defines it: truncation, then three clamps (NaN and values at or above the range give the maximum, values below it the minimum, 0 for the unsigned forms), printed `v = (int)x; if (x < -2147483648.0) v = -0x80000000; if (2147483648.0 <= x) v = 0x7fffffff; if (NAN(x)) v = 0x7fffffff;`. `RuleSatConvert` (oppool1, `kuna_satconvert.rs`) takes the outermost of three two-input MULTIEQUALs, each choosing a constant on one out-edge of its immediate dominator's branch (the `pow2select` select test), whose innermost input is a `FLOAT_TRUNC` of `x` (or the low part of a 64-bit one) and whose branches test `x` against float constants or `NAN(x)`. It evaluates the ladder at NaN, the infinities, zero, -0.5, -1 and every threshold and its neighbours, and requires the result to equal C's saturating conversion at the join's width, signed or unsigned. Only then does it replace the join by the truncation, so the clamps die and the function prints `(int)x`. The 64-bit unsigned form, whose truncation is itself split at 2^63, keeps its ladder.
+- **When to flip:** On by default: C leaves an out-of-range float-to-integer conversion undefined, so `(int)x` is what the source said, and the ladder appears only where the ISA defines the saturation. Flip off to see the ISA's exact result for NaN and out-of-range values.
+- **Where / provenance:** P3/simplification-quiescence · kuna · presentation-default · unlace-satconvert
+- **Example:** `option satconvert off`
 
 ### `cmpmerge` -- on | off, default `off`
 
@@ -1471,21 +1484,21 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P3/simplification-quiescence · kuna · presentation-default · GH-1650
 - **Example:** `option repstring off`
 
-### `atomics` -- auto | msvc | gcc | off, default `off`
+### `atomics` -- auto | msvc | gcc | off, default `auto`
 
 - **Symptoms:** LOCK(); and UNLOCK(); around a plain load and store; a lock xadd, lock cmpxchg or lock inc prints as an ordinary update; an AArch64 ldaddal, swpal or casal prints as a plain load and store with no sign of atomicity; a compare-exchange retry loop whose compare and store moved out of the loop.
 - **What it does:** Print an atomic read-modify-write instruction as the builtin it performs: the GCC/Clang `__sync_*` builtin under `gcc`, the MSVC `_Interlocked*` intrinsic under `msvc` (`_InterlockedExchangeAdd`, `_InterlockedAnd`, `_InterlockedOr`, `_InterlockedXor`, `_InterlockedExchange`, `_InterlockedCompareExchange`, suffixed `8`/`16`/none/`64` by width, as Hex-Rays names them), and under `auto` the MSVC spelling on a Windows image (a Windows compiler spec or a Windows user-mode PE) and the GCC one elsewhere. MSVC has no fetch-and-subtract, so a subtraction becomes `_InterlockedExchangeAdd` of the negated operand (or keeps `__sync_fetch_and_sub` where the negation cannot be built in place), and `_InterlockedCompareExchange(p, N, E)` takes the new value before the expected one. SLEIGH lifts an x86 `lock`-prefixed instruction as `LOCK()`, a load, an update, a store and `UNLOCK()`, and an AArch64 LSE atomic (`ldadd`, `ldclr`, `ldeor`, `ldset`, `swp`, `cas` and their `a`/`l`/`al` and `st` forms) or a RISC-V AMO as the same load and store with nothing marking it, so the C showed a plain update between `LOCK();` and `UNLOCK();` or no sign of atomicity at all. `kuna_atomics` evaluates each instruction's p-code right after it is lifted, over every path through its internal branches (at most four), with `Old` for the value the location holds when the instruction starts, and rewrites it in place when the value it writes is `Old + X`, `Old - X`, `Old & X`, `Old | X`, `Old ^ X` or `~Old` (`__sync_fetch_and_add/sub/and/or/xor`), `X` (`__sync_lock_test_and_set`), or `N` on exactly the path where `Old == E` (`__sync_val_compare_and_swap(p, E, N)`), with `X`, `E` and `N` independent of `Old`; the builtin's result is `Old`. `cmpxchg8b`/`cmpxchg16b` (whose flag test `ZF == 1` reads as the compare that set it) become `__sync_val_compare_and_swap` of the 8- or 16-byte location, its expected and new values rebuilt from the register pairs in front of the instruction, and an AArch64 `casp` on X registers (two 8-byte loads, two compares and two stores) one on the 16-byte pair, its result split back into the halves; the 16-byte forms keep the GCC spelling. Declined: another user operation inside the lock envelope (an HLE hint), an update that leaves the location unchanged (`lock orq $0, (%rsp)`, the fence compilers emit), `lock neg`, the min/max forms, an unlocked x86 update and every instruction of a Go image (`goatomicreturn` owns those). The builtins carry the call flag and guard writable memory across themselves like a call (`kuna_memoryguard`). Inert off x86, AArch64 and RISC-V.
-- **When to flip:** Off by default. Use `auto` to read lock-free code (reference counts, spin locks, lock-free queues) as the atomic operations it performs instead of LOCK()/UNLOCK() envelopes or plain loads and stores. The `__sync` names do not encode a memory order: the AArch64 acquire/release markers stay as `LOAcquire()`/`LORelease()`.
+- **When to flip:** `auto` by default: lock-free code (reference counts, spin locks, lock-free queues) reads as the atomic operations it performs instead of LOCK()/UNLOCK() envelopes or plain loads and stores, in the MSVC spelling on a Windows image and the GCC one elsewhere. Measured in unlace#581 (clang -O1/-O2 test files on x86-64, i386, AArch64 with and without LSE, ARMv7/Thumb/Cortex-M4; libatomic x86-64 and i386; crazyflie, chibios, betaflight firmware): every rewrite read is the source builtin, 0 new errors, no time cost (x86-64 LOCK() envelopes 28 -> 0 on the test file, libatomic x86-64 376 -> 140). Turn it off to see the LOCK()/UNLOCK() envelope SLEIGH lifts. The `__sync` names do not encode a memory order: the AArch64 acquire/release markers stay as `LOAcquire()`/`LORelease()`.
 - **Where / provenance:** P2/flow-classification · kuna · presentation-default · unlace-19
-- **Example:** `option atomics auto`
+- **Example:** `option atomics off`
 
-### `llscfold` -- on | off, default `off`
+### `llscfold` -- on | off, default `on`
 
 - **Symptoms:** an AArch64 do/while loop around ExclusiveMonitorPass and ExclusiveMonitorsStatus; a shared_ptr or Arc reference count update prints as a loop with a char status variable; `if ((bool)ExclusiveMonitorPass(p,0x10))` in a loop.
 - **What it does:** AArch64 and ARM: fold a load-exclusive/store-exclusive retry loop into the `__sync_*` builtin its successful iteration performs, as option `atomics` names the single-instruction LSE forms: `ldaxr; add; stlxr; cbnz` becomes `__sync_fetch_and_add(p, x)` and a compare-exchange loop (`ldaxr; cmp; b.ne fail; stlxr; cbnz`) becomes `__sync_val_compare_and_swap(p, e, n)`. Pre-SSA, the loop head (holding the load), the store-exclusive's blocks (a branch on `ExclusiveMonitorPass`, then the STORE and `ExclusiveMonitorsStatus`; on ARM and Thumb a branch on `hasExclusiveAccess`, then the status register's 0 and the STORE, and the status test a `cmp` and `bne`) and the status test are evaluated symbolically as one atomic update with the monitor passing and the status 0: one LOAD and one STORE through one address that the monitor also checks, the status test leaving the loop, and a stored value `Old op X` or `X` (`op` one of `+ - & | ^`), or, for a compare-exchange, a value independent of `Old` stored only when the head finds `Old == E`. An address, operand or stored value the loop reads from a register or temporary it also writes refuses the fold, because a retry would see a different value, and so does any other such value unless it is dead after the loop (a temporary, written before it is read on the straight path out, or a one-byte flag that path never reads before it returns or calls); so does a compare's exit that does more than `clrex` before branching back. The load becomes the builtin, the pass and status become the constants 1 and 0, the store and a Thumb `ExclusiveAccess` marker dead copies, so dead-branch removal deletes the back edge. The builtin guards memory like a call. Inert off AArch64 and ARM (only they declare the monitor user operations); `ldrexd`/`strexd` and `ldaxp`/`stlxp` pairs are not folded.
-- **When to flip:** Off by default. Turn on with `atomics` to read AArch64 code built without LSE (shared_ptr and Arc reference counts, std::atomic updates) as the atomic operations it performs; leave off when the loop's failure path or its exact instruction sequence matters.
+- **When to flip:** On by default (unlace#581: AArch64 v8.0 12/14 and ARMv7/Thumb/Cortex-M4 10/12 test functions fold, crazyflie's usecTimerHighCount loop that printed its store outside the loop becomes __sync_fetch_and_add, 0 new errors); it acts only together with `atomics`. Reads AArch64 code built without LSE (shared_ptr and Arc reference counts, std::atomic updates) as the atomic operations it performs; leave off when the loop's failure path or its exact instruction sequence matters.
 - **Where / provenance:** P2/flow-classification · kuna · presentation-default · unlace-19
-- **Example:** `option llscfold on`
+- **Example:** `option llscfold off`
 
 ### `copyrun` -- on | off, default `on`
 
@@ -3523,13 +3536,13 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · ida · new-analysis · kuna-osclassinfo
 - **Example:** `option osclassinfo off`
 
-### `dextrpc` -- on | off, default `off`
+### `dextrpc` -- on | off, default `on`
 
 - **Symptoms:** a DriverKit _Dispatch prints as void C::_Dispatch(unsigned long a0,unsigned long *a1); a dext's _Dispatch compares *(long *)IORPCMessageFromMach(...) against bare 64-bit hashes; a dext's M_Invoke results are dropped and _Dispatch returns nothing; a DriverKit init or M_Impl reads its ivars as ((long *)a0)[N].
 - **What it does:** DriverKit IORPC dispatch types for a dext (an arm64 Mach-O whose __osclassinfo the osclassinfo pass reads; inert unless osclassinfo is on). Every symbol the dext defines or imports named C::_Dispatch(C *, IORPC) (_ZN<n>C9_DispatchEPS_5IORPC), C::Dispatch(IORPC) (_ZN<n>C8DispatchE5IORPC) or X::M_Invoke(IORPC, OSMetaClassBase *, handler[, const OSMetaClass *]) gets its prototype by address: int return (kern_return_t), the IORPC as IORPC * (AAPCS64 passes the 24-byte struct by reference), self or this as C * for a class of the dext and void * otherwise. IORPCMessageFromMach gets IORPCMessage *(IORPCMessageMach *msg, bool reply). The types follow IORPC.h: IORPC {message, reply, sendSize, replySize} and IORPCMessage {msgid, flags, objectRefs}, msgid typed by an 8-byte enum IORPCMessageID whose values C_M_ID come from the class descriptions (the method-options table holds the n message ids of the methods the class implements, then n option words; the method-names table the n length-prefixed names in the same order; meta methods likewise; an id two classes list keeps the first name), so _Dispatch compares the message id against named constants. Each class becomes a struct C of its instanceSize: iig gives every class one C_IVars *ivars after its superclass, so ivars sits at instanceSize - 8, behind the superclass's struct as field super when the superclass is a class of the same dext whose size leaves room (else those bytes stay untyped). init, free and every M_Impl of a class get an unlocked C *this hint on x0, so this->ivars replaces ((long *)a0)[10]. A table that does not parse adds no ids, a class whose instanceSize is not a multiple of 8 gets no struct, and a type name the program already holds with another shape is left alone.
-- **When to flip:** Off by default. Turn on when reading a DriverKit extension: _Dispatch prints int C::_Dispatch(C *self, IORPC *rpc) with IORPCMessageFromMach(rpc->message,0)->msgid compared against C_M_ID names and return M_Invoke(...) instead of void with *a1 and bare 64-bit hashes, and init, free and the M_Impl methods read their instance variables through this->ivars. Symbol-driven like IDA's dku: a dext stripped of its C++ symbols gets only the enum and the class structs.
+- **When to flip:** On by default (unlace#581: 16 arm64e dexts of macOS 15.6.1, 626 of 4298 functions change, 0 errors, no time cost; it acts only on a dext whose __osclassinfo the osclassinfo pass reads). In a DriverKit extension _Dispatch prints int C::_Dispatch(C *self, IORPC *rpc) with IORPCMessageFromMach(rpc->message,0)->msgid compared against C_M_ID names and return M_Invoke(...) instead of void with *a1 and bare 64-bit hashes, and init, free and the M_Impl methods read their instance variables through this->ivars. Symbol-driven like IDA's dku: a dext stripped of its C++ symbols gets only the enum and the class structs.
 - **Where / provenance:** P1/external-refinement · ida · new-analysis · ida-driverkit
-- **Example:** `option dextrpc on`
+- **Example:** `option dextrpc off`
 
 ### `swiftobjcthunk` -- on | off, default `on`
 
@@ -3611,13 +3624,13 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · kuna-analysis-cortexmscs
 - **Example:** `option cortexmscs off`
 
-### `com` -- on | off, default `off`
+### `com` -- on | off, default `on`
 
 - **Symptoms:** a CLSID or IID in .rdata is an unnamed 16-byte blob; a COM method call renders as (**(code **)(*plVar1 + 0x58))(plVar1, ...); CoCreateInstance(&dat_140003010, 0, 1, &dat_140003020, &local_18) with the ids unnamed; the object a QueryInterface or CoCreateInstance call returns is an untyped void * or long *; the MULTI_QI array of CoCreateInstanceEx is untyped and each pItf a void *.
 - **What it does:** COM markup for a PE image. Every 16-byte value in a data section equal to a known interface or class id (5239 ids: IID_IShellLinkW, CLSID_ShellLink, CLSID_WbemLocator and the rest) is named and typed GUID. For each interface id found, the interface struct is built the way COM lays it out: IShellLinkW holds IShellLinkWVtbl *lpVtbl, and the table holds a typed function pointer per method, the base interfaces' methods first and This the first parameter, from the method tables of 4401 interfaces generated from the Win32 metadata. The out-parameter of CoCreateInstance, CoGetClassObject, CoGetObject, CoGetInterfaceAndReleaseStream, CoGetObjectContext, CoGetCallContext, DllGetClassObject and OleCreate, and of a call through slot 0 (QueryInterface) or, with four arguments, slot 3 (IClassFactory::CreateInstance) of the table of the object the call passes as This, is typed a pointer to the interface its interface-id argument names when that argument is the address of a known id, so the object it fills is typed and each call through it prints as `p->lpVtbl->SetPath(p, ...)`. CoCreateInstanceEx, CoCreateInstanceFromApp, CoGetInstanceFromIStorage and CoGetInstanceFromFile fill an array of MULTI_QI elements, one interface id each: when the count is a literal of 1 to 8 and the array is on the stack, the array is typed MULTI_QI_IShellLinkW (one element) or a record of one MULTI_QI_<Interface> per element (MULTI_QI_IShellLinkW_IPersistFile), each pItf a pointer to the interface whose id the code stores into that element's pIID before the call. The imported ole32 requests get their prototypes, so the out-parameter is an argument at each call. Option comcfg adds the ids of a clsid.cfg file to the built-in table. A method with a by-value aggregate parameter keeps an untyped code pointer.
-- **When to flip:** Off by default. Turn on for Windows code that uses COM (shell links, WMI, the task scheduler, BITS, the firewall, scripting hosts, Office automation): the ids in .rdata are named and the objects the requests return are typed, so their method calls read as names instead of offsets off a table. It acts on PE images only and builds its types only when on. A call whose interface id is computed, or read from memory the decompiler cannot fold, stays untyped.
+- **When to flip:** On by default (unlace#581: 14 Windows 11 System32/SysWOW64 DLLs, x64 and i386, 0 new errors, no time cost; e.g. credprovhost.dll 58 of 1533 functions and its i386 build 62 of 1742 gain named ids and typed interface calls). For Windows code that uses COM (shell links, WMI, the task scheduler, BITS, the firewall, scripting hosts, Office automation) the ids in .rdata (or .text, where i386 MSVC merges it) are named and the objects the requests return are typed, so their method calls read as names instead of offsets off a table. It acts on PE images only and builds its types only when on. A call whose interface id is computed, or read from memory the decompiler cannot fold, stays untyped.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida95-gap9
-- **Example:** `option com on`
+- **Example:** `option com off`
 
 ### `comcfg` -- off | <path>, default `off`
 

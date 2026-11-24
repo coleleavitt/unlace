@@ -366,6 +366,32 @@ language yet, so it still needs an explicit `--target`. A relocatable ARC
 object loads, but its relocation types are not applied; a call to an undefined
 symbol keeps the unrelocated displacement.
 
+(kuna, unlace#680) A WebAssembly relocatable object (`.o`) has no `name`
+section; its function and global names come from the `WASM_SYMBOL_TABLE`
+subsection of its `linking` custom section (version 2), for every index the
+`name` section does not name (`loader/format/wasm.rs`). An undefined symbol
+is named only when it carries `WASM_SYM_EXPLICIT_NAME`.
+
+(kuna, unlace#678) A relocatable object for a 16-bit machine (AVR, MSP430) is
+laid out from `SMALL_RELOC_BASE` (0x100) instead of 0x400000, which is past
+the end of its address space; every other machine keeps 0x400000
+(`reloc_object::reloc_base`, also used by the FID relocation map).
+
+(kuna, unlace#676) Six more ELF machines are read from the header
+(`crates/unlace-analysis/src/loader/kuna_elfmachinetarget.rs`), because the
+object reader either has no language stem for them or no architecture at all:
+`EM_AVR` (83) selects `avr8:LE:16:default` (`gcc` model), `EF_AVR_ARCH_AVR6`
+the ATmega256 language and `EF_AVR_ARCH_XMEGA1`..`7` `avr8:LE:24:xmega`;
+`EM_MSP430` (105) `TI_MSP430:LE:16:default`; `EM_HEXAGON` (164)
+`Hexagon:LE:32:default`; `EM_LANAI` (244) `lanai:BE:32:default`; `EM_LOONGARCH`
+(258) the ilp32 or lp64 language of the ELF class, single-float when the
+`e_flags` ABI is single-float and double otherwise (soft-float has no language
+of its own); `EM_AMDGPU` (224) the GFX9, GFX10 or GFX11 language of
+`EF_AMDGPU_MACH` (gfx900-gfx90c and gfx90a; gfx101x/103x; gfx11xx; and the
+matching generic targets). RDNA images take the wave32 language, because the
+wave size is in the kernel descriptor, not the ELF header; wave64 code and
+GFX9.4, GCN 1-4 and GFX12 images still need an explicit `--target`.
+
 (kuna) PowerPC32 ELF APU requirements are read by
 `crates/unlace-analysis/src/loader/kuna_ppcaputarget.rs` when the
 default-off `ppcapu` load-time option is on. SPE and embedded floating-point APUs
@@ -5324,7 +5350,7 @@ moves.
   `--svd` import puts the device name in front of a structure name the built-in
   layouts use (`STM32F103_SCB_Type`), so an SVD peripheral keeps the SVD's
   registers.
-- **(kuna) COM ids and interfaces** (`com`, default off,
+- **(kuna) COM ids and interfaces** (`com`, default on since unlace#581,
   `crates/unlace-analysis/src/analyzers/com/mod.rs (ComPass)`): on a PE
   image, every 16-byte value at 4-byte alignment in a data or code section
   (an i386 MSVC image merges `.rdata`, ids included, into `.text`) that equals
@@ -8714,7 +8740,7 @@ both
   the commit point like `com`
   (`crates/unlace-analysis/src/passes.rs (run_dextrpc)`) when `dextrpc` and `osclassinfo` are on, because the
   load-time pass list sees the architecture's constructor defaults rather than
-  the run's options, default-off;
+  the run's options, default on since unlace#581;
   `crates/unlace-analysis/src/analyzers/iokit/kuna_dextrpc.rs (emit)`):
   every symbol the dext defines or imports that names `C::_Dispatch(C *,
   IORPC)` (`_ZN<n>C9_DispatchEPS_5IORPC`), `C::Dispatch(IORPC)`
@@ -11731,7 +11757,15 @@ least four times among already-reached functions, and the bounded
 `check_valid_subroutine` probe must cover more than two instructions without a
 bad decode or out-of-image flow and reach either a terminal/computed jump or an
 informative call/edge into known code. Accepted bodies are claimed so a later
-candidate cannot split them. ARM instead reuses the existing Thumb-pointer
+candidate cannot split them. The walk then resumes with the accepted targets,
+and the entries the load-time passes committed (a Delphi VMT method, say), as
+roots, so their direct-call closure is discovered and committed too. The
+functions the walk had before the resume are kept, so the resume only adds
+entries. A Delphi image's System memory-manager record is the case it was
+written for: the record in writable data holds `GetMem`, `FreeMem` and
+`ReallocMem`, which are reached only by indirect calls through that record, and
+before the resume they were listed without any of the allocator code they call.
+ARM instead reuses the existing Thumb-pointer
 oracle: an aligned odd code pointer is accepted only at an undefined
 frame-establishing prologue that passes the same valid-subroutine probe.
 

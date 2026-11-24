@@ -34,7 +34,7 @@ use std::time::Duration;
 
 use egg::{
     Analysis, CostFunction, DidMerge, EGraph, Extractor, Id, Language, RecExpr, Rewrite, Runner,
-    Symbol, define_language, rewrite,
+    StopReason, Symbol, define_language, rewrite,
 };
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -349,9 +349,30 @@ fn bitwise_ops(e: &Expr) -> usize {
     }
 }
 
+/// The first round's budget: most trees that simplify do so in a small
+/// e-graph, and most that do not saturate it without finding anything.
+const QUICK_NODE_LIMIT: usize = 500;
+const QUICK_ITER_LIMIT: usize = 5;
+/// Fewest bitwise ops of a tree whose first round hit its limit for a second,
+/// full round to run: obfuscated trees are dense in them, ordinary code is not.
+const ESCALATE_BITWISE: usize = 3;
+
+fn run(eg: EGraph<Bv, Fold>, mask: u64, nodes: usize, iters: usize) -> Runner<Bv, Fold, ()> {
+    Runner::new(Fold { mask })
+        .with_egraph(eg)
+        .with_node_limit(nodes)
+        .with_iter_limit(iters)
+        .with_time_limit(TIME_LIMIT)
+        .run(rules())
+}
+
 /// The cheapest expression equal to `f` (`n` leaves, `bits` wide) that saturation
 /// finds, when it has fewer than `budget` ops and fewer than `bit_budget`
-/// bitwise ops and passes the checks.
+/// bitwise ops and passes the checks. Saturation runs in two rounds: a quick
+/// one ([`QUICK_NODE_LIMIT`] nodes, [`QUICK_ITER_LIMIT`] iterations), and, when
+/// that finds nothing and stopped at its limit rather than saturating, the full
+/// one on the same e-graph for a tree with at least [`ESCALATE_BITWISE`] bitwise
+/// ops.
 pub(crate) fn saturate(
     f: &Expr,
     n: usize,
@@ -375,25 +396,31 @@ pub(crate) fn saturate(
         let s = add(&mut eg, &s, n, mask, false);
         eg.union(root, s);
     }
-    let runner: Runner<Bv, Fold, ()> = Runner::new(Fold { mask })
-        .with_egraph(eg)
-        .with_node_limit(NODE_LIMIT)
-        .with_iter_limit(ITER_LIMIT)
-        .with_time_limit(TIME_LIMIT)
-        .run(rules());
-    let root = runner.egraph.find(root);
-    let (_, best) = Extractor::new(&runner.egraph, OpCount).find_best(root);
-    let simple = lower(&best, best.root())?;
-    if simple.ops() >= budget
-        || bitwise_ops(&simple) >= bit_budget
-        || !kuna_mba::agree(f, &simple, n, mask)
-        || !agree_exhaustive(f, &simple, n)
+    let check = |runner: &Runner<Bv, Fold, ()>| -> Option<Expr> {
+        let root = runner.egraph.find(root);
+        let (_, best) = Extractor::new(&runner.egraph, OpCount).find_best(root);
+        let simple = lower(&best, best.root())?;
+        if simple.ops() >= budget
+            || bitwise_ops(&simple) >= bit_budget
+            || !kuna_mba::agree(f, &simple, n, mask)
+            || !agree_exhaustive(f, &simple, n)
+        {
+            return None;
+        }
+        let refuted =
+            n <= MAX_NONLINEAR_LEAVES && kuna_mba::prove_equal(f, &simple, n, bits) == Some(false);
+        (!refuted).then_some(simple)
+    };
+    let quick = run(eg, mask, QUICK_NODE_LIMIT, QUICK_ITER_LIMIT);
+    if let Some(s) = check(&quick) {
+        return Some(s);
+    }
+    if matches!(quick.stop_reason, Some(StopReason::Saturated)) || bitwise_ops(f) < ESCALATE_BITWISE
     {
         return None;
     }
-    let refuted =
-        n <= MAX_NONLINEAR_LEAVES && kuna_mba::prove_equal(f, &simple, n, bits) == Some(false);
-    (!refuted).then_some(simple)
+    let full = run(quick.egraph, mask, NODE_LIMIT, ITER_LIMIT);
+    check(&full)
 }
 
 /// (kuna `egraph`) `RuleEgraphSimplify`.
@@ -487,7 +514,14 @@ impl Rule for RuleEgraphSimplify {
         if self.barren.contains(&key) {
             return 0;
         }
-        let Some(simple) = saturate(&t.expr, t.n, 8 * size as u32, t.budget, usize::MAX) else {
+        // A tree with one bitwise op has no MBA identity to compose; the
+        // closed forms of `mba` are all it gets, without an e-graph.
+        let simple = if bitwise_ops(&t.expr) < 2 {
+            mba_seed(&t.expr, t.n, kuna_mba::mask_of(size)).filter(|s| s.ops() < t.budget)
+        } else {
+            saturate(&t.expr, t.n, 8 * size as u32, t.budget, usize::MAX)
+        };
+        let Some(simple) = simple else {
             self.barren.insert(key);
             return 0;
         };

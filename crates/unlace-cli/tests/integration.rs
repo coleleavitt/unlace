@@ -10,8 +10,6 @@ mod evm;
 mod hexagon_hmx;
 #[path = "huc6280.rs"]
 mod huc6280;
-#[path = "javacard_raw.rs"]
-mod javacard_raw;
 #[path = "konami.rs"]
 mod konami;
 #[path = "lua54.rs"]
@@ -24,8 +22,6 @@ mod mep;
 mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
-#[path = "v8ignition_raw.rs"]
-mod v8ignition_raw;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
@@ -35,6 +31,8 @@ mod aarch64_sme;
 mod aarch64_sve2;
 #[path = "aarch64_svemm.rs"]
 mod aarch64_svemm;
+#[path = "aarch64_pauth.rs"]
+mod aarch64_pauth;
 #[path = "ppc_gekko.rs"]
 mod ppc_gekko;
 #[path = "ppc_spe2.rs"]

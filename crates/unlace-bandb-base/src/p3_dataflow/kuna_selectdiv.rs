@@ -41,13 +41,13 @@ impl RuleSelectDiv {
     }
 }
 
-fn constant(data: &Funcdata, vn: VarnodeId) -> Option<uintb> {
+pub(crate) fn constant(data: &Funcdata, vn: VarnodeId) -> Option<uintb> {
     let v = data.vbank().get(vn)?;
     v.is_constant().then(|| v.get_offset())
 }
 
 /// `vn` with any chain of `COPY`s that defined it skipped.
-fn source(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
+pub(crate) fn source(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
     let mut vn = vn;
     while let Some(op) = def_of(data, vn, OpCode::CPUI_COPY) {
         match input(data, op, 0) {
@@ -59,20 +59,20 @@ fn source(data: &Funcdata, vn: VarnodeId) -> VarnodeId {
 }
 
 /// Do `a` and `b` hold the same value through `COPY`s?
-fn same(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
+pub(crate) fn same(data: &Funcdata, a: VarnodeId, b: VarnodeId) -> bool {
     source(data, a) == source(data, b)
 }
 
-fn def_of(data: &Funcdata, vn: VarnodeId, opc: OpCode) -> Option<OpId> {
+pub(crate) fn def_of(data: &Funcdata, vn: VarnodeId, opc: OpCode) -> Option<OpId> {
     let def = data.vbank().get(vn)?.get_def()?;
     (data.obank().get(def)?.code() == opc).then_some(def)
 }
 
-fn input(data: &Funcdata, op: OpId, slot: int4) -> Option<VarnodeId> {
+pub(crate) fn input(data: &Funcdata, op: OpId, slot: int4) -> Option<VarnodeId> {
     data.obank().get(op)?.get_in(slot)
 }
 
-fn size(data: &Funcdata, vn: VarnodeId) -> int4 {
+pub(crate) fn size(data: &Funcdata, vn: VarnodeId) -> int4 {
     data.vbank().get(vn).map_or(0, |v| v.get_size())
 }
 
@@ -110,7 +110,7 @@ fn last_op(data: &Funcdata, bl: BlockId) -> Option<OpId> {
 
 /// For a two-input MULTIEQUAL, the CBRANCH condition of its block's immediate
 /// dominator and the condition's value on the edge each input arrives by.
-fn select_condition(data: &Funcdata, phi: OpId) -> Option<(VarnodeId, [bool; 2])> {
+pub(crate) fn select_condition(data: &Funcdata, phi: OpId) -> Option<(VarnodeId, [bool; 2])> {
     let graph = data.bblocks_ref();
     let bl = data.obank().get(phi)?.get_parent()?;
     if graph.block(bl).size_in() != 2 || data.obank().get(phi)?.num_input() != 2 {
@@ -187,6 +187,9 @@ fn picks_by_sign(data: &Funcdata, phi: OpId, pos: usize, x: VarnodeId) -> bool {
         return false;
     };
     let n = size(data, x);
+    if !(1..=8).contains(&n) {
+        return false;
+    }
     let half: uintb = 1 << (n * 8 - 1);
     let positive = CircleRange::new(1, half, n, 1);
     let negative = CircleRange::new(half + 1, 0, n, 1);
@@ -204,7 +207,7 @@ fn division(data: &Funcdata, op: OpId) -> Option<(VarnodeId, int4)> {
     let shifted = input(data, op, 0)?;
     let k = constant(data, input(data, op, 1)?)?;
     let bits = size(data, shifted) as uintb * 8;
-    if k == 0 || k >= bits - 1 {
+    if !(8..=64).contains(&bits) || k == 0 || k >= bits - 1 {
         return None;
     }
     let bias = (1 << k) - 1;
@@ -246,7 +249,8 @@ fn remainder(data: &Funcdata, phi: OpId) -> Option<(VarnodeId, uintb)> {
         let Some(m) = constant(data, input(data, and, 1)?) else {
             continue;
         };
-        if m == 0 || m & (m + 1) != 0 || m >= 1 << (size(data, x) * 8 - 1) {
+        let n = size(data, x);
+        if !(1..=8).contains(&n) || m == 0 || m & m.wrapping_add(1) != 0 || m >= 1 << (n * 8 - 1) {
             continue;
         }
         let Some(neg_and) = negation_of(data, input(data, phi, 1 - pos as int4)?) else {

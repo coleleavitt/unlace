@@ -2133,6 +2133,9 @@ fn language_id_for(
     if let Some(id) = crate::loader::kuna_arctarget::language_id(file) {
         return Ok(id.into_bytes());
     }
+    if let Some(id) = crate::loader::kuna_elfmachinetarget::language_id(file) {
+        return Ok(id.into_bytes());
+    }
     if let Some(id) = crate::loader::kuna_ppcaputarget::language_id(file) {
         return Ok(id.into_bytes());
     }
@@ -2434,6 +2437,7 @@ pub(crate) fn compose_language_id(
         }
         Architecture::Bpf => format!("eBPF:{endian}:64:default:{}", model.unwrap_or("default")),
         Architecture::S390x => format!("s390x:BE:64:default:{}", model.unwrap_or("default")),
+        Architecture::Hexagon => format!("Hexagon:LE:32:default:{}", model.unwrap_or("default")),
         _ => return None,
     })
 }
@@ -2493,6 +2497,7 @@ pub fn elf_language_ids() -> Vec<String> {
         (Architecture::Sparc64, &["BE"]),
         (Architecture::Bpf, &["LE", "BE"]),
         (Architecture::S390x, &["BE"]),
+        (Architecture::Hexagon, &["LE"]),
     ];
     let mut out = Vec::new();
     for &(arch, endians) in arches {
@@ -2519,6 +2524,7 @@ pub fn elf_language_ids() -> Vec<String> {
         out.push(id);
     }
     out.extend(crate::loader::kuna_arctarget::language_ids());
+    out.extend(crate::loader::kuna_elfmachinetarget::language_ids());
     out.extend(crate::loader::kuna_ppcaputarget::language_ids());
     out.extend(crate::loader::kuna_ppc64elfv2target::language_ids());
     out.extend(crate::loader::kuna_mipstarget::language_ids());

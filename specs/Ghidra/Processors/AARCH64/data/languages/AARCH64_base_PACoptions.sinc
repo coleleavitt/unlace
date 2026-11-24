@@ -162,3 +162,56 @@ xpaclri__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 { x30 = xpac(x
 xpaclri__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 { xpac(x30, 0:1); }
 xpaclri__PACpart: "hide" is ShowPAC=0 { }
 
+# (kuna) FEAT_PAuth_LR (Armv9.5): the PC (or a label or register holding it) is a second
+# modifier, passed as the third operand of the PAC user operations.
+PACLRLabel: "#0" is imm16=0 { local a:8 = inst_start; export a; }
+PACLRLabel: "#-"^off is imm16 [ off = imm16 * 4; ] { local a:8 = inst_start - off; export a; }
+
+paciasppc__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 { local here:8 = inst_start; x30 = pacia(x30, sp, here); }
+paciasppc__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 { local here:8 = inst_start; pacia(x30, sp, here); }
+paciasppc__PACpart: "hide" is ShowPAC=0 { }
+
+pacibsppc__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 { local here:8 = inst_start; x30 = pacib(x30, sp, here); }
+pacibsppc__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 { local here:8 = inst_start; pacib(x30, sp, here); }
+pacibsppc__PACpart: "hide" is ShowPAC=0 { }
+
+pacia171615__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 { x17 = pacia(x17, x16, x15); }
+pacia171615__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 { pacia(x17, x16, x15); }
+pacia171615__PACpart: "hide" is ShowPAC=0 { }
+
+pacib171615__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 { x17 = pacib(x17, x16, x15); }
+pacib171615__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 { pacib(x17, x16, x15); }
+pacib171615__PACpart: "hide" is ShowPAC=0 { }
+
+autia171615__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 { x17 = AuthIA(x17, x16, x15); }
+autia171615__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 { AuthIA(x17, x16, x15); }
+autia171615__PACpart: "hide" is ShowPAC=0 { }
+
+autib171615__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 { x17 = AuthIB(x17, x16, x15); }
+autib171615__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 { AuthIB(x17, x16, x15); }
+autib171615__PACpart: "hide" is ShowPAC=0 { }
+
+autiasppc__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 & PACLRLabel { x30 = AuthIA(x30, sp, PACLRLabel); }
+autiasppc__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 & PACLRLabel { AuthIA(x30, sp, PACLRLabel); }
+autiasppc__PACpart: "hide" is ShowPAC=0 { }
+autibsppc__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 & PACLRLabel { x30 = AuthIB(x30, sp, PACLRLabel); }
+autibsppc__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 & PACLRLabel { AuthIB(x30, sp, PACLRLabel); }
+autibsppc__PACpart: "hide" is ShowPAC=0 { }
+autiasppcr__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 & Rn_GPR64 { x30 = AuthIA(x30, sp, Rn_GPR64); }
+autiasppcr__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 & Rn_GPR64 { AuthIA(x30, sp, Rn_GPR64); }
+autiasppcr__PACpart: "hide" is ShowPAC=0 { }
+autibsppcr__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 & Rn_GPR64 { x30 = AuthIB(x30, sp, Rn_GPR64); }
+autibsppcr__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 & Rn_GPR64 { AuthIB(x30, sp, Rn_GPR64); }
+autibsppcr__PACpart: "hide" is ShowPAC=0 { }
+retaasppc__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 & PACLRLabel { AuthIA(x30, sp, PACLRLabel); }
+retaasppc__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 & PACLRLabel { AuthIA(x30, sp, PACLRLabel); }
+retaasppc__PACpart: "hide" is ShowPAC=0 { }
+retabsppc__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 & PACLRLabel { AuthIB(x30, sp, PACLRLabel); }
+retabsppc__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 & PACLRLabel { AuthIB(x30, sp, PACLRLabel); }
+retabsppc__PACpart: "hide" is ShowPAC=0 { }
+retaasppcr__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 & Rd_GPR64 { AuthIA(x30, sp, Rd_GPR64); }
+retaasppcr__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 & Rd_GPR64 { AuthIA(x30, sp, Rd_GPR64); }
+retaasppcr__PACpart: "hide" is ShowPAC=0 { }
+retabsppcr__PACpart: "show_and_clobber" is ShowPAC=1 & PAC_clobber=1 & Rd_GPR64 { AuthIB(x30, sp, Rd_GPR64); }
+retabsppcr__PACpart: "show_noclobber" is ShowPAC=1 & PAC_clobber=0 & Rd_GPR64 { AuthIB(x30, sp, Rd_GPR64); }
+retabsppcr__PACpart: "hide" is ShowPAC=0 { }

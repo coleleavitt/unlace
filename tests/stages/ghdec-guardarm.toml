@@ -34,6 +34,8 @@
 # the source, IDA and Ghidra all write.  Assertion #2.
 # Assertion #3 pins that the no-return call itself is emitted in BOTH passes, so
 # #1/#2 are measuring the nesting and not the presence of the call.
+# noretfirst (default on) already puts the no-return arm first and removes the tie, so the
+# script turns it off to keep measuring guardarm's own tie-break.
 
 [image]
 arch = 'x86:LE:64:default:gcc'
@@ -49,6 +51,7 @@ hex = '85ff74054885f67505e812000000893e89f883c001c390909090909090909090c3'
 
 [script]
 commands = [
+    'option noretfirst off',
     'lo fu victim',
     'decompile',
     'print C',

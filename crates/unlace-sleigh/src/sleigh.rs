@@ -1191,8 +1191,9 @@ struct SleighBuilder<'a> {
     cur_ctx: usize,
     /// Index of the "cross" context for a crossbuild walk (`None` normally).
     cross_ctx: Option<usize>,
-    /// All resolved contexts (index 0 is the main instruction).
-    contexts: &'a [ResolvedCtx],
+    /// All resolved contexts (index 0 is the main instruction). A crossbuild target
+    /// that is not yet among them is resolved on demand and appended.
+    contexts: Vec<ResolvedCtx>,
     /// Symbol table (read-only navigation).
     table: &'a SymbolTable,
     /// The engine (n2addr length lookups).
@@ -1571,9 +1572,20 @@ impl PcodeBuilder for SleighBuilder<'_> {
 
         let newaddr = Address::new(Rc::clone(&spc), addr);
         self.set_unique_offset(&newaddr);
-        let idx = self
-            .find_context(&newaddr)
-            .ok_or_else(|| KunaError::lowlevel("Could not obtain cached crossbuild instruction"))?;
+        // C++ reads the target from the disassembly cache, where the flow walk has
+        // already left it; the pre-resolved set here holds only the instruction and
+        // its delay slots, so a target outside it is resolved now.
+        let idx = match self.find_context(&newaddr) {
+            Some(idx) => idx,
+            None => {
+                let ctx = self.engine.obtain_context(&newaddr, ParseState::Pcode)?;
+                self.contexts.push(ResolvedCtx {
+                    addr: newaddr.clone(),
+                    ctx,
+                });
+                self.contexts.len() - 1
+            }
+        };
         if self.contexts[idx].ctx.get_parser_state() != ParseState::Pcode {
             return Err(KunaError::lowlevel(
                 "Could not obtain cached crossbuild instruction",
@@ -2781,16 +2793,17 @@ impl Sleigh {
             cur: WalkCursor::new(),
             cur_ctx: 0,
             cross_ctx: None,
-            contexts: &contexts,
+            contexts: std::mem::take(&mut contexts),
             table,
             engine: self,
             const_space: Rc::clone(&const_space),
             uniq_space,
             uniquemask: umask,
-            uniqueoffset: (contexts[0].addr.get_offset() & u64::from(umask)) << 8,
+            uniqueoffset: 0,
             cache: &mut cache,
         };
-        builder.cur.point = Some(contexts[0].ctx.base_state);
+        builder.uniqueoffset = (builder.contexts[0].addr.get_offset() & u64::from(umask)) << 8;
+        builder.cur.point = Some(builder.contexts[0].ctx.base_state);
         let main_ct = builder.walker().get_constructor_inner()?;
         let handle = table.get_constructor(main_ct)?.get_templ();
         let tpl = handle.map(|h| self.base.template(h)).transpose()?;
@@ -2799,11 +2812,12 @@ impl Sleigh {
             Err(KunaError::Unimpl { .. }) => {
                 // C++ rethrows with a descriptive message + instruction_length.
                 let mut s = String::from("Instruction not implemented in pcode:\n ");
-                let mut basewalker = ParserWalker::new(&contexts[builder.cur_ctx].ctx, table, self);
+                let mut basewalker =
+                    ParserWalker::new(&builder.contexts[builder.cur_ctx].ctx, table, self);
                 basewalker.base_state();
                 let bct = basewalker.get_constructor_inner()?;
                 let mut a = String::new();
-                contexts[builder.cur_ctx].addr.print_raw(&mut a)?;
+                builder.contexts[builder.cur_ctx].addr.print_raw(&mut a)?;
                 s.push_str(&a);
                 s.push_str(": ");
                 let mut mon = String::new();
@@ -2821,6 +2835,8 @@ impl Sleigh {
             }
             Err(e) => return Err(e),
         }
+        let mut contexts = std::mem::take(&mut builder.contexts);
+        drop(builder);
         cache.resolve_relatives()?;
         cache.emit(baseaddr, emit);
         *self.pcode_cacher.borrow_mut() = cache;

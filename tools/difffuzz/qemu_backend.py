@@ -282,7 +282,83 @@ class MipsHarness:
         return regs, 0
 
 
-HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness}
+# ---------------------------------------------------------------- Nios II (R1, ELF32)
+
+def n2_i(op, a, b, imm):
+    return (a << 27) | (b << 22) | ((imm & 0xFFFF) << 6) | op
+
+
+def n2_li32(r, v):
+    return [n2_i(0x34, 0, r, v >> 16), n2_i(0x14, r, r, v & 0xFFFF)]        # orhi; ori
+
+
+N2_TRAP = 0x003B683A
+
+
+class Nios2Harness:
+    """r1..r31 at 4*i. A scratch register the instruction does not write holds the table address
+    while the others load and store; it reads back as its input."""
+    qemu = ("qemu-nios2", [])
+    machine = 113
+    big = False
+    elf32 = True
+    table_size = 128 + 8
+    marker_at = 128
+
+    def __init__(self):
+        self.scratch = 31
+
+    def prologue(self, target):
+        s = self.scratch
+        c = n2_li32(s, TABLES)
+        for i in range(1, 32):
+            if i != s:
+                c.append(n2_i(0x17, s, i, 4 * i))                                    # ldw ri, 4i(s)
+        c.append(n2_i(0x17, s, s, 4 * s))
+        c.append(((target >> 2) << 6) | 0x01)                                         # jmpi target
+        return words(c)
+
+    def epilogue(self, dumps, marker):
+        s = self.scratch
+        c = n2_li32(s, OUT)
+        for i in range(1, 32):
+            if i != s:
+                c.append(n2_i(0x15, s, i, 4 * i))                                    # stw ri, 4i(s)
+        c += n2_li32(1, marker) + [n2_i(0x15, s, 1, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [n2_i(0x04, 0, 4, 1)] + n2_li32(5, base) + n2_li32(6, size)
+            c += [n2_i(0x04, 0, 2, 64), N2_TRAP]                                     # write(1, base, size)
+        c += [n2_i(0x04, 0, 4, 0), n2_i(0x04, 0, 2, 93), N2_TRAP]                     # exit(0)
+        return words(c)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs, start=1):
+            struct.pack_into("<I", t, 4 * i, init.get(n, 0) & 0xFFFFFFFF)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        return {n: struct.unpack_from("<I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs, start=1)}, 0
+
+
+def elf32(segments, entry, machine, big=False, flags=0):
+    """A static ELF32 with one PT_LOAD per (vaddr, bytes, prot) segment."""
+    e = ">" if big else "<"
+    n = len(segments)
+    ident = b"\x7fELF" + bytes([1, 2 if big else 1, 1, 0]) + b"\0" * 8
+    hdr = ident + struct.pack(e + "HHIIIIIHHHHHH", 2, machine, 1, entry, 52, 0, flags, 52, 32, n, 40, 0, 0)
+    off = PAGE
+    phs, blobs = b"", b""
+    for vaddr, data, prot in segments:
+        phs += struct.pack(e + "IIIIIIII", 1, off, vaddr, vaddr, len(data), len(data), prot, PAGE)
+        pad = (-len(data)) % PAGE
+        blobs += data + b"\0" * pad
+        off += len(data) + pad
+    img = hdr + phs
+    return img + b"\0" * (PAGE - len(img)) + blobs
+
+
+HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "nios2": Nios2Harness}
 
 
 def available(arch):
@@ -338,7 +414,7 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         return {"status": "undefined"}
 
     h = HARNESSES[arch.name]()
-    if arch.name in ("riscv64", "mips"):
+    if arch.name in ("riscv64", "mips", "nios2"):
         written = set()
         for o in row["ops"]:
             out = o.get("output")
@@ -390,7 +466,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     segs.sort()
     path = os.path.join(tmp, "qemu-case.elf")
     with open(path, "wb") as f:
-        f.write(elf(segs, PROLOGUE, h.machine, h.big, getattr(h, "flags", 0)))
+        build = elf32 if getattr(h, "elf32", False) else elf
+        f.write(build(segs, PROLOGUE, h.machine, h.big, getattr(h, "flags", 0)))
     os.chmod(path, 0o755)
     try:
         p = subprocess.run([h.qemu[0], *h.qemu[1], path], capture_output=True, timeout=10)
@@ -403,7 +480,7 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         why = p.stderr.decode(errors="replace").strip().splitlines()
         return {"status": "ref-exception", "why": "qemu " + (why[0][:60] if why else "exit %s" % p.returncode)}
     ref, ref_flags = h.parse(arch, p.stdout[:h.table_size])
-    if arch.name in ("riscv64", "mips"):
+    if arch.name in ("riscv64", "mips", "nios2"):
         ref[arch.gprs[h.scratch - 1][0]] = init[arch.gprs[h.scratch - 1][0]]
 
     diffs = {}

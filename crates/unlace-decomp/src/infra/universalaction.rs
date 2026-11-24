@@ -728,6 +728,11 @@ pub fn universal_sched_hooked(
             crate::satmul::RuleSaturatedMul::new("analysis")
         ),
         rrow!(
+            "bitfieldarith",
+            "analysis",
+            crate::bitfieldarith::RuleBitFieldArith::new("analysis")
+        ),
+        rrow!(
             "strcpychain",
             "analysis",
             crate::helperrole::RuleStrcpyChain::new("analysis")

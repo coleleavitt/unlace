@@ -1714,6 +1714,25 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "bitfieldarith"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace-bitfieldarith"
+summary = "Recover the pure-arithmetic form of a bitfield access on a register value: (x >> s) & mask(w) as bitfield_get(x, s, w), and (x & ~(m << s)) | ((y & m) << s) as bitfield_set(x, y, s, w), for a constant s and a low mask m of w bits with s + w inside the operand. Main recovers bitfields only from struct-typed loads, stores and mapped varnodes, so packed fields in a register print as shifts and masks."
+use_when = "Off by default: it prints bitfield_get and bitfield_set calls, which are not C and carry no field names. Turn it on to read register-level packing (flag words, descriptor fields, hardware registers) as one access per field instead of shift-and-mask arithmetic."
+example = "option bitfieldarith on"
+source_decompiler = "unlace"
+inspiration = "archived unlace idiom_recognition try_bitfield_read / try_bitfield_write (issue 1253)"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a register field is extracted with a shift and an AND|a flag field is set with a clear-mask OR and a shifted insert|packed descriptor or hardware register fields print as shift and mask arithmetic"
+
+[[settable]]
 option = "satmul"
 values = "on|off"
 default = "off"

@@ -3446,6 +3446,9 @@ impl Architecture {
             userops.register_builtin(BUILTIN_VAARG, &adapter)?;
             // (unlace satmul) the overflow-saturating multiply before operator new[].
             userops.register_builtin(crate::userop::BUILTIN_SATURATED_MUL, &adapter)?;
+            // (unlace bitfieldarith) the pure-arithmetic bitfield get and set.
+            userops.register_builtin(crate::userop::BUILTIN_BITFIELD_GET, &adapter)?;
+            userops.register_builtin(crate::userop::BUILTIN_BITFIELD_SET, &adapter)?;
             // (unlace kernelbug) the Linux `__bug_table` trap statements.
             userops.register_builtin(BUILTIN_KERNEL_BUG, &adapter)?;
             userops.register_builtin(BUILTIN_KERNEL_WARN, &adapter)?;

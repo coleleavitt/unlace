@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<compiler_spec>
+  <data_organization>
+    <absolute_max_alignment value="0" />
+    <machine_alignment value="4" />
+    <default_alignment value="1" />
+    <default_pointer_alignment value="4" />
+    <pointer_size value="4" />
+    <char_type signed="true" />
+    <char_size value="1" />
+    <wchar_size value="4" />
+    <short_size value="2" />
+    <integer_size value="4" />
+    <long_size value="4" />
+    <long_long_size value="8" />
+    <float_size value="4" />
+    <double_size value="8" />
+    <long_double_size value="8" />
+    <size_alignment_map>
+      <entry size="1" alignment="1" />
+      <entry size="2" alignment="2" />
+      <entry size="4" alignment="4" />
+      <entry size="8" alignment="4" />
+    </size_alignment_map>
+  </data_organization>
+  <global>
+    <range space="ram"/>
+  </global>
+  <stackpointer register="gr1" space="ram"/>
+  <returnaddress>
+    <register name="lr"/>
+  </returnaddress>
+  <default_proto>
+    <!-- GCC config/frv: arguments in gr8-gr13, then on the stack; results in gr8 (gr8:gr9
+         for 64-bit values, most significant word in gr8); gr16-gr31 and gr48-gr63 are
+         callee-saved; gr1 is the stack pointer, gr2 the frame pointer, LR the return address. -->
+    <prototype name="__stdcall" extrapop="0" stackshift="0">
+      <input>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="gr8"/></pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="gr9"/></pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="gr10"/></pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="gr11"/></pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="gr12"/></pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="gr13"/></pentry>
+        <pentry minsize="1" maxsize="500" align="4">
+          <addr offset="0" space="stack"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="4">
+          <register name="gr8"/>
+        </pentry>
+        <pentry minsize="5" maxsize="8">
+          <addr space="join" piece1="gr8" piece2="gr9"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="gr16"/>
+        <register name="gr17"/>
+        <register name="gr18"/>
+        <register name="gr19"/>
+        <register name="gr20"/>
+        <register name="gr21"/>
+        <register name="gr22"/>
+        <register name="gr23"/>
+        <register name="gr24"/>
+        <register name="gr25"/>
+        <register name="gr26"/>
+        <register name="gr27"/>
+        <register name="gr28"/>
+        <register name="gr29"/>
+        <register name="gr30"/>
+        <register name="gr31"/>
+        <register name="gr1"/>
+        <register name="gr2"/>
+        <register name="gr48"/>
+        <register name="gr49"/>
+        <register name="gr50"/>
+        <register name="gr51"/>
+        <register name="gr52"/>
+        <register name="gr53"/>
+        <register name="gr54"/>
+        <register name="gr55"/>
+        <register name="gr56"/>
+        <register name="gr57"/>
+        <register name="gr58"/>
+        <register name="gr59"/>
+        <register name="gr60"/>
+        <register name="gr61"/>
+        <register name="gr62"/>
+        <register name="gr63"/>
+      </unaffected>
+      <killedbycall>
+        <register name="gr3"/>
+        <register name="gr4"/>
+        <register name="gr5"/>
+        <register name="gr6"/>
+        <register name="gr7"/>
+        <register name="gr8"/>
+        <register name="gr9"/>
+        <register name="gr10"/>
+        <register name="gr11"/>
+        <register name="gr12"/>
+        <register name="gr13"/>
+        <register name="gr14"/>
+        <register name="gr15"/>
+        <register name="lr"/>
+        <register name="icc0"/>
+        <register name="icc1"/>
+        <register name="icc2"/>
+        <register name="icc3"/>
+      </killedbycall>
+    </prototype>
+  </default_proto>
+</compiler_spec>

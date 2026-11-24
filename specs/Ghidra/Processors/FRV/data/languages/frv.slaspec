@@ -1,0 +1,1262 @@
+# Fujitsu FR-V (FR400, FR450, FR500, FR550) instruction set.
+#
+# Written for unlace from the FR-V instruction-set manuals. The decode table was
+# generated from the binutils CGEN opcode table (frv-opc.c: the field layout and
+# mask/value of each instruction; no text copied), so every FR-V instruction
+# binutils knows decodes. Instructions are 32-bit big-endian; bit 31 is the
+# VLIW pack bit (".p" marks an instruction that is not the last of its packet).
+# Packets are lifted sequentially. Integer, branch, load/store, check, float
+# and conditional (CCi/cond) instructions carry p-code; media, coprocessor,
+# cache and trap instructions are named user ops writing their destination.
+
+define endian=big;
+define alignment=4;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0x0000 size=4 [ gr0 gr1 gr2 gr3 gr4 gr5 gr6 gr7 gr8 gr9 gr10 gr11 gr12 gr13 gr14 gr15 gr16 gr17 gr18 gr19 gr20 gr21 gr22 gr23 gr24 gr25 gr26 gr27 gr28 gr29 gr30 gr31 gr32 gr33 gr34 gr35 gr36 gr37 gr38 gr39 gr40 gr41 gr42 gr43 gr44 gr45 gr46 gr47 gr48 gr49 gr50 gr51 gr52 gr53 gr54 gr55 gr56 gr57 gr58 gr59 gr60 gr61 gr62 gr63 ];
+define register offset=0x0000 size=8 [ grd0 grd2 grd4 grd6 grd8 grd10 grd12 grd14 grd16 grd18 grd20 grd22 grd24 grd26 grd28 grd30 grd32 grd34 grd36 grd38 grd40 grd42 grd44 grd46 grd48 grd50 grd52 grd54 grd56 grd58 grd60 grd62 ];
+define register offset=0x0100 size=4 [ fr0 fr1 fr2 fr3 fr4 fr5 fr6 fr7 fr8 fr9 fr10 fr11 fr12 fr13 fr14 fr15 fr16 fr17 fr18 fr19 fr20 fr21 fr22 fr23 fr24 fr25 fr26 fr27 fr28 fr29 fr30 fr31 fr32 fr33 fr34 fr35 fr36 fr37 fr38 fr39 fr40 fr41 fr42 fr43 fr44 fr45 fr46 fr47 fr48 fr49 fr50 fr51 fr52 fr53 fr54 fr55 fr56 fr57 fr58 fr59 fr60 fr61 fr62 fr63 ];
+define register offset=0x0100 size=8 [ frd0 frd2 frd4 frd6 frd8 frd10 frd12 frd14 frd16 frd18 frd20 frd22 frd24 frd26 frd28 frd30 frd32 frd34 frd36 frd38 frd40 frd42 frd44 frd46 frd48 frd50 frd52 frd54 frd56 frd58 frd60 frd62 ];
+define register offset=0x0200 size=4 [ cpr0 cpr1 cpr2 cpr3 cpr4 cpr5 cpr6 cpr7 cpr8 cpr9 cpr10 cpr11 cpr12 cpr13 cpr14 cpr15 cpr16 cpr17 cpr18 cpr19 cpr20 cpr21 cpr22 cpr23 cpr24 cpr25 cpr26 cpr27 cpr28 cpr29 cpr30 cpr31 cpr32 cpr33 cpr34 cpr35 cpr36 cpr37 cpr38 cpr39 cpr40 cpr41 cpr42 cpr43 cpr44 cpr45 cpr46 cpr47 cpr48 cpr49 cpr50 cpr51 cpr52 cpr53 cpr54 cpr55 cpr56 cpr57 cpr58 cpr59 cpr60 cpr61 cpr62 cpr63 ];
+define register offset=0x0200 size=8 [ cprd0 cprd2 cprd4 cprd6 cprd8 cprd10 cprd12 cprd14 cprd16 cprd18 cprd20 cprd22 cprd24 cprd26 cprd28 cprd30 cprd32 cprd34 cprd36 cprd38 cprd40 cprd42 cprd44 cprd46 cprd48 cprd50 cprd52 cprd54 cprd56 cprd58 cprd60 cprd62 ];
+define register offset=0x0300 size=8 [ acc0 acc1 acc2 acc3 acc4 acc5 acc6 acc7 acc8 acc9 acc10 acc11 acc12 acc13 acc14 acc15 acc16 acc17 acc18 acc19 acc20 acc21 acc22 acc23 acc24 acc25 acc26 acc27 acc28 acc29 acc30 acc31 acc32 acc33 acc34 acc35 acc36 acc37 acc38 acc39 acc40 acc41 acc42 acc43 acc44 acc45 acc46 acc47 acc48 acc49 acc50 acc51 acc52 acc53 acc54 acc55 acc56 acc57 acc58 acc59 acc60 acc61 acc62 acc63 ];
+define register offset=0x0500 size=1 [ accg0 accg1 accg2 accg3 accg4 accg5 accg6 accg7 accg8 accg9 accg10 accg11 accg12 accg13 accg14 accg15 accg16 accg17 accg18 accg19 accg20 accg21 accg22 accg23 accg24 accg25 accg26 accg27 accg28 accg29 accg30 accg31 accg32 accg33 accg34 accg35 accg36 accg37 accg38 accg39 accg40 accg41 accg42 accg43 accg44 accg45 accg46 accg47 accg48 accg49 accg50 accg51 accg52 accg53 accg54 accg55 accg56 accg57 accg58 accg59 accg60 accg61 accg62 accg63 ];
+define register offset=0x0540 size=1 [ cc0 cc1 cc2 cc3 cc4 cc5 cc6 cc7 icc0 icc1 icc2 icc3 fcc0 fcc1 fcc2 fcc3 ];
+define register offset=0x0560 size=4 [ pc ];
+define register offset=0x1000 size=4 [ psr ];
+define register offset=0x1004 size=4 [ pcsr ];
+define register offset=0x1008 size=4 [ bpcsr ];
+define register offset=0x100c size=4 [ tbr ];
+define register offset=0x1010 size=4 [ bpsr ];
+define register offset=0x1400 size=4 [ ccr ];
+define register offset=0x141c size=4 [ cccr ];
+define register offset=0x1440 size=4 [ lr ];
+define register offset=0x1444 size=4 [ lcr ];
+define register offset=0x1480 size=4 [ isr ];
+
+define token ins (32)
+  pack = (31,31)
+  f_gri = (12,17)
+  f_grj = (0,5)
+  f_grk = (25,30)
+  f_grin = (12,17)
+  f_grjn = (0,5)
+  f_grkn = (25,30)
+  f_grkd = (25,30)
+  f_fri = (12,17)
+  f_frj = (0,5)
+  f_frk = (25,30)
+  f_frid = (12,17)
+  f_frjd = (0,5)
+  f_frkd = (25,30)
+  f_cpri = (12,17)
+  f_cprj = (0,5)
+  f_cprk = (25,30)
+  f_cprkd = (25,30)
+  f_acci = (12,17)
+  f_acck = (25,30)
+  f_accgi = (12,17)
+  f_accgk = (25,30)
+  f_cri = (12,14)
+  f_crj = (0,2)
+  f_crk = (25,27)
+  f_cci = (9,11)
+  f_crji = (25,26)
+  f_crjf = (25,26)
+  f_icc1 = (10,11)
+  f_icc2 = (25,26)
+  f_icc3 = (0,1)
+  f_fcc1 = (10,11)
+  f_fcc2 = (25,26)
+  f_fcc3 = (0,1)
+  f_s12 = (0,11) signed
+  f_s10 = (0,9) signed
+  f_u16 = (0,15)
+  f_s16 = (0,15) signed
+  f_s6 = (0,5) signed
+  f_s6_1 = (6,11) signed
+  f_u6 = (0,5)
+  f_s5 = (0,4) signed
+  f_u12h = (12,17) signed
+  f_u12l = (0,5)
+  f_sprh = (25,30)
+  f_sprl = (12,17)
+  f_l24h = (25,30) signed
+  f_l24l = (0,17)
+  f_eir = (12,17)
+  f_cond = (8,8)
+  f_ccond = (12,12)
+  f_hint = (16,17)
+  f_b25 = (25,25)
+  f_lrae = (5,5)
+  f_lrad = (4,4)
+  f_lras = (3,3)
+  f_tlbopx = (26,28)
+  f_a = (17,17)
+  m_6_11 = (6,11)
+  m_18_24 = (18,24)
+  m_6_24 = (6,24)
+  m_18_30 = (18,30)
+  m_6_7 = (6,7)
+  m_12_24 = (12,24)
+  m_6_9 = (6,9)
+  m_16_24 = (16,24)
+  m_0_15 = (0,15)
+  m_27_30 = (27,30)
+  m_0_11 = (0,11)
+  m_13_15 = (13,15)
+  m_0_24 = (0,24)
+  m_26_30 = (26,30)
+  m_0_30 = (0,30)
+  m_3_11 = (3,11)
+  m_15_24 = (15,24)
+  m_28_30 = (28,30)
+  m_3_24 = (3,24)
+  m_2_24 = (2,24)
+  m_0_7 = (0,7)
+  m_2_7 = (2,7)
+  m_0_2 = (0,2)
+  m_29_30 = (29,30)
+  m_5_24 = (5,24)
+;
+
+attach variables [ f_grk f_gri f_grj ] [ gr0 gr1 gr2 gr3 gr4 gr5 gr6 gr7 gr8 gr9 gr10 gr11 gr12 gr13 gr14 gr15 gr16 gr17 gr18 gr19 gr20 gr21 gr22 gr23 gr24 gr25 gr26 gr27 gr28 gr29 gr30 gr31 gr32 gr33 gr34 gr35 gr36 gr37 gr38 gr39 gr40 gr41 gr42 gr43 gr44 gr45 gr46 gr47 gr48 gr49 gr50 gr51 gr52 gr53 gr54 gr55 gr56 gr57 gr58 gr59 gr60 gr61 gr62 gr63 ];
+attach variables [ f_grkd ] [ grd0 _ grd2 _ grd4 _ grd6 _ grd8 _ grd10 _ grd12 _ grd14 _ grd16 _ grd18 _ grd20 _ grd22 _ grd24 _ grd26 _ grd28 _ grd30 _ grd32 _ grd34 _ grd36 _ grd38 _ grd40 _ grd42 _ grd44 _ grd46 _ grd48 _ grd50 _ grd52 _ grd54 _ grd56 _ grd58 _ grd60 _ grd62 _ ];
+attach variables [ f_fri f_frj f_frk ] [ fr0 fr1 fr2 fr3 fr4 fr5 fr6 fr7 fr8 fr9 fr10 fr11 fr12 fr13 fr14 fr15 fr16 fr17 fr18 fr19 fr20 fr21 fr22 fr23 fr24 fr25 fr26 fr27 fr28 fr29 fr30 fr31 fr32 fr33 fr34 fr35 fr36 fr37 fr38 fr39 fr40 fr41 fr42 fr43 fr44 fr45 fr46 fr47 fr48 fr49 fr50 fr51 fr52 fr53 fr54 fr55 fr56 fr57 fr58 fr59 fr60 fr61 fr62 fr63 ];
+attach variables [ f_frid f_frjd f_frkd ] [ frd0 _ frd2 _ frd4 _ frd6 _ frd8 _ frd10 _ frd12 _ frd14 _ frd16 _ frd18 _ frd20 _ frd22 _ frd24 _ frd26 _ frd28 _ frd30 _ frd32 _ frd34 _ frd36 _ frd38 _ frd40 _ frd42 _ frd44 _ frd46 _ frd48 _ frd50 _ frd52 _ frd54 _ frd56 _ frd58 _ frd60 _ frd62 _ ];
+attach variables [ f_cpri f_cprj f_cprk ] [ cpr0 cpr1 cpr2 cpr3 cpr4 cpr5 cpr6 cpr7 cpr8 cpr9 cpr10 cpr11 cpr12 cpr13 cpr14 cpr15 cpr16 cpr17 cpr18 cpr19 cpr20 cpr21 cpr22 cpr23 cpr24 cpr25 cpr26 cpr27 cpr28 cpr29 cpr30 cpr31 cpr32 cpr33 cpr34 cpr35 cpr36 cpr37 cpr38 cpr39 cpr40 cpr41 cpr42 cpr43 cpr44 cpr45 cpr46 cpr47 cpr48 cpr49 cpr50 cpr51 cpr52 cpr53 cpr54 cpr55 cpr56 cpr57 cpr58 cpr59 cpr60 cpr61 cpr62 cpr63 ];
+attach variables [ f_cprkd ] [ cprd0 _ cprd2 _ cprd4 _ cprd6 _ cprd8 _ cprd10 _ cprd12 _ cprd14 _ cprd16 _ cprd18 _ cprd20 _ cprd22 _ cprd24 _ cprd26 _ cprd28 _ cprd30 _ cprd32 _ cprd34 _ cprd36 _ cprd38 _ cprd40 _ cprd42 _ cprd44 _ cprd46 _ cprd48 _ cprd50 _ cprd52 _ cprd54 _ cprd56 _ cprd58 _ cprd60 _ cprd62 _ ];
+attach variables [ f_acci f_acck ] [ acc0 acc1 acc2 acc3 acc4 acc5 acc6 acc7 acc8 acc9 acc10 acc11 acc12 acc13 acc14 acc15 acc16 acc17 acc18 acc19 acc20 acc21 acc22 acc23 acc24 acc25 acc26 acc27 acc28 acc29 acc30 acc31 acc32 acc33 acc34 acc35 acc36 acc37 acc38 acc39 acc40 acc41 acc42 acc43 acc44 acc45 acc46 acc47 acc48 acc49 acc50 acc51 acc52 acc53 acc54 acc55 acc56 acc57 acc58 acc59 acc60 acc61 acc62 acc63 ];
+attach variables [ f_accgi f_accgk ] [ accg0 accg1 accg2 accg3 accg4 accg5 accg6 accg7 accg8 accg9 accg10 accg11 accg12 accg13 accg14 accg15 accg16 accg17 accg18 accg19 accg20 accg21 accg22 accg23 accg24 accg25 accg26 accg27 accg28 accg29 accg30 accg31 accg32 accg33 accg34 accg35 accg36 accg37 accg38 accg39 accg40 accg41 accg42 accg43 accg44 accg45 accg46 accg47 accg48 accg49 accg50 accg51 accg52 accg53 accg54 accg55 accg56 accg57 accg58 accg59 accg60 accg61 accg62 accg63 ];
+attach variables [ f_cri f_crj f_crk f_cci ] [ cc0 cc1 cc2 cc3 cc4 cc5 cc6 cc7 ];
+attach variables [ f_crji ] [ cc4 cc5 cc6 cc7 ];
+attach variables [ f_crjf ] [ cc0 cc1 cc2 cc3 ];
+attach variables [ f_icc1 f_icc2 f_icc3 ] [ icc0 icc1 icc2 icc3 ];
+attach variables [ f_fcc1 f_fcc2 f_fcc3 ] [ fcc0 fcc1 fcc2 fcc3 ];
+
+define pcodeop frv_addss;
+define pcodeop frv_andcr;
+define pcodeop frv_andncr;
+define pcodeop frv_bar;
+define pcodeop frv_bcnolr;
+define pcodeop frv_bno;
+define pcodeop frv_break;
+define pcodeop frv_caddcc;
+define pcodeop frv_candcc;
+define pcodeop frv_cfmadds;
+define pcodeop frv_cfmas;
+define pcodeop frv_cfmss;
+define pcodeop frv_cfmsubs;
+define pcodeop frv_cldq;
+define pcodeop frv_cldqu;
+define pcodeop frv_clrfa;
+define pcodeop frv_clrfr;
+define pcodeop frv_clrga;
+define pcodeop frv_clrgr;
+define pcodeop frv_cmaddhss;
+define pcodeop frv_cmaddhus;
+define pcodeop frv_cmand;
+define pcodeop frv_cmbtoh;
+define pcodeop frv_cmbtohe;
+define pcodeop frv_cmcpxis;
+define pcodeop frv_cmcpxiu;
+define pcodeop frv_cmcpxrs;
+define pcodeop frv_cmcpxru;
+define pcodeop frv_cmexpdhd;
+define pcodeop frv_cmexpdhw;
+define pcodeop frv_cmhtob;
+define pcodeop frv_cmmachs;
+define pcodeop frv_cmmachu;
+define pcodeop frv_cmmulhs;
+define pcodeop frv_cmmulhu;
+define pcodeop frv_cmnot;
+define pcodeop frv_cmor;
+define pcodeop frv_cmovfgd;
+define pcodeop frv_cmovgfd;
+define pcodeop frv_cmpb;
+define pcodeop frv_cmpba;
+define pcodeop frv_cmqaddhss;
+define pcodeop frv_cmqaddhus;
+define pcodeop frv_cmqmachs;
+define pcodeop frv_cmqmachu;
+define pcodeop frv_cmqmulhs;
+define pcodeop frv_cmqmulhu;
+define pcodeop frv_cmqsubhss;
+define pcodeop frv_cmqsubhus;
+define pcodeop frv_cmsubhss;
+define pcodeop frv_cmsubhus;
+define pcodeop frv_cmxor;
+define pcodeop frv_commitfa;
+define pcodeop frv_commitfr;
+define pcodeop frv_commitga;
+define pcodeop frv_commitgr;
+define pcodeop frv_cop1;
+define pcodeop frv_cop2;
+define pcodeop frv_corcc;
+define pcodeop frv_cscan;
+define pcodeop frv_csllcc;
+define pcodeop frv_csmulcc;
+define pcodeop frv_csracc;
+define pcodeop frv_csrlcc;
+define pcodeop frv_cstq;
+define pcodeop frv_csubcc;
+define pcodeop frv_cswap;
+define pcodeop frv_cxorcc;
+define pcodeop frv_dcef;
+define pcodeop frv_dcei;
+define pcodeop frv_dcf;
+define pcodeop frv_dci;
+define pcodeop frv_dcpl;
+define pcodeop frv_dcul;
+define pcodeop frv_dtlbi;
+define pcodeop frv_fbno;
+define pcodeop frv_fcbnolr;
+define pcodeop frv_fdabss;
+define pcodeop frv_fdadds;
+define pcodeop frv_fdcmps;
+define pcodeop frv_fddivs;
+define pcodeop frv_fditos;
+define pcodeop frv_fdmadds;
+define pcodeop frv_fdmas;
+define pcodeop frv_fdmovs;
+define pcodeop frv_fdmss;
+define pcodeop frv_fdmulcs;
+define pcodeop frv_fdmuls;
+define pcodeop frv_fdnegs;
+define pcodeop frv_fdsads;
+define pcodeop frv_fdsqrts;
+define pcodeop frv_fdstoi;
+define pcodeop frv_fdsubs;
+define pcodeop frv_fmad;
+define pcodeop frv_fmaddd;
+define pcodeop frv_fmadds;
+define pcodeop frv_fmas;
+define pcodeop frv_fmsd;
+define pcodeop frv_fmss;
+define pcodeop frv_fmsubd;
+define pcodeop frv_fmsubs;
+define pcodeop frv_fnop;
+define pcodeop frv_fteq;
+define pcodeop frv_ftge;
+define pcodeop frv_ftgt;
+define pcodeop frv_ftieq;
+define pcodeop frv_ftige;
+define pcodeop frv_ftigt;
+define pcodeop frv_ftile;
+define pcodeop frv_ftilg;
+define pcodeop frv_ftilt;
+define pcodeop frv_ftine;
+define pcodeop frv_ftino;
+define pcodeop frv_ftio;
+define pcodeop frv_ftira;
+define pcodeop frv_ftiu;
+define pcodeop frv_ftiue;
+define pcodeop frv_ftiug;
+define pcodeop frv_ftiuge;
+define pcodeop frv_ftiul;
+define pcodeop frv_ftiule;
+define pcodeop frv_ftle;
+define pcodeop frv_ftlg;
+define pcodeop frv_ftlt;
+define pcodeop frv_ftne;
+define pcodeop frv_ftno;
+define pcodeop frv_fto;
+define pcodeop frv_ftra;
+define pcodeop frv_ftu;
+define pcodeop frv_ftue;
+define pcodeop frv_ftug;
+define pcodeop frv_ftuge;
+define pcodeop frv_ftul;
+define pcodeop frv_ftule;
+define pcodeop frv_icei;
+define pcodeop frv_ici;
+define pcodeop frv_icpl;
+define pcodeop frv_icul;
+define pcodeop frv_itlbi;
+define pcodeop frv_ldc;
+define pcodeop frv_ldcu;
+define pcodeop frv_lddc;
+define pcodeop frv_lddcu;
+define pcodeop frv_ldq;
+define pcodeop frv_ldqc;
+define pcodeop frv_ldqcu;
+define pcodeop frv_ldqf;
+define pcodeop frv_ldqfi;
+define pcodeop frv_ldqfu;
+define pcodeop frv_ldqi;
+define pcodeop frv_ldqu;
+define pcodeop frv_lrad;
+define pcodeop frv_lrai;
+define pcodeop frv_mabshs;
+define pcodeop frv_maddaccs;
+define pcodeop frv_maddhss;
+define pcodeop frv_maddhus;
+define pcodeop frv_mand;
+define pcodeop frv_masaccs;
+define pcodeop frv_maveh;
+define pcodeop frv_mbtoh;
+define pcodeop frv_mbtohe;
+define pcodeop frv_mclracc;
+define pcodeop frv_mcmpsh;
+define pcodeop frv_mcmpuh;
+define pcodeop frv_mcop1;
+define pcodeop frv_mcop2;
+define pcodeop frv_mcplhi;
+define pcodeop frv_mcpli;
+define pcodeop frv_mcpxis;
+define pcodeop frv_mcpxiu;
+define pcodeop frv_mcpxrs;
+define pcodeop frv_mcpxru;
+define pcodeop frv_mcut;
+define pcodeop frv_mcuti;
+define pcodeop frv_mcutss;
+define pcodeop frv_mcutssi;
+define pcodeop frv_mdaddaccs;
+define pcodeop frv_mdasaccs;
+define pcodeop frv_mdcutssi;
+define pcodeop frv_mdpackh;
+define pcodeop frv_mdrotli;
+define pcodeop frv_mdsubaccs;
+define pcodeop frv_mdunpackh;
+define pcodeop frv_membar;
+define pcodeop frv_mexpdhd;
+define pcodeop frv_mexpdhw;
+define pcodeop frv_mhdseth;
+define pcodeop frv_mhdsets;
+define pcodeop frv_mhsethih;
+define pcodeop frv_mhsethis;
+define pcodeop frv_mhsetloh;
+define pcodeop frv_mhsetlos;
+define pcodeop frv_mhtob;
+define pcodeop frv_mmachs;
+define pcodeop frv_mmachu;
+define pcodeop frv_mmrdhs;
+define pcodeop frv_mmrdhu;
+define pcodeop frv_mmulhs;
+define pcodeop frv_mmulhu;
+define pcodeop frv_mmulxhs;
+define pcodeop frv_mmulxhu;
+define pcodeop frv_mnop;
+define pcodeop frv_mnot;
+define pcodeop frv_mor;
+define pcodeop frv_movfgd;
+define pcodeop frv_movfgq;
+define pcodeop frv_movgfd;
+define pcodeop frv_movgfq;
+define pcodeop frv_mpackh;
+define pcodeop frv_mqaddhss;
+define pcodeop frv_mqaddhus;
+define pcodeop frv_mqcpxis;
+define pcodeop frv_mqcpxiu;
+define pcodeop frv_mqcpxrs;
+define pcodeop frv_mqcpxru;
+define pcodeop frv_mqlclrhs;
+define pcodeop frv_mqlmths;
+define pcodeop frv_mqmachs;
+define pcodeop frv_mqmachu;
+define pcodeop frv_mqmacxhs;
+define pcodeop frv_mqmulhs;
+define pcodeop frv_mqmulhu;
+define pcodeop frv_mqmulxhs;
+define pcodeop frv_mqmulxhu;
+define pcodeop frv_mqsaths;
+define pcodeop frv_mqsllhi;
+define pcodeop frv_mqsrahi;
+define pcodeop frv_mqsubhss;
+define pcodeop frv_mqsubhus;
+define pcodeop frv_mqxmachs;
+define pcodeop frv_mqxmacxhs;
+define pcodeop frv_mrdacc;
+define pcodeop frv_mrdaccg;
+define pcodeop frv_mrotli;
+define pcodeop frv_mrotri;
+define pcodeop frv_msaths;
+define pcodeop frv_msathu;
+define pcodeop frv_msllhi;
+define pcodeop frv_msrahi;
+define pcodeop frv_msrlhi;
+define pcodeop frv_msubaccs;
+define pcodeop frv_msubhss;
+define pcodeop frv_msubhus;
+define pcodeop frv_mtrap;
+define pcodeop frv_munpackh;
+define pcodeop frv_mwcut;
+define pcodeop frv_mwcuti;
+define pcodeop frv_mwtacc;
+define pcodeop frv_mwtaccg;
+define pcodeop frv_mxor;
+define pcodeop frv_nandcr;
+define pcodeop frv_nandncr;
+define pcodeop frv_nfadds;
+define pcodeop frv_nfdadds;
+define pcodeop frv_nfdcmps;
+define pcodeop frv_nfddivs;
+define pcodeop frv_nfditos;
+define pcodeop frv_nfdivs;
+define pcodeop frv_nfdmadds;
+define pcodeop frv_nfdmas;
+define pcodeop frv_nfdmss;
+define pcodeop frv_nfdmulcs;
+define pcodeop frv_nfdmuls;
+define pcodeop frv_nfdsads;
+define pcodeop frv_nfdsqrts;
+define pcodeop frv_nfdstoi;
+define pcodeop frv_nfdsubs;
+define pcodeop frv_nfitos;
+define pcodeop frv_nfmadds;
+define pcodeop frv_nfmas;
+define pcodeop frv_nfmss;
+define pcodeop frv_nfmsubs;
+define pcodeop frv_nfmuls;
+define pcodeop frv_nfsqrts;
+define pcodeop frv_nfstoi;
+define pcodeop frv_nfsubs;
+define pcodeop frv_nldq;
+define pcodeop frv_nldqf;
+define pcodeop frv_nldqfi;
+define pcodeop frv_nldqfu;
+define pcodeop frv_nldqu;
+define pcodeop frv_norcr;
+define pcodeop frv_norncr;
+define pcodeop frv_notcr;
+define pcodeop frv_orcr;
+define pcodeop frv_orncr;
+define pcodeop frv_rei;
+define pcodeop frv_rett;
+define pcodeop frv_scan;
+define pcodeop frv_scani;
+define pcodeop frv_scutss;
+define pcodeop frv_slass;
+define pcodeop frv_smass;
+define pcodeop frv_smsss;
+define pcodeop frv_smu;
+define pcodeop frv_smulicc;
+define pcodeop frv_stc;
+define pcodeop frv_stcu;
+define pcodeop frv_stdc;
+define pcodeop frv_stdcu;
+define pcodeop frv_stq;
+define pcodeop frv_stqc;
+define pcodeop frv_stqcu;
+define pcodeop frv_stqf;
+define pcodeop frv_stqfi;
+define pcodeop frv_stqfu;
+define pcodeop frv_stqi;
+define pcodeop frv_stqu;
+define pcodeop frv_subss;
+define pcodeop frv_swap;
+define pcodeop frv_swapi;
+define pcodeop frv_tc;
+define pcodeop frv_teq;
+define pcodeop frv_tge;
+define pcodeop frv_tgt;
+define pcodeop frv_thi;
+define pcodeop frv_tic;
+define pcodeop frv_tieq;
+define pcodeop frv_tige;
+define pcodeop frv_tigt;
+define pcodeop frv_tihi;
+define pcodeop frv_tile;
+define pcodeop frv_tils;
+define pcodeop frv_tilt;
+define pcodeop frv_tin;
+define pcodeop frv_tinc;
+define pcodeop frv_tine;
+define pcodeop frv_tino;
+define pcodeop frv_tinv;
+define pcodeop frv_tip;
+define pcodeop frv_tira;
+define pcodeop frv_tiv;
+define pcodeop frv_tlbpr;
+define pcodeop frv_tle;
+define pcodeop frv_tls;
+define pcodeop frv_tlt;
+define pcodeop frv_tn;
+define pcodeop frv_tnc;
+define pcodeop frv_tne;
+define pcodeop frv_tno;
+define pcodeop frv_tnv;
+define pcodeop frv_tp;
+define pcodeop frv_tra;
+define pcodeop frv_tv;
+define pcodeop frv_umulicc;
+define pcodeop frv_wdtlb;
+define pcodeop frv_witlb;
+define pcodeop frv_xorcr;
+
+o_pack: ".p" is pack=0 { }
+o_pack: is pack=1 { }
+
+o_GRi: "gr0" is f_grin=0 { export 0:4; }
+o_GRi: f_gri is f_gri { export f_gri; }
+o_GRj: "gr0" is f_grjn=0 { export 0:4; }
+o_GRj: f_grj is f_grj { export f_grj; }
+o_GRk: f_grk is f_grk { export f_grk; }
+o_GRkS: "gr0" is f_grkn=0 { export 0:4; }
+o_GRkS: f_grk is f_grk { export f_grk; }
+o_GRdk: f_grk is f_grk & f_grkd { export f_grkd; }
+o_FRdi: f_fri is f_fri & f_frid { export f_frid; }
+o_FRdj: f_frj is f_frj & f_frjd { export f_frjd; }
+o_FRdk: f_frk is f_frk & f_frkd { export f_frkd; }
+o_CPRdk: f_cprk is f_cprk & f_cprkd { export f_cprkd; }
+
+o_label16: target is f_s16 [ target = inst_start + (f_s16 << 2); ] { export *:4 target; }
+o_label24: target is f_l24h & f_l24l [ target = inst_start + (((f_l24h << 18) | f_l24l) << 2); ] { export *:4 target; }
+o_u12: val is f_u12h & f_u12l [ val = (f_u12h << 6) | f_u12l; ] { export *[const]:4 val; }
+o_spr: "psr" is f_sprh=0 & f_sprl=0 { export psr; }
+o_spr: "pcsr" is f_sprh=0 & f_sprl=1 { export pcsr; }
+o_spr: "bpcsr" is f_sprh=0 & f_sprl=2 { export bpcsr; }
+o_spr: "tbr" is f_sprh=0 & f_sprl=3 { export tbr; }
+o_spr: "bpsr" is f_sprh=0 & f_sprl=4 { export bpsr; }
+o_spr: "ccr" is f_sprh=4 & f_sprl=0 { export ccr; }
+o_spr: "cccr" is f_sprh=4 & f_sprl=7 { export cccr; }
+o_spr: "lr" is f_sprh=4 & f_sprl=16 { export lr; }
+o_spr: "lcr" is f_sprh=4 & f_sprl=17 { export lcr; }
+o_spr: "isr" is f_sprh=4 & f_sprl=32 { export isr; }
+o_spr: "spr"^num is f_sprh & f_sprl [ num = (f_sprh << 6) | f_sprl; ] { local a:4 = 0x1000 + num * 4; export *[register]:4 a; }
+
+:add^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0x0 & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRk { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a + b; o_GRk = r; }
+:sub^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0x4 & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRk { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a - b; o_GRk = r; }
+:and^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0x0 & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a & b; o_GRk = r; }
+:or^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0x2 & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a | b; o_GRk = r; }
+:xor^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0x4 & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a ^ b; o_GRk = r; }
+:not^o_pack o_GRj,o_GRk is m_6_24=0x1006 & o_pack & o_GRj & o_GRk { o_GRk = ~o_GRj; }
+:sdiv^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0xe & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRk { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a s/ b; o_GRk = r; }
+:nsdiv^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0xe & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a s/ b; o_GRk = r; }
+:udiv^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0xf & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRk { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a / b; o_GRk = r; }
+:nudiv^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0xf & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a / b; o_GRk = r; }
+:smul^o_pack o_GRi,o_GRj,o_GRdk is m_6_11=0x8 & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRdk { local a:4 = o_GRi; local b:4 = o_GRj; local r:8 = sext(a) * sext(b); o_GRdk = r; }
+:umul^o_pack o_GRi,o_GRj,o_GRdk is m_6_11=0xa & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRdk { local a:4 = o_GRi; local b:4 = o_GRj; local r:8 = zext(a) * zext(b); o_GRdk = r; }
+:smu^o_pack o_GRi,o_GRj is m_6_11=0x5 & m_18_30=0x46 & o_pack & o_GRi & o_GRj { o_GRj = frv_smu(o_GRi); }
+:smass^o_pack o_GRi,o_GRj is m_6_11=0x6 & m_18_30=0x46 & o_pack & o_GRi & o_GRj { o_GRj = frv_smass(o_GRi); }
+:smsss^o_pack o_GRi,o_GRj is m_6_11=0x7 & m_18_30=0x46 & o_pack & o_GRi & o_GRj { o_GRj = frv_smsss(o_GRi); }
+:sll^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0x8 & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a << (b & 31); o_GRk = r; }
+:srl^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0xa & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a >> (b & 31); o_GRk = r; }
+:sra^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0xc & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a s>> (b & 31); o_GRk = r; }
+:slass^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0x2 & m_18_24=0x46 & o_pack & o_GRi & o_GRj & o_GRk { o_GRk = frv_slass(o_GRi, o_GRj); }
+:scutss^o_pack o_GRj,o_GRk is m_6_24=0x46004 & o_pack & o_GRj & o_GRk { o_GRk = frv_scutss(o_GRj); }
+:scan^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0x0 & m_18_24=0xb & o_pack & o_GRi & o_GRj & o_GRk { o_GRk = frv_scan(o_GRi, o_GRj); }
+:cadd^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x58 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a + b; o_GRk = r; }
+:csub^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x58 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a - b; o_GRk = r; }
+:cand^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x5a & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a & b; o_GRk = r; }
+:cor^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x5a & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a | b; o_GRk = r; }
+:cxor^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x5a & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a ^ b; o_GRk = r; }
+:cnot^o_pack o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x3 & m_12_24=0x1680 & o_pack & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = ~o_GRj; }
+:csmul^o_pack o_GRi,o_GRj,o_GRdk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x58 & o_pack & o_GRi & o_GRj & o_GRdk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local a:4 = o_GRi; local b:4 = o_GRj; local r:8 = sext(a) * sext(b); o_GRdk = r; }
+:csdiv^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x58 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a s/ b; o_GRk = r; }
+:cudiv^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x59 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a / b; o_GRk = r; }
+:csll^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x5c & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a << (b & 31); o_GRk = r; }
+:csrl^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x5c & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a >> (b & 31); o_GRk = r; }
+:csra^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x5c & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a s>> (b & 31); o_GRk = r; }
+:cscan^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x65 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = frv_cscan(o_GRi, o_GRj); }
+:addcc^o_pack o_GRi,o_GRj,o_GRk,f_icc1 is m_6_9=0x1 & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a + b; f_icc1 = ((r s< 0) << 3) | ((r == 0) << 2) | ((scarry(a, b)) << 1) | (carry(a, b)); o_GRk = r; }
+:subcc^o_pack o_GRi,o_GRj,o_GRk,f_icc1 is m_6_9=0x5 & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a - b; f_icc1 = ((r s< 0) << 3) | ((r == 0) << 2) | ((sborrow(a, b)) << 1) | (a < b); o_GRk = r; }
+:andcc^o_pack o_GRi,o_GRj,o_GRk,f_icc1 is m_6_9=0x1 & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a & b; f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRk = r; }
+:orcc^o_pack o_GRi,o_GRj,o_GRk,f_icc1 is m_6_9=0x3 & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a | b; f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRk = r; }
+:xorcc^o_pack o_GRi,o_GRj,o_GRk,f_icc1 is m_6_9=0x5 & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a ^ b; f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRk = r; }
+:sllcc^o_pack o_GRi,o_GRj,o_GRk,f_icc1 is m_6_9=0x9 & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a << (b & 31); f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRk = r; }
+:srlcc^o_pack o_GRi,o_GRj,o_GRk,f_icc1 is m_6_9=0xb & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a >> (b & 31); f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRk = r; }
+:sracc^o_pack o_GRi,o_GRj,o_GRk,f_icc1 is m_6_9=0xd & m_18_24=0x1 & o_pack & o_GRi & o_GRj & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local r:4 = a s>> (b & 31); f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRk = r; }
+:smulcc^o_pack o_GRi,o_GRj,o_GRdk,f_icc1 is m_6_9=0x9 & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRdk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local r:8 = sext(a) * sext(b); f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRdk = r; }
+:umulcc^o_pack o_GRi,o_GRj,o_GRdk,f_icc1 is m_6_9=0xb & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRdk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local r:8 = zext(a) * zext(b); f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRdk = r; }
+:caddcc^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x59 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = frv_caddcc(o_GRi, o_GRj); }
+:csubcc^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x59 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = frv_csubcc(o_GRi, o_GRj); }
+:csmulcc^o_pack o_GRi,o_GRj,o_GRdk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x59 & o_pack & o_GRi & o_GRj & o_GRdk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRdk = frv_csmulcc(o_GRi, o_GRj); }
+:candcc^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x5b & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = frv_candcc(o_GRi, o_GRj); }
+:corcc^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x5b & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = frv_corcc(o_GRi, o_GRj); }
+:cxorcc^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x5b & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = frv_cxorcc(o_GRi, o_GRj); }
+:csllcc^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x5d & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = frv_csllcc(o_GRi, o_GRj); }
+:csrlcc^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x5d & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = frv_csrlcc(o_GRi, o_GRj); }
+:csracc^o_pack o_GRi,o_GRj,o_GRk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x5d & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = frv_csracc(o_GRi, o_GRj); }
+:addx^o_pack o_GRi,o_GRj,o_GRk,f_icc1 is m_6_9=0x2 & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local c:4 = zext((f_icc1 & 1) != 0); local t:4 = a + b; local r:4 = t + c; o_GRk = r; }
+:subx^o_pack o_GRi,o_GRj,o_GRk,f_icc1 is m_6_9=0x6 & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local c:4 = zext((f_icc1 & 1) != 0); local t:4 = a - b; local r:4 = t - c; o_GRk = r; }
+:addxcc^o_pack o_GRi,o_GRj,o_GRk,f_icc1 is m_6_9=0x3 & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local c:4 = zext((f_icc1 & 1) != 0); local t:4 = a + b; local r:4 = t + c; f_icc1 = ((r s< 0) << 3) | ((r == 0) << 2) | ((scarry(a, b) ^^ scarry(t, c)) << 1) | (carry(a, b) || carry(t, c)); o_GRk = r; }
+:subxcc^o_pack o_GRi,o_GRj,o_GRk,f_icc1 is m_6_9=0x7 & m_18_24=0x0 & o_pack & o_GRi & o_GRj & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = o_GRj; local c:4 = zext((f_icc1 & 1) != 0); local t:4 = a - b; local r:4 = t - c; f_icc1 = ((r s< 0) << 3) | ((r == 0) << 2) | ((sborrow(a, b) ^^ sborrow(t, c)) << 1) | ((a < b) || (t < c)); o_GRk = r; }
+:addss^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0x0 & m_18_24=0x46 & o_pack & o_GRi & o_GRj & o_GRk { o_GRk = frv_addss(o_GRi, o_GRj); }
+:subss^o_pack o_GRi,o_GRj,o_GRk is m_6_11=0x1 & m_18_24=0x46 & o_pack & o_GRi & o_GRj & o_GRk { o_GRk = frv_subss(o_GRi, o_GRj); }
+:addi^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x10 & o_pack & o_GRi & f_s12 & o_GRk { local a:4 = o_GRi; local b:4 = f_s12; local r:4 = a + b; o_GRk = r; }
+:subi^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x14 & o_pack & o_GRi & f_s12 & o_GRk { local a:4 = o_GRi; local b:4 = f_s12; local r:4 = a - b; o_GRk = r; }
+:andi^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x20 & o_pack & o_GRi & f_s12 & o_GRk { local a:4 = o_GRi; local b:4 = f_s12; local r:4 = a & b; o_GRk = r; }
+:ori^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x22 & o_pack & o_GRi & f_s12 & o_GRk { local a:4 = o_GRi; local b:4 = f_s12; local r:4 = a | b; o_GRk = r; }
+:xori^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x24 & o_pack & o_GRi & f_s12 & o_GRk { local a:4 = o_GRi; local b:4 = f_s12; local r:4 = a ^ b; o_GRk = r; }
+:sdivi^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x1e & o_pack & o_GRi & f_s12 & o_GRk { local a:4 = o_GRi; local b:4 = f_s12; local r:4 = a s/ b; o_GRk = r; }
+:nsdivi^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x2e & o_pack & o_GRi & f_s12 & o_GRk { local a:4 = o_GRi; local b:4 = f_s12; local r:4 = a s/ b; o_GRk = r; }
+:udivi^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x1f & o_pack & o_GRi & f_s12 & o_GRk { local a:4 = o_GRi; local b:4 = f_s12; local r:4 = a / b; o_GRk = r; }
+:nudivi^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x2f & o_pack & o_GRi & f_s12 & o_GRk { local a:4 = o_GRi; local b:4 = f_s12; local r:4 = a / b; o_GRk = r; }
+:smuli^o_pack o_GRi,f_s12,o_GRdk is m_18_24=0x18 & o_pack & o_GRi & f_s12 & o_GRdk { local a:4 = o_GRi; local b:4 = f_s12; local r:8 = sext(a) * sext(b); o_GRdk = r; }
+:umuli^o_pack o_GRi,f_s12,o_GRdk is m_18_24=0x1a & o_pack & o_GRi & f_s12 & o_GRdk { local a:4 = o_GRi; local b:4 = f_s12; local r:8 = zext(a) * zext(b); o_GRdk = r; }
+:slli^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x28 & o_pack & o_GRi & f_s12 & o_GRk { local a:4 = o_GRi; local b:4 = f_s12; local r:4 = a << (b & 31); o_GRk = r; }
+:srli^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x2a & o_pack & o_GRi & f_s12 & o_GRk { local a:4 = o_GRi; local b:4 = f_s12; local r:4 = a >> (b & 31); o_GRk = r; }
+:srai^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x2c & o_pack & o_GRi & f_s12 & o_GRk { local a:4 = o_GRi; local b:4 = f_s12; local r:4 = a s>> (b & 31); o_GRk = r; }
+:scani^o_pack o_GRi,f_s12,o_GRk is m_18_24=0x47 & o_pack & o_GRi & f_s12 & o_GRk { local i1:4 = f_s12; o_GRk = frv_scani(o_GRi, i1); }
+:addicc^o_pack o_GRi,f_s10,o_GRk,f_icc1 is m_18_24=0x11 & o_pack & o_GRi & f_s10 & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = f_s10; local r:4 = a + b; f_icc1 = ((r s< 0) << 3) | ((r == 0) << 2) | ((scarry(a, b)) << 1) | (carry(a, b)); o_GRk = r; }
+:subicc^o_pack o_GRi,f_s10,o_GRk,f_icc1 is m_18_24=0x15 & o_pack & o_GRi & f_s10 & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = f_s10; local r:4 = a - b; f_icc1 = ((r s< 0) << 3) | ((r == 0) << 2) | ((sborrow(a, b)) << 1) | (a < b); o_GRk = r; }
+:andicc^o_pack o_GRi,f_s10,o_GRk,f_icc1 is m_18_24=0x21 & o_pack & o_GRi & f_s10 & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = f_s10; local r:4 = a & b; f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRk = r; }
+:oricc^o_pack o_GRi,f_s10,o_GRk,f_icc1 is m_18_24=0x23 & o_pack & o_GRi & f_s10 & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = f_s10; local r:4 = a | b; f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRk = r; }
+:xoricc^o_pack o_GRi,f_s10,o_GRk,f_icc1 is m_18_24=0x25 & o_pack & o_GRi & f_s10 & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = f_s10; local r:4 = a ^ b; f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRk = r; }
+:smulicc^o_pack o_GRi,f_s10,o_GRdk,f_icc1 is m_18_24=0x19 & o_pack & o_GRi & f_s10 & o_GRdk & f_icc1 { local i1:4 = f_s10; o_GRdk = frv_smulicc(o_GRi, i1, f_icc1); }
+:umulicc^o_pack o_GRi,f_s10,o_GRdk,f_icc1 is m_18_24=0x1b & o_pack & o_GRi & f_s10 & o_GRdk & f_icc1 { local i1:4 = f_s10; o_GRdk = frv_umulicc(o_GRi, i1, f_icc1); }
+:sllicc^o_pack o_GRi,f_s10,o_GRk,f_icc1 is m_18_24=0x29 & o_pack & o_GRi & f_s10 & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = f_s10; local r:4 = a << (b & 31); f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRk = r; }
+:srlicc^o_pack o_GRi,f_s10,o_GRk,f_icc1 is m_18_24=0x2b & o_pack & o_GRi & f_s10 & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = f_s10; local r:4 = a >> (b & 31); f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRk = r; }
+:sraicc^o_pack o_GRi,f_s10,o_GRk,f_icc1 is m_18_24=0x2d & o_pack & o_GRi & f_s10 & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = f_s10; local r:4 = a s>> (b & 31); f_icc1 = (f_icc1 & 3) | ((r s< 0) << 3) | ((r == 0) << 2); o_GRk = r; }
+:addxi^o_pack o_GRi,f_s10,o_GRk,f_icc1 is m_18_24=0x12 & o_pack & o_GRi & f_s10 & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = f_s10; local c:4 = zext((f_icc1 & 1) != 0); local t:4 = a + b; local r:4 = t + c; o_GRk = r; }
+:subxi^o_pack o_GRi,f_s10,o_GRk,f_icc1 is m_18_24=0x16 & o_pack & o_GRi & f_s10 & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = f_s10; local c:4 = zext((f_icc1 & 1) != 0); local t:4 = a - b; local r:4 = t - c; o_GRk = r; }
+:addxicc^o_pack o_GRi,f_s10,o_GRk,f_icc1 is m_18_24=0x13 & o_pack & o_GRi & f_s10 & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = f_s10; local c:4 = zext((f_icc1 & 1) != 0); local t:4 = a + b; local r:4 = t + c; f_icc1 = ((r s< 0) << 3) | ((r == 0) << 2) | ((scarry(a, b) ^^ scarry(t, c)) << 1) | (carry(a, b) || carry(t, c)); o_GRk = r; }
+:subxicc^o_pack o_GRi,f_s10,o_GRk,f_icc1 is m_18_24=0x17 & o_pack & o_GRi & f_s10 & o_GRk & f_icc1 { local a:4 = o_GRi; local b:4 = f_s10; local c:4 = zext((f_icc1 & 1) != 0); local t:4 = a - b; local r:4 = t - c; f_icc1 = ((r s< 0) << 3) | ((r == 0) << 2) | ((sborrow(a, b) ^^ sborrow(t, c)) << 1) | ((a < b) || (t < c)); o_GRk = r; }
+:cmpb^o_pack o_GRi,o_GRj,f_icc1 is m_6_9=0xc & m_18_30=0x0 & o_pack & o_GRi & o_GRj & f_icc1 { o_GRj = frv_cmpb(o_GRi, f_icc1); }
+:cmpba^o_pack o_GRi,o_GRj,f_icc1 is m_6_9=0xd & m_18_30=0x0 & o_pack & o_GRi & o_GRj & f_icc1 { o_GRj = frv_cmpba(o_GRi, f_icc1); }
+:setlo^o_pack f_u16,o_GRk is m_16_24=0xf4 & o_pack & f_u16 & o_GRk { o_GRk = (o_GRk & 0xffff0000) | f_u16; }
+:sethi^o_pack f_u16,o_GRk is m_16_24=0xf8 & o_pack & f_u16 & o_GRk { o_GRk = (o_GRk & 0xffff) | (f_u16 << 16); }
+:setlos^o_pack f_s16,o_GRk is m_16_24=0xfc & o_pack & f_s16 & o_GRk { o_GRk = f_s16; }
+:ldsb^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x0 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; o_GRk = sext(v); }
+:ldub^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x1 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; o_GRk = zext(v); }
+:ldsh^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x2 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; o_GRk = sext(v); }
+:lduh^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x3 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; o_GRk = zext(v); }
+:ld^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x4 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:4 = *:4 ea; o_GRk = v; }
+:ldbf^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x8 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; f_frk = zext(v); }
+:ldhf^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x9 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; f_frk = zext(v); }
+:ldf^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0xa & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { local ea:4 = o_GRi + o_GRj; local v:4 = *:4 ea; f_frk = v; }
+:ldc^o_pack "@"^"("^o_GRi,o_GRj^")",f_cprk is m_6_11=0xd & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_cprk { f_cprk = frv_ldc(o_GRi, o_GRj); }
+:nldsb^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x20 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; o_GRk = sext(v); }
+:nldub^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x21 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; o_GRk = zext(v); }
+:nldsh^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x22 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; o_GRk = sext(v); }
+:nlduh^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x23 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; o_GRk = zext(v); }
+:nld^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x24 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:4 = *:4 ea; o_GRk = v; }
+:nldbf^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x28 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; f_frk = zext(v); }
+:nldhf^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x29 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; f_frk = zext(v); }
+:nldf^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x2a & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { local ea:4 = o_GRi + o_GRj; local v:4 = *:4 ea; f_frk = v; }
+:ldd^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRdk is m_6_11=0x5 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRdk { local ea:4 = o_GRi + o_GRj; local v:8 = *:8 ea; o_GRdk = v; }
+:lddf^o_pack "@"^"("^o_GRi,o_GRj^")",o_FRdk is m_6_11=0xb & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_FRdk { local ea:4 = o_GRi + o_GRj; local v:8 = *:8 ea; o_FRdk = v; }
+:lddc^o_pack "@"^"("^o_GRi,o_GRj^")",o_CPRdk is m_6_11=0xe & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_CPRdk { o_CPRdk = frv_lddc(o_GRi, o_GRj); }
+:nldd^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRdk is m_6_11=0x25 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRdk { local ea:4 = o_GRi + o_GRj; local v:8 = *:8 ea; o_GRdk = v; }
+:nlddf^o_pack "@"^"("^o_GRi,o_GRj^")",o_FRdk is m_6_11=0x2b & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_FRdk { local ea:4 = o_GRi + o_GRj; local v:8 = *:8 ea; o_FRdk = v; }
+:ldq^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x6 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { o_GRk = frv_ldq(o_GRi, o_GRj); }
+:ldqf^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0xc & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { f_frk = frv_ldqf(o_GRi, o_GRj); }
+:ldqc^o_pack "@"^"("^o_GRi,o_GRj^")",f_cprk is m_6_11=0xf & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_cprk { f_cprk = frv_ldqc(o_GRi, o_GRj); }
+:nldq^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x26 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { o_GRk = frv_nldq(o_GRi, o_GRj); }
+:nldqf^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x2c & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { f_frk = frv_nldqf(o_GRi, o_GRj); }
+:ldsbu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x10 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; o_GRk = sext(v); o_GRi = ea; }
+:ldubu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x11 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; o_GRk = zext(v); o_GRi = ea; }
+:ldshu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x12 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; o_GRk = sext(v); o_GRi = ea; }
+:lduhu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x13 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; o_GRk = zext(v); o_GRi = ea; }
+:ldu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x14 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:4 = *:4 ea; o_GRk = v; o_GRi = ea; }
+:nldsbu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x30 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; o_GRk = sext(v); o_GRi = ea; }
+:nldubu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x31 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; o_GRk = zext(v); o_GRi = ea; }
+:nldshu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x32 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; o_GRk = sext(v); o_GRi = ea; }
+:nlduhu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x33 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; o_GRk = zext(v); o_GRi = ea; }
+:nldu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x34 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { local ea:4 = o_GRi + o_GRj; local v:4 = *:4 ea; o_GRk = v; o_GRi = ea; }
+:ldbfu^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x18 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; f_frk = zext(v); o_GRi = ea; }
+:ldhfu^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x19 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; f_frk = zext(v); o_GRi = ea; }
+:ldfu^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x1a & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { local ea:4 = o_GRi + o_GRj; local v:4 = *:4 ea; f_frk = v; o_GRi = ea; }
+:ldcu^o_pack "@"^"("^o_GRi,o_GRj^")",f_cprk is m_6_11=0x1d & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_cprk { f_cprk = frv_ldcu(o_GRi, o_GRj); }
+:nldbfu^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x38 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; f_frk = zext(v); o_GRi = ea; }
+:nldhfu^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x39 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; f_frk = zext(v); o_GRi = ea; }
+:nldfu^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x3a & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { local ea:4 = o_GRi + o_GRj; local v:4 = *:4 ea; f_frk = v; o_GRi = ea; }
+:lddu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRdk is m_6_11=0x15 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRdk { local ea:4 = o_GRi + o_GRj; local v:8 = *:8 ea; o_GRdk = v; o_GRi = ea; }
+:nlddu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRdk is m_6_11=0x35 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRdk { local ea:4 = o_GRi + o_GRj; local v:8 = *:8 ea; o_GRdk = v; o_GRi = ea; }
+:lddfu^o_pack "@"^"("^o_GRi,o_GRj^")",o_FRdk is m_6_11=0x1b & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_FRdk { local ea:4 = o_GRi + o_GRj; local v:8 = *:8 ea; o_FRdk = v; o_GRi = ea; }
+:lddcu^o_pack "@"^"("^o_GRi,o_GRj^")",o_CPRdk is m_6_11=0x1e & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_CPRdk { o_CPRdk = frv_lddcu(o_GRi, o_GRj); }
+:nlddfu^o_pack "@"^"("^o_GRi,o_GRj^")",o_FRdk is m_6_11=0x3b & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_FRdk { local ea:4 = o_GRi + o_GRj; local v:8 = *:8 ea; o_FRdk = v; o_GRi = ea; }
+:ldqu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x16 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { o_GRk = frv_ldqu(o_GRi, o_GRj); }
+:nldqu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x36 & m_18_24=0x2 & o_pack & o_GRi & o_GRj & o_GRk { o_GRk = frv_nldqu(o_GRi, o_GRj); }
+:ldqfu^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x1c & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { f_frk = frv_ldqfu(o_GRi, o_GRj); }
+:ldqcu^o_pack "@"^"("^o_GRi,o_GRj^")",f_cprk is m_6_11=0x1f & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_cprk { f_cprk = frv_ldqcu(o_GRi, o_GRj); }
+:nldqfu^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk is m_6_11=0x3c & m_18_24=0x2 & o_pack & o_GRi & o_GRj & f_frk { f_frk = frv_nldqfu(o_GRi, o_GRj); }
+:ldsbi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRk is m_18_24=0x30 & o_pack & o_GRi & f_s12 & o_GRk { local ea:4 = o_GRi + f_s12; local v:1 = *:1 ea; o_GRk = sext(v); }
+:ldshi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRk is m_18_24=0x31 & o_pack & o_GRi & f_s12 & o_GRk { local ea:4 = o_GRi + f_s12; local v:2 = *:2 ea; o_GRk = sext(v); }
+:ldi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRk is m_18_24=0x32 & o_pack & o_GRi & f_s12 & o_GRk { local ea:4 = o_GRi + f_s12; local v:4 = *:4 ea; o_GRk = v; }
+:ldubi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRk is m_18_24=0x35 & o_pack & o_GRi & f_s12 & o_GRk { local ea:4 = o_GRi + f_s12; local v:1 = *:1 ea; o_GRk = zext(v); }
+:lduhi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRk is m_18_24=0x36 & o_pack & o_GRi & f_s12 & o_GRk { local ea:4 = o_GRi + f_s12; local v:2 = *:2 ea; o_GRk = zext(v); }
+:ldbfi^o_pack "@"^"("^o_GRi,f_s12^")",f_frk is m_18_24=0x38 & o_pack & o_GRi & f_s12 & f_frk { local ea:4 = o_GRi + f_s12; local v:1 = *:1 ea; f_frk = zext(v); }
+:ldhfi^o_pack "@"^"("^o_GRi,f_s12^")",f_frk is m_18_24=0x39 & o_pack & o_GRi & f_s12 & f_frk { local ea:4 = o_GRi + f_s12; local v:2 = *:2 ea; f_frk = zext(v); }
+:ldfi^o_pack "@"^"("^o_GRi,f_s12^")",f_frk is m_18_24=0x3a & o_pack & o_GRi & f_s12 & f_frk { local ea:4 = o_GRi + f_s12; local v:4 = *:4 ea; f_frk = v; }
+:nldsbi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRk is m_18_24=0x40 & o_pack & o_GRi & f_s12 & o_GRk { local ea:4 = o_GRi + f_s12; local v:1 = *:1 ea; o_GRk = sext(v); }
+:nldubi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRk is m_18_24=0x41 & o_pack & o_GRi & f_s12 & o_GRk { local ea:4 = o_GRi + f_s12; local v:1 = *:1 ea; o_GRk = zext(v); }
+:nldshi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRk is m_18_24=0x42 & o_pack & o_GRi & f_s12 & o_GRk { local ea:4 = o_GRi + f_s12; local v:2 = *:2 ea; o_GRk = sext(v); }
+:nlduhi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRk is m_18_24=0x43 & o_pack & o_GRi & f_s12 & o_GRk { local ea:4 = o_GRi + f_s12; local v:2 = *:2 ea; o_GRk = zext(v); }
+:nldi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRk is m_18_24=0x44 & o_pack & o_GRi & f_s12 & o_GRk { local ea:4 = o_GRi + f_s12; local v:4 = *:4 ea; o_GRk = v; }
+:nldbfi^o_pack "@"^"("^o_GRi,f_s12^")",f_frk is m_18_24=0x48 & o_pack & o_GRi & f_s12 & f_frk { local ea:4 = o_GRi + f_s12; local v:1 = *:1 ea; f_frk = zext(v); }
+:nldhfi^o_pack "@"^"("^o_GRi,f_s12^")",f_frk is m_18_24=0x49 & o_pack & o_GRi & f_s12 & f_frk { local ea:4 = o_GRi + f_s12; local v:2 = *:2 ea; f_frk = zext(v); }
+:nldfi^o_pack "@"^"("^o_GRi,f_s12^")",f_frk is m_18_24=0x4a & o_pack & o_GRi & f_s12 & f_frk { local ea:4 = o_GRi + f_s12; local v:4 = *:4 ea; f_frk = v; }
+:lddi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRdk is m_18_24=0x33 & o_pack & o_GRi & f_s12 & o_GRdk { local ea:4 = o_GRi + f_s12; local v:8 = *:8 ea; o_GRdk = v; }
+:lddfi^o_pack "@"^"("^o_GRi,f_s12^")",o_FRdk is m_18_24=0x3b & o_pack & o_GRi & f_s12 & o_FRdk { local ea:4 = o_GRi + f_s12; local v:8 = *:8 ea; o_FRdk = v; }
+:nlddi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRdk is m_18_24=0x45 & o_pack & o_GRi & f_s12 & o_GRdk { local ea:4 = o_GRi + f_s12; local v:8 = *:8 ea; o_GRdk = v; }
+:nlddfi^o_pack "@"^"("^o_GRi,f_s12^")",o_FRdk is m_18_24=0x4b & o_pack & o_GRi & f_s12 & o_FRdk { local ea:4 = o_GRi + f_s12; local v:8 = *:8 ea; o_FRdk = v; }
+:ldqi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRk is m_18_24=0x34 & o_pack & o_GRi & f_s12 & o_GRk { local i1:4 = f_s12; o_GRk = frv_ldqi(o_GRi, i1); }
+:ldqfi^o_pack "@"^"("^o_GRi,f_s12^")",f_frk is m_18_24=0x3c & o_pack & o_GRi & f_s12 & f_frk { local i1:4 = f_s12; f_frk = frv_ldqfi(o_GRi, i1); }
+:nldqfi^o_pack "@"^"("^o_GRi,f_s12^")",f_frk is m_18_24=0x4c & o_pack & o_GRi & f_s12 & f_frk { local i1:4 = f_s12; f_frk = frv_nldqfi(o_GRi, i1); }
+:stb^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x0 & m_18_24=0x3 & o_pack & o_GRkS & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:1 ea = o_GRkS:1; }
+:sth^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x1 & m_18_24=0x3 & o_pack & o_GRkS & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:2 ea = o_GRkS:2; }
+:st^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x2 & m_18_24=0x3 & o_pack & o_GRkS & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:4 ea = o_GRkS; }
+:stbf^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x8 & m_18_24=0x3 & o_pack & f_frk & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:1 ea = f_frk:1; }
+:sthf^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x9 & m_18_24=0x3 & o_pack & f_frk & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:2 ea = f_frk:2; }
+:stf^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0xa & m_18_24=0x3 & o_pack & f_frk & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:4 ea = f_frk; }
+:stc^o_pack f_cprk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x25 & m_18_24=0x3 & o_pack & f_cprk & o_GRi & o_GRj { frv_stc(f_cprk, o_GRi, o_GRj); }
+:std^o_pack o_GRdk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x3 & m_18_24=0x3 & o_pack & o_GRdk & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:8 ea = o_GRdk; }
+:stdf^o_pack o_FRdk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0xb & m_18_24=0x3 & o_pack & o_FRdk & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:8 ea = o_FRdk; }
+:stdc^o_pack o_CPRdk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x26 & m_18_24=0x3 & o_pack & o_CPRdk & o_GRi & o_GRj { frv_stdc(o_CPRdk, o_GRi, o_GRj); }
+:stq^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x4 & m_18_24=0x3 & o_pack & o_GRkS & o_GRi & o_GRj { frv_stq(o_GRkS, o_GRi, o_GRj); }
+:stqf^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0xc & m_18_24=0x3 & o_pack & f_frk & o_GRi & o_GRj { frv_stqf(f_frk, o_GRi, o_GRj); }
+:stqc^o_pack f_cprk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x27 & m_18_24=0x3 & o_pack & f_cprk & o_GRi & o_GRj { frv_stqc(f_cprk, o_GRi, o_GRj); }
+:stbu^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x10 & m_18_24=0x3 & o_pack & o_GRkS & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:1 ea = o_GRkS:1; o_GRi = ea; }
+:sthu^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x11 & m_18_24=0x3 & o_pack & o_GRkS & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:2 ea = o_GRkS:2; o_GRi = ea; }
+:stu^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x12 & m_18_24=0x3 & o_pack & o_GRkS & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:4 ea = o_GRkS; o_GRi = ea; }
+:stbfu^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x18 & m_18_24=0x3 & o_pack & f_frk & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:1 ea = f_frk:1; o_GRi = ea; }
+:sthfu^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x19 & m_18_24=0x3 & o_pack & f_frk & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:2 ea = f_frk:2; o_GRi = ea; }
+:stfu^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x1a & m_18_24=0x3 & o_pack & f_frk & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:4 ea = f_frk; o_GRi = ea; }
+:stcu^o_pack f_cprk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x2d & m_18_24=0x3 & o_pack & f_cprk & o_GRi & o_GRj { frv_stcu(f_cprk, o_GRi, o_GRj); }
+:stdu^o_pack o_GRdk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x13 & m_18_24=0x3 & o_pack & o_GRdk & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:8 ea = o_GRdk; o_GRi = ea; }
+:stdfu^o_pack o_FRdk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x1b & m_18_24=0x3 & o_pack & o_FRdk & o_GRi & o_GRj { local ea:4 = o_GRi + o_GRj; *:8 ea = o_FRdk; o_GRi = ea; }
+:stdcu^o_pack o_CPRdk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x2e & m_18_24=0x3 & o_pack & o_CPRdk & o_GRi & o_GRj { frv_stdcu(o_CPRdk, o_GRi, o_GRj); }
+:stqu^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x14 & m_18_24=0x3 & o_pack & o_GRkS & o_GRi & o_GRj { frv_stqu(o_GRkS, o_GRi, o_GRj); }
+:stqfu^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x1c & m_18_24=0x3 & o_pack & f_frk & o_GRi & o_GRj { frv_stqfu(f_frk, o_GRi, o_GRj); }
+:stqcu^o_pack f_cprk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x2f & m_18_24=0x3 & o_pack & f_cprk & o_GRi & o_GRj { frv_stqcu(f_cprk, o_GRi, o_GRj); }
+:cldsb^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x5e & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; o_GRk = sext(v); }
+:cldub^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x5e & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; o_GRk = zext(v); }
+:cldsh^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x5e & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; o_GRk = sext(v); }
+:clduh^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x5e & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; o_GRk = zext(v); }
+:cld^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x5f & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:4 = *:4 ea; o_GRk = v; }
+:cldbf^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x60 & o_pack & o_GRi & o_GRj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; f_frk = zext(v); }
+:cldhf^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x60 & o_pack & o_GRi & o_GRj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; f_frk = zext(v); }
+:cldf^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x60 & o_pack & o_GRi & o_GRj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:4 = *:4 ea; f_frk = v; }
+:cldd^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRdk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x5f & o_pack & o_GRi & o_GRj & o_GRdk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:8 = *:8 ea; o_GRdk = v; }
+:clddf^o_pack "@"^"("^o_GRi,o_GRj^")",o_FRdk,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x60 & o_pack & o_GRi & o_GRj & o_FRdk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:8 = *:8 ea; o_FRdk = v; }
+:cldq^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x5f & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = frv_cldq(o_GRi, o_GRj); }
+:cldsbu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x61 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; o_GRk = sext(v); o_GRi = ea; }
+:cldubu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x61 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; o_GRk = zext(v); o_GRi = ea; }
+:cldshu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x61 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; o_GRk = sext(v); o_GRi = ea; }
+:clduhu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x61 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; o_GRk = zext(v); o_GRi = ea; }
+:cldu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x62 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:4 = *:4 ea; o_GRk = v; o_GRi = ea; }
+:cldbfu^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x63 & o_pack & o_GRi & o_GRj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:1 = *:1 ea; f_frk = zext(v); o_GRi = ea; }
+:cldhfu^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x63 & o_pack & o_GRi & o_GRj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:2 = *:2 ea; f_frk = zext(v); o_GRi = ea; }
+:cldfu^o_pack "@"^"("^o_GRi,o_GRj^")",f_frk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x63 & o_pack & o_GRi & o_GRj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:4 = *:4 ea; f_frk = v; o_GRi = ea; }
+:clddu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRdk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x62 & o_pack & o_GRi & o_GRj & o_GRdk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:8 = *:8 ea; o_GRdk = v; o_GRi = ea; }
+:clddfu^o_pack "@"^"("^o_GRi,o_GRj^")",o_FRdk,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x63 & o_pack & o_GRi & o_GRj & o_FRdk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; local v:8 = *:8 ea; o_FRdk = v; o_GRi = ea; }
+:cldqu^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x62 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = frv_cldqu(o_GRi, o_GRj); }
+:cstb^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x0 & m_18_24=0x64 & o_pack & o_GRkS & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:1 ea = o_GRkS:1; }
+:csth^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x1 & m_18_24=0x64 & o_pack & o_GRkS & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:2 ea = o_GRkS:2; }
+:cst^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x2 & m_18_24=0x64 & o_pack & o_GRkS & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:4 ea = o_GRkS; }
+:cstbf^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x0 & m_18_24=0x66 & o_pack & f_frk & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:1 ea = f_frk:1; }
+:csthf^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x1 & m_18_24=0x66 & o_pack & f_frk & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:2 ea = f_frk:2; }
+:cstf^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x2 & m_18_24=0x66 & o_pack & f_frk & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:4 ea = f_frk; }
+:cstd^o_pack o_GRdk,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x3 & m_18_24=0x64 & o_pack & o_GRdk & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:8 ea = o_GRdk; }
+:cstdf^o_pack o_FRdk,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x3 & m_18_24=0x66 & o_pack & o_FRdk & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:8 ea = o_FRdk; }
+:cstq^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x0 & m_18_24=0x65 & o_pack & o_GRkS & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; frv_cstq(o_GRkS, o_GRi, o_GRj); }
+:cstbu^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x0 & m_18_24=0x67 & o_pack & o_GRkS & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:1 ea = o_GRkS:1; o_GRi = ea; }
+:csthu^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x1 & m_18_24=0x67 & o_pack & o_GRkS & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:2 ea = o_GRkS:2; o_GRi = ea; }
+:cstu^o_pack o_GRkS,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x2 & m_18_24=0x67 & o_pack & o_GRkS & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:4 ea = o_GRkS; o_GRi = ea; }
+:cstbfu^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x0 & m_18_24=0x68 & o_pack & f_frk & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:1 ea = f_frk:1; o_GRi = ea; }
+:csthfu^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x1 & m_18_24=0x68 & o_pack & f_frk & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:2 ea = f_frk:2; o_GRi = ea; }
+:cstfu^o_pack f_frk,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x2 & m_18_24=0x68 & o_pack & f_frk & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:4 ea = f_frk; o_GRi = ea; }
+:cstdu^o_pack o_GRdk,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x3 & m_18_24=0x67 & o_pack & o_GRdk & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:8 ea = o_GRdk; o_GRi = ea; }
+:cstdfu^o_pack o_FRdk,"@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x3 & m_18_24=0x68 & o_pack & o_FRdk & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local ea:4 = o_GRi + o_GRj; *:8 ea = o_FRdk; o_GRi = ea; }
+:stbi^o_pack o_GRkS,"@"^"("^o_GRi,f_s12^")" is m_18_24=0x50 & o_pack & o_GRkS & o_GRi & f_s12 { local ea:4 = o_GRi + f_s12; *:1 ea = o_GRkS:1; }
+:sthi^o_pack o_GRkS,"@"^"("^o_GRi,f_s12^")" is m_18_24=0x51 & o_pack & o_GRkS & o_GRi & f_s12 { local ea:4 = o_GRi + f_s12; *:2 ea = o_GRkS:2; }
+:sti^o_pack o_GRkS,"@"^"("^o_GRi,f_s12^")" is m_18_24=0x52 & o_pack & o_GRkS & o_GRi & f_s12 { local ea:4 = o_GRi + f_s12; *:4 ea = o_GRkS; }
+:stbfi^o_pack f_frk,"@"^"("^o_GRi,f_s12^")" is m_18_24=0x4e & o_pack & f_frk & o_GRi & f_s12 { local ea:4 = o_GRi + f_s12; *:1 ea = f_frk:1; }
+:sthfi^o_pack f_frk,"@"^"("^o_GRi,f_s12^")" is m_18_24=0x4f & o_pack & f_frk & o_GRi & f_s12 { local ea:4 = o_GRi + f_s12; *:2 ea = f_frk:2; }
+:stfi^o_pack f_frk,"@"^"("^o_GRi,f_s12^")" is m_18_24=0x55 & o_pack & f_frk & o_GRi & f_s12 { local ea:4 = o_GRi + f_s12; *:4 ea = f_frk; }
+:stdi^o_pack o_GRdk,"@"^"("^o_GRi,f_s12^")" is m_18_24=0x53 & o_pack & o_GRdk & o_GRi & f_s12 { local ea:4 = o_GRi + f_s12; *:8 ea = o_GRdk; }
+:stdfi^o_pack o_FRdk,"@"^"("^o_GRi,f_s12^")" is m_18_24=0x56 & o_pack & o_FRdk & o_GRi & f_s12 { local ea:4 = o_GRi + f_s12; *:8 ea = o_FRdk; }
+:stqi^o_pack o_GRkS,"@"^"("^o_GRi,f_s12^")" is m_18_24=0x54 & o_pack & o_GRkS & o_GRi & f_s12 { local i2:4 = f_s12; frv_stqi(o_GRkS, o_GRi, i2); }
+:stqfi^o_pack f_frk,"@"^"("^o_GRi,f_s12^")" is m_18_24=0x57 & o_pack & f_frk & o_GRi & f_s12 { local i2:4 = f_s12; frv_stqfi(f_frk, o_GRi, i2); }
+:swap^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk is m_6_11=0x5 & m_18_24=0x3 & o_pack & o_GRi & o_GRj & o_GRk { o_GRk = frv_swap(o_GRi, o_GRj); }
+:swapi^o_pack "@"^"("^o_GRi,f_s12^")",o_GRk is m_18_24=0x4d & o_pack & o_GRi & f_s12 & o_GRk { local i1:4 = f_s12; o_GRk = frv_swapi(o_GRi, i1); }
+:cswap^o_pack "@"^"("^o_GRi,o_GRj^")",o_GRk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x65 & o_pack & o_GRi & o_GRj & o_GRk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRk = frv_cswap(o_GRi, o_GRj); }
+:movgf^o_pack o_GRj,f_frk is m_6_24=0x3015 & o_pack & o_GRj & f_frk { f_frk = o_GRj; }
+:movfg^o_pack f_frk,o_GRj is m_6_24=0x300d & o_pack & f_frk & o_GRj { o_GRj = f_frk; }
+:movgfd^o_pack o_GRj,f_frk is m_6_24=0x3016 & o_pack & o_GRj & f_frk { f_frk = frv_movgfd(o_GRj); }
+:movfgd^o_pack f_frk,o_GRj is m_6_24=0x300e & o_pack & f_frk & o_GRj { o_GRj = frv_movfgd(f_frk); }
+:movgfq^o_pack o_GRj,f_frk is m_6_24=0x3017 & o_pack & o_GRj & f_frk { f_frk = frv_movgfq(o_GRj); }
+:movfgq^o_pack f_frk,o_GRj is m_6_24=0x300f & o_pack & f_frk & o_GRj { o_GRj = frv_movfgq(f_frk); }
+:cmovgf^o_pack o_GRj,f_frk,f_cci,f_cond is m_6_7=0x0 & m_12_24=0x1a40 & o_pack & o_GRj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = o_GRj; }
+:cmovfg^o_pack f_frk,o_GRj,f_cci,f_cond is m_6_7=0x2 & m_12_24=0x1a40 & o_pack & f_frk & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRj = f_frk; }
+:cmovgfd^o_pack o_GRj,f_frk,f_cci,f_cond is m_6_7=0x1 & m_12_24=0x1a40 & o_pack & o_GRj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmovgfd(o_GRj); }
+:cmovfgd^o_pack f_frk,o_GRj,f_cci,f_cond is m_6_7=0x3 & m_12_24=0x1a40 & o_pack & f_frk & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; o_GRj = frv_cmovfgd(f_frk); }
+:movgs^o_pack o_GRj,o_spr is m_6_11=0x6 & m_18_24=0x3 & o_pack & o_GRj & o_spr { o_spr = o_GRj; }
+:movsg^o_pack o_spr,o_GRj is m_6_11=0x7 & m_18_24=0x3 & o_pack & o_spr & o_GRj { o_GRj = o_spr; }
+:bra^o_pack o_label16 is m_18_30=0x1006 & o_pack & o_label16 { goto o_label16; }
+:bno^o_pack is m_0_15=0x0 & m_18_30=0x6 & o_pack { frv_bno(); }
+:beq^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0x4 & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if (((c & 4) != 0)) goto o_label16; }
+:bne^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0xc & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if (((c & 4) == 0)) goto o_label16; }
+:ble^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0x7 & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if ((((c & 4) != 0) || (((c >> 3) ^ (c >> 1)) & 1) != 0)) goto o_label16; }
+:bgt^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0xf & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if ((((c & 4) == 0) && (((c >> 3) ^ (c >> 1)) & 1) == 0)) goto o_label16; }
+:blt^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0x3 & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if (((((c >> 3) ^ (c >> 1)) & 1) != 0)) goto o_label16; }
+:bge^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0xb & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if (((((c >> 3) ^ (c >> 1)) & 1) == 0)) goto o_label16; }
+:bls^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0x5 & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if (((c & 5) != 0)) goto o_label16; }
+:bhi^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0xd & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if (((c & 5) == 0)) goto o_label16; }
+:bc^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0x1 & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if (((c & 1) != 0)) goto o_label16; }
+:bnc^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0x9 & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if (((c & 1) == 0)) goto o_label16; }
+:bn^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0x6 & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if (((c & 8) != 0)) goto o_label16; }
+:bp^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0xe & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if (((c & 8) == 0)) goto o_label16; }
+:bv^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0x2 & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if (((c & 2) != 0)) goto o_label16; }
+:bnv^o_pack f_icc2,f_hint,o_label16 is m_18_24=0x6 & m_27_30=0xa & o_pack & f_icc2 & f_hint & o_label16 { local c:1 = f_icc2; if (((c & 2) == 0)) goto o_label16; }
+:fbra^o_pack o_label16 is m_18_30=0x1e07 & o_pack & o_label16 { goto o_label16; }
+:fbno^o_pack is m_0_15=0x0 & m_18_30=0x7 & o_pack { frv_fbno(); }
+:fbne^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0x7 & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 7) != 0)) goto o_label16; }
+:fbeq^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0x8 & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 8) != 0)) goto o_label16; }
+:fblg^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0x6 & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 6) != 0)) goto o_label16; }
+:fbue^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0x9 & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 9) != 0)) goto o_label16; }
+:fbul^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0x5 & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 5) != 0)) goto o_label16; }
+:fbge^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0xa & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 10) != 0)) goto o_label16; }
+:fblt^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0x4 & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 4) != 0)) goto o_label16; }
+:fbuge^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0xb & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 11) != 0)) goto o_label16; }
+:fbug^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0x3 & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 3) != 0)) goto o_label16; }
+:fble^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0xc & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 12) != 0)) goto o_label16; }
+:fbgt^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0x2 & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 2) != 0)) goto o_label16; }
+:fbule^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0xd & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 13) != 0)) goto o_label16; }
+:fbu^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0x1 & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 1) != 0)) goto o_label16; }
+:fbo^o_pack f_fcc2,f_hint,o_label16 is m_18_24=0x7 & m_27_30=0xe & o_pack & f_fcc2 & f_hint & o_label16 { local c:1 = f_fcc2; if (((c & 14) != 0)) goto o_label16; }
+:bctrlr^o_pack f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x1 & m_18_30=0xe & o_pack & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); if (!go) goto inst_next; goto [lr]; }
+:bralr^o_pack is m_0_15=0x4000 & m_18_30=0x100e & o_pack { return [lr]; }
+:bnolr^o_pack is m_0_15=0x4000 & m_18_30=0xe & o_pack { }
+:beqlr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0x4 & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!((c & 4) != 0)) goto inst_next; return [lr]; }
+:bnelr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0xc & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!((c & 4) == 0)) goto inst_next; return [lr]; }
+:blelr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0x7 & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!(((c & 4) != 0) || (((c >> 3) ^ (c >> 1)) & 1) != 0)) goto inst_next; return [lr]; }
+:bgtlr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0xf & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!(((c & 4) == 0) && (((c >> 3) ^ (c >> 1)) & 1) == 0)) goto inst_next; return [lr]; }
+:bltlr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0x3 & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!((((c >> 3) ^ (c >> 1)) & 1) != 0)) goto inst_next; return [lr]; }
+:bgelr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0xb & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!((((c >> 3) ^ (c >> 1)) & 1) == 0)) goto inst_next; return [lr]; }
+:blslr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0x5 & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!((c & 5) != 0)) goto inst_next; return [lr]; }
+:bhilr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0xd & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!((c & 5) == 0)) goto inst_next; return [lr]; }
+:bclr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0x1 & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!((c & 1) != 0)) goto inst_next; return [lr]; }
+:bnclr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0x9 & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!((c & 1) == 0)) goto inst_next; return [lr]; }
+:bnlr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0x6 & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!((c & 8) != 0)) goto inst_next; return [lr]; }
+:bplr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0xe & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!((c & 8) == 0)) goto inst_next; return [lr]; }
+:bvlr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0x2 & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!((c & 2) != 0)) goto inst_next; return [lr]; }
+:bnvlr^o_pack f_icc2,f_hint is m_0_15=0x4000 & m_18_24=0xe & m_27_30=0xa & o_pack & f_icc2 & f_hint { local c:1 = f_icc2; if (!((c & 2) == 0)) goto inst_next; return [lr]; }
+:fbralr^o_pack is m_0_15=0xc000 & m_18_30=0x1e0e & o_pack { return [lr]; }
+:fbnolr^o_pack is m_0_15=0xc000 & m_18_30=0xe & o_pack { }
+:fbeqlr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0x8 & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 8) != 0)) goto inst_next; return [lr]; }
+:fbnelr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0x7 & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 7) != 0)) goto inst_next; return [lr]; }
+:fblglr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0x6 & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 6) != 0)) goto inst_next; return [lr]; }
+:fbuelr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0x9 & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 9) != 0)) goto inst_next; return [lr]; }
+:fbullr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0x5 & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 5) != 0)) goto inst_next; return [lr]; }
+:fbgelr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0xa & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 10) != 0)) goto inst_next; return [lr]; }
+:fbltlr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0x4 & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 4) != 0)) goto inst_next; return [lr]; }
+:fbugelr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0xb & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 11) != 0)) goto inst_next; return [lr]; }
+:fbuglr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0x3 & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 3) != 0)) goto inst_next; return [lr]; }
+:fblelr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0xc & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 12) != 0)) goto inst_next; return [lr]; }
+:fbgtlr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0x2 & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 2) != 0)) goto inst_next; return [lr]; }
+:fbulelr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0xd & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 13) != 0)) goto inst_next; return [lr]; }
+:fbulr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0x1 & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 1) != 0)) goto inst_next; return [lr]; }
+:fbolr^o_pack f_fcc2,f_hint is m_0_15=0xc000 & m_18_24=0xe & m_27_30=0xe & o_pack & f_fcc2 & f_hint { local c:1 = f_fcc2; if (!((c & 14) != 0)) goto inst_next; return [lr]; }
+:bcralr^o_pack f_ccond is m_0_11=0x0 & m_13_15=0x3 & m_18_30=0x100e & o_pack & f_ccond { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); if (!go) goto inst_next; goto [lr]; }
+:bcnolr^o_pack is m_0_15=0x6000 & m_18_30=0xe & o_pack { frv_bcnolr(); }
+:bceqlr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0x4 & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && ((c & 4) != 0); if (!go) goto inst_next; goto [lr]; }
+:bcnelr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0xc & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && ((c & 4) == 0); if (!go) goto inst_next; goto [lr]; }
+:bclelr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0x7 & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && (((c & 4) != 0) || (((c >> 3) ^ (c >> 1)) & 1) != 0); if (!go) goto inst_next; goto [lr]; }
+:bcgtlr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0xf & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && (((c & 4) == 0) && (((c >> 3) ^ (c >> 1)) & 1) == 0); if (!go) goto inst_next; goto [lr]; }
+:bcltlr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0x3 & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && ((((c >> 3) ^ (c >> 1)) & 1) != 0); if (!go) goto inst_next; goto [lr]; }
+:bcgelr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0xb & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && ((((c >> 3) ^ (c >> 1)) & 1) == 0); if (!go) goto inst_next; goto [lr]; }
+:bclslr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0x5 & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && ((c & 5) != 0); if (!go) goto inst_next; goto [lr]; }
+:bchilr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0xd & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && ((c & 5) == 0); if (!go) goto inst_next; goto [lr]; }
+:bcclr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0x1 & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && ((c & 1) != 0); if (!go) goto inst_next; goto [lr]; }
+:bcnclr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0x9 & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && ((c & 1) == 0); if (!go) goto inst_next; goto [lr]; }
+:bcnlr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0x6 & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && ((c & 8) != 0); if (!go) goto inst_next; goto [lr]; }
+:bcplr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0xe & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && ((c & 8) == 0); if (!go) goto inst_next; goto [lr]; }
+:bcvlr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0x2 & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && ((c & 2) != 0); if (!go) goto inst_next; goto [lr]; }
+:bcnvlr^o_pack f_icc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x3 & m_18_24=0xe & m_27_30=0xa & o_pack & f_icc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_icc2; go = go && ((c & 2) == 0); if (!go) goto inst_next; goto [lr]; }
+:fcbralr^o_pack f_ccond is m_0_11=0x0 & m_13_15=0x7 & m_18_30=0x1e0e & o_pack & f_ccond { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); if (!go) goto inst_next; goto [lr]; }
+:fcbnolr^o_pack is m_0_15=0xe000 & m_18_30=0xe & o_pack { frv_fcbnolr(); }
+:fcbeqlr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0x8 & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 8) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcbnelr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0x7 & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 7) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcblglr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0x6 & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 6) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcbuelr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0x9 & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 9) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcbullr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0x5 & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 5) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcbgelr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0xa & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 10) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcbltlr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0x4 & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 4) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcbugelr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0xb & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 11) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcbuglr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0x3 & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 3) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcblelr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0xc & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 12) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcbgtlr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0x2 & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 2) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcbulelr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0xd & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 13) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcbulr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0x1 & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 1) != 0); if (!go) goto inst_next; goto [lr]; }
+:fcbolr^o_pack f_fcc2,f_ccond,f_hint is m_0_11=0x0 & m_13_15=0x7 & m_18_24=0xe & m_27_30=0xe & o_pack & f_fcc2 & f_ccond & f_hint { local ccv:1 = f_ccond; local t:4 = lcr - 1; lcr = t; local go:1 = ((ccv == 0) && (t != 0)) || ((ccv != 0) && (t == 0)); local c:1 = f_fcc2; go = go && ((c & 14) != 0); if (!go) goto inst_next; goto [lr]; }
+:jmpl^o_pack "@"^"("^o_GRi,o_GRj^")" is m_6_11=0x0 & m_18_30=0xc & o_pack & o_GRi & o_GRj { local t:4 = o_GRi + o_GRj; goto [t]; }
+:calll^o_pack "@"^"("^o_GRi,o_GRj^")" is m_6_11=0x0 & m_18_30=0x8c & o_pack & o_GRi & o_GRj { local t:4 = o_GRi + o_GRj; lr = inst_start + 4; call [t]; }
+:jmpil^o_pack "@"^"("^o_GRi,f_s12^")" is m_18_30=0xd & o_pack & o_GRi & f_s12 { local t:4 = o_GRi + f_s12; goto [t]; }
+:callil^o_pack "@"^"("^o_GRi,f_s12^")" is m_18_30=0x8d & o_pack & o_GRi & f_s12 { local t:4 = o_GRi + f_s12; lr = inst_start + 4; call [t]; }
+:call^o_pack o_label24 is m_18_24=0xf & o_pack & o_label24 { lr = inst_start + 4; call o_label24; }
+:rett^o_pack f_b25 is m_0_24=0x140000 & m_26_30=0x0 & o_pack & f_b25 { local i0:4 = f_b25; frv_rett(i0); }
+:rei^o_pack f_eir is m_0_11=0x0 & m_18_30=0x37 & o_pack & f_eir { local i0:4 = f_eir; frv_rei(i0); }
+:tra^o_pack o_GRi,o_GRj is m_6_11=0x0 & m_18_30=0x1004 & o_pack & o_GRi & o_GRj { frv_tra(o_GRi, o_GRj); }
+:tno^o_pack is m_0_30=0x100000 & o_pack { frv_tno(); }
+:teq^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0x4 & o_pack & f_icc2 & o_GRi & o_GRj { frv_teq(f_icc2, o_GRi, o_GRj); }
+:tne^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0xc & o_pack & f_icc2 & o_GRi & o_GRj { frv_tne(f_icc2, o_GRi, o_GRj); }
+:tle^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0x7 & o_pack & f_icc2 & o_GRi & o_GRj { frv_tle(f_icc2, o_GRi, o_GRj); }
+:tgt^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0xf & o_pack & f_icc2 & o_GRi & o_GRj { frv_tgt(f_icc2, o_GRi, o_GRj); }
+:tlt^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0x3 & o_pack & f_icc2 & o_GRi & o_GRj { frv_tlt(f_icc2, o_GRi, o_GRj); }
+:tge^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0xb & o_pack & f_icc2 & o_GRi & o_GRj { frv_tge(f_icc2, o_GRi, o_GRj); }
+:tls^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0x5 & o_pack & f_icc2 & o_GRi & o_GRj { frv_tls(f_icc2, o_GRi, o_GRj); }
+:thi^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0xd & o_pack & f_icc2 & o_GRi & o_GRj { frv_thi(f_icc2, o_GRi, o_GRj); }
+:tc^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0x1 & o_pack & f_icc2 & o_GRi & o_GRj { frv_tc(f_icc2, o_GRi, o_GRj); }
+:tnc^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0x9 & o_pack & f_icc2 & o_GRi & o_GRj { frv_tnc(f_icc2, o_GRi, o_GRj); }
+:tn^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0x6 & o_pack & f_icc2 & o_GRi & o_GRj { frv_tn(f_icc2, o_GRi, o_GRj); }
+:tp^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0xe & o_pack & f_icc2 & o_GRi & o_GRj { frv_tp(f_icc2, o_GRi, o_GRj); }
+:tv^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0x2 & o_pack & f_icc2 & o_GRi & o_GRj { frv_tv(f_icc2, o_GRi, o_GRj); }
+:tnv^o_pack f_icc2,o_GRi,o_GRj is m_6_11=0x0 & m_18_24=0x4 & m_27_30=0xa & o_pack & f_icc2 & o_GRi & o_GRj { frv_tnv(f_icc2, o_GRi, o_GRj); }
+:ftra^o_pack o_GRi,o_GRj is m_6_11=0x1 & m_18_30=0x1e04 & o_pack & o_GRi & o_GRj { frv_ftra(o_GRi, o_GRj); }
+:ftno^o_pack is m_0_30=0x100040 & o_pack { frv_ftno(); }
+:ftne^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0x7 & o_pack & f_fcc2 & o_GRi & o_GRj { frv_ftne(f_fcc2, o_GRi, o_GRj); }
+:fteq^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0x8 & o_pack & f_fcc2 & o_GRi & o_GRj { frv_fteq(f_fcc2, o_GRi, o_GRj); }
+:ftlg^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0x6 & o_pack & f_fcc2 & o_GRi & o_GRj { frv_ftlg(f_fcc2, o_GRi, o_GRj); }
+:ftue^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0x9 & o_pack & f_fcc2 & o_GRi & o_GRj { frv_ftue(f_fcc2, o_GRi, o_GRj); }
+:ftul^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0x5 & o_pack & f_fcc2 & o_GRi & o_GRj { frv_ftul(f_fcc2, o_GRi, o_GRj); }
+:ftge^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0xa & o_pack & f_fcc2 & o_GRi & o_GRj { frv_ftge(f_fcc2, o_GRi, o_GRj); }
+:ftlt^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0x4 & o_pack & f_fcc2 & o_GRi & o_GRj { frv_ftlt(f_fcc2, o_GRi, o_GRj); }
+:ftuge^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0xb & o_pack & f_fcc2 & o_GRi & o_GRj { frv_ftuge(f_fcc2, o_GRi, o_GRj); }
+:ftug^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0x3 & o_pack & f_fcc2 & o_GRi & o_GRj { frv_ftug(f_fcc2, o_GRi, o_GRj); }
+:ftle^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0xc & o_pack & f_fcc2 & o_GRi & o_GRj { frv_ftle(f_fcc2, o_GRi, o_GRj); }
+:ftgt^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0x2 & o_pack & f_fcc2 & o_GRi & o_GRj { frv_ftgt(f_fcc2, o_GRi, o_GRj); }
+:ftule^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0xd & o_pack & f_fcc2 & o_GRi & o_GRj { frv_ftule(f_fcc2, o_GRi, o_GRj); }
+:ftu^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0x1 & o_pack & f_fcc2 & o_GRi & o_GRj { frv_ftu(f_fcc2, o_GRi, o_GRj); }
+:fto^o_pack f_fcc2,o_GRi,o_GRj is m_6_11=0x1 & m_18_24=0x4 & m_27_30=0xe & o_pack & f_fcc2 & o_GRi & o_GRj { frv_fto(f_fcc2, o_GRi, o_GRj); }
+:tira^o_pack o_GRi,f_s12 is m_18_30=0x101c & o_pack & o_GRi & f_s12 { local i1:4 = f_s12; frv_tira(o_GRi, i1); }
+:tino^o_pack is m_0_30=0x700000 & o_pack { frv_tino(); }
+:tieq^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0x4 & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tieq(f_icc2, o_GRi, i2); }
+:tine^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0xc & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tine(f_icc2, o_GRi, i2); }
+:tile^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0x7 & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tile(f_icc2, o_GRi, i2); }
+:tigt^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0xf & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tigt(f_icc2, o_GRi, i2); }
+:tilt^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0x3 & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tilt(f_icc2, o_GRi, i2); }
+:tige^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0xb & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tige(f_icc2, o_GRi, i2); }
+:tils^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0x5 & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tils(f_icc2, o_GRi, i2); }
+:tihi^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0xd & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tihi(f_icc2, o_GRi, i2); }
+:tic^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0x1 & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tic(f_icc2, o_GRi, i2); }
+:tinc^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0x9 & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tinc(f_icc2, o_GRi, i2); }
+:tin^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0x6 & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tin(f_icc2, o_GRi, i2); }
+:tip^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0xe & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tip(f_icc2, o_GRi, i2); }
+:tiv^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0x2 & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tiv(f_icc2, o_GRi, i2); }
+:tinv^o_pack f_icc2,o_GRi,f_s12 is m_18_24=0x1c & m_27_30=0xa & o_pack & f_icc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_tinv(f_icc2, o_GRi, i2); }
+:ftira^o_pack o_GRi,f_s12 is m_18_30=0x1e1d & o_pack & o_GRi & f_s12 { local i1:4 = f_s12; frv_ftira(o_GRi, i1); }
+:ftino^o_pack is m_0_30=0x740000 & o_pack { frv_ftino(); }
+:ftine^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0x7 & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftine(f_fcc2, o_GRi, i2); }
+:ftieq^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0x8 & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftieq(f_fcc2, o_GRi, i2); }
+:ftilg^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0x6 & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftilg(f_fcc2, o_GRi, i2); }
+:ftiue^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0x9 & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftiue(f_fcc2, o_GRi, i2); }
+:ftiul^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0x5 & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftiul(f_fcc2, o_GRi, i2); }
+:ftige^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0xa & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftige(f_fcc2, o_GRi, i2); }
+:ftilt^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0x4 & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftilt(f_fcc2, o_GRi, i2); }
+:ftiuge^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0xb & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftiuge(f_fcc2, o_GRi, i2); }
+:ftiug^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0x3 & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftiug(f_fcc2, o_GRi, i2); }
+:ftile^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0xc & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftile(f_fcc2, o_GRi, i2); }
+:ftigt^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0x2 & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftigt(f_fcc2, o_GRi, i2); }
+:ftiule^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0xd & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftiule(f_fcc2, o_GRi, i2); }
+:ftiu^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0x1 & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftiu(f_fcc2, o_GRi, i2); }
+:ftio^o_pack f_fcc2,o_GRi,f_s12 is m_18_24=0x1d & m_27_30=0xe & o_pack & f_fcc2 & o_GRi & f_s12 { local i2:4 = f_s12; frv_ftio(f_fcc2, o_GRi, i2); }
+:break^o_pack is m_0_30=0x1000c0 & o_pack { frv_break(); }
+:mtrap^o_pack is m_0_30=0x100080 & o_pack { frv_mtrap(); }
+:andcr^o_pack f_cri,f_crj,f_crk is m_3_11=0x40 & m_15_24=0x50 & m_28_30=0x0 & o_pack & f_cri & f_crj & f_crk { frv_andcr(f_cri, f_crj, f_crk); }
+:orcr^o_pack f_cri,f_crj,f_crk is m_3_11=0x48 & m_15_24=0x50 & m_28_30=0x0 & o_pack & f_cri & f_crj & f_crk { frv_orcr(f_cri, f_crj, f_crk); }
+:xorcr^o_pack f_cri,f_crj,f_crk is m_3_11=0x50 & m_15_24=0x50 & m_28_30=0x0 & o_pack & f_cri & f_crj & f_crk { frv_xorcr(f_cri, f_crj, f_crk); }
+:nandcr^o_pack f_cri,f_crj,f_crk is m_3_11=0x60 & m_15_24=0x50 & m_28_30=0x0 & o_pack & f_cri & f_crj & f_crk { frv_nandcr(f_cri, f_crj, f_crk); }
+:norcr^o_pack f_cri,f_crj,f_crk is m_3_11=0x68 & m_15_24=0x50 & m_28_30=0x0 & o_pack & f_cri & f_crj & f_crk { frv_norcr(f_cri, f_crj, f_crk); }
+:andncr^o_pack f_cri,f_crj,f_crk is m_3_11=0x80 & m_15_24=0x50 & m_28_30=0x0 & o_pack & f_cri & f_crj & f_crk { frv_andncr(f_cri, f_crj, f_crk); }
+:orncr^o_pack f_cri,f_crj,f_crk is m_3_11=0x88 & m_15_24=0x50 & m_28_30=0x0 & o_pack & f_cri & f_crj & f_crk { frv_orncr(f_cri, f_crj, f_crk); }
+:nandncr^o_pack f_cri,f_crj,f_crk is m_3_11=0xa0 & m_15_24=0x50 & m_28_30=0x0 & o_pack & f_cri & f_crj & f_crk { frv_nandncr(f_cri, f_crj, f_crk); }
+:norncr^o_pack f_cri,f_crj,f_crk is m_3_11=0xa8 & m_15_24=0x50 & m_28_30=0x0 & o_pack & f_cri & f_crj & f_crk { frv_norncr(f_cri, f_crj, f_crk); }
+:notcr^o_pack f_crj,f_crk is m_3_24=0x50058 & m_28_30=0x0 & o_pack & f_crj & f_crk { frv_notcr(f_crj, f_crk); }
+:ckra^o_pack f_crji is m_0_24=0x200000 & m_27_30=0x8 & o_pack & f_crji { local c:1 = 0; f_crji = 2 + (1); }
+:ckno^o_pack f_crji is m_0_24=0x200000 & m_27_30=0x0 & o_pack & f_crji { local c:1 = 0; f_crji = 2 + (0); }
+:ckeq^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0x4 & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + (((c & 4) != 0)); }
+:ckne^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0xc & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + (((c & 4) == 0)); }
+:ckle^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0x7 & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + ((((c & 4) != 0) || (((c >> 3) ^ (c >> 1)) & 1) != 0)); }
+:ckgt^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0xf & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + ((((c & 4) == 0) && (((c >> 3) ^ (c >> 1)) & 1) == 0)); }
+:cklt^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0x3 & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + (((((c >> 3) ^ (c >> 1)) & 1) != 0)); }
+:ckge^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0xb & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + (((((c >> 3) ^ (c >> 1)) & 1) == 0)); }
+:ckls^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0x5 & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + (((c & 5) != 0)); }
+:ckhi^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0xd & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + (((c & 5) == 0)); }
+:ckc^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0x1 & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + (((c & 1) != 0)); }
+:cknc^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0x9 & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + (((c & 1) == 0)); }
+:ckn^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0x6 & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + (((c & 8) != 0)); }
+:ckp^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0xe & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + (((c & 8) == 0)); }
+:ckv^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0x2 & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + (((c & 2) != 0)); }
+:cknv^o_pack f_icc3,f_crji is m_2_24=0x80000 & m_27_30=0xa & o_pack & f_icc3 & f_crji { local c:1 = f_icc3; f_crji = 2 + (((c & 2) == 0)); }
+:fckra^o_pack f_crjf is m_2_24=0x90000 & m_27_30=0xf & o_pack & f_crjf { local c:1 = 0; f_crjf = 2 + (1); }
+:fckno^o_pack f_crjf is m_2_24=0x90000 & m_27_30=0x0 & o_pack & f_crjf { local c:1 = 0; f_crjf = 2 + (0); }
+:fckne^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0x7 & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 7) != 0)); }
+:fckeq^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0x8 & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 8) != 0)); }
+:fcklg^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0x6 & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 6) != 0)); }
+:fckue^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0x9 & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 9) != 0)); }
+:fckul^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0x5 & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 5) != 0)); }
+:fckge^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0xa & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 10) != 0)); }
+:fcklt^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0x4 & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 4) != 0)); }
+:fckuge^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0xb & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 11) != 0)); }
+:fckug^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0x3 & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 3) != 0)); }
+:fckle^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0xc & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 12) != 0)); }
+:fckgt^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0x2 & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 2) != 0)); }
+:fckule^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0xd & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 13) != 0)); }
+:fcku^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0x1 & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 1) != 0)); }
+:fcko^o_pack f_fcc3,f_crjf is m_2_24=0x90000 & m_27_30=0xe & o_pack & f_fcc3 & f_crjf { local c:1 = f_fcc3; f_crjf = 2 + (((c & 14) != 0)); }
+:cckra^o_pack f_crji,f_cci,f_cond is m_0_7=0x0 & m_12_24=0x1a80 & m_27_30=0x8 & o_pack & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = 0; f_crji = 2 + (1); }
+:cckno^o_pack f_crji,f_cci,f_cond is m_0_7=0x0 & m_12_24=0x1a80 & m_27_30=0x0 & o_pack & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = 0; f_crji = 2 + (0); }
+:cckeq^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0x4 & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + (((c & 4) != 0)); }
+:cckne^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0xc & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + (((c & 4) == 0)); }
+:cckle^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0x7 & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + ((((c & 4) != 0) || (((c >> 3) ^ (c >> 1)) & 1) != 0)); }
+:cckgt^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0xf & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + ((((c & 4) == 0) && (((c >> 3) ^ (c >> 1)) & 1) == 0)); }
+:ccklt^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0x3 & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + (((((c >> 3) ^ (c >> 1)) & 1) != 0)); }
+:cckge^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0xb & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + (((((c >> 3) ^ (c >> 1)) & 1) == 0)); }
+:cckls^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0x5 & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + (((c & 5) != 0)); }
+:cckhi^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0xd & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + (((c & 5) == 0)); }
+:cckc^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0x1 & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + (((c & 1) != 0)); }
+:ccknc^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0x9 & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + (((c & 1) == 0)); }
+:cckn^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0x6 & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + (((c & 8) != 0)); }
+:cckp^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0xe & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + (((c & 8) == 0)); }
+:cckv^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0x2 & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + (((c & 2) != 0)); }
+:ccknv^o_pack f_icc3,f_crji,f_cci,f_cond is m_2_7=0x0 & m_12_24=0x1a80 & m_27_30=0xa & o_pack & f_icc3 & f_crji & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_icc3; f_crji = 2 + (((c & 2) == 0)); }
+:cfckra^o_pack f_crjf,f_cci,f_cond is m_0_7=0x40 & m_12_24=0x1a80 & m_27_30=0xf & o_pack & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = 0; f_crjf = 2 + (1); }
+:cfckno^o_pack f_crjf,f_cci,f_cond is m_0_7=0x40 & m_12_24=0x1a80 & m_27_30=0x0 & o_pack & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = 0; f_crjf = 2 + (0); }
+:cfckne^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0x7 & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 7) != 0)); }
+:cfckeq^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0x8 & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 8) != 0)); }
+:cfcklg^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0x6 & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 6) != 0)); }
+:cfckue^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0x9 & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 9) != 0)); }
+:cfckul^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0x5 & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 5) != 0)); }
+:cfckge^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0xa & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 10) != 0)); }
+:cfcklt^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0x4 & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 4) != 0)); }
+:cfckuge^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0xb & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 11) != 0)); }
+:cfckug^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0x3 & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 3) != 0)); }
+:cfckle^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0xc & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 12) != 0)); }
+:cfckgt^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0x2 & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 2) != 0)); }
+:cfckule^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0xd & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 13) != 0)); }
+:cfcku^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0x1 & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 1) != 0)); }
+:cfcko^o_pack f_fcc3,f_crjf,f_cci,f_cond is m_2_7=0x10 & m_12_24=0x1a80 & m_27_30=0xe & o_pack & f_fcc3 & f_crjf & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local c:1 = f_fcc3; f_crjf = 2 + (((c & 14) != 0)); }
+:cjmpl^o_pack "@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x2 & m_18_30=0x6a & o_pack & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local t:4 = o_GRi + o_GRj; goto [t]; }
+:ccalll^o_pack "@"^"("^o_GRi,o_GRj^")",f_cci,f_cond is m_6_7=0x2 & m_18_30=0xea & o_pack & o_GRi & o_GRj & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local t:4 = o_GRi + o_GRj; lr = inst_start + 4; call [t]; }
+:ici^o_pack "@"^"("^o_GRi,o_GRj^")" is m_6_11=0x38 & m_18_30=0x3 & o_pack & o_GRi & o_GRj { frv_ici(o_GRi, o_GRj); }
+:dci^o_pack "@"^"("^o_GRi,o_GRj^")" is m_6_11=0x3c & m_18_30=0x3 & o_pack & o_GRi & o_GRj { frv_dci(o_GRi, o_GRj); }
+:icei^o_pack "@"^"("^o_GRi,o_GRj^")",f_b25 is m_6_11=0x39 & m_18_24=0x3 & m_26_30=0x0 & o_pack & o_GRi & o_GRj & f_b25 { local i2:4 = f_b25; frv_icei(o_GRi, o_GRj, i2); }
+:dcei^o_pack "@"^"("^o_GRi,o_GRj^")",f_b25 is m_6_11=0x3a & m_18_24=0x3 & m_26_30=0x0 & o_pack & o_GRi & o_GRj & f_b25 { local i2:4 = f_b25; frv_dcei(o_GRi, o_GRj, i2); }
+:dcf^o_pack "@"^"("^o_GRi,o_GRj^")" is m_6_11=0x3d & m_18_30=0x3 & o_pack & o_GRi & o_GRj { frv_dcf(o_GRi, o_GRj); }
+:dcef^o_pack "@"^"("^o_GRi,o_GRj^")",f_b25 is m_6_11=0x3b & m_18_24=0x3 & m_26_30=0x0 & o_pack & o_GRi & o_GRj & f_b25 { local i2:4 = f_b25; frv_dcef(o_GRi, o_GRj, i2); }
+:witlb^o_pack o_GRk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x32 & m_18_24=0x3 & o_pack & o_GRk & o_GRi & o_GRj { frv_witlb(o_GRk, o_GRi, o_GRj); }
+:wdtlb^o_pack o_GRk,"@"^"("^o_GRi,o_GRj^")" is m_6_11=0x36 & m_18_24=0x3 & o_pack & o_GRk & o_GRi & o_GRj { frv_wdtlb(o_GRk, o_GRi, o_GRj); }
+:itlbi^o_pack "@"^"("^o_GRi,o_GRj^")" is m_6_11=0x33 & m_18_30=0x3 & o_pack & o_GRi & o_GRj { frv_itlbi(o_GRi, o_GRj); }
+:dtlbi^o_pack "@"^"("^o_GRi,o_GRj^")" is m_6_11=0x37 & m_18_30=0x3 & o_pack & o_GRi & o_GRj { frv_dtlbi(o_GRi, o_GRj); }
+:icpl^o_pack o_GRi,o_GRj,f_b25 is m_6_11=0x30 & m_18_24=0x3 & m_26_30=0x0 & o_pack & o_GRi & o_GRj & f_b25 { local i2:4 = f_b25; frv_icpl(o_GRi, o_GRj, i2); }
+:dcpl^o_pack o_GRi,o_GRj,f_b25 is m_6_11=0x34 & m_18_24=0x3 & m_26_30=0x0 & o_pack & o_GRi & o_GRj & f_b25 { local i2:4 = f_b25; frv_dcpl(o_GRi, o_GRj, i2); }
+:icul^o_pack o_GRi is m_0_11=0xc40 & m_18_30=0x3 & o_pack & o_GRi { frv_icul(o_GRi); }
+:dcul^o_pack o_GRi is m_0_11=0xd40 & m_18_30=0x3 & o_pack & o_GRi { frv_dcul(o_GRi); }
+:bar^o_pack is m_0_30=0xc0f80 & o_pack { frv_bar(); }
+:membar^o_pack is m_0_30=0xc0fc0 & o_pack { frv_membar(); }
+:lrai^o_pack o_GRi,o_GRk,f_lrae,f_lrad,f_lras is m_0_2=0x0 & m_6_11=0x20 & m_18_24=0x3 & o_pack & o_GRi & o_GRk & f_lrae & f_lrad & f_lras { local i1:4 = f_lrae; local i2:4 = f_lrad; local i3:4 = f_lras; o_GRk = frv_lrai(o_GRi, i1, i2, i3); }
+:lrad^o_pack o_GRi,o_GRk,f_lrae,f_lrad,f_lras is m_0_2=0x0 & m_6_11=0x21 & m_18_24=0x3 & o_pack & o_GRi & o_GRk & f_lrae & f_lrad & f_lras { local i1:4 = f_lrae; local i2:4 = f_lrad; local i3:4 = f_lras; o_GRk = frv_lrad(o_GRi, i1, i2, i3); }
+:tlbpr^o_pack o_GRi,o_GRj,f_tlbopx,f_b25 is m_6_11=0x24 & m_18_24=0x3 & m_29_30=0x0 & o_pack & o_GRi & o_GRj & f_tlbopx & f_b25 { local i2:4 = f_tlbopx; local i3:4 = f_b25; frv_tlbpr(o_GRi, o_GRj, i2, i3); }
+:cop1^o_pack f_s6_1,f_cpri,f_cprj,f_cprk is m_18_24=0x7e & o_pack & f_s6_1 & f_cpri & f_cprj & f_cprk { local i0:4 = f_s6_1; frv_cop1(i0, f_cpri, f_cprj, f_cprk); }
+:cop2^o_pack f_s6_1,f_cpri,f_cprj,f_cprk is m_18_24=0x7f & o_pack & f_s6_1 & f_cpri & f_cprj & f_cprk { local i0:4 = f_s6_1; frv_cop2(i0, f_cpri, f_cprj, f_cprk); }
+:clrgr^o_pack o_GRk is m_0_24=0x280000 & o_pack & o_GRk { frv_clrgr(o_GRk); }
+:clrfr^o_pack f_frk is m_0_24=0x280080 & o_pack & f_frk { frv_clrfr(f_frk); }
+:clrga^o_pack is m_0_30=0x280040 & o_pack { frv_clrga(); }
+:clrfa^o_pack is m_0_30=0x2800c0 & o_pack { frv_clrfa(); }
+:commitgr^o_pack o_GRk is m_0_24=0x280100 & o_pack & o_GRk { frv_commitgr(o_GRk); }
+:commitfr^o_pack f_frk is m_0_24=0x280180 & o_pack & f_frk { frv_commitfr(f_frk); }
+:commitga^o_pack is m_0_30=0x280140 & o_pack { frv_commitga(); }
+:commitfa^o_pack is m_0_30=0x2801c0 & o_pack { frv_commitfa(); }
+:fitos^o_pack f_frj,f_frk is m_6_24=0x79000 & o_pack & f_frj & f_frk { f_frk = int2float(f_frj); }
+:fstoi^o_pack f_frj,f_frk is m_6_24=0x79001 & o_pack & f_frj & f_frk { f_frk = trunc(f_frj); }
+:fitod^o_pack f_frj,o_FRdk is m_6_24=0x7a000 & o_pack & f_frj & o_FRdk { o_FRdk = int2float(f_frj); }
+:fdtoi^o_pack o_FRdj,f_frk is m_6_24=0x7a001 & o_pack & o_FRdj & f_frk { f_frk = trunc(o_FRdj); }
+:fditos^o_pack f_frj,f_frk is m_6_24=0x79010 & o_pack & f_frj & f_frk { f_frk = frv_fditos(f_frj); }
+:fdstoi^o_pack f_frj,f_frk is m_6_24=0x79011 & o_pack & f_frj & f_frk { f_frk = frv_fdstoi(f_frj); }
+:nfditos^o_pack f_frj,f_frk is m_6_24=0x79030 & o_pack & f_frj & f_frk { f_frk = frv_nfditos(f_frj); }
+:nfdstoi^o_pack f_frj,f_frk is m_6_24=0x79031 & o_pack & f_frj & f_frk { f_frk = frv_nfdstoi(f_frj); }
+:cfitos^o_pack f_frj,f_frk,f_cci,f_cond is m_6_7=0x0 & m_12_24=0x1ac0 & o_pack & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = int2float(f_frj); }
+:cfstoi^o_pack f_frj,f_frk,f_cci,f_cond is m_6_7=0x1 & m_12_24=0x1ac0 & o_pack & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = trunc(f_frj); }
+:nfitos^o_pack f_frj,f_frk is m_6_24=0x79020 & o_pack & f_frj & f_frk { f_frk = frv_nfitos(f_frj); }
+:nfstoi^o_pack f_frj,f_frk is m_6_24=0x79021 & o_pack & f_frj & f_frk { f_frk = frv_nfstoi(f_frj); }
+:fmovs^o_pack f_frj,f_frk is m_6_24=0x79002 & o_pack & f_frj & f_frk { f_frk = f_frj; }
+:fmovd^o_pack o_FRdj,o_FRdk is m_6_24=0x7a002 & o_pack & o_FRdj & o_FRdk { o_FRdk = o_FRdj; }
+:fdmovs^o_pack f_frj,f_frk is m_6_24=0x79012 & o_pack & f_frj & f_frk { f_frk = frv_fdmovs(f_frj); }
+:cfmovs^o_pack f_frj,f_frk,f_cci,f_cond is m_6_7=0x0 & m_12_24=0x1b00 & o_pack & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = f_frj; }
+:fnegs^o_pack f_frj,f_frk is m_6_24=0x79003 & o_pack & f_frj & f_frk { f_frk = f- f_frj; }
+:fnegd^o_pack o_FRdj,o_FRdk is m_6_24=0x7a003 & o_pack & o_FRdj & o_FRdk { o_FRdk = f- o_FRdj; }
+:fdnegs^o_pack f_frj,f_frk is m_6_24=0x79013 & o_pack & f_frj & f_frk { f_frk = frv_fdnegs(f_frj); }
+:cfnegs^o_pack f_frj,f_frk,f_cci,f_cond is m_6_7=0x1 & m_12_24=0x1b00 & o_pack & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = f- f_frj; }
+:fabss^o_pack f_frj,f_frk is m_6_24=0x79004 & o_pack & f_frj & f_frk { f_frk = abs(f_frj); }
+:fabsd^o_pack o_FRdj,o_FRdk is m_6_24=0x7a004 & o_pack & o_FRdj & o_FRdk { o_FRdk = abs(o_FRdj); }
+:fdabss^o_pack f_frj,f_frk is m_6_24=0x79014 & o_pack & f_frj & f_frk { f_frk = frv_fdabss(f_frj); }
+:cfabss^o_pack f_frj,f_frk,f_cci,f_cond is m_6_7=0x2 & m_12_24=0x1b00 & o_pack & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = abs(f_frj); }
+:fsqrts^o_pack f_frj,f_frk is m_6_24=0x79005 & o_pack & f_frj & f_frk { f_frk = sqrt(f_frj); }
+:fdsqrts^o_pack f_frj,f_frk is m_6_24=0x79015 & o_pack & f_frj & f_frk { f_frk = frv_fdsqrts(f_frj); }
+:nfdsqrts^o_pack f_frj,f_frk is m_6_24=0x79035 & o_pack & f_frj & f_frk { f_frk = frv_nfdsqrts(f_frj); }
+:fsqrtd^o_pack o_FRdj,o_FRdk is m_6_24=0x7a005 & o_pack & o_FRdj & o_FRdk { o_FRdk = sqrt(o_FRdj); }
+:cfsqrts^o_pack f_frj,f_frk,f_cci,f_cond is m_6_7=0x2 & m_12_24=0x1b80 & o_pack & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = sqrt(f_frj); }
+:nfsqrts^o_pack f_frj,f_frk is m_6_24=0x79025 & o_pack & f_frj & f_frk { f_frk = frv_nfsqrts(f_frj); }
+:fadds^o_pack f_fri,f_frj,f_frk is m_6_11=0x6 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = f_fri f+ f_frj; }
+:fsubs^o_pack f_fri,f_frj,f_frk is m_6_11=0x7 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = f_fri f- f_frj; }
+:fmuls^o_pack f_fri,f_frj,f_frk is m_6_11=0x8 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = f_fri f* f_frj; }
+:fdivs^o_pack f_fri,f_frj,f_frk is m_6_11=0x9 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = f_fri f/ f_frj; }
+:faddd^o_pack o_FRdi,o_FRdj,o_FRdk is m_6_11=0x6 & m_18_24=0x7a & o_pack & o_FRdi & o_FRdj & o_FRdk { o_FRdk = o_FRdi f+ o_FRdj; }
+:fsubd^o_pack o_FRdi,o_FRdj,o_FRdk is m_6_11=0x7 & m_18_24=0x7a & o_pack & o_FRdi & o_FRdj & o_FRdk { o_FRdk = o_FRdi f- o_FRdj; }
+:fmuld^o_pack o_FRdi,o_FRdj,o_FRdk is m_6_11=0x8 & m_18_24=0x7a & o_pack & o_FRdi & o_FRdj & o_FRdk { o_FRdk = o_FRdi f* o_FRdj; }
+:fdivd^o_pack o_FRdi,o_FRdj,o_FRdk is m_6_11=0x9 & m_18_24=0x7a & o_pack & o_FRdi & o_FRdj & o_FRdk { o_FRdk = o_FRdi f/ o_FRdj; }
+:cfadds^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x6d & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = f_fri f+ f_frj; }
+:cfsubs^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x6d & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = f_fri f- f_frj; }
+:cfmuls^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x6e & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = f_fri f* f_frj; }
+:cfdivs^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x6e & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = f_fri f/ f_frj; }
+:nfadds^o_pack f_fri,f_frj,f_frk is m_6_11=0x26 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfadds(f_fri, f_frj); }
+:nfsubs^o_pack f_fri,f_frj,f_frk is m_6_11=0x27 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfsubs(f_fri, f_frj); }
+:nfmuls^o_pack f_fri,f_frj,f_frk is m_6_11=0x28 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfmuls(f_fri, f_frj); }
+:nfdivs^o_pack f_fri,f_frj,f_frk is m_6_11=0x29 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfdivs(f_fri, f_frj); }
+:fcmps^o_pack f_fri,f_frj,f_fcc2 is m_6_11=0xa & m_18_24=0x79 & m_27_30=0x0 & o_pack & f_fri & f_frj & f_fcc2 { local x = f_fri; local y = f_frj; f_fcc2 = ((x f== y) << 3) | ((x f< y) << 2) | ((y f< x) << 1) | (nan(x) || nan(y)); }
+:fcmpd^o_pack o_FRdi,o_FRdj,f_fcc2 is m_6_11=0xa & m_18_24=0x7a & m_27_30=0x0 & o_pack & o_FRdi & o_FRdj & f_fcc2 { local x = o_FRdi; local y = o_FRdj; f_fcc2 = ((x f== y) << 3) | ((x f< y) << 2) | ((y f< x) << 1) | (nan(x) || nan(y)); }
+:cfcmps^o_pack f_fri,f_frj,f_fcc2,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x6d & m_27_30=0x0 & o_pack & f_fri & f_frj & f_fcc2 & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local x = f_fri; local y = f_frj; f_fcc2 = ((x f== y) << 3) | ((x f< y) << 2) | ((y f< x) << 1) | (nan(x) || nan(y)); }
+:fdcmps^o_pack f_fri,f_frj,f_fcc2 is m_6_11=0x1a & m_18_24=0x79 & m_27_30=0x0 & o_pack & f_fri & f_frj & f_fcc2 { f_frj = frv_fdcmps(f_fri, f_fcc2); }
+:fmadds^o_pack f_fri,f_frj,f_frk is m_6_11=0xb & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fmadds(f_fri, f_frj); }
+:fmsubs^o_pack f_fri,f_frj,f_frk is m_6_11=0xc & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fmsubs(f_fri, f_frj); }
+:fmaddd^o_pack o_FRdi,o_FRdj,o_FRdk is m_6_11=0xb & m_18_24=0x7a & o_pack & o_FRdi & o_FRdj & o_FRdk { o_FRdk = frv_fmaddd(o_FRdi, o_FRdj); }
+:fmsubd^o_pack o_FRdi,o_FRdj,o_FRdk is m_6_11=0xc & m_18_24=0x7a & o_pack & o_FRdi & o_FRdj & o_FRdk { o_FRdk = frv_fmsubd(o_FRdi, o_FRdj); }
+:fdmadds^o_pack f_fri,f_frj,f_frk is m_6_11=0x1b & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fdmadds(f_fri, f_frj); }
+:nfdmadds^o_pack f_fri,f_frj,f_frk is m_6_11=0x3b & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfdmadds(f_fri, f_frj); }
+:cfmadds^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x6f & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cfmadds(f_fri, f_frj); }
+:cfmsubs^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x6f & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cfmsubs(f_fri, f_frj); }
+:nfmadds^o_pack f_fri,f_frj,f_frk is m_6_11=0x2b & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfmadds(f_fri, f_frj); }
+:nfmsubs^o_pack f_fri,f_frj,f_frk is m_6_11=0x2c & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfmsubs(f_fri, f_frj); }
+:fmas^o_pack f_fri,f_frj,f_frk is m_6_11=0xe & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fmas(f_fri, f_frj); }
+:fmss^o_pack f_fri,f_frj,f_frk is m_6_11=0xf & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fmss(f_fri, f_frj); }
+:fdmas^o_pack f_fri,f_frj,f_frk is m_6_11=0x1c & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fdmas(f_fri, f_frj); }
+:fdmss^o_pack f_fri,f_frj,f_frk is m_6_11=0x1d & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fdmss(f_fri, f_frj); }
+:nfdmas^o_pack f_fri,f_frj,f_frk is m_6_11=0x3c & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfdmas(f_fri, f_frj); }
+:nfdmss^o_pack f_fri,f_frj,f_frk is m_6_11=0x3d & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfdmss(f_fri, f_frj); }
+:cfmas^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x6f & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cfmas(f_fri, f_frj); }
+:cfmss^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x6f & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cfmss(f_fri, f_frj); }
+:fmad^o_pack f_fri,f_frj,f_frk is m_6_11=0xe & m_18_24=0x7a & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fmad(f_fri, f_frj); }
+:fmsd^o_pack f_fri,f_frj,f_frk is m_6_11=0xf & m_18_24=0x7a & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fmsd(f_fri, f_frj); }
+:nfmas^o_pack f_fri,f_frj,f_frk is m_6_11=0x2e & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfmas(f_fri, f_frj); }
+:nfmss^o_pack f_fri,f_frj,f_frk is m_6_11=0x2f & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfmss(f_fri, f_frj); }
+:fdadds^o_pack f_fri,f_frj,f_frk is m_6_11=0x16 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fdadds(f_fri, f_frj); }
+:fdsubs^o_pack f_fri,f_frj,f_frk is m_6_11=0x17 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fdsubs(f_fri, f_frj); }
+:fdmuls^o_pack f_fri,f_frj,f_frk is m_6_11=0x18 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fdmuls(f_fri, f_frj); }
+:fddivs^o_pack f_fri,f_frj,f_frk is m_6_11=0x19 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fddivs(f_fri, f_frj); }
+:fdsads^o_pack f_fri,f_frj,f_frk is m_6_11=0x1e & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fdsads(f_fri, f_frj); }
+:fdmulcs^o_pack f_fri,f_frj,f_frk is m_6_11=0x1f & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_fdmulcs(f_fri, f_frj); }
+:nfdmulcs^o_pack f_fri,f_frj,f_frk is m_6_11=0x3f & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfdmulcs(f_fri, f_frj); }
+:nfdadds^o_pack f_fri,f_frj,f_frk is m_6_11=0x36 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfdadds(f_fri, f_frj); }
+:nfdsubs^o_pack f_fri,f_frj,f_frk is m_6_11=0x37 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfdsubs(f_fri, f_frj); }
+:nfdmuls^o_pack f_fri,f_frj,f_frk is m_6_11=0x38 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfdmuls(f_fri, f_frj); }
+:nfddivs^o_pack f_fri,f_frj,f_frk is m_6_11=0x39 & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfddivs(f_fri, f_frj); }
+:nfdsads^o_pack f_fri,f_frj,f_frk is m_6_11=0x3e & m_18_24=0x79 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_nfdsads(f_fri, f_frj); }
+:nfdcmps^o_pack f_fri,f_frj,f_fcc2 is m_6_11=0x3a & m_18_24=0x79 & m_27_30=0x0 & o_pack & f_fri & f_frj & f_fcc2 { f_frj = frv_nfdcmps(f_fri, f_fcc2); }
+:mhsetlos^o_pack o_u12,f_frk is m_6_11=0x20 & m_18_24=0x78 & o_pack & o_u12 & f_frk { local i0:4 = o_u12; f_frk = frv_mhsetlos(i0); }
+:mhsethis^o_pack o_u12,f_frk is m_6_11=0x22 & m_18_24=0x78 & o_pack & o_u12 & f_frk { local i0:4 = o_u12; f_frk = frv_mhsethis(i0); }
+:mhdsets^o_pack o_u12,f_frk is m_6_11=0x24 & m_18_24=0x78 & o_pack & o_u12 & f_frk { local i0:4 = o_u12; f_frk = frv_mhdsets(i0); }
+:mhsetloh^o_pack f_s5,f_frk is m_5_24=0xf0042 & o_pack & f_s5 & f_frk { local i0:4 = f_s5; f_frk = frv_mhsetloh(i0); }
+:mhsethih^o_pack f_s5,f_frk is m_5_24=0xf0046 & o_pack & f_s5 & f_frk { local i0:4 = f_s5; f_frk = frv_mhsethih(i0); }
+:mhdseth^o_pack f_s5,f_frk is m_5_24=0xf004a & o_pack & f_s5 & f_frk { local i0:4 = f_s5; f_frk = frv_mhdseth(i0); }
+:mand^o_pack f_fri,f_frj,f_frk is m_6_11=0x0 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mand(f_fri, f_frj); }
+:mor^o_pack f_fri,f_frj,f_frk is m_6_11=0x1 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mor(f_fri, f_frj); }
+:mxor^o_pack f_fri,f_frj,f_frk is m_6_11=0x2 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mxor(f_fri, f_frj); }
+:cmand^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x70 & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmand(f_fri, f_frj); }
+:cmor^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x70 & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmor(f_fri, f_frj); }
+:cmxor^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x70 & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmxor(f_fri, f_frj); }
+:mnot^o_pack f_frj,f_frk is m_6_24=0x7b003 & o_pack & f_frj & f_frk { f_frk = frv_mnot(f_frj); }
+:cmnot^o_pack f_frj,f_frk,f_cci,f_cond is m_6_7=0x3 & m_12_24=0x1c00 & o_pack & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmnot(f_frj); }
+:mrotli^o_pack f_fri,f_u6,f_frk is m_6_11=0x4 & m_18_24=0x7b & o_pack & f_fri & f_u6 & f_frk { local i1:4 = f_u6; f_frk = frv_mrotli(f_fri, i1); }
+:mrotri^o_pack f_fri,f_u6,f_frk is m_6_11=0x5 & m_18_24=0x7b & o_pack & f_fri & f_u6 & f_frk { local i1:4 = f_u6; f_frk = frv_mrotri(f_fri, i1); }
+:mwcut^o_pack f_fri,f_frj,f_frk is m_6_11=0x6 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mwcut(f_fri, f_frj); }
+:mwcuti^o_pack f_fri,f_u6,f_frk is m_6_11=0x7 & m_18_24=0x7b & o_pack & f_fri & f_u6 & f_frk { local i1:4 = f_u6; f_frk = frv_mwcuti(f_fri, i1); }
+:mcut^o_pack f_acci,f_frj,f_frk is m_6_11=0x2c & m_18_24=0x7b & o_pack & f_acci & f_frj & f_frk { f_frk = frv_mcut(f_acci, f_frj); }
+:mcuti^o_pack f_acci,f_s6,f_frk is m_6_11=0x2e & m_18_24=0x7b & o_pack & f_acci & f_s6 & f_frk { local i1:4 = f_s6; f_frk = frv_mcuti(f_acci, i1); }
+:mcutss^o_pack f_acci,f_frj,f_frk is m_6_11=0x2d & m_18_24=0x7b & o_pack & f_acci & f_frj & f_frk { f_frk = frv_mcutss(f_acci, f_frj); }
+:mcutssi^o_pack f_acci,f_s6,f_frk is m_6_11=0x2f & m_18_24=0x7b & o_pack & f_acci & f_s6 & f_frk { local i1:4 = f_s6; f_frk = frv_mcutssi(f_acci, i1); }
+:mdcutssi^o_pack f_acci,f_s6,f_frk is m_6_11=0xe & m_18_24=0x78 & o_pack & f_acci & f_s6 & f_frk { local i1:4 = f_s6; f_frk = frv_mdcutssi(f_acci, i1); }
+:maveh^o_pack f_fri,f_frj,f_frk is m_6_11=0x8 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_maveh(f_fri, f_frj); }
+:msllhi^o_pack f_fri,f_u6,f_frk is m_6_11=0x9 & m_18_24=0x7b & o_pack & f_fri & f_u6 & f_frk { local i1:4 = f_u6; f_frk = frv_msllhi(f_fri, i1); }
+:msrlhi^o_pack f_fri,f_u6,f_frk is m_6_11=0xa & m_18_24=0x7b & o_pack & f_fri & f_u6 & f_frk { local i1:4 = f_u6; f_frk = frv_msrlhi(f_fri, i1); }
+:msrahi^o_pack f_fri,f_u6,f_frk is m_6_11=0xb & m_18_24=0x7b & o_pack & f_fri & f_u6 & f_frk { local i1:4 = f_u6; f_frk = frv_msrahi(f_fri, i1); }
+:mdrotli^o_pack f_fri,f_s6,f_frk is m_6_11=0xb & m_18_24=0x78 & o_pack & f_fri & f_s6 & f_frk { local i1:4 = f_s6; f_frk = frv_mdrotli(f_fri, i1); }
+:mcplhi^o_pack f_fri,f_u6,f_frk is m_6_11=0xc & m_18_24=0x78 & o_pack & f_fri & f_u6 & f_frk { local i1:4 = f_u6; f_frk = frv_mcplhi(f_fri, i1); }
+:mcpli^o_pack f_fri,f_u6,f_frk is m_6_11=0xd & m_18_24=0x78 & o_pack & f_fri & f_u6 & f_frk { local i1:4 = f_u6; f_frk = frv_mcpli(f_fri, i1); }
+:msaths^o_pack f_fri,f_frj,f_frk is m_6_11=0xc & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_msaths(f_fri, f_frj); }
+:mqsaths^o_pack f_fri,f_frj,f_frk is m_6_11=0xf & m_18_24=0x78 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mqsaths(f_fri, f_frj); }
+:msathu^o_pack f_fri,f_frj,f_frk is m_6_11=0xd & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_msathu(f_fri, f_frj); }
+:mcmpsh^o_pack f_fri,f_frj,f_fcc2 is m_6_11=0xe & m_18_24=0x7b & m_27_30=0x0 & o_pack & f_fri & f_frj & f_fcc2 { f_frj = frv_mcmpsh(f_fri, f_fcc2); }
+:mcmpuh^o_pack f_fri,f_frj,f_fcc2 is m_6_11=0xf & m_18_24=0x7b & m_27_30=0x0 & o_pack & f_fri & f_frj & f_fcc2 { f_frj = frv_mcmpuh(f_fri, f_fcc2); }
+:mabshs^o_pack f_frj,f_frk is m_6_24=0x7800a & o_pack & f_frj & f_frk { f_frk = frv_mabshs(f_frj); }
+:maddhss^o_pack f_fri,f_frj,f_frk is m_6_11=0x10 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_maddhss(f_fri, f_frj); }
+:maddhus^o_pack f_fri,f_frj,f_frk is m_6_11=0x11 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_maddhus(f_fri, f_frj); }
+:msubhss^o_pack f_fri,f_frj,f_frk is m_6_11=0x12 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_msubhss(f_fri, f_frj); }
+:msubhus^o_pack f_fri,f_frj,f_frk is m_6_11=0x13 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_msubhus(f_fri, f_frj); }
+:cmaddhss^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x71 & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmaddhss(f_fri, f_frj); }
+:cmaddhus^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x71 & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmaddhus(f_fri, f_frj); }
+:cmsubhss^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x71 & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmsubhss(f_fri, f_frj); }
+:cmsubhus^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x71 & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmsubhus(f_fri, f_frj); }
+:mqaddhss^o_pack f_fri,f_frj,f_frk is m_6_11=0x18 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mqaddhss(f_fri, f_frj); }
+:mqaddhus^o_pack f_fri,f_frj,f_frk is m_6_11=0x19 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mqaddhus(f_fri, f_frj); }
+:mqsubhss^o_pack f_fri,f_frj,f_frk is m_6_11=0x1a & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mqsubhss(f_fri, f_frj); }
+:mqsubhus^o_pack f_fri,f_frj,f_frk is m_6_11=0x1b & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mqsubhus(f_fri, f_frj); }
+:cmqaddhss^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x73 & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmqaddhss(f_fri, f_frj); }
+:cmqaddhus^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x73 & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmqaddhus(f_fri, f_frj); }
+:cmqsubhss^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x73 & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmqsubhss(f_fri, f_frj); }
+:cmqsubhus^o_pack f_fri,f_frj,f_frk,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x73 & o_pack & f_fri & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmqsubhus(f_fri, f_frj); }
+:mqlclrhs^o_pack f_fri,f_frj,f_frk is m_6_11=0x10 & m_18_24=0x78 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mqlclrhs(f_fri, f_frj); }
+:mqlmths^o_pack f_fri,f_frj,f_frk is m_6_11=0x14 & m_18_24=0x78 & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mqlmths(f_fri, f_frj); }
+:mqsllhi^o_pack f_fri,f_u6,f_frk is m_6_11=0x11 & m_18_24=0x78 & o_pack & f_fri & f_u6 & f_frk { local i1:4 = f_u6; f_frk = frv_mqsllhi(f_fri, i1); }
+:mqsrahi^o_pack f_fri,f_u6,f_frk is m_6_11=0x13 & m_18_24=0x78 & o_pack & f_fri & f_u6 & f_frk { local i1:4 = f_u6; f_frk = frv_mqsrahi(f_fri, i1); }
+:maddaccs^o_pack f_acci,f_acck is m_0_11=0x100 & m_18_24=0x78 & o_pack & f_acci & f_acck { f_acck = frv_maddaccs(f_acci); }
+:msubaccs^o_pack f_acci,f_acck is m_0_11=0x140 & m_18_24=0x78 & o_pack & f_acci & f_acck { f_acck = frv_msubaccs(f_acci); }
+:mdaddaccs^o_pack f_acci,f_acck is m_0_11=0x180 & m_18_24=0x78 & o_pack & f_acci & f_acck { f_acck = frv_mdaddaccs(f_acci); }
+:mdsubaccs^o_pack f_acci,f_acck is m_0_11=0x1c0 & m_18_24=0x78 & o_pack & f_acci & f_acck { f_acck = frv_mdsubaccs(f_acci); }
+:masaccs^o_pack f_acci,f_acck is m_0_11=0x200 & m_18_24=0x78 & o_pack & f_acci & f_acck { f_acck = frv_masaccs(f_acci); }
+:mdasaccs^o_pack f_acci,f_acck is m_0_11=0x240 & m_18_24=0x78 & o_pack & f_acci & f_acck { f_acck = frv_mdasaccs(f_acci); }
+:mmulhs^o_pack f_fri,f_frj,f_acck is m_6_11=0x14 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mmulhs(f_fri, f_frj); }
+:mmulhu^o_pack f_fri,f_frj,f_acck is m_6_11=0x15 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mmulhu(f_fri, f_frj); }
+:mmulxhs^o_pack f_fri,f_frj,f_acck is m_6_11=0x28 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mmulxhs(f_fri, f_frj); }
+:mmulxhu^o_pack f_fri,f_frj,f_acck is m_6_11=0x29 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mmulxhu(f_fri, f_frj); }
+:cmmulhs^o_pack f_fri,f_frj,f_acck,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x72 & o_pack & f_fri & f_frj & f_acck & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_acck = frv_cmmulhs(f_fri, f_frj); }
+:cmmulhu^o_pack f_fri,f_frj,f_acck,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x72 & o_pack & f_fri & f_frj & f_acck & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_acck = frv_cmmulhu(f_fri, f_frj); }
+:mqmulhs^o_pack f_fri,f_frj,f_acck is m_6_11=0x1c & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqmulhs(f_fri, f_frj); }
+:mqmulhu^o_pack f_fri,f_frj,f_acck is m_6_11=0x1d & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqmulhu(f_fri, f_frj); }
+:mqmulxhs^o_pack f_fri,f_frj,f_acck is m_6_11=0x2a & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqmulxhs(f_fri, f_frj); }
+:mqmulxhu^o_pack f_fri,f_frj,f_acck is m_6_11=0x2b & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqmulxhu(f_fri, f_frj); }
+:cmqmulhs^o_pack f_fri,f_frj,f_acck,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x74 & o_pack & f_fri & f_frj & f_acck & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_acck = frv_cmqmulhs(f_fri, f_frj); }
+:cmqmulhu^o_pack f_fri,f_frj,f_acck,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x74 & o_pack & f_fri & f_frj & f_acck & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_acck = frv_cmqmulhu(f_fri, f_frj); }
+:mmachs^o_pack f_fri,f_frj,f_acck is m_6_11=0x16 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mmachs(f_fri, f_frj); }
+:mmachu^o_pack f_fri,f_frj,f_acck is m_6_11=0x17 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mmachu(f_fri, f_frj); }
+:mmrdhs^o_pack f_fri,f_frj,f_acck is m_6_11=0x30 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mmrdhs(f_fri, f_frj); }
+:mmrdhu^o_pack f_fri,f_frj,f_acck is m_6_11=0x31 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mmrdhu(f_fri, f_frj); }
+:cmmachs^o_pack f_fri,f_frj,f_acck,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x72 & o_pack & f_fri & f_frj & f_acck & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_acck = frv_cmmachs(f_fri, f_frj); }
+:cmmachu^o_pack f_fri,f_frj,f_acck,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x72 & o_pack & f_fri & f_frj & f_acck & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_acck = frv_cmmachu(f_fri, f_frj); }
+:mqmachs^o_pack f_fri,f_frj,f_acck is m_6_11=0x1e & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqmachs(f_fri, f_frj); }
+:mqmachu^o_pack f_fri,f_frj,f_acck is m_6_11=0x1f & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqmachu(f_fri, f_frj); }
+:cmqmachs^o_pack f_fri,f_frj,f_acck,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x74 & o_pack & f_fri & f_frj & f_acck & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_acck = frv_cmqmachs(f_fri, f_frj); }
+:cmqmachu^o_pack f_fri,f_frj,f_acck,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x74 & o_pack & f_fri & f_frj & f_acck & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_acck = frv_cmqmachu(f_fri, f_frj); }
+:mqxmachs^o_pack f_fri,f_frj,f_acck is m_6_11=0x0 & m_18_24=0x78 & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqxmachs(f_fri, f_frj); }
+:mqxmacxhs^o_pack f_fri,f_frj,f_acck is m_6_11=0x1 & m_18_24=0x78 & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqxmacxhs(f_fri, f_frj); }
+:mqmacxhs^o_pack f_fri,f_frj,f_acck is m_6_11=0x2 & m_18_24=0x78 & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqmacxhs(f_fri, f_frj); }
+:mcpxrs^o_pack f_fri,f_frj,f_acck is m_6_11=0x20 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mcpxrs(f_fri, f_frj); }
+:mcpxru^o_pack f_fri,f_frj,f_acck is m_6_11=0x21 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mcpxru(f_fri, f_frj); }
+:mcpxis^o_pack f_fri,f_frj,f_acck is m_6_11=0x22 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mcpxis(f_fri, f_frj); }
+:mcpxiu^o_pack f_fri,f_frj,f_acck is m_6_11=0x23 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mcpxiu(f_fri, f_frj); }
+:cmcpxrs^o_pack f_fri,f_frj,f_acck,f_cci,f_cond is m_6_7=0x0 & m_18_24=0x75 & o_pack & f_fri & f_frj & f_acck & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_acck = frv_cmcpxrs(f_fri, f_frj); }
+:cmcpxru^o_pack f_fri,f_frj,f_acck,f_cci,f_cond is m_6_7=0x1 & m_18_24=0x75 & o_pack & f_fri & f_frj & f_acck & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_acck = frv_cmcpxru(f_fri, f_frj); }
+:cmcpxis^o_pack f_fri,f_frj,f_acck,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x75 & o_pack & f_fri & f_frj & f_acck & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_acck = frv_cmcpxis(f_fri, f_frj); }
+:cmcpxiu^o_pack f_fri,f_frj,f_acck,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x75 & o_pack & f_fri & f_frj & f_acck & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_acck = frv_cmcpxiu(f_fri, f_frj); }
+:mqcpxrs^o_pack f_fri,f_frj,f_acck is m_6_11=0x24 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqcpxrs(f_fri, f_frj); }
+:mqcpxru^o_pack f_fri,f_frj,f_acck is m_6_11=0x25 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqcpxru(f_fri, f_frj); }
+:mqcpxis^o_pack f_fri,f_frj,f_acck is m_6_11=0x26 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqcpxis(f_fri, f_frj); }
+:mqcpxiu^o_pack f_fri,f_frj,f_acck is m_6_11=0x27 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_acck { f_acck = frv_mqcpxiu(f_fri, f_frj); }
+:mexpdhw^o_pack f_fri,f_u6,f_frk is m_6_11=0x32 & m_18_24=0x7b & o_pack & f_fri & f_u6 & f_frk { local i1:4 = f_u6; f_frk = frv_mexpdhw(f_fri, i1); }
+:cmexpdhw^o_pack f_fri,f_u6,f_frk,f_cci,f_cond is m_6_7=0x2 & m_18_24=0x76 & o_pack & f_fri & f_u6 & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local i1:4 = f_u6; f_frk = frv_cmexpdhw(f_fri, i1); }
+:mexpdhd^o_pack f_fri,f_u6,f_frk is m_6_11=0x33 & m_18_24=0x7b & o_pack & f_fri & f_u6 & f_frk { local i1:4 = f_u6; f_frk = frv_mexpdhd(f_fri, i1); }
+:cmexpdhd^o_pack f_fri,f_u6,f_frk,f_cci,f_cond is m_6_7=0x3 & m_18_24=0x76 & o_pack & f_fri & f_u6 & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; local i1:4 = f_u6; f_frk = frv_cmexpdhd(f_fri, i1); }
+:mpackh^o_pack f_fri,f_frj,f_frk is m_6_11=0x34 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mpackh(f_fri, f_frj); }
+:mdpackh^o_pack f_fri,f_frj,f_frk is m_6_11=0x36 & m_18_24=0x7b & o_pack & f_fri & f_frj & f_frk { f_frk = frv_mdpackh(f_fri, f_frj); }
+:munpackh^o_pack f_fri,f_frk is m_0_11=0xd40 & m_18_24=0x7b & o_pack & f_fri & f_frk { f_frk = frv_munpackh(f_fri); }
+:mdunpackh^o_pack f_fri,f_frk is m_0_11=0xdc0 & m_18_24=0x7b & o_pack & f_fri & f_frk { f_frk = frv_mdunpackh(f_fri); }
+:mbtoh^o_pack f_frj,f_frk is m_6_24=0x7b038 & o_pack & f_frj & f_frk { f_frk = frv_mbtoh(f_frj); }
+:cmbtoh^o_pack f_frj,f_frk,f_cci,f_cond is m_6_7=0x0 & m_12_24=0x1dc0 & o_pack & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmbtoh(f_frj); }
+:mhtob^o_pack f_frj,f_frk is m_6_24=0x7b039 & o_pack & f_frj & f_frk { f_frk = frv_mhtob(f_frj); }
+:cmhtob^o_pack f_frj,f_frk,f_cci,f_cond is m_6_7=0x1 & m_12_24=0x1dc0 & o_pack & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmhtob(f_frj); }
+:mbtohe^o_pack f_frj,f_frk is m_6_24=0x7b03a & o_pack & f_frj & f_frk { f_frk = frv_mbtohe(f_frj); }
+:cmbtohe^o_pack f_frj,f_frk,f_cci,f_cond is m_6_7=0x2 & m_12_24=0x1dc0 & o_pack & f_frj & f_frk & f_cci & f_cond { if (f_cci != (2 | f_cond)) goto inst_next; f_frk = frv_cmbtohe(f_frj); }
+:mnop^o_pack is m_0_30=0x7fee0ec0 & o_pack { frv_mnop(); }
+:mclracc^o_pack f_acck,f_a is m_0_24=0x1ec0ec0 & o_pack & f_acck & f_a { local i1:4 = f_a; frv_mclracc(f_acck, i1); }
+:mclracc^o_pack f_acck,f_a is m_0_24=0x1ee0ec0 & o_pack & f_acck & f_a { local i1:4 = f_a; frv_mclracc(f_acck, i1); }
+:mrdacc^o_pack f_acci,f_frk is m_0_11=0xf00 & m_18_24=0x7b & o_pack & f_acci & f_frk { f_frk = frv_mrdacc(f_acci); }
+:mrdaccg^o_pack f_accgi,f_frk is m_0_11=0xf80 & m_18_24=0x7b & o_pack & f_accgi & f_frk { f_frk = frv_mrdaccg(f_accgi); }
+:mwtacc^o_pack f_fri,f_acck is m_0_11=0xf40 & m_18_24=0x7b & o_pack & f_fri & f_acck { frv_mwtacc(f_fri, f_acck); }
+:mwtaccg^o_pack f_fri,f_accgk is m_0_11=0xfc0 & m_18_24=0x7b & o_pack & f_fri & f_accgk { frv_mwtaccg(f_fri, f_accgk); }
+:mcop1^o_pack f_fri,f_frj,f_frk is m_6_11=0x0 & m_18_24=0x7c & o_pack & f_fri & f_frj & f_frk { frv_mcop1(f_fri, f_frj, f_frk); }
+:mcop2^o_pack f_fri,f_frj,f_frk is m_6_11=0x0 & m_18_24=0x7d & o_pack & f_fri & f_frj & f_frk { frv_mcop2(f_fri, f_frj, f_frk); }
+:fnop^o_pack is m_0_30=0x1e40340 & o_pack { frv_fnop(); }

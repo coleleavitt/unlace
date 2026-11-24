@@ -4378,7 +4378,22 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `M88000` | Motorola 88000 (MC88100) | `88000:BE:32:default` | written for unlace from the MC88100 User's Manual, Apache-2.0 |
 | `RISCV` (T-Head) | RISC-V with the T-Head vendor extensions (XThead*) | `RISCV:LE:64:XThead`, `RISCV:LE:32:XThead` | written for #98 from T-Head's thead-extension-spec and LLVM's XTHead encodings |
 | `Clipper` | Fairchild/Intergraph CLIPPER C100/C300 | `clipper:LE:32:default` | written for unlace from the CLIPPER C300 data book, Apache-2.0 |
+| `ROMP` | IBM ROMP (RT PC) | `ROMP:BE:32:default` | written for unlace from the RT PC Hardware Technical Reference, Apache-2.0 |
+| `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
 <!-- vendor-rows -->
+
+### IBM ROMP (#98)
+
+`specs/Ghidra/Processors/ROMP` is a SLEIGH module written for unlace from the IBM
+RT PC Hardware Technical Reference (no prior SLEIGH existed):
+`ROMP:BE:32:default`. Branches test one bit of the condition status (LT, EQ,
+GT, C, OV, TB, and bit 8, the permanent zero that makes `bnb` unconditional);
+the "with execute" forms run the next instruction as a delay slot. The cspec
+follows the RT linkage (arguments r2-r5, result r2, link r15, stack r1).
+Exercised by `unlace-cli/tests/romp_raw.rs` (hand-assembled add, signed max,
+absolute load and branch-with-execute call routines decompile to the expected
+C).
+
 
 ### CLIPPER (#98)
 
@@ -4448,6 +4463,8 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Visium` | Visium (CDS GR5/GR6) | `visium:BE:32:default` | binutils `visium` opcode table and disassembler, GCC `config/visium` | `unlace-cli/tests/visium_raw.rs` |
 | `TMS9900` | TI TMS9900 | `TMS9900:BE:16:default` | TI TMS9900 Microprocessor Data Manual, TMS9900 Family System Development Manual | `unlace-cli/tests/tms9900_raw.rs` |
 | `Blackfin` | Analog Devices Blackfin (ADSP-BF5xx, BF6xx) | `Blackfin:LE:32:default` | Blackfin Processor Programming Reference rev 2.2, binutils `bfin.h` layouts; checked against `bfin-elf-objdump` | `unlace-cli/tests/blackfin_raw.rs` |
+| `Epiphany` | Adapteva Epiphany | `epiphany:LE:32:default` | Epiphany Architecture Reference, binutils CGEN `cpu/epiphany.cpu`, GCC `config/epiphany` | `unlace-cli/tests/epiphany_raw.rs` |
+| `uPD7810` | NEC uPD7810 / 7811 / 78C10 / 78C11 / 78C14 | `uPD7810:LE:16:default` | NEC uPD7810/7811 user's manual, MAME `upd7810` tables | `unlace-cli/tests/upd7810.rs` |
 | `SAM8` | Samsung SAM8 (S3C8/S3F8), SAM88RCRI (S3C9/S3F9) | `SAM8:BE:16:default`, `SAM88RCRI:BE:16:default` | Samsung S3C8-series user's manual ch. 6 (instruction set), S3C9454B/F9454B user's manual | `unlace-cli/tests/sam8_raw.rs` |
 <!-- native-rows -->
 

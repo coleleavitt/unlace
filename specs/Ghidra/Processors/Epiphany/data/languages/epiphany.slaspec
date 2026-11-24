@@ -1,0 +1,375 @@
+# Adapteva Epiphany (E16/E64): little-endian, 64 32-bit registers, mixed 16/32-bit
+# instructions (bits 3:0 select the opcode group; groups 8, 9, B, C, D, F are 32 bits wide
+# and extend each 3-bit register field with three high bits). Written from the Epiphany
+# Architecture Reference and the binutils Epiphany CGEN description (cpu/epiphany.cpu:
+# fields and register-transfer semantics, read not copied).
+
+define endian=little;
+define alignment=2;
+
+define space ram type=ram_space size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0 size=4 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 fp ip sp lr r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 r29 r30 r31 r32 r33 r34 r35 r36 r37 r38 r39 r40 r41 r42 r43 r44 r45 r46 r47 r48 r49 r50 r51 r52 r53 r54 r55 r56 r57 r58 r59 r60 r61 r62 r63 ];
+define register offset=0x100 size=4 [ pc ];
+define register offset=0x110 size=1 [ AZ AN AC AV BZ BN ];
+
+define token i16(16)
+  op4   = (0,3)
+  b4    = (4,4)
+  o63   = (4,6)
+  o85   = (4,8)
+  ws    = (5,6)
+  cond  = (4,7)
+  b8    = (8,8)
+  b9    = (9,9)
+  rm3   = (7,9)
+  disp3 = (7,9)
+  simm3 = (7,9) signed
+  shift = (5,9)
+  imm8  = (5,12)
+  rn3   = (10,12)
+  rd3   = (13,15)
+  tnum  = (10,15)
+  simm8 = (8,15) signed
+;
+attach variables [ rm3 rn3 rd3 ] [ r0 r1 r2 r3 r4 r5 r6 r7 ];
+
+define token i32(32)
+  xop4   = (0,3)
+  xb4    = (4,4)
+  xo63   = (4,6)
+  xo85   = (4,8)
+  xws    = (5,6)
+  xcond  = (4,7)
+  xb8    = (8,8)
+  xb9    = (9,9)
+  xdisp3 = (7,9)
+  xshift = (5,9)
+  ximm8  = (5,12)
+  xo194  = (16,19)
+  xb20   = (20,20)
+  xb21   = (21,21)
+  xg2120 = (20,21)
+  xdisp8 = (16,23)
+  xsub   = (24,24)
+  xpm    = (25,25)
+  ximmhi = (20,27)
+  xb28   = (28,28)
+  xhi4   = (28,31)
+  rmx    = (23,25)
+  rnx    = (26,28)
+  rdx    = (29,31)
+  xrm3   = (7,9)
+  xrn3   = (10,12)
+  xrd3   = (13,15)
+  simm24 = (8,31) signed
+  sd11hi = (16,23) signed
+  x2522  = (22,25)
+  x2516  = (16,25)
+  x3116  = (16,31)
+  rd_0 = (13,15)
+  rn_0 = (10,12)
+  rm_0 = (7,9)
+  rd_1 = (13,15)
+  rn_1 = (10,12)
+  rm_1 = (7,9)
+  rd_2 = (13,15)
+  rn_2 = (10,12)
+  rm_2 = (7,9)
+  rd_3 = (13,15)
+  rn_3 = (10,12)
+  rm_3 = (7,9)
+  rd_4 = (13,15)
+  rn_4 = (10,12)
+  rm_4 = (7,9)
+  rd_5 = (13,15)
+  rn_5 = (10,12)
+  rm_5 = (7,9)
+  rd_6 = (13,15)
+  rn_6 = (10,12)
+  rm_6 = (7,9)
+  rd_7 = (13,15)
+  rn_7 = (10,12)
+  rm_7 = (7,9)
+;
+attach variables [ rd_0 rn_0 rm_0 ] [ r0 r1 r2 r3 r4 r5 r6 r7 ];
+attach variables [ rd_1 rn_1 rm_1 ] [ r8 r9 r10 fp ip sp lr r15 ];
+attach variables [ rd_2 rn_2 rm_2 ] [ r16 r17 r18 r19 r20 r21 r22 r23 ];
+attach variables [ rd_3 rn_3 rm_3 ] [ r24 r25 r26 r27 r28 r29 r30 r31 ];
+attach variables [ rd_4 rn_4 rm_4 ] [ r32 r33 r34 r35 r36 r37 r38 r39 ];
+attach variables [ rd_5 rn_5 rm_5 ] [ r40 r41 r42 r43 r44 r45 r46 r47 ];
+attach variables [ rd_6 rn_6 rm_6 ] [ r48 r49 r50 r51 r52 r53 r54 r55 ];
+attach variables [ rd_7 rn_7 rm_7 ] [ r56 r57 r58 r59 r60 r61 r62 r63 ];
+
+define pcodeop idle;
+define pcodeop breakpoint;
+define pcodeop multicore_breakpoint;
+define pcodeop return_from_interrupt;
+define pcodeop software_interrupt;
+define pcodeop trap;
+define pcodeop sync;
+define pcodeop wired_and;
+define pcodeop interrupts_enable;
+define pcodeop interrupts_disable;
+define pcodeop read_special;
+define pcodeop write_special;
+define pcodeop bit_reverse;
+define pcodeop field_extract;
+define pcodeop field_deposit;
+define pcodeop lfsr;
+define pcodeop reciprocal;
+define pcodeop unimplemented;
+RD6: rd_0 is rdx=0 & rd_0 { export rd_0; }
+RD6: rd_1 is rdx=1 & rd_1 { export rd_1; }
+RD6: rd_2 is rdx=2 & rd_2 { export rd_2; }
+RD6: rd_3 is rdx=3 & rd_3 { export rd_3; }
+RD6: rd_4 is rdx=4 & rd_4 { export rd_4; }
+RD6: rd_5 is rdx=5 & rd_5 { export rd_5; }
+RD6: rd_6 is rdx=6 & rd_6 { export rd_6; }
+RD6: rd_7 is rdx=7 & rd_7 { export rd_7; }
+RN6: rn_0 is rnx=0 & rn_0 { export rn_0; }
+RN6: rn_1 is rnx=1 & rn_1 { export rn_1; }
+RN6: rn_2 is rnx=2 & rn_2 { export rn_2; }
+RN6: rn_3 is rnx=3 & rn_3 { export rn_3; }
+RN6: rn_4 is rnx=4 & rn_4 { export rn_4; }
+RN6: rn_5 is rnx=5 & rn_5 { export rn_5; }
+RN6: rn_6 is rnx=6 & rn_6 { export rn_6; }
+RN6: rn_7 is rnx=7 & rn_7 { export rn_7; }
+RM6: rm_0 is rmx=0 & rm_0 { export rm_0; }
+RM6: rm_1 is rmx=1 & rm_1 { export rm_1; }
+RM6: rm_2 is rmx=2 & rm_2 { export rm_2; }
+RM6: rm_3 is rmx=3 & rm_3 { export rm_3; }
+RM6: rm_4 is rmx=4 & rm_4 { export rm_4; }
+RM6: rm_5 is rmx=5 & rm_5 { export rm_5; }
+RM6: rm_6 is rmx=6 & rm_6 { export rm_6; }
+RM6: rm_7 is rmx=7 & rm_7 { export rm_7; }
+RD6N: nxt is rdx & xrd3 [ nxt = ((rdx << 3) + xrd3 + 1) * 4; ] { export *[register]:4 nxt; }
+RD3N: nxt is rd3 [ nxt = (rd3 + 1) * 4; ] { export *[register]:4 nxt; }
+CC: "eq" is cond=0 { local c:1 = AZ; export c; }
+XCC: "eq" is xcond=0 { local c:1 = AZ; export c; }
+CC: "ne" is cond=1 { local c:1 = !AZ; export c; }
+XCC: "ne" is xcond=1 { local c:1 = !AZ; export c; }
+CC: "gtu" is cond=2 { local c:1 = AC && !AZ; export c; }
+XCC: "gtu" is xcond=2 { local c:1 = AC && !AZ; export c; }
+CC: "gteu" is cond=3 { local c:1 = AC; export c; }
+XCC: "gteu" is xcond=3 { local c:1 = AC; export c; }
+CC: "lteu" is cond=4 { local c:1 = !AC || AZ; export c; }
+XCC: "lteu" is xcond=4 { local c:1 = !AC || AZ; export c; }
+CC: "ltu" is cond=5 { local c:1 = !AC; export c; }
+XCC: "ltu" is xcond=5 { local c:1 = !AC; export c; }
+CC: "gt" is cond=6 { local c:1 = !AZ && (AV == AN); export c; }
+XCC: "gt" is xcond=6 { local c:1 = !AZ && (AV == AN); export c; }
+CC: "gte" is cond=7 { local c:1 = AV == AN; export c; }
+XCC: "gte" is xcond=7 { local c:1 = AV == AN; export c; }
+CC: "lt" is cond=8 { local c:1 = AV != AN; export c; }
+XCC: "lt" is xcond=8 { local c:1 = AV != AN; export c; }
+CC: "lte" is cond=9 { local c:1 = AZ || (AV != AN); export c; }
+XCC: "lte" is xcond=9 { local c:1 = AZ || (AV != AN); export c; }
+CC: "beq" is cond=10 { local c:1 = BZ; export c; }
+XCC: "beq" is xcond=10 { local c:1 = BZ; export c; }
+CC: "bne" is cond=11 { local c:1 = !BZ; export c; }
+XCC: "bne" is xcond=11 { local c:1 = !BZ; export c; }
+CC: "blt" is cond=12 { local c:1 = BN && !BZ; export c; }
+XCC: "blt" is xcond=12 { local c:1 = BN && !BZ; export c; }
+CC: "blte" is cond=13 { local c:1 = BN || BZ; export c; }
+XCC: "blte" is xcond=13 { local c:1 = BN || BZ; export c; }
+
+REL8: dest is simm8 [ dest = inst_start + simm8 * 2; ] { export *:4 dest; }
+REL24: dest is simm24 [ dest = inst_start + simm24 * 2; ] { export *:4 dest; }
+
+# Branches
+:b^CC^".s" REL8 is op4=0 & CC & REL8 { if (CC) goto REL8; }
+:b^".s" REL8 is op4=0 & cond=14 & REL8 { goto REL8; }
+:bl^".s" REL8 is op4=0 & cond=15 & REL8 { lr = inst_next; call REL8; }
+:b^XCC^".l" REL24 is xop4=8 & XCC & REL24 { if (XCC) goto REL24; }
+:b^".l" REL24 is xop4=8 & xcond=14 & REL24 { goto REL24; }
+:bl^".l" REL24 is xop4=8 & xcond=15 & REL24 { lr = inst_next; call REL24; }
+
+# Flow group (16-bit op 2, 32-bit op F with bits 19:16 = 2)
+:jr rn3 is op4=2 & o85=0x14 & b9=0 & rd3=0 & rn3 { goto [rn3]; }
+:rts is op4=2 & o85=0x14 & b9=0 & rd3=0 & rn3=6 { return [lr]; }
+:jalr rn3 is op4=2 & o85=0x15 & b9=0 & rd3=0 & rn3 { local t = rn3; lr = inst_next; call [t]; }
+:jr RN6 is xop4=15 & xo85=0x14 & xb9=0 & xo194=2 & xrd3=0 & rdx=0 & x2522=0 & RN6 { goto [RN6]; }
+:rts is xop4=15 & xo85=0x14 & xb9=0 & xo194=2 & xrd3=0 & rdx=0 & x2522=0 & rnx=1 & xrn3=6 { return [lr]; }
+:jalr RN6 is xop4=15 & xo85=0x15 & xb9=0 & xo194=2 & xrd3=0 & rdx=0 & x2522=0 & RN6 { local t = RN6; lr = inst_next; call [t]; }
+:nop is op4=2 & o85=0x1a & b9=0 & rd3=0 & rn3=0 { }
+:snop is op4=2 & o85=0x1a & b9=1 & rd3=0 & rn3=0 { }
+:idle is op4=2 & o85=0x1b & b9=0 { idle(); }
+:bkpt is op4=2 & o85=0x1c & b9=0 { breakpoint(); }
+:mbkpt is op4=2 & o85=0x1c & b9=1 { multicore_breakpoint(); }
+:rti is op4=2 & o85=0x1d { return_from_interrupt(); return [pc]; }
+:wand is op4=2 & o85=0x18 { wired_and(); }
+:sync is op4=2 & o85=0x1f { sync(); }
+:gie is op4=2 & o85=0x19 & b9=0 { interrupts_enable(); }
+:gid is op4=2 & o85=0x19 & b9=1 { interrupts_disable(); }
+:swi tnum is op4=2 & o85=0x1e & b9=0 & tnum { software_interrupt(tnum:1); }
+:trap tnum is op4=2 & o85=0x1e & b9=1 & tnum { trap(tnum:1); }
+:unimpl is xop4=15 & xo85=0 & xb8=0 & xo194=15 & x2522=0 & rmx=0 & rnx=0 & rdx=0 & xrd3=0 & xrn3=0 & xb9=0 { unimplemented(); }
+
+# Conditional moves
+:mov^CC rd3, rn3 is op4=2 & b8=0 & b9=0 & CC & rd3 & rn3 { if (!CC) goto inst_next; rd3 = rn3; }
+:mov rd3, rn3 is op4=2 & b8=0 & b9=0 & cond=14 & rd3 & rn3 { rd3 = rn3; }
+:mov^XCC RD6, RN6 is xop4=15 & xb8=0 & xb9=0 & xo194=2 & x2522=0 & rmx=0 & XCC & RD6 & RN6 { if (!XCC) goto inst_next; RD6 = RN6; }
+:mov RD6, RN6 is xop4=15 & xb8=0 & xb9=0 & xo194=2 & x2522=0 & rmx=0 & xcond=14 & RD6 & RN6 { RD6 = RN6; }
+
+# Special registers (core, DMA, memory-protection and mesh groups)
+:movts tnum, rd3 is op4=2 & o85=0x10 & b9=0 & tnum & rd3 { write_special(0:1, tnum:1, rd3); }
+:movfs rd3, tnum is op4=2 & o85=0x11 & b9=0 & tnum & rd3 { rd3 = read_special(0:1, tnum:1); }
+SN6: val is rnx & xrn3 [ val = (rnx << 3) | xrn3; ] { export *[const]:1 val; }
+:movts xg2120, SN6, RD6 is xop4=15 & xo85=0x10 & xb9=0 & xo194=2 & xg2120 & SN6 & RD6 { write_special(xg2120:1, SN6, RD6); }
+:movfs RD6, xg2120, SN6 is xop4=15 & xo85=0x11 & xb9=0 & xo194=2 & xg2120 & SN6 & RD6 { RD6 = read_special(xg2120:1, SN6); }
+
+# Immediates
+:mov rd3, imm8 is op4=3 & b4=0 & rd3 & imm8 { rd3 = imm8; }
+IMM16: val is ximm8 & ximmhi [ val = (ximmhi << 8) | ximm8; ] { export *[const]:4 val; }
+:mov RD6, IMM16 is xop4=11 & xb4=0 & xb28=0 & xo194=2 & RD6 & IMM16 { RD6 = IMM16; }
+:movt RD6, IMM16 is xop4=11 & xb4=0 & xb28=1 & xo194=2 & RD6 & IMM16 { RD6 = (RD6 & 0xffff) | (IMM16 << 16); }
+
+macro addflags(a, b, r) { AC = carry(a, b); AV = scarry(a, b); AZ = r == 0; AN = r s< 0; }
+macro subflags(a, b, r) { AC = a >= b; AV = sborrow(a, b); AZ = r == 0; AN = r s< 0; }
+macro logflags(r) { AC = 0; AV = 0; AZ = r == 0; AN = r s< 0; }
+
+D11: val is xdisp3 & xdisp8 [ val = (xdisp8 << 3) | xdisp3; ] { export *[const]:4 val; }
+SIMM11: val is xdisp3 & sd11hi [ val = (sd11hi << 3) | xdisp3; ] { export *[const]:4 val; }
+:add rd3, rn3, simm3 is op4=3 & o63=1 & rd3 & rn3 & simm3 { local a = rn3; local b:4 = simm3; rd3 = a + b; addflags(a, b, rd3); }
+:sub rd3, rn3, simm3 is op4=3 & o63=3 & rd3 & rn3 & simm3 { local a = rn3; local b:4 = simm3; rd3 = a - b; subflags(a, b, rd3); }
+:add RD6, RN6, SIMM11 is xop4=11 & xo63=1 & xpm=0 & RD6 & RN6 & SIMM11 { local a = RN6; local b = SIMM11; RD6 = a + b; addflags(a, b, RD6); }
+:sub RD6, RN6, SIMM11 is xop4=11 & xo63=3 & xpm=0 & RD6 & RN6 & SIMM11 { local a = RN6; local b = SIMM11; RD6 = a - b; subflags(a, b, RD6); }
+:eor rd3, rn3, rm3 is op4=10 & o63=0 & rd3 & rn3 & rm3 { local a = rn3; local b = rm3; local r = a ^ b; logflags(r); rd3 = r; }
+:eor RD6, RN6, RM6 is xop4=15 & xo63=0 & xo194=10 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local a = RN6; local b = RM6; local r = a ^ b; logflags(r); RD6 = r; }
+:add rd3, rn3, rm3 is op4=10 & o63=1 & rd3 & rn3 & rm3 { local a = rn3; local b = rm3; local r = a + b; addflags(a, b, r); rd3 = r; }
+:add RD6, RN6, RM6 is xop4=15 & xo63=1 & xo194=10 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local a = RN6; local b = RM6; local r = a + b; addflags(a, b, r); RD6 = r; }
+:lsl rd3, rn3, rm3 is op4=10 & o63=2 & rd3 & rn3 & rm3 { local a = rn3; local b = rm3; local r = a << (b & 31); logflags(r); rd3 = r; }
+:lsl RD6, RN6, RM6 is xop4=15 & xo63=2 & xo194=10 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local a = RN6; local b = RM6; local r = a << (b & 31); logflags(r); RD6 = r; }
+:sub rd3, rn3, rm3 is op4=10 & o63=3 & rd3 & rn3 & rm3 { local a = rn3; local b = rm3; local r = a - b; subflags(a, b, r); rd3 = r; }
+:sub RD6, RN6, RM6 is xop4=15 & xo63=3 & xo194=10 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local a = RN6; local b = RM6; local r = a - b; subflags(a, b, r); RD6 = r; }
+:lsr rd3, rn3, rm3 is op4=10 & o63=4 & rd3 & rn3 & rm3 { local a = rn3; local b = rm3; local r = a >> (b & 31); logflags(r); rd3 = r; }
+:lsr RD6, RN6, RM6 is xop4=15 & xo63=4 & xo194=10 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local a = RN6; local b = RM6; local r = a >> (b & 31); logflags(r); RD6 = r; }
+:and rd3, rn3, rm3 is op4=10 & o63=5 & rd3 & rn3 & rm3 { local a = rn3; local b = rm3; local r = a & b; logflags(r); rd3 = r; }
+:and RD6, RN6, RM6 is xop4=15 & xo63=5 & xo194=10 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local a = RN6; local b = RM6; local r = a & b; logflags(r); RD6 = r; }
+:asr rd3, rn3, rm3 is op4=10 & o63=6 & rd3 & rn3 & rm3 { local a = rn3; local b = rm3; local r = a s>> (b & 31); logflags(r); rd3 = r; }
+:asr RD6, RN6, RM6 is xop4=15 & xo63=6 & xo194=10 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local a = RN6; local b = RM6; local r = a s>> (b & 31); logflags(r); RD6 = r; }
+:orr rd3, rn3, rm3 is op4=10 & o63=7 & rd3 & rn3 & rm3 { local a = rn3; local b = rm3; local r = a | b; logflags(r); rd3 = r; }
+:orr RD6, RN6, RM6 is xop4=15 & xo63=7 & xo194=10 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local a = RN6; local b = RM6; local r = a | b; logflags(r); RD6 = r; }
+:lsr rd3, rn3, shift is op4=6 & b4=0 & rd3 & rn3 & shift { local a = rn3; local r = a >> shift; logflags(r); rd3 = r; }
+:lsr RD6, RN6, xshift is xop4=15 & xb4=0 & xo194=6 & x2522=0 & rmx=0 & RD6 & RN6 & xshift { local a = RN6; local r = a >> xshift; logflags(r); RD6 = r; }
+:lsl rd3, rn3, shift is op4=6 & b4=1 & rd3 & rn3 & shift { local a = rn3; local r = a << shift; logflags(r); rd3 = r; }
+:lsl RD6, RN6, xshift is xop4=15 & xb4=1 & xo194=6 & x2522=0 & rmx=0 & RD6 & RN6 & xshift { local a = RN6; local r = a << xshift; logflags(r); RD6 = r; }
+:asr rd3, rn3, shift is op4=14 & b4=0 & rd3 & rn3 & shift { local a = rn3; local r = a s>> shift; logflags(r); rd3 = r; }
+:asr RD6, RN6, xshift is xop4=15 & xb4=0 & xo194=14 & x2522=0 & rmx=0 & RD6 & RN6 & xshift { local a = RN6; local r = a s>> xshift; logflags(r); RD6 = r; }
+:bitr rd3, rn3 is op4=14 & b4=1 & b9=0 & rd3 & rn3 { local r = bit_reverse(rn3); logflags(r); rd3 = r; }
+:bitr RD6, RN6 is xop4=15 & xb4=1 & xo194=14 & x2522=0 & rmx=0 & RD6 & RN6 { local r = bit_reverse(RN6); logflags(r); RD6 = r; }
+:fext RD6, RN6, RM6 is xop4=15 & xo63=0 & xo194=10 & xb20=1 & RD6 & RN6 & RM6 { RD6 = field_extract(RN6, RM6); }
+:fdep RD6, RN6, RM6 is xop4=15 & xo63=1 & xo194=10 & xb20=1 & RD6 & RN6 & RM6 { RD6 = field_deposit(RD6, RN6, RM6); }
+:lfsr RD6, RN6, RM6 is xop4=15 & xo63=2 & xo194=10 & xb20=1 & RD6 & RN6 & RM6 { RD6 = lfsr(RN6, RM6); }
+macro fflags(r) { BZ = r f== 0; BN = r f< 0; }
+:fadd rd3, rn3, rm3 is op4=7 & o63=0 & rd3 & rn3 & rm3 { local d = rd3; local a = rn3; local b = rm3; local r = a f+ b; fflags(r); rd3 = r; }
+:fadd RD6, RN6, RM6 is xop4=15 & xo63=0 & xo194=7 & xb20=0 & RD6 & RN6 & RM6 { local d = RD6; local a = RN6; local b = RM6; local r = a f+ b; fflags(r); RD6 = r; }
+:fsub rd3, rn3, rm3 is op4=7 & o63=1 & rd3 & rn3 & rm3 { local d = rd3; local a = rn3; local b = rm3; local r = a f- b; fflags(r); rd3 = r; }
+:fsub RD6, RN6, RM6 is xop4=15 & xo63=1 & xo194=7 & xb20=0 & RD6 & RN6 & RM6 { local d = RD6; local a = RN6; local b = RM6; local r = a f- b; fflags(r); RD6 = r; }
+:fmul rd3, rn3, rm3 is op4=7 & o63=2 & rd3 & rn3 & rm3 { local d = rd3; local a = rn3; local b = rm3; local r = a f* b; fflags(r); rd3 = r; }
+:fmul RD6, RN6, RM6 is xop4=15 & xo63=2 & xo194=7 & xb20=0 & RD6 & RN6 & RM6 { local d = RD6; local a = RN6; local b = RM6; local r = a f* b; fflags(r); RD6 = r; }
+:fmadd rd3, rn3, rm3 is op4=7 & o63=3 & rd3 & rn3 & rm3 { local d = rd3; local a = rn3; local b = rm3; local r = d f+ (a f* b); fflags(r); rd3 = r; }
+:fmadd RD6, RN6, RM6 is xop4=15 & xo63=3 & xo194=7 & xb20=0 & RD6 & RN6 & RM6 { local d = RD6; local a = RN6; local b = RM6; local r = d f+ (a f* b); fflags(r); RD6 = r; }
+:fmsub rd3, rn3, rm3 is op4=7 & o63=4 & rd3 & rn3 & rm3 { local d = rd3; local a = rn3; local b = rm3; local r = d f- (a f* b); fflags(r); rd3 = r; }
+:fmsub RD6, RN6, RM6 is xop4=15 & xo63=4 & xo194=7 & xb20=0 & RD6 & RN6 & RM6 { local d = RD6; local a = RN6; local b = RM6; local r = d f- (a f* b); fflags(r); RD6 = r; }
+:float rd3, rn3 is op4=7 & o63=5 & rd3 & rn3 { local a = rn3; local r:4 = int2float(a); rd3 = r; }
+:float RD6, RN6 is xop4=15 & xo63=5 & xo194=7 & xb20=0 & RD6 & RN6 { local a = RN6; local r:4 = int2float(a); RD6 = r; }
+:fix rd3, rn3 is op4=7 & o63=6 & rd3 & rn3 { local a = rn3; local r:4 = trunc(a); rd3 = r; }
+:fix RD6, RN6 is xop4=15 & xo63=6 & xo194=7 & xb20=0 & RD6 & RN6 { local a = RN6; local r:4 = trunc(a); RD6 = r; }
+:fabs rd3, rn3 is op4=7 & o63=7 & rd3 & rn3 { local a = rn3; local r:4 = abs(a); rd3 = r; }
+:fabs RD6, RN6 is xop4=15 & xo63=7 & xo194=7 & xb20=0 & RD6 & RN6 { local a = RN6; local r:4 = abs(a); RD6 = r; }
+:frecip RD6, RN6 is xop4=15 & xo63=0 & xo194=7 & xb20=1 & RD6 & RN6 { RD6 = reciprocal(RN6); }
+:fsqrt RD6, RN6 is xop4=15 & xo63=1 & xo194=7 & xb20=1 & RD6 & RN6 { RD6 = sqrt(RN6); }
+:ldrb rd3, [rn3, rm3] is op4=1 & ws=0 & b4=0 & rd3 & rn3 & rm3 { local ea = rn3 + rm3; rd3 = zext(*:1 ea); }
+:ldrb rd3, [rn3], rm3 is op4=5 & ws=0 & b4=0 & rd3 & rn3 & rm3 { local ea = rn3; local m = rm3; rd3 = zext(*:1 ea); rn3 = ea + m; }
+:ldrb rd3, [rn3, disp3] is op4=4 & ws=0 & b4=0 & rd3 & rn3 & disp3 { local ea = rn3 + 1*disp3; rd3 = zext(*:1 ea); }
+:ldrb RD6, [RN6, "+"^RM6] is xop4=9 & xws=0 & xb4=0 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6 + RM6; RD6 = zext(*:1 ea); }
+:ldrb RD6, [RN6, "-"^RM6] is xop4=9 & xws=0 & xb4=0 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6 - RM6; RD6 = zext(*:1 ea); }
+:ldrb RD6, [RN6], "+"^RM6 is xop4=13 & xws=0 & xb4=0 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6; local m = RM6; RD6 = zext(*:1 ea); RN6 = ea + m; }
+:ldrb RD6, [RN6], "-"^RM6 is xop4=13 & xws=0 & xb4=0 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6; local m = RM6; RD6 = zext(*:1 ea); RN6 = ea - m; }
+:ldrb RD6, [RN6, "+"^D11] is xop4=12 & xws=0 & xb4=0 & xpm=0 & xsub=0 & RD6 & RN6 & D11 { local ea = RN6 + 1*D11; RD6 = zext(*:1 ea); }
+:ldrb RD6, [RN6, "-"^D11] is xop4=12 & xws=0 & xb4=0 & xpm=0 & xsub=1 & RD6 & RN6 & D11 { local ea = RN6 - 1*D11; RD6 = zext(*:1 ea); }
+:ldrb RD6, [RN6], "+"^D11 is xop4=12 & xws=0 & xb4=0 & xpm=1 & xsub=0 & RD6 & RN6 & D11 { local ea = RN6; RD6 = zext(*:1 ea); RN6 = ea + 1*D11; }
+:ldrb RD6, [RN6], "-"^D11 is xop4=12 & xws=0 & xb4=0 & xpm=1 & xsub=1 & RD6 & RN6 & D11 { local ea = RN6; RD6 = zext(*:1 ea); RN6 = ea - 1*D11; }
+:strb rd3, [rn3, rm3] is op4=1 & ws=0 & b4=1 & rd3 & rn3 & rm3 { local ea = rn3 + rm3; *:1 ea = rd3:1; }
+:strb rd3, [rn3], rm3 is op4=5 & ws=0 & b4=1 & rd3 & rn3 & rm3 { local ea = rn3; local m = rm3; *:1 ea = rd3:1; rn3 = ea + m; }
+:strb rd3, [rn3, disp3] is op4=4 & ws=0 & b4=1 & rd3 & rn3 & disp3 { local ea = rn3 + 1*disp3; *:1 ea = rd3:1; }
+:strb RD6, [RN6, "+"^RM6] is xop4=9 & xws=0 & xb4=1 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6 + RM6; *:1 ea = RD6:1; }
+:strb RD6, [RN6, "-"^RM6] is xop4=9 & xws=0 & xb4=1 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6 - RM6; *:1 ea = RD6:1; }
+:strb RD6, [RN6], "+"^RM6 is xop4=13 & xws=0 & xb4=1 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6; local m = RM6; *:1 ea = RD6:1; RN6 = ea + m; }
+:strb RD6, [RN6], "-"^RM6 is xop4=13 & xws=0 & xb4=1 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6; local m = RM6; *:1 ea = RD6:1; RN6 = ea - m; }
+:strb RD6, [RN6, "+"^D11] is xop4=12 & xws=0 & xb4=1 & xpm=0 & xsub=0 & RD6 & RN6 & D11 { local ea = RN6 + 1*D11; *:1 ea = RD6:1; }
+:strb RD6, [RN6, "-"^D11] is xop4=12 & xws=0 & xb4=1 & xpm=0 & xsub=1 & RD6 & RN6 & D11 { local ea = RN6 - 1*D11; *:1 ea = RD6:1; }
+:strb RD6, [RN6], "+"^D11 is xop4=12 & xws=0 & xb4=1 & xpm=1 & xsub=0 & RD6 & RN6 & D11 { local ea = RN6; *:1 ea = RD6:1; RN6 = ea + 1*D11; }
+:strb RD6, [RN6], "-"^D11 is xop4=12 & xws=0 & xb4=1 & xpm=1 & xsub=1 & RD6 & RN6 & D11 { local ea = RN6; *:1 ea = RD6:1; RN6 = ea - 1*D11; }
+:testsetb RD6, [RN6, RM6] is xop4=9 & xws=0 & xb4=0 & xo194=0 & xb21=1 & RD6 & RN6 & RM6 { local ea = RN6 + RM6; local old = zext(*:1 ea); if (old != 0) goto <done>; *:1 ea = RD6:1; <done> RD6 = old; }
+:ldrh rd3, [rn3, rm3] is op4=1 & ws=1 & b4=0 & rd3 & rn3 & rm3 { local ea = rn3 + rm3; rd3 = zext(*:2 ea); }
+:ldrh rd3, [rn3], rm3 is op4=5 & ws=1 & b4=0 & rd3 & rn3 & rm3 { local ea = rn3; local m = rm3; rd3 = zext(*:2 ea); rn3 = ea + m; }
+:ldrh rd3, [rn3, disp3] is op4=4 & ws=1 & b4=0 & rd3 & rn3 & disp3 { local ea = rn3 + 2*disp3; rd3 = zext(*:2 ea); }
+:ldrh RD6, [RN6, "+"^RM6] is xop4=9 & xws=1 & xb4=0 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6 + RM6; RD6 = zext(*:2 ea); }
+:ldrh RD6, [RN6, "-"^RM6] is xop4=9 & xws=1 & xb4=0 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6 - RM6; RD6 = zext(*:2 ea); }
+:ldrh RD6, [RN6], "+"^RM6 is xop4=13 & xws=1 & xb4=0 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6; local m = RM6; RD6 = zext(*:2 ea); RN6 = ea + m; }
+:ldrh RD6, [RN6], "-"^RM6 is xop4=13 & xws=1 & xb4=0 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6; local m = RM6; RD6 = zext(*:2 ea); RN6 = ea - m; }
+:ldrh RD6, [RN6, "+"^D11] is xop4=12 & xws=1 & xb4=0 & xpm=0 & xsub=0 & RD6 & RN6 & D11 { local ea = RN6 + 2*D11; RD6 = zext(*:2 ea); }
+:ldrh RD6, [RN6, "-"^D11] is xop4=12 & xws=1 & xb4=0 & xpm=0 & xsub=1 & RD6 & RN6 & D11 { local ea = RN6 - 2*D11; RD6 = zext(*:2 ea); }
+:ldrh RD6, [RN6], "+"^D11 is xop4=12 & xws=1 & xb4=0 & xpm=1 & xsub=0 & RD6 & RN6 & D11 { local ea = RN6; RD6 = zext(*:2 ea); RN6 = ea + 2*D11; }
+:ldrh RD6, [RN6], "-"^D11 is xop4=12 & xws=1 & xb4=0 & xpm=1 & xsub=1 & RD6 & RN6 & D11 { local ea = RN6; RD6 = zext(*:2 ea); RN6 = ea - 2*D11; }
+:strh rd3, [rn3, rm3] is op4=1 & ws=1 & b4=1 & rd3 & rn3 & rm3 { local ea = rn3 + rm3; *:2 ea = rd3:2; }
+:strh rd3, [rn3], rm3 is op4=5 & ws=1 & b4=1 & rd3 & rn3 & rm3 { local ea = rn3; local m = rm3; *:2 ea = rd3:2; rn3 = ea + m; }
+:strh rd3, [rn3, disp3] is op4=4 & ws=1 & b4=1 & rd3 & rn3 & disp3 { local ea = rn3 + 2*disp3; *:2 ea = rd3:2; }
+:strh RD6, [RN6, "+"^RM6] is xop4=9 & xws=1 & xb4=1 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6 + RM6; *:2 ea = RD6:2; }
+:strh RD6, [RN6, "-"^RM6] is xop4=9 & xws=1 & xb4=1 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6 - RM6; *:2 ea = RD6:2; }
+:strh RD6, [RN6], "+"^RM6 is xop4=13 & xws=1 & xb4=1 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6; local m = RM6; *:2 ea = RD6:2; RN6 = ea + m; }
+:strh RD6, [RN6], "-"^RM6 is xop4=13 & xws=1 & xb4=1 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6; local m = RM6; *:2 ea = RD6:2; RN6 = ea - m; }
+:strh RD6, [RN6, "+"^D11] is xop4=12 & xws=1 & xb4=1 & xpm=0 & xsub=0 & RD6 & RN6 & D11 { local ea = RN6 + 2*D11; *:2 ea = RD6:2; }
+:strh RD6, [RN6, "-"^D11] is xop4=12 & xws=1 & xb4=1 & xpm=0 & xsub=1 & RD6 & RN6 & D11 { local ea = RN6 - 2*D11; *:2 ea = RD6:2; }
+:strh RD6, [RN6], "+"^D11 is xop4=12 & xws=1 & xb4=1 & xpm=1 & xsub=0 & RD6 & RN6 & D11 { local ea = RN6; *:2 ea = RD6:2; RN6 = ea + 2*D11; }
+:strh RD6, [RN6], "-"^D11 is xop4=12 & xws=1 & xb4=1 & xpm=1 & xsub=1 & RD6 & RN6 & D11 { local ea = RN6; *:2 ea = RD6:2; RN6 = ea - 2*D11; }
+:testseth RD6, [RN6, RM6] is xop4=9 & xws=1 & xb4=0 & xo194=0 & xb21=1 & RD6 & RN6 & RM6 { local ea = RN6 + RM6; local old = zext(*:2 ea); if (old != 0) goto <done>; *:2 ea = RD6:2; <done> RD6 = old; }
+:ldr rd3, [rn3, rm3] is op4=1 & ws=2 & b4=0 & rd3 & rn3 & rm3 { local ea = rn3 + rm3; rd3 = *:4 ea; }
+:ldr rd3, [rn3], rm3 is op4=5 & ws=2 & b4=0 & rd3 & rn3 & rm3 { local ea = rn3; local m = rm3; rd3 = *:4 ea; rn3 = ea + m; }
+:ldr rd3, [rn3, disp3] is op4=4 & ws=2 & b4=0 & rd3 & rn3 & disp3 { local ea = rn3 + 4*disp3; rd3 = *:4 ea; }
+:ldr RD6, [RN6, "+"^RM6] is xop4=9 & xws=2 & xb4=0 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6 + RM6; RD6 = *:4 ea; }
+:ldr RD6, [RN6, "-"^RM6] is xop4=9 & xws=2 & xb4=0 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6 - RM6; RD6 = *:4 ea; }
+:ldr RD6, [RN6], "+"^RM6 is xop4=13 & xws=2 & xb4=0 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6; local m = RM6; RD6 = *:4 ea; RN6 = ea + m; }
+:ldr RD6, [RN6], "-"^RM6 is xop4=13 & xws=2 & xb4=0 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6; local m = RM6; RD6 = *:4 ea; RN6 = ea - m; }
+:ldr RD6, [RN6, "+"^D11] is xop4=12 & xws=2 & xb4=0 & xpm=0 & xsub=0 & RD6 & RN6 & D11 { local ea = RN6 + 4*D11; RD6 = *:4 ea; }
+:ldr RD6, [RN6, "-"^D11] is xop4=12 & xws=2 & xb4=0 & xpm=0 & xsub=1 & RD6 & RN6 & D11 { local ea = RN6 - 4*D11; RD6 = *:4 ea; }
+:ldr RD6, [RN6], "+"^D11 is xop4=12 & xws=2 & xb4=0 & xpm=1 & xsub=0 & RD6 & RN6 & D11 { local ea = RN6; RD6 = *:4 ea; RN6 = ea + 4*D11; }
+:ldr RD6, [RN6], "-"^D11 is xop4=12 & xws=2 & xb4=0 & xpm=1 & xsub=1 & RD6 & RN6 & D11 { local ea = RN6; RD6 = *:4 ea; RN6 = ea - 4*D11; }
+:str rd3, [rn3, rm3] is op4=1 & ws=2 & b4=1 & rd3 & rn3 & rm3 { local ea = rn3 + rm3; *:4 ea = rd3; }
+:str rd3, [rn3], rm3 is op4=5 & ws=2 & b4=1 & rd3 & rn3 & rm3 { local ea = rn3; local m = rm3; *:4 ea = rd3; rn3 = ea + m; }
+:str rd3, [rn3, disp3] is op4=4 & ws=2 & b4=1 & rd3 & rn3 & disp3 { local ea = rn3 + 4*disp3; *:4 ea = rd3; }
+:str RD6, [RN6, "+"^RM6] is xop4=9 & xws=2 & xb4=1 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6 + RM6; *:4 ea = RD6; }
+:str RD6, [RN6, "-"^RM6] is xop4=9 & xws=2 & xb4=1 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6 - RM6; *:4 ea = RD6; }
+:str RD6, [RN6], "+"^RM6 is xop4=13 & xws=2 & xb4=1 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6; local m = RM6; *:4 ea = RD6; RN6 = ea + m; }
+:str RD6, [RN6], "-"^RM6 is xop4=13 & xws=2 & xb4=1 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 { local ea = RN6; local m = RM6; *:4 ea = RD6; RN6 = ea - m; }
+:str RD6, [RN6, "+"^D11] is xop4=12 & xws=2 & xb4=1 & xpm=0 & xsub=0 & RD6 & RN6 & D11 { local ea = RN6 + 4*D11; *:4 ea = RD6; }
+:str RD6, [RN6, "-"^D11] is xop4=12 & xws=2 & xb4=1 & xpm=0 & xsub=1 & RD6 & RN6 & D11 { local ea = RN6 - 4*D11; *:4 ea = RD6; }
+:str RD6, [RN6], "+"^D11 is xop4=12 & xws=2 & xb4=1 & xpm=1 & xsub=0 & RD6 & RN6 & D11 { local ea = RN6; *:4 ea = RD6; RN6 = ea + 4*D11; }
+:str RD6, [RN6], "-"^D11 is xop4=12 & xws=2 & xb4=1 & xpm=1 & xsub=1 & RD6 & RN6 & D11 { local ea = RN6; *:4 ea = RD6; RN6 = ea - 4*D11; }
+:testset RD6, [RN6, RM6] is xop4=9 & xws=2 & xb4=0 & xo194=0 & xb21=1 & RD6 & RN6 & RM6 { local ea = RN6 + RM6; local old = *:4 ea; if (old != 0) goto <done>; *:4 ea = RD6; <done> RD6 = old; }
+:ldrd rd3, [rn3, rm3] is op4=1 & ws=3 & b4=0 & rd3 & rn3 & rm3 & RD3N { local ea = rn3 + rm3; rd3 = *:4 ea; RD3N = *:4 (ea + 4); }
+:ldrd rd3, [rn3], rm3 is op4=5 & ws=3 & b4=0 & rd3 & rn3 & rm3 & RD3N { local ea = rn3; local m = rm3; rd3 = *:4 ea; RD3N = *:4 (ea + 4); rn3 = ea + m; }
+:ldrd rd3, [rn3, disp3] is op4=4 & ws=3 & b4=0 & rd3 & rn3 & disp3 & RD3N { local ea = rn3 + 8*disp3; rd3 = *:4 ea; RD3N = *:4 (ea + 4); }
+:ldrd RD6, [RN6, "+"^RM6] is xop4=9 & xws=3 & xb4=0 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 & RD6N { local ea = RN6 + RM6; RD6 = *:4 ea; RD6N = *:4 (ea + 4); }
+:ldrd RD6, [RN6, "-"^RM6] is xop4=9 & xws=3 & xb4=0 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 & RD6N { local ea = RN6 - RM6; RD6 = *:4 ea; RD6N = *:4 (ea + 4); }
+:ldrd RD6, [RN6], "+"^RM6 is xop4=13 & xws=3 & xb4=0 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 & RD6N { local ea = RN6; local m = RM6; RD6 = *:4 ea; RD6N = *:4 (ea + 4); RN6 = ea + m; }
+:ldrd RD6, [RN6], "-"^RM6 is xop4=13 & xws=3 & xb4=0 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 & RD6N { local ea = RN6; local m = RM6; RD6 = *:4 ea; RD6N = *:4 (ea + 4); RN6 = ea - m; }
+:ldrd RD6, [RN6, "+"^D11] is xop4=12 & xws=3 & xb4=0 & xpm=0 & xsub=0 & RD6 & RN6 & D11 & RD6N { local ea = RN6 + 8*D11; RD6 = *:4 ea; RD6N = *:4 (ea + 4); }
+:ldrd RD6, [RN6, "-"^D11] is xop4=12 & xws=3 & xb4=0 & xpm=0 & xsub=1 & RD6 & RN6 & D11 & RD6N { local ea = RN6 - 8*D11; RD6 = *:4 ea; RD6N = *:4 (ea + 4); }
+:ldrd RD6, [RN6], "+"^D11 is xop4=12 & xws=3 & xb4=0 & xpm=1 & xsub=0 & RD6 & RN6 & D11 & RD6N { local ea = RN6; RD6 = *:4 ea; RD6N = *:4 (ea + 4); RN6 = ea + 8*D11; }
+:ldrd RD6, [RN6], "-"^D11 is xop4=12 & xws=3 & xb4=0 & xpm=1 & xsub=1 & RD6 & RN6 & D11 & RD6N { local ea = RN6; RD6 = *:4 ea; RD6N = *:4 (ea + 4); RN6 = ea - 8*D11; }
+:strd rd3, [rn3, rm3] is op4=1 & ws=3 & b4=1 & rd3 & rn3 & rm3 & RD3N { local ea = rn3 + rm3; *:4 ea = rd3; *:4 (ea + 4) = RD3N; }
+:strd rd3, [rn3], rm3 is op4=5 & ws=3 & b4=1 & rd3 & rn3 & rm3 & RD3N { local ea = rn3; local m = rm3; *:4 ea = rd3; *:4 (ea + 4) = RD3N; rn3 = ea + m; }
+:strd rd3, [rn3, disp3] is op4=4 & ws=3 & b4=1 & rd3 & rn3 & disp3 & RD3N { local ea = rn3 + 8*disp3; *:4 ea = rd3; *:4 (ea + 4) = RD3N; }
+:strd RD6, [RN6, "+"^RM6] is xop4=9 & xws=3 & xb4=1 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 & RD6N { local ea = RN6 + RM6; *:4 ea = RD6; *:4 (ea + 4) = RD6N; }
+:strd RD6, [RN6, "-"^RM6] is xop4=9 & xws=3 & xb4=1 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 & RD6N { local ea = RN6 - RM6; *:4 ea = RD6; *:4 (ea + 4) = RD6N; }
+:strd RD6, [RN6], "+"^RM6 is xop4=13 & xws=3 & xb4=1 & xo194=0 & xb20=0 & xb21=0 & RD6 & RN6 & RM6 & RD6N { local ea = RN6; local m = RM6; *:4 ea = RD6; *:4 (ea + 4) = RD6N; RN6 = ea + m; }
+:strd RD6, [RN6], "-"^RM6 is xop4=13 & xws=3 & xb4=1 & xo194=0 & xb20=1 & xb21=0 & RD6 & RN6 & RM6 & RD6N { local ea = RN6; local m = RM6; *:4 ea = RD6; *:4 (ea + 4) = RD6N; RN6 = ea - m; }
+:strd RD6, [RN6, "+"^D11] is xop4=12 & xws=3 & xb4=1 & xpm=0 & xsub=0 & RD6 & RN6 & D11 & RD6N { local ea = RN6 + 8*D11; *:4 ea = RD6; *:4 (ea + 4) = RD6N; }
+:strd RD6, [RN6, "-"^D11] is xop4=12 & xws=3 & xb4=1 & xpm=0 & xsub=1 & RD6 & RN6 & D11 & RD6N { local ea = RN6 - 8*D11; *:4 ea = RD6; *:4 (ea + 4) = RD6N; }
+:strd RD6, [RN6], "+"^D11 is xop4=12 & xws=3 & xb4=1 & xpm=1 & xsub=0 & RD6 & RN6 & D11 & RD6N { local ea = RN6; *:4 ea = RD6; *:4 (ea + 4) = RD6N; RN6 = ea + 8*D11; }
+:strd RD6, [RN6], "-"^D11 is xop4=12 & xws=3 & xb4=1 & xpm=1 & xsub=1 & RD6 & RN6 & D11 & RD6N { local ea = RN6; *:4 ea = RD6; *:4 (ea + 4) = RD6N; RN6 = ea - 8*D11; }

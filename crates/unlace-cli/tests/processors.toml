@@ -92,6 +92,10 @@ x86_32_avx10 = """
 c5fb1044240431c062f1ff082f84240c0000000f97c0c3
 """
 
+ppc_xenon_vmx128 = """
+100018cb102020cb14400c1a1462049a106029cb4e800020
+"""
+
 [[family]]
 name = "blackfin"
 language = "Blackfin:LE:32:default"
@@ -1654,4 +1658,20 @@ address = "0x0"
 expect = [
     "a0 = a1;",  # BT skips the TFR when D0 > D1
     "return a0;",
+]
+
+# The Xbox 360 Xenon language decodes VMX128: two lvx128 loads into vr64/vr65, vaddfp128,
+# vmulfp128 and an stvx128 store (encoded from Xenia's VX128 formats, blr from powerpc-elf-as).
+[[family]]
+name = "ppc_xenon_vmx128"
+language = "PowerPC:BE:64:Xenon"
+base = "0x82000000"
+image = "ppc_xenon_vmx128"
+
+[[family.function]]
+test = "xenon_vmx128_vector_math_decompiles"
+address = "0x82000000"
+expect = [
+    "void sub_82000000(unsigned int a0,unsigned int a1,unsigned int a2)",
+    "*(char (*)[16])(a2 & 0xfffffff0) = vmx128_vmulfp(vmx128_vaddfp(",
 ]

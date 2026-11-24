@@ -4256,6 +4256,23 @@ LLVM-selected `c.lbu`, `c.lh`, `c.sb`, `c.mul`/`c.not` and
 `cmpxchg`-lowered `amocas` functions that decompile with no bad or
 unimplemented instruction.
 
+
+### RISC-V Zabha (#98)
+
+`riscv.zabha.sinc` decodes Zabha 1.0, the byte (funct3 000) and halfword
+(funct3 001) forms of every A-extension AMO (`amoswap`, `amoadd`, `amoxor`,
+`amoand`, `amoor`, `amomin`, `amomax`, `amominu`, `amomaxu`) and, with
+Zacas, `amocas.b`/`amocas.h`, with the `.aq`/`.rl`/`.aqrl` suffixes, in RV32
+and RV64. They lift like the word forms: `rd` receives the old memory value
+sign-extended to the register, the arithmetic and logical forms store the
+combined value, min/max store `rs2` only when it wins the (signed or
+unsigned) comparison, and `amocas` stores `rs2` only when memory equals the
+low byte or halfword of the old `rd`. Before, all of them were bad
+instructions. Exercised by `unlace-cli/tests/riscv_zabha.rs`: one probe row
+per encoding against LLVM's names, RV32 and RV64, and LLVM-selected 8- and
+16-bit `atomicrmw`/`cmpxchg` functions that decompile with no bad or
+unimplemented instruction.
+
 ### RISC-V scalar cryptography (#98)
 
 `riscv.rv32k.sinc` (RV32 and RV64) and `riscv.rv64k.sinc` (RV64 only,
@@ -4310,6 +4327,26 @@ AArch64's FP16 forms. `fmv.x.h` sign-extends the 16-bit pattern into `rd`,
 names, RV32 and RV64, and LLVM-selected half-precision functions that
 decompile with no bad or unimplemented instruction.
 
+
+
+### RISC-V Zfa (#98)
+
+`riscv.zfa.sinc` decodes the rest of Zfa 1.0 next to `fli.s` (§ GH-7451):
+`fli.d` and `fli.h` (the same 32-entry constant table, lifted like `fli.s`
+through the `fli` user operation with the table index), `fminm`/`fmaxm` in
+S, D and H (as `fmin`/`fmax`, but a NaN operand is the result),
+`fround`/`froundnx` (round to an integral value in the same format; user
+operations taking the value and the rounding mode, since p-code has no
+operation parameterised by rounding mode), `fcvtmod.w.d` (the low 32 bits of
+the truncated 64-bit conversion, sign-extended on RV64), the quiet compares
+`fleq`/`fltq` (the ordinary p-code float compares, which raise no exceptions
+in p-code either), and on RV32 `fmvh.x.d` (the high word of a double) and
+`fmvp.d.x` (a double from `rs2:rs1`). The `fli` constant at index 0 now
+displays as `-1.0` (it read `min`, the name of index 1). Exercised by
+`unlace-cli/tests/riscv_zfa.rs`: one probe row per encoding (all 32 `fli`
+constants) against LLVM's names, RV32 and RV64, and LLVM-selected
+`fminm.d`, `fmaxm.s`, `fround.d`, `fli.d` and `fleq.d` functions that
+decompile with no bad or unimplemented instruction.
 
 ### RISC-V cache-block operations, hints, may-be-operations and CFI (#98)
 

@@ -7,6 +7,12 @@
 //! (the default), each class is a structure whose first field is
 //! `C_vtbl *__vftable`, Tagged embeds its Named subobject, and a virtual
 //! member's `this` is hinted as its class's pointer; off, none of it exists.
+//! `Circle::Circle`, which the image calls and which stores Circle's vftable
+//! through `this` and returns it, is named and its `this` typed.
+//!
+//! `msvc_vbases_{x64,x86}.exe` (source `msvc_vbases.cpp`) keep Both's vftable
+//! for its virtual base Base at an offset only the vbtable states; that
+//! vftable's methods take a `Base *`.
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -17,6 +23,14 @@ use unlace_decomp::dtype::Datatype;
 /// `Square::area` (`return side * side * scale`), slot 0 of Square's vftable.
 const SQUARE_AREA_X64: u64 = 0x1_4000_1110;
 const SQUARE_AREA_X86: u64 = 0x0040_10e0;
+
+/// `Circle::Circle(int)`, out of line and called by the entry.
+const CIRCLE_CTOR_X64: u64 = 0x1_4000_10f0;
+const CIRCLE_CTOR_X86: u64 = 0x0040_10c0;
+
+/// The two methods in Both's vftable for its virtual base Base.
+const BASE_METHODS_X64: [u64; 2] = [0x1_4000_1090, 0x1_4000_10a0];
+const BASE_METHODS_X86: [u64; 2] = [0x0040_1070, 0x0040_1080];
 
 fn fixture(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -83,9 +97,29 @@ fn assert_typed(prog: &ConsoleProgram, square_area: u64, named_at: i32) {
     assert_eq!(this_class(prog, square_area).as_deref(), Some("Square"));
 }
 
+fn assert_constructor(prog: &ConsoleProgram, ctor: u64) {
+    assert_eq!(prog.function_named_at(ctor).as_deref(), Some("Circle"));
+    assert!(prog.has_symbol_named("Circle::Circle"));
+    assert_eq!(this_class(prog, ctor).as_deref(), Some("Circle"));
+}
+
+fn assert_virtual_base(prog: &ConsoleProgram, methods: [u64; 2]) {
+    let base = find_type(prog, "Base").expect("the virtual base is typed");
+    assert!(field(&base, "__vftable").is_some());
+    let both = find_type(prog, "Both").expect("Both is typed");
+    assert!(
+        field(&both, "Base").is_none(),
+        "a virtual base is not embedded"
+    );
+    for m in methods {
+        assert_eq!(this_class(prog, m).as_deref(), Some("Base"), "{m:#x}");
+    }
+}
+
 fn assert_untyped(prog: &ConsoleProgram, square_area: u64) {
     assert!(find_type(prog, "Square_vtbl").is_none());
     assert!(this_class(prog, square_area).is_none());
+    assert!(!prog.has_symbol_named("Circle::Circle"));
 }
 
 #[test]
@@ -104,6 +138,26 @@ fn x86_classes_are_typed_from_msvc_rtti() {
         SQUARE_AREA_X86,
         0xc,
     );
+}
+
+#[test]
+fn x64_constructor_is_named_and_typed() {
+    assert_constructor(&bootstrap("msvc_classes_x64.exe", true), CIRCLE_CTOR_X64);
+}
+
+#[test]
+fn x86_constructor_is_named_and_typed() {
+    assert_constructor(&bootstrap("msvc_classes_x86.exe", true), CIRCLE_CTOR_X86);
+}
+
+#[test]
+fn x64_virtual_base_vftable_is_typed() {
+    assert_virtual_base(&bootstrap("msvc_vbases_x64.exe", true), BASE_METHODS_X64);
+}
+
+#[test]
+fn x86_virtual_base_vftable_is_typed() {
+    assert_virtual_base(&bootstrap("msvc_vbases_x86.exe", true), BASE_METHODS_X86);
 }
 
 #[test]

@@ -169,6 +169,37 @@ On the #546 encodings, `--oracle qemu` runs `bfdot` and `usdot` (Unicorn raises
 finds `fle.s` reading an unboxed single (`d38c9fa1`): QEMU compares the canonical NaN and
 writes 0, SLEIGH writes 1. Unicorn misses this because it does not unbox either.
 
+## Regression sweep
+
+`tools/difffuzz/sweep.py` runs every configuration (each `--arch` with the Unicorn oracle where
+Unicorn emulates it, and with `--oracle qemu`, including `riscv64v`) at a fixed seed and a small
+count, one difffuzz process per configuration, and prints one line per configuration:
+
+```sh
+DIFFFUZZ_QEMU_DIR=~/.local/share/qemu-8.2-user ~/.local/share/difffuzz-venv/bin/python \
+    tools/difffuzz/sweep.py --unlace target/debug/unlace --objdump <llvm-objdump with RVV> --jobs 4 --out sweep.json
+x86-64       unicorn  ok    match    270  mismatch    0 (+0 known)  decode    0  ref-exc    8  unmodeled    9
+riscv64v     qemu     ok    match    126  mismatch    0 (+66 known)  decode    0  ref-exc   83  unmodeled    0
+s390x        qemu     unavailable: no QEMU user binary
+```
+
+`--count` (200), `--trials` (2) and `--seed` (1) are passed through, and so are `--sleighpath`
+(to check spec edits) and `--only REGEX` (over `arch/oracle`). A configuration whose oracle is
+not installed is `unavailable`, not a failure. `--out` writes the outcome counts of each
+configuration and up to `--keep` (10) of its failing cases.
+
+The exit status is 1 when a configuration has a finding of a failing kind (`mismatch`,
+`length`, `missing-output`, `missing-input`) that `tools/difffuzz/sweep_known.json` does not
+accept, 2 when a configuration errored, and 0 otherwise. `sweep_known.json` maps
+`arch/oracle` to the difference keys (a register, `missing-output`, `missing-input`) and the
+fnmatch patterns over their values that are documented open classes. Today that is only the RISC-V
+vector classes below. A value mismatch is never accepted.
+
+First run (unlace-2feb8da847, seed 1, 200 per configuration): every available configuration is
+`ok`. Unavailable were `ppc`, `ppc64le`, `ppc64le-isa` and `s390x` on QEMU (no
+`qemu-ppc`/`qemu-ppc64le`/`qemu-s390x` on this host). `riscv64v` had 66 findings, all in its four
+documented classes.
+
 ## How a case runs
 
 - **Registers.** The register file of the language comes from its `.slaspec`

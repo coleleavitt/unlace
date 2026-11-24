@@ -5580,6 +5580,25 @@ loads it from the first word of its area. `XRSTOR` and `XRSTORS` load it the
 same way when `EAX` bit 0 and the area's `XSTATE_BV` bit 0 are set, reset it
 to `0x037f` when only `EAX` bit 0 is set, and leave it unchanged otherwise.
 
+The x87 condition bits `C0`-`C3` are their own registers; `FSTSW`/`FNSTSW` (to
+`AX` or memory) store `FPUStatusWord` with bits 8-10 and 14 replaced by them,
+so a status word read after an arithmetic instruction, `FPREM` or `FXAM` sees
+the bits that instruction set (before, only `FCOM`-family compares wrote the
+word). `FXAM` classifies `ST0` from its encoding: `C1` is the sign bit (also for
+a zero or NaN), `C0` is an all-ones exponent (NaN or infinity), `C3` a zero
+exponent (zero or denormal), `C2` a non-NaN non-zero value; an empty register
+and the unsupported 80-bit encodings are not told apart. `FPREM` converts its
+truncated quotient back to a float before the multiply (it multiplied the
+integer's bits), and `FPREM`/`FPREM1` set `C2` when the exponents differ by
+more than 63 (a partial remainder) and `C1`, `C3`, `C0` to bits 0-2 of the
+quotient's magnitude. Their remainder comes from a rounded divide and multiply,
+so it is exact only while the quotient's product with `ST1` fits 64 bits.
+Loads, exact stores, `FXCH`, `FCHS`, `FABS`, `FINCSTP`, `FISTTP` and the
+constant loads clear `C1` as the SDM says. `FLDPI`, `FLDL2E`, `FLDL2T`, `FLDLG2`
+and `FLDLN2` stay the widened double values (their low 11 bits differ from the
+hardware's): a p-code constant is at most 8 bytes, and building the 80-bit value
+from two integers prints as bit operations.
+
 The x86 `BOUND` lift loads adjacent signed lower and upper limits at the
 operand width and passes the index and both limits to the side-effecting,
 outputless `x86_bound_check16` or `x86_bound_check32` user-op. Its contract is to

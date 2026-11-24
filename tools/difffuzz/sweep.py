@@ -34,7 +34,7 @@ CONFIGS = [
     ("mips", "qemu"), ("mips64", "qemu"), ("mipsr6", "qemu"), ("mips64r6", "qemu"),
     ("ppc", "qemu"), ("ppc64", "qemu"), ("ppc64le", "qemu"), ("ppc64-isa", "qemu"), ("ppc64le-isa", "qemu"),
     ("s390x", "qemu"), ("nios2", "qemu"), ("sh4", "qemu"), ("m68k", "qemu"),
-    ("x86-64-native", "native"),
+    ("x86-64-native", "native"), ("x86-64-x87", "native"),
 ]
 FAILING = ("mismatch", "length", "missing-output", "missing-input")
 KNOWN = HERE / "sweep_known.json"

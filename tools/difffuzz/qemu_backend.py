@@ -1063,11 +1063,14 @@ class X86NativeHarness:
     qemu = None
     machine = 62
     big = False
-    table_size = 192 + 512 + 16
+    # an FXSAVE image at 768 (FCW 0x37F, the C0-C3 bits, ST0..ST6 valid, ST7 empty, MXCSR 0x1F80)
+    fx_at = 768
+    table_size = 768 + 512
     marker_at = 192 + 512
 
     def prologue(self, target):
         c = b"\x48\xB8" + struct.pack("<Q", TABLES)                      # movabs rax, TABLES
+        c += b"\x48\x0F\xAE\x88" + struct.pack("<i", self.fx_at)            # fxrstor64 [rax+fx_at]
         for i in range(16):
             c += _x86_vmovdqu(i, 192 + 32 * i, False)
         c += b"\xFF\xB0" + struct.pack("<i", 128) + b"\x9D"              # push [rax+128]; popfq
@@ -1086,6 +1089,7 @@ class X86NativeHarness:
         c += b"\x9C\x5B" + _x86_mov_store(3, 128)                        # pushfq; pop rbx; store
         for i in range(16):
             c += _x86_vmovdqu(i, 192 + 32 * i, True)
+        c += b"\x48\x0F\xAE\x80" + struct.pack("<i", self.fx_at)            # fxsave64 [rax+fx_at]
         c += b"\x48\xC7\x80" + struct.pack("<iI", self.marker_at, marker)
         for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
             c += b"\xB8\x01\x00\x00\x00\xBF\x01\x00\x00\x00"              # eax=1 (write); edi=1
@@ -1102,16 +1106,35 @@ class X86NativeHarness:
         for i in range(16):
             v = init_vec.get(f"YMM{i}", 0)
             t[192 + 32 * i:224 + 32 * i] = (v & (2 ** 256 - 1)).to_bytes(32, "little")
+        fx = self.fx_at
+        fsw = (init.get("C0", 0) << 8) | (init.get("C1", 0) << 9) | (init.get("C2", 0) << 10) | (init.get("C3", 0) << 14)
+        struct.pack_into("<HHB", t, fx, 0x37F, fsw, 0x7F)
+        struct.pack_into("<I", t, fx + 24, 0x1F80)
+        for i in range(8):
+            t[fx + 32 + 16 * i:fx + 42 + 16 * i] = (init.get(f"ST{i}", 0) & (2 ** 80 - 1)).to_bytes(10, "little")
         return bytes(t)
 
     def parse(self, arch, out):
         regs = {n: struct.unpack_from("<Q", out, 8 * i)[0] for i, (n, _) in enumerate(arch.gprs)}
         for i in range(16):
             regs[f"YMM{i}"] = int.from_bytes(out[192 + 32 * i:224 + 32 * i], "little")
+        fx = self.fx_at
+        fsw, ftw = struct.unpack_from("<HB", out, fx + 2)
+        top = (fsw >> 11) & 7
+        for n, b in (("C0", 8), ("C1", 9), ("C2", 10), ("C3", 14)):
+            regs[n] = (fsw >> b) & 1
+        regs["_invalid"] = set()
+        for i in range(8):
+            regs[f"ST{i}"] = int.from_bytes(out[fx + 32 + 16 * i:fx + 42 + 16 * i], "little")
+            if not (ftw >> ((top + i) & 7)) & 1:
+                regs["_invalid"].add(f"ST{i}")        # an empty register holds no value
+        # a stack fault (push onto a full stack, pop or read of an empty one): not modelled by SLEIGH
+        regs["_undefined"] = bool(fsw & 0x40)
         return regs, struct.unpack_from("<Q", out, 128)[0]
 
 
 HARNESSES["x86-64-native"] = X86NativeHarness
+HARNESSES["x86-64-x87"] = X86NativeHarness
 
 
 def available(arch):
@@ -1135,6 +1158,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     else:
         bits_ = {n: rng.getrandbits(1) for n in getattr(arch, "qemu_bits", ())}
     init.update(bits_)
+    extra = arch.extra_init(rng) if hasattr(arch, "extra_init") else {}
+    init.update(extra)
     for n, _ in arch.vecs:
         if n in regs and regs[n][1] < 16:
             init_vec[n] &= (1 << (8 * regs[n][1])) - 1
@@ -1155,6 +1180,9 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         st.set(n, init[n])
     for n in bits_:
         st.set(n, bits_[n])
+    for n, v in extra.items():
+        if n in regs:
+            st.set(n, v)
     for n, _ in arch.vecs:
         if n in regs:
             st.set(n, init_vec[n])
@@ -1261,6 +1289,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         for n in h.scratch_names:
             ref[n] = init[n]
 
+    if ref.get("_undefined"):
+        return {"status": "undefined"}
     diffs = {}
     if not hasattr(arch, "partial"):
         partial = {}
@@ -1268,6 +1298,12 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         partial = arch.partial(cand["mnemonic"], cand["op_str"], row)
     else:
         partial = arch.partial(cand["mnemonic"], cand["op_str"])
+    for n in extra:
+        if n in ignore or n not in regs or n not in ref or n in ref.get("_invalid", ()):
+            continue
+        w = (1 << (8 * regs[n][1])) - 1
+        if st.get(n) & w != ref[n] & w:
+            diffs[n] = (st.get(n) & w, ref[n] & w)
     for n, _ in arch.gprs + arch.vecs + [(b, None) for b in bits_]:
         if n in ignore or n not in regs:
             continue

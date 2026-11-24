@@ -1401,6 +1401,10 @@ pub fn universal_sched_hooked(
             act!(crate::kuna_chkstkdarwin::ActionChkstkDarwin::boxed(
                 "deadcode"
             )),
+            // (kuna) llscfold (option `llscfold`, default-OFF): an AArch64
+            // load/store-exclusive retry loop becomes the atomic builtin of its
+            // successful iteration. Pre-SSA, so heritage guards memory across it.
+            act!(crate::kuna_atomics::ActionLlscLoop::boxed("deadcode")),
             // (kuna) outline (option `outline`, default-OFF - destructive, and inert
             // with no region supplied).  Excise a SUPPLIED single-entry region and
             // emit a call to a synthesized pseudofunction in its place.

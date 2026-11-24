@@ -5582,7 +5582,9 @@ moves.
   prints; a narrower pointer, float or record is not widened and stays
   unbound. This also places a narrow local on a big-endian register at the
   bytes the write really covers. The matching raw varnodes have their
-  properties refreshed, as for a console `type varnode`. A parameter whose location at the entry PC is a
+  properties refreshed, as for a console `type varnode`. A local left unbound is
+  returned to the drive, which with `option honestgaps` on names it in a
+  `debuginfo:` header warning instead of dropping it silently (chapter 02). A parameter whose location at the entry PC is a
   single register (`entry_storage`) is locked to that register when the
   default model would put some parameter of the function elsewhere and gives it
   no hidden return pointer (the commit asks the model with
@@ -13706,6 +13708,29 @@ family, `__assert_rtn`, `dispatch_main`, `objc_exception_throw`,
 ends a block at or lowers bounds and SIMD panics to (`runtime.block`,
 `runtime.panicrangestate`, `runtime.panicBounds`, `runtime.panicExtend`,
 `runtime.panicSimdImm` and the `panicBounds64`/`32`/`32X` helpers) and `os.Exit`.
+A second such block per list (#28) names, each with its declaration in the
+comment above it: on ELF, the remaining C++ runtime exits (`__cxa_call_terminate`,
+`__cxxabiv1::__unexpected`, `_Unwind_SjLj_Resume`, libstdc++'s
+`std::__throw_bad_weak_ptr`, `std::__throw_bad_any_cast` and
+`std::__glibcxx_assert_fail`), newlib's `__assert_func`, Android's
+`__android_log_assert`, OpenBSD's `__stack_smash_handler`, libiberty's `xexit` and
+`xmalloc_failed`, CPython's `Py_FatalError`, `_Py_FatalErrorFunc`, `Py_Exit` and
+`Py_ExitStatusException`, the two unrecoverable UBSan handlers, and the Linux
+kernel's `__noreturn` functions from objtool's `noreturns.h` whose names a user
+program is unlikely to reuse (`make_task_dead`, `kthread_exit`, `usercopy_abort`,
+`start_kernel`, …; `do_exit` and `rest_init` stay out); off-ELF,
+`_Unwind_Resume`, `_Unwind_SjLj_Resume`, `__cxa_call_unexpected`,
+`__cxa_call_terminate`, `__stack_chk_fail`, Darwin's `abort_with_reason` and
+`abort_with_payload`, and the CPython exits; on PE only (the Win32 list), the MSVC
+CRT /GS reporters (`__report_gsfailure`, `__report_securityfailure(Ex)`),
+`_amsg_exit`, the Microsoft STL `std::_X*` throwers in both decorations and
+demangled, `std::unexpected`, nine MFC `AfxThrow*Exception` functions,
+`_com_raise_error`, and ntdll's `RtlExitUserProcess`, `RtlExitUserThread` and
+`RtlRestoreContext`; for Rust, `__rust_alloc_error_handler`,
+`__rdl_alloc_error_handler` and `core::panicking::assert_failed_inner`; for Go,
+`runtime.goexit`, `runtime.morestackc` and `runtime.dieFromException`. Names whose
+declaration lets them return stay out: `_Unwind_Resume_or_Rethrow` returns when no
+handler is found, and `_com_issue_error` calls a replaceable handler.
 glibc's `__assert` is left out: stripped of its underscores it would name a
 program's own returning `assert`. The Rust list's mangled prefixes only match
 legacy symbols (`_ZN4core9panicking5panic17h...`), and current rustc emits v0

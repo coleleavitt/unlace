@@ -41,3 +41,63 @@ ___report_rangecheckfailure
 ?_Xout_of_range@std@@YAXPBD@Z
 ?_Xbad_function_call@std@@YAXXZ
 ?terminate@@YAXXZ
+
+# (kuna, #28) Windows names a public declaration or document marks no-return,
+# missing above.
+# MSVC CRT gs_report.c (`__declspec(noreturn)`; the /GS failure path that
+# terminates the process): `__report_gsfailure`, `__report_securityfailure`,
+# `__report_securityfailureEx`. mingw-w64 crt internal.h `_amsg_exit`
+# (`__MINGW_ATTRIB_NORETURN`).
+report_gsfailure
+report_securityfailure
+report_securityfailureEx
+amsg_exit
+# Microsoft STL yvals.h: `[[noreturn]] std::_X*`. The decorated prefix covers
+# both the x86 (`PBD`) and x64 (`PEBD`) argument encodings; the plain spelling
+# is the demangled `std::_Xlength_error` under the `std` namespace guard.
+?_Xbad_alloc@std@@*
+?_Xinvalid_argument@std@@*
+?_Xlength_error@std@@*
+?_Xout_of_range@std@@*
+?_Xoverflow_error@std@@*
+?_Xruntime_error@std@@*
+?_XGetLastError@std@@*
+Xbad_alloc
+Xinvalid_argument
+Xlength_error
+Xout_of_range
+Xoverflow_error
+Xruntime_error
+XGetLastError
+# C++ <exception> `[[noreturn]] std::unexpected()` (MSVC decoration).
+?unexpected@@YAXXZ
+# MFC (Microsoft Learn, "Exception Processing"): each AfxThrow* "Throws a ...
+# exception". Decorated prefix plus the plain name.
+?AfxThrowArchiveException@@*
+?AfxThrowFileException@@*
+?AfxThrowInvalidArgException@@*
+?AfxThrowMemoryException@@*
+?AfxThrowNotSupportedException@@*
+?AfxThrowResourceException@@*
+?AfxThrowUserException@@*
+?AfxThrowOleException@@*
+?AfxThrowOleDispatchException@@*
+AfxThrowArchiveException
+AfxThrowFileException
+AfxThrowInvalidArgException
+AfxThrowMemoryException
+AfxThrowNotSupportedException
+AfxThrowResourceException
+AfxThrowUserException
+AfxThrowOleException
+AfxThrowOleDispatchException
+# comdef.h `_com_raise_error` (Microsoft Learn: "Throws a _com_error").
+# `_com_issue_error` calls the replaceable `_set_com_error_handler` handler,
+# which may return, and stays out.
+?_com_raise_error@@*
+com_raise_error
+# ntdll (phnt ntrtl.h, `DECLSPEC_NORETURN`): `RtlExitUserProcess`,
+# `RtlExitUserThread`; winnt.h `RtlRestoreContext` (`__MINGW_ATTRIB_NORETURN`).
+RtlExitUserProcess
+RtlExitUserThread
+RtlRestoreContext

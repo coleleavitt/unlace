@@ -43,6 +43,7 @@ pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
     crate::kuna_loweredswitchvalue::provide(slots);
     crate::kuna_constselectjump::provide(slots);
     crate::kuna_jumpassist::provide(slots);
+    crate::kuna_atomics::provide(slots);
 }
 
 /// This crate's unit tests link without the driver, so they define the driver's hook symbol

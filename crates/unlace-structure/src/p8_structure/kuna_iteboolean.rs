@@ -155,6 +155,7 @@ impl Action for ActionIteBoolean {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, Casts);
         // P0 assertion `option iteboolean on|off`, carried on the Architecture
         // boundary.  Off => nothing marked => byte-identical output.
         if !data

@@ -7,9 +7,11 @@
 //! imports at which addresses. It interns nothing and types nothing.
 //!
 //! A target is an object format, an operating system, a machine and a C
-//! library. The one target with a library is an x86-64 Linux ELF dynamically
-//! linked against glibc or musl; every other image yields no facts, and the
-//! commit then has nothing to consult the library for.
+//! library. The one target with a built-in library is an x86-64 Linux ELF
+//! dynamically linked against glibc or musl. Every other image is named by its
+//! format and machine ([`any_target`]), which no built-in library and no text
+//! library of that target matches, so only an IDA type library (`.til`), which
+//! is rendered for whatever target reads it, declares its imports.
 
 use object::{Object, ObjectSection};
 
@@ -37,6 +39,32 @@ fn target(file: &object::File) -> Option<(&'static str, bool)> {
     (musl_loader || names.any(|s| s.starts_with(b"libc.musl-"))).then_some(("linux x86_64", false))
 }
 
+/// The target of an image no built-in library serves: its format and machine.
+fn any_target(file: &object::File) -> &'static str {
+    use object::Architecture as A;
+    use object::BinaryFormat as F;
+    match (file.format(), file.architecture()) {
+        (F::Pe | F::Coff, A::I386) => "windows x86",
+        (F::Pe | F::Coff, A::X86_64) => "windows x86_64",
+        (F::Pe | F::Coff, A::Aarch64) => "windows aarch64",
+        (F::Pe | F::Coff, A::Arm) => "windows arm",
+        (F::MachO, A::X86_64) => "macho x86_64",
+        (F::MachO, A::Aarch64) => "macho aarch64",
+        (F::MachO, A::Arm) => "macho arm",
+        (F::Elf, A::X86_64) => "elf x86_64",
+        (F::Elf, A::I386) => "elf x86",
+        (F::Elf, A::Aarch64) => "elf aarch64",
+        (F::Elf, A::Arm) => "elf arm",
+        (F::Elf, A::Mips) => "elf mips",
+        (F::Elf, A::Mips64) => "elf mips64",
+        (F::Elf, A::PowerPc) => "elf ppc",
+        (F::Elf, A::PowerPc64) => "elf ppc64",
+        (F::Elf, A::Riscv32) => "elf riscv32",
+        (F::Elf, A::Riscv64) => "elf riscv64",
+        _ => "other",
+    }
+}
+
 impl AnalysisPass for TypeLibPass {
     fn phase(&self) -> Phase {
         Phase::P1
@@ -48,9 +76,7 @@ impl AnalysisPass for TypeLibPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = AnalysisOutput::default();
-        let Some((target, glibc)) = target(ctx.file) else {
-            return out;
-        };
+        let (target, glibc) = target(ctx.file).unwrap_or_else(|| (any_target(ctx.file), false));
         let Some(image) = ctx.image else {
             return out;
         };
@@ -72,7 +98,7 @@ impl AnalysisPass for TypeLibPass {
 
 #[cfg(test)]
 mod tests {
-    use super::target;
+    use super::{any_target, target};
 
     fn fixture(name: &str) -> Vec<u8> {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -92,5 +118,6 @@ mod tests {
         let mips = fixture("libctypes_mips32_glibc_le32");
         let file = object::File::parse(&*mips).unwrap();
         assert_eq!(target(&file), None);
+        assert_eq!(any_target(&file), "elf mips");
     }
 }

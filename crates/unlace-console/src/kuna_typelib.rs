@@ -55,6 +55,8 @@ const BUILTIN: &[(&str, &str)] = &[("linux x86_64", include_str!("../typelib/lin
 
 /// Largest library file `typelib <path>` reads.
 const MAX_LIBRARY_BYTES: u64 = 16 << 20;
+/// Largest IDA type library (`.til`) `typelib <path>` reads.
+const MAX_TIL_BYTES: u64 = 64 << 20;
 /// Longest line of a library.
 const MAX_LINE_BYTES: usize = 4096;
 /// Largest record a library may declare.
@@ -440,10 +442,13 @@ impl<'l, 'a> Reader<'l, 'a> {
 }
 
 /// The library text the option selects for `target`: the built-in one, or the
-/// file's when it names the same target.
+/// file's when it names the same target. An IDA type library (`.til`) is
+/// rendered as library text for `target` itself, its pointers `addr_size`
+/// bytes wide when its memory model states no width.
 fn library_text(
     choice: &TypeLib,
     target: &str,
+    addr_size: u8,
 ) -> Result<Option<std::borrow::Cow<'static, str>>, String> {
     let builtin = || {
         BUILTIN
@@ -458,6 +463,18 @@ fn library_text(
     };
     let shown = path.display();
     let meta = std::fs::metadata(path).map_err(|e| format!("typelib {shown}: {e}"))?;
+    if is_til_file(path) {
+        if meta.len() > MAX_TIL_BYTES {
+            return Err(format!(
+                "typelib {shown}: larger than {} MiB",
+                MAX_TIL_BYTES >> 20
+            ));
+        }
+        let bytes = std::fs::read(path).map_err(|e| format!("typelib {shown}: {e}"))?;
+        let text = unlace_analysis::protos::kuna_til::to_typelib(&bytes, target, addr_size)
+            .map_err(|e| format!("typelib {shown}: {e}"))?;
+        return Ok(Some(text.into()));
+    }
     if meta.len() > MAX_LIBRARY_BYTES {
         return Err(format!(
             "typelib {shown}: larger than {} MiB",
@@ -466,6 +483,16 @@ fn library_text(
     }
     let text = std::fs::read_to_string(path).map_err(|e| format!("typelib {shown}: {e}"))?;
     Ok(Some(text.into()))
+}
+
+/// `true` when `path` opens with the IDA type-library header.
+fn is_til_file(path: &std::path::Path) -> bool {
+    use std::io::Read;
+    let mut head = [0u8; 6];
+    std::fs::File::open(path)
+        .and_then(|mut f| f.read_exact(&mut head))
+        .is_ok()
+        && unlace_analysis::protos::kuna_til::is_til(&head)
 }
 
 /// Add the library's prototype for each import of `facts` that no earlier
@@ -478,7 +505,9 @@ pub fn seed(
     let typelib = arch
         .kuna_options
         .get::<unlace_decomp::kuna_typelib::TypeLib>();
-    let Some(text) = library_text(&typelib, facts.target)? else {
+    let (addr_size, word_size) = arch.data_org();
+    let Some(text) = library_text(&typelib, facts.target, u8::try_from(addr_size).unwrap_or(8))?
+    else {
         return Ok(0);
     };
     let lib = Library::parse(&text).map_err(|e| format!("typelib {}: {e}", typelib.as_str()))?;
@@ -490,7 +519,6 @@ pub fn seed(
             facts.target
         ));
     }
-    let (addr_size, word_size) = arch.data_org();
     let org = DataOrg {
         addr_size,
         word_size,

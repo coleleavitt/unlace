@@ -76,7 +76,7 @@ fn archive_members_keep_the_vendored_database_and_leave_no_staging_files() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|c| c["name"] == "kuna_strlen")
+            .any(|c| c["name"] == "unlace_strlen")
     );
     let records = unlace_analysis::fid::db::FidDb::load(&std::fs::read(output).unwrap()).unwrap();
     let mut names: Vec<_> = records
@@ -85,7 +85,7 @@ fn archive_members_keep_the_vendored_database_and_leave_no_staging_files() {
         .map(|record| record.name.as_str())
         .collect();
     names.sort_unstable();
-    assert_eq!(names, ["kuna_crc32", "kuna_memset", "kuna_strlen"]);
+    assert_eq!(names, ["unlace_crc32", "unlace_memset", "unlace_strlen"]);
     assert!(std::fs::read_dir(staging).unwrap().next().is_none());
 }
 
@@ -155,7 +155,7 @@ fn query_reports_candidates_collisions_and_invalid_databases() {
     assert_eq!(value["entry_source"], "discovered");
     assert_eq!(value["instruction_boundary"], "instruction_start");
     assert_eq!(value["match_basis"], "full_hash");
-    assert_eq!(value["candidates"][0]["name"], "kuna_crc32");
+    assert_eq!(value["candidates"][0]["name"], "unlace_crc32");
     assert_eq!(value["candidates"][0]["specific_hash_matches"], false);
     assert_eq!(value["specific_hash_evidence"], "no_candidate_matches");
     assert_eq!(value["candidates"][0]["code_unit_size_matches"], true);
@@ -231,7 +231,7 @@ fn query_reports_candidates_collisions_and_invalid_databases() {
     let mut records: Vec<_> = db.records().into_iter().cloned().collect();
     let mut collision = records
         .iter()
-        .find(|r| r.name == "kuna_crc32")
+        .find(|r| r.name == "unlace_crc32")
         .unwrap()
         .clone();
     collision.name = "other_candidate".into();

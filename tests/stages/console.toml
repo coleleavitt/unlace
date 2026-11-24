@@ -3,7 +3,7 @@
 # Proves that the unlace-owned IfaceUnlaceCapability self-registers its console
 # commands inside the datatest harness (testfunction.cc ConsoleCommands ->
 # IfaceCapability::registerAllCommands) with no upstream anchor edit, and
-# that the stage registry (kuna_stages.cc) answers queries:
+# that the stage registry (unlace_stages.cc) answers queries:
 #
 #   phase list        - phases + Band B + sub-phase catalog (with LATENT)
 #   phase map <name>  - group / surface / sub-phase resolution

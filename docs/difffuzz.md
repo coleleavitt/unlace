@@ -464,7 +464,7 @@ the venv's python (`DIFFFUZZ_PYTHON`), the QEMU directories
 rustc-master llvm-objdump for RVV (`DIFFFUZZ_OBJDUMP`) and for Power ISA 3.1 (`DIFFFUZZ_PPC_OBJDUMP`),
 `~/.local/share/difffuzz-tools/loongarch64-linux-gnu-objdump` (`DIFFFUZZ_LA_OBJDUMP`) and the gdb
 simulator drivers in `~/.local/share/difffuzz-gdbsim/bin` (`DIFFFUZZ_GDBSIM_DIR`). It goes
-through `kuna-slot` when that exists, with core dumps off, and writes the summary to
+through `unlace-slot` when that exists, with core dumps off, and writes the summary to
 `~/.local/share/difffuzz-sweeps/sweep-<UTC time>-<binary>.json` (`DIFFFUZZ_SWEEP_OUT`). Its
 exit status is sweep.py's. LoongArch without an objdump, or a `gdbsim` configuration without its
 `dfsim-<sim>` driver, is `unavailable`. After the sweep it runs `xopcheck.py` (XOP and TBM

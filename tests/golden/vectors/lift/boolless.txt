@@ -4,7 +4,7 @@
 # cap: 80 instructions per lift point
 # lift-points (space:byte-offset name): CODE:0xa000=boolless
 # regenerate: python tools/rust-port/gen_lift.py  (see tests/golden/vectors/lift/README.md)
-# golden liftctx (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden liftctx (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 archid 8051:BE:16:default:default
 languageid 8051:BE:16:default
 slafile 8051.sla
@@ -24,7 +24,7 @@ space fspec index=10 size=8 wordsize=1 bigendian=0
 space iop index=11 size=8 wordsize=1 bigendian=0
 space join index=12 size=4 wordsize=1 bigendian=1
 space stack index=13 size=1 wordsize=1 bigendian=1
-# golden lift CODE:0xa000 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift CODE:0xa000 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 insn CODE:0xa000 2
   COPY (register,0xb,1) (INTMEM,0x52,1)
 insn CODE:0xa002 3

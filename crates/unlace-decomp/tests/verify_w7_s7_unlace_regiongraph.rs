@@ -1,5 +1,5 @@
 //! Independent verifier adversarial tests for item `w7-s7-unlace-regiongraph`
-//! (`decompiler/cpp/kuna_regiongraph.{cc,hh}`): the unlace-owned region digraph
+//! (`decompiler/cpp/unlace_regiongraph.{cc,hh}`): the unlace-owned region digraph
 //! substrate for the angr `RegionIdentifier` port (S7).
 //!
 //! These target the hunt-list spots flagged as most fragile for this item:
@@ -22,7 +22,7 @@
 //!     the frontier (erase-while-iterating / dangling-node fixpoint).
 //!
 //! Each assertion is re-derived from the C++ oracle in
-//! `decompiler/cpp/kuna_regiongraph.cc`, not from the Rust port.
+//! `decompiler/cpp/unlace_regiongraph.cc`, not from the Rust port.
 
 use std::collections::BTreeMap;
 

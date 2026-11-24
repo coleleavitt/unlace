@@ -1,7 +1,7 @@
 # unlace GH-510: repeated `index out of bounds: the len is N but the index is N`
 # panics on an 18 MB Windows PE, each one dropping a whole function from the
 # output as a LOSS-131 error record.
-# https://github.com/Noelo-Lab/kuna/issues/510
+# upstream issue #510
 #
 # Stage / sub-stage: P3 SSA construction, the op-property triple heritage
 # caches on the ops it creates (the C++ `glb->inst[opc]` seam).  Correctness

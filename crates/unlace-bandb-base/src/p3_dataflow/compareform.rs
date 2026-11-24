@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_compareform.{cc,hh}` — comparison-form
+//! Port of `decompiler/cpp/unlace_compareform.{cc,hh}` — comparison-form
 //! presentation sub-stage (unlace GH-558, S3/S9 presentation split).
 //!
 //! The decompiler canonicalizes `V <= c` into `V < c+1` through one primitive
@@ -31,7 +31,7 @@
 //! (`original` => `present_lessequal = true`, unlace DIV-2 default-on, GH-558).
 //!
 //! The option-apply body that selects that gate value — `OptionCompareForm::apply`
-//! (`kuna_compareform.cc:85`) — is ported as [`parse_compare_form`] (mirroring the
+//! (`unlace_compareform.cc:85`) — is ported as [`parse_compare_form`] (mirroring the
 //! sibling `parse_return_pair_form` / `parse_memset_recover_form`): it parses
 //! `original`/`canonical` into [`CompareForm`] (the `glb->present_lessequal` write
 //! becomes the returned form, threaded by `w4-unlace-p0-pack` into
@@ -109,7 +109,7 @@ impl Action for ActionPresentCompareForm {
         }))
     }
 
-    /// C++ `ActionPresentCompareForm::apply` (`kuna_compareform.cc:67`) —
+    /// C++ `ActionPresentCompareForm::apply` (`unlace_compareform.cc:67`) —
     /// transcribed.
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         // `Funcdata::glb` is the real `Architecture` (`ArchHandle = Rc<Architecture>`),
@@ -278,7 +278,7 @@ impl CompareForm {
 
 /// Parse the `option compareform original|canonical` argument and produce the
 /// resolved form plus the confirmation message (C++ `OptionCompareForm::apply`,
-/// `kuna_compareform.cc:85`).
+/// `unlace_compareform.cc:85`).
 ///
 ///
 /// The C++ `throw ParseError(...)` surfaces as a [`UnlaceError::parse`] (the

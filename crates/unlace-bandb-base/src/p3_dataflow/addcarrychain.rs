@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_addcarrychain.{cc,hh}` — carry-chain wide-add
+//! Port of `decompiler/cpp/unlace_addcarrychain.{cc,hh}` — carry-chain wide-add
 //! recovery (unlace GH-8913, S5/S3 simplification-quiescence).
 //!
 //! `RuleAddCarryChain` matches the reassembling `CPUI_PIECE` of an 8-bit
@@ -67,7 +67,7 @@ impl Rule for RuleAddCarryChain {
         }))
     }
 
-    /// C++ `RuleAddCarryChain::applyOp` (`kuna_addcarrychain.cc:77`) — transcribed.
+    /// C++ `RuleAddCarryChain::applyOp` (`unlace_addcarrychain.cc:77`) — transcribed.
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         let hivn = match op_in(data, op, 0) {
             Some(v) => v,
@@ -198,7 +198,7 @@ pub fn specs() -> Vec<RuleSpec> {
 }
 
 // ---------------------------------------------------------------------------
-// Static helpers (faithful transcriptions of the kuna_addcarrychain.cc statics)
+// Static helpers (faithful transcriptions of the unlace_addcarrychain.cc statics)
 // ---------------------------------------------------------------------------
 
 /// Strip any CAST/COPY wrappers, returning the underlying value

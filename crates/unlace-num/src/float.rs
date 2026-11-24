@@ -891,7 +891,7 @@ mod tests {
     // deliberately distinct.
 
     #[test]
-    #[allow(clippy::approx_constant)] // literal from kuna_goldengen.cc, not PI
+    #[allow(clippy::approx_constant)] // literal from unlace_goldengen.cc, not PI
     fn test_edge_ldexp_frexp_roundtrip() {
         // frexp/ldexp transcriptions: exact roundtrip across the range,
         // including subnormals.

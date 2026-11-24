@@ -40,8 +40,8 @@ out="$outdir/sweep-$(date -u +%Y%m%dT%H%M%SZ)-$(basename "$unlace").json"
 
 ulimit -c 0
 slot=()
-if command -v kuna-slot >/dev/null; then
-    slot=(kuna-slot)
+if command -v unlace-slot >/dev/null; then
+    slot=(unlace-slot)
 fi
 
 set +e

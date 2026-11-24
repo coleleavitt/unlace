@@ -17,7 +17,7 @@ covered_by_option: retpushedhalf
 touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
-pr: https://github.com/Noelo-Lab/kuna/pull/559
+pr: upstream PR #559
 closed_in_round: 12
 closing_pr: "559"
 reject_reason: null

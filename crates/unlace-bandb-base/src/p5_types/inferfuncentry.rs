@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_inferfuncentry.{cc,hh}` — function-entry
+//! Port of `decompiler/cpp/unlace_inferfuncentry.{cc,hh}` — function-entry
 //! constant-pointer inference (unlace GH-6930, S5 const-pointer).
 //!
 //! `ActionConstantPtr::isPointer` rejects any constant whose bit pattern "looks
@@ -95,7 +95,7 @@ pub fn entry_escape_applies(opcode: OpCode, value_reads_as_integer: bool) -> boo
 /// (unlace) Does the constant resolve exactly to a known function entry?
 /// (C++ `unlaceIsFunctionEntry`, GH-6930).
 ///
-/// C++ `kuna_inferfuncentry.cc:12-26`.
+/// C++ `unlace_inferfuncentry.cc:12-26`.
 ///
 /// `rampoint` is the resolved `glb->resolveConstant(...)`: `None` transcribes
 /// the C++ invalid address (`rampoint.isInvalid()`).  // STUB(W4)

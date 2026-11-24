@@ -3,7 +3,7 @@ name: Deploy web demo to GitHub Pages
 # Builds the in-browser (WebAssembly) decompiler demo — integrations/web —
 # and publishes it as two GitHub Pages sites: the decompiler at decompile.run
 # (pushed to Noelo-Lab/decompile.run, whose Pages serves its main branch) and
-# the landing page and /dev-viz/ at kuna.noelo.org (this repo's Pages). The
+# the landing page and /dev-viz/ at coleleavitt.github.io/unlace (this repo's Pages). The
 # engine runs entirely client-side; the deployed decompiler is a static bundle
 # (page + glue + WASI shim + wasm + the full runtime SLEIGH tree, lazily
 # fetched), so nothing talks to a backend and it decompiles whatever the CLI
@@ -80,7 +80,7 @@ jobs:
       - name: Disable Jekyll
         run: touch integrations/web/dist/.nojekyll
 
-      # dist/ -> kuna.noelo.org (its /decompile/ forwards); dist-run/ -> decompile.run.
+      # dist/ -> coleleavitt.github.io/unlace (its /decompile/ forwards); dist-run/ -> decompile.run.
       - name: Split into the two sites
         run: bash integrations/web/split-sites.sh
 

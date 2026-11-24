@@ -1,4 +1,4 @@
-//! Port of `decompiler/unittests/testkunaregion.cc` (unlace-owned unit tests for
+//! Port of `decompiler/unittests/testunlaceregion.cc` (unlace-owned unit tests for
 //! the angr `RegionIdentifier` port, S7).
 //!
 //! These are NOT upstream Ghidra tests.  `regionid_diamond0` / `regionid_diamond1`

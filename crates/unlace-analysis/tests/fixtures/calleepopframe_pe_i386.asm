@@ -1,5 +1,5 @@
 ; Clean-room repro: a fixed-frame i386 caller of __stdcall imports
-; (Noelo-Lab/kuna#1029).
+; (upstream #1029).
 ;
 ; GCC/MinGW reserves the outgoing-argument area once and writes each call's
 ; arguments with `mov [esp+k]`. memset (msvcrt.dll, __cdecl) pops nothing;

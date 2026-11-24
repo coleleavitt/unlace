@@ -13,8 +13,8 @@ Saved pointers and simultaneous aliases must continue to denote the same bytes.
 
 ## Inputs and contributor ownership
 
-- Issue: <https://github.com/Noelo-Lab/kuna/issues/810>.
-- Contributor PR: <https://github.com/Noelo-Lab/kuna/pull/1162>, unchanged head
+- Issue: <upstream issue #810>.
+- Contributor PR: <upstream PR #1162>, unchanged head
   `3a4ff3d73ef64d6ac6ee62d669b40d998a0ac482`, original base
   `ecd456743593868ae639cebe378bdfde20e0bb80`.
 - All eight original commits are by **mgostIH**

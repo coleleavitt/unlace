@@ -83,5 +83,5 @@
     "No option, no phases.toml row, no catalog counter and no tests/stages case: tooling track, and the xref index is read-only, commits nothing into the engine and cannot change emitted C.",
     "`aif` was considered as a covered-by-option answer and rejected. Neither unlace strings nor unlace xrefs accepts --option, so it is not reachable from the probe at all; and even where the gap-walk does fire it answers with a speculative entry inside the function rather than the function -- which is precisely what this change replaces on Cube.exe."
   ],
-  "pr": "https://github.com/Noelo-Lab/kuna/pull/469"
+  "pr": "upstream PR #469"
 }

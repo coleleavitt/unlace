@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_naming.{cc,hh}` — unlace's angr-style default
+//! Port of `decompiler/cpp/unlace_naming.{cc,hh}` — unlace's angr-style default
 //! naming policy.
 //!
 //! This is a unlace-owned policy file (NOT upstream Ghidra).  It centralizes the
@@ -45,7 +45,7 @@ use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, intb, uintb};
 
 // Re-export the pure address-rendering helpers ported into `database.rs`
-// (kuna_naming.cc:55-89).  These are the canonical unlace implementations.
+// (unlace_naming.cc:55-89).  These are the canonical unlace implementations.
 pub use crate::database::{
     unlace_arg_name, unlace_function_name, unlace_global_data_name, unlace_label_name,
     unlace_materialized_param_name,
@@ -56,7 +56,7 @@ pub use crate::database::{
 pub const ELEM_NAMESTYLE: unlace_base::marshal::ElementId =
     unlace_base::marshal::ElementId::new("namestyle", 4020);
 
-/// C++ `unlaceAngrNaming(const Architecture *glb)` (kuna_naming.cc:30-34).
+/// C++ `unlaceAngrNaming(const Architecture *glb)` (unlace_naming.cc:30-34).
 ///
 /// "Is angr-style naming active for this Architecture?"  In C++ this is
 /// `(glb != 0) && glb->name_style_angr`; the Rust caller passes the flag value
@@ -66,7 +66,7 @@ pub fn unlace_angr_naming(name_style_angr: bool) -> bool {
     name_style_angr
 }
 
-/// C++ `unlaceToLower(string &s)` (kuna_naming.cc:48-53): lowercase a register name
+/// C++ `unlaceToLower(string &s)` (unlace_naming.cc:48-53): lowercase a register name
 /// in place (angr renders registers lowercase).
 ///
 /// Transcribes the C++ `s[i] = tolower((unsigned char)s[i])` byte-for-byte: the C
@@ -84,7 +84,7 @@ fn unlace_to_lower(s: &mut String) {
     *s = String::from_utf8(bytes).expect("ASCII-only lowercasing preserves UTF-8");
 }
 
-/// C++ `unlaceIsGeneratedName(const string &nm)` (kuna_naming.cc:91-106).
+/// C++ `unlaceIsGeneratedName(const string &nm)` (unlace_naming.cc:91-106).
 ///
 /// Recognize a generated default name in either scheme: `param_N` (ghidra) or
 /// `vN` / `aN` (angr).  Returns `true` only when the prefix is followed by one or
@@ -143,7 +143,7 @@ pub struct StorageView<'a> {
 }
 
 /// C++ `unlaceStorageComment(const Architecture *glb,const Symbol *sym,string &out)`
-/// (kuna_naming.cc:108-180).
+/// (unlace_naming.cc:108-180).
 ///
 /// Build a `// rax` / `// stack - 0x10` style storage annotation for a symbol's
 /// storage.  Returns `Some(text)` when a comment was produced, `None` when none

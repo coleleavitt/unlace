@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_regionid.{cc,hh}` (W7, item
+//! Port of `decompiler/cpp/unlace_regionid.{cc,hh}` (W7, item
 //! `w7-s7-unlace-regionid`): the unlace-owned region-identification analysis (S7),
 //! a faithful, ANALYSIS-ONLY reimplementation of angr's `RegionIdentifier`
 //! (`angr/analyses/decompiler/region_identifier.py`) and the read-only subset
@@ -34,7 +34,7 @@
 //! machinery, which are a later wave (the same surface `assert.rs` stubs
 //! off).  This port realizes the full identifier algorithm over the synthetic
 //! input API (`add_synthetic_block`/`add_synthetic_edge`), exactly what the
-//! `testkunaregion.cc` unit tests drive; the block-graph adapter and the
+//! `testunlaceregion.cc` unit tests drive; the block-graph adapter and the
 //! console bindings are `// STUB(W7)` (see `losses`).
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -2314,7 +2314,7 @@ impl UnlaceRegionIdentifier {
 mod tests {
     use super::*;
 
-    /// Test visitor mirroring `testkunaregion.cc`'s `UnlaceTestCollector`:
+    /// Test visitor mirroring `testunlaceregion.cc`'s `UnlaceTestCollector`:
     /// collect every leaf block address (in walk order) and, for each cyclic
     /// region, the head address plus the addresses visited inside it.
     ///
@@ -2369,7 +2369,7 @@ mod tests {
         r
     }
 
-    /// Port of `testkunaregion.cc:regionid_diamond0` (angr
+    /// Port of `testunlaceregion.cc:regionid_diamond0` (angr
     /// `test_region_identifier_0`): a diamond `1 -> 2 -> {3,4} -> 5 -> 6`.
     #[test]
     fn regionid_diamond0() {
@@ -2415,7 +2415,7 @@ mod tests {
         assert_eq!(col.cyclics.len(), 0);
     }
 
-    /// Port of `testkunaregion.cc:regionid_diamond1` (angr
+    /// Port of `testunlaceregion.cc:regionid_diamond1` (angr
     /// `test_region_identifier_1`): two stacked half-diamonds.
     #[test]
     fn regionid_diamond1() {
@@ -2447,7 +2447,7 @@ mod tests {
         }
     }
 
-    /// Port of `testkunaregion.cc:regionid_loop` (unlace-added cyclic coverage):
+    /// Port of `testunlaceregion.cc:regionid_loop` (unlace-added cyclic coverage):
     /// `1 -> 2 -> 3 -> 4` with a back edge `3 -> 2` (loop body `{2,3}`).
     #[test]
     fn regionid_loop() {

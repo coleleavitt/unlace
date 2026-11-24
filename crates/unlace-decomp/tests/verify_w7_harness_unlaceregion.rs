@@ -1,5 +1,5 @@
 //! Independent adversarial verification tests for `w7-harness-unlaceregion`
-//! (port of `decompiler/unittests/testkunaregion.cc`, the 3 angr
+//! (port of `decompiler/unittests/testunlaceregion.cc`, the 3 angr
 //! RegionIdentifier S7 unit tests).
 //!
 //! These tests were written by the VERIFIER, not the porter.  The harness port

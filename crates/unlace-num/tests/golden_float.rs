@@ -1,6 +1,6 @@
 //! GOLDEN GATE for item w1-num-float-multiprec: replay EVERY row of
 //! `tests/golden/vectors/float.csv` (emitted by the C++ oracle's
-//! `golden float` command, `decompiler/cpp/kuna_goldengen.cc`) through the
+//! `golden float` command, `decompiler/cpp/unlace_goldengen.cc`) through the
 //! Rust `FloatFormat` and `cfmt` ports and require a 100% byte-for-byte
 //! match.
 //!

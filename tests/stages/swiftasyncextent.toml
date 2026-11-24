@@ -15,10 +15,10 @@
 # `callee_evidence`): only the calls between the function's entry and
 # the next known entry count.
 #
-# Assertions: `kuna_pick` (0x2c90) branches past the prologue of
-# `kuna_alloc` (0x2ca0), so its flow holds that function's call to
+# Assertions: `unlace_pick` (0x2c90) branches past the prologue of
+# `unlace_alloc` (0x2ca0), so its flow holds that function's call to
 # `swift_task_alloc` and the store through r14 after it; it takes the
-# selector alone. `kuna_alloc` itself calls `swift_task_alloc` and
+# selector alone. `unlace_alloc` itself calls `swift_task_alloc` and
 # keeps its context.
 
 [image]
@@ -51,7 +51,7 @@ commands = [
 [[match]]
 name = 'a run-on into an async body does not make the function async'
 count = 1
-literal = 'void * kuna_pick(int4 a0)'
+literal = 'void * unlace_pick(int4 a0)'
 
 [[match]]
 name = "the run-on still reaches the neighbour's call"
@@ -61,4 +61,4 @@ literal = 'swift_task_alloc(0x40)'
 [[match]]
 name = 'the async neighbour keeps its context'
 count = 1
-literal = 'kuna_alloc(swift.AsyncContext *async_context)'
+literal = 'unlace_alloc(swift.AsyncContext *async_context)'

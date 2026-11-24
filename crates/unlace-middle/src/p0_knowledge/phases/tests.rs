@@ -1,6 +1,6 @@
 //! Unit tests for the unlace phase registry (`phases.rs`).
 //!
-//! Parity targets (origin: `decompiler/cpp/kuna_stages.cc`, since grown):
+//! Parity targets (origin: `decompiler/cpp/unlace_stages.cc`, since grown):
 //! group/subphase/surface/settable counts read from `phases.toml` itself, plus the phase-code
 //! helpers, the lookup API, the typed `OptionValues` defaults, and the
 //! catalog emitter.

@@ -2,7 +2,7 @@
 
 Status: approved design implemented behind the default-off `x86listingswitch`
 option. This is a partial underlying improvement for
-[#299](https://github.com/Noelo-Lab/kuna/issues/299); its original private PE and
+[#299](upstream issue #299); its original private PE and
 crackme remain unavailable, so this feature does not establish that issue's
 acceptance bar.
 
@@ -347,7 +347,7 @@ chapter is `docs/spec/01-program-prep.md`.
 
 ## What #299 still requires
 
-The [latest measured issue update](https://github.com/Noelo-Lab/kuna/issues/299#issuecomment-6162124373)
+The [latest measured issue update](upstream issue #299#issuecomment-6162124373)
 reports AIF-marginal corpus mid-body entries reduced from 11,010 to 1,504 after
 already-merged improvements. The original bar included a sixty-percent corpus
 reduction and at most one hundred mid-body entries on the original crackme.

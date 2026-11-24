@@ -1395,7 +1395,7 @@ class Handler(BaseHTTPRequestHandler):
         if not rest or any(s in ("..", ".", "") or "/" in s or "\\" in s for s in rest):
             return self._err(400, "bad asset path")
         # site.css is served verbatim from the live site tree so the dashboard cannot drift
-        # from kuna.noelo.org's --paper/--ink/--red token system.
+        # from coleleavitt.github.io/unlace's --paper/--ink/--red token system.
         if rest == ["site.css"]:
             return self._file(SITE_CSS, _CTYPES[".css"])
         if rest[0] == "fonts" and len(rest) == 2:

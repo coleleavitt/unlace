@@ -3,7 +3,7 @@
 
    Layers on /assets/site.css, which is served VERBATIM out of
    integrations/web/assets/css/site.css so this page cannot drift from
-   kuna.noelo.org: --paper/--ink/--red/--mono/--disp all come from there.
+   coleleavitt.github.io/unlace: --paper/--ink/--red/--mono/--disp all come from there.
    Nothing here is loaded from a CDN; the whole page is three files.
 
    site.css's own @font-face rules point at ../fonts/, which is /fonts/ under

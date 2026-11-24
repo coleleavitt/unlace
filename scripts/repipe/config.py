@@ -206,4 +206,4 @@ def role_policy_problems():
         problems.append("REPIPE_CAPTAIN_BACKEND must be claude or codex")
     return problems
 
-GH_REPO = os.environ.get("REPIPE_GH_REPO", "Noelo-Lab/kuna")
+GH_REPO = os.environ.get("REPIPE_GH_REPO", "coleleavitt/unlace")

@@ -1,6 +1,6 @@
 {
   "opportunity": "foldcallret (default-on) moves a single-use call's evaluation to where its result is printed. Its order-safety predicate stated the barrier set in opcodes (CALL/LOAD/STORE/CALLOTHER), but heritage promotes a write to a fixed address into a plain CPUI_COPY, so a call sank past a write to a global it reads and the emitted C computed a different value than the binary.",
-  "issue": "Noelo-Lab/kuna#657",
+  "issue": "upstream #657",
   "test_name": "tests/stages/foldcallret-barrier.xml (single pass, defaults: target = the issue verbatim, target2 = the write after the use so the expression travels to the return) + tests/cli/foldcallret-sinks-call-past.json",
   "binary": "decompiler/crates/unlace-analysis/tests/fixtures/gh657_x86_64 (hand-assembled, 5000 bytes) and a synthetic bytechunk of the same bytes in the stage test",
   "selector": "target",
@@ -133,7 +133,7 @@
     "docs/features/gh657/{analysis.md,plan.md,record.json,foldclassify.py,cause.py,phicmp.py,sweep.sh,repro.c,travel.s}"
   ],
   "option_off_identity": "`unlace decompile-all --option foldcallret off` is byte-identical (md5) between origin/main 520443d7 and this branch on grep O0, dash O2 and libselinux.so.1: every new test is behind Architecture::fold_call_returns.",
-  "rust_test": "run through /home/mahaloz/kwt/rust-test-lane.sh on the worktree at the final rebased SHA (log .scratch/rust-test-r5.log, 2026-09-17T16:50-17:05Z); target/debug deleted afterwards.",
+  "rust_test": "run through /home/mahaloz/unlace-wt/rust-test-lane.sh on the worktree at the final rebased SHA (log .scratch/rust-test-r5.log, 2026-09-17T16:50-17:05Z); target/debug deleted afterwards.",
   "phi_arm": {
     "acceptance_metric": "per-function CONTENT equality of the `--option foldcallretphi on` dumps, main build against this branch, split on the `// Function:` banner. The round-1 metric (equality of the phi-delta SET) could not see a content change inside the delta and is retired.",
     "main_build": "origin/main 520443d7, built fresh",

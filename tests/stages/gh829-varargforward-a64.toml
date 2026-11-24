@@ -1,6 +1,6 @@
 # GH-829 (unlace): "A variadic call drops an argument the caller forwards
 # unchanged in its own register", AArch64 half.
-# https://github.com/Noelo-Lab/kuna/issues/829
+# upstream issue #829
 #
 # Source, clang -O2 for aarch64-linux-gnu:
 #   double vr(int n, ...);

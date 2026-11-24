@@ -38,7 +38,7 @@ while [ "${1:-}" != "${1#--}" ] && [ -n "${1:-}" ]; do
   esac
 done
 
-REPO_SLUG="${PIPELINE_REPO:-Noelo-Lab/kuna}"
+REPO_SLUG="${PIPELINE_REPO:-coleleavitt/unlace}"
 BASE="${BASE_BRANCH:-main}"
 UNLACE_PY="${UNLACE_PY:-$HOME/.virtualenvs/unlace/bin/python}"
 # scripts.pipeline.* must be importable without an install: repo root on the path.

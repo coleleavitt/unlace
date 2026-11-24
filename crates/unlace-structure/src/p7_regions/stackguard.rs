@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_stackguard.{cc,hh}` — strip the glibc
+//! Port of `decompiler/cpp/unlace_stackguard.{cc,hh}` — strip the glibc
 //! `-fstack-protector` canary epilogue (port of angr's StackCanarySimplifier),
 //! unlace option-gated, default on since DIV-14 (per-test opt-outs keep the corpus byte-identical).
 //!
@@ -73,7 +73,7 @@ use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
 /// Does Varnode `ptr` address `<base> + 0x28` (the x86-64 TLS canary slot)?
-/// (C++ `ptrIsCanarySlot`, `kuna_stackguard.cc:34`).
+/// (C++ `ptrIsCanarySlot`, `unlace_stackguard.cc:34`).
 ///
 /// Peels transparent COPY/CAST off the pointer, then requires an `INT_ADD` with
 /// a constant `0x28` operand.  (`fs:0x28` is the glibc x86-64 stack-guard
@@ -219,7 +219,7 @@ fn ptr_is_guard_slot(ptr: VarnodeId, data: &Funcdata) -> bool {
 }
 
 /// Does `vn` ultimately derive from a LOAD of the canary slot?
-/// (C++ `derivesFromCanaryLoad`, `kuna_stackguard.cc:60`).
+/// (C++ `derivesFromCanaryLoad`, `unlace_stackguard.cc:60`).
 ///
 /// Peels value-preserving ops (COPY/CAST/zext/sext/INDIRECT/zero-SUBPIECE) and
 /// follows every input of a MULTIEQUAL (the saved-canary operand is a phi over
@@ -511,7 +511,7 @@ pub fn release_canary_slots(data: &mut Funcdata, slots: &[(Address, int4)]) {
 }
 
 /// Is the boolean feeding `cbranch` a stack-canary compare?
-/// (C++ `isCanaryCompare`, `kuna_stackguard.cc:88`).
+/// (C++ `isCanaryCompare`, `unlace_stackguard.cc:88`).
 ///
 /// True when it is an `INT_EQUAL`/`INT_NOTEQUAL` whose BOTH operands derive from
 /// a LOAD of the canary slot (saved canary vs. fresh reload).  Returns
@@ -544,7 +544,7 @@ fn is_canary_compare(cbranch: OpId, data: &Funcdata) -> Option<bool> {
 }
 
 /// Does basic block `bb` contain a CALL (the canary-fail handler)?
-/// (C++ `blockHasCall`, `kuna_stackguard.cc:104`).
+/// (C++ `blockHasCall`, `unlace_stackguard.cc:104`).
 fn block_has_call(bb: BlockId, data: &Funcdata) -> bool {
     for op in data.bb_ops(bb) {
         let oc = data.obank().get(op).expect("blockHasCall: op").code();
@@ -556,7 +556,7 @@ fn block_has_call(bb: BlockId, data: &Funcdata) -> bool {
 }
 
 /// (unlace) Strip a glibc `-fstack-protector` canary epilogue
-/// (C++ `ActionStripStackGuard`, `kuna_stackguard.hh:59`).
+/// (C++ `ActionStripStackGuard`, `unlace_stackguard.hh:59`).
 ///
 /// When `option stackguard on`, finds a `__stack_chk_fail` call guarded by a
 /// canary compare and removes the failure branch + the now-orphaned handler
@@ -596,7 +596,7 @@ impl Action for ActionStripStackGuard {
         }))
     }
 
-    /// C++ `ActionStripStackGuard::apply`, `kuna_stackguard.cc:115`.
+    /// C++ `ActionStripStackGuard::apply`, `unlace_stackguard.cc:115`.
     ///
     /// Remove a structurally proven canary failure branch and its unreachable handler.
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
@@ -734,7 +734,7 @@ impl Action for ActionStripStackGuard {
 }
 
 /// (unlace) Toggle glibc stack-protector epilogue stripping
-/// (C++ `OptionStackGuard`, `kuna_stackguard.hh:74`).
+/// (C++ `OptionStackGuard`, `unlace_stackguard.hh:74`).
 ///
 /// `off` retains the upstream rendering (the Action is inert). `on`
 /// strips the `-fstack-protector` canary check + `__stack_chk_fail` call, like

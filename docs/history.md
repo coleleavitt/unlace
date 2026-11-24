@@ -31,7 +31,7 @@ and design docs summarized here.
 | 2026-06-22 | `aa765712` | **Analysis-tier port begins**: Ghidra's Java analyzer suite recreated as `unlace-analysis` — 62 increments over ~5 weeks (no-return, demangling, strings, DWARF, entry discovery, ARM/Thumb painting, the Listing/xref tier, PE/Mach-O/COFF loaders, Go pclntab, FID, RTTI/Obj-C/PDB metadata), every increment holding 675/675. |
 | 2026-07-04 | `6b270a3e` | decbench campaign: whole-binary benchmark loop (mine/triage/rescore) driving feature work from real-binary regressions vs Ghidra/angr. |
 | 2026-07-05 | `b255b3d4` | Ghidra integration Phase 1: kuna as stock Ghidra's decompiler core (wire protocol + extension). |
-| 2026-07-16→28 | `cdaa35bc`, `9d308212` | `unlace decompile-project` whole-binary export; WASM browser build; the project site + in-browser decompiler at kuna.noelo.org. |
+| 2026-07-16→28 | `cdaa35bc`, `9d308212` | `unlace decompile-project` whole-binary export; WASM browser build; the project site + in-browser decompiler at coleleavitt.github.io/unlace. |
 
 ## The Rust port: how it was verified
 

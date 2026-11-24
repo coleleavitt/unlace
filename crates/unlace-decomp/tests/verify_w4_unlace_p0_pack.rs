@@ -15,9 +15,9 @@
 //!     and `(space_index, offset)` key ordering (the transcribed `operator<`);
 //!   - `AssertLog::render_list`'s "applied via HARD mechanism" annotation gate.
 //!
-//! These are derived against the C++ in scope (`kuna_console.cc unlaceJsonString`/
-//! `unlaceEmitSettableJson`, `kuna_stages.cc unlaceStageFromCode`,
-//! `kuna_restartlog.cc`, `kuna_assert.cc listAssertions`), not the porter notes.
+//! These are derived against the C++ in scope (`unlace_console.cc unlaceJsonString`/
+//! `unlaceEmitSettableJson`, `unlace_stages.cc unlaceStageFromCode`,
+//! `unlace_restartlog.cc`, `unlace_assert.cc listAssertions`), not the porter notes.
 
 use std::rc::Rc;
 

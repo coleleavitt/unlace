@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_booleanmask.{cc,hh}` — boolean
+//! Port of `decompiler/cpp/unlace_booleanmask.{cc,hh}` — boolean
 //! sign-extension-mask simplification (unlace GH-1282, S3 simplification-quiescence).
 //!
 //! `RuleBoolSignShift` folds `(b << k) s>> k` into the sign-extended-mask form
@@ -65,7 +65,7 @@ impl Rule for RuleBoolSignShift {
         }))
     }
 
-    /// C++ `RuleBoolSignShift::applyOp` (`kuna_booleanmask.cc:19`) — transcribed.
+    /// C++ `RuleBoolSignShift::applyOp` (`unlace_booleanmask.cc:19`) — transcribed.
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         let in1 = match op_in(data, op, 1) {
             Some(v) => v,

@@ -1,4 +1,4 @@
-# Objective-C metadata of a dyld shared cache image (Noelo-Lab/kuna#1623).
+# Objective-C metadata of a dyld shared cache image (upstream #1623).
 #
 # Issue: in an image loaded from a cache the `objc` pass recovered nothing. A
 # cache's small method lists hold their selectors (`0x40000000`) and type

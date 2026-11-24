@@ -2,7 +2,7 @@
   "slug": "localstackviews",
   "opportunity": "issue:810::bounded-local-stack-views",
   "test_name": "issue810-local-stack-views",
-  "binary": "/home/mahaloz/kwt/issues1019/issue810-audit/final-repro/input-gcc.elf",
+  "binary": "/home/mahaloz/unlace-wt/issues1019/issue810-audit/final-repro/input-gcc.elf",
   "selector": "t11_branch",
   "func_addr": "0x401200",
   "angr_version": null,
@@ -37,7 +37,7 @@
   "contributor": {
     "login": "mgostIH",
     "email": "13892786+mgostIH@users.noreply.github.com",
-    "original_pr": "https://github.com/Noelo-Lab/kuna/pull/1162",
+    "original_pr": "upstream PR #1162",
     "original_head": "3a4ff3d73ef64d6ac6ee62d669b40d998a0ac482",
     "original_body_sha256": "5a187f814e5899fb0801b869a11dc58ae33f9a24e468a2582ad5609bbc7d00f9",
     "original_pr_unchanged": true,
@@ -247,7 +247,7 @@
       "historical_reversal_decisions_reviewed": 12,
       "baseline_cache_status": "All1071input/execution/status/output hashes validated under the exact saved explicit environment; currentcandidate27source/runtime/CLI pins separate."
     },
-    "handoff": "/home/mahaloz/kwt/issues1019/issue810-implementation-audit/corpus/candidate27-final-handoff.json",
+    "handoff": "/home/mahaloz/unlace-wt/issues1019/issue810-implementation-audit/corpus/candidate27-final-handoff.json",
     "handoff_sha256": "848a467aeeed133d4ac96a1ce3792f008bd8595f47891acd854aa382c04b0ffb",
     "typed_run_id": "a5fa2a5879179e0d09cc41802dd7c5c55d356ac40f0cbb9e091f75de0087fa37",
     "core_integrity_sha256": "76e00fb34315e7428e5fd9bf716b406b54fce81c05587a2d66fef6597b1a2fb2",
@@ -289,7 +289,7 @@
     "additional_callback_replacement_declines": 8,
     "actual_default_equals_explicit_on_cells": 152,
     "boundary_controls_exact_fresh_base": 9,
-    "classification": "/home/mahaloz/kwt/issues1019/scratch/localstackviews-review/root26-panel/comparison.json",
+    "classification": "/home/mahaloz/unlace-wt/issues1019/scratch/localstackviews-review/root26-panel/comparison.json",
     "raw_function_C_and_errors_checked": 276,
     "raw_function_C_and_errors_equal_accepted21": 272,
     "new_exact_off_read_decline_queries": 4
@@ -307,7 +307,7 @@
     "on_header_preserves_original_scalar_pointer": true,
     "preexisting_off_header_defect": "Pair pointer declaration remains unchanged; authoritative original scalar contract compiles and executes OFF/ON",
     "note": "Finalcorrectedruntime26/27 bothARM/MIPSpositiveadmissions retainexact25/19C/header;16targetcells\u00d77vectorspass.27onlycorrectsprivatetestsetup, runtimebytesidentical.",
-    "acceptance": "/home/mahaloz/kwt/issues1019/scratch/810-cross-publication/candidate26-acceptance.json",
+    "acceptance": "/home/mahaloz/unlace-wt/issues1019/scratch/810-cross-publication/candidate26-acceptance.json",
     "acceptance_sha256": "fd9b93325a0f8209393ca388a00b50c9bbfd2f3ab9ce14639a9cbaec93dccab3"
   },
   "focused_validation": {
@@ -487,15 +487,15 @@
     "mergecheck_against": "6d7ab7fff8092b6f154f5aed3cdf2a98701d5d6a",
     "mergecheck_rejects": 0,
     "debug_cleanup": true,
-    "matching_binaries": "/home/mahaloz/kwt/issues1019/issue810-implementation-audit/candidate27/manifest.json",
+    "matching_binaries": "/home/mahaloz/unlace-wt/issues1019/issue810-implementation-audit/candidate27/manifest.json",
     "matching_parity_logs": [
       {
-        "path": "/home/mahaloz/kwt/issues1019/issue810-implementation-audit/candidate27/matching-test.log",
+        "path": "/home/mahaloz/unlace-wt/issues1019/issue810-implementation-audit/candidate27/matching-test.log",
         "sha256": "764be2ac60c31c5865b7065361cee2b4f1939eb1222b02afb84ef55125f98c34",
         "bytes": 256
       },
       {
-        "path": "/home/mahaloz/kwt/issues1019/issue810-implementation-audit/candidate27/matching-test-stages.log",
+        "path": "/home/mahaloz/unlace-wt/issues1019/issue810-implementation-audit/candidate27/matching-test-stages.log",
         "sha256": "ef42b87fb05e9e92d5d53bcf95db706adc0a2a28891483ae2a41c82bd72c5d95",
         "bytes": 298
       }
@@ -614,7 +614,7 @@
               }
             }
           },
-          "binary": "/home/mahaloz/kwt/issues1019/issue810-audit/final-repro/input-gcc.elf",
+          "binary": "/home/mahaloz/unlace-wt/issues1019/issue810-audit/final-repro/input-gcc.elf",
           "binary_sha256": "5f17f2b271fd3990bca2c5112b7c8cee812703ed16b4069605290a0b47832d42",
           "selector": null,
           "repeat": 24,
@@ -910,7 +910,7 @@
           "typed_intended_hunks": 54,
           "typed_equivalent_hunks": 5
         },
-        "handoff": "/home/mahaloz/kwt/issues1019/issue810-implementation-audit/corpus/candidate25-final-handoff.json",
+        "handoff": "/home/mahaloz/unlace-wt/issues1019/issue810-implementation-audit/corpus/candidate25-final-handoff.json",
         "handoff_sha256": "729b39f9df83c907830eabbf56b821453149b7a7be2acc31d4942809967cefda",
         "typed_run_id": "527b967793c814380037dfec7bca7d29a5a2ea1a2630d844991612b97c18d726",
         "core_handoff_sha256": "c0da387e20e159518cf1ee5eaaaaf4df3410bf932b234386709932dad159e3e5",
@@ -989,7 +989,7 @@
   },
   "final_evidence": {
     "runtime_source_tree": "b11957e13c5d4045c14991d8f3f2a7f93d201fd0",
-    "gate_log_pins": "/home/mahaloz/kwt/issues1019/issue810-implementation-audit/candidate27/gate-results.json",
+    "gate_log_pins": "/home/mahaloz/unlace-wt/issues1019/issue810-implementation-audit/candidate27/gate-results.json",
     "all_build_test_query_jobs_drained": true,
     "debug_target_deleted": true,
     "only_final_documentation_changes_after_runtime_freeze": true,
@@ -1018,18 +1018,18 @@
     "corrected_runtime_tree": "b11957e13c5d4045c14991d8f3f2a7f93d201fd0",
     "corrected_test_tree": "57d2042a073209cbef13bacc74b81da0a35ce78e",
     "test_only_delta": "Foursetup linespopulateSTOREspace/destination beforelowering; initialprivate26failurewasnullfixtureinput, runtimesame27.",
-    "causal_audit": "/home/mahaloz/kwt/issues1019/issue810-implementation-audit/store-trace/gcc-slp-register/audit.txt",
-    "ci_logs": "/home/mahaloz/kwt/issues1019/issue810-implementation-audit/ci1209-full.log",
+    "causal_audit": "/home/mahaloz/unlace-wt/issues1019/issue810-implementation-audit/store-trace/gcc-slp-register/audit.txt",
+    "ci_logs": "/home/mahaloz/unlace-wt/issues1019/issue810-implementation-audit/ci1209-full.log",
     "new_original_native_guard_contexts": 12,
     "validation": "Full9178/38/0; focusedprivate17 and CLI6; independentSLPdefault/FULL8strictnativepasses; independent675and104supportednative/72exactOFFdeclines; ABI16cells\u00d77vectors. Correctedruntime26 and test27 haveidenticalproductionbytes.",
     "status": "Corrected and fully revalidated; no engine edits afterruntime26 and test-only27 setup."
   },
   "speed_evidence": {
-    "whole": "/home/mahaloz/kwt/issues1019/issue810-implementation-audit/candidate27/default-speed-results.json",
+    "whole": "/home/mahaloz/unlace-wt/issues1019/issue810-implementation-audit/candidate27/default-speed-results.json",
     "whole_sha256": "a0d78e7c02df7f1fb9e18e6e67d307bd04c41a72be518ce61556f6bd082a190f",
-    "official": "/home/mahaloz/kwt/issues1019/issue810-implementation-audit/candidate27/timeit.log",
+    "official": "/home/mahaloz/unlace-wt/issues1019/issue810-implementation-audit/candidate27/timeit.log",
     "official_sha256": "894c1df761ee74fea3c1b9d5d06607bcbc867769b578ea517f91fb3719331830",
-    "protocol": "/home/mahaloz/kwt/issues1019/issue810-implementation-audit/candidate27/default_speed.py",
+    "protocol": "/home/mahaloz/unlace-wt/issues1019/issue810-implementation-audit/candidate27/default_speed.py",
     "cpu_affinity": [
       24
     ],

@@ -13,7 +13,7 @@
 //!   `blockaction` (structuring), `subflow`, `transform`, `condexe`,
 //!   `paramid`, `varmap`
 //! - `print*` (`printlanguage.cc`, `printc.cc`, `printjava.cc`, `prettyprint.cc`)
-//! - the unlace phase registry (`kuna_stages.cc` and friends -- regenerated from
+//! - the unlace phase registry (`unlace_stages.cc` and friends -- regenerated from
 //!   `phases.toml` per ADR 0006)
 //!
 //! Action/Rule dispatch and scheduling follow ADR 0005; re-runability and the

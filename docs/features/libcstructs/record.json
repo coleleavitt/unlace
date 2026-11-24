@@ -351,7 +351,7 @@
     "kept_off_pool": "every kept row not in ranked-pool.md's NEW column carries a one-line note there (reach, changed, +i/-w, extra costs)"
   },
   "followup_706": {
-    "pr": "https://github.com/Noelo-Lab/kuna/pull/706",
+    "pr": "upstream PR #706",
     "why": "post-merge review of #692: (1) the x86-64 widths grow frame objects on other ABIs; (2) a struct whose first member is a libc aggregate was typed as that aggregate",
     "changes": {
       "width_gate": "glibc::target_takes_the_widths: x86-64 ELF not linked against another libc (no .dynstr, or glibc .dynstr); everything else gets the void * tables and no stream symbol; carried to the declared-name path as AnalysisOutput::libctypes_refused",

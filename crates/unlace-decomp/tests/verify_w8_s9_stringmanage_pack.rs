@@ -1,6 +1,6 @@
 //! Adversarial verification tests for `w8-s9-stringmanage-pack`
-//! (port of `decompiler/cpp/stringmanage.{cc,hh}`, `kuna_naming.{cc,hh}`,
-//! `kuna_arraynotation.{cc,hh}`).
+//! (port of `decompiler/cpp/stringmanage.{cc,hh}`, `unlace_naming.{cc,hh}`,
+//! `unlace_arraynotation.{cc,hh}`).
 //!
 //! Written by the independent verifier (verification.md adversarial pass).  The
 //! hunt targeted: the `getStringData` do-while no-terminator path

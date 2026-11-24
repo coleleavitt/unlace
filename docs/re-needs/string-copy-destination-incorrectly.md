@@ -17,7 +17,7 @@ covered_by_option: libproto
 touches: [crates/unlace-analysis]
 scope: small
 regression_of: null
-pr: https://github.com/Noelo-Lab/kuna/pull/575
+pr: upstream PR #575
 closed_in_round: 12
 closing_pr: "575"
 reject_reason: null

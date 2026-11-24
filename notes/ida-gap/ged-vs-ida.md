@@ -30,7 +30,7 @@ So the IDA side of the comparison is the stored `ida-9.5` column. Only unlace ne
 ## How it was run
 
 Everything comes from the skill's `scripts/decbench-e2e/`, with the binaries and sources in
-`~/RustProjects/forks/kuna-data/decbench-data`.
+`~/RustProjects/forks/unlace-data/decbench-data`.
 
 1. `kr.py strip OUT` makes DecBench-stripped copies (`binfmt.strip_copy`).
 2. `unlace decompile-all <stripped> --json --max-fn-seconds 600` (`--mode auto`, as DecBench

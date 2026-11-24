@@ -1,7 +1,7 @@
 # A slot pushed in front of one call and popped by a later one keeps the
 # callee-pop guess right.
 #
-# Issue: GH Noelo-Lab/kuna#991. MSVC builds a class returned by value in the
+# Issue: GH upstream #991. MSVC builds a class returned by value in the
 # stack slot that is then the by-value argument of the next call, and that
 # callee pops it. 0x401000 is
 #   void F(void) { Arr a, r; Note(1); a = Load(0x2a0017); Note(0x40000001); }

@@ -4,7 +4,7 @@
 # cap: 80 instructions per lift point
 # lift-points (space:byte-offset name): ram:0x4004c7=establish
 # regenerate: python tools/rust-port/gen_lift.py  (see tests/golden/vectors/lift/README.md)
-# golden liftctx (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden liftctx (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 archid x86:LE:64:default:gcc
 languageid x86:LE:64:default
 slafile x86-64.sla
@@ -62,7 +62,7 @@ context vexMode=0
 context vexVVVV=0
 context xacquireprefx=0
 context xreleaseprefx=0
-# golden lift ram:0x4004c7 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift ram:0x4004c7 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 insn ram:0x4004c7 1
   COPY (unique,0x4f900,8) (register,0x28,8)
   INT_SUB (register,0x20,8) (register,0x20,8) (const,0x8,8)

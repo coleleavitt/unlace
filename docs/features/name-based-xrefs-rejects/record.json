@@ -61,5 +61,5 @@
     "onto": "798f01e56c7fa454856ff9acba482ba6179c8fb8",
     "note": "origin/main moved by one repipe-docs commit (#439); counters re-derived from a fresh capture on the rebased tree with no drift, mergecheck clean (0 rejects), and every gate re-run after the rebase"
   },
-  "pr": "https://github.com/Noelo-Lab/kuna/pull/441"
+  "pr": "upstream PR #441"
 }

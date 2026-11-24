@@ -77,7 +77,7 @@ regex = 'math.Float64frombits\(uint64\(a\)\)'
 [[match]]
 name = 'Go bottom-tested loop skips only its first condition'
 count = 1
-regex = 'for _kuna_first_[0-9]+ := true; _kuna_first_[0-9]+ \|\| \('
+regex = 'for _unlace_first_[0-9]+ := true; _unlace_first_[0-9]+ \|\| \('
 
 [[match]]
 name = 'Go switch renders actual shared-case fallthrough'

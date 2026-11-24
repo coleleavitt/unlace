@@ -2288,7 +2288,7 @@ impl Funcdata {
 
     /// (unlace) Manufacture the S2 switch artifact from a recovered lowered
     /// comparison cascade (C++ `Funcdata::unlaceInstallLoweredSwitch`,
-    /// `kuna_loweredswitch.cc:463`).
+    /// `unlace_loweredswitch.cc:463`).
     ///
     /// Runs pre-SSA on the restart pass (`ActionLowerSwitchInstall::apply`, before
     /// `ActionHeritage`).  It:

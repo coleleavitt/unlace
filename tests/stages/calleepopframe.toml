@@ -1,7 +1,7 @@
 # A fixed-frame caller that re-reserves what a __stdcall import popped keeps
 # its frame offsets, and a C runtime import is __cdecl.
 #
-# Issue: GH Noelo-Lab/kuna#1029. MinGW's GetSpecialFolder(path, folder)
+# Issue: GH upstream #1029. MinGW's GetSpecialFolder(path, folder)
 # writes every call's arguments with `mov [esp+k]` and lowers ESP again after
 # each advapi32 call (`call [RegOpenKeyExA]; sub esp,0x14`). 0x401000 is the
 # same shape: memset(path) through a `jmp [msvcrt!memset]` thunk, then

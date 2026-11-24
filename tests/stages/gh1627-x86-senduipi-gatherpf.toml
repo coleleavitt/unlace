@@ -1,5 +1,5 @@
 # Unlace #1627: "x86-64: SENDUIPI decodes as RDRAND; VGATHERPF0DPS reads a GPR
-# index"  https://github.com/Noelo-Lab/kuna/issues/1627
+# index"  upstream issue #1627
 #
 # Bytes (the issue's repro, as clang assembles it):
 #   f30fc7f7              senduipi %rdi            -> was RDRAND EDI

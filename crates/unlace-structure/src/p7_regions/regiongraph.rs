@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_regiongraph.{cc,hh}` (W7, item
+//! Port of `decompiler/cpp/unlace_regiongraph.{cc,hh}` (W7, item
 //! `w7-s7-unlace-regiongraph`): the unlace-owned graph substrate for the angr
 //! `RegionIdentifier` port (S7).
 //!
@@ -36,7 +36,7 @@
 //! ## STUB(W7): the region payload
 //!
 //! `UnlaceRegionNode` in C++ carries a `UnlaceGraphRegion *region` (the collapsed
-//! region payload, defined in `kuna_regionid.hh`).  `unlace_regionid` is not yet
+//! region payload, defined in `unlace_regionid.hh`).  `unlace_regionid` is not yet
 //! ported, so [`UnlaceRegionNode::region`] is an opaque [`RegionPayloadId`]
 //! placeholder; the graph substrate never dereferences it.
 

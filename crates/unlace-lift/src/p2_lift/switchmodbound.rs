@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_switchmodbound.{cc,hh}` — modulo/and-mask
+//! Port of `decompiler/cpp/unlace_switchmodbound.{cc,hh}` — modulo/and-mask
 //! jump-table index-bound option (unlace GH-9191, S2 switch-model).
 //!
 //! When a jump-table index is bounded only by an in-band `index % N` (or
@@ -10,7 +10,7 @@
 //!
 //! ## What this module owns vs. STUB(W4)
 //!
-//! The assigned C++ scope (`kuna_switchmodbound.cc/.hh`) contains **only** the
+//! The assigned C++ scope (`unlace_switchmodbound.cc/.hh`) contains **only** the
 //! `ElementId` and the `ArchOption` that sets the arch flag — *not* the recovery
 //! logic.  As the C++ header states, the recovery walk
 //! `JumpBasic::unlaceTryModuloBoundTable(Funcdata*, PcodeOp* indop, uint4

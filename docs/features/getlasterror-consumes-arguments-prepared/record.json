@@ -4,7 +4,7 @@
   "scope": "small",
   "option": "calleeprotostack",
   "div": "DIV-142",
-  "pr": "https://github.com/Noelo-Lab/kuna/pull/521",
+  "pr": "upstream PR #521",
   "acceptance": "PASS",
   "gates": {
     "test": "PARITY OK 675/675",

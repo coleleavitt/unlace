@@ -1,6 +1,6 @@
 //! GOLDEN GATE for item w1-num-pcode-semantics: replay EVERY row of
 //! `tests/golden/vectors/opbehavior.csv` (emitted by the C++ oracle's
-//! `golden opbehavior` command, `decompiler/cpp/kuna_goldengen.cc`).
+//! `golden opbehavior` command, `decompiler/cpp/unlace_goldengen.cc`).
 //!
 //! The test transcribes the generator loop itself (`IfcUnlaceGoldenOpbehavior::
 //! execute`: behavior-table iteration in opcode enum order, the fixed
@@ -133,7 +133,7 @@ fn generate_lines() -> Vec<String> {
 
     let mut lines: Vec<String> = Vec::new();
     lines.push(
-        "# golden opbehavior vectors (kuna_goldengen.cc; see tests/golden/vectors/README.md)"
+        "# golden opbehavior vectors (unlace_goldengen.cc; see tests/golden/vectors/README.md)"
             .to_string(),
     );
     lines.push(

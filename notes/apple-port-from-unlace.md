@@ -104,7 +104,7 @@ Each item: what unlace has, unlace's gap with evidence, where it goes in unlace.
 
 ## Status (2026-10-29)
 
-Review PRs in the fork (github.com/coleleavitt/kuna):
+Review PRs in the fork (github.com/coleleavitt/unlace):
 
 | PR | Branch | Base | Item |
 |---|---|---|---|

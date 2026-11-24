@@ -22,7 +22,7 @@ Adding the producer's own 64-bit prototype repairs the output. Merely enabling
 `bejoin on` does not retain the missing word.
 
 This is one remaining positive-evidence family from
-[issue #904](https://github.com/Noelo-Lab/kuna/issues/904).
+[issue #904](upstream issue #904).
 Declared and linked-DWARF eight-byte outputs already work with `bejoin off`.
 Ambiguous instructions alone cannot prove the width: PPC and ARM compile a
 64-bit sum and its high-word-only truncation to identical producer bytes.

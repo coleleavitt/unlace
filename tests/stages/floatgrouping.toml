@@ -1,6 +1,6 @@
 # unlace GH-641: "floating point associativity" (reported with a hand-written
 # x86-64 fixture and a native-execution witness).
-# https://github.com/Noelo-Lab/kuna/issues/641
+# upstream issue #641
 #
 # CPUI_FLOAT_MULT and CPUI_FLOAT_ADD pushed the same MULTIPLY / BINARY_PLUS
 # tokens integer arithmetic uses, and those are marked associative, so the

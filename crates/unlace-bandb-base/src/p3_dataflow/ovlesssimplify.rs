@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_ovlesssimplify.{cc,hh}` — overflow-flag
+//! Port of `decompiler/cpp/unlace_ovlesssimplify.{cc,hh}` — overflow-flag
 //! signed-less-than simplification (unlace GH-7190, S3 simplification-quiescence).
 //!
 //! `RuleOvLessSimplify` collapses the OV-flag signed-less-than idiom
@@ -63,7 +63,7 @@ impl Rule for RuleOvLessSimplify {
         }))
     }
 
-    /// C++ `RuleOvLessSimplify::applyOp` (`kuna_ovlesssimplify.cc:48`) —
+    /// C++ `RuleOvLessSimplify::applyOp` (`unlace_ovlesssimplify.cc:48`) —
     /// transcribed.
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         // Match  NE( SLESS(V+K,0) , BOOL_AND( signTest , SLESS(-1, V+K) ) )
@@ -191,7 +191,7 @@ pub fn specs() -> Vec<RuleSpec> {
 }
 
 /// Return `(base, koff)` if `vn` is `V + K` (K constant)
-/// (C++ static `matchAddConst`, `kuna_ovlesssimplify.cc:18`).
+/// (C++ static `matchAddConst`, `unlace_ovlesssimplify.cc:18`).
 fn match_add_const(data: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, uintb)> {
     if !vn_is_written(data, vn) {
         return None;

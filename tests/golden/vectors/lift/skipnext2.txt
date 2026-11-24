@@ -4,7 +4,7 @@
 # cap: 80 instructions per lift point
 # lift-points (space:byte-offset name): ram:0x10=skipinst
 # regenerate: python tools/rust-port/gen_lift.py  (see tests/golden/vectors/lift/README.md)
-# golden liftctx (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden liftctx (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 archid Toy:BE:32:builder.align2:default
 languageid Toy:BE:32:builder.align2
 slafile toy_builder_be_align2.sla
@@ -23,7 +23,7 @@ context counter=0
 context fctx=0
 context nfctx=0
 context phase=0
-# golden lift ram:0x10 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift ram:0x10 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 insn ram:0x10 2
   COPY (register,0x1100,1) (const,0x0,1)
   COPY (register,0x1103,1) (const,0x0,1)

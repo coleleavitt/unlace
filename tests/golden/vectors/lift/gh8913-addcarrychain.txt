@@ -4,7 +4,7 @@
 # cap: 80 instructions per lift point
 # lift-points (space:byte-offset name): RAM:0x0=gh8913 RAM:0x401=current_screen RAM:0x40b=current_hovered_object
 # regenerate: python tools/rust-port/gen_lift.py  (see tests/golden/vectors/lift/README.md)
-# golden liftctx (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden liftctx (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 archid 6502:LE:16:default:default
 languageid 6502:LE:16:default
 slafile 6502.sla
@@ -19,7 +19,7 @@ space fspec index=5 size=8 wordsize=1 bigendian=0
 space iop index=6 size=8 wordsize=1 bigendian=0
 space join index=7 size=4 wordsize=1 bigendian=0
 space stack index=8 size=2 wordsize=1 bigendian=0
-# golden lift RAM:0x0 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift RAM:0x0 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 insn RAM:0x0 3
   COPY (register,0x0,1) (RAM,0x41a,1)
   INT_EQUAL (register,0x35,1) (register,0x0,1) (const,0x0,1)
@@ -557,7 +557,7 @@ insn RAM:0x95 1
   COPY (register,0x34,1) (const,0x1,1)
   LOAD (unique,0x8100,2) (const,RAM,8) (const,0xfffe,2)
   BRANCHIND - (unique,0x8100,2)
-# golden lift RAM:0x401 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift RAM:0x401 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 lifterror dataunavail RAM:0x401 Bytes at 0x0401 are not mapped
-# golden lift RAM:0x40b 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift RAM:0x40b 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 lifterror dataunavail RAM:0x40b Bytes at 0x040b are not mapped

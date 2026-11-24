@@ -68,5 +68,5 @@
     "`override flow <addr> branch` at an instruction that is ALREADY a branch is still REFUSED rather than treated as a satisfied no-op. That is upstream's rule (findPrimaryBranch skips the branch it is being asked to produce) and both witnesses ask for exactly it, so an agent that wants the switch-table reading of an indirect jump gets a rejection with a reason rather than a silent success. Changing the rule would be a behaviour change to a ported core routine and belongs behind a named option, not in a failure-path fix.",
     "docs/re-needs/ is deliberately NOT committed: the round-5 need docs live on the captain's local main and are not in this branch's base. The retargeted acceptance block was written into the local copy so `scripts.repipe.verify --need` could run; the captain owns the backlog file."
   ],
-  "pr": "https://github.com/Noelo-Lab/kuna/pull/472"
+  "pr": "upstream PR #472"
 }

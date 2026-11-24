@@ -617,7 +617,7 @@ fn normalize_fspec_offset(line: &str) -> String {
 const CODEREF_OPS: &[&str] = &["BRANCH", "CBRANCH", "CALL"];
 
 /// Normalize the one documented divergence between the **raw lift template** (what
-/// the golden fixture renders — `kuna_goldengen.cc` `GoldenLiftEmit::dump` emits
+/// the golden fixture renders — `unlace_goldengen.cc` `GoldenLiftEmit::dump` emits
 /// `vars[i]` verbatim) and the **built IR** (what the real `PcodeEmitFd::dump`
 /// constructs): for a code-ref op, `newCodeRef` makes the slot-0 destination a
 /// **size-1** annotation Varnode, where the raw template carries the address-width

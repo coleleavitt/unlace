@@ -12,7 +12,7 @@
 
 Unlace exposes the decisions inside the decompiler as named options that an agent (or a person)
 can flip per run, lists them with `unlace catalog`, and speaks `--json`, so an LLM can drive it
-end to end. Its engine comes from [Kuna](https://github.com/Noelo-Lab/kuna), a Rust port of
+end to end. Its engine comes from Kuna, a Rust port of
 [Ghidra](https://github.com/NationalSecurityAgency/ghidra)'s decompiler; Unlace adds Apple
 platform support (Mach-O, chained fixups, the dyld shared cache, kernelcaches, Objective-C,
 Swift, arm64e) and fixes found by comparing its output against IDA 9.5.

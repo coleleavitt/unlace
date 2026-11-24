@@ -1,7 +1,7 @@
 //! GOLDEN GATE for item `w2-sleigh-core`: replay every per-instruction raw
 //! p-code lift fixture in `tests/golden/vectors/lift/` (emitted by the C++
 //! oracle's `golden lift` / `golden liftctx` console commands,
-//! `decompiler/cpp/kuna_goldengen.cc`).
+//! `decompiler/cpp/unlace_goldengen.cc`).
 //!
 //! Each fixture pins one corpus binary against one `.sla` language: for every
 //! lift point, the C++ decoded up to 80 instructions and dumped each one as a
@@ -40,7 +40,7 @@ fn repo_root() -> PathBuf {
         .unwrap()
 }
 
-/// goldenOpName: the canonical enum names (kuna_goldengen.cc's ZPULL/SPULL
+/// goldenOpName: the canonical enum names (unlace_goldengen.cc's ZPULL/SPULL
 /// fix is already the unlace `get_opname` behavior).
 fn golden_op_name(opc: OpCode) -> &'static str {
     get_opname(opc)
@@ -90,7 +90,7 @@ impl LiftEmit<'_> {
     }
 }
 
-/// Map a lift error to its fixture class (kuna_goldengen.cc's catch ladder).
+/// Map a lift error to its fixture class (unlace_goldengen.cc's catch ladder).
 fn lifterror_class(e: &UnlaceError) -> &'static str {
     match e {
         UnlaceError::DataUnavail { .. } => "dataunavail",

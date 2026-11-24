@@ -1,7 +1,7 @@
 {
   "need_id": "checker-uses-stack-aggregate",
   "opportunity": "checker-uses-stack-aggregate",
-  "pr": "https://github.com/Noelo-Lab/kuna/pull/573",
+  "pr": "upstream PR #573",
   "test_name": "re-checker-stack-aggregate",
   "binary": "decompiler/crates/unlace-analysis/tests/fixtures/checker_stack_aggregate_x86_64",
   "selector": "stack_aggregate",

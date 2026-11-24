@@ -1,4 +1,4 @@
-# Noelo-Lab/kuna#1629: the RH850 system-register banks.
+# upstream #1629: the RH850 system-register banks.
 #
 # On RH850 the second word of LDSR/STSR carries a selID that picks one of
 # the banks of 32 system registers; V850E2M has one bank and other names in

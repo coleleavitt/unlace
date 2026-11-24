@@ -169,7 +169,7 @@ mod tests {
             "unlace-jobs-v2-",
             "unlace-jobs-v2-abc-1",
             "unlace-jobs-v2-1-",
-            "kunajobs-1-2",
+            "unlacejobs-1-2",
             "tmpdir",
         ] {
             assert_eq!(scratch_owner(bad), None, "{bad}");

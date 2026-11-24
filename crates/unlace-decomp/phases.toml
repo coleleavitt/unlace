@@ -1,5 +1,5 @@
 # phases.toml -- the unlace phase registry (ADR 0006): the SINGLE SOURCE OF TRUTH
-# for the four static tables transcribed from decompiler/cpp/kuna_stages.cc
+# for the four static tables transcribed from decompiler/cpp/unlace_stages.cc
 # (groupTable, substageTable, surfaceTable, settableTable). build.rs reads this
 # file and generates the static tables, the typed OptionValues struct, and the
 # live-value match. Editing a row here is the one edit point; the codegen makes
@@ -1347,7 +1347,7 @@ note = "(unlace angr-naming) master default-name scheme: angr vN/aN/dat_/sub_/la
 # settableTable: one row per unlace ArchOption -- the LLM control surface (26).
 # live_field/live_true/live_false give build.rs the typed OptionValues field +
 # the live-value reader mapping (the literal `flag ? live_true : live_false`
-# ternary of kuna_console.cc unlaceLiveValue); the three options with no live
+# ternary of unlace_console.cc unlaceLiveValue); the three options with no live
 # reader (loweredswitch/stackguard/namestyle) omit all three live_* keys.
 # ---------------------------------------------------------------------------
 [[settable]]

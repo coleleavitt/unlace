@@ -787,6 +787,9 @@ Three tiers:
 | code after a call to a renamed library abort is decompiled as reachable | [`fidproto`](#fidproto----on--off-default-on) |
 | msvc c++ class names missing and vftables left as unnamed data | [`rtti`](#rtti----on--off-default-on) |
 | no Class::vftable or RTTI_ labels in a windows pe with polymorphic classes | [`rtti`](#rtti----on--off-default-on) |
+| _CxxThrowException(&v1, &dat_<addr>) with no thrown type | [`msvceh`](#msvceh----on--off-default-off) |
+| nothing says what an msvc c++ function throws | [`msvceh`](#msvceh----on--off-default-off) |
+| _CxxThrowException(0, 0) with no hint that it rethrows | [`msvceh`](#msvceh----on--off-default-off) |
 | an ESP32 firmware calls through a literal like (*dat_40080504)(dst,src,n) instead of memcpy | [`esprom`](#esprom----auto--off--esp32--esp32s2--esp32s3--esp32c2--esp32c3--esp32c6--esp32h2--esp8266-default-auto) |
 | a call to a fixed 0x4000xxxx address in an Espressif image has no name | [`esprom`](#esprom----auto--off--esp32--esp32s2--esp32s3--esp32c2--esp32c3--esp32c6--esp32h2--esp8266-default-auto) |
 | sub_40000xxx callees in an ESP32-C3 image that have no body | [`esprom`](#esprom----auto--off--esp32--esp32s2--esp32s3--esp32c2--esp32c3--esp32c6--esp32h2--esp8266-default-auto) |
@@ -1144,6 +1147,10 @@ Three tiers:
 | v10 and v11 declared between v1 and v2 | [`declorder`](#declorder----natural--name-default-natural) |
 | local declarations in string order v1, v10, v11, v2 | [`declorder`](#declorder----natural--name-default-natural) |
 | a numbered local hard to find among ten or more declarations | [`declorder`](#declorder----natural--name-default-natural) |
+| std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > instead of std::string | [`cppshortnames`](#cppshortnames----on--off-default-off) |
+| a std::vector or std::map type spelled with its allocator and comparator | [`cppshortnames`](#cppshortnames----on--off-default-off) |
+| __cxx11 or __1 in front of a std function name | [`cppshortnames`](#cppshortnames----on--off-default-off) |
+| C++ type names too long to read | [`cppshortnames`](#cppshortnames----on--off-default-off) |
 | a local holding open()'s result named v1 | [`libcnames`](#libcnames----on--off-default-on) |
 | read's byte count kept as a vN | [`libcnames`](#libcnames----on--off-default-on) |
 | a stack buffer passed to read() or ReadFile() named vN | [`libcnames`](#libcnames----on--off-default-on) |
@@ -2997,6 +3004,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · unlace-analysis-rtti
 - **Example:** `option rtti on`
 
+### `msvceh` -- on | off, default `off`
+
+- **Symptoms:** _CxxThrowException(&v1, &dat_<addr>) with no thrown type; nothing says what an msvc c++ function throws; _CxxThrowException(0, 0) with no hint that it rethrows.
+- **What it does:** On an MSVC PE, label the C++ throw metadata and say what each x64 throw site throws. An MSVC `throw e;` is `_CxxThrowException(&e, &ThrowInfo)`, and a `throw;` is `_CxxThrowException(0, 0)`; stripped, the call reads `_CxxThrowException(&v1, &dat_140004a10)`. The pass finds the type_info vftable the `.?A` type descriptors share, every TypeDescriptor that points at it (built-in types such as `.H` included), and walks the image's references back from each: TypeDescriptor -> CatchableType (pType at +4, properties, object size and copy constructor checked) -> CatchableTypeArray (first entry at +4, every entry a CatchableType) -> ThrowInfo (array at +12, attributes, destructor and forward-compat routine checked). Each record is labelled with its type: `ThrowInfo<std::runtime_error>`, `ThrowInfo<int const>` (from TI_IsConst), `CatchableTypeArray<T>`, `CatchableType<T>` for the thrown type and each public base. Class names come from the MSVC demangler, built-in and pointer types from their type codes. On x64, a call of the imported `_CxxThrowException` (call through its IAT slot or its jump thunk) whose rdx is loaded by a `lea rdx, [rip+d]` of a labelled ThrowInfo in the 32 bytes before it gets the comment `throw T`, and one right after `xor edx, edx; xor ecx, ecx` gets `rethrow`; the comment goes to the function whose `.pdata` record (followed through chained unwind info) covers the call. x86 references are absolute addresses and are labelled the same way; x86 has no `.pdata`, so its throw sites get no comment. Catch-side metadata (FuncInfo, FH4, catch funclets) and x86 SEH scope tables are not read.
+- **When to flip:** Off by default. Turn it on for an MSVC or clang-cl C++ PE to see what each throw throws: the second argument of `_CxxThrowException` reads `&ThrowInfo<std::out_of_range>` instead of `&dat_<addr>`, and on x64 the call carries a `throw std::out_of_range` or `rethrow` comment. Inert on any other image.
+- **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · unlace-31
+- **Example:** `--option msvceh on`
+
 ### `esprom` -- auto | off | esp32 | esp32s2 | esp32s3 | esp32c2 | esp32c3 | esp32c6 | esp32h2 | esp8266, default `auto`
 
 - **Symptoms:** an ESP32 firmware calls through a literal like (*dat_40080504)(dst,src,n) instead of memcpy; a call to a fixed 0x4000xxxx address in an Espressif image has no name; sub_40000xxx callees in an ESP32-C3 image that have no body; a peripheral register poll loop in ESP firmware folds to while (true); ets_printf, esp_rom_delay_us or Cache_Read_Enable missing from an ESP image's output.
@@ -3712,6 +3727,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default: locals declare as `v1, v2, ..., v10`, the order IDA declares its numbered locals in. Set it to `name` for the plain string order (`v1, v10, v11, v2`) the declaration pass used before.
 - **Where / provenance:** P9/naming-policy · ida · presentation-default · kuna-declorder
 - **Example:** `option declorder name`
+
+### `cppshortnames` -- on | off, default `off`
+
+- **Symptoms:** std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > instead of std::string; a std::vector or std::map type spelled with its allocator and comparator; __cxx11 or __1 in front of a std function name; C++ type names too long to read.
+- **What it does:** Print a standard C++ name the way a C++ programmer writes it. A demangler and DWARF spell `std::string` as `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >`. With the option on, `kuna_cppshortnames` shortens the name where the printer writes it, and the type, its Symbol and every directive keep the full name. An inline namespace right after `std` (`__cxx11`, `__1`, `__2`, `__ndk1`) is dropped from a type name and from the namespaces printed in front of a declared or called function (`std::basic_string::_M_append`). A character template whose other arguments are its defaults prints as its standard alias: `basic_string`, `basic_string_view` over `char`, `wchar_t`, `char8_t`, `char16_t` and `char32_t` (`std::string`, `std::wstring`, `std::u16string_view`), and the stream and buffer templates over `char` and `wchar_t` (`std::ostream`, `std::wistream`, `std::ostringstream`, `std::filebuf`). A DWARF name without its namespace (`basic_string<char, std::char_traits<char>, std::allocator<char> >`) counts when a default argument shows it is the standard one. A standard container loses its trailing default arguments when they name its own element, or for a map its own key and value pair: `std::vector<int, std::allocator<int> >` prints `std::vector<int>`, `std::map<int, std::string, std::less<int>, std::allocator<std::pair<int const, std::string> > >` prints `std::map<int, std::string>`, and `std::unique_ptr<Foo, std::default_delete<Foo> >` prints `std::unique_ptr<Foo>`. Any other argument stays (`std::vector<int, std::allocator<long>>`, `std::set<int, std::greater<int>>`). MSVC's `class`/`struct` argument tags are dropped. A rewritten name closes nested argument lists as `>>`. A name more than 32 template levels deep, longer than 4 KiB, or with unbalanced brackets prints as it is. The scope name of a member of the C++11-ABI string stays `basic_string`: the demangled symbol has lost its template arguments, so `char` and `wchar_t` cannot be told apart.
+- **When to flip:** Turn on for C++ binaries: `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > *` prints `std::string *`, and `std::__cxx11::basic_string::_M_append` prints `std::basic_string::_M_append`. Off by default because it respells names that stage assertions and CLI tests spell in full.
+- **Where / provenance:** P9/naming-policy · ida · presentation-default · kuna-cppshortnames
+- **Example:** `option cppshortnames on`
 
 ### `libcnames` -- on | off, default `on`
 

@@ -606,6 +606,9 @@ mod tests {
             "contextnames",
             // `flownames` renames locals from fields and types the same way.
             "flownames",
+            // `cppshortnames` respells C++ type and scope names that stage
+            // assertions and CLI tests spell in full.
+            "cppshortnames",
             // `mapglobalsyms` makes a function's output depend on which functions
             // were decompiled before it in the same run; in the preset that would
             // make every `decompile-all` under 500 KiB order-dependent.

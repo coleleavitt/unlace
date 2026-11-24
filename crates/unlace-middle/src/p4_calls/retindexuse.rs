@@ -12,7 +12,10 @@
 //! With the option on, a LOAD whose address is the walked value plus a value the
 //! walk did not reach (a base pointer; constant offsets folded on the way) is an
 //! index use, not a dereference of the returned value, and does not refuse a
-//! RETURN trial. The shipped default `bpf` applies it on eBPF only, where a
+//! RETURN trial. A 64-bit address built as two 32-bit halves (SASS
+//! `IADD3`/`IMAD.X` into a register pair, read back as one `PIECE`) is
+//! followed through its low half, and a `COPY` on the way is looked through.
+//! The shipped default `bpf` applies it on eBPF only, where a
 //! measurement of BPF, SASS, x86-64 and Thumb-2 builds of the same C (#865)
 //! found only right returns gained; elsewhere a scratch register that indexes
 //! a loop and is left in the return register of a `void` function would read
@@ -94,15 +97,30 @@ fn index_only_load(data: &Funcdata, opmatch: OpId, op: OpId, vn: VarnodeId) -> b
         return false;
     }
     let mut addr = vn;
-    for _ in 0..8 {
+    for _ in 0..12 {
         let Some(def) = vbank.get(addr).and_then(|v| v.get_def()) else {
             return false;
         };
         let Some(o) = obank.get(def) else {
             return false;
         };
-        if !matches!(o.code(), OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD) {
-            return false;
+        match o.code() {
+            OpCode::CPUI_INT_ADD | OpCode::CPUI_PTRADD => {}
+            OpCode::CPUI_COPY => match o.get_in(0) {
+                Some(x) => {
+                    addr = x;
+                    continue;
+                }
+                None => return false,
+            },
+            OpCode::CPUI_PIECE => match o.get_in(1) {
+                Some(lo) => {
+                    addr = lo;
+                    continue;
+                }
+                None => return false,
+            },
+            _ => return false,
         }
         let (Some(a), Some(b)) = (o.get_in(0), o.get_in(1)) else {
             return false;

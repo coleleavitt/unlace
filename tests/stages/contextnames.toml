@@ -69,7 +69,7 @@ literal = '} while (a2 != j);'
 [[match]]
 name = 'CONTEXTNAMES #4: on, the innermost counter is k'
 count = 1
-literal = '} while (k != a3);'
+literal = 'while (k != a3)'
 
 [[match]]
 name = 'CONTEXTNAMES #5: on, both returned accumulators are result'

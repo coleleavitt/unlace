@@ -161,6 +161,18 @@ S0, A0, A1, A2, A7 = 8, 10, 11, 12, 17
 
 SLOT = 32
 
+def harness_mem(tests, data_addr):
+    """Per test: ld a0,0(s0); ld a2,8(s0); addi a1,s0,16; <word>; sd a0,24(s0);
+    addi s0,s0,32: the word works on the doubleword at s0+16."""
+    code = [enc_u(0x37, S0, data_addr)]
+    for w in tests:
+        code += [enc_i(0x03, A0, 3, S0, 0), enc_i(0x03, A2, 3, S0, 8), enc_i(0x13, A1, 0, S0, 16), w,
+                 enc_s(0x23, 3, S0, A0, 24), enc_i(0x13, S0, 0, S0, SLOT)]
+    n = SLOT * len(tests)
+    code += [enc_i(0x13, A0, 0, 0, 1), enc_u(0x37, A1, data_addr), enc_u(0x37, A2, (n + 0x800) & ~0xfff), enc_i(0x13, A2, 0, A2, n - ((n + 0x800) & ~0xfff)),
+             enc_i(0x13, A7, 0, 0, 64), 0x73, enc_i(0x13, A0, 0, 0, 0), enc_i(0x13, A7, 0, 0, 93), 0x73]
+    return b''.join(struct.pack('<I', c) for c in code)
+
 def harness(tests, data_addr):
     """Per test: ld a1,0(s0); ld a2,8(s0); fld fa1,0(s0); fld fa2,8(s0); <word>;
     sd a0,16(s0); fsd fa0,24(s0); addi s0,s0,32. Then write(1, data, len) and
@@ -220,7 +232,7 @@ class Pcode:
     def __init__(self, xlen):
         self.xlen = xlen
 
-    def run(self, ops, regs, regoff, next_addr, fregs=None):
+    def run(self, ops, regs, regoff, next_addr, fregs=None, ram=None):
         mem = {}
         written = set()
         rsz = self.xlen // 8
@@ -236,6 +248,9 @@ class Pcode:
             return v
         for r, val in regs.items():
             wr({'space': 'register', 'offset': regoff(r), 'size': rsz}, val)
+        for addr, val in (ram or {}).items():
+            for b in range(8):
+                mem[('ram', addr + b)] = (val >> (8 * b)) & 0xff
         for r, val in (fregs or {}).items():
             wr({'space': 'register', 'offset': FREG_BASE + 8 * r, 'size': 8}, val)
         i = 0
@@ -266,6 +281,21 @@ class Pcode:
                 return None
             if op == 'CALLOTHER':
                 return 'opaque'
+            if op == 'STORE':
+                addr = rd(ins[1])
+                val = rd(ins[2])
+                for b in range(ins[2]['size']):
+                    mem[('ram', addr + b)] = (val >> (8 * b)) & 0xff
+                i += 1
+                continue
+            if op == 'LOAD':
+                addr = rd(ins[1])
+                v = 0
+                for b in range(out['size']):
+                    v |= mem.get(('ram', addr + b), 0) << (8 * b)
+                wr(out, v)
+                i += 1
+                continue
             s0 = ins[0]['size']
             r = {
                 'COPY': lambda: x[0],
@@ -325,6 +355,12 @@ class Pcode:
                 written.add(out['offset'])
             wr(out, r() & M)
             i += 1
+        if ram is not None:
+            addr = next(iter(ram))
+            m = 0
+            for b in range(8):
+                m |= mem.get(('ram', addr + b), 0) << (8 * b)
+            return ('m', rd({'space': 'register', 'offset': regoff(A0), 'size': rsz}), m)
         if fregs is not None:
             fa0 = FREG_BASE + 8 * A0
             if fa0 in written:
@@ -332,13 +368,14 @@ class Pcode:
             return ('x', rd({'space': 'register', 'offset': regoff(A0), 'size': rsz}))
         return rd({'space': 'register', 'offset': regoff(A0), 'size': rsz})
 
-def run_qemu(a, tmp, ws, vecs):
+def run_qemu(a, tmp, ws, vecs, mems):
     tests = [w for w in ws for _ in vecs]
     owner = [(w, x, y) for w in ws for x, y in vecs]
-    code = harness(tests, 0)
+    hz = harness_mem if a.mem else harness
+    code = hz(tests, 0)
     data_addr = (BASE + len(code) + 0x1fff) & ~0xfff
-    code = harness(tests, data_addr)
-    data = b''.join(struct.pack('<QQQQ', x, y, 0, 0) for _, x, y in owner)
+    code = hz(tests, data_addr)
+    data = b''.join(struct.pack('<QQQQ', x, y, mems.get((x, y), 0), 0) for _, x, y in owner)
     prog = os.path.join(tmp, 'qemu1.elf')
     with open(prog, 'wb') as f:
         f.write(elf(code, 64, data, data_addr))
@@ -346,7 +383,8 @@ def run_qemu(a, tmp, ws, vecs):
     p = subprocess.run([a.qemu, '-cpu', a.cpu, prog], capture_output=True)
     if p.returncode != 0 or len(p.stdout) != len(data):
         return None
-    return [struct.unpack_from('<QQ', p.stdout, SLOT * j + 16) for j in range(len(owner))]
+    out = [struct.unpack_from('<QQ', p.stdout, SLOT * j + 16) for j in range(len(owner))]
+    return [('m', r[1], r[0]) for r in out] if a.mem else out
 
 def raw_pcode(path, unl, spec, n):
     """Each word's p-code; a word that does not decode ends a listing, so the
@@ -367,6 +405,8 @@ def raw_pcode(path, unl, spec, n):
 
 def pick(g, wv):
     """The QEMU result (a0, fa0) for the register the p-code wrote."""
+    if isinstance(g, tuple) and g[0] == 'm':
+        return wv
     if isinstance(g, tuple):
         return (g[0], wv[1] if g[0] == 'f' else wv[0])
     return wv[0] if isinstance(wv, tuple) else wv
@@ -392,7 +432,7 @@ def same(g, w):
 
 def show(v):
     if isinstance(v, tuple):
-        return '%s:%s' % (v[0], hex(v[1]))
+        return '%s:%s' % (v[0], ','.join(hex(x) for x in v[1:]))
     return v if isinstance(v, str) else hex(v)
 
 FP_POOL = [0x0, 0x8000000000000000, 0x3fe0000000000000, 0x3ff8000000000000, 0x4004000000000000, 0xc004000000000000,
@@ -433,6 +473,10 @@ def semantics(a):
             continue
         val = lambda: rng.choice(edge) if rng.random() < 0.3 else rng.getrandbits(a.xlen)
         vecs.append((val(), val()))
+    mems = {}
+    if a.mem:
+        for x, y in vecs:
+            mems[(x, y)] = x if rng.random() < 0.4 else rng.getrandbits(64)
     tmp = a.keep or tempfile.mkdtemp()
     one = os.path.join(tmp, 'one.elf')
     open(one, 'wb').write(elf(b''.join(struct.pack('<I', w) for _, w in words), a.xlen))
@@ -451,6 +495,9 @@ def semantics(a):
             for x, y in vecs:
                 try:
                     xm = (1 << a.xlen) - 1
+                    if a.mem:
+                        outs.append(interp.run(ins['ops'], {A0: x & xm, A1: 0x1000, A2: y & xm}, regoff, BASE + 4 * i + 4, None, {0x1000: mems[(x, y)]}))
+                        continue
                     outs.append(interp.run(ins['ops'], {A1: x & xm, A2: y & xm, A0: 0xdead}, regoff, BASE + 4 * i + 4,
                                            {A1: x, A2: y, A0: 0xdead} if a.fp else None))
                 except RuntimeError as ex:
@@ -464,22 +511,24 @@ def semantics(a):
             for x, y in vecs:
                 tests.append(w)
                 owner.append((w, x, y))
-        code = harness(tests, 0)
+        hz = harness_mem if a.mem else harness
+        code = hz(tests, 0)
         data_addr = (BASE + len(code) + 0x1fff) & ~0xfff
-        code = harness(tests, data_addr)
-        data = b''.join(struct.pack('<QQQQ', x, y, 0, 0) for _, x, y in owner)
+        code = hz(tests, data_addr)
+        data = b''.join(struct.pack('<QQQQ', x, y, mems.get((x, y), 0), 0) for _, x, y in owner)
         prog = os.path.join(tmp, 'qemu.elf')
         open(prog, 'wb').write(elf(code, 64, data, data_addr))
         os.chmod(prog, 0o755)
         p = subprocess.run([a.qemu, '-cpu', a.cpu, prog], capture_output=True)
         if p.returncode == 0 and len(p.stdout) == len(data):
             for j, (w, x, y) in enumerate(owner):
-                oracle.setdefault(w, []).append(struct.unpack_from('<QQ', p.stdout, SLOT * j + 16))
+                r = struct.unpack_from('<QQ', p.stdout, SLOT * j + 16)
+                oracle.setdefault(w, []).append(('m', r[1], r[0]) if a.mem else r)
         else:
             # some word traps (a reserved encoding QEMU rejects): run each
             # word on its own and leave the trapping ones without a reference
             for n, w in words:
-                got = run_qemu(a, tmp, [w], vecs)
+                got = run_qemu(a, tmp, [w], vecs, mems)
                 if got is not None:
                     oracle[w] = got
     report = {}
@@ -551,6 +600,7 @@ def main():
             p.add_argument('--vectors', type=int, default=16)
             p.add_argument('--qemu')
             p.add_argument('--keep', help='write the test ELFs into this directory')
+            p.add_argument('--mem', action='store_true', help='memory instructions: rd=a0 starts as the vector, rs1=a1 points at a doubleword holding a second value, rs2=a2; compare a0 and that doubleword')
             p.add_argument('--fp', action='store_true', help='also load fa1/fa2 with the vectors (FP-flavoured values), and compare fa0 when the p-code writes it')
             p.add_argument('--cpu', default='rv64,zba=true,zbb=true,zbc=true,zbs=true,zbkb=true,zbkx=true,zicond=true')
     a = ap.parse_args()

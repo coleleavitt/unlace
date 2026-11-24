@@ -68,9 +68,8 @@ input registers and the differing values.
   `--count` to a few hundred and vary `--seed`.
 - m68k and SPARC have no `Arch`: Unicorn 2.1.4 segfaults within a few hundred cases on both, and
   its m68k SR read does not include the lazily computed condition codes.
-- RISC-V: fused multiply-adds, instructions with a static rounding mode other than `rne`/`dyn`
-  (p-code float ops round to nearest), and the NaN-boxing of single-precision results in 64-bit
-  `f` registers (open, see below).
+- RISC-V: fused multiply-adds and instructions with a static rounding mode other than
+  `rne`/`dyn` (p-code float ops round to nearest).
 
 ### Reference quirks
 
@@ -83,6 +82,10 @@ Unicorn is the reference, not the truth. Each disagreement below was checked aga
   the prefix in 64-bit mode.
 - A RIP-relative `SHLD`/`SHRD` with an `imm8` addresses one byte short.
 - `INSERTQ` inserts the wrong field and `EXTRQ` keeps bits 127:64.
+- RISC-V: Unicorn's QEMU NaN-boxes a single-precision result only for `flw` and `fmv.w.x`; the
+  arithmetic, conversion and sign-injection results keep bits 63:32 as 0 (or, for `fsgnj.s`,
+  as the upper word of `rs1`). The ISA manual boxes every one ("NaN Boxing of Narrower
+  Values"), so when ours is boxed only its low 32 bits are compared (`RiscV64.normalize`).
 
 ## Findings
 
@@ -102,18 +105,20 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
   `LD1`..`LD4` and `LD1R`..`LD4R` with 64-bit arrangements, ...) left bits 127:64 of the
   vector register unchanged. `FCVTZU d,d,#fbits` and `FCVTZU h,h,#fbits`, `SCVTF`/`UCVTF`
   `.4H`/`.8H` `#fbits` and scalar `URSHR d` decoded their shift with the wrong element size.
+- **AArch64 (#546).** Rounding of `SRSRA`/`URSRA` and by-element `SQRDMULH`, saturation of
+  `SQDMULH`/`SQRDMULH`/`SQDMLAL`/`SQDMLSL`/`SUQADD`, `SUDOT`/`USDOT`/`BFDOT`/`BFMLALB`/`BFMLALT` by element, and the MOPS `wt` options.
 - **RISC-V.** `c.jr`, `c.jalr` and `ret` did not clear bit 0 of the target, as `jalr` does.
+  Single-precision (and Zfh half-precision) results written to a 64-bit `f` register were
+  zero-extended instead of NaN-boxed (`flw fs4,-0x56f(tp)` left `fs4 = 0x000000009b2a6699`
+  for `0xffffffff9b2a6699`).
 - **ARM.** A conditional `STRHT` wrote its base back even when the condition failed, and stored 4
   bytes. The T32 `ANDS`, `BICS`, `MOVS.W` (immediate), `MVNS` and `ANDS.W`/`MVNS.W` with a
   shifted register did not set C from the shifter.
 
-Open (issues #546, #548, #549, #563):
+Open (issues #548, #563):
 
-- AArch64: the rounding of `SQRDMULH`, `SRSHR`/`URSHR`/`SRSRA`/`URSRA` and the saturation of
-  `SQDMLAL`/`SQDMLSL`/`SUQADD` are not modelled; `FCVTMU`/`FCVTZU` of a negative value
-  wraps instead of saturating to 0; `BFDOT`, `USDOT` and `SUDOT` by element fail to lift
-  (`generateLocation: null space`); the MOPS `CPY*` and `BFMLALB/T` (vector) do not decode.
-- RISC-V: single-precision results are not NaN-boxed in the 64-bit `f` registers.
+- AArch64: `FCVT*U` of a negative value wraps instead of giving 0 (kept: clamping makes every
+  `(unsigned)f` unreadable); the SVE `USDOT`/`BFMLALB` and F64MM `LD1RO*` do not decode.
 - TriCore: PSW.V is the sign bit of the 32-bit result instead of signed overflow (`overflowflags`,
   about 110 constructors), and `SHA` never sets PSW.C.
 - x86-64: an encoding whose REX prefix is followed by another prefix (REX is then ignored) does

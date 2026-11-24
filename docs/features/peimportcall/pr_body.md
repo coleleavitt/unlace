@@ -263,7 +263,7 @@ Whole-binary is negative because the truncated functions are less work.
 
 ## Test
 
-`tests/stages/ghdec-peimportcall.xml` — a two-pass `decompilertest` over the real
+`tests/stages/ghdec-peimportcall.toml` — a two-pass `decompilertest` over the real
 `load file → read symbols → decompile` path on a new 6 KB PE fixture
 (`pe_noreturn_import.exe`, built with MinGW-w64 in the `kuna-dev` container; source and
 recipe committed beside it and documented in the fixtures README). It is purpose-built

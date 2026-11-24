@@ -126,7 +126,7 @@
 //! (`mov %r12,%rdx`) on the non-clobber path loses both the argument and the
 //! parameter, and `void caller(long,unsigned long)` becomes `void
 //! caller(long)`. That shape is
-//! `tests/stages/kuna-argclobber-forward.xml`.
+//! `tests/stages/kuna-argclobber-forward.toml`.
 //!
 //! **The callee.** That still leaves a register the caller never wrote, and
 //! nothing on the caller's side can say whether the callee wanted it. Only the

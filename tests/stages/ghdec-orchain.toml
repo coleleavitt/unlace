@@ -1,0 +1,111 @@
+# decbench: `returndup` splits the shared epilogue of a source function that is
+# ONE short-circuit boolean return, and the split permanently blocks the fold.
+#   Case: O0-iproute2-ip-sci_complete   (GED 21 with the split, 0 without)
+#   Siblings: O0-cleanflight-cleanflight_DALRCF405-USBD_DataInStage (13 -> 0),
+#             O0-crazyflie-cf2-DCD_HandleUSBSuspend_ISR             (12 -> 0)
+#
+# Source of this testcase (gcc -O0 -fno-pie -fno-stack-protector -c), the
+# sci_complete shape reduced to its four operands and no calls, so the object
+# is relocation-free:
+#
+#     int t(int a, int b, int c, int d)
+#     {
+#       return a || (b && (c || d));
+#     }
+#
+# At -O0 that compiles to four `cmp/jcc` operand blocks, two constant
+# materialisation blocks (`mov $1,%eax` / `mov $0,%eax`) and ONE shared
+# `pop %rbp; ret` epilogue, which is the -O0 encoding of every source return in
+# the function, not evidence that the source wrote several.
+#
+# Root cause (P8).  `Funcdata::returndup_apply` (option `returndup`, DIV-54
+# default-ON) gives every predecessor of the shared bare-epilogue RETURN block
+# its own private return.  For a guard clause that recovers the source shape,
+# but the operand blocks of a short-circuit expression are predecessors of that
+# same block, and the shared out-target is exactly what
+# `CollapseStructure::rule_block_or` matches on:
+#
+#     bl -> {orblock, clauseblock}, orblock -> {clauseblock, X}
+#
+# Once each operand owns a private return the guards no longer share
+# `clauseblock`, `rule_block_or` declines, and `iteboolean` never sees the 0/1
+# select diamond either.  `ActionReturnDup` runs in the `returnsplit` group and
+# `collapse_conditions` runs later, so the loss is permanent.
+#
+# The fix (part of `returndup`) replays `collapse_conditions` read-only on the
+# bblocks CFG before splitting (`kuna_orchain::shortcircuit_shared_targets`,
+# mirroring ruleBlockOr's own admission test: one in-edge, two out-edges, not a
+# switch, not BlockBasic::isComplex, and a shared out-target) and declines the
+# function's splits when one of its own candidates is a fold target.  It also
+# protects the block joining two single-exit arms that are themselves fold
+# targets, because the FIRST returndup invocation of the schedule's fullloop
+# still sees the constant-materialisation blocks in between.
+#
+# Stage model: P8 "goto-quality" (S8 CFG rewrite before the final block
+# structuring), rendered in P9.  Inert with `option returndup off`.
+#
+# Without the gate one source expression becomes a five-return guard cascade,
+# `return-dupe x3` on the header; the whole chain folds back into one
+# short-circuit condition with a single guarded return.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x101000', name = 't' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x101000'
+hex = '''
+f30f1efa554889e5897dfc8975f88955f4894df0837dfc007512837df8007413
+837df4007506837df0007407b801000000eb05b8000000005dc3
+'''
+
+[script]
+commands = [
+    'lo fu t',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'orchain #1: the cascade never opens with the first operand as its own guard'
+count = 0
+literal = 'if (a0)'
+
+[[match]]
+name = 'orchain #2: the second operand never gets a private return'
+count = 0
+literal = 'if (!a1)'
+
+[[match]]
+name = 'orchain #3: nor the third'
+count = 0
+literal = 'if (a2)'
+
+[[match]]
+name = 'orchain #4: nor the fourth'
+count = 0
+literal = 'if (a3)'
+
+[[match]]
+name = 'orchain #5: returndup never splits the chain'
+count = 0
+literal = 'return-dupe x3'
+
+[[match]]
+name = 'orchain #6: the whole operand chain folds back into one short-circuit condition'
+count = 1
+literal = 'if ((!a0) && ((!a1 || ((!a2 && (!a3))))))'
+
+[[match]]
+name = "orchain #7: one `return 1;`, the folded form's"
+count = 1
+literal = 'return 1;'
+
+[[match]]
+name = "orchain #8: one `return 0;`, the folded form's guarded return"
+count = 1
+literal = 'return 0;'

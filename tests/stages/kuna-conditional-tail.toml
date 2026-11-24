@@ -1,0 +1,220 @@
+# Authored MSABI conditional tail: compare [rcx],7; preserve all four incoming
+# arguments on JNE helper; swap rcx/rdx on the unconditional JMP other.
+# P2 flow classification, option tailcalljump off/on/direct. Unknown and
+# mid-function targets must still clip. A separately declared interior entry
+# stays local. An unbounded caller retains its copied-in callee body; a clipped
+# false path still halts; a stated int tail returns its result, and a no-return
+# callee stops only its taken path. A final pass explicitly inlines the int leaf.
+# No bytes or names are copied from an application binary.
+
+[image]
+arch = 'x86:LE:64:default:windows'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '8339074889d00f85f40000004889ca4889c1e9e9010000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1100'
+readonly = true
+hex = 'c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1200'
+readonly = true
+hex = 'c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1300'
+readonly = true
+hex = '8339070f85f7000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1400'
+readonly = true
+hex = 'c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1500'
+readonly = true
+hex = '8339070f85f8010000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1600'
+readonly = true
+hex = '8339077505b803000000b809000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1700'
+readonly = true
+hex = 'b80b000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1900'
+readonly = true
+hex = '8d0411c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1a00'
+readonly = true
+hex = '85c90f84f8feffffb82a000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1b00'
+readonly = true
+hex = '0f0b'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1c00'
+readonly = true
+hex = '85c90f85f8feffffb82a000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1d00'
+readonly = true
+hex = '85c90f85f8fbffff'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1e00'
+readonly = true
+hex = '85c90f85f8faffffb82a000000c3'
+
+[script]
+commands = [
+    'function bounds 0x1000 0x1017 as dispatch',
+    'function bounds 0x1100 0x1101 as helper',
+    'function bounds 0x1200 0x1201 as other',
+    'function bounds 0x1300 0x130a as unknown',
+    'function bounds 0x1500 0x150a as middle',
+    'function bounds 0x1600 0x1610 as local',
+    'function bounds 0x160a 0x1610 as interior',
+    'function bounds 0x1700 0x1706 as target',
+    'parse line extern void dispatch(int *object, void *layer, int identity, const void *remap);',
+    'parse line extern void helper(int *object, void *layer, int identity, const void *remap);',
+    'parse line extern void other(void *layer, int *object, int identity, const void *remap);',
+    'parse line extern void unknown(int *object);',
+    'parse line extern void middle(int *object);',
+    'parse line extern int local(int *object);',
+    'function bounds 0x1900 0x1904 as add',
+    'function bounds 0x1a00 0x1a0e as value_tail',
+    'function bounds 0x1b00 0x1b02 as fatal',
+    'function bounds 0x1c00 0x1c0e as fatal_tail',
+    'parse line extern int add(int x, int y);',
+    'parse line extern int value_tail(int x, int y);',
+    'parse line extern void fatal(int value);',
+    'parse line extern int fatal_tail(int value);',
+    'function bounds 0x1d00 0x1d08 as clipped_tail',
+    'parse line extern int clipped_tail(int x, int y);',
+    'function bounds 0x1e00 as unbounded',
+    'parse line extern int unbounded(int x, int y);',
+    'option noreturn fatal',
+    'option tailcallframe off',
+    'option tailcalljump on',
+    'lo fu dispatch',
+    'decompile',
+    'print C',
+    'option tailcalljump direct',
+    'decompile',
+    'print C',
+    'option tailcalljump off',
+    'decompile',
+    'print C',
+    'option tailcalljump direct',
+    'option tailcallframe on',
+    'lo fu unknown',
+    'decompile',
+    'print C',
+    'lo fu middle',
+    'decompile',
+    'print C',
+    'lo fu local',
+    'decompile',
+    'print C',
+    'lo fu value_tail',
+    'decompile',
+    'print C',
+    'lo fu fatal_tail',
+    'decompile',
+    'print C',
+    'lo fu unbounded',
+    'decompile',
+    'print C',
+    'lo fu clipped_tail',
+    'decompile',
+    'print C',
+    'option inline add',
+    'lo fu value_tail',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CONDITIONAL-TAIL #1: on and direct preserve incoming argument order on the taken edge'
+count = 2
+literal = 'helper(object,layer,identity,remap);'
+
+[[match]]
+name = 'CONDITIONAL-TAIL #2: the fall-through swaps only the first two arguments'
+count = 2
+literal = 'other(layer,object,identity,remap);'
+
+[[match]]
+name = 'CONDITIONAL-TAIL #3: disabled, unknown and mid-function edges still clip'
+count = 5
+literal = 'halt_missing();'
+
+[[match]]
+name = 'CONDITIONAL-TAIL #4: an interior declared entry remains local'
+count = 1
+literal = 'return 9;'
+
+[[match]]
+name = 'CONDITIONAL-TAIL #5: no call to the interior entry'
+count = 0
+literal = 'interior('
+
+[[match]]
+name = 'CONDITIONAL-TAIL #6: a backward conditional tail returns the stated callee result'
+count = 2
+regex = 'return add\((x|0),y\);'
+
+[[match]]
+name = 'CONDITIONAL-TAIL #7: the no-return taken edge calls its declared leaf'
+count = 1
+literal = 'fatal(value);'
+
+[[match]]
+name = 'CONDITIONAL-TAIL #8: value-returning fall-through paths survive'
+count = 4
+literal = 'return 0x2a;'
+
+[[match]]
+name = 'CONDITIONAL-TAIL #9: actual extent clipping keeps its warnings'
+count = 4
+literal = 'Function flows out of bounds'
+
+[[match]]
+name = 'CONDITIONAL-TAIL #10: the taken block survives explicit leaf inlining'
+count = 1
+literal = '// inlined: add'
+
+[[match]]
+name = 'CONDITIONAL-TAIL #11: the inlined zero-key tail returns its second input'
+count = 1
+literal = 'return y;'

@@ -1279,7 +1279,7 @@ variable. `--option boolbyte off` restores the upstream fold exactly - the
 candidate is never offered and the printer arm is not consulted - which is the
 ablation to reach for when a `bool` declaration is in question.
 
-`tests/stages/kuna-boolbyte.xml` pins the witness, the five refusals - a byte
+`tests/stages/kuna-boolbyte.toml` pins the witness, the five refusals - a byte
 that is also widened and added, a byte tested for its low bit, a byte stored
 through a pointer, a stack byte set to 0 and then filled by a callee, and a byte
 parameter copied into a slot a callee is handed the address of - and both
@@ -1384,7 +1384,7 @@ one type, three functions change a declaration count: two split a `char` byte
 or pointer from an unrelated `unsigned char` value that had shared its
 declaration, and one joins two `char *` locals. Every changed comparison was
 checked by compiling both forms and evaluating them over all 256 byte values.
-`tests/stages/kuna-charbyte.xml` pins the witness, the `unsigned char *` and
+`tests/stages/kuna-charbyte.toml` pins the witness, the `unsigned char *` and
 unsigned-compare controls, the `0xe9` comparison, and a pointer that is
 `char *` only because `strlen` takes one.
 
@@ -1660,7 +1660,7 @@ also holds a keymap entry's function is now typed as that function pointer and
 indexed. The cost is gcc's incompatible-pointer-type warnings, 247 to 312: a
 function whose recovered prototype differs from the DWARF type of the slot it
 is passed to was passed to a `void *` before, and gcc 14 and later reject that
-by default. Exercised by `tests/stages/kuna-calltargettype.xml` (gcc -O1 and clang
+by default. Exercised by `tests/stages/kuna-calltargettype.toml` (gcc -O1 and clang
 -O2 builds of a table dispatch, a local holding a table entry, a record's
 callback, a local called with two arities, a local that receives a function's
 address, a local handed to `qsort`, a float held in `xmm0` as an integer, and a
@@ -4119,9 +4119,12 @@ off; `pairparam` must be on),
 low-word `INT_EQUAL`/`INT_NOTEQUAL`, when one operand is an input word with an
 unlocked input word above it (the same `input_above` test) and the condition
 of a CBRANCH next to the one the compare decides compares that high word with
-the high word of the other operand: for an ordered low compare, an ordered
-compare (signed or not) in one of the one or two blocks reached by walking up
-single-entry edges; for an equality, an equality in the block directly above
+the high word of the other operand: for an ordered low compare, the high words compared in both
+of the two blocks reached by walking up single-entry edges, at least one of
+them an ordered compare (signed or not): the three-way shape `hi < ...; hi !=
+...; lo < ...` that `LessThreeWay` folds, never one bound per word (betaflight's
+`spektrumTmTextGenPutChar(col, row, c)` tests `row <= 8 && col <= 0xb` and
+was read as one `unsigned long long`); for an equality, an equality in the block directly above
 (along a single-entry edge) or in a single-entry successor. The other operand's
 words must be a pair (`is_pair`: two adjacent input words or the SUBPIECEs of
 one whole), or, for an ordered compare only, two constants. The same low-word

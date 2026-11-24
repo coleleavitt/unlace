@@ -1,0 +1,244 @@
+# An ARM hard-float function returns a double in d0 and a float in s0
+# (option armfloatreturn, default off).
+#
+# The default model lists only the 4-byte s-registers, so a double return
+# is cut to its low word: fixed() { vmov.f64 d0,#1.5; bx lr } prints
+# unsigned int fixed(void) { return 0; }, and a double argument read from
+# d0 is never a parameter.
+#
+# The raw image below has no ELF container, so it states no calling
+# convention: the option leaves it alone, and only an explicit prototype
+# brings the double back.
+#
+# armfloatreturn_armhf.o (clang -mfloat-abi=hard, source beside it) is a
+# relocatable object whose .ARM.attributes says Tag_ABI_VFP_args=1.
+# fmtlf_armhf is a linked PIE whose ELF header carries the hard-float flag.
+# Pass 1 (option off) reproduces the defect on both; pass 2 (on) returns
+# the whole double, takes the d0 parameter, narrows a float converted from
+# a double to s0, keeps an integer return in r0 while d0 is also written
+# or still holds a callee's double, fills an unused d0 below a used d1 with
+# one double, does not make two floats in s0/s1 one 8-byte parameter, and
+# returns a double that one path takes from a call and another computes.
+
+[image]
+arch = 'ARM:LE:32:v7'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'raw_fixed' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '080bb7ee1eff2fe1'
+
+[script]
+commands = [
+    'option armfloatreturn off',
+    'lo fu raw_fixed',
+    'decompile',
+    'print C',
+    'option armfloatreturn on',
+    'option armfloatargs off',
+    'lo fu raw_fixed',
+    'decompile',
+    'print C',
+    'parse line extern float8 raw_fixed(void);',
+    'lo fu raw_fixed',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/armfloatreturn_armhf.o',
+    'option armfloatreturn off',
+    'read symbols',
+    'lo fu scale',
+    'decompile',
+    'print C',
+    'lo fu fixed',
+    'decompile',
+    'print C',
+    'lo fu narrow',
+    'decompile',
+    'print C',
+    'lo fu keep',
+    'decompile',
+    'print C',
+    'lo fu bump',
+    'decompile',
+    'print C',
+    'lo fu second',
+    'decompile',
+    'print C',
+    'lo fu w2',
+    'decompile',
+    'print C',
+    'lo fu a3',
+    'decompile',
+    'print C',
+    'lo fu a7',
+    'decompile',
+    'print C',
+    'lo fu a6',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/fmtlf_armhf',
+    'option armfloatreturn off',
+    'read symbols',
+    'lo fu rd',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/armfloatreturn_armhf.o',
+    'option armfloatreturn on',
+    'option armfloatargs off',
+    'read symbols',
+    'lo fu scale',
+    'decompile',
+    'print C',
+    'lo fu fixed',
+    'decompile',
+    'print C',
+    'lo fu narrow',
+    'decompile',
+    'print C',
+    'lo fu keep',
+    'decompile',
+    'print C',
+    'lo fu bump',
+    'decompile',
+    'print C',
+    'lo fu second',
+    'decompile',
+    'print C',
+    'lo fu w2',
+    'decompile',
+    'print C',
+    'lo fu a3',
+    'decompile',
+    'print C',
+    'lo fu a7',
+    'decompile',
+    'print C',
+    'lo fu a6',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/fmtlf_armhf',
+    'option armfloatreturn on',
+    'option armfloatargs off',
+    'read symbols',
+    'lo fu rd',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'armfloatreturn #1: a raw image states no calling convention, so both passes return the zero low word of 1.5'
+count = 2
+literal = 'unsigned int raw_fixed(void)'
+
+[[match]]
+name = 'armfloatreturn #2: an explicit double prototype on the raw image and the on pass return 1.5'
+count = 2
+literal = 'return 1.5;'
+
+[[match]]
+name = 'armfloatreturn #3: off returns the zero low word of the double constant in the object'
+count = 1
+literal = 'unsigned int fixed(void)'
+
+[[match]]
+name = 'armfloatreturn #4: off cuts the double that scale returns to its low word'
+count = 1
+literal = 'return SUB84(v1 * 1.5,0);'
+
+[[match]]
+name = 'armfloatreturn #5: on returns the whole double and takes the d0 parameter'
+count = 1
+literal = 'float8 scale(float8 a0)'
+
+[[match]]
+name = 'armfloatreturn #6: on returns the double constant'
+count = 1
+literal = 'float8 fixed(void)'
+
+[[match]]
+name = 'armfloatreturn #7: off loses the parameter of a float return converted from a double'
+count = 1
+literal = 'float4 narrow(void)'
+
+[[match]]
+name = 'armfloatreturn #8: on keeps the float return in s0 and takes the double parameter'
+count = 1
+literal = 'float4 narrow(float8 a0)'
+
+[[match]]
+name = 'armfloatreturn #9: off loses the double parameter of an integer function'
+count = 1
+literal = 'unsigned int keep(float8 *a0)'
+
+[[match]]
+name = 'armfloatreturn #10: on keeps the integer return in r0 while d0 is also written'
+count = 1
+literal = 'unsigned int keep(float8 a0,float8 *a1)'
+
+[[match]]
+name = 'armfloatreturn #11: off returns the parsed double of the linked PIE as an integer'
+count = 1
+literal = 'return (int4)v1;'
+
+[[match]]
+name = 'armfloatreturn #12: on returns the parsed double of the linked PIE'
+count = 1
+literal = 'float8 rd(char *a0)'
+
+[[match]]
+name = 'armfloatreturn #13: an int computed after a call returning a double stays the result in both passes'
+count = 2
+literal = 'int4 bump(int4 a0)'
+
+[[match]]
+name = 'armfloatreturn #14: off loses both double parameters of second'
+count = 1
+literal = 'void second(void)'
+
+[[match]]
+name = 'armfloatreturn #15: on fills the unused d0 below the returned d1 with one double'
+count = 1
+literal = 'float8 second(float8 a0,float8 a1)'
+
+[[match]]
+name = 'armfloatreturn #16: two floats read as the halves of d0 are not one integer parameter in either pass'
+count = 2
+literal = 'w2(void)'
+
+[[match]]
+name = 'armfloatreturn #17: off returns neither path of a3 as a double'
+count = 1
+literal = 'unsigned int a3(void)'
+
+[[match]]
+name = 'armfloatreturn #18: on a3 returns the call result on one path and its own product on the other'
+count = 1
+literal = 'float8 a3(float8 a0)'
+
+[[match]]
+name = 'armfloatreturn #19: on the computed path of a3 keeps its value'
+count = 1
+literal = 'return a0 * 3.0;'
+
+[[match]]
+name = 'armfloatreturn #20: on the constant path of a7 keeps 2.5'
+count = 1
+literal = 'return 2.5;'
+
+[[match]]
+name = 'armfloatreturn #21: on a6 returns the double both arms of its join assign'
+count = 1
+literal = 'float8 a6(float8 a0,int4 a1)'
+
+[[match]]
+name = 'armfloatreturn #22: off a6 returns nothing'
+count = 1
+literal = 'void a6(int4 a0)'

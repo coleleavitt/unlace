@@ -1,0 +1,52 @@
+# kuna C-surface normalization: a zero pointer constant renders as the NULL
+# token instead of a casted hex zero (user-reported readability issue on the
+# angr fmt corpus binary: `v8 = (char *)0x0;`; no upstream GH issue).
+#
+# Upstream Ghidra ships option_NULL (PrintC::pushConstant's nullToken gate)
+# default-off, so a null pointer renders `(char *)0x0`.  kuna flips the
+# default on (DIV-34, docs/history.md): the same constant renders `NULL`.
+# The upstream form stays reachable via the ported nullprinting option.
+#
+# Stage model: S9 emission / literal-format policy.  P0 assertion:
+# `option nullprinting on|off` (upstream OptionNullPrinting).
+#
+# Source: char *nullprint_fn(void) { return 0; }
+# Compiled (as): xor %eax,%eax ; ret
+#
+# Pass 1 (default): the fix - `return NULL;` (assert #1, exactly once).
+# Pass 2 (option nullprinting off): the legacy form - `return (char *)0x0;`
+# (assert #2, exactly once).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'nullprint_fn' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '31c0c3'
+
+[script]
+commands = [
+    'parse line extern char *nullprint_fn(void);',
+    'lo fu nullprint_fn',
+    'decompile',
+    'print C',
+    'option nullprinting off',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CNORM-NULLPRINT #1: default renders the zero pointer as NULL (DIV-34)'
+count = 1
+literal = 'return NULL;'
+
+[[match]]
+name = 'CNORM-NULLPRINT #2: nullprinting off restores the upstream casted zero'
+count = 1
+literal = 'return (char *)0x0;'

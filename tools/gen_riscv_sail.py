@@ -198,6 +198,9 @@ class P:
         return lhs
 
     def unary(self):
+        if self.peek()[1] == 'return' and self.peek()[0] == 'id':
+            self.next()
+            return ('return', self.expr())
         if self.accept('~'):
             return ('not', self.unary())
         if self.accept('-'):
@@ -205,6 +208,9 @@ class P:
         return self.postfix(self.primary())
 
     def postfix(self, e):
+        while self.peek()[1] == '.' and self.peek(1)[0] == 'id':
+            self.next()
+            e = ('field', e, self.next()[1])
         while self.peek()[1] == '[':
             self.next()
             hi = self.expr()
@@ -264,7 +270,7 @@ def parse_expr(text):
     return e
 
 # ---------------------------------------------------------------- model
-TOP = re.compile(r'^(union|mapping|function|val|enum|type|overload|infix|let|register|scattered|struct|bitfield|\$\[|//|\}|$)')
+TOP = re.compile(r'^(private|union|mapping|function|val|enum|type|overload|infix|let|register|scattered|struct|bitfield|\$\[|//|\}|$)')
 
 def items(text):
     cur = []
@@ -304,6 +310,7 @@ class Model:
                     self.unparsed.append((m.group(1) if m else it.strip()[:40], str(ex)))
 
     def item(self, it, insts):
+        it = re.sub(r'^private\s+', '', it)
         m = re.match(r'union clause instruction\s*=\s*(\w+)\s*:\s*(.*)$', it, re.S)
         if m:
             ty = m.group(2).strip()
@@ -351,7 +358,7 @@ class Model:
             return
         m = re.match(r'function\s+(\w+)\s*\((.*?)\)\s*(?:->\s*([^=]*))?=\s*(.*)$', it, re.S)
         if m and m.group(1) not in ('clause',):
-            params = [a.split(':')[0].strip() for a in m.group(2).split(',') if a.strip()]
+            params = [re.sub(r'^\w+\((\w+)\)$', r'\1', a.split(':')[0].strip()) for a in m.group(2).split(',') if a.strip()]
             if m.group(3) and m.group(1) not in self.vals:
                 ptys = [a.split(':', 1)[1].strip() for a in m.group(2).split(',') if ':' in a]
                 if len(ptys) == len(params):
@@ -401,6 +408,12 @@ class V:
         return 'V(%s,%r,%s)' % (self.name, self.w, self.kind)
 
 INT_W = 64
+
+# Names of the Sail model's privilege, trigger and access-type state; the
+# abstract memory model below never needs their values.
+OPAQUE_NAMES = {'Data', 'cur_privilege', 'TriggerAddress_AMO', 'TriggerAddress_Load', 'TriggerAddress_Store', 'mstatus'}
+OPAQUE_CALLS = {'Atomic', 'Read', 'Write', 'ReadWrite', 'Execute', 'default_access_info', 'effectivePrivilege',
+                'access_is_gva', 'TriggerAddress', 'TriggerAMOData', 'TriggerLoadData', 'TriggerStoreData', 'exception_vaddr'}
 
 CANON_NAN = {16: 0x7e00, 32: 0x7fc00000, 64: 0x7ff8000000000000}
 
@@ -493,12 +506,20 @@ class Compiler:
         if ty.startswith('(') and ty.endswith(')'):
             inner = split_top(ty[1:-1])
             if len(inner) > 1:
-                return tuple(self.width_of_type(x, env) for x in inner)
+                out = []
+                for x in inner:
+                    try:
+                        out.append(self.width_of_type(x, env))
+                    except Unsupported:
+                        out.append(None)
+                return tuple(out)
             ty = inner[0] if inner else ty
         if ty == 'bits_fflags':
             return 5
         if ty in ('flenbits',):
             return self.flen
+        if ty in ('virtaddr', 'physaddr'):
+            return self.xlen
         if ty in ('xlenbits',):
             return self.xlen
         if ty == 'bool':
@@ -534,6 +555,10 @@ class Compiler:
                 return C(self.xlen // 8, None, 'int')
             if n == 'RETIRE_SUCCESS':
                 return C(0, None, 'int')
+            if n in OPAQUE_NAMES:
+                return C(n, None, 'opaque')
+            if any(n in vals for vals in self.m.enums.values()):
+                return C(n, None, 'enum')
             raise Unsupported('identifier %s' % n)
         if k == 'block':
             inner = dict(env)
@@ -550,6 +575,28 @@ class Compiler:
             if not isinstance(scrut, C):
                 raise Unsupported('runtime match')
             for pat, arm in e[2]:
+                if scrut.kind == 'variant':
+                    tag, vals = scrut.v
+                    if pat[0] != 'call' or pat[1] != tag:
+                        continue
+                    pargs = pat[2]
+                    if len(pargs) == 1 and pargs[0][0] == 'tuple':
+                        pargs = pargs[0][1]
+                    ok = True
+                    binds = {}
+                    for p_, v_ in zip(pargs, vals):
+                        if p_[0] == 'id' and p_[1] != '_':
+                            binds[p_[1]] = v_
+                        elif p_[0] == 'bool':
+                            ok = ok and isinstance(v_, C) and v_.v == p_[1]
+                    if not ok:
+                        continue
+                    env2 = dict(env)
+                    env2.update(binds)
+                    r = self.expr(arm, env2, want)
+                    for n in env:
+                        env[n] = env2[n]
+                    return r
                 if scrut.kind == 'option':
                     if pat[0] == 'call' and pat[1] == 'None' and scrut.v is None:
                         return self.expr(arm, env, want)
@@ -581,6 +628,15 @@ class Compiler:
             return self.binop(e, env, want)
         if k == 'call':
             return self.call(e, env, want)
+        if k == 'unit':
+            return C(0, None, 'int')
+        if k == 'return':
+            raise Unsupported('return on a path the compiler takes')
+        if k == 'field':
+            base = self.expr(e[1], env, None)
+            if base.kind == 'opaque':
+                return base
+            raise Unsupported('field access')
         if k == 'tuple':
             wants = want if isinstance(want, tuple) and len(want) == len(e[1]) else (None,) * len(e[1])
             return T(self.expr(x, env, wx) for x, wx in zip(e[1], wants))
@@ -824,6 +880,8 @@ class Compiler:
         if op in ('&', '|') :
             a = self.expr(l, env, want)
             if a.kind == 'bool':
+                if isinstance(a, C) and bool(a.v) == (op == '|'):
+                    return a
                 b = self.cond(r, env)
                 return self.logic(op, a, b)
             b = self.expr(r, env, a.w if a.w else want)
@@ -966,6 +1024,23 @@ class Compiler:
             if c.v:
                 return self.expr(a_e, env, want)
             return self.expr(b_e, env, want) if b_e else C(0, None, 'int')
+        if effects(a_e) or (b_e is not None and effects(b_e)):
+            # arms that write registers or memory run on their own paths
+            self.nlab += 1
+            l_else, l_end = 'sgelse%d' % self.nlab, 'sgend%d' % self.nlab
+            self.emit('if (!%s) goto <%s>;' % (self.operand(c, 1), l_else))
+            self.depth += 1
+            ra = self.expr(a_e, env, want)
+            self.emit('goto <%s>;' % l_end)
+            self.depth -= 1
+            self.emit('<%s>' % l_else)
+            self.depth += 1
+            rb = self.expr(b_e, env, want) if b_e is not None else C(0, None, 'int')
+            self.depth -= 1
+            self.emit('<%s>' % l_end)
+            if isinstance(ra, C) and isinstance(rb, C) and ra.v == rb.v and ra.kind == rb.kind:
+                return ra
+            raise Unsupported('if with side effects and a value')
         # the then-arm is the value by default and the else-arm is assigned
         # when the condition fails, as hand-written min/max do (rd = rs1 first)
         a = self.expr(a_e, env, want)
@@ -1098,8 +1173,53 @@ class Compiler:
             return C(0, None, 'int')
         return None
 
+    def mem_intrinsic(self, f, args, env, want):
+        """The abstract memory model: address translation, PMA/PMP checks,
+        triggers and alignment never fault; a read is a RAM load and a write
+        a RAM store of the access width."""
+        if f in OPAQUE_CALLS:
+            return C(f, None, 'opaque')
+        if f in ('currentlyEnabled', 'hartSupports'):
+            return C(True, None, 'bool')
+        if f == 'bits_of':
+            return self.expr(args[0], env, want)
+        if f == 'get_transformed_data_addr':
+            base = V(self.expr(args[0], env, None).name, self.xlen, 'bits', True)
+            off = self.coerce(self.expr(args[1], env, self.xlen), self.xlen)
+            addr = base if isinstance(off, C) and off.v == 0 else self.masked(self.tmp(self.xlen, '%s + %s' % (base.name, self.fit(off, self.xlen // 8))), self.xlen)
+            return C(('Ext_DataAddr_OK', [addr]), None, 'variant')
+        if f in ('match_memory_trigger_before', 'match_memory_trigger_after'):
+            return C(None, None, 'option')
+        if f == 'is_aligned_addr':
+            return C(True, None, 'bool')
+        if f == 'translateAddr':
+            vaddr = self.expr(args[0], env, None)
+            return C(('Ok', [vaddr, C(0, None, 'opaque'), C(0, None, 'opaque')]), None, 'variant')
+        if f == 'mem_write_ea':
+            return C(('Ok', [C(0, None, 'int')]), None, 'variant')
+        if f == 'mem_read':
+            addr = self.expr(args[3], env, None)
+            width = self.static_int(args[4], env)
+            r = self.tmp(8 * width, '*[ram]:%d %s' % (width, self.fit(addr, self.xlen // 8)))
+            return C(('Ok', [r]), None, 'variant')
+        if f == 'mem_write_value':
+            addr = self.expr(args[0], env, None)
+            width = self.static_int(args[1], env)
+            v = self.coerce(self.expr(args[2], env, 8 * width), 8 * width)
+            self.emit('*[ram]:%d %s = %s;' % (width, self.fit(addr, self.xlen // 8), self.fit(v, width)))
+            return C(('Ok', [C(True, None, 'bool')]), None, 'variant')
+        if f == 'trunc':
+            if want is None:
+                raise Unsupported('trunc width unknown')
+            v = self.expr(args[0], env, None)
+            return self.coerce_zext(v, want)
+        return None
+
     def call(self, e, env, want):
         _, f, args = e
+        r = self.mem_intrinsic(f, args, env, want)
+        if r is not None:
+            return r
         r = self.float_intrinsic(f, args, env, want)
         if r is not None:
             return r
@@ -1225,6 +1345,18 @@ class Compiler:
         ops = ', '.join(self.fit(v, self.size(v)) if isinstance(v, V) else self.operand(v, nbytes(v.w or 64)) for v in vals)
         return self.tmp(w, '%s(%s)' % (f, ops))
 
+def effects(e):
+    """Does this expression write a register or memory?"""
+    if isinstance(e, tuple):
+        if e and e[0] == 'assign':
+            return True
+        if e and e[0] == 'call' and e[1] in ('mem_write_value', 'mem_write_ea'):
+            return True
+        return any(effects(x) for x in e if isinstance(x, (tuple, list)))
+    if isinstance(e, list):
+        return any(effects(x) for x in e)
+    return False
+
 def sx(v, w):
     v &= mask(w)
     return v - (1 << w) if v >> (w - 1) & 1 else v
@@ -1294,6 +1426,7 @@ class Gen:
         self.parts = {}
         self.reserved = set()
         self.display_tables = {}
+        self.only = None
         self.fallback = False
         self.flen = 64
         self.report = {'constructors': [], 'skipped': [], 'pcodeops': []}
@@ -1400,7 +1533,12 @@ class Gen:
                 w = comp.width_of_type(names[a[1]], {})
                 combos = [{**c, i: ('bits', v, w)} for c in combos for v in range(1 << w)]
         for combo in combos:
-            yield from self.one(ctor, largs, types, names, layout, guard, combo, xlen, comp, asm_args, asm_pieces, exec_args, body)
+            try:
+                yield from self.one(ctor, largs, types, names, layout, guard, combo, xlen, comp, asm_args, asm_pieces, exec_args, body)
+            except (Unsupported, SailError, Budget) as ex:
+                if len(combos) == 1:
+                    raise
+                self.report.setdefault('skipped_forms', []).append({'xlen': xlen, 'ctor': ctor, 'combo': repr(sorted(combo.items())), 'why': str(ex)})
 
     def one(self, ctor, largs, types, names, layout, guard, combo, xlen, comp, asm_args, asm_pieces, exec_args, body, alt=None):
         genv = {}
@@ -1411,6 +1549,10 @@ class Gen:
                 if a[0] == 'bits':
                     genv[fname] = C(a[1], a[2])
                     fixedval[fname] = a[1]
+                elif a[0] == 'bool':
+                    genv[fname] = C(a[1], None, 'bool')
+                elif a[0] == 'num':
+                    genv[fname] = C(a[1], None, 'int')
                 else:
                     genv[fname] = C(a[1], None, 'enum')
             elif a[0] == 'id':
@@ -1427,7 +1569,7 @@ class Gen:
                 val = genv.get(f)
                 bitsv = None
                 for l, r in self.m.maps[mname]:
-                    if val is not None and l == ('id', val.v):
+                    if val is not None and (l == ('id', val.v) or (l[0] in ('bool', 'num') and l[1] == val.v and val.kind in ('bool', 'int'))):
                         bitsv = r[1]
                 if bitsv is None:
                     raise Unsupported('mapping value')
@@ -1447,7 +1589,13 @@ class Gen:
         if guard is not None and alt is None:
             if ctor in self.reserved:
                 guard = drop_field_terms(guard, set(operand_fields))
-            gw = self.guard_ok(guard, genv, operand_fields, names, comp, fixed)
+            genv_g = dict(genv)
+            for kind, lo, hi, x in layout:
+                if kind == 'reg' and lo in REG_AT and x not in genv_g:
+                    genv_g[x] = V(REG_AT[lo], 5, 'reg')
+                elif kind == 'freg' and lo in FREG_AT and x not in genv_g:
+                    genv_g[x] = V(FREG_AT[lo], 5, 'freg')
+            gw = self.guard_ok(guard, genv_g, operand_fields, names, comp, fixed)
             if gw is False:
                 return
             if isinstance(gw, list):
@@ -1493,6 +1641,8 @@ class Gen:
             elif i in combo and combo[i][0] == 'bits':
                 ex_env[n] = C(combo[i][1], combo[i][2])
         mnem, ops, disp = self.assembly(asm_args, asm_pieces, ex_env, largs, env, regs, imm)
+        if self.only and not re.search(self.only, mnem):
+            return
         def opaque():
             comp.begin()
             op = mnem.replace('.', '_')
@@ -1524,7 +1674,7 @@ class Gen:
         m_ = sum(1 << b for b in fixed)
         v_ = sum(fixed[b] << b for b in fixed)
         self.report['constructors'].append({'xlen': xlen, 'ctor': ctor, 'mnemonic': mnem, 'mask': '0x%08x' % m_, 'match': '0x%08x' % v_, 'ops': len(lines)})
-        text = ':%s %s is %s\n{\n%s\n}\n' % (mnem, ','.join(disp), ' & '.join(cons), '\n'.join(lines))
+        text = ':%s %s is %s\n{\n%s\n}\n' % (mnem, ''.join(disp), ' & '.join(cons), '\n'.join(lines))
         self.parts.setdefault(xlen, []).append({'mnem': mnem, 'ops': ops, 'disp': disp, 'cons': cons, 'lines': list(lines), 'mask': m_, 'match': v_})
         yield (mnem, m_, v_, text)
 
@@ -1591,17 +1741,32 @@ class Gen:
         return True
 
     def assembly(self, asm_args, pieces, ex_env, largs, env, regs, imm, ctor=None):
-        """The mnemonic, the operands the pattern binds and the display list
-        (operand names and quoted literal text, in order)."""
-        mnem = None
+        """The mnemonic, the operands the pattern binds and the display tokens
+        (operand names, separators and quoted literal text, in order). Text
+        before the first spc() is part of the mnemonic."""
+        mn = []
         ops = []
         disp = []
+        in_mnem = True
+        def text_of(f, a):
+            vals = [ex_env[x.strip()] for x in split_top(a)]
+            key = vals[0] if len(vals) == 1 else None
+            for l, r in self.m.maps[f]:
+                if len(vals) == 1:
+                    v = key
+                    if (l[0] == 'id' and v.kind == 'enum' and l[1] == v.v) or (l[0] in ('bits', 'num', 'bool') and isinstance(v, C) and l[1] == v.v):
+                        return r[1]
+                elif l[0] == 'tuple' and len(l[1]) == len(vals) and all(isinstance(v, C) and p[0] in ('bool', 'num', 'bits', 'id') and p[1] == v.v for p, v in zip(l[1], vals)):
+                    return r[1]
+            raise Unsupported('text for %s(%s)' % (f, a))
         for pc in pieces:
             pc = pc.strip()
             if pc.startswith('"'):
                 text = pc[1:-1]
-                if mnem is None:
-                    mnem = text
+                if in_mnem:
+                    mn.append(text)
+                elif text in ('(', ')', '[', ']'):
+                    disp.append(text)
                 elif text.strip():
                     disp.append('"%s"' % text.strip())
                 continue
@@ -1609,7 +1774,11 @@ class Gen:
             if not mm:
                 raise Unsupported('assembly piece %s' % pc)
             f, a = mm.group(1), mm.group(2).strip()
-            if f in ('spc', 'sep'):
+            if f == 'spc':
+                in_mnem = False
+                continue
+            if f == 'sep':
+                disp.append(',')
                 continue
             if f in ('reg_name', 'freg_name'):
                 v = ex_env[a]
@@ -1627,20 +1796,14 @@ class Gen:
                 ops.append(v.name)
                 disp.append(v.name)
             elif f in self.m.maps:
-                v = ex_env[a]
-                text = None
-                for l, r in self.m.maps[f]:
-                    if (l[0] == 'id' and v.kind == 'enum' and l[1] == v.v) or (l[0] == 'bits' and isinstance(v, C) and v.kind == 'bits' and l[1] == v.v):
-                        text = r[1]
-                if text is None:
-                    raise Unsupported('text for %r' % v)
-                if mnem is None:
-                    mnem = text
+                text = text_of(f, a)
+                if in_mnem:
+                    mn.append(text)
                 else:
                     disp.append('"%s"' % text)
             else:
                 raise Unsupported('assembly function %s' % f)
-        return mnem, ops, disp
+        return ''.join(mn), ops, disp
 
 def drop_field_terms(e, fields):
     """The guard with every comparison that mentions an operand field taken as true."""
@@ -1711,9 +1874,16 @@ def aliases(gen, xlen, pseudo):
                 continue
             lo, n = reg[0]
             field = 'op%02d%02d' % (lo, lo + 4)
-            disp = [o for o in p['disp'] if o != n]
+            disp = list(p['disp'])
+            if n in disp:
+                i = disp.index(n)
+                del disp[i]
+                if i < len(disp) and disp[i] == ',':
+                    del disp[i]
+                elif i > 0 and disp[i - 1] == ',':
+                    del disp[i - 1]
             cons = p['cons'] + ['%s=0' % field]
-            out.append((name, m_p, v_p, ':%s %s is %s\n{\n%s\n}\n' % (name, ','.join(disp), ' & '.join(cons), '\n'.join(p['lines']))))
+            out.append((name, m_p, v_p, ':%s %s is %s\n{\n%s\n}\n' % (name, ''.join(disp), ' & '.join(cons), '\n'.join(p['lines']))))
             have.add(name)
             break
     return out
@@ -1790,6 +1960,7 @@ def main():
     ap.add_argument('--source-rev', default='', help='source revisions to record in the header')
     ap.add_argument('--display-table', default='', help='field=subtable: display a Sail immediate through an existing SLEIGH subtable and split the constructor per value (constantidx=fliConstS)')
     ap.add_argument('--opaque-fallback', action='store_true', help='lift a clause whose semantics the compiler cannot handle to a user pcodeop named after the mnemonic instead of skipping it')
+    ap.add_argument('--only', help='keep only constructors whose mnemonic matches this regular expression')
     ap.add_argument('--flen', type=int, default=64, help='FP register width the F_H/F_S/F_D NaN-boxing assumes')
     ap.add_argument('--decode-reserved', default='', help='Sail constructors whose encdec guard is ignored, so reserved operand values decode as LLVM and GNU decode them (AES64KS1I,...)')
     ap.add_argument('--opaque', default='', help='mnemonics or Sail constructors to lift to a user pcodeop named after the mnemonic instead (orc.b,ORCB,...)')
@@ -1816,6 +1987,7 @@ def main():
     gen.display_tables = dict(x.split('=', 1) for x in a.display_table.split(',') if x)
     gen.fallback = a.opaque_fallback
     gen.flen = a.flen
+    gen.only = a.only
     res = {}
     ops = set()
     for xlen in (32, 64):
@@ -1852,7 +2024,7 @@ def main():
         seen = set()
         for c in gen.report['constructors']:
             mn = c['mnemonic']
-            cands = ref.get(mn, [])
+            cands = ref.get(mn, []) or ref.get(re.sub(r'\.(aqrl|aq|rl)$', '', mn), [])
             mm, vv = int(c['mask'], 16), int(c['match'], 16)
             ok = any(m_ == mm and v_ == vv for _, m_, v_ in cands)
             if not ok:
@@ -1861,6 +2033,7 @@ def main():
             if not ok:
                 bad.append(c)
             seen.add(mn)
+            seen.add(re.sub(r'\.(aqrl|aq|rl)$', '', mn))
         gen.report['opcodes_unmatched'] = sorted(set(ref) - seen)
     if a.report:
         json.dump(gen.report, open(a.report, 'w'), indent=1)

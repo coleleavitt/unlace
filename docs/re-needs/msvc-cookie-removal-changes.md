@@ -164,5 +164,5 @@ Three controls close the adjacent escape hatches:
    a helper containing an ordinary returning CALL before INT 0x29, so the
    generic body probe is deliberately incomplete. Unit negatives additionally
    reject missing/mismatched algebra, duplicate cancels, indirect calls, and
-   live checker outputs; `tests/stages/kuna-calleeretpreserves.xml` retains the
+   live checker outputs; `tests/stages/kuna-calleeretpreserves.toml` retains the
    `endbr64; ret` negative and direct/tailcallee `RAX`-writer controls.

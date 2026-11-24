@@ -1,0 +1,294 @@
+# kuna_atomics (option atomics, docs/spec/02-lift-and-flow.md; auto, then msvc for two functions): a locked x86-64 read-modify-write
+# lifts to one __sync builtin instead of LOCK(); load; update; store; UNLOCK();.
+# Fixed forms: xadd, add, dec, or, xchg (always locked), cmpxchg at 4, 8 and 1
+# bytes, an inc of a RIP-relative global, and two cmpxchg retry loops whose
+# compare-exchange must stay inside the loop. Declined: an HLE xacquire hint, a
+# locked neg, an unlocked add and a locked or of 0 (a fence) keep their p-code.
+#
+# Source (clang 22 -O2 -fcf-protection=none -fno-asynchronous-unwind-tables -c,
+# linked by ld.lld -static -e 0 with image base and -Ttext 0x100000; the
+# .text bytes verbatim below):
+#
+#   int counter;
+#   int fetch_add(int *p, int d) { return __atomic_fetch_add(p, d, __ATOMIC_SEQ_CST); }
+#   void add_only(int *p, int d) { __atomic_fetch_add(p, d, __ATOMIC_SEQ_CST); }
+#   int release(int *p) { return __atomic_sub_fetch(p, 1, __ATOMIC_ACQ_REL) == 0; }
+#   void or_only(unsigned *p, unsigned v) { __atomic_fetch_or(p, v, __ATOMIC_SEQ_CST); }
+#   int xchg(int *p, int v) { return __atomic_exchange_n(p, v, __ATOMIC_SEQ_CST); }
+#   int cas_val(int *p, int e, int n) { return __sync_val_compare_and_swap(p, e, n); }
+#   int cas_bool(long *p, long e, long n) { return __atomic_compare_exchange_n(p, &e, n, 0, 5, 5); }
+#   unsigned char cas8(unsigned char *p, unsigned char e, unsigned char n) { return __sync_val_compare_and_swap(p, e, n); }
+#   int fetch_and(int *p, int v) { return __atomic_fetch_and(p, v, __ATOMIC_SEQ_CST); }
+#   void inc_global(void) { __atomic_fetch_add(&counter, 1, __ATOMIC_RELAXED); }
+#   int store_max(int *p, int d) { int o = *p; while (!__atomic_compare_exchange_n(p, &o, o > d ? o : d, 1, 5, 5)) {} return o; }
+#
+# and, assembled with clang -c:
+#
+#   hle_add:    .byte 0xf2, 0xf0, 0x01, 0x37   (xacquire lock add %esi,(%rdi))
+#               ret
+#   neg_locked: lock negl (%rdi); ret
+#   plain_add:  addl %esi,(%rdi); ret
+#   fence:      lock orq $0,(%rsp); ret   (the identity update stays LOCK(); UNLOCK();)
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'fetch_add' },
+    { space = 'ram', offset = '0x100010', name = 'add_only' },
+    { space = 'ram', offset = '0x100020', name = 'release' },
+    { space = 'ram', offset = '0x100030', name = 'or_only' },
+    { space = 'ram', offset = '0x100040', name = 'xchg' },
+    { space = 'ram', offset = '0x100050', name = 'cas_val' },
+    { space = 'ram', offset = '0x100060', name = 'cas_bool' },
+    { space = 'ram', offset = '0x100070', name = 'cas8' },
+    { space = 'ram', offset = '0x100080', name = 'fetch_and' },
+    { space = 'ram', offset = '0x1000a0', name = 'inc_global' },
+    { space = 'ram', offset = '0x1000b0', name = 'store_max' },
+    { space = 'ram', offset = '0x1000d4', name = 'hle_add' },
+    { space = 'ram', offset = '0x1000d9', name = 'neg_locked' },
+    { space = 'ram', offset = '0x1000dd', name = 'plain_add' },
+    { space = 'ram', offset = '0x1000e0', name = 'fence' },
+    { space = 'ram', offset = '0x1010e8', name = 'counter' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '89f0f00fc107c3660f1f840000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100010'
+readonly = true
+hex = 'f00137c36666662e0f1f840000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100020'
+readonly = true
+hex = '31c0f0ff0f0f94c0c30f1f8000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100030'
+readonly = true
+hex = 'f00937c36666662e0f1f840000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100040'
+readonly = true
+hex = '89f08707c366662e0f1f840000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100050'
+readonly = true
+hex = '89f0f00fb117c3660f1f840000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100060'
+readonly = true
+hex = '4889f031c9f0480fb1170f94c189c8c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100070'
+readonly = true
+hex = '89f0f00fb017c3660f1f840000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100080'
+readonly = true
+hex = '8b0766666666662e0f1f84000000000089c121f1f00fb10f75f6c30f1f440000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000a0'
+readonly = true
+hex = 'f0ff0541100000c30f1f840000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000b0'
+readonly = true
+hex = '8b0766666666662e0f1f84000000000089c139f089f20f4fd0f00fb11775f189c8c3cccc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000d4'
+readonly = true
+hex = 'f2f00137c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000d9'
+readonly = true
+hex = 'f0f71fc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000dd'
+readonly = true
+hex = '0137c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000e0'
+readonly = true
+hex = 'f048830c2400c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1010e8'
+hex = '00000000'
+
+[script]
+commands = [
+    'option atomics auto',
+    'load function fetch_add',
+    'decompile',
+    'print C',
+    'load function add_only',
+    'decompile',
+    'print C',
+    'load function release',
+    'decompile',
+    'print C',
+    'load function or_only',
+    'decompile',
+    'print C',
+    'load function xchg',
+    'decompile',
+    'print C',
+    'load function cas_val',
+    'decompile',
+    'print C',
+    'load function cas_bool',
+    'decompile',
+    'print C',
+    'load function cas8',
+    'decompile',
+    'print C',
+    'load function fetch_and',
+    'decompile',
+    'print C',
+    'load function inc_global',
+    'decompile',
+    'print C',
+    'load function store_max',
+    'decompile',
+    'print C',
+    'load function hle_add',
+    'decompile',
+    'print C',
+    'load function neg_locked',
+    'decompile',
+    'print C',
+    'load function plain_add',
+    'decompile',
+    'print C',
+    'load function fence',
+    'decompile',
+    'print C',
+    'option atomics msvc',
+    'load function fetch_add',
+    'decompile',
+    'print C',
+    'load function cas_val',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'lock xadd returns the old value of one fetch-and-add'
+count = 1
+regex = '^  return __sync_fetch_and_add\(\w+,\w+\);$'
+
+[[match]]
+name = 'lock add discards it'
+count = 1
+regex = '^  __sync_fetch_and_add\(\w+,\w+\);$'
+
+[[match]]
+name = 'lock dec tests the old value'
+count = 1
+regex = '^  return __sync_fetch_and_sub\(\w+,1\) == 1;$'
+
+[[match]]
+name = 'lock or'
+count = 1
+regex = '^  __sync_fetch_and_or\(\w+,\w+\);$'
+
+[[match]]
+name = 'xchg with memory is always locked'
+count = 1
+regex = '^  return __sync_lock_test_and_set\(\w+,\w+\);$'
+
+[[match]]
+name = 'lock cmpxchg returns the old value at 4 bytes'
+count = 1
+regex = '^  return __sync_val_compare_and_swap\(\w+,\w+,\w+\);$'
+
+[[match]]
+name = 'lock cmpxchg at 8 bytes tests it'
+count = 1
+regex = '^  return \w+ == __sync_val_compare_and_swap\(\w+,\w+,\w+\);$'
+
+[[match]]
+name = 'lock cmpxchg at 1 byte'
+count = 1
+regex = '__sync_val_compare_and_swap\(\w+,\(char\)\w+,\w+\)'
+
+[[match]]
+name = 'a fetch-and-and retry loop keeps its compare-exchange in the loop condition'
+count = 1
+regex = '^  while \(\w+ = __sync_val_compare_and_swap\('
+
+[[match]]
+name = 'the store_max compare-exchange stays inside its loop'
+count = 1
+regex = '^    \w+ = __sync_val_compare_and_swap\(\w+,\w+,\w+\);$'
+
+[[match]]
+name = 'lock inc of a RIP-relative global names it'
+count = 1
+regex = '^  __sync_fetch_and_add\(.*counter,1\);$'
+
+[[match]]
+name = 'every rewritten form'
+count = 11
+literal = '__sync_'
+
+[[match]]
+name = 'HLE, neg and the fence keep LOCK'
+count = 3
+regex = '^  LOCK\(\);$'
+
+[[match]]
+name = 'and UNLOCK'
+count = 3
+regex = '^  UNLOCK\(\);$'
+
+[[match]]
+name = 'the HLE hint stays'
+count = 1
+regex = '^  XACQUIRE\(\);$'
+
+[[match]]
+name = 'the unlocked add and the HLE add stay plain updates'
+count = 2
+regex = '^  \*\w+ = \*\w+ \+ \w+;$'
+
+[[match]]
+name = 'atomics msvc: lock xadd as _InterlockedExchangeAdd'
+count = 1
+regex = '^  return _InterlockedExchangeAdd\(\w+,\w+\);$'
+
+[[match]]
+name = 'atomics msvc: lock cmpxchg as _InterlockedCompareExchange'
+count = 1
+regex = '^  return _InterlockedCompareExchange\(\w+,\w+,\w+\);$'

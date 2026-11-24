@@ -85,6 +85,9 @@ x86_64_avx512_base = """
 62f27d487cc762f17e487f06c5f877c3c5f446c962f27d4990448f1062f1
 7e487f06c5f877c3
 """
+x86_32_avx10 = """
+c5fb1044240431c062f1ff082f84240c0000000f97c0c3
+"""
 
 [[family]]
 name = "blackfin"
@@ -1565,3 +1568,16 @@ address = "0x74"
 expect = [
     "a1 + a0 * 8",  # ld.xs scales the index
 ]
+
+# AVX10.2 in 32-bit x86: vcomxsd sets OF SF ZF PF CF so that seta is an ordered greater-than
+# (vmovsd xmm0,[esp+4]; xor eax,eax; vcomxsd xmm0,[esp+12]; seta al; ret).
+[[family]]
+name = "x86_32_avx10"
+language = "x86:LE:32:default:gcc"
+base = "0x0"
+image = "x86_32_avx10"
+
+[[family.function]]
+test = "x86_32_vcomxsd_is_an_ordered_compare"
+address = "0x0"
+expect = ["return a1 < a0;"]

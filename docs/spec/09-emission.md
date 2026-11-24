@@ -3123,7 +3123,10 @@ rewritten name joins arguments with `, ` and closes nested lists as `>>`. A name
 more than 32 levels deep, longer than 4 KiB, or with unbalanced brackets is
 printed as it is. The namespaces printed in front of a declared or called
 function lose an inline namespace after `std` too
-(`kuna_cppshortnames.rs (short_scopes)`). A scope keeps `basic_string`,
+(`kuna_cppshortnames.rs (short_scopes)`), and so does a function name that
+carries its whole demangled path, as every name of a standalone load does
+(`std::__cxx11::basic_string::_M_append` prints
+`std::basic_string::_M_append`; `kuna_cppshortnames.rs (function_name)`). A scope keeps `basic_string`,
 because the demangled symbol name no longer has the template arguments that
 would tell `std::string` from `std::wstring`.
 

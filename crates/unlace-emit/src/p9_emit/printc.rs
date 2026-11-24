@@ -3464,6 +3464,7 @@ impl PrintC {
                 };
             }
         }
+        let display = crate::kuna_cppshortnames::function_name(arch, display);
         // Return type from the recovered proto output (C++ `getFuncProto().
         // getOutputType()`), defaulting to "void".  The output storage/type is
         // recovered by `ActionOutputPrototype` (the stand-alone `ProtoStoreInternal`
@@ -11351,7 +11352,7 @@ impl PrintC {
                 ));
             }
             self.push_atom(&Atom::with_op(
-                name,
+                crate::kuna_cppshortnames::function_name(arch, name),
                 TagType::FuncToken,
                 crate::printlanguage::SyntaxHighlight::funcname_color,
                 op_key(op),
@@ -11552,7 +11553,7 @@ impl PrintC {
         };
         self.push_word_result_open(fd, arch, op);
         self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
-        let name = self.call_callee_name(fd, op);
+        let name = crate::kuna_cppshortnames::function_name(arch, self.call_callee_name(fd, op));
         self.push_atom(&Atom::with_op(
             name,
             TagType::FuncToken,

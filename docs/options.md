@@ -153,9 +153,9 @@ Three tiers:
 | solidity internal functions are inlined into every caller | [`evmcalls`](#evmcalls----on--off-default-on) |
 | evm return labels such as 0x91 are assigned to stack slots instead of calls | [`evmcalls`](#evmcalls----on--off-default-on) |
 | every evm internal function return is a switch on a stack value | [`evmcalls`](#evmcalls----on--off-default-on) |
-| a min or max prints as a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0) | [`selectmul`](#selectmul----on--off-default-off) |
-| a select prints as a sum of two products with (unsigned int) casts of complementary compares | [`selectmul`](#selectmul----on--off-default-off) |
-| tricore sel or sat prints as multiplications by booleans | [`selectmul`](#selectmul----on--off-default-off) |
+| a min or max prints as a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0) | [`selectmul`](#selectmul----on--off-default-on) |
+| a select prints as a sum of two products with (unsigned int) casts of complementary compares | [`selectmul`](#selectmul----on--off-default-on) |
+| tricore sel or sat prints as multiplications by booleans | [`selectmul`](#selectmul----on--off-default-on) |
 | several near-identical if/else blocks in a row, each comparing two adjacent stack slots and either calling a helper with the same object or storing one character through a 16-byte-threshold pointer select | [`msvcstrappend`](#msvcstrappend----on--off-default-off-destructive-opt-in) |
 | an msvc c++ function whose string-building code shows a `0x10 <= v` buffer select before every character store | [`msvcstrappend`](#msvcstrappend----on--off-default-off-destructive-opt-in) |
 | a loop body that is a whole capacity check plus a grow call to append one byte to a std::string | [`msvcstrappend`](#msvcstrappend----on--off-default-off-destructive-opt-in) |
@@ -587,10 +587,10 @@ Three tiers:
 | a declared local is never written and never read anywhere in the function | [`indirectonly`](#indirectonly----on--off-default-off) |
 | a `vN = slot;` ... `slot = vN;` round-trip copy pair around a loop that only reads the slot | [`indirectonly`](#indirectonly----on--off-default-off) |
 | a call result assigned to a temporary that is immediately assigned to a stack slot | [`indirectonly`](#indirectonly----on--off-default-off) |
-| one local is assigned unrelated values in different parts of the function | [`typemerge`](#typemerge----on--storage--off-default-on) |
-| a loop counter reused later as an unrelated result or return code | [`typemerge`](#typemerge----on--storage--off-default-on) |
-| two source variables of the same type print as one name | [`typemerge`](#typemerge----on--storage--off-default-on) |
-| a saved argument and a later call result share one declared local | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| one local is assigned unrelated values in different parts of the function | [`typemerge`](#typemerge----on--storage--off-default-storage) |
+| a loop counter reused later as an unrelated result or return code | [`typemerge`](#typemerge----on--storage--off-default-storage) |
+| two source variables of the same type print as one name | [`typemerge`](#typemerge----on--storage--off-default-storage) |
+| a saved argument and a later call result share one declared local | [`typemerge`](#typemerge----on--storage--off-default-storage) |
 | one local holds a value computed and used on one branch arm and an unrelated value from the other arm | [`phiarm`](#phiarm----on--off-default-off) |
 | a variable is assigned different kinds of values on two paths that meet at a join | [`phiarm`](#phiarm----on--off-default-off) |
 | two source variables that meet only at a join print as one name | [`phiarm`](#phiarm----on--off-default-off) |
@@ -1688,13 +1688,13 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P2/flow-classification · kuna · transform · unlace-evm-internal-calls
 - **Example:** `option evmcalls on`
 
-### `selectmul` -- on | off, default `off`
+### `selectmul` -- on | off, default `on`
 
 - **Symptoms:** a min or max prints as a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0); a select prints as a sum of two products with (unsigned int) casts of complementary compares; tricore sel or sat prints as multiplications by booleans.
 - **What it does:** Print a select the lifter wrote as arithmetic, `a * zext(c) + b * zext(!c)`, as C's conditional operator `c ? a : b`. SLEIGH has no select operator, so a spec that picks one of two values without a branch multiplies each by the zero-extension of a boolean and adds (or ors) the products: TriCore's `ternary` macro behind `sel`, `seln`, `min`, `max`, `sat` and `cmov` does, and `min %d2,%d5,%d4` printed `a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0)`. `kuna_selectmul.rs` matches, at print time, an `INT_ADD`, `INT_OR` or `INT_XOR` of two implied `INT_MULT`s, each of a value by an implied `INT_ZEXT` of a one-byte boolean, whose booleans are complements: one the `BOOL_NEGATE` of the other, `==` and `!=` of the same operands in either order, or `x < y` and `y <= x` (both signed or both unsigned). Exactly one term is then non-zero, so the expression equals the value whose boolean holds, and it prints `a1 < a0 ? a1 : a0`. The condition printed is the strict compare or `!=` of the pair, and a negation's operand; it is a boolean context, so `x != 0` prints as `x`. A term held in a named variable, a float compare and a language without `?:` keep the arithmetic.
-- **When to flip:** Turn on to read a branch-free select as the conditional it computes (TriCore `sel`/`min`/`max`/`sat`, any spec that lifts a select as multiply-by-boolean). Leave off to see the arithmetic the lift performs; both evaluate to the same value.
+- **When to flip:** On by default: on 10 TriCore tricore-elf-gcc images (newlib included) 77 printed lines change, each turning a product sum into `c ? a : b`, every one a min/max/sel/sat/abs or a shift-direction select; on a control set of 18 images (x86-64 xz, ARM, Thumb, AArch64, MIPS, RISC-V, ARCv2, Xtensa, OpenRISC, SPARC, m68k, s390x, PowerPC, plus clang/zig select tests) no output changes, and whole-image time is within noise (xz 2.84 s off, 2.69 s on). Flip off to see the arithmetic the lift performs; both evaluate to the same value.
 - **Where / provenance:** P9/condition-form · kuna · presentation-default · unlace-selectmul
-- **Example:** `option selectmul on`
+- **Example:** `option selectmul off`
 
 ### `msvcstrappend` -- on | off, default `off` (destructive opt-in)
 
@@ -2680,13 +2680,13 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P6/merge-aggressiveness · ghidra · presentation-default · kuna-indirectonly
 - **Example:** `option indirectonly on`
 
-### `typemerge` -- on | storage | off, default `on`
+### `typemerge` -- on | storage | off, default `storage`
 
 - **Symptoms:** one local is assigned unrelated values in different parts of the function; a loop counter reused later as an unrelated result or return code; two source variables of the same type print as one name; a saved argument and a later call result share one declared local.
-- **What it does:** Narrow which variables ActionMergeType joins. Merge::mergeByDatatype (merge.cc:359-401) gathers every HighVariable of the function, groups them by identical data-type, and lets mergeLinear join any two in a group whose lifetimes do not overlap, wherever each is stored: two distinct source variables that only share a type (two `int` counters of two loops, a saved argument and a later result) print as one reused local, and a value that crossed a call or a phi in another register becomes the same name as an unrelated one. `on` is that upstream pass byte-for-byte. `storage` keeps the type grouping but lets a high join a group only when every instance of it and every instance of the group's first high sit in one and the same storage (same space, offset and size; kuna_typemerge.rs (single_storage)), so a register or stack slot that the compiler reused for one variable still reads as one variable while values held in different registers stay apart. `off` skips the type grouping entirely. Both narrower modes leave the required merges, ActionMergeCopy, ActionMergeAdjacent, ActionDominantCopy and the prior-decompile variable groups (kuna_stablenames.rs (variable_groups)) untouched; they only drop speculative joins, so every variable they keep apart is one upstream would have printed as the same name.
-- **When to flip:** ON (upstream) by default: it is the pass that folds dozens of same-typed temporaries into a handful of reused locals, and the narrower modes print more declarations. Flip to `storage` when one local is assigned values that clearly mean different things in different parts of the function (a loop counter reused as a return code, a saved argument overwritten by an unrelated result) and you want the variables the machine kept in different places printed apart; it keeps a variable the compiler spilled to one slot or held in one register whole. Flip to `off` to see every speculative same-type join undone, at the cost of the most declarations. The narrower modes have not yet been measured against DWARF variable boundaries on a corpus, which is what a default change would need.
+- **What it does:** Narrow which variables ActionMergeType joins. Merge::mergeByDatatype (merge.cc:359-401) gathers every HighVariable of the function, groups them by identical data-type, and lets mergeLinear join any two in a group whose lifetimes do not overlap, wherever each is stored: two distinct source variables that only share a type (two `int` counters of two loops, a saved argument and a later result) print as one reused local, and a value that crossed a call or a phi in another register becomes the same name as an unrelated one. `on` is that upstream pass byte-for-byte. `storage` keeps the type grouping but lets a high join a group only when it shares a storage location (same space, offset and size) with the group's first high, comparing every storage the instances of each sit in (kuna_typemerge.rs (storages)), so a register or stack slot that the compiler reused for one variable still reads as one variable, a high that an earlier merge spread over several registers still joins one held in any of them, and values that never shared a register or slot stay apart. `off` skips the type grouping entirely. Both narrower modes leave the required merges, ActionMergeCopy, ActionMergeAdjacent, ActionDominantCopy and the prior-decompile variable groups (kuna_stablenames.rs (variable_groups)) untouched; they only drop speculative joins, so every variable they keep apart is one upstream would have printed as the same name.
+- **When to flip:** STORAGE by default (issue #20, DecBench O2-noinline, all 40 projects, 35,052 functions): against DWARF register locations it cut decompiled locals that stand for several source variables by 13% and source variables spread over several locals by 6%, and 2,724 functions moved closer to the source variables while 610 moved away, with GED -2 over 33,395 functions (5 better, 4 worse) and type_match unchanged; it prints about 10% more declarations, mostly loop counters and pointers of separate loops that get their own names. Flip to `on` for the upstream output, where same-typed temporaries in different registers fold into a handful of reused locals. Flip to `off` to see every speculative same-type join undone: it removes more merges than `storage` but splits more source variables and prints about 30% more declarations.
 - **Where / provenance:** P6/merge-aggressiveness · kuna · presentation-default · unlace-20
-- **Example:** `option typemerge storage`
+- **Example:** `option typemerge on`
 
 ### `phiarm` -- on | off, default `off`
 

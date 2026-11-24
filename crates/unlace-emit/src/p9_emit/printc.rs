@@ -333,6 +333,23 @@ pub fn token_negate(tok: &'static OpToken) -> Option<&'static OpToken> {
     }
 }
 
+/// (kuna `constright`) The comparison token with its operands exchanged (`<` and `>`, `<=`
+/// and `>=`); `None` for any other token.
+pub fn token_mirror(tok: &'static OpToken) -> Option<&'static OpToken> {
+    use tokens::*;
+    if std::ptr::eq(tok, &LESS_THAN) {
+        Some(&GREATER_THAN)
+    } else if std::ptr::eq(tok, &LESS_EQUAL) {
+        Some(&GREATER_EQUAL)
+    } else if std::ptr::eq(tok, &GREATER_THAN) {
+        Some(&LESS_THAN)
+    } else if std::ptr::eq(tok, &GREATER_EQUAL) {
+        Some(&LESS_EQUAL)
+    } else {
+        None
+    }
+}
+
 // ===========================================================================
 // Keyword / punctuation constants (printc.cc:80-104)
 // ===========================================================================
@@ -8587,6 +8604,17 @@ impl PrintC {
                 }
             }
         }
+        // (kuna `constright`) `c < x` prints as `x > c`.
+        let mirror = (self.out_lang == crate::kuna_lang::OutLang::C
+            && arch
+                .kuna_options
+                .get::<crate::kuna_constright::ConstRight>()
+                .0
+            && crate::kuna_constright::mirrors(fd, op))
+        .then(|| token_mirror(tok))
+        .flatten();
+        let mirrored = mirror.is_some();
+        let tok = mirror.unwrap_or(tok);
         self.push_op(tok, Some(op_key(op)));
         // (kuna truthycond) `&&`/`||` operands are boolean contexts themselves
         // (this is semantics-preserving even in value position: both sides of
@@ -8594,7 +8622,8 @@ impl PrintC {
         let boolean_operands = tok.print1 == "&&" || tok.print1 == "||";
         // C++ pushes in1 then in0 onto the LIFO nodepend; resolving directly,
         // push in0 then in1 so the operands print in0 <op> in1.
-        for slot in 0..2 {
+        let slots = if mirrored { [1, 0] } else { [0, 1] };
+        for slot in slots {
             if let Some(v) = fd.obank().get(op).and_then(|o| o.get_in(slot)) {
                 if boolean_operands {
                     self.context.push_mod();
@@ -11269,6 +11298,18 @@ impl PrintC {
         if self.out_lang == crate::kuna_lang::OutLang::C
             && arch
                 .kuna_options
+                .get::<super::kuna_structassign::StructAssign>()
+                .0
+        {
+            let callee = self.call_callee_name(fd, op);
+            if let Some((dst, src)) = super::kuna_structassign::recover(fd, arch, op, &callee) {
+                self.push_struct_assign(fd, arch, op, dst, src);
+                return;
+            }
+        }
+        if self.out_lang == crate::kuna_lang::OutLang::C
+            && arch
+                .kuna_options
                 .get::<crate::kuna_analysisgates::Msvceh>()
                 .0
         {
@@ -11572,6 +11613,29 @@ impl PrintC {
             self.push_op(&tokens::DEREFERENCE, Some(op_key(op)));
         }
         self.push_vn_ir_m(fd, arch, obj, op, m);
+    }
+
+    /// (kuna `structassign`) `*dst = *src` for a whole-struct `memcpy`: each side
+    /// is printed as a load through its pointer would be, so `&local` reads as
+    /// `local`. Operands are pushed right side first, as `opStore` does.
+    fn push_struct_assign(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        op: OpId,
+        dst: VarnodeId,
+        src: VarnodeId,
+    ) {
+        self.push_op(&tokens::ASSIGNMENT, Some(op_key(op)));
+        for vn in [src, dst] {
+            let mut m = self.context.mods();
+            if self.check_array_deref(fd, vn) && !self.context.is_set(modifiers::FORCE_POINTER) {
+                m |= modifiers::PRINT_LOAD_VALUE;
+            } else {
+                self.push_op(&tokens::DEREFERENCE, Some(op_key(op)));
+            }
+            self.push_vn_ir_m(fd, arch, vn, op, m);
+        }
     }
 
     /// (kuna `oslog`) A direct os_log call: the dso as its header symbol and
@@ -14050,7 +14114,7 @@ impl PrintC {
             {
                 use crate::dtype::type_metatype::{TYPE_INT, TYPE_UINT};
                 if matches!(ct.get_metatype(), TYPE_INT | TYPE_UINT) && ct.is_char_print() {
-                    self.push_char_constant_ir(fd, &ct, off, op, vn);
+                    self.push_char_constant_ir(fd, arch, &ct, off, op, vn);
                     return;
                 }
             }
@@ -14217,6 +14281,7 @@ impl PrintC {
             // read-facing type format (e.g. `force datatype octint4 oct` ->
             // `globaloct = 05555`).
             let mut lit = self.integer_literal(fd, arch, vn, &ct);
+            self.signed_decimal(fd, arch, op, off, sz, &mut lit);
             if let Some(unsigned) = self.widen_suffix(fd, arch, vn, op) {
                 lit.suffix_as_long(arch, unsigned);
             }
@@ -15470,6 +15535,29 @@ impl PrintC {
     /// The format, sign and suffixes the integer path of
     /// [`push_vn_explicit_ir`](Self::push_vn_explicit_ir) prints the constant `vn`
     /// with, whose read-facing type is `ct`.
+    /// (kuna `signeddec`) Print the signed integer constant `val` (`sz` bytes) that `op` reads in
+    /// decimal when the option is on and no symbol or type fixes its format.
+    fn signed_decimal(
+        &self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        op: OpId,
+        val: uintb,
+        sz: int4,
+        lit: &mut IntegerLiteral,
+    ) {
+        if lit.sign
+            && lit.display_fmt == display_format::NONE
+            && arch
+                .kuna_options
+                .get::<crate::kuna_signeddec::SignedDec>()
+                .0
+            && crate::kuna_signeddec::decimal(fd, op, val, sz)
+        {
+            lit.display_fmt = display_format::FORCE_DEC;
+        }
+    }
+
     fn integer_literal(
         &self,
         fd: &Funcdata,
@@ -15551,7 +15639,8 @@ impl PrintC {
         {
             return None;
         }
-        let lit = self.integer_literal(fd, arch, vn, &ct);
+        let mut lit = self.integer_literal(fd, arch, vn, &ct);
+        self.signed_decimal(fd, arch, op, v.get_offset(), v.get_size(), &mut lit);
         Some(self.integer_token(
             v.get_offset(),
             v.get_size(),
@@ -15655,6 +15744,7 @@ impl PrintC {
     fn push_char_constant_ir(
         &mut self,
         fd: &Funcdata,
+        arch: &Architecture,
         ct: &crate::dtype::Datatype,
         val: uintb,
         op: OpId,
@@ -15678,6 +15768,16 @@ impl PrintC {
         // `caresAboutCharRepresentation` returns false), prints as an integer.
         if display_fmt != display_format::NONE && display_fmt != display_format::FORCE_CHAR {
             self.push_constant_ir_fmt_sign(val, ct.get_size(), op, display_fmt, is_signed);
+            return;
+        }
+        // (kuna `charnum`) A zero or non-printable byte ordered against a value or used in
+        // arithmetic prints as a number.
+        if ct.get_size() == 1
+            && display_fmt == display_format::NONE
+            && arch.kuna_options.get::<crate::kuna_charnum::CharNum>().0
+            && crate::kuna_charnum::as_number(fd, op, val)
+        {
+            self.push_constant_ir_fmt_sign(val, 1, op, display_format::NONE, is_signed);
             return;
         }
         // (kuna) `'\xc8'` is -56 or 200 by the sign of the target's `char`, so a
@@ -17451,6 +17551,14 @@ impl crate::kuna_castimplied::PrintedForms for ImpliedView<'_> {
             return None;
         }
         let mut lit = self.pc.integer_literal(self.fd, self.arch, vn, &ct);
+        self.pc.signed_decimal(
+            self.fd,
+            self.arch,
+            op,
+            v.get_offset(),
+            v.get_size(),
+            &mut lit,
+        );
         if let Some(unsigned) = suffix {
             lit.suffix_as_long(self.arch, unsigned);
         }

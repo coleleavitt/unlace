@@ -364,8 +364,8 @@ literal = 'int4 get_prefix(_IO_FILE *f)'
 
 [[match]]
 name = 'LIBCTYPES #9: with its real field layout, not a shell'
-count = 1
-literal = 'f->_IO_read_end <= v4'
+count = 2
+literal = 'f->_IO_read_end <= v2'
 
 [[match]]
 name = 'LIBCTYPES #10: glibc off, a MINTED stream shell has no members, so the refill body reads an offset'

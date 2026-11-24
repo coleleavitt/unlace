@@ -1134,8 +1134,11 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   at VMA 0: the faithful loader maps whichever sorts first and every symbol
   collapses onto address 0, so with MSVC function-level linking (`/Gy`, one COMDAT
   `.text` per function — the default for real builds) all but one function
-  disappear. `crates/unlace-analysis/src/loader/reloc_object.rs (RelocLayout)`
-  reproduces angr CLE's relocatable backend for both: lay each memory-resident,
+  disappear. A Mach-O `MH_OBJECT` places its sections one after another from 0, so
+  it maps, but none of its relocations is applied: an arm64 `.o` decompiled to an
+  empty body, its flow ending at an unrelocated `bl`, and an x86-64 one read its
+  globals at junk addresses. `crates/unlace-analysis/src/loader/reloc_object.rs (RelocLayout)`
+  reproduces angr CLE's relocatable backend for all three: lay each memory-resident,
   non-empty section out above `0x400000` (`RELOC_BASE`, matching CLE so addresses
   line up with angr's), apply the relocations, rebase defined symbols, and bind
   each undefined extern to a synthetic call target in an extern area above the
@@ -1149,7 +1152,25 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   per object (`reloc_object.rs (ZERO_FILL_LIMIT)`); code is laid out at the bytes
   the file holds, because absent bytes are not instructions. A section cut short
   this way is laid out at its reduced size, one left with no bytes is dropped,
-  and each is named on the loader's diagnostic line. The analyzer tier's
+  and each is named on the loader's diagnostic line. A Mach-O object takes every section but
+  the `S_ATTR_DEBUG` ones (`__DWARF`, `__LD,__compact_unwind`). Its symbols hold
+  addresses in the object's own layout, so their section offsets are taken
+  against the section's `addr`, and the assembler's `ltmp`/`l_`/`L` labels name
+  no function. `reloc_apply.rs (classify_macho)` reads the relocation by its
+  `r_type`: ARM64 `BRANCH26` (a call when the word is `bl`), `PAGE21`, `PAGEOFF12`
+  (`add`, or a load/store scaled by its access size, which the one type does not
+  say), `GOT_LOAD_PAGE21`/`PAGEOFF12` and `TLVP_LOAD_*` through a synthetic slot,
+  `POINTER_TO_GOT`, `UNSIGNED`, and an arm64e `AUTHENTICATED_POINTER` written as its
+  plain target; x86-64 `GOT_LOAD`, `GOT` and `TLV` through a slot and
+  `SIGNED_{1,2,4}`, the rest by their generic kinds. An `ARM64_RELOC_ADDEND` is the
+  addend of the relocation it precedes. `reloc_object.rs (macho_target)` adjusts the
+  target value. A section target (`r_extern = 0`) keeps the referent's pre-link
+  address in the field, so the value is the section's move, plus for a
+  PC-relative field the place's pre-link address. A `SUBTRACTOR` pair is the minuend
+  less the subtrahend. An x86-64 `SIGNED_k` field already holds the addend less
+  `k`, which `object` subtracts again, so `k` is added back. The rebased view
+  writes the laid-out `addr` into each `section_64` and moves each `N_SECT`
+  symbol's `n_value` with its section (`kuna_relocrebase.rs (patch_macho)`). The analyzer tier's
   rebased view (`kuna_relocrebase.rs (rebased_view)`) writes the same reduced
   sizes into its section headers, so no pass scans the declared extent. COMMON symbols instead reserve their
   full size (ELF `st_size`, COFF symbol value), using the ELF alignment carried
@@ -1398,7 +1419,10 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   `9_X`, `7_X` are reported unsupported and leave the field untouched.
   AVR (unlace#757, little-endian 16-bit words) covers `13_PCREL` (`rjmp`/
   `rcall`) and `7_PCREL` (`brbs`/`brbc`), the word displacement from the next
-  instruction; the nine `LDI` forms (`LO8`/`HI8`/`HH8` of `S + A`, of its
+  instruction (an `rjmp`/`rcall` whose ends both lie in the first 8 KiB wraps at
+  4 KiW, as a device with at most 8 KiB of flash does and the 16-bit-PC avr8
+  language's `rel12addr` models, so an -O0 object's libcalls past 4 KiB are
+  reached; unlace#976); the nine `LDI` forms (`LO8`/`HI8`/`HH8` of `S + A`, of its
   negation, or of the word address `(S + A) >> 1`) into `ldi`'s split K; `CALL`
   (the 22-bit word address of `call`/`jmp`); and `16_PM`. AMDGPU (`EM_AMDGPU`,
   no object architecture, told apart by `e_machine`) covers the 32-bit literal
@@ -2061,7 +2085,19 @@ symbols; an address that already has a name keeps it. A companion that carries
 DWARF also feeds the DWARF analyzer
 (`crates/unlace-analysis/src/analyzers/dwarf/mod.rs (DwarfPass)` runs
 over the companion when the image has no `.debug_info`), since the addresses
-are the image's own; MiniDebugInfo has no DWARF. The loader also reports a `PT_LOAD`
+are the image's own; MiniDebugInfo has no DWARF. A debug file that `dwz -m`
+compressed (Fedora/RHEL `-debuginfo`, Debian/Ubuntu `-dbgsym`) keeps the
+strings and partial units several packages share in a supplementary file its
+`.gnu_debugaltlink` names with that file's build-id;
+`elf_debuglink.rs (find_altlink)` looks for it at the named path (absolute,
+with `/usr/lib/debug` also tried under each `KUNA_DEBUG_DIRS` root, or
+relative to the debug file), then by build-id under the debug directories,
+and accepts it only if its build-id matches. The DWARF analyzer then sets it as
+gimli's supplementary `Dwarf` (`Dwarf::set_sup`), so names in
+`DW_FORM_GNU_strp_alt` / `DW_FORM_strp_sup` resolve. A `DW_FORM_GNU_ref_alt`
+reference into the supplementary file's partial units is not followed yet
+(the per-unit DIE snapshot resolves only unit-local references), so a type
+that lives only there stays unknown. The loader also reports a `PT_LOAD`
 that maps an address another `PT_LOAD` already mapped from different file bytes
 (`elf_debuglink.rs (overlapping_loads)`), a shape only a hand-made or hostile
 image has; which bytes win is unchanged.
@@ -4701,7 +4737,24 @@ moves.
   present is read (`_win10`, then `_win81`, `_win8`, `_win7`, `_vista`,
   `_ws03`, `_xp`, `_2000`, `_nt`, then the bare name), and a user-mode or
   native image also reads the newest Native API library (`ntapi`,
-  `ntapi64`). Which files were read, and any that could not be, is said once on
+  `ntapi64`); an AArch64 EFI image reads `arm/uefi64`.
+
+  An ELF or Mach-O image reads the libraries `TypeLibPass` names for it
+  (`kuna_typelib.rs (til_slots)`, carried as `TypeLibFacts::til_slots`): per
+  slot a list of candidate paths relative to the `til` directory, of which the
+  first present is read (or, when the variable names a subdirectory such as
+  `til/arm`, the first present by file name). A Linux ELF reads
+  `gnulnx_<arch>` and the `gnuunx` (32-bit) or `gnuunx64` library it is built
+  on (x86, x86-64, ARM, AArch64, 32-bit PowerPC; PowerPC64's `gnulnx_ppc64`
+  stands alone). An ELF whose loader is `/system/bin/linker[64]`, or which
+  imports from `libc.so` under Bionic's `LIBC` version, reads `android_arm` or
+  `android_arm64` instead. A Mach-O reads one SDK library: for iOS (the
+  `LC_BUILD_VERSION` or `LC_VERSION_MIN_IPHONEOS` platform, simulator
+  included) `iphoneos64_sdkNN` on AArch64 and `iphoneos_sdk12` on 32-bit ARM;
+  otherwise `macosNN_sdk00_arm64` or `macosNN_sdk00_x64` (an x86-64 image
+  built with a 10.x SDK first tries `macosx64_sdk15`/`sdk14`). The library
+  for the major SDK version the image names is preferred, then older ones,
+  then newer ones (`by_preference`). Which files were read, and any that could not be, is said once on
   stderr (`[kuna typelib] UNLACE_TIL_DIR: read ...`); an unreadable library is
   skipped, where a listed file that cannot be read is an error.
 
@@ -12715,6 +12768,13 @@ unmatched `PUSH`/`SUB SP` still open) was implemented, measured, and dominated b
 it on both precision and recall. As with `ptrentry`, the region is the
 entry-ordered one — the nearest preceding discovered entry — which is the
 granularity the tier has and errs conservative on a sparsely discovered image.
+An accepted target becomes a region boundary for the next pass, and the scan
+repeats until it finds nothing new (at most eight rounds). A routine reached by
+a tail branch from another tail-branch target lies inside the first one's region
+until that one is accepted. libopencm3's `_usbd_standard_request` is found in
+the first round, and the `_usbd_standard_request_device`, `_interface` and
+`_endpoint` it tail-branches to are found in the second. Before, their bodies
+printed inside it.
 Two of the four guards are satisfied by an *absent* model rather than by
 evidence: the predecessor test reads the reference model and the epilogue test
 the disassembly text, and a walk can be told to capture neither (above), which
@@ -13394,6 +13454,16 @@ retained prior entry that a jump-table dispatch reaches is a case block and is
 contradicted too. On the stripped U-Boot O2-noinline image these rules leave
 recall at 92.0% and raise precision from 92.6% to 98.6%; `parse_label` and
 `malloc` stay whole.
+
+A `ptrentry` target is checked against the raw Thumb scan's roots the same
+way (`kuna_ptrentry.rs (shrinkwrap_roots)`). Its decoded run, following
+fall-through only for at most eight instructions and stopping at a call, a
+return or an unconditional branch, may reach a root no call targets. Then the
+target is the routine's real entry and the root its shrink-wrapped `push`: the
+root is withdrawn, the target becomes a walk root, and the Listing is rebuilt.
+libopencm3's `dwc_poll` (`ldr.w r12,[r0,#0xdc]; push.w {...}`, reached only
+through the driver table) was a 4-byte stub and a separate 472-byte
+`sub_8001718` before.
 
 One inventory recovery shares its decodes. Frame validation, the AIF gap walks
 (including the prior inventory's), prefix reconciliation and every Listing
@@ -15334,3 +15404,5 @@ candidate, while preserving PE/Mach-O import slots inside executable sections an
 caller-declared-entry precedence.
 
 (kuna) **`__eh_frame` FDE starts on Mach-O** (`crates/unlace-analysis/src/analyzers/entry/kuna_machoehframe.rs (MachoEhFrameStartsPass)`, option `machoehframe`, default-on). A Mach-O describes most functions' unwinding in `__unwind_info` and falls back to a DWARF FDE in `__TEXT,__eh_frame` for a function the compact encoding cannot describe (a variable stack adjustment, an unusual register save). Each FDE's `pcBegin` is a function start, exactly as on ELF, where the always-on discovery already reads `.eh_frame` (oracle 3); the pass runs that same walk (`scan_eh_frame_starts`, now accepting a Mach-O's `__eh_frame`) and keeps the starts that lie in an executable section and carry no symbol. Like `__unwind_info` the section lives in `__TEXT` and survives the strip of `LC_FUNCTION_STARTS`; unlike it, every FDE is a real function start with no folding, and the pass is cheap, so it is on by default, as IDA's Mach-O loader runs its `eh_frame` parse on every load. On an image that keeps `LC_FUNCTION_STARTS` it adds nothing.
+
+(kuna) **`LC_DATA_IN_CODE` runs are data to the Listing** (`crates/unlace-analysis/src/loader/kuna_machodataincode.rs (data_in_code_ranges)`, always on). clang lays an x86-64 switch's jump table and a Thumb `tbb`/`tbh` table into `__text` after the dispatch, and ARM literal pools between functions, and records each run as a `data_in_code_entry` (`offset`, `length`, `kind` 1 to 5: data, 8/16/32-bit jump table, absolute 32-bit jump table). The Listing build cuts those ranges out of the executable ranges the walk decodes (`listing/mod.rs`), so a table's bytes are neither decoded as instructions nor reach the gap and prologue sweeps; the jump-table readers take their own executable ranges and still read the tables. In a linked image `offset` is a file offset from the Mach-O header and is placed through the section holding it; in an `MH_OBJECT` it is a pre-link address. A table with an entry of any other kind is ignored whole (a dyld-cache image's `dataoff` names another sub-cache file).

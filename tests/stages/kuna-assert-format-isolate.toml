@@ -16,7 +16,9 @@
 #       int t = a; p(&t); h(t); a = a * 3; h(a); h(a + t); return a; }
 #
 # Each function is decompiled first without the command (the output the
-# directive corrects) and again after it.
+# directive corrects) and again after it. `reuse` needs the upstream type
+# merge (`option typemerge on`): the default `storage` mode already keeps the
+# reused local's two values apart, which leaves `isolate` nothing to do.
 
 [image]
 arch = 'x86:LE:64:default:gcc'
@@ -57,6 +59,7 @@ commands = [
     'force constant 0x1468 oct 0x1ed',
     'decompile',
     'print C',
+    'option typemerge on',
     'load function reuse',
     'decompile',
     'print C',

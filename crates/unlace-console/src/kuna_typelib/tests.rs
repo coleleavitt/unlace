@@ -382,7 +382,7 @@ fn auto_chooses_the_til_ida_would_for_a_pe() {
     ] {
         std::fs::write(dir.join(name), b"IDATIL").unwrap();
     }
-    let pick = |target, subsystem| super::til_choice(&dir, target, subsystem);
+    let pick = |target, subsystem| super::til_choice(&dir, target, subsystem, &[]);
     let user = pick("windows x86_64", Some(3));
     let native = pick("windows x86_64", Some(1));
     let efi = pick("windows x86_64", Some(10));
@@ -402,6 +402,56 @@ fn auto_chooses_the_til_ida_would_for_a_pe() {
     );
     assert_eq!(efi, [dir.join("pc/uefi64.til")]);
     assert!(narrow.is_empty() && linux.is_empty());
+}
+
+/// For an ELF or Mach-O, `auto` reads the first existing candidate of each
+/// slot the analysis named, from the directory or by file name from the
+/// subdirectory the variable points at.
+#[test]
+fn auto_reads_the_slots_of_a_non_pe_image() {
+    let dir = std::env::temp_dir().join(format!("kuna-tilslots-{}", std::process::id()));
+    std::fs::create_dir_all(dir.join("arm")).unwrap();
+    for name in [
+        "arm/gnulnx_arm64.til",
+        "gnuunx64.til",
+        "arm/macos13_sdk00_arm64.til",
+        "arm/uefi64.til",
+    ] {
+        std::fs::write(dir.join(name), b"IDATIL").unwrap();
+    }
+    let s = |v: &[&str]| v.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+    let linux = super::til_choice(
+        &dir,
+        "elf aarch64",
+        None,
+        &[s(&["arm/gnulnx_arm64.til"]), s(&["gnuunx64.til"])],
+    );
+    let mac = super::til_choice(
+        &dir,
+        "macho aarch64",
+        None,
+        &[s(&[
+            "arm/macos14_sdk00_arm64.til",
+            "arm/macos13_sdk00_arm64.til",
+        ])],
+    );
+    let in_arm = super::til_choice(
+        &dir.join("arm"),
+        "elf aarch64",
+        None,
+        &[s(&["arm/gnulnx_arm64.til"])],
+    );
+    let efi = super::til_choice(&dir, "windows aarch64", Some(10), &[]);
+    let missing = super::til_choice(&dir, "elf ppc", None, &[s(&["ppc/gnulnx_ppc.til"])]);
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(
+        linux,
+        [dir.join("arm/gnulnx_arm64.til"), dir.join("gnuunx64.til")]
+    );
+    assert_eq!(mac, [dir.join("arm/macos13_sdk00_arm64.til")]);
+    assert_eq!(in_arm, [dir.join("arm").join("gnulnx_arm64.til")]);
+    assert_eq!(efi, [dir.join("arm/uefi64.til")]);
+    assert!(missing.is_empty());
 }
 
 /// A name the image's own metadata states wins over signature guesses, and
@@ -440,8 +490,8 @@ fn a_list_of_files_is_read_in_order() {
     std::fs::write(&a, SMALL).unwrap();
     std::fs::write(&b, "kuna-typelib 1\ntarget linux x86_64\nsource second 1\n").unwrap();
     let choice = TypeLib::Files(vec![a.clone(), b.clone()]);
-    let read = super::library_sources(&choice, "linux x86_64", None, 8, None);
-    let off = super::library_sources(&TypeLib::Off, "linux x86_64", None, 8, None);
+    let read = super::library_sources(&choice, "linux x86_64", None, &[], 8, None);
+    let off = super::library_sources(&TypeLib::Off, "linux x86_64", None, &[], 8, None);
     std::fs::remove_file(&a).unwrap();
     std::fs::remove_file(&b).unwrap();
     let (sources, note) = read.unwrap();
@@ -456,10 +506,10 @@ fn a_list_of_files_is_read_in_order() {
 #[test]
 fn auto_without_a_directory_reads_the_built_in_library() {
     let (sources, note) =
-        super::library_sources(&TypeLib::Auto, "windows x86_64", Some(3), 8, None).unwrap();
+        super::library_sources(&TypeLib::Auto, "windows x86_64", Some(3), &[], 8, None).unwrap();
     assert_eq!(sources.len(), 1);
     assert_eq!(sources[0].label, "auto");
     assert!(note.is_none());
-    let (none, _) = super::library_sources(&TypeLib::Auto, "elf mips", None, 4, None).unwrap();
+    let (none, _) = super::library_sources(&TypeLib::Auto, "elf mips", None, &[], 4, None).unwrap();
     assert!(none.is_empty());
 }

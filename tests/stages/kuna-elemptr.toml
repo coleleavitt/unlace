@@ -210,7 +210,7 @@ literal = 'char * w_decode(char *a0,uint8 a1,uint8 *a2)'
 [[match]]
 name = 'elemptr #4: with the option on a store into the allocated buffer is a subscript'
 count = 1
-literal = 'v6[v8] = v5 >> 0x10;'
+literal = 'v7[v9] = v6 >> 0x10;'
 
 [[match]]
 name = 'elemptr #5: with the option on the global table and the .data alphabet are arrays'
@@ -250,7 +250,7 @@ regex = '\bint2 w_wu\(|^short w_wu\('
 [[match]]
 name = 'elemptr #12: with the option on a lookup in the global table is a char the conditional widens itself'
 count = 4
-literal = '? dat_300053e0[(uint1)a0[v7]] : 0;'
+literal = '? dat_300053e0[(uint1)a0[v8]] : 0;'
 
 [[match]]
 name = "elemptr #13: a buffer's length compared against a pointer difference stays a number in both passes"

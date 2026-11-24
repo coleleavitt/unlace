@@ -3219,10 +3219,14 @@ impl Funcdata {
     /// (kuna `phithread`, `returndup calls`) [`Self::node_split`] for a block with
     /// exactly one out edge: the clone takes over in edge `inedge` and flows into
     /// the same successor, whose MULTIEQUALs gain an input for the new edge (the
-    /// clone of whatever the original block passed).  Every value the block
-    /// defines must be read only inside the block or by a MULTIEQUAL of the
-    /// successor, and none may be persistent or address-tied; otherwise nothing
-    /// changes and an error is returned.  Returns the new block.
+    /// clone of whatever the original block passed).  When the successor has no
+    /// other predecessor, a value the block defines may be read anywhere beyond
+    /// it: the successor gets a MULTIEQUAL merging the value and its clone, and
+    /// every reader outside the two blocks reads that instead.  Otherwise every
+    /// value the block defines must be read only inside the block or by a
+    /// MULTIEQUAL of the successor.  No output may be persistent or
+    /// address-tied; when a condition fails nothing changes and an error is
+    /// returned.  Returns the new block.
     pub fn node_split_through(
         &mut self,
         b: BlockId,
@@ -3248,6 +3252,8 @@ impl Funcdata {
             }
         }
         let slot = self.bblocks_ref().block(succ).get_in_index(b);
+        let succ_single = self.bblocks_ref().block(succ).size_in() == 1;
+        let mut escaping: Vec<VarnodeId> = Vec::new();
         if slot < 0 {
             return Err(KunaError::lowlevel(
                 "nodesplit-through: successor lost its edge",
@@ -3282,9 +3288,14 @@ impl Funcdata {
                     && r.code() == OpCode::CPUI_MULTIEQUAL
                     && (0..r.num_input()).all(|s| r.get_in(s) != Some(out) || s == slot);
                 if !via_slot {
-                    return Err(KunaError::lowlevel(
-                        "nodesplit-through: value read outside the block",
-                    ));
+                    if !succ_single {
+                        return Err(KunaError::lowlevel(
+                            "nodesplit-through: value read outside the block",
+                        ));
+                    }
+                    if !escaping.contains(&out) {
+                        escaping.push(out);
+                    }
                 }
             }
         }
@@ -3317,8 +3328,78 @@ impl Funcdata {
                 .and_then(|c| self.obank().get(c).and_then(|o| o.get_out()));
             self.op_insert_input(phi, cloned.unwrap_or(v), newslot)?;
         }
+        for v in escaping {
+            self.merge_split_value(b, bprime, succ, v, &cloner)?;
+        }
         self.structure_reset();
         Ok(bprime)
+    }
+
+    /// (kuna) After [`Self::node_split_through`] split `b` into `b` and `bprime`,
+    /// both flowing into `succ` alone: merge `b`'s output `v` and its clone in a
+    /// new MULTIEQUAL at the head of `succ`, and point every reader of `v`
+    /// outside the two blocks at the merge.
+    fn merge_split_value(
+        &mut self,
+        b: BlockId,
+        bprime: BlockId,
+        succ: BlockId,
+        v: VarnodeId,
+        cloner: &CloneBlockOps,
+    ) -> KunaResult<()> {
+        let clone_vn = self
+            .vbank()
+            .get(v)
+            .and_then(|vn| vn.get_def())
+            .and_then(|d| cloner.orig_to_clone.get(&d).copied())
+            .filter(|&c| self.obank().get(c).is_some_and(|o| !o.is_dead()))
+            .and_then(|c| self.obank().get(c).and_then(|o| o.get_out()))
+            .ok_or_else(|| KunaError::lowlevel("nodesplit-through: value has no clone"))?;
+        let (size, addr) = {
+            let vn = self
+                .vbank()
+                .get(v)
+                .ok_or_else(|| KunaError::lowlevel("nodesplit-through: stale value"))?;
+            (vn.get_size(), vn.get_addr().clone())
+        };
+        let unique = addr.get_space().map(|s| s.get_type()) == Some(spacetype::IPTR_INTERNAL);
+        let readers: Vec<OpId> = self
+            .vbank()
+            .get(v)
+            .map(|vn| vn.descend_iter().collect())
+            .unwrap_or_default();
+        let start = crate::block::block_get_start(&self.bblocks_ref().arena, succ);
+        let phi = self.new_op(2, start);
+        self.op_set_opcode_code(phi, OpCode::CPUI_MULTIEQUAL);
+        let merged = if unique {
+            self.new_unique_out(size, phi)?
+        } else {
+            self.new_varnode_out(size, &addr, phi)?
+        };
+        for reader in readers {
+            let Some(r) = self.obank().get(reader) else {
+                continue;
+            };
+            let parent = r.get_parent();
+            if parent == Some(b) || parent == Some(bprime) {
+                continue;
+            }
+            let slots: Vec<int4> = (0..r.num_input())
+                .filter(|&s| r.get_in(s) == Some(v))
+                .collect();
+            for s in slots {
+                self.op_set_input(reader, merged, s)?;
+            }
+        }
+        let sb = self.bblocks_ref().block(succ).get_in_index(b);
+        let sp = self.bblocks_ref().block(succ).get_in_index(bprime);
+        if sb < 0 || sp < 0 {
+            return Err(KunaError::lowlevel("nodesplit-through: successor edges"));
+        }
+        self.op_set_input(phi, v, sb)?;
+        self.op_set_input(phi, clone_vn, sp)?;
+        self.op_insert_begin(phi, succ);
+        Ok(())
     }
 
     fn node_split_cloning(&mut self, b: BlockId, inedge: int4, calls: bool) -> KunaResult<BlockId> {

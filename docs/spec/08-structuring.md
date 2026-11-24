@@ -1508,6 +1508,20 @@ default because the source often wrote the merged form as a ternary argument
 (`lua_pushstring(L, isint ? "integer" : "float")`), and the binary cannot tell
 the two apart.
 
+A call block that falls through to one successor instead of returning
+qualifies on the same terms (its only branch may be a BRANCH), which is
+Hex-Rays' `UNMERGE_CALLS` (hexx64 `sub_191D80`). It is split with
+`crates/unlace-middle/src/substrate/funcdata_block.rs
+(Funcdata::node_split_through)`: the clone flows into the same successor, whose
+MULTIEQUALs gain the clone's values for the new edge. When the successor had
+no other predecessor, every value the block defines that is read beyond it,
+the call's result first of all, is merged back in a new MULTIEQUAL at the head
+of the successor (`funcdata_block.rs (Funcdata::merge_split_value)`), and the
+readers outside the two blocks read the merge. When the successor has other
+predecessors, the block's values may only reach it through its MULTIEQUALs, and
+any other reader leaves the block alone. A persistent or address-tied output
+also leaves it alone.
+
 ### orchain — the split that must not happen (decbench)
 
 `returndup` is right about a *guard clause* and wrong about the *operand chain

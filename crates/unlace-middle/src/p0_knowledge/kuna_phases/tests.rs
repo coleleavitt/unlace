@@ -1310,6 +1310,7 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `phiarm`; its P6 row sits after `typemerge`.
     // +1 for `calleesaved`; its P6 row sits after `phiarm`.
     // +1 for `phithread`; its P3 row sits after `latecse`.
+    // unused-note-no-new-option
     assert_eq!(json.matches("},\n").count(), 341);
 }
 

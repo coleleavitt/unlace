@@ -177,6 +177,12 @@ pub fn function_tables(
             _ => break,
         }
     }
+    swx_dbg(|| {
+        format!(
+            "function_tables {lo:#x}..{end:#x} stopped at {at:#x}: {:x?}",
+            fold.tables
+        )
+    });
     ExtentTables {
         tables: fold.tables.into_iter().collect(),
         cases: fold.cases,
@@ -587,6 +593,24 @@ fn sign_extend(v: u64, size: u32) -> u64 {
 pub fn table_read(fd: &Funcdata, load: OpId) -> Option<(u64, u64, VarnodeId)> {
     let ptr = fd.obank().get(load)?.get_in(1)?;
     let add = fd.obank().get(fd.vbank().get(ptr)?.get_def()?)?;
+    swx_dbg(|| {
+        let def = |vn: Option<VarnodeId>| {
+            vn.and_then(|vn| fd.vbank().get(vn)).map(|v| {
+                (
+                    v.is_constant(),
+                    v.get_def()
+                        .and_then(|d| fd.obank().get(d))
+                        .map(|o| o.code()),
+                )
+            })
+        };
+        format!(
+            "table_read: ptr def {:?} in0 {:?} in1 {:?}",
+            add.code(),
+            def(add.get_in(0)),
+            def(add.get_in(1))
+        )
+    });
     if add.code() != OpCode::CPUI_INT_ADD {
         return None;
     }
@@ -628,7 +652,8 @@ fn constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
 
 /// A constant, also through copies and through a loop-carried register: a
 /// MULTIEQUAL each of whose inputs is that constant or the MULTIEQUAL itself
-/// (gnulib's regcomp keeps its table base in `%rbx` across the loop).
+/// (gnulib's regcomp keeps its table base in `%rbx` across the loop, and an
+/// INDIRECT carries it past each call).
 fn base_constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
     let mut seen: Vec<VarnodeId> = Vec::new();
     let mut work = vec![vn];
@@ -650,7 +675,7 @@ fn base_constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
         }
         let op = fd.obank().get(fd.vbank().get(at)?.get_def()?)?;
         match op.code() {
-            OpCode::CPUI_COPY => work.push(op.get_in(0)?),
+            OpCode::CPUI_COPY | OpCode::CPUI_INDIRECT => work.push(op.get_in(0)?),
             OpCode::CPUI_MULTIEQUAL => {
                 for i in 0..op.num_input() {
                     work.push(op.get_in(i)?);
@@ -665,4 +690,11 @@ fn base_constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).
 pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
     hooks.switchextent_table_read = Some(table_read);
+}
+
+/// Temporary switchextent tracing (`KUNA_SWX_DEBUG`); removed before merge.
+fn swx_dbg(msg: impl FnOnce() -> String) {
+    if std::env::var_os("KUNA_SWX_DEBUG").is_some() {
+        eprintln!("[swx] {}", msg());
+    }
 }

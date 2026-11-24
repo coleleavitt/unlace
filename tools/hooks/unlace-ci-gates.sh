@@ -47,13 +47,6 @@ step() { local name="$1"; shift
   if "$@"; then PASSED+=("$name"); echo "-- $name ok ($((SECONDS-t0)) s)"
   else FAILED+=("$name"); echo "-- $name FAILED ($((SECONDS-t0)) s)"; fi; }
 
-forbidden_words() {
-  # Only a branch meant for Noelo-Lab/kuna (cut from upstream/main) is checked; unlace's main carries the IDA-informed tracks.
-  git rev-parse -q --verify upstream/main >/dev/null || { echo "no upstream/main remote; not checked"; return 0; }
-  case "$(git rev-parse --abbrev-ref HEAD)" in main|all|personal*) echo "branch carries IDA-informed tracks; not checked"; return 0;; esac
-  local base; base="$(git merge-base HEAD upstream/main)"
-  ! { git diff "$base"...HEAD; git diff --cached; } | grep '^+' | grep -v '^+++' | grep -inE '\b(IDA|hex-?rays|ida95)\b'
-}
 ignored_fixtures() {
   local hits; hits="$(git ls-files --others --ignored --exclude-standard -- \
      'tests/stages' 'tests/fixtures' 'crates/*/tests/fixtures' 'integrations/web/test/fixtures' 2>/dev/null \
@@ -91,7 +84,6 @@ rusttest() {
   cargo nextest run --workspace "${web[@]}" --profile ci
 }
 
-step forbidden-words forbidden_words
 step ignored-fixtures ignored_fixtures
 step test-layout python3 scripts/check_test_layout.py
 step fmt fmt

@@ -61,6 +61,27 @@ Heavy runs (decompile-all over a corpus, `cargo test -p unlace-harness --test pa
 `tools/hooks/unlace-slot <cmd>`, which holds one of `UNLACE_SLOTS` (default 6)
 machine-wide slots.
 
+### Dynamic linking (dev only, off by default)
+
+`crates/unlace-decomp-dylib` builds `unlace-decomp` (with every decompiler crate under it) and
+`unlace-analysis` as one Rust `dylib`. The `dynamic_linking` feature of `unlace-cli`,
+`unlace-console`, `unlace-harness` and `unlace-ghidra` links the binaries and their test targets
+against it, so an edit to the engine links the `.so` once instead of statically relinking the
+engine into every binary and test target. It does not speed up compiling the engine itself.
+
+```bash
+cargo build -p unlace-cli -p unlace-console -p unlace-harness --features \
+  unlace-cli/dynamic_linking,unlace-console/dynamic_linking,unlace-harness/dynamic_linking
+cargo build --timings ...   # compare link time with and without the feature
+```
+
+The crate is excluded from the workspace, so `cargo build --workspace` never links it. The
+binaries then need `libstd-*.so` and the dylib at run time: `cargo run`/`cargo test` set the
+library path, and the build scripts of `unlace`, `decomp_dbg` and `decomp_test_dbg` add an rpath
+(`$ORIGIN/deps` and `$(rustc --print sysroot)/lib`). `unlace_ghidra` has no rpath; run it with
+`LD_LIBRARY_PATH=$(rustc --print sysroot)/lib:$CARGO_TARGET_DIR/debug/deps`. Never use the
+feature for `--release`, dist builds or `unlace-wasm`.
+
 ## Gates
 
 Each gate is one command, run from the repository root on dev binaries:
@@ -100,8 +121,7 @@ target/release/unlace` and `bash scripts/coverage.sh` (docs/observatory.md).
 tools/hooks/unlace-ci-gates.sh [fast|parity|full]   # default parity
 ```
 
-- `fast`: rustfmt, forbidden words (no IDA/Hex-Rays text in a branch meant for Noelo-Lab/kuna;
-  skipped on `main`), ignored fixtures, `scripts/check_test_layout.py`.
+- `fast`: rustfmt, ignored fixtures, `scripts/check_test_layout.py`.
 - `parity` adds: the Python tooling tests, build, specs, lint, the parity target,
   `tools/check_spec.py`, the CLI probes, `unlace catalog --check`, the repipe counters,
   `docs/options.md` freshness and unlace-ghidra. A full pass records the

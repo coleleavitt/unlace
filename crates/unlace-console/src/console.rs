@@ -602,6 +602,11 @@ pub fn unlace_live_value(conf: &Architecture, option: &str) -> Option<Cow<'stati
                 .get::<unlace_decomp::analysisgates::Unwindstarts>()
                 .0,
         ),
+        "aggressivethunks" => on_off(
+            conf.unlace_options
+                .get::<unlace_decomp::analysisgates::AggressiveThunks>()
+                .0,
+        ),
 
         "machoehframe" => on_off(
             conf.unlace_options

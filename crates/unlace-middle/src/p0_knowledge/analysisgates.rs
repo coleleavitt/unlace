@@ -191,6 +191,18 @@ crate::unlace_flag!(
 );
 
 crate::unlace_flag!(
+    /// (unlace `thunkentry`) Widen the jump-thunk promotion from the jumps that open a
+    /// function entry to every decoded direct jump (IDA's
+    /// `aggressively_convert_jumps_to_thunks`); default **off** (output-changing: adds
+    /// function entries for jump-only stubs into code that is not a function).
+    AggressiveThunks,
+    "aggressivethunks",
+    "aggressive jump-to-thunk conversion",
+    unset: false,
+    shipped: false
+);
+
+crate::unlace_flag!(
     /// (unlace) Gate the Mach-O bound-slot naming pass (`machobinds`); default **on**.
     Machobinds,
     "machobinds",

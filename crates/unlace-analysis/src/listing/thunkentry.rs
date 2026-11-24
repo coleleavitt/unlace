@@ -34,6 +34,13 @@
 //! jumps from a walk entry, so an obfuscator's chain of tens of thousands of
 //! jumps adds a few entries, not one per jump.
 //!
+//! `option aggressivethunks on` (default off) widens the candidates to every decoded
+//! direct jump, not only the jumps that open a function entry, which is IDA's
+//! `aggressively_convert_jumps_to_thunks`. Rule 1 is then replaced by three tests:
+//! the jump is not a fall-through target (no instruction runs into it), its target has
+//! exactly one reference in the listing (a block several jumps reach is shared, not one
+//! stub's body), and rules 2 and 3 hold as before. See [`aggressive_jumps`].
+//!
 //! x86 only (I386 and x86-64); every other architecture is a no-op.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -47,7 +54,7 @@ const MAX_CHAIN_HOPS: usize = 4;
 ///
 /// Every returned address is a decoded instruction start that is not already a
 /// function of `listing`.
-pub fn thunk_entries(file: &object::File, listing: &Listing) -> Vec<u64> {
+pub fn thunk_entries(file: &object::File, listing: &Listing, aggressive: bool) -> Vec<u64> {
     use object::read::Object;
     if !matches!(
         file.architecture(),
@@ -55,13 +62,13 @@ pub fn thunk_entries(file: &object::File, listing: &Listing) -> Vec<u64> {
     ) {
         return Vec::new();
     }
-    promote(listing)
+    promote(listing, aggressive)
 }
 
 /// The least fixpoint of the three rules over `listing`'s function set.
-fn promote(listing: &Listing) -> Vec<u64> {
+fn promote(listing: &Listing, aggressive: bool) -> Vec<u64> {
     let known: BTreeSet<u64> = listing.functions().map(|(&a, _)| a).collect();
-    let jumps = thunk_jumps(listing, &known);
+    let jumps = thunk_jumps(listing, &known, aggressive);
     let targets: BTreeSet<u64> = jumps
         .values()
         .copied()
@@ -70,13 +77,16 @@ fn promote(listing: &Listing) -> Vec<u64> {
     if targets.is_empty() {
         return Vec::new();
     }
-    let impure = impure_targets(listing, &targets);
+    let mut impure = impure_targets(listing, &targets);
+    if aggressive {
+        impure.extend(shared_targets(listing, &targets));
+    }
     let mut accepted: BTreeSet<u64> = BTreeSet::new();
     let mut waiting: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut work: Vec<u64> = jumps
         .keys()
         .copied()
-        .filter(|t| known.contains(t))
+        .filter(|t| aggressive || known.contains(t))
         .collect();
     while let Some(thunk) = work.pop() {
         let target = jumps[&thunk];
@@ -113,9 +123,13 @@ fn jump_target(listing: &Listing, vma: u64) -> Option<u64> {
 /// Every potential thunk keyed to its jump target: the known entries that open
 /// with a direct jump, and the targets of those jumps that do too, up to
 /// [`MAX_CHAIN_HOPS`] jumps from a known entry.
-fn thunk_jumps(listing: &Listing, known: &BTreeSet<u64>) -> BTreeMap<u64, u64> {
+fn thunk_jumps(listing: &Listing, known: &BTreeSet<u64>, aggressive: bool) -> BTreeMap<u64, u64> {
     let mut jumps: BTreeMap<u64, u64> = BTreeMap::new();
-    let mut frontier: Vec<u64> = known.iter().copied().collect();
+    let mut frontier: Vec<u64> = if aggressive {
+        aggressive_jumps(listing)
+    } else {
+        known.iter().copied().collect()
+    };
     for _ in 0..MAX_CHAIN_HOPS {
         let mut next = Vec::new();
         for thunk in frontier {
@@ -133,6 +147,35 @@ fn thunk_jumps(listing: &Listing, known: &BTreeSet<u64>) -> BTreeMap<u64, u64> {
         frontier = next;
     }
     jumps
+}
+
+/// The starts of every decoded direct jump that no instruction falls through into,
+/// address-sorted: the candidate thunks of `option aggressivethunks`.
+fn aggressive_jumps(listing: &Listing) -> Vec<u64> {
+    let falls: BTreeSet<u64> = listing
+        .instructions()
+        .filter_map(|(_, insn)| insn.fall_through)
+        .collect();
+    listing
+        .instructions()
+        .map(|(&vma, _)| vma)
+        .filter(|vma| !falls.contains(vma) && jump_target(listing, *vma).is_some())
+        .collect()
+}
+
+/// The candidate targets that more than one flow reaches. A block that several
+/// jumps share is not one stub's body, so `option aggressivethunks` leaves it alone.
+fn shared_targets(listing: &Listing, targets: &BTreeSet<u64>) -> BTreeSet<u64> {
+    let mut refs: BTreeMap<u64, usize> = BTreeMap::new();
+    for (_, insn) in listing.instructions() {
+        for t in insn.flows.iter().copied().filter(|t| targets.contains(t)) {
+            *refs.entry(t).or_default() += 1;
+        }
+    }
+    refs.into_iter()
+        .filter(|&(_, n)| n > 1)
+        .map(|(t, _)| t)
+        .collect()
 }
 
 /// The candidate targets some decoded instruction falls through into or
@@ -349,7 +392,7 @@ mod tests {
     }
 
     fn accepted(l: &Listing) -> Vec<u64> {
-        promote(l)
+        promote(l, false)
     }
 
     /// The issue's table: three adjacent thunks, then three bodies.
@@ -370,6 +413,18 @@ mod tests {
             &[0x1000, 0x1005, 0x100a],
         );
         assert_eq!(accepted(&l), vec![0x1010, 0x1030, 0x1040]);
+    }
+
+    /// A stub that no function entry opens, jumping into a block only it reaches.
+    /// The default walk misses it; `option aggressivethunks` promotes the block.
+    #[test]
+    fn an_aggressive_stub_promotes_its_private_target() {
+        let l = listing(
+            vec![ret(0x1000), jmp(0x1001, 0x1010), op(0x1010, 3), ret(0x1013)],
+            &[0x1000],
+        );
+        assert!(promote(&l, false).is_empty());
+        assert_eq!(promote(&l, true), vec![0x1010]);
     }
 
     /// `f: jmp cond; body: ...; cond: ...; jne body` is one function.

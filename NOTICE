@@ -313,6 +313,10 @@ specs/Ghidra/Processors/PXF vendors the Cisco PXF "Toaster" microcode (NSE-100) 
 Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
 License (its license files are in that directory).
 
+specs/Ghidra/Processors/ESRL vendors the Sharp ESR-L SLEIGH specification of
+benryves/GhidraESRL (https://github.com/benryves/GhidraESRL), released under the
+MIT License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

@@ -1,0 +1,577 @@
+# SPDX-License-Identifier: Apache-2.0
+# NEC V30MZ (WonderSwan CPU) -- SLEIGH specification.
+#
+# Derived from Ghidra's Intel x86 specification
+#   Ghidra/Processors/x86/data/languages/ia.sinc (Ghidra 12.1.3)
+#   (+ lockable.sinc, macros.sinc)
+# which is Copyright the Ghidra project / National Security Agency and is licensed under the
+# Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0). This file is a
+# derivative work under the same license: only the 16-bit real-mode 8086/80186 subset is ported,
+# as a compact standalone spec (ia.sinc is not included). Constructor display formats are kept
+# byte-for-byte identical to x86:LE:16:Real Mode so that disassembly and decompiler output can be
+# diffed against Ghidra's x86 language (see ghidra_scripts/V30MZDecodeDiff.java).
+#
+# Authoritative behaviour brief: docs/V30MZ-SPEC-NOTES.md (citations [ST:n] [DS:n] [CT:n] [WI:n]
+# [WN:n] [WF:n] [WM:n] [IA:n] refer to the keys defined there).
+#
+# Conventions in comments:
+#   SOURCE-CONFLICT:  sources disagree; the chosen behaviour and why (hardware test ROM
+#                     WSCpuTest [CT] wins over documents).
+#   UNRESOLVED:       no source settles it; the brief's recommendation is implemented.
+#   RESOLVED (src):   formerly UNRESOLVED; settled by the named sources
+#                     (docs/V30MZ-UNDEFINED-ENCODINGS.md).
+#   UNRESOLVED-SEMANTICS: length settled, effect not; a v30mz_undefined placeholder or the
+#                     documented choice is implemented.
+#
+# Address model:
+#   * The "ram" space holds 20-bit linear addresses (seg*16 + off). The pspec declares it a
+#     segmented space (type="real") and defines the `segment` userop as
+#     ((zext(base) << 4) + zext(inner)) & 0xFFFFF   -- the V30MZ 20-bit wrap [ST:331-333].
+#   * inst_start / inst_next are LINEAR addresses. Unlike Ghidra's x86 real mode (which derives
+#     CS as (inst_next >> 4) & 0xF000, i.e. assumes a 64K-aligned code segment [IA:1110]), the
+#     V30MZ spec tracks the real code segment in the flowing context variable `csval`:
+#       - the loader (or the user, via Set Register Values on "csval") sets it at entry points;
+#       - Ghidra flows it unchanged to the fall-through and to near branch / call targets;
+#       - a direct far JMP/CALL ptr16:16 sets it at the target with globalset();
+#       - after RETF / IRET / INT / indirect far JMP/CALL the target's CS cannot be known
+#         statically; the target keeps whatever csval the program context has there.
+#     Near relative targets are csval*16 + ((IP_next + disp) & 0xFFFF), IP_next =
+#     inst_next - csval*16, i.e. IP wraps FFFF->0000 inside the code segment [ST:3012-3013].
+#     CS: overrides, PUSH CS and near indirect CALL/JMP use csval as the (constant) CS.
+#     An unset csval is 0 (CS = 0000). Ghidra renders exported addresses with its default
+#     segment ((linear >> 4) & 0xF000), so 4400:0123 is displayed as 4000:4123 -- the linear
+#     value is right; SLEIGH cannot choose the segment used for display.
+#   * Every memory operand goes through the `segment` userop: default DS, SS for BP-based
+#     modes, string sources seg:SI (override-able), string destinations ES:DI (fixed)
+#     [ST:2941-2948].
+
+define endian=little;
+define alignment=1;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+# I/O port space. IN/OUT/INS/OUTS are plain loads/stores here (16-bit port numbers, byte
+# addressed; a word access at port p touches p and p+1 -- the high byte goes to port+1
+# [ST:4929-4931], [ST:5246-5249]). The WonderSwan SoC decodes only the low 8 bits of the port
+# number; that aliasing is NOT modelled here (no masking) -- it belongs to the platform model.
+# The pspec marks the whole space volatile so the decompiler keeps every port access.
+define space io       type=ram_space      size=2 wordsize=1;
+
+# ---------------------------------------------------------------------------------------------
+# Registers (names identical to Ghidra x86 for the 16-bit subset)
+# ---------------------------------------------------------------------------------------------
+define register offset=0     size=2 [ AX CX DX BX SP BP SI DI ];
+define register offset=0     size=1 [ AL AH CL CH DL DH BL BH ];
+define register offset=0x100 size=2 [ ES CS SS DS ];
+# Flags as single-byte boolean registers, as in ia.sinc. F1/F3/F5 are unused placeholders.
+define register offset=0x200 size=1 [ CF F1 PF F3 AF F5 ZF SF TF IF DF OF ];
+# 16-bit FLAGS (PSW) image used by PUSHF/POPF/IRET/interrupts, and the instruction pointer.
+define register offset=0x280 size=2 [ flags IP ];
+# MULOV: hidden CPU latch = the CF/OF overflow result of the last MUL/IMUL. The 8-bit DIV/IDIV and
+# AAM 0 copy it into CF and OF ("Carry & Overflow are from the last multiplication",
+# WSCpuTest README, DIV/IDIV/AAM). Not architecturally visible otherwise; 0 at reset.
+define register offset=0x290 size=1 [ MULOV ];
+
+define register offset=0x2000 size=8 contextreg;
+
+define context contextreg
+  # Code segment of the instruction (flows; see header). Must be set at entry points.
+  csval=(0,15)
+  # Scratch: csval before a far ptr16:16 transfer rewrites it (noflow).
+  csold=(16,31) noflow
+  segover=(32,34)      # 0=default 1=CS 2=SS 3=DS 4=ES  (same numbering as ia.sinc)
+  repneprefx=(35,35)   # F2 seen
+  repprefx=(36,36)     # F3 seen
+  lockprefx=(37,37)    # F0 seen
+  # hwundef: 0 (default) = strict: undefined opcodes / sub-opcodes decode as no instruction, so
+  #          disassembly of data fails fast [brief 9.4].
+  #          1 = hardware-faithful: decode undefined forms with the length and effect the
+  #          hardware has (for a p-code emulator). Flows; set it at entry points or per range
+  #          with Set Register Values ("hwundef"), or default it in v30mz.pspec.
+  hwundef=(38,38)
+  # colorsoc: which SoC executes the code; only MUL's ZF depends on it (brief 10 #7):
+  #   0 (default) = ASWAN (mono WonderSwan): MUL clears ZF;
+  #   1 = SPHINX / SPHINX2 (WonderSwan Color / SwanCrystal): MUL sets ZF [CT:24,148-149].
+  # Set by the emulator (WSMachine) or per range like hwundef. A colour cartridge can run on
+  # either SoC only in colour mode, so for static analysis the value hardly matters.
+  colorsoc=(39,39)
+;
+
+# ---------------------------------------------------------------------------------------------
+# Tokens
+# ---------------------------------------------------------------------------------------------
+define token opbyte (8)
+  byte=(0,7)
+  high4=(4,7)
+  high5=(3,7)
+  low5=(0,4)
+  low3=(0,2)
+;
+
+define token modrm (8)
+  mod           = (6,7)
+  reg_opcode    = (3,5)
+  reg_opcode_hb = (5,5)
+  sreg2         = (3,4)
+  r_m           = (0,2)
+  row           = (4,7)
+  page          = (3,3)
+  cond          = (0,3)
+  reg8          = (3,5)
+  reg16         = (3,5)
+  r8            = (0,2)
+  r16           = (0,2)
+;
+
+define token I8 (8)
+  imm8_7=(7,7)
+  imm8=(0,7)
+  imm8z=(0,7)
+  simm8=(0,7) signed
+;
+
+define token I16 (16) imm16=(0,15) simm16=(0,15) signed j16=(0,15);
+define token override (8) over=(0,7);
+
+attach variables [ r16 reg16 ] [ AX CX DX BX SP BP SI DI ];
+attach variables [ r8  reg8  ] [ AL CL DL BL AH CH DH BH ];
+# Segment register field: 2 bits (ModRM bits 4:3); bit 5 is ignored by the hardware
+# [CT:287-289], [ST:5070]. Strict mode requires bit 5 = 0 (see MOV Sreg below).
+attach variables sreg2 [ ES CS SS DS ];
+
+define pcodeop segment;    # linear address from segment:offset (body in v30mz.pspec)
+define pcodeop swi;        # software interrupt / CPU exception: returns handler address
+define pcodeop LOCK;       # F0 BUSLOCK prefix
+define pcodeop UNLOCK;
+# halt(): HLT. The CPU stops fetching until an interrupt is requested (also with IF=0), then
+# continues with the NEXT instruction; when the request is serviced, the pushed IP is the address
+# after the HLT [ST:4115-4119], [ST:4473-4475]. The p-code falls through, so static analysis sees
+# the code after HLT as reachable (it is: HLT is the usual wait-for-VBlank idiom). An emulator
+# implements the wait (WSMachine: halted state).
+define pcodeop halt;
+# divtrap(): divide-error exception (INT 0) of DIV/IDIV (zero divisor or quotient out of range)
+# and AAM 0. The CPU enters the vector-0 handler with the pushed IP = the NEXT instruction (an
+# "after" trap [ST:4271-4275]), so after the handler's IRET execution continues there; the p-code
+# therefore falls through. An emulator performs the interrupt entry (push FLAGS, CS, IP; IF=TF=0;
+# CS:IP from vector 0) and redirects the PC (WSMachine). Unlike `swi` + `call`, this keeps the
+# decompiler output of a DIV free of a call through an unknown pointer.
+define pcodeop divtrap;
+
+# From macros.sinc (Ghidra x86)
+macro conditionalAssign(dest, cond, trueVal, falseVal) {
+  dest = zext(cond) * trueVal | zext(!cond) * falseVal;
+}
+
+# ---------------------------------------------------------------------------------------------
+# Operand subtables (ported from ia.sinc, 16-bit / real-mode variants only)
+# ---------------------------------------------------------------------------------------------
+Reg8:   reg8   is reg8   { export reg8; }
+Reg16:  reg16  is reg16  { export reg16; }
+Rmr8:   r8     is r8     { export r8; }
+CRmr8:  r8     is r8     { export r8; }
+Rmr16:  r16    is r16    { export r16; }
+CRmr16: r16    is r16    { export r16; }
+
+simm8_16:  simm8  is simm8  { export *[const]:2 simm8; }
+simm16_16: simm16 is simm16 { export *[const]:2 simm16; }
+
+usimm8_16: imm8 is imm8 & imm8_7=0 { export *[const]:2 imm8; }
+usimm8_16: val  is imm8 & imm8_7=1 [ val = 0xff00 | imm8; ] { export *[const]:2 val; }
+
+# 16-bit addressing modes (the offset portion) [IA:1033-1056]
+addr16: [BX + SI]   is mod=0 & r_m=0 & BX & SI   { local tmp=BX+SI; export tmp; }
+addr16: [BX + DI]   is mod=0 & r_m=1 & BX & DI   { local tmp=BX+DI; export tmp; }
+addr16: [BP + SI]   is mod=0 & r_m=2 & BP & SI   { local tmp=BP+SI; export tmp; }
+addr16: [BP + DI]   is mod=0 & r_m=3 & BP & DI   { local tmp=BP+DI; export tmp; }
+addr16: [SI]        is mod=0 & r_m=4 & SI        { export SI; }
+addr16: [DI]        is mod=0 & r_m=5 & DI        { export DI; }
+addr16: [imm16]     is mod=0 & r_m=6; imm16      { export *[const]:2 imm16; }
+addr16: [BX]        is mod=0 & r_m=7 & BX        { export BX; }
+addr16: [BX + SI + simm8_16] is mod=1 & r_m=0 & BX & SI; simm8_16 { local tmp=BX+SI+simm8_16; export tmp; }
+addr16: [BX + DI + simm8_16] is mod=1 & r_m=1 & BX & DI; simm8_16 { local tmp=BX+DI+simm8_16; export tmp; }
+addr16: [BP + SI + simm8_16] is mod=1 & r_m=2 & BP & SI; simm8_16 { local tmp=BP+SI+simm8_16; export tmp; }
+addr16: [BP + DI + simm8_16] is mod=1 & r_m=3 & BP & DI; simm8_16 { local tmp=BP+DI+simm8_16; export tmp; }
+addr16: [SI + simm8_16]      is mod=1 & r_m=4 & SI; simm8_16      { local tmp=SI+simm8_16; export tmp; }
+addr16: [DI + simm8_16]      is mod=1 & r_m=5 & DI; simm8_16      { local tmp=DI+simm8_16; export tmp; }
+addr16: [BP + simm8_16]      is mod=1 & r_m=6 & BP; simm8_16      { local tmp=BP+simm8_16; export tmp; }
+addr16: [BX + simm8_16]      is mod=1 & r_m=7 & BX; simm8_16      { local tmp=BX+simm8_16; export tmp; }
+addr16: [BX + SI + imm16]    is mod=2 & r_m=0 & BX & SI; imm16    { local tmp=BX+SI+imm16; export tmp; }
+addr16: [BX + DI + imm16]    is mod=2 & r_m=1 & BX & DI; imm16    { local tmp=BX+DI+imm16; export tmp; }
+addr16: [BP + SI + imm16]    is mod=2 & r_m=2 & BP & SI; imm16    { local tmp=BP+SI+imm16; export tmp; }
+addr16: [BP + DI + imm16]    is mod=2 & r_m=3 & BP & DI; imm16    { local tmp=BP+DI+imm16; export tmp; }
+addr16: [SI + imm16]         is mod=2 & r_m=4 & SI; imm16         { local tmp=SI+imm16; export tmp; }
+addr16: [DI + imm16]         is mod=2 & r_m=5 & DI; imm16         { local tmp=DI+imm16; export tmp; }
+addr16: [BP + imm16]         is mod=2 & r_m=6 & BP; imm16         { local tmp=BP+imm16; export tmp; }
+addr16: [BX + imm16]         is mod=2 & r_m=7 & BX; imm16         { local tmp=BX+imm16; export tmp; }
+
+# Current code segment = csval from the context (exported as a constant).
+currentCS: CS is CS & csval { export *[const]:2 csval; }
+
+# IP of the next instruction (return address pushed by near CALL).
+retIP: ipn is epsilon [ ipn = (inst_next - (csval << 4)) & 0xffff; ] { export *[const]:2 ipn; }
+
+seg16:            is segover=0              { export DS; }
+seg16: currentCS: is segover=1 & currentCS  { export currentCS; }
+seg16: SS:        is segover=2 & SS         { export SS; }
+seg16: DS:        is segover=3 & DS         { export DS; }
+seg16: ES:        is segover=4 & ES         { export ES; }
+
+# Effective address -> linear address. BP-based modes default to SS [IA:1129-1138].
+Mem: addr16         is (segover=0 & mod=0 & r_m=2) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+Mem: addr16         is (segover=0 & mod=0 & r_m=3) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+Mem: addr16         is (segover=0 & mod=1 & r_m=2) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+Mem: addr16         is (segover=0 & mod=1 & r_m=3) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+Mem: addr16         is (segover=0 & mod=1 & r_m=6) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+Mem: addr16         is (segover=0 & mod=2 & r_m=2) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+Mem: addr16         is (segover=0 & mod=2 & r_m=3) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+Mem: addr16         is (segover=0 & mod=2 & r_m=6) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+Mem: seg16^addr16   is seg16; addr16                            { tmp:4 = segment(seg16,addr16); export tmp; }
+
+# Segment word of a far pointer in memory (LES/LDS): segment(base, offset + 2); the offset wraps inside
+# the segment as on hardware. Not displayed (used next to Mem in the same operand).
+MemHi: addr16         is (segover=0 & mod=0 & r_m=2) ... & addr16 { local o2:2 = addr16 + 2; tmp:4 = segment(SS,o2); export tmp; }
+MemHi: addr16         is (segover=0 & mod=0 & r_m=3) ... & addr16 { local o2:2 = addr16 + 2; tmp:4 = segment(SS,o2); export tmp; }
+MemHi: addr16         is (segover=0 & mod=1 & r_m=2) ... & addr16 { local o2:2 = addr16 + 2; tmp:4 = segment(SS,o2); export tmp; }
+MemHi: addr16         is (segover=0 & mod=1 & r_m=3) ... & addr16 { local o2:2 = addr16 + 2; tmp:4 = segment(SS,o2); export tmp; }
+MemHi: addr16         is (segover=0 & mod=1 & r_m=6) ... & addr16 { local o2:2 = addr16 + 2; tmp:4 = segment(SS,o2); export tmp; }
+MemHi: addr16         is (segover=0 & mod=2 & r_m=2) ... & addr16 { local o2:2 = addr16 + 2; tmp:4 = segment(SS,o2); export tmp; }
+MemHi: addr16         is (segover=0 & mod=2 & r_m=3) ... & addr16 { local o2:2 = addr16 + 2; tmp:4 = segment(SS,o2); export tmp; }
+MemHi: addr16         is (segover=0 & mod=2 & r_m=6) ... & addr16 { local o2:2 = addr16 + 2; tmp:4 = segment(SS,o2); export tmp; }
+MemHi: seg16^addr16   is seg16; addr16                            { local o2:2 = addr16 + 2; tmp:4 = segment(seg16,o2); export tmp; }
+
+# Same address computation as Mem, but displayed as the bare offset (Ghidra x86 shows
+# "CALLF [BX]" without any segment override text [IA:2954]); used only by CALLF m16:16.
+FarMem: addr16      is (segover=0 & mod=0 & r_m=2) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+FarMem: addr16      is (segover=0 & mod=0 & r_m=3) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+FarMem: addr16      is (segover=0 & mod=1 & r_m=2) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+FarMem: addr16      is (segover=0 & mod=1 & r_m=3) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+FarMem: addr16      is (segover=0 & mod=1 & r_m=6) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+FarMem: addr16      is (segover=0 & mod=2 & r_m=2) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+FarMem: addr16      is (segover=0 & mod=2 & r_m=3) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+FarMem: addr16      is (segover=0 & mod=2 & r_m=6) ... & addr16 { tmp:4 = segment(SS,addr16); export tmp; }
+FarMem: addr16      is seg16; addr16                            { tmp:4 = segment(seg16,addr16); export tmp; }
+
+# Near relative targets: IP wraps inside the code segment csval [ST:3012-3013]; the linear
+# result wraps at 20 bits [ST:331-333].
+rel8:  reloc is simm8  [ reloc = ((csval << 4) + ((inst_next - (csval << 4) + simm8) & 0xffff)) & 0xfffff; ]  { export *[ram]:4 reloc; }
+rel16: reloc is simm16 [ reloc = ((csval << 4) + ((inst_next - (csval << 4) + simm16) & 0xffff)) & 0xfffff; ] { export *[ram]:4 reloc; }
+
+m8:   "byte ptr" Mem  is Mem { export *:1 Mem; }
+m16:  "word ptr" Mem  is Mem { export *:2 Mem; }
+# BOUND's operand is two words; displayed like m16 for x86 parity, exports the address.
+bnd16: "word ptr" Mem is Mem { export Mem; }
+
+moffs8:  seg16^[imm16] is seg16 & imm16 { tmp:4 = segment(seg16,imm16:2); export *:1 tmp; }
+moffs16: seg16^[imm16] is seg16 & imm16 { tmp:4 = segment(seg16,imm16:2); export *:2 tmp; }
+
+# String memory access: source seg:SI (override-able), destination ES:DI (fixed)
+# [ST:2941-2948], [ST:11306-11318].
+dseSI1: seg16^SI is seg16 & SI { tmp:4 = segment(seg16,SI); SI = SI + 1-2*zext(DF); export *:1 tmp; }
+dseSI2: seg16^SI is seg16 & SI { tmp:4 = segment(seg16,SI); SI = SI + 2-4*zext(DF); export *:2 tmp; }
+eseDI1: ES:DI    is ES & DI    { tmp:4 = segment(ES,DI);    DI = DI + 1-2*zext(DF); export *:1 tmp; }
+eseDI2: ES:DI    is ES & DI    { tmp:4 = segment(ES,DI);    DI = DI + 2-4*zext(DF); export *:2 tmp; }
+
+rm8:  Rmr8            is mod=3 & Rmr8  { export Rmr8; }
+rm8:  "byte ptr" Mem  is Mem           { export *:1 Mem; }
+rm16: Rmr16           is mod=3 & Rmr16 { export Rmr16; }
+rm16: "word ptr" Mem  is Mem           { export *:2 Mem; }
+
+# Immediate port number as a direct io-space varnode (displayed like Ghidra x86: "0xb5").
+iop8b: imm8 is imm8 { export *[io]:1 imm8; }
+iop8w: imm8 is imm8 { export *[io]:2 imm8; }
+
+n1: one is epsilon [ one = 1; ] { export *[const]:1 one; }
+
+# Far pointer immediate (9A / EA). The linear target wraps at 20 bits [ST:331-333].
+# The target's csval is set to the new segment (globalset); csold keeps the caller's segment
+# for the return IP of CALLF.
+ptr1616: reloc is imm16; j16 [ reloc = ((j16 << 4) + imm16) & 0xfffff; csold = csval; csval = j16; globalset(reloc, csval); ]
+                                { CS = j16; export *[ram]:4 reloc; }
+# Return CS:IP pushed by CALLF ptr16:16: the caller's segment (csold, see ptr1616).
+farRetIP: ipf is epsilon [ ipf = (inst_next - (csold << 4)) & 0xffff; ] { export *[const]:2 ipf; }
+farRetCS: is csold { export *[const]:2 csold; }
+
+# Conditions [IA:1525-1540]
+cc: "O"  is cond=0  { export OF; }
+cc: "NO" is cond=1  { local tmp = !OF; export tmp; }
+cc: "C"  is cond=2  { export CF; }
+cc: "NC" is cond=3  { local tmp = !CF; export tmp; }
+cc: "Z"  is cond=4  { export ZF; }
+cc: "NZ" is cond=5  { local tmp = !ZF; export tmp; }
+cc: "BE" is cond=6  { local tmp = CF || ZF; export tmp; }
+cc: "A"  is cond=7  { local tmp = !(CF || ZF); export tmp; }
+cc: "S"  is cond=8  { export SF; }
+cc: "NS" is cond=9  { local tmp = !SF; export tmp; }
+cc: "P"  is cond=10 { export PF; }
+cc: "NP" is cond=11 { local tmp = !PF; export tmp; }
+cc: "L"  is cond=12 { local tmp = OF != SF; export tmp; }
+cc: "GE" is cond=13 { local tmp = OF == SF; export tmp; }
+cc: "LE" is cond=14 { local tmp = ZF || (OF != SF); export tmp; }
+cc: "G"  is cond=15 { local tmp = !ZF && (OF == SF); export tmp; }
+
+# Ghidra x86 prints 2E/3E before a Jcc as branch hints; the V30MZ just ignores the segment
+# override there. Kept for display parity [IA:3736-3738].
+jccRel8: rel8        is rel8               { export rel8; }
+jccRel8: rel8, "bn"  is segover=1 & rel8   { export rel8; }
+jccRel8: rel8, "bt"  is segover=3 & rel8   { export rel8; }
+
+# Repeat prefixes [IA:1545-1569]. REP on a non-string instruction is a no-op [ST:11556-11557].
+rep: ".REP" is ((repprefx=1 & repneprefx=0)|(repprefx=0 & repneprefx=1)) { if (CX==0) goto inst_next; CX=CX-1; }
+rep:        is repprefx=0 & repneprefx=0 { }
+reptail:    is ((repprefx=1 & repneprefx=0)|(repprefx=0 & repneprefx=1)) { goto inst_start; }
+reptail:    is repprefx=0 & repneprefx=0 { }
+repe: ".REPE"  is repprefx=1 & repneprefx=0 { if (CX==0) goto inst_next; CX=CX-1; }
+repe: ".REPNE" is repneprefx=1 & repprefx=0 { if (CX==0) goto inst_next; CX=CX-1; }
+repe:          is repprefx=0 & repneprefx=0 { }
+repetail:      is repprefx=1 & repneprefx=0 { if (ZF) goto inst_start; }
+repetail:      is repneprefx=1 & repprefx=0 { if (!ZF) goto inst_start; }
+repetail:      is repprefx=0 & repneprefx=0 { }
+
+# LOCK (BUSLOCK). The V30MZ accepts F0 before any instruction and never faults
+# [ST:9778-9779], [DS:583-587], [ST:10660-10663].
+# SOURCE-CONFLICT: STSWS says the prefix applies to all instructions [ST:9778]; the datasheet
+#   says it is only valid for memory / I-O instructions [DS:583]. Neither faults, so the prefix
+#   is accepted everywhere. As in Ghidra x86, ".LOCK" is displayed (and LOCK()/UNLOCK() emitted)
+#   only on the read-modify-write memory forms; elsewhere it is silently ignored.
+lockx:  ".LOCK" is lockprefx=1 { LOCK(); }
+lockx:          is epsilon     { }
+unlock:         is lockprefx=1 { UNLOCK(); }
+unlock:         is epsilon     { }
+# XCHG with memory always asserts the lock signal (display ".LOCK" only when F0 is present).
+alwaysLock: ".LOCK" is lockprefx=1 { LOCK(); }
+alwaysLock:         is epsilon     { LOCK(); }
+
+enterFrames: low5 is low5 { tmp:1 = low5; export tmp; }
+
+# MUL's ZF (no display): SoC-dependent constant, see the colorsoc context field.
+mulz: is colorsoc { export *[const]:1 colorsoc; }
+
+# ---------------------------------------------------------------------------------------------
+# Macros [IA:1923-2220]
+# ---------------------------------------------------------------------------------------------
+macro push22(x) {
+  mysave:2 = x;
+  SP = SP - 2;
+  tmp:4 = segment(SS,SP);
+  *:2 tmp = mysave;
+}
+
+macro pop22(x) {
+  tmp:4 = segment(SS,SP);
+  x = *:2 tmp;
+  SP = SP + 2;
+}
+
+# V30MZ PSW: bits 15..12 read as 1 and bit 1 reads as 1.
+# SOURCE-CONFLICT: STSWS shows bit 15 fixed at 1 [ST:3062-3065]; the datasheet calls it the MD
+#   flag, set on interrupt entry and at reset [DS:1029], [DS:1203-1204], [DS:3127]. Both say it
+#   has no effect on the V30MZ (no 8080 mode). Modelled as constant 1 (reset image F002h
+#   [DS:777-779]).
+macro unpackflags(tmp) {
+  OF = (tmp & 0x0800) != 0;
+  DF = (tmp & 0x0400) != 0;
+  IF = (tmp & 0x0200) != 0;
+  TF = (tmp & 0x0100) != 0;
+  SF = (tmp & 0x0080) != 0;
+  ZF = (tmp & 0x0040) != 0;
+  AF = (tmp & 0x0010) != 0;
+  PF = (tmp & 0x0004) != 0;
+  CF = (tmp & 0x0001) != 0;
+}
+
+macro packflags(tmp) {
+  tmp = 0xf002  | (0x0800 * zext(OF&1))
+                | (0x0400 * zext(DF&1)) | (0x0200 * zext(IF&1))   | (0x0100 * zext(TF&1))
+                | (0x0080 * zext(SF&1)) | (0x0040 * zext(ZF&1))   | (0x0010 * zext(AF&1))
+                | (0x0004 * zext(PF&1)) | (0x0001 * zext(CF&1));
+}
+
+# ---- Flag results -----------------------------------------------------------------------------
+# The V30MZ always writes the flags the manuals call "undefined" ("never kept as they were",
+# [CT:19]); the formulas below are the ones the hardware test ROM WSCpuTest checks (WSCpuTest
+# README "How the tests works", referred to as [CTR] below; see docs/SOURCES.md) and that Mesen 2 b9fa69d
+# (passes all 48 WSCpuTest groups; read as a reference only, GPL-3.0) implements.
+# AF is the carry / borrow out of bit 3: AF = bit 4 of (x ^ y ^ result) for add and subtract.
+
+macro addflags(op1,op2) {
+  CF = carry(op1,op2);
+  OF = scarry(op1,op2);
+  AF = (((op1 ^ op2) ^ (op1 + op2)) & 0x10) != 0;
+}
+
+macro addCarryFlags(op1, op2) {
+  local CFcopy = zext(CF);
+  CF = carry( op1, op2 );
+  OF = scarry( op1, op2 );
+  local result = op1 + op2;
+  CF = CF || carry( result, CFcopy );
+  OF = OF ^^ scarry( result, CFcopy );
+  local sum = result + CFcopy;
+  AF = (((op1 ^ op2) ^ sum) & 0x10) != 0;
+  op1 = sum;
+}
+
+macro subCarryFlags(op1, op2) {
+  local CFcopy = zext(CF);
+  CF = op1 < op2;
+  OF = sborrow( op1, op2 );
+  local result = op1 - op2;
+  CF = CF || (result < CFcopy);
+  OF = OF ^^ sborrow( result, CFcopy );
+  local diff = result - CFcopy;
+  AF = (((op1 ^ op2) ^ diff) & 0x10) != 0;
+  op1 = diff;
+}
+
+macro resultflags(result) {
+  SF = result s< 0;
+  ZF = result == 0;
+  PF = ((popcount(result & 0xff) & 1:1) == 0);
+}
+
+# SHL/SHR/SAR: SF, ZF and PF follow the result and AF is cleared for EVERY count, including a
+# count of 0 [CTR SHL/SHR/SAR], [CT:19]. (Ghidra x86 keeps them for count 0.) `count` is unused.
+macro shiftresultflags(result,count) {
+  resultflags(result);
+  AF = 0;
+}
+
+macro subflags(op1,op2) {
+  CF = op1 < op2;
+  OF = sborrow(op1,op2);
+  AF = (((op1 ^ op2) ^ (op1 - op2)) & 0x10) != 0;
+}
+
+# NEG = SUB from 0 [CTR NEG].
+macro negflags(op1) {
+  CF = (op1 != 0);
+  OF = sborrow(0,op1);
+  AF = (op1 & 0xf) != 0;
+}
+
+# AND/OR/XOR/TEST: AF, CF and OF cleared [CTR AND, OR, XOR & TEST].
+macro logicalflags() {
+  CF = 0;
+  OF = 0;
+  AF = 0;
+}
+
+# INC/DEC: as ADD/SUB 1, CF unchanged [CTR INC/DEC].
+macro incflags(op1) {
+  OF = scarry(op1,1);
+  AF = (op1 & 0xf) == 0xf;
+}
+
+macro decflags(op1) {
+  OF = sborrow(op1,1);
+  AF = (op1 & 0xf) == 0;
+}
+
+# MUL/IMUL [CTR MUL, IMUL]: CF = OF = "result does not fit"; AF, PF, SF cleared; ZF is a
+# constant: always set for IMUL, SoC-dependent for MUL (see `mulz`). The overflow is also kept in
+# the hidden MULOV latch, which the 8-bit divides and AAM 0 copy into CF/OF.
+macro mulflags(ovf, zf) {
+  CF = ovf;
+  OF = ovf;
+  MULOV = ovf;
+  AF = 0;
+  PF = 0;
+  SF = 0;
+  ZF = zf;
+}
+
+macro imultflags(low,total) {
+  local ovf = sext(low) != total;
+  mulflags(ovf, 1:1);
+}
+
+macro multflags(highhalf, zf) {
+  local ovf = highhalf != 0;
+  mulflags(ovf, zf);
+}
+
+# Rotates [CTR ROL/ROR/RCL/RCR]: CF is kept when (count & 0x1F) == 0, otherwise it is the last
+# bit rotated out. OF is written for EVERY count, including 0 (Ghidra x86: count 1 only):
+# ROL/RCL: OF = CF ^ msb(result); ROR/RCR: OF = bit n-1 ^ bit n-2 of the result.
+# AF, PF, SF, ZF unchanged.
+macro rolflags(result,count) {
+  conditionalAssign(CF, count==0, CF, (result & 1) != 0);
+  OF = CF ^ (result s< 0);
+}
+
+macro rorflags(result,count) {
+  conditionalAssign(CF, count==0, CF, (result s< 0));
+  OF = (result ^ (result << 1)) s< 0;
+}
+
+# Shifts [CTR SHL/SHR/SAR]: CF kept for count 0; SHL: OF = CF ^ msb(result); SHR/SAR:
+# OF = bit n-1 ^ bit n-2 of the result -- all for every count, including 0.
+macro shlflags(op1,result,count) {
+  conditionalAssign(CF, count==0, CF, (op1 << (count - 1)) s< 0);
+  OF = CF ^ (result s< 0);
+}
+
+macro sarflags(op1,result,count) {
+  conditionalAssign(CF, count==0, CF, ( (op1 s>> (count - 1)) & 1 ) != 0 );
+  OF = (result ^ (result << 1)) s< 0;
+}
+
+macro shrflags(op1,result,count) {
+  conditionalAssign(CF, count==0, CF, ( (op1 >> (count - 1)) & 1 ) != 0 );
+  OF = (result ^ (result << 1)) s< 0;
+}
+
+macro rcl8(dest, rotate_count) {
+  local cnt:1 = (rotate_count & 0x1f) % 9;
+  local tmp:2 = (zext(CF) << 8) | zext(dest);
+  tmp = (tmp << cnt)|(tmp >> (9 - cnt));
+  dest = tmp(0);
+  conditionalAssign(CF, cnt == 0, CF, (tmp & 0x100) != 0);
+  OF = CF ^ (dest s< 0);
+}
+
+macro rcl16(dest, rotate_count) {
+  local cnt = (rotate_count & 0x1f) % 17;
+  local tmp:4 = (zext(CF) << 16) | zext(dest);
+  tmp = (tmp << cnt) | (tmp >> (17 - cnt));
+  dest = tmp(0);
+  conditionalAssign(CF, cnt == 0, CF, (tmp & 0x10000) != 0);
+  OF = CF ^ (dest s< 0);
+}
+
+macro rcr8(dest, rotate_count) {
+  local cnt = (rotate_count & 0x1f) % 9;
+  local tmp:2 = (zext(CF) << 8) | zext(dest);
+  tmp = (tmp >> cnt) | (tmp << (9 - cnt));
+  dest = tmp(0);
+  conditionalAssign(CF, cnt == 0, CF, (tmp & 0x100) != 0);
+  OF = (dest ^ (dest << 1)) s< 0;
+}
+
+macro rcr16(dest, rotate_count) {
+  local cnt = (rotate_count & 0x1f) % 17;
+  local tmp:4 = (zext(CF) << 16) | zext(dest);
+  tmp = (tmp >> cnt) | (tmp << (17 - cnt));
+  dest = tmp(0);
+  conditionalAssign(CF, cnt == 0, CF, (tmp & 0x10000) != 0);
+  OF = (dest ^ (dest << 1)) s< 0;
+}
+
+# ---------------------------------------------------------------------------------------------
+# Prefixes. Only 26 2E 36 3E F0 F2 F3 [ST:3978-3995], [ST:12391-12421]. 64 65 66 67 are NOT
+# prefixes on the V30MZ (one-byte undefined opcodes) [ST:13740-13757], [CT:283-285].
+# A repeated prefix category: the last one wins [ST:3999-4004] (natural result of the chain).
+# SOURCE-CONFLICT: STSWS: no limit on prefix count [ST:3999]; datasheet: at most 7, and at most
+#   3 kinds for correct REP resume [DS:532-540], [DS:2933-2937]. The decoder accepts any number
+#   (decoding is unaffected; only interrupt-resume behaviour differs, an emulator concern).
+# ---------------------------------------------------------------------------------------------
+:^instruction is over=0x2e; instruction [ segover=1; ] {}   # CS:
+:^instruction is over=0x36; instruction [ segover=2; ] {}   # SS:
+:^instruction is over=0x3e; instruction [ segover=3; ] {}   # DS:
+:^instruction is over=0x26; instruction [ segover=4; ] {}   # ES:
+:^instruction is over=0xf2; instruction [ repneprefx=1; repprefx=0; ] {}
+:^instruction is over=0xf3; instruction [ repneprefx=0; repprefx=1; ] {}
+:^instruction is over=0xf0; instruction [ lockprefx=1; ] {}
+
+@include "v30mz_insn.sinc"
+@include "v30mz_hwundef.sinc"

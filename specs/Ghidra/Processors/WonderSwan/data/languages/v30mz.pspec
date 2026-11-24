@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<!-- NEC V30MZ: real-mode segmented addressing, linear = (seg << 4) + off, 20-bit bus. -->
+<processor_spec>
+  <properties>
+    <property key="useOperandReferenceAnalyzerSwitchTables" value="true"/>
+  </properties>
+  <programcounter register="IP"/>
+  <segmented_address space="ram" type="real" />
+  <!-- farpointer="yes" as in Ghidra's x86 real mode. LES/LDS read a far pointer as two words (offset, then
+       segment at segment(base, offset+2)) rather than one 4-byte load: a 4-byte load of a constant far
+       pointer (e.g. C000:0000 built on the stack) was typed as a flat pointer 0xC0000000 into the 4-byte ram
+       space and decompilation failed ("Offset must be between 0x0 and 0x10ffef"). -->
+  <segmentop space="ram" userop="segment" farpointer="yes">
+    <pcode>
+      <input name="base" size="2"/>
+      <input name="inner" size="2"/>
+      <output name="res" size="4"/>
+      <body><![CDATA[
+        res = ((zext(base) << 4) + zext(inner)) & 0xfffff;
+      ]]></body>
+    </pcode>
+    <constresolve>
+      <register name="DS"/>
+    </constresolve>
+  </segmentop>
+  <!-- I/O ports (io space) have side effects: keep every access in the decompiler. -->
+  <volatile outputop="write_volatile" inputop="read_volatile">
+    <range space="io" first="0x0" last="0xffff"/>
+  </volatile>
+  <context_data>
+    <!-- hwundef=0: undefined opcodes decode as no instruction (strict, default).
+         colorsoc=0: MUL clears ZF as on the mono SoC (1 = colour SoC: MUL sets ZF).
+         Emulators set hwundef=1 and colorsoc from the machine (see README).
+         csval: code segment; must be set by the loader at entry points (see README). -->
+    <context_set space="ram">
+      <set name="hwundef" val="0"/>
+      <set name="colorsoc" val="0"/>
+    </context_set>
+    <tracked_set space="ram">
+      <set name="DF" val="0"/>
+    </tracked_set>
+  </context_data>
+</processor_spec>

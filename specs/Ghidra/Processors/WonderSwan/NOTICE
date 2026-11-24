@@ -1,0 +1,21 @@
+ghidra-wonderswan
+Copyright (c) 2026 Jidou Ghost
+
+Licensed under either of the MIT License (LICENSE-MIT) or the Apache License,
+Version 2.0 (LICENSE-APACHE), at your option.
+
+This product includes software derived from Ghidra (https://github.com/NationalSecurityAgency/ghidra),
+licensed under the Apache License, Version 2.0. The following files are derivative works of
+Ghidra's x86 processor specification and remain subject to the Apache License, Version 2.0 for
+the portions taken from Ghidra:
+
+  v30mz/data/languages/v30mz.slaspec   derived from x86 ia.sinc, lockable.sinc, macros.sinc
+  v30mz/data/languages/v30mz_insn.sinc derived from x86 ia.sinc, lockable.sinc
+  v30mz/data/languages/v30mz.cspec     derived from x86 x86-16.cspec
+
+These files were modified: only the 16-bit real-mode 8086/80186 subset is kept, and NEC V30MZ
+behaviour (code-segment tracking, I/O address space, undefined-opcode forms, flag results,
+calling conventions) was added. See the header of each file.
+
+The build files load Ghidra's support/buildExtension.gradle from the user's Ghidra install; no
+Ghidra source is distributed in this repository.

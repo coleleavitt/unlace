@@ -1,0 +1,184 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# NEC V30MZ: hardware-faithful decode of undefined opcodes and sub-opcodes (hwundef=1).
+#
+# The V30MZ never traps on an undefined opcode ([ST:4055-4059], [ST:4372-4385], [WN:52-54]).
+# By default (hwundef=0) these forms have NO constructor so that disassembling data fails fast
+# [brief 9.4]. With hwundef=1 they decode with the length and effect the hardware has, for a
+# p-code emulator. Forms whose length or effect no source establishes stay undecoded in both
+# modes (see the UNRESOLVED notes).
+#
+# Already handled in v30mz_insn.sinc via `hwundef=1` alternatives:
+#   FE /2-/6  = the FF word forms CALL / CALLF / JMP / JMPF / PUSH  [ST:9875-9880],
+#               [ST:10164-10169], [ST:5515], [CT:343-345]
+#
+# Emulator sources for the forms below (verdicts, line citations and licences in
+# docs/V30MZ-UNDEFINED-ENCODINGS.md):
+#   [AV]  ARMV30MZ.s @146f5fb (FluBBaOfWard; all rights reserved, reference only)
+#   [AVM] NitroSwan source/Memory.s @564e171 (EA read helpers used by [AV])
+#   [MS]  Mesen2 Core/WS/WsCpu.cpp @b9fa69d (GPL-3.0, reference only)
+#   [AR]  ares component/processor/v30mz @4cb8d92 (ISC)
+#   [CTA] WSCpuTest.asm @71d9d30, the hardware test ROM behind [CT]
+#
+# Never decoded (both modes):
+#   F1                UNRESOLVED (CONFLICT): [MS] (WsCpu.cpp:2112, Undefined() :812) and [AR]
+#                     (instruction.cpp:305, no case) treat it as a 1-byte no-op, but [AV] sends
+#                     it to i_crash (ARMV30MZ.s:3504-3507 "Not working on V30MZ?") and the
+#                     hardware-test author could not characterise it ([CT:337]; the test is
+#                     commented out as `db 0xF1, 0x01` BRKS, WSCpuTest.asm:8747). STSWS lists it
+#                     as undefined [ST:13653]. No hardware evidence for its length -> no
+#                     constructor.
+
+# Placeholder for an effect the sources do not agree on. A p-code emulator must supply this
+# userop; it fails fast instead of silently running a guessed effect.
+define pcodeop v30mz_undefined;
+
+# --- mod=11 "register" effective addresses of LEA / LES / LDS / CALLF / JMPF -----------------
+# RESOLVED (CT hardware test + AV + MS + AR): with mod=11 these instructions do not use the
+# register; r/m selects a new base+index address and no displacement follows (2 bytes):
+#   0 DS:[BX+AX]  1 DS:[BX+CX]  2 SS:[BP+DX]  3 SS:[BP+BX]
+#   4 DS:[SI+SP]  5 DS:[DI+BP]  6 SS:[BP+SI]  7 DS:[BX+DI]
+# [CT:291-305], WSCpuTest.asm:7656-7815 (LEA, all 8), :7973-8533 (LES/LDS, all 8),
+# [AV] ARMV30MZ.s:4310-4380 (EA_300-EA_307), [MS] WsCpu.cpp:633-654 (LdsLesLeaModRm),
+# [AR] modrm.cpp:11-25 (modRM(forceAddress)). A segment override replaces the default segment
+# in all three emulators (TestSegmentPrefix / GetSegment / segment()).
+# SOURCE-CONFLICT resolved: STSWS's "LEA r,r acts as MOV" [ST:5009-5011] is contradicted by the
+# hardware test.
+altaddr16: [BX + AX] is mod=3 & r_m=0 & BX & AX { local tmp = BX + AX; export tmp; }
+altaddr16: [BX + CX] is mod=3 & r_m=1 & BX & CX { local tmp = BX + CX; export tmp; }
+altaddr16: [BP + DX] is mod=3 & r_m=2 & BP & DX { local tmp = BP + DX; export tmp; }
+altaddr16: [BP + BX] is mod=3 & r_m=3 & BP & BX { local tmp = BP + BX; export tmp; }
+altaddr16: [SI + SP] is mod=3 & r_m=4 & SI & SP { local tmp = SI + SP; export tmp; }
+altaddr16: [DI + BP] is mod=3 & r_m=5 & DI & BP { local tmp = DI + BP; export tmp; }
+altaddr16: [BP + SI] is mod=3 & r_m=6 & BP & SI { local tmp = BP + SI; export tmp; }
+altaddr16: [BX + DI] is mod=3 & r_m=7 & BX & DI { local tmp = BX + DI; export tmp; }
+
+altMem: altaddr16       is (segover=0 & r_m=2) & altaddr16 { tmp:4 = segment(SS,altaddr16); export tmp; }
+altMem: altaddr16       is (segover=0 & r_m=3) & altaddr16 { tmp:4 = segment(SS,altaddr16); export tmp; }
+altMem: altaddr16       is (segover=0 & r_m=6) & altaddr16 { tmp:4 = segment(SS,altaddr16); export tmp; }
+altMem: seg16^altaddr16 is seg16 & altaddr16               { tmp:4 = segment(seg16,altaddr16); export tmp; }
+altMemHi: altaddr16       is (segover=0 & r_m=2) & altaddr16 { local o2:2 = altaddr16 + 2; tmp:4 = segment(SS,o2); export tmp; }
+altMemHi: altaddr16       is (segover=0 & r_m=3) & altaddr16 { local o2:2 = altaddr16 + 2; tmp:4 = segment(SS,o2); export tmp; }
+altMemHi: altaddr16       is (segover=0 & r_m=6) & altaddr16 { local o2:2 = altaddr16 + 2; tmp:4 = segment(SS,o2); export tmp; }
+altMemHi: seg16^altaddr16 is seg16 & altaddr16               { local o2:2 = altaddr16 + 2; tmp:4 = segment(seg16,o2); export tmp; }
+
+# LEA r16,(mod=11): r16 = the offset of the new mode.
+:LEA Reg16,altaddr16 is hwundef=1 & byte=0x8D; altaddr16 & Reg16 { Reg16 = altaddr16; }
+# LES/LDS r16,(mod=11): r16 = word [ea], ES/DS = word [ea+2] (same as the memory form).
+:LES Reg16,altMem    is hwundef=1 & byte=0xC4; altMem & altMemHi & Reg16 { local off:2 = *:2 altMem; local sg:2 = *:2 altMemHi; ES = sg; Reg16 = off; }
+:LDS Reg16,altMem    is hwundef=1 & byte=0xC5; altMem & altMemHi & Reg16 { local off:2 = *:2 altMem; local sg:2 = *:2 altMemHi; DS = sg; Reg16 = off; }
+
+# FF /3, FF /5 with mod=11 (and the FE /3 /5 aliases, see insn.sinc): far CALL / JMP through
+# the new mode. Hardware: WSCpuTest.asm:8883-8900 (FF D8) and :8945-8963 (FF E8) set BX so that
+# only DS:[BX+AX] reaches the pass path; [AV] callFarFFReg/braFarFFReg ARMV30MZ.s:3992-4033 and
+# [MS] WsCpu.cpp:1014-1046 agree. [AR] instructions-group.cpp:70-90 uses the register itself as
+# both offset and segment; the hardware test contradicts that (its comment: "some emus use AX as
+# both ofs & seg", WSCpuTest.asm:8883).
+# UNRESOLVED-SEMANTICS: ordering. [AV] computes the address and reads the offset BEFORE it
+#   pushes CS:IP; [MS] pushes first and then computes the address (so r/m=4 [SI+SP] sees SP-4)
+#   and reads. Only r/m=4, or a pointer that overlaps the two pushed words, can tell them apart;
+#   no hardware test covers it. Here: address from the pre-push registers ([AV]), reads after
+#   the pushes (as the hardware-tested memory form [CT:355-357]).
+:CALLF altMem        is hwundef=1 & (byte=0xff | byte=0xfe) & retIP & currentCS; altMem & reg_opcode=3 {
+    local ptr:4 = altMem;
+    push22(currentCS);
+    push22(retIP);
+    local ptr2:4 = ptr + 2;
+    local off:2 = *:2 ptr;
+    CS = *:2 ptr2;
+    local addrptr:4 = segment(CS,off);
+    call [addrptr];
+    CS = currentCS;
+}
+:JMPF altMem         is hwundef=1 & (byte=0xff | byte=0xfe); altMem & reg_opcode=5 {
+    local ptr2:4 = altMem + 2;
+    local off:2 = *:2 altMem;
+    CS = *:2 ptr2;
+    target:4 = segment(CS,off);
+    goto [target];
+}
+
+# --- BOUND (62) with mod=11 -----------------------------------------------------------------
+# RESOLVED (AV + MS + AR) length: 2 bytes, no displacement (no hardware test).
+# UNRESOLVED-SEMANTICS (CONFLICT): [AV] i_chkind (ARMV30MZ.s:1294-1310) reads the two bounds
+#   from the new mode (v30ReadEAW goes through the EA table, [AVM] Memory.s:214-219);
+#   [MS] BOUND (WsCpu.cpp:580-592) and [AR] instructionBound (instructions-misc.cpp:81-88) use
+#   the r/m register as both bounds. No hardware test -> v30mz_undefined placeholder.
+:BOUND Reg16,Rmr16   is hwundef=1 & byte=0x62; mod=3 & Reg16 & Rmr16 { v30mz_undefined(0x62:1, Reg16, Rmr16); }
+
+# --- F6 /1, F7 /1: no-op, NO immediate -----------------------------------------------------
+# RESOLVED (AV + MS + AR): length 2+disp; no immediate; registers and flags unchanged.
+#   [AV] i_f6pre/i_f7pre -> undefF6/undefF7 (ARMV30MZ.s:3551-3561, 3699-3708, 4550-4556);
+#   [MS] Grp3ModRm "case 0x01: break; //NOP" (WsCpu.cpp:979); [AR] Group3MemImm "case 1:
+#   undefined (acts as NOP)" (instructions-group.cpp:43; changed from TEST-with-immediate by ares
+#   commit 4b43bbf "fix opcode 0xF7:1 to match hardware"). Hardware [CT:339-341]: no flag or
+#   register change; the test pads with 90 (NOP) bytes, so it does not show the length
+#   (WSCpuTest.asm:8770, :8799). STSWS agrees on ModRM + displacement and does not mention an
+#   immediate [ST:13950-13953].
+# SOURCE-CONFLICT (no p-code effect): STSWS says no memory is accessed [ST:13952-13953]; the three
+#   emulators read the operand and discard it. No read is emitted here.
+:UNDEF rm8          is hwundef=1 & byte=0xf6; rm8 & reg_opcode=1 ...  { }
+:UNDEF rm16         is hwundef=1 & byte=0xf7; rm16 & reg_opcode=1 ... { }
+
+# --- 8F /1-/7: POP r/m16 (the reg field is ignored) -----------------------------------------
+# RESOLVED (AV + MS + AR; no hardware test of reg != 0): length 2+disp, acts as 8F /0.
+#   [AV] i_popw never tests the reg bits (ARMV30MZ.s:1920-1932); [MS] PopMemory (WsCpu.cpp:253);
+#   [AR] instructionPopMem (instructions-exec.cpp:217).
+:POP rm16           is hwundef=1 & byte=0x8f; rm16 & reg_opcode!=0 ... { local val:2 = 0; pop22(val); build rm16; rm16 = val; }
+:POP Rmr16          is hwundef=1 & byte=0x8f; mod=3 & reg_opcode!=0 & r_m=4 & Rmr16 { tmp:4 = segment(SS,SP); SP = *:2 tmp; }
+
+# --- C6 /1-/7, C7 /1-/7: MOV r/m,imm (the reg field is ignored) -----------------------------
+# RESOLVED (AV + MS + AR; no hardware test of reg != 0): length 3+disp (C6) / 4+disp (C7),
+#   acts as the /0 form. [AV] i_mov_bd8/i_mov_wd16 never test the reg bits
+#   (ARMV30MZ.s:3043-3082); [MS] MoveImmediate (WsCpu.cpp:1148); [AR] MoveMemImm
+#   (instructions-move.cpp:45).
+:MOV Rmr8,imm8      is hwundef=1 & byte=0xc6; (mod=3 & Rmr8 & reg_opcode!=0); imm8   { Rmr8 = imm8; }
+:MOV m8,imm8        is hwundef=1 & byte=0xc6; m8 & reg_opcode!=0 ...; imm8           { m8 = imm8; }
+:MOV Rmr16,imm16    is hwundef=1 & byte=0xc7; (mod=3 & Rmr16 & reg_opcode!=0); imm16 { Rmr16 = imm16; }
+:MOV m16,imm16      is hwundef=1 & byte=0xc7; m16 & reg_opcode!=0 ...; imm16         { m16 = imm16; }
+
+# --- One-byte undefined opcodes: 0F 63 64 65 66 67 -> 1-byte NOP ---------------------------
+# [ST:12517], [ST:12936-12952], [ST:13732-13757], [CT:279-285]. 64/65/66/67 are not prefixes.
+# SOURCE-CONFLICT (brief 10 #2): STSWS's vector-6 note says all operand bytes are skipped
+#   [ST:4055-4059]; its exception notes say execution continues at the next byte
+#   [ST:4374-4376]. For one-byte opcodes both agree with the hardware test (1 byte, 1 cycle
+#   [CT:281,285]) -> 1 byte.
+:UNDEF              is hwundef=1 & (byte=0x0f | byte=0x63 | byte=0x64 | byte=0x65 | byte=0x66 | byte=0x67) { }
+
+# --- D8-DF ESC (FPO1): NOP that consumes ModRM + displacement, no memory access -------------
+# [ST:7405-7427], [DS:531], [DS:3539], [CT:331-333]. There is no coprocessor.
+escrm: Rmr16          is mod=3 & Rmr16 { }
+escrm: Mem            is Mem           { }
+:ESC low3,escrm     is hwundef=1 & high5=0x1b & low3; escrm ... { }
+
+# --- FE /7, FF /7: no-op that consumes ModRM + displacement; no memory accessed -----------
+# [ST:14015-14029], [CT:347-349]; [MS] Grp45ModRm case 7 (WsCpu.cpp:1050) and [AR] Group4MemImm
+# case 7 (instructions-group.cpp:92) also consume the displacement.
+# SOURCE-CONFLICT (kept as is): [AV] dispatches FE /7 to undefFF straight from the ModRM byte, so
+#   it consumes no displacement (2 bytes) (ARMV30MZ.s:3905-3910, 4553); its FF /7 does consume it
+#   (contFF -> v30ReadEAW, :3944-3951). STSWS + MS + AR win; no hardware test has a displacement.
+:UNDEF escrm      is hwundef=1 & (byte=0xfe | byte=0xff); escrm & reg_opcode=7 ... { }
+
+# --- Group 2 /6 (C0 C1 D0 D1 D2 D3): result is 0 and is stored (register or memory) -------
+# [ST:13816-13877], [CT:311-317] ("zeros al/ax").
+# UNRESOLVED: the effect on the flags is not documented by any source (brief 10 #15); the
+#   flags are left unchanged here.
+:SHL6 rm8,n1        is hwundef=1 & byte=0xD0; rm8 & n1 & reg_opcode=6 ...          { rm8 = 0; }
+:SHL6 rm8,CL        is hwundef=1 & byte=0xD2; CL & rm8 & reg_opcode=6 ...          { rm8 = 0; }
+:SHL6 rm8,imm8      is hwundef=1 & byte=0xC0; rm8 & reg_opcode=6 ... ; imm8        { rm8 = 0; }
+:SHL6 rm16,n1       is hwundef=1 & byte=0xD1; rm16 & n1 & reg_opcode=6 ...         { rm16 = 0; }
+:SHL6 rm16,CL       is hwundef=1 & byte=0xD3; CL & rm16 & reg_opcode=6 ...         { rm16 = 0; }
+:SHL6 rm16,imm8     is hwundef=1 & byte=0xC1; rm16 & reg_opcode=6 ... ; imm8       { rm16 = 0; }
+
+# --- MOV CS,r/m16 (8E /1, and /5 via the bit-5 alias): the move is not performed ----------
+# [ST:5136-5138]. (It is not MOV CS as on the 8086.) Operand bytes are consumed; the source
+# memory operand is not read.
+:MOV CS,rm16        is hwundef=1 & byte=0x8e & CS; rm16 & sreg2=1 ... { }
+
+# --- 8C / 8E with ModRM bit 5 set: aliases of ES/CS/SS/DS ------------------------------------
+# Bit 5 of the sreg field is ignored by the hardware [CT:287-289]; STSWS marks it unused but
+# "needs research" [ST:3957-3964], [ST:5070]; the datasheet encodes it as 0 [DS:3576,3607].
+# SOURCE-CONFLICT: hardware test wins -> reg 4..7 alias ES..DS (displayed as the aliased name).
+:MOV m16,sreg2      is hwundef=1 & byte=0x8c; (mod != 3 & reg_opcode_hb=1 & sreg2) ... & m16 { m16 = sreg2; }
+:MOV Rmr16,sreg2    is hwundef=1 & byte=0x8c; mod=3 & reg_opcode_hb=1 & Rmr16 & sreg2       { Rmr16 = sreg2; }
+:MOV sreg2,m16      is hwundef=1 & byte=0x8e; (mod != 3 & reg_opcode_hb=1 & sreg2 & (sreg2=0 | sreg2=2 | sreg2=3)) ... & m16 { sreg2 = m16; }
+:MOV sreg2,Rmr16    is hwundef=1 & byte=0x8e; mod=3 & reg_opcode_hb=1 & Rmr16 & sreg2 & (sreg2=0 | sreg2=2 | sreg2=3) { sreg2 = Rmr16; }

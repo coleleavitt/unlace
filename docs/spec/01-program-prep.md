@@ -7135,7 +7135,11 @@ every other binary's pass list is byte-identical to before the pass existed):
   more than one vftable, so an indexed `<Class>::vftable_<i>` reads as that class's
   i-th table and made `unlace functions` report hundreds of bytes of executable
   `std::basic_stringbuf` code as vtable objects. Only the table itself wears a
-  `vftable` name, and it is unindexed.
+  `vftable` name, and it is unindexed. The slots named are those of the vftable
+  as the typed vftables below cut it (`kuna_msvcvtabletypes.rs (trim_overruns)`):
+  the walk alone ran on into a table laid directly after the vftable, and named
+  SensorService.dll's RPC server routines `Sensors::BrSensor::vfunc_4` to
+  `vfunc_14`.
 
   The pass runs at every PE load whatever its gate says (its facts are committed
   only when it is on), so its cost is paid by every command on a C++ DLL. Both of

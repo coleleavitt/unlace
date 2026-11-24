@@ -4229,7 +4229,9 @@ The operand mode bits select `a = b op c`, `a = b op u6`, `b = b op s12` or
 the conditional `b = b op c|u6`, whose condition skips the instruction when it
 fails. The `F` bit selects a second constructor that writes `Z`, `N`, `C` and
 `V`; carry on a subtraction is the borrow. A `.d` branch, jump or call
-evaluates its condition and target first, then runs the delay slot.
+evaluates its condition and target first, then runs the delay slot whether
+or not the condition holds, and only then branches. A delayed `bl`/`jl` links
+`blink` to the instruction after the delay slot.
 
 The zero-overhead loop is carried in the decode context. `lp end` records the
 address after itself in `lpstart` at address `end` and sets `lpend` there
@@ -4311,8 +4313,15 @@ language except Octeon, with `lsa`/`dlsa` (MSA brought them in before Release 6)
 formats are unused otherwise). The 128-bit registers `w0`-`w31` are separate from the FPRs (the
 FR=1 aliasing is not modelled). Loads and stores move each element at its own address in the
 language's byte order (element 0 is the least significant), `copy_s`/`copy_u` and `move.v`,
-`cfcmsa`/`ctcmsa` and the `bz`/`bnz` branches (with their delay slot) have real p-code; every
-other instruction is a user operation named after its mnemonic (`msa_addv_w`) with the
+`cfcmsa`/`ctcmsa` and the `bz`/`bnz` branches (with their delay slot) have real p-code, and so
+do the element-wise groups: `addv`/`subv`/`mulv` (and `addvi`/`subvi`), the bitwise `.v` and `andi`/`ori`/
+`xori`/`nori`, `bmnz`/`bmz`/`bsel`, the shifts `sll`/`srl`/`sra` (and immediates; the count is the
+element's low bits), the compares `ceq`/`clt`/`cle` (and immediates; all-ones or zero elements),
+`min`/`max` (signed, unsigned, immediates), the saturating `adds_s`/`adds_u`/`subs_s`/`subs_u`,
+`div`/`mod` (a zero divisor gives what QEMU gives: the architecture leaves it UNPREDICTABLE),
+`pcnt`/`nlzc`/`nloc`, `fill`/`ldi`/`splat`/`splati`, and the `ilv*`/`pck*` permutations. Every
+other instruction (floating point, dot products, fixed-point `q` forms, `shf`, `vshf`, `sld`, ...)
+is a user operation named after its mnemonic (`msa_addv_w`) with the
 destination as output and the read operands (and the destination, for the accumulating forms)
 as inputs.
 
@@ -4505,10 +4514,19 @@ TMS320C5x, TMS320C54x). Without that block, the self-referencing root never take
 over the ordinary constructors and the loop-back is silently dropped.
 
 C-SKY `bloop` needs none of this: it sits after the body it closes and is lifted as a
-decrement-and-branch. Not modelled: Epiphany (its loop registers are written with `movts`,
-not named by one instruction), StarCore `DOEN`/`DOSETUP` (not decoded), and Hexagon `endloop`
-(a branch through `SA0`/`SA1`, which resolves only where the decompiler propagates the
-`loop0`/`loop1` constants).
+decrement-and-branch.
+
+Hexagon is the other way round: the packet that ends the loop carries the mark (its parse
+bits, `:endloop0`/`:endloop1`), and only `loop0`/`loop1` names the start. Those
+instructions record the start in flowing (not `noflow`) context, `lp0sa`/`lp1sa`, set
+with `globalset(inst_next, ...)`, so it reaches every instruction the loop setup flows to.
+An end-of-loop packet that sees a recorded start counts `LC0`/`LC1` down and branches
+directly to it; with no recorded start (a loop set up in another function, or through
+`SA0`/`SA1` writes) it keeps the indirect branch through `SA0`/`SA1`. A packet that ends
+both loops at once keeps the indirect form.
+
+Not modelled: Epiphany (its loop registers are written with `movts`, not named by one
+instruction) and StarCore `DOEN`/`DOSETUP` (not decoded).
 
 ### Vendored community processor modules (#98)
 
@@ -5592,6 +5610,23 @@ its register, so each floating-point register is listed as its short view and
 then whole. The caller's 160-byte register save area at `0(r15)` is in the
 callee's local range, because the callee's prologue stores into it.
 Exercised by `tests/stages/kuna-s390x.xml`.
+
+The module also decodes, with exact p-code: the high-word facility (`aih`, `alsih`,
+`alsihn`, `ahhhr`/`ahhlr`, `alhhhr`/`alhhlr`, `shhhr`/`shhlr`, `slhhhr`/`slhhlr`,
+`chhr`/`chlr`/`chf`/`cih`, `clhhr`/`clhlr`/`clhf`/`clih`, `lbh`/`lhh`/`lfh`/`llch`/`llhh`,
+`stch`/`sthh`/`stfh`, `brcth`), which operates on bits 0-31 (`rNh`) of a register; the z14
+`msrkc`/`msgrkc`/`msc`/`msgc` (condition code 3 when the signed product overflows) and `mg`;
+the z15 `ncrk`/`ncgrk`, `ocrk`/`ocgrk`, `nnrk`/`nngrk`, `nork`/`nogrk` and `nxrk`/`nxgrk`;
+`bi`/`bic` (a branch to the doubleword at the address); `cds`/`cdsy`/`cdsg` (a compare and
+swap of a register pair) and `lpq`/`stpq`; `lae`/`laey`; `bal`/`balr` (64-bit linkage, as
+`bas`/`basr`); `bxh`/`bxle`/`bxhg`/`bxleg`; `slda` (condition code 3 when a bit unlike the sign
+is shifted out); and the BFP `TEST DATA CLASS` instructions `tceb`/`tcdb`/`tcxb` (the class of
+the operand, one of zero, normal, subnormal, infinity, quiet or signalling NaN by sign, against
+the 12-bit mask in the second-operand address), which `isnan`/`isinf` compile to. Before, a
+z13+ build halted on the high-word instructions and every `isnan` halted on `tcdb`. Checked with
+`tools/difffuzz --arch s390x --oracle qemu`, which also found that `risbhg` and `risblg` took their
+start and end positions from six bits of I3/I4 instead of bits 3-7 (a position within the word),
+so `risblg r11,r1,0xdf,0xe4,11` cleared the register instead of inserting a wrapped field.
 
 ### x86-64 lifter fixes from differential fuzzing
 

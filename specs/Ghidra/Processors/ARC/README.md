@@ -15,3 +15,12 @@ accumulator multiplies, named auxiliary registers.
 The encodings follow the ARCv2 ISA; the decode vectors in
 `decompiler/crates/kuna-sleigh/tests/arcv2_decode.tsv` were assembled with the
 GNU ARC assembler. `docs/spec/02-lift-and-flow.md` describes the model.
+
+## Local changes
+
+- A conditional delayed jump (`jcc.d`, `jcc.d [blink]`, `jlcc.d`) and a conditional delayed
+  `blcc.d` run their delay slot on both paths. Before this change, the condition skipped the
+  delay slot when it failed (`jcc` branched to `inst_next` before the delay slot), and `blcc.d`
+  re-executed the delay slot by branching back to it. gcc's `jeq.d [blink]` / `mov_s r0,0` early
+  return in `list_sum` lost the zeroed accumulator on the fall-through path.
+- Delayed calls link `blink` to the instruction after the delay slot (`inst_next2`).

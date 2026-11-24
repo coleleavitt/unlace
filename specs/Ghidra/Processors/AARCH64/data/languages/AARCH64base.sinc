@@ -5450,11 +5450,11 @@ is sf=1 & op.dp3_op54=0 & b_2428=0x1b & op.dp3_op31=1 & Rm_GPR32 & op.dp3_o0=1 &
 define pcodeop sveStreamingModeStart;
 define pcodeop sveStreamingModeStop;
 
-SVAmodeOp: "SM" is b_0911=0x1 & b_08 { svcr[0,1] = b_08; }
-SVAmodeOp: "ZA" is b_0911=0x2 & b_08 { svcr[1,1] = b_08; }
+SVAmodeOp: "sm" is b_0911=0x1 & b_08 { svcr[0,1] = b_08; }
+SVAmodeOp: "za" is b_0911=0x2 & b_08 { svcr[1,1] = b_08; }
 SVAmodeOp: ""   is b_0911=0x3 & b_08 { svcr[0,1] = b_08; svcr[1,1] = b_08; }
 
-:smstart "{"^SVAmodeOp^"}"
+:smstart SVAmodeOp
 is b_1131=0x1aa068 & SVAmodeOp & b_08=1 & b_0507=0x3 & op4=0x1f {
 	build SVAmodeOp;
 	sveStreamingModeStart();
@@ -5467,7 +5467,7 @@ is b_1131=0x1aa068 & SVAmodeOp & b_08=1 & b_0507=0x3 & op4=0x1f {
 # xd503407f/mask=xfffff9ff NOT MATCHED BY ANY CONSTRUCTOR
 # b_0031=110101010000001101000..001111111
 
-:smstop "{"^SVAmodeOp^"}"
+:smstop SVAmodeOp
 is b_1131=0x1aa068 & SVAmodeOp & b_08=0 & b_0507=0x3 & op4=0x1f {
 	sveStreamingModeStop();
 }

@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- ================================================================
+     Generic MC68HC16Z2/Z3 processor spec (language 68HC16:BE:24:default)
+
+     This is the chip-generic profile: the CPU16 exception-vector layout
+     plus the MC68HC16Z2/Z3 on-chip peripheral map (ADC/MRM/GPT/SIM/SRAM/
+     QSM), taken straight from the MC68HC16ZUM manual. It carries NO
+     firmware-specific assumptions: no seeded entry points, no external
+     memory blocks, and neutral (reset) bank defaults. Use it as a clean
+     starting point for any HC16Z binary, then add your own entry points,
+     memory map, and bank context.
+
+     For the Chrysler JTEC+ PCM/TCM firmware, import with the
+     68HC16:BE:24:JTEC language instead (68HC16_JTEC.pspec), which layers
+     the firmware-specific entry points, memory blocks, and bank defaults
+     on top of this same peripheral map.
+     ================================================================ -->
+<processor_spec>
+  <programcounter register="PC"/>
+  <!-- ================================================================
+       Default extension fields: EK (extended addressing) and ZK (,Z modes)
+
+       Neutral CPU16 reset defaults: reset clears the K register (EK, XK,
+       YK, ZK); ZK, SK and PK are then loaded from the reset vector word at
+       $0000 (CPU16RM 9.6, Figure 9-3), so ZK is whatever the firmware's
+       vector says. If your firmware's vector or startup code fixes a data
+       bank, change the ZK defaults below to match.
+
+       Two settings carry them:
+         - tracked_set EK/ZK: the values the decompiler assumes at each
+           function entry. The p-code reads the EK and ZK registers, as the
+           CPU does, so a function that changes them (TBEK, TBZK, TXZ,
+           PULM K...) is followed; Set Register Values on EK/ZK overrides the
+           default for a range.
+         - context_set ctxEK: the bank the listing shows for EXT operands
+           (the 20-bit address printed next to the instruction). ctxZK is
+           no longer read by the instruction set; it is kept so existing
+           projects that set it still load.
+       Keep EK and ctxEK in step when you change a default.
+       ================================================================ -->
+  <context_data>
+    <context_set space="ram">
+        <set name="ctxEK" val="0"/>
+        <set name="ctxZK" val="0"/>
+    </context_set>
+    <tracked_set space="ram">
+        <set name="EK" val="0"/>
+        <set name="ZK" val="0"/>
+    </tracked_set>
+  </context_data>
+	<volatile outputop="write_volatile" inputop="read_volatile">
+    	<range space="ram" first="0x0FF700" last="0x0FF73F"/>  <!-- ADC -->
+    	<range space="ram" first="0x0FF820" last="0x0FF83F"/>  <!-- MRM -->
+    	<range space="ram" first="0x0FF900" last="0x0FF93F"/>  <!-- GPT -->
+    	<range space="ram" first="0x0FFA00" last="0x0FFA7F"/>  <!-- SIM -->
+    	<range space="ram" first="0x0FFB00" last="0x0FFB07"/>  <!-- SRAM ctrl -->
+    	<range space="ram" first="0x0FFC00" last="0x0FFDFF"/>  <!-- QSM + data RAMs -->
+	</volatile>
+  <default_symbols>
+
+    <!-- ================================================================
+         Vector Table (Bank 0, 0x0000-0x01FE)
+         Each entry is a 16-bit word.
+         Vectors 0-3 (0x0000-0x0006): Reset initialization values
+         Vectors 4+ (0x0008-0x01FE): Exception/interrupt handler addresses
+         ================================================================ -->
+    <!-- Vector table slots: 16-bit PC values only, NOT full 20-bit pointers.
+         Define as Word (2-byte) data in the listing, never as Pointer type.
+         The bank context is encoded separately in VEC_RESET_ZK_SK_PK. -->
+    <symbol name="VEC_RESET_ZK_SK_PK" address="ram:0x0000"/>
+    <symbol name="VEC_RESET_PC"       address="ram:0x0002"/>
+
+    <!-- NOTE: no handler entry points are seeded here. Exception-handler
+         addresses live in this binary's own vector table (0x0008-0x01FE);
+         they are firmware-specific, so on import Ghidra should follow the
+         reset vector / your own analysis rather than guessing. The JTEC+
+         preset (68HC16_JTEC.pspec) seeds its scanned handler addresses. -->
+    <symbol name="VEC_RESET_SP"       address="ram:0x0004"/>
+    <symbol name="VEC_RESET_IZ"       address="ram:0x0006"/>
+    <symbol name="VEC_BKPT"           address="ram:0x0008"/>
+    <symbol name="VEC_BERR"           address="ram:0x000A"/>
+    <symbol name="VEC_SWI"            address="ram:0x000C"/>
+    <symbol name="VEC_ILLEGAL"        address="ram:0x000E"/>
+    <symbol name="VEC_DIV_ZERO"       address="ram:0x0010"/>
+    <!-- 0x0012-0x001C: Reserved -->
+    <symbol name="VEC_UNINITIALIZED"  address="ram:0x001E"/>
+    <!-- 0x0020: Reserved -->
+    <symbol name="VEC_LVL1_AUTO"      address="ram:0x0022"/>
+    <symbol name="VEC_LVL2_AUTO"      address="ram:0x0024"/>
+    <symbol name="VEC_LVL3_AUTO"      address="ram:0x0026"/>
+    <symbol name="VEC_LVL4_AUTO"      address="ram:0x0028"/>
+    <symbol name="VEC_LVL5_AUTO"      address="ram:0x002A"/>
+    <symbol name="VEC_LVL6_AUTO"      address="ram:0x002C"/>
+    <symbol name="VEC_LVL7_AUTO"      address="ram:0x002E"/>
+    <symbol name="VEC_SPURIOUS"       address="ram:0x0030"/>
+    <!-- 0x0032-0x006E: Reserved -->
+    <!-- 0x0070-0x01FE: User-defined interrupt vectors -->
+    <symbol name="VEC_PICR"           address="ram:0x0070"/>
+
+    <!-- ================================================================
+         ADC - Analog-to-Digital Converter  ($YFF700 - $YFF73F)
+         Source: MC68HC16ZUM Table D-24, EQUATES.ASM
+         64 bytes
+         ================================================================ -->
+    <symbol name="ADCMCR"   address="ram:0x0FF700"/>  <!-- ADC Module Configuration Register -->
+    <symbol name="ADCTEST"  address="ram:0x0FF702"/>  <!-- ADC Test Register -->
+    <symbol name="PORTADA"  address="ram:0x0FF706"/>  <!-- ADC Port ADA Data Register -->
+    <symbol name="ADCTL0"   address="ram:0x0FF70A"/>  <!-- A/D Control Register 0 -->
+    <symbol name="ADCTL1"   address="ram:0x0FF70C"/>  <!-- A/D Control Register 1 -->
+    <symbol name="ADCSTAT"  address="ram:0x0FF70E"/>  <!-- ADC Status Register -->
+    <symbol name="RJURR0"   address="ram:0x0FF710"/>  <!-- Right-Justified Unsigned Result 0 -->
+    <symbol name="RJURR1"   address="ram:0x0FF712"/>  <!-- Right-Justified Unsigned Result 1 -->
+    <symbol name="RJURR2"   address="ram:0x0FF714"/>  <!-- Right-Justified Unsigned Result 2 -->
+    <symbol name="RJURR3"   address="ram:0x0FF716"/>  <!-- Right-Justified Unsigned Result 3 -->
+    <symbol name="RJURR4"   address="ram:0x0FF718"/>  <!-- Right-Justified Unsigned Result 4 -->
+    <symbol name="RJURR5"   address="ram:0x0FF71A"/>  <!-- Right-Justified Unsigned Result 5 -->
+    <symbol name="RJURR6"   address="ram:0x0FF71C"/>  <!-- Right-Justified Unsigned Result 6 -->
+    <symbol name="RJURR7"   address="ram:0x0FF71E"/>  <!-- Right-Justified Unsigned Result 7 -->
+    <symbol name="LJSRR0"   address="ram:0x0FF720"/>  <!-- Left-Justified Signed Result 0 -->
+    <symbol name="LJSRR1"   address="ram:0x0FF722"/>  <!-- Left-Justified Signed Result 1 -->
+    <symbol name="LJSRR2"   address="ram:0x0FF724"/>  <!-- Left-Justified Signed Result 2 -->
+    <symbol name="LJSRR3"   address="ram:0x0FF726"/>  <!-- Left-Justified Signed Result 3 -->
+    <symbol name="LJSRR4"   address="ram:0x0FF728"/>  <!-- Left-Justified Signed Result 4 -->
+    <symbol name="LJSRR5"   address="ram:0x0FF72A"/>  <!-- Left-Justified Signed Result 5 -->
+    <symbol name="LJSRR6"   address="ram:0x0FF72C"/>  <!-- Left-Justified Signed Result 6 -->
+    <symbol name="LJSRR7"   address="ram:0x0FF72E"/>  <!-- Left-Justified Signed Result 7 -->
+    <symbol name="LJURR0"   address="ram:0x0FF730"/>  <!-- Left-Justified Unsigned Result 0 -->
+    <symbol name="LJURR1"   address="ram:0x0FF732"/>  <!-- Left-Justified Unsigned Result 1 -->
+    <symbol name="LJURR2"   address="ram:0x0FF734"/>  <!-- Left-Justified Unsigned Result 2 -->
+    <symbol name="LJURR3"   address="ram:0x0FF736"/>  <!-- Left-Justified Unsigned Result 3 -->
+    <symbol name="LJURR4"   address="ram:0x0FF738"/>  <!-- Left-Justified Unsigned Result 4 -->
+    <symbol name="LJURR5"   address="ram:0x0FF73A"/>  <!-- Left-Justified Unsigned Result 5 -->
+    <symbol name="LJURR6"   address="ram:0x0FF73C"/>  <!-- Left-Justified Unsigned Result 6 -->
+    <symbol name="LJURR7"   address="ram:0x0FF73E"/>  <!-- Left-Justified Unsigned Result 7 -->
+
+    <!-- ================================================================
+         MRM - Masked ROM Module  ($YFF820 - $YFF83F)
+         Source: MC68HC16ZUM Table D-21, EQUATES.ASM
+         32 bytes (Z2/Z3 only)
+         ================================================================ -->
+    <symbol name="MRMCR"      address="ram:0x0FF820"/>  <!-- MRM Module Configuration Register -->
+    <symbol name="ROMBAH"     address="ram:0x0FF824"/>  <!-- ROM Array Base Address High -->
+    <symbol name="ROMBAL"     address="ram:0x0FF826"/>  <!-- ROM Array Base Address Low -->
+    <symbol name="RSIGHI"     address="ram:0x0FF828"/>  <!-- ROM Signature High -->
+    <symbol name="RSIGLO"     address="ram:0x0FF82A"/>  <!-- ROM Signature Low -->
+    <symbol name="ROMBS0"     address="ram:0x0FF830"/>  <!-- ROM Bootstrap Word 0 -->
+    <symbol name="ROMBS1"     address="ram:0x0FF832"/>  <!-- ROM Bootstrap Word 1 -->
+    <symbol name="ROMBS2"     address="ram:0x0FF834"/>  <!-- ROM Bootstrap Word 2 -->
+    <symbol name="ROMBS3"     address="ram:0x0FF836"/>  <!-- ROM Bootstrap Word 3 -->
+
+    <!-- ================================================================
+         GPT - General-Purpose Timer  ($YFF900 - $YFF93F)
+         Source: MC68HC16ZUM Table D-42, EQUATES.ASM
+         64 bytes
+         ================================================================ -->
+    <symbol name="GPTMCR"   address="ram:0x0FF900"/>  <!-- GPT Module Configuration Register -->
+    <symbol name="GPTMTR"   address="ram:0x0FF902"/>  <!-- GPT Module Test Register (reserved) -->
+    <symbol name="ICR"      address="ram:0x0FF904"/>  <!-- GPT Interrupt Configuration Register -->
+    <symbol name="ICPAR"    address="ram:0x0FF905"/>  <!-- GPT Input Capture Pulse Accumulator Register -->
+    <symbol name="DDRGP"    address="ram:0x0FF906"/>  <!-- Port GP Data Direction Register -->
+    <symbol name="PORTGP"   address="ram:0x0FF907"/>  <!-- Port GP Data Register -->
+    <symbol name="OC1M"     address="ram:0x0FF908"/>  <!-- Output Compare 1 Action Mask Register -->
+    <symbol name="OC1D"     address="ram:0x0FF909"/>  <!-- Output Compare 1 Action Data Register -->
+    <symbol name="TCNT"     address="ram:0x0FF90A"/>  <!-- Timer Counter Register -->
+    <symbol name="PACTL"    address="ram:0x0FF90C"/>  <!-- Pulse Accumulator Control Register -->
+    <symbol name="PACNT"    address="ram:0x0FF90D"/>  <!-- Pulse Accumulator Counter Register -->
+    <symbol name="TIC1"     address="ram:0x0FF90E"/>  <!-- Input Capture Register 1 -->
+    <symbol name="TIC2"     address="ram:0x0FF910"/>  <!-- Input Capture Register 2 -->
+    <symbol name="TIC3"     address="ram:0x0FF912"/>  <!-- Input Capture Register 3 -->
+    <symbol name="TOC1"     address="ram:0x0FF914"/>  <!-- Output Compare Register 1 -->
+    <symbol name="TOC2"     address="ram:0x0FF916"/>  <!-- Output Compare Register 2 -->
+    <symbol name="TOC3"     address="ram:0x0FF918"/>  <!-- Output Compare Register 3 -->
+    <symbol name="TOC4"     address="ram:0x0FF91A"/>  <!-- Output Compare Register 4 -->
+    <symbol name="TI4O5"    address="ram:0x0FF91C"/>  <!-- Input Capture 4 / Output Compare 5 -->
+    <symbol name="TCTL1"    address="ram:0x0FF91E"/>  <!-- Timer Control Register 1 -->
+    <symbol name="TCTL2"    address="ram:0x0FF91F"/>  <!-- Timer Control Register 2 -->
+    <symbol name="TMSK1"    address="ram:0x0FF920"/>  <!-- Timer Interrupt Mask Register 1 -->
+    <symbol name="TMSK2"    address="ram:0x0FF921"/>  <!-- Timer Interrupt Mask Register 2 -->
+    <symbol name="TFLG1"    address="ram:0x0FF922"/>  <!-- Timer Interrupt Flag Register 1 -->
+    <symbol name="TFLG2"    address="ram:0x0FF923"/>  <!-- Timer Interrupt Flag Register 2 -->
+    <symbol name="CFORC"    address="ram:0x0FF924"/>  <!-- Compare Force Register -->
+    <symbol name="PWMC"     address="ram:0x0FF925"/>  <!-- PWM Control Register C -->
+    <symbol name="PWMA"     address="ram:0x0FF926"/>  <!-- PWM Control Register A -->
+    <symbol name="PWMB"     address="ram:0x0FF927"/>  <!-- PWM Control Register B -->
+    <symbol name="PWMCNT"   address="ram:0x0FF928"/>  <!-- PWM Counter Register -->
+    <symbol name="PWMBUFA"  address="ram:0x0FF92A"/>  <!-- PWM Buffer Register A -->
+    <symbol name="PWMBUFB"  address="ram:0x0FF92B"/>  <!-- PWM Buffer Register B -->
+    <symbol name="PRESCL"   address="ram:0x0FF92C"/>  <!-- GPT Prescaler Register -->
+
+    <!-- ================================================================
+         SIM - System Integration Module  ($YFFA00 - $YFFA7F)
+         Source: MC68HC16ZUM Table D-2, EQUATES.ASM
+         128 bytes
+         ================================================================ -->
+    <symbol name="SIMCR"    address="ram:0x0FFA00"/>  <!-- SIM Module Configuration Register -->
+    <symbol name="SIMTR"    address="ram:0x0FFA02"/>  <!-- SIM Test Register -->
+    <symbol name="SYNCR"    address="ram:0x0FFA04"/>  <!-- Clock Synthesizer Control Register -->
+    <symbol name="RSR"      address="ram:0x0FFA07"/>  <!-- Reset Status Register -->
+    <symbol name="SIMTRE"   address="ram:0x0FFA08"/>  <!-- SIM Test Register E -->
+    <symbol name="PORTE0"   address="ram:0x0FFA11"/>  <!-- Port E Data Register 0 -->
+    <symbol name="PORTE1"   address="ram:0x0FFA13"/>  <!-- Port E Data Register 1 -->
+    <symbol name="DDRE"     address="ram:0x0FFA15"/>  <!-- Port E Data Direction Register -->
+    <symbol name="PEPAR"    address="ram:0x0FFA17"/>  <!-- Port E Pin Assignment Register -->
+    <symbol name="PORTF0"   address="ram:0x0FFA19"/>  <!-- Port F Data Register 0 -->
+    <symbol name="PORTF1"   address="ram:0x0FFA1B"/>  <!-- Port F Data Register 1 -->
+    <symbol name="DDRF"     address="ram:0x0FFA1D"/>  <!-- Port F Data Direction Register -->
+    <symbol name="PFPAR"    address="ram:0x0FFA1F"/>  <!-- Port F Pin Assignment Register -->
+    <symbol name="SYPCR"    address="ram:0x0FFA21"/>  <!-- System Protection Control Register -->
+    <symbol name="PICR"     address="ram:0x0FFA22"/>  <!-- Periodic Interrupt Control Register -->
+    <symbol name="PITR"     address="ram:0x0FFA24"/>  <!-- Periodic Interrupt Timer Register -->
+    <symbol name="SWSR"     address="ram:0x0FFA27"/>  <!-- Software Watchdog Service Register -->
+    <symbol name="TSTMSRA"  address="ram:0x0FFA30"/>  <!-- Test Module Master Shift A Register -->
+    <symbol name="TSTMSRB"  address="ram:0x0FFA32"/>  <!-- Test Module Master Shift B Register -->
+    <symbol name="TSTSC"    address="ram:0x0FFA34"/>  <!-- Test Module Shift Count Register -->
+    <symbol name="TSTRC"    address="ram:0x0FFA36"/>  <!-- Test Module Repetition Count Register -->
+    <symbol name="CREG"     address="ram:0x0FFA38"/>  <!-- Test Module Control Register -->
+    <symbol name="DREG"     address="ram:0x0FFA3A"/>  <!-- Test Module Distributed Register -->
+    <symbol name="PORTC"    address="ram:0x0FFA41"/>  <!-- Port C Data Register -->
+    <symbol name="CSPAR0"   address="ram:0x0FFA44"/>  <!-- Chip-Select Pin Assignment Register 0 -->
+    <symbol name="CSPAR1"   address="ram:0x0FFA46"/>  <!-- Chip-Select Pin Assignment Register 1 -->
+    <symbol name="CSBARBT"  address="ram:0x0FFA48"/>  <!-- Chip-Select Base Address Register Boot -->
+    <symbol name="CSORBT"   address="ram:0x0FFA4A"/>  <!-- Chip-Select Option Register Boot -->
+    <symbol name="CSBAR0"   address="ram:0x0FFA4C"/>  <!-- Chip-Select Base Address Register 0 -->
+    <symbol name="CSOR0"    address="ram:0x0FFA4E"/>  <!-- Chip-Select Option Register 0 -->
+    <symbol name="CSBAR1"   address="ram:0x0FFA50"/>  <!-- Chip-Select Base Address Register 1 -->
+    <symbol name="CSOR1"    address="ram:0x0FFA52"/>  <!-- Chip-Select Option Register 1 -->
+    <symbol name="CSBAR2"   address="ram:0x0FFA54"/>  <!-- Chip-Select Base Address Register 2 -->
+    <symbol name="CSOR2"    address="ram:0x0FFA56"/>  <!-- Chip-Select Option Register 2 -->
+    <symbol name="CSBAR3"   address="ram:0x0FFA58"/>  <!-- Chip-Select Base Address Register 3 -->
+    <symbol name="CSOR3"    address="ram:0x0FFA5A"/>  <!-- Chip-Select Option Register 3 -->
+    <symbol name="CSBAR4"   address="ram:0x0FFA5C"/>  <!-- Chip-Select Base Address Register 4 -->
+    <symbol name="CSOR4"    address="ram:0x0FFA5E"/>  <!-- Chip-Select Option Register 4 -->
+    <symbol name="CSBAR5"   address="ram:0x0FFA60"/>  <!-- Chip-Select Base Address Register 5 -->
+    <symbol name="CSOR5"    address="ram:0x0FFA62"/>  <!-- Chip-Select Option Register 5 -->
+    <symbol name="CSBAR6"   address="ram:0x0FFA64"/>  <!-- Chip-Select Base Address Register 6 -->
+    <symbol name="CSOR6"    address="ram:0x0FFA66"/>  <!-- Chip-Select Option Register 6 -->
+    <symbol name="CSBAR7"   address="ram:0x0FFA68"/>  <!-- Chip-Select Base Address Register 7 -->
+    <symbol name="CSOR7"    address="ram:0x0FFA6A"/>  <!-- Chip-Select Option Register 7 -->
+    <symbol name="CSBAR8"   address="ram:0x0FFA6C"/>  <!-- Chip-Select Base Address Register 8 -->
+    <symbol name="CSOR8"    address="ram:0x0FFA6E"/>  <!-- Chip-Select Option Register 8 -->
+    <symbol name="CSBAR9"   address="ram:0x0FFA70"/>  <!-- Chip-Select Base Address Register 9 -->
+    <symbol name="CSOR9"    address="ram:0x0FFA72"/>  <!-- Chip-Select Option Register 9 -->
+    <symbol name="CSBAR10"  address="ram:0x0FFA74"/>  <!-- Chip-Select Base Address Register 10 -->
+    <symbol name="CSOR10"   address="ram:0x0FFA76"/>  <!-- Chip-Select Option Register 10 -->
+
+    <!-- ================================================================
+         SRAM - Standby RAM Module  ($YFFB00 - $YFFB07)
+         Source: MC68HC16ZUM Table D-19, EQUATES.ASM
+         8 bytes
+         ================================================================ -->
+    <symbol name="RAMMCR"   address="ram:0x0FFB00"/>  <!-- RAM Module Configuration Register -->
+    <symbol name="RAMTST"   address="ram:0x0FFB02"/>  <!-- RAM Test Register -->
+    <symbol name="RAMBAH"   address="ram:0x0FFB04"/>  <!-- RAM Array Base Address High -->
+    <symbol name="RAMBAL"   address="ram:0x0FFB06"/>  <!-- RAM Array Base Address Low -->
+
+    <!-- ================================================================
+         QSM - Queued Serial Module  ($YFFC00 - $YFFDFF)
+         Includes SCI (Serial Communications Interface) and
+         SPI (Serial Peripheral Interface)
+         Source: MC68HC16ZUM Table D-31, EQUATES.ASM
+         512 bytes (includes data RAM)
+         ================================================================ -->
+    <symbol name="QSMCR"    address="ram:0x0FFC00"/>  <!-- QSM Module Configuration Register -->
+    <symbol name="QTEST"    address="ram:0x0FFC02"/>  <!-- QSM Test Register -->
+    <symbol name="QILR"     address="ram:0x0FFC04"/>  <!-- QSM Interrupt Level Register -->
+    <symbol name="QIVR"     address="ram:0x0FFC05"/>  <!-- QSM Interrupt Vector Register -->
+    <symbol name="SCCR0"    address="ram:0x0FFC08"/>  <!-- SCI Control Register 0 -->
+    <symbol name="SCCR1"    address="ram:0x0FFC0A"/>  <!-- SCI Control Register 1 -->
+    <symbol name="SCSR"     address="ram:0x0FFC0C"/>  <!-- SCI Status Register -->
+    <symbol name="SCDR"     address="ram:0x0FFC0E"/>  <!-- SCI Data Register -->
+    <symbol name="PORTQS"   address="ram:0x0FFC15"/>  <!-- Port QS Data Register -->
+    <symbol name="PQSPAR"   address="ram:0x0FFC16"/>  <!-- Port QS Pin Assignment Register -->
+    <symbol name="DDRQS"    address="ram:0x0FFC17"/>  <!-- Port QS Data Direction Register -->
+    <symbol name="SPCR0"    address="ram:0x0FFC18"/>  <!-- SPI Control Register 0 -->
+    <symbol name="SPCR1"    address="ram:0x0FFC1A"/>  <!-- SPI Control Register 1 -->
+    <symbol name="SPCR2"    address="ram:0x0FFC1C"/>  <!-- SPI Control Register 2 -->
+    <symbol name="SPCR3"    address="ram:0x0FFC1E"/>  <!-- SPI Control Register 3 -->
+    <symbol name="SPSR"     address="ram:0x0FFC1F"/>  <!-- SPI Status Register -->
+
+    <!-- QSM Receive Data RAM (0x0FFD00-0x0FFD1F, 16 words) -->
+    <symbol name="RR_BASE"  address="ram:0x0FFD00"/>  <!-- Receive Data RAM base -->
+    <!-- QSM Transmit Data RAM (0x0FFD20-0x0FFD3F, 16 words) -->
+    <symbol name="TR_BASE"  address="ram:0x0FFD20"/>  <!-- Transmit Data RAM base -->
+    <!-- QSM Command RAM (0x0FFD40-0x0FFD5F, 16 words) -->
+    <symbol name="CR_BASE"  address="ram:0x0FFD40"/>  <!-- Command RAM base -->
+
+  </default_symbols>
+
+  <!-- ================================================================
+       Memory Blocks (chip-generic)
+
+       Only the on-chip I/O register blocks are declared here. Their
+       location (bank 0xF, 0x0FFxxx) is the MC68HC16Z2/Z3 reset default
+       from MC68HC16ZUM Figure 3-9.
+
+       NOT declared (firmware/board-specific; add per target):
+         - Internal SRAM: its base is programmed at runtime via
+           RAMBAH/RAMBAL, so there is no universal address.
+         - External memory / peripherals: mapped by the chip-select
+           registers (CSBARx/CSORx) your firmware configures.
+       The JTEC+ preset (68HC16_JTEC.pspec) declares both, at the
+       addresses that firmware's startup code programs.
+       ================================================================ -->
+  <default_memory_blocks>
+    <!-- I/O register blocks: per-peripheral for better Ghidra visibility.
+         Sizes from MC68HC16ZUM Figure 3-9 (Z2/Z3 address map). -->
+    <memory_block name="ADC_REGS"  start_address="ram:0x0FF700" length="0x40"  initialized="false" mode="rwv"/>
+    <memory_block name="MRM_REGS"  start_address="ram:0x0FF820" length="0x20"  initialized="false" mode="rwv"/>
+    <memory_block name="GPT_REGS"  start_address="ram:0x0FF900" length="0x40"  initialized="false" mode="rwv"/>
+    <memory_block name="SIM_REGS"  start_address="ram:0x0FFA00" length="0x80"  initialized="false" mode="rwv"/>
+    <memory_block name="SRAM_REGS" start_address="ram:0x0FFB00" length="0x08"  initialized="false" mode="rwv"/>
+    <memory_block name="QSM_REGS"  start_address="ram:0x0FFC00" length="0x200" initialized="false" mode="rwv"/>
+  </default_memory_blocks>
+
+  <register_data>
+    <register name="A"    group="GP"/>
+    <register name="B"    group="GP"/>
+    <register name="D"    group="GP"/>
+    <register name="E"    group="GP"/>
+    <register name="IX"   group="Index"/>
+    <register name="IY"   group="Index"/>
+    <register name="IZ"   group="Index"/>
+    <register name="SSP"  group="Stack"/>
+    <register name="SP"   group="Stack"/>
+    <register name="PC"   group="PC"/>
+    <register name="CCR"  group="Flags"/>
+    <register name="EK"   group="Extension"/>
+    <register name="XK"   group="Extension"/>
+    <register name="YK"   group="Extension"/>
+    <register name="ZK"   group="Extension"/>
+    <register name="SK"   group="Extension"/>
+    <register name="PK"   group="Extension"/>
+    <register name="HR"   group="MAC"/>
+    <register name="IR"   group="MAC"/>
+    <register name="AM"   group="MAC"/>
+    <register name="AM_EXT" group="MAC"/>
+    <register name="XMSK" group="MAC"/>
+    <register name="YMSK" group="MAC"/>
+  </register_data>
+</processor_spec>

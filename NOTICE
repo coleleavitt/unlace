@@ -150,6 +150,10 @@ specs/Ghidra/Processors/PicoBlaze vendors the Xilinx PicoBlaze (KCPSM) SLEIGH sp
 aleph-void/ghidra-picoblaze-kcpsm (https://github.com/aleph-void/ghidra-picoblaze-kcpsm), released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/MC68HC16 vendors the Motorola MC68HC16 SLEIGH specification of
+aleph-void/Ghidra-Processor-MC68HC16Z (https://github.com/aleph-void/Ghidra-Processor-MC68HC16Z), a fork of HausRummel/Ghidra-Processor-MC68HC16Z, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

@@ -4198,6 +4198,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `PDK` | Padauk PDK (PMS/PFS) | `pdk13:LE:16:default`, `pms152:LE:16:default`, `pms132:LE:16:default`, `pms134:LE:16:default`, `pmc884:LE:16:default` | aleph-void/ghidra-pdk (fork of CUB3D/ghidra-pdk) @ `d4cdebc983`, Apache-2.0 |
 | `PIC16F153xx` | Microchip PIC16F153xx enhanced midrange | `PIC-16:LE:16:PIC-16F153xx` | aleph-void/ghidra-pic16f153xx @ `85c02a04a0`, Apache-2.0 |
 | `PicoBlaze` | Xilinx PicoBlaze (KCPSM) | `KCPSM3:BE:24:default`, `KCPSM6:BE:24:default` | aleph-void/ghidra-picoblaze-kcpsm @ `ba271a21d6`, Apache-2.0 |
+| `MC68HC16` | Motorola MC68HC16 | `68HC16:BE:24:cpu16`, `68HC16:BE:24:default`, `68HC16:BE:24:JTEC` | aleph-void/Ghidra-Processor-MC68HC16Z (fork of HausRummel/Ghidra-Processor-MC68HC16Z) @ `974d796590`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

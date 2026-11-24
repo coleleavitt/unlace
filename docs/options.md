@@ -587,10 +587,10 @@ Three tiers:
 | a declared local is never written and never read anywhere in the function | [`indirectonly`](#indirectonly----on--off-default-off) |
 | a `vN = slot;` ... `slot = vN;` round-trip copy pair around a loop that only reads the slot | [`indirectonly`](#indirectonly----on--off-default-off) |
 | a call result assigned to a temporary that is immediately assigned to a stack slot | [`indirectonly`](#indirectonly----on--off-default-off) |
-| one local is assigned unrelated values in different parts of the function | [`typemerge`](#typemerge----on--storage--off-default-on) |
-| a loop counter reused later as an unrelated result or return code | [`typemerge`](#typemerge----on--storage--off-default-on) |
-| two source variables of the same type print as one name | [`typemerge`](#typemerge----on--storage--off-default-on) |
-| a saved argument and a later call result share one declared local | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| one local is assigned unrelated values in different parts of the function | [`typemerge`](#typemerge----on--storage--off-default-storage) |
+| a loop counter reused later as an unrelated result or return code | [`typemerge`](#typemerge----on--storage--off-default-storage) |
+| two source variables of the same type print as one name | [`typemerge`](#typemerge----on--storage--off-default-storage) |
+| a saved argument and a later call result share one declared local | [`typemerge`](#typemerge----on--storage--off-default-storage) |
 | one local holds a value computed and used on one branch arm and an unrelated value from the other arm | [`phiarm`](#phiarm----on--off-default-off) |
 | a variable is assigned different kinds of values on two paths that meet at a join | [`phiarm`](#phiarm----on--off-default-off) |
 | two source variables that meet only at a join print as one name | [`phiarm`](#phiarm----on--off-default-off) |
@@ -744,6 +744,9 @@ Three tiers:
 | many sub_<addr> functions that end in _Unwind_Resume() | [`ehcold`](#ehcold----on--off-default-on) |
 | a stripped c++ binary's function list is full of cleanup fragments from .text.unlikely | [`ehcold`](#ehcold----on--off-default-on) |
 | a function that starts by reading an undefined rbx and frees buffers before _Unwind_Resume | [`ehcold`](#ehcold----on--off-default-on) |
+| many sub_<addr> functions that are a single ud2 at the start of .text | [`functails`](#functails----on--off-default-off) |
+| a function jumps to sub_<addr> for its error path instead of showing it | [`functails`](#functails----on--off-default-off) |
+| a gcc .cold part is listed as its own function | [`functails`](#functails----on--off-default-off) |
 | an mfc window class's message handlers are missing from the function list | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
 | a function in an mfc image spans several handlers that a message map names | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
 | IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
@@ -1323,6 +1326,8 @@ Three tiers:
 | avx-512 arithmetic prints as vaddps_avx512f | [`avxintrinsics`](#avxintrinsics----on--off-default-on) |
 | a global one function accessed whole prints as unrelated dat_ names in another | [`mapglobalsyms`](#mapglobalsyms----on--off-default-off) |
 | later functions do not see the DAT_ symbol an earlier decompile created, unlike upstream decomp_dbg sessions | [`mapglobalsyms`](#mapglobalsyms----on--off-default-off) |
+| calls to empty functions read as sub_<addr>() like any other | [`nullsubs`](#nullsubs----on--off-default-off) |
+| a virtual table slot points at a function that only returns | [`nullsubs`](#nullsubs----on--off-default-off) |
 | an untyped MIPS32 big-endian producer loses its low return word despite a declared 64-bit consumer | [`callwide`](#callwide----on--off-default-off) |
 | producer and caller disagree about a complete big-endian eight-byte integer return | [`callwide`](#callwide----on--off-default-off) |
 | a long long return on a big-endian 32-bit target prints CONCAT44 with the low word first | [`bejoin`](#bejoin----off--evidence--callers--on-default-callers) |
@@ -2680,13 +2685,13 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P6/merge-aggressiveness · ghidra · presentation-default · kuna-indirectonly
 - **Example:** `option indirectonly on`
 
-### `typemerge` -- on | storage | off, default `on`
+### `typemerge` -- on | storage | off, default `storage`
 
 - **Symptoms:** one local is assigned unrelated values in different parts of the function; a loop counter reused later as an unrelated result or return code; two source variables of the same type print as one name; a saved argument and a later call result share one declared local.
-- **What it does:** Narrow which variables ActionMergeType joins. Merge::mergeByDatatype (merge.cc:359-401) gathers every HighVariable of the function, groups them by identical data-type, and lets mergeLinear join any two in a group whose lifetimes do not overlap, wherever each is stored: two distinct source variables that only share a type (two `int` counters of two loops, a saved argument and a later result) print as one reused local, and a value that crossed a call or a phi in another register becomes the same name as an unrelated one. `on` is that upstream pass byte-for-byte. `storage` keeps the type grouping but lets a high join a group only when every instance of it and every instance of the group's first high sit in one and the same storage (same space, offset and size; kuna_typemerge.rs (single_storage)), so a register or stack slot that the compiler reused for one variable still reads as one variable while values held in different registers stay apart. `off` skips the type grouping entirely. Both narrower modes leave the required merges, ActionMergeCopy, ActionMergeAdjacent, ActionDominantCopy and the prior-decompile variable groups (kuna_stablenames.rs (variable_groups)) untouched; they only drop speculative joins, so every variable they keep apart is one upstream would have printed as the same name.
-- **When to flip:** ON (upstream) by default: it is the pass that folds dozens of same-typed temporaries into a handful of reused locals, and the narrower modes print more declarations. Flip to `storage` when one local is assigned values that clearly mean different things in different parts of the function (a loop counter reused as a return code, a saved argument overwritten by an unrelated result) and you want the variables the machine kept in different places printed apart; it keeps a variable the compiler spilled to one slot or held in one register whole. Flip to `off` to see every speculative same-type join undone, at the cost of the most declarations. The narrower modes have not yet been measured against DWARF variable boundaries on a corpus, which is what a default change would need.
+- **What it does:** Narrow which variables ActionMergeType joins. Merge::mergeByDatatype (merge.cc:359-401) gathers every HighVariable of the function, groups them by identical data-type, and lets mergeLinear join any two in a group whose lifetimes do not overlap, wherever each is stored: two distinct source variables that only share a type (two `int` counters of two loops, a saved argument and a later result) print as one reused local, and a value that crossed a call or a phi in another register becomes the same name as an unrelated one. `on` is that upstream pass byte-for-byte. `storage` keeps the type grouping but lets a high join a group only when it shares a storage location (same space, offset and size) with the group's first high, comparing every storage the instances of each sit in (kuna_typemerge.rs (storages)), so a register or stack slot that the compiler reused for one variable still reads as one variable, a high that an earlier merge spread over several registers still joins one held in any of them, and values that never shared a register or slot stay apart. `off` skips the type grouping entirely. Both narrower modes leave the required merges, ActionMergeCopy, ActionMergeAdjacent, ActionDominantCopy and the prior-decompile variable groups (kuna_stablenames.rs (variable_groups)) untouched; they only drop speculative joins, so every variable they keep apart is one upstream would have printed as the same name.
+- **When to flip:** STORAGE by default (issue #20, DecBench O2-noinline, all 40 projects, 35,052 functions): against DWARF register locations it cut decompiled locals that stand for several source variables by 13% and source variables spread over several locals by 6%, and 2,724 functions moved closer to the source variables while 610 moved away, with GED -2 over 33,395 functions (5 better, 4 worse) and type_match unchanged; it prints about 10% more declarations, mostly loop counters and pointers of separate loops that get their own names. Flip to `on` for the upstream output, where same-typed temporaries in different registers fold into a handful of reused locals. Flip to `off` to see every speculative same-type join undone: it removes more merges than `storage` but splits more source variables and prints about 30% more declarations.
 - **Where / provenance:** P6/merge-aggressiveness · kuna · presentation-default · unlace-20
-- **Example:** `option typemerge storage`
+- **Example:** `option typemerge on`
 
 ### `phiarm` -- on | off, default `off`
 
@@ -3043,6 +3048,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** On by default. Keep it on for gcc -O2 C++ binaries, where cleanup ladders otherwise flood the function list with sub_<addr> fragments that start from an undefined register and end in _Unwind_Resume(). Flip OFF to list and decompile the cold cleanup code on its own (to read what a destructor chain frees).
 - **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · ida95-22-ehcold
 - **Example:** `--option ehcold off`
+
+### `functails` -- on | off, default `off`
+
+- **Symptoms:** many sub_<addr> functions that are a single ud2 at the start of .text; a function jumps to sub_<addr> for its error path instead of showing it; a gcc .cold part is listed as its own function.
+- **What it does:** Keep every single-owner .cold part out of the function list, as IDA keeps a function tail (AF_FTAIL, append_func_tail). GCC's hot/cold split moves a function's unlikely blocks (ud2 traps, error paths, the cleanups ehcold already takes) into .text.unlikely, each with its own FDE; the FDE oracle listed each as a function, so the owner's jump into it printed as a call to sub_<addr> and the part decompiled alone. With the option on, an FDE body with no function symbol at its start, targeted by no direct call, entered by direct jmp/jcc rel32 only from ONE other FDE body (its owner), laid out before that owner and starting off the 16-byte function alignment contributes no entries: the commit drops every discovered entry inside it, its start included, and the owner's flow follows its jumps into the part. ehcold is the landing-pad case of the same rule. x86/x86-64 ELF only.
+- **When to flip:** Off by default. Turn it on for a gcc -O2 x86-64 ELF whose function list carries many small sub_<addr> fragments at the start of .text that only one function jumps to (a lone ud2, an error call), so each owner prints its unlikely paths in place instead of as calls. On IDA's elf.so it keeps 135 of IDA's 154 FDE-backed tail chunks with their owners and drops no function IDA keeps. Leave it off to list and decompile the cold parts on their own.
+- **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · ida-gap-kernel-autoanalysis-1
+- **Example:** `--option functails on`
 
 ### `mfcmsgmap` -- on | off, default `on`
 
@@ -4247,6 +4260,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Off by default: the output of a function then depends on which functions were decompiled before it in the same session. Turn on to get upstream's session behaviour: a global a first function read as 8 bytes stays one 8-byte object, so a later function's 4-byte access to its upper half prints as a piece of it (dat_x._4_4_) instead of a separate dat_<addr+4>.
 - **Where / provenance:** P9/naming-policy · ghidra · presentation-default · kuna-mapglobals-dat-symbols
 - **Example:** `option mapglobalsyms on`
+
+### `nullsubs` -- on | off, default `off`
+
+- **Symptoms:** calls to empty functions read as sub_<addr>() like any other; a virtual table slot points at a function that only returns.
+- **What it does:** Name a placeholder function whose body is a bare return nullsub_<addr>, IDA's AF_NULLSUB. After at most one instruction that emits no p-code (endbr64, bti), the first instruction must be a return doing nothing but its own stack and link-register work (on MIPS and SPARC, where those ops would be a delay slot's, the return alone). The placeholder's address spelling is kept (sub_401000 becomes nullsub_401000); a function with a real name, or whose new name is taken, is left alone.
+- **When to flip:** Off by default. Turn it on to tell empty callbacks, stubbed-out hooks and no-op virtual functions apart from code at a glance: calls to them read nullsub_<addr>(), as in IDA (41 on IDA's elf.so).
+- **Where / provenance:** P1/code-data-partition · kuna · presentation-default · ida-gap-kernel-autoanalysis-5
+- **Example:** `--option nullsubs on`
 
 ### `callwide` -- on | off, default `off`
 

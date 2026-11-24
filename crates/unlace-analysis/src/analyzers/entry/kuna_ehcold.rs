@@ -34,6 +34,9 @@ use super::{executable_sections, existing_function_addrs, scan_eh_frame_landing_
 /// How far into a landing pad its jump to the cold part may sit.
 const PAD_STUB: u64 = 16;
 
+/// The function alignment GCC and Clang use on x86 at -O2, which a `.cold` part does not get.
+const TAIL_ALIGN: u64 = 16;
+
 /// (kuna) The EH cold-fragment pass (`ehcold`), gated at the commit.
 pub struct EhColdPass;
 
@@ -63,12 +66,78 @@ impl AnalysisPass for EhColdPass {
     }
 }
 
+/// (kuna) The function-tail pass (`functails`), gated at the commit. Its tails
+/// travel on the same channel as the EH cold parts, so the commit drops every
+/// discovered entry inside one, and the owner's flow follows its jumps into the
+/// tail as into any other block of its own.
+pub struct FuncTailsPass;
+
+impl AnalysisPass for FuncTailsPass {
+    fn phase(&self) -> Phase {
+        Phase::P1
+    }
+
+    fn id(&self) -> &'static str {
+        "functails"
+    }
+
+    fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
+        let file = ctx.file;
+        if !matches!(file.format(), object::BinaryFormat::Elf)
+            || !matches!(
+                file.architecture(),
+                object::Architecture::X86_64 | object::Architecture::I386
+            )
+        {
+            return AnalysisOutput::default();
+        }
+        AnalysisOutput {
+            eh_cold: cold_tails(file, ctx.bytes),
+            ..AnalysisOutput::default()
+        }
+    }
+}
+
 /// The FDE bodies that are another function's exception-cleanup cold part.
 pub fn eh_cold_parts(file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
     let pads = scan_eh_frame_landing_pads_owned(file);
     if pads.is_empty() {
         return Vec::new();
     }
+    single_owner_parts(file, bytes)
+        .into_iter()
+        .filter(|(_, owner, srcs)| {
+            srcs.iter().any(|&src| {
+                pads.iter()
+                    .any(|&(o, pad)| o == owner.0 && pad <= src && src < pad + PAD_STUB)
+            })
+        })
+        .map(|(body, _, _)| body)
+        .collect()
+}
+
+/// (kuna `functails`) The FDE bodies that are a tail of another function: entered
+/// only by direct jumps from one other FDE body (its owner), never called, with no
+/// function symbol at the start, laid out before the owner and starting off the
+/// 16-byte function alignment, where GCC's hot/cold split puts a `.cold` part.
+/// The landing-pad evidence [`eh_cold_parts`] needs is not asked for, so this also
+/// takes `ud2` traps, error paths and other unlikely blocks; the alignment and
+/// placement tests keep a real function that only one other function tail-calls.
+pub fn cold_tails(file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
+    single_owner_parts(file, bytes)
+        .into_iter()
+        .filter(|&((s, _), owner, _)| s % TAIL_ALIGN != 0 && s < owner.0)
+        .map(|(body, _, _)| body)
+        .collect()
+}
+
+/// Every FDE body with no function symbol at its start and no direct call into
+/// it, whose direct `jmp`/`jcc rel32` entries from outside all come from one other
+/// FDE body: `(body, owner, jump sources)`.
+fn single_owner_parts(
+    file: &object::File,
+    bytes: &[u8],
+) -> Vec<((u64, u64), (u64, u64), Vec<u64>)> {
     let bodies = scan_fde_bodies(file);
     let named = existing_function_addrs(file, bytes);
     let execs = executable_sections(file);
@@ -89,25 +158,19 @@ pub fn eh_cold_parts(file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
     called.sort_unstable();
     incoming
         .into_iter()
-        .filter(|&((s, e), ref srcs)| {
+        .filter_map(|((s, e), srcs)| {
             if named.binary_search(&s).is_ok()
                 || called[called.partition_point(|&c| c < s)..]
                     .first()
                     .is_some_and(|&c| c < e)
             {
-                return false;
+                return None;
             }
-            let Some(owner) = containing_body(&bodies, srcs[0]) else {
-                return false;
-            };
+            let owner = containing_body(&bodies, srcs[0])?;
             srcs.iter()
                 .all(|&src| containing_body(&bodies, src) == Some(owner))
-                && srcs.iter().any(|&src| {
-                    pads.iter()
-                        .any(|&(o, pad)| o == owner.0 && pad <= src && src < pad + PAD_STUB)
-                })
+                .then_some(((s, e), owner, srcs))
         })
-        .map(|(body, _)| body)
         .collect()
 }
 

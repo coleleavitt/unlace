@@ -3687,6 +3687,14 @@ funcsym stream:
   calls `os_unfair_lock_lock_with_options` through an island on iOS 16 and
   through `HomeKit`'s rewritten stub on iOS 14, and both render the name.
 
+- **Empty functions** (kuna `nullsubs`, default off,
+  `crates/unlace-console/src/engine/kuna_thunknames.rs (name_nullsubs)`): after
+  the thunks are named, a discovered function still named by a placeholder whose
+  first instruction, after at most one that emits no p-code (`endbr64`, `bti`), is
+  a return doing nothing but its own stack and link-register work (`LOAD`,
+  `INT_ADD`, `INT_AND`, `COPY`) becomes `nullsub_<addr>` with the placeholder's
+  address spelling, IDA's `AF_NULLSUB`. On MIPS and SPARC those ops would be the
+  delay slot's, so the return must be alone. A name in use is left alone.
 - **Jump thunks** (kuna `thunknames`, default on,
   `crates/unlace-console/src/engine/kuna_thunknames.rs`): a function
   whose first instruction is a direct unconditional branch is a thunk (a
@@ -10528,6 +10536,23 @@ FDE). The commit drops every discovered entry inside such a body, its start
 included, after the `coldentry` entries are added. A cold throw path reached by
 an ordinary branch (`may_throw.cold`) is not a landing-pad target and stays a
 function. x86/x86-64 ELF only.
+
+**(kuna) Or any other single-owner cold part** (`functails`, default off;
+`crates/unlace-analysis/src/analyzers/entry/kuna_ehcold.rs (cold_tails)`). The
+same test without the landing pad takes every `.cold` part IDA keeps as a
+function tail (`AF_FTAIL`, libida `append_func_tail`): a lone `ud2` after an
+assertion, an error call, an unlikely branch. An FDE body qualifies when no
+function symbol names its start, no direct `call rel32` targets it, every direct
+`jmp`/`jcc rel32` into it comes from one other FDE body (its owner), it lies
+before that owner, and its start is off the 16-byte alignment GCC and Clang give
+a function at -O2 but not a cold part. The last two tests keep a real function
+that only one other function tail-calls. The bodies go out on the `ehcold`
+channel, so the commit drops every entry inside one; the owner's flow then
+follows its jumps into the part like into any block of its own, so the unlikely
+path prints in place. Against IDA 9.5's own databases of its loaders, a
+byte-scan prototype of the rule selects 54 of 62 FDE-backed tails on pe.so, 135 of 154 on elf.so, 21 of 24 on
+coff.so and 128 of 140 on dex.so, and one function IDA keeps (pe.so 0x62fe).
+x86/x86-64 ELF only.
 
 **(kuna) The pads that stay hidden are named** (`ehnote`, default-**on**;
 `crates/unlace-analysis/src/analyzers/entry/kuna_itaniumeh.rs (eh_notes)`).

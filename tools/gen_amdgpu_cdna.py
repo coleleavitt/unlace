@@ -114,7 +114,8 @@ def inline(path):
     for line in open(path).read().split('\n'):
         m = re.match(r'@include "([^"]+)"', line)
         if m:
-            out.extend(open(os.path.join(os.path.dirname(path), m.group(1))).read().split('\n'))
+            name = m.group(1).replace('amdgcn_gfx9_mem.sinc', 'amdgcn_cdna_mem.sinc')   # acc in place of tfe
+            out.extend(open(os.path.join(os.path.dirname(path), name)).read().split('\n'))
         else:
             out.append(line)
     return out
@@ -218,10 +219,11 @@ def gen_include(m, names, mf, cpu, base):
         if n < 2:
             continue
         for k in range(n):
-            if n > 2:   # single AGPRs and pairs are defined in the spec, before the context
+            if n > 2 and not re.search(r'define register offset=0x6000 size=%d \[ at' % (4 * n), base):
+                # single AGPRs and pairs are defined in the spec, before the context
                 w('define register offset=0x%x size=%d [ %s ];' % (0x6000 + 4 * k, 4 * n,
                                                                    ' '.join(at(s, n) for s in range(k, 256 - n + 1, n))))
-            if n > 2:
+            if n > 2 and not re.search(r'define register offset=0x1000 size=%d \[ vt' % (4 * n), base):
                 w('define register offset=0x%x size=%d [ %s ];' % (0x1000 + 4 * k, 4 * n,
                                                                    ' '.join(vt(s, n) for s in range(k, 256 - n + 1, n))))
     ops = set()

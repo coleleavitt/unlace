@@ -2223,6 +2223,21 @@ test = "amdgpu_gfx900_sdwa_decompiles"
 address = "0x200"
 expect = ["* 0x100", "<< 0x10;"]
 
+# `fixtures/amdgpu/gfx900_graphics.ll` for gfx900: VINTRP attribute interpolation feeding an MIMG
+# sample, and MTBUF typed buffer accesses.
+[[family]]
+name = "amdgpu_gfx900_graphics"
+language = "AMDGPU:LE:64:GFX9"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/gfx900_graphics.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx900_interp_image_decompiles"
+address = "0x0"
+expect = ["= interp_p1(", "interp_p2(", "= image_sample("]
+
 # CDNA 2 (gfx90a, MI200): `fixtures/amdgpu/cdna_kernels.cl` at -O3. MFMA results and accumulators
 # live in AGPR tuples (a[0:15]) or VGPR tuples, read back with v_accvgpr_read_b32.
 [[family]]

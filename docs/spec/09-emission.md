@@ -5909,7 +5909,17 @@ is in flat mode (flat printing walks the basic blocks through `emit_block_graph`
 with no tree). The tree walk (`printc/ctreeprint.rs`, `emit_ctree_stmt`) prints
 graph sequences and leaves itself and chooses the emitter for every other
 statement kind; only an opaque statement (a condition or multi-goto block)
-reaches the block printer's own dispatch, `emit_block_raw`. The tree lives in
+reaches the block printer's own dispatch, `emit_block_raw`. The elements of a
+`BlockList` print from the tree's sequence statements (`emit_list_items`), so a
+rewrite that changes a statement changes what its list prints. Before any other
+rewrite, `ctree_rewrite` turns each `if` on an `eh_unwinding()` exceptional edge
+that prints as `try { ... } catch (..) { ... }` (`itaniumeh`: one arm starts at a
+landing pad, or the call the edge follows names the pad) into a `Try` statement
+holding the condition block, the arm inside the `try`, the pad and the handler arm;
+`emit_block_if` prints that statement, and no later rewrite folds it. The `if`
+whose edge is the enclosing `try`'s own (printed as its call and normal path
+only) is still decided while printing, since it depends on the `try` being printed
+around it. The tree lives in
 `crates/unlace-ctree/src`: `unlace_ctree` holds the statement and expression
 arenas and the tree's maturity (`built`, `statements`, `rewritten`, `final`,
 which only rises), and `unlace_ctreebuild::build` makes one statement per

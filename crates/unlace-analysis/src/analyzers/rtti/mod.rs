@@ -78,7 +78,9 @@ use object::read::pe::{ImageNtHeaders, PeFile32, PeFile64};
 use object::{BinaryFormat, FileKind};
 
 use crate::demangle::demangle_rtti_class_name;
-use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, SymFact, SymKind};
+use crate::pass::{
+    AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, SymFact, SymKind, TypedDataFact,
+};
 use models::{
     BaseClassDescriptor, ClassHierarchyDescriptor, CompleteObjectLocator, ImageBytes,
     TypeDescriptor, read_base_class_array,
@@ -155,9 +157,50 @@ impl AnalysisPass for RttiPass {
         // 3. For each TypeDescriptor, find the CompleteObjectLocator that names it
         //    and emit the class it validates.
         emit_classes(&img, &rk, &text, &tds, &mut out);
+        type_vftable_labels(ctx, &rk, &mut out);
 
         out
     }
+}
+
+/// A vftable is data, an array of its slots' code pointers, so each
+/// `<Class>::vftable` label is installed with that type rather than as an untyped
+/// label: an untyped one takes the `code` type, and a constructor's store of
+/// its address printed as if it stored the label's value
+/// (`this->__vftable = (C_vtbl *)vftable`). The slot count is the read-only range
+/// the slot walk marked from the label. A label with no walked slots stays as it is.
+fn type_vftable_labels(ctx: &AnalysisCtx, rk: &RefKind, out: &mut AnalysisOutput) {
+    let types = ctx.arch.types();
+    let (_, word_size) = ctx.arch.data_org();
+    let ptr = rk.ptr_size() as u64;
+    let Ok(code) = types.get_type_code() else {
+        return;
+    };
+    let Ok(slot) = types.get_type_pointer(rk.ptr_size() as i32, code, word_size) else {
+        return;
+    };
+    let ends: FxHashMap<u64, u64> = out.readonly.iter().copied().collect();
+    let mut kept = Vec::with_capacity(out.symbols.len());
+    for s in std::mem::take(&mut out.symbols) {
+        let slots = ends
+            .get(&s.addr)
+            .map(|&end| end.saturating_sub(s.addr) / ptr)
+            .filter(|&n| n > 0 && n <= 4096);
+        match slots {
+            Some(n) if s.kind == SymKind::Data && s.name.ends_with("::vftable") => {
+                match types.get_type_array(n as i32, std::rc::Rc::clone(&slot)) {
+                    Ok(array) => out.typed_data.push(TypedDataFact {
+                        addr: s.addr,
+                        name: s.name,
+                        type_: array,
+                    }),
+                    Err(_) => kept.push(s),
+                }
+            }
+            _ => kept.push(s),
+        }
+    }
+    out.symbols = kept;
 }
 
 /// For each TypeDescriptor, take the image's references to it (`ref`), treat

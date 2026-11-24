@@ -4150,6 +4150,8 @@ XNOR of the result sign of `V - K` with `SBORROW(V, K)`, in either its
 AND-of-ORs or OR-of-ANDs lowering — becomes `INT_SLESSEQUAL(K, V)` (`V >= K`
 as the source wrote it). Always on (DIV-3).
 
+**sfofxor** (unlace#1271, default off) -- `crates/unlace-bandb-base/src/p3_dataflow/sfofxor.rs` (RuleSfOfXor), oppool1, fires on INT_XOR and BOOL_XOR with a one-byte output. When the two inputs are the direct definitions INT_SLESS(a, b) and INT_SBORROW(a, b) over the same a and b in the same order, the XOR becomes INT_SLESS(a, b), since SF xor OF is the signed less-than for the x86 flags. Off by default: the identity depends on the lifter's flag definitions, which must be verified first. No other shape matches.
+
 **ovlesssimplify** (GH-7190) —
 `crates/unlace-bandb-base/src/p3_dataflow/ovlesssimplify.rs
 (RuleOvLessSimplify)`, oppool1, fires on INT_NOTEQUAL. Pattern: the explicit

@@ -59,6 +59,7 @@ pub mod satconvert;
 pub mod satmul;
 pub mod sccp; // (unlace `sccp`) sparse conditional constant propagation solver
 pub mod selectdiv;
+pub mod sfofxor;
 pub mod simdlane;
 pub mod spillstoreguard;
 pub mod splitstorekeep;

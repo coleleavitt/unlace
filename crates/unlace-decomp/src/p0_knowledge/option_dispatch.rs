@@ -375,6 +375,7 @@ unlace_options! { self, p1;
     "addrcompare" => registered!(crate::addrcompare::AddrCompare),
     "pow2select" => registered!(crate::selectdiv::Pow2Select),
     "satconvert" => registered!(crate::satconvert::SatConvert),
+    "sfofxor" => registered!(crate::sfofxor::SfOfXor),
     "fpargboxed" => registered!(crate::boxedcompare::FpArgBoxed),
     "castimplied" => registered!(crate::castimplied::CastImplied),
     "castsign" => registered!(crate::castsign::CastSign),

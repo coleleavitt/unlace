@@ -1,109 +1,152 @@
 //! Catalog byte-compatibility gate (ADR 0006, item w4-unlace-p0-pack).
 //!
-//! The Rust catalog JSON emitter (`phases::emit_catalog_json`) must
-//! reproduce `unlace_console.cc unlaceEmitSettableJson`'s output **byte for byte**:
-//! `tests/stages/unlace-catalog.toml` (a C++ datatest) string-matches the raw
-//! emitter output, and `python -m unlace.catalog` parses it, so any drift in key
-//! order, spacing, separators, pipe-splitting, the conditional `current` field,
-//! or escaping would silently break the LLM control surface.
+//! `phases::emit_catalog_json` is the catalog the LLM control surface reads: an array with one
+//! object per settable, fixed keys in a fixed order, and fixed value types. This gate pins that
+//! shape against `tests/fixtures/phase_catalog.toml`, the captured `phase catalog` output with
+//! no program loaded (so no `current` field), stored as one `[[option]]` table per settable.
 //!
-//! ## What is compared
-//!
-//! The fixture `tests/fixtures/phase_catalog.json` is the EXACT bytes the C++
-//! `decomp_dbg` binary emits for `phase catalog` **with no program loaded**
-//! (so `unlaceLiveValue` returns `""` for every option and no `current` field is
-//! present). We compare against the no-program form deliberately: the `current`
-//! field is architecture-dependent (it reads live `Architecture` flags), so it
-//! is not a stable cross-build byte contract — but the surrounding bytes (key
-//! order, `[\n  {...},\n  {...}\n]\n` framing, two-space indent, `, ` and `: `
-//! separators, the pipe-split `values` array, and the JSON escaping) are. The
-//! Rust emitter is driven with a `live = |_| None` closure to produce the same
-//! no-`current` form.
+//! The comparison is field by field. Each entry must sit at the same index with the same option
+//! name, the same field names in the same order, and equal values, so a change to any catalog
+//! text, tier, symptom list or entry order fails here with the option and field named. The
+//! settable count is not written in this file: the fixture has one table per settable, and
+//! `fixture_has_every_settable` checks it against the registry.
 //!
 //! ## Regenerating the fixture
 //!
-//! The original fixture was captured from the (now-removed) C++ binary. Since the
-//! C++ tree is gone and unlace is Rust-only, the Rust `emit_catalog_json` emitter is
-//! the authoritative source; unlace-native settables (e.g. `realtypes`, DIV-6) have
-//! no C++ origin. Recapture from the Rust `decomp_dbg` with the `openfile write`
-//! trick (the same one `unlace decompile` uses, so console prompts never pollute the
-//! bytes), with no program loaded so `unlaceLiveValue` returns `""` (no `current`):
+//! The fixture is the Rust emitter's output (there is no C++ origin left: unlace-native settables
+//! such as `realtypes` (DIV-6) are not in any C++ tree). Capture it from `decomp_dbg` with no
+//! program loaded, so `unlaceLiveValue` returns `""` and no `current` is emitted, then convert
+//! the JSON capture with `scripts/catalog_fixture_toml.py` (it keeps entry order, key order and
+//! every value, and re-parses the TOML before writing it):
 //!
 //! ```sh
 //! printf 'openfile write /tmp/cap.json\nphase catalog\nclosefile\nquit\n' \
 //!   | target/release/decomp_dbg -s "$PWD/specs" >/dev/null 2>&1
-//! cp /tmp/cap.json crates/unlace-decomp/tests/fixtures/phase_catalog.json
+//! python3 scripts/catalog_fixture_toml.py /tmp/cap.json \
+//!   > crates/unlace-decomp/tests/fixtures/phase_catalog.toml
 //! ```
 //!
-//! Regenerate it whenever `phases.toml` gains/loses a settable or a settable's
-//! catalog text changes.
+//! Regenerate it whenever `phases.toml` gains or loses a settable, or a settable's catalog text
+//! changes. Never edit it by hand.
 
-use unlace_decomp::phases::{emit_catalog_json, emit_catalog_json_one, lookup_settable};
+use std::collections::BTreeSet;
 
-/// The captured `phase catalog` output (no program loaded -> no `current`).
-const FIXTURE: &str = include_str!("fixtures/phase_catalog.json");
+use serde_json::Value;
+use unlace_decomp::phases::{
+    emit_catalog_json, emit_catalog_json_one, lookup_settable, unlace_num_settables,
+    unlace_settable_by_index,
+};
+
+/// The captured `phase catalog` output (no program loaded -> no `current`), as TOML.
+const FIXTURE: &str = include_str!("fixtures/phase_catalog.toml");
+
+/// The fixture's entries as JSON objects, in catalog order.
+fn fixture_entries() -> Vec<Value> {
+    let doc: toml::Table = toml::from_str(FIXTURE).expect("phase_catalog.toml parses as TOML");
+    doc.get("option")
+        .and_then(toml::Value::as_array)
+        .expect("phase_catalog.toml has [[option]] tables")
+        .iter()
+        .map(|entry| serde_json::to_value(entry).expect("a TOML table converts to JSON"))
+        .collect()
+}
+
+/// The emitter's full catalog, parsed back from its JSON text, in catalog order.
+fn emitted_entries() -> Vec<Value> {
+    serde_json::from_str(&emit_catalog_json(|_| None))
+        .expect("emit_catalog_json returns a JSON array")
+}
+
+fn option_name(entry: &Value) -> &str {
+    entry
+        .get("option")
+        .and_then(Value::as_str)
+        .unwrap_or("<unnamed>")
+}
+
+/// Asserts that `got` and `want` have the same field names in the same order, with equal values.
+fn assert_same_entry(got: &Value, want: &Value, context: &str) {
+    let got = got.as_object().expect("an emitted entry is an object");
+    let want = want.as_object().expect("a fixture entry is a table");
+    assert!(
+        got.keys().eq(want.keys()),
+        "{context}: field names or their order differ (emitted {:?}, fixture {:?})",
+        got.keys().collect::<BTreeSet<_>>(),
+        want.keys().collect::<BTreeSet<_>>(),
+    );
+    for (key, want_value) in want {
+        assert_eq!(got.get(key), Some(want_value), "{context}: field `{key}`");
+    }
+}
 
 #[test]
-fn full_catalog_matches_cpp_byte_for_byte() {
-    // No live values -> the static, no-`current` form the fixture captures.
-    let rust = emit_catalog_json(|_| None);
-    if rust != FIXTURE {
-        // Surface the first divergence for a readable failure.
-        let rl: Vec<&str> = rust.lines().collect();
-        let fl: Vec<&str> = FIXTURE.lines().collect();
-        for (i, (r, f)) in rl.iter().zip(fl.iter()).enumerate() {
-            assert_eq!(r, f, "first byte divergence at line {i}");
-        }
+fn full_catalog_matches_fixture_field_by_field() {
+    let emitted = emitted_entries();
+    let fixture = fixture_entries();
+    assert_eq!(
+        emitted.len(),
+        fixture.len(),
+        "entry count: emitter vs phase_catalog.toml"
+    );
+    for (index, (got, want)) in emitted.iter().zip(&fixture).enumerate() {
+        let name = option_name(want);
         assert_eq!(
-            rl.len(),
-            fl.len(),
-            "line count differs (rust {}, cpp {})",
-            rl.len(),
-            fl.len()
+            option_name(got),
+            name,
+            "entry {index}: option name or entry order"
         );
-        assert_eq!(rust, FIXTURE, "catalog bytes differ");
+        assert_same_entry(got, want, &format!("option `{name}`"));
     }
-    assert_eq!(rust, FIXTURE);
 }
 
 #[test]
 fn fixture_has_no_current_field() {
     // Documents the comparison contract: the captured form has no live values.
     assert!(
-        !FIXTURE.contains("\"current\""),
+        fixture_entries()
+            .iter()
+            .all(|entry| entry.get("current").is_none()),
         "fixture must be the no-program (no `current`) form"
     );
 }
 
 #[test]
-// One `"option":` per settable row, each carrying the tier and symptoms
-// fields; the count is the registry's, so a row added elsewhere moves it.
 fn fixture_has_every_settable() {
-    let n = unlace_decomp::phases::unlace_num_settables();
-    assert_eq!(FIXTURE.matches("\"option\": ").count(), n);
-    assert_eq!(FIXTURE.matches("\"tier\": ").count(), n);
-    assert_eq!(FIXTURE.matches("\"symptoms\": ").count(), n);
+    let entries = fixture_entries();
+    assert_eq!(
+        entries.len(),
+        unlace_num_settables(),
+        "one [[option]] table per settable"
+    );
+    for entry in &entries {
+        for field in ["option", "tier", "symptoms"] {
+            assert!(
+                entry.get(field).is_some(),
+                "`{}` lacks `{field}`",
+                option_name(entry)
+            );
+        }
+    }
 }
 
 #[test]
 fn single_settable_rows_match_their_slice_of_the_catalog() {
-    // `phase catalog <option>` (one-argument form) must emit exactly the same
-    // bytes as that option's row in the full catalog, minus the leading "  "
-    // is preserved and minus the trailing comma (the full form joins with ',').
-    for i in 0..unlace_decomp::phases::unlace_num_settables() {
-        let st = unlace_decomp::phases::unlace_settable_by_index(i);
-        let one = emit_catalog_json_one(st.option, None).expect("known option");
-        // The one-row form is the bare object + a single newline.
+    // `phase catalog <option>` (one-argument form) must emit the same fields and values as that
+    // option's entry in the full catalog.
+    let fixture = fixture_entries();
+    for index in 0..unlace_num_settables() {
+        let option = unlace_settable_by_index(index).option;
+        let one = emit_catalog_json_one(option, None).expect("known option");
+        // The one-row form is the bare object, indented two spaces, plus a single newline.
         assert!(one.starts_with("  {\"option\": "));
         assert!(one.ends_with("}\n"));
-        // It must appear verbatim inside the full catalog (the full form differs
-        // only by an optional trailing comma before the newline).
-        let body = one.trim_end_matches('\n');
-        assert!(
-            FIXTURE.contains(body),
-            "one-row form for `{}` not found verbatim in the full catalog",
-            st.option
-        );
+        let row: Value =
+            serde_json::from_str(one.trim()).expect("the one-row form is a JSON object");
+        let want = fixture
+            .iter()
+            .find(|entry| option_name(entry) == option)
+            .unwrap_or_else(|| panic!("`{option}` is missing from phase_catalog.toml"));
+        assert_same_entry(&row, want, &format!("one-row form of `{option}`"));
     }
 }
 

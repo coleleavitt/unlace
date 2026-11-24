@@ -14,7 +14,6 @@ The counters, how each is measured, and where each is hard-coded:
 
     settables (127)         `[[settable]]` blocks in unlace-decomp/phases.toml
                             -> phases/tests.rs   2 asserts + the test fn NAME
-                            -> catalog_bytecompat.rs  3 FIXTURE.matches asserts + the fn NAME
     tiers (28/52/47)        row["tier"] tally from `unlace catalog --json`
                             -> phases/tests.rs   the tuple assert + the test fn NAME
     catalog buckets         field/value tallies over the same catalog rows
@@ -31,7 +30,7 @@ The test function NAMES are checked as sites in their own right. They encode the
 compiler or test run disagrees with a stale one, and `settable_count_is_117` guarding an
 `assert_eq!(..., 127)` is exactly the artifact a silent auto-merge leaves behind.
 
-`crates/unlace-decomp/tests/fixtures/phase_catalog.json` is NOT rewritten here. It
+`crates/unlace-decomp/tests/fixtures/phase_catalog.toml` is NOT rewritten here. It
 is *captured bytes* -- guessing at them is how the byte-compat gate stops meaning anything.
 When it disagrees with the derived settable count this module reports an unfixable drift and
 prints the recapture recipe, read out of catalog_bytecompat.rs's own module header so the
@@ -41,7 +40,7 @@ CLI:
     python -m scripts.repipe.counters                     # check; exit 1 on drift
     python -m scripts.repipe.counters --rederive --json   # measure now, report; read-only
     python -m scripts.repipe.counters --fix               # rewrite every fixable site
-    python -m scripts.repipe.counters --recipe            # the phase_catalog.json recapture
+    python -m scripts.repipe.counters --recipe            # the phase_catalog.toml recapture
 """
 from __future__ import annotations
 
@@ -67,7 +66,7 @@ CORPUS_DIRS = ("tests/datatests", "tests/stages")
 REL_PHASES_TOML = "crates/unlace-decomp/phases.toml"
 REL_TESTS_RS = "crates/unlace-middle/src/p0_knowledge/phases/tests.rs"
 REL_BYTECOMPAT_RS = "crates/unlace-decomp/tests/catalog_bytecompat.rs"
-REL_CATALOG_FIXTURE = "crates/unlace-decomp/tests/fixtures/phase_catalog.json"
+REL_CATALOG_FIXTURE = "crates/unlace-decomp/tests/fixtures/phase_catalog.toml"
 REL_CATALOG_XML = "tests/stages/catalog.xml"
 REL_CATALOG_TOML = "tests/stages/catalog.toml"
 REL_BASE_XML_RS = "crates/unlace-base/src/xml.rs"
@@ -83,7 +82,7 @@ class DeriveError(RuntimeError):
 class Drift:
     """One hard-coded site that disagrees with the derived truth.
 
-    ``fixable`` is False for a site whose correct value is a capture (phase_catalog.json) or
+    ``fixable`` is False for a site whose correct value is a capture (phase_catalog.toml) or
     an intentionally loose range -- those need an operator, not a rewrite.
     """
     site: str
@@ -205,10 +204,6 @@ SITES = (
      r"fn tier_counts_are_(\d+)_core_(\d+)_transform_(\d+)_analysis\(\)", "tier_tuple"),
     ("phases-tests.tier-tuple", REL_TESTS_RS,
      r"assert_eq!\(\(core, transform, analysis\), \((\d+), (\d+), (\d+)\)\)", "tier_tuple"),
-    ("bytecompat.fn-name-settables", REL_BYTECOMPAT_RS,
-     r"fn fixture_has_all_(\d+)_settables\(\)", "settables"),
-    ("bytecompat.fixture-matches", REL_BYTECOMPAT_RS,
-     r'FIXTURE\.matches\("\\"(?:option|tier|symptoms)\\": "\)\.count\(\), (\d+)\)', "settables"),
     ("phases-tests.catalog-json-records", REL_TESTS_RS,
      r'assert_eq!\(json\.matches\("\},\\n"\)\.count\(\), (\d+)\)', "settables_minus_one"),
     ("base-xml.corpus-count", REL_BASE_XML_RS,
@@ -414,7 +409,7 @@ def derive(repo=None, unlace=None) -> dict:
     toml_n = settables_from_phases_toml(repo=repo)
     eids = element_ids(repo=repo)
     fixture = path_of(REL_CATALOG_FIXTURE, repo)
-    fixture_n = (fixture.read_text(encoding="utf-8").count('"option": ')
+    fixture_n = (len(re.findall(r"^\[\[option\]\]\s*$", fixture.read_text(encoding="utf-8"), re.M))
                  if fixture.exists() else None)
     return {
         "repo": str(_root(repo)),
@@ -488,7 +483,7 @@ def check(derived=None, repo=None, unlace=None) -> list:
 # --- fixing -----------------------------------------------------------------
 
 def recapture_recipe(repo=None) -> str:
-    """The phase_catalog.json recapture, read out of catalog_bytecompat.rs's own header.
+    """The phase_catalog.toml recapture, read out of catalog_bytecompat.rs's own header.
 
     Reading it rather than restating it means the recipe cannot drift away from the gate
     that consumes the capture -- and the "no program loaded" condition, which is the part a
@@ -507,7 +502,7 @@ def recapture_recipe(repo=None) -> str:
     idx = doc.find("## Regenerating the fixture")
     body = doc[idx:] if idx >= 0 else doc
     fences = re.findall(r"```sh\n(.*?)```", body, re.S)
-    lead = ("Recapture crates/unlace-decomp/tests/fixtures/phase_catalog.json.\n"
+    lead = ("Recapture crates/unlace-decomp/tests/fixtures/phase_catalog.toml.\n"
             "It is CAPTURED BYTES, with NO PROGRAM LOADED so unlaceLiveValue returns \"\" and no\n"
             "`current` field is emitted. Never hand-edit it, and never re-capture with a program\n"
             "loaded -- `current` is architecture-dependent and is not a byte contract.\n")
@@ -581,7 +576,7 @@ def main(argv=None) -> int:
     ap.add_argument("--fix", action="store_true",
                     help="rewrite every fixable site to the derived value")
     ap.add_argument("--recipe", action="store_true",
-                    help="print the phase_catalog.json recapture recipe and exit")
+                    help="print the phase_catalog.toml recapture recipe and exit")
     ap.add_argument("--repo", default=None, help="repo root (default: config.repo_root())")
     ap.add_argument("--unlace", default=None, help="unlace binary (default: config.unlace_bin())")
     ap.add_argument("--json", action="store_true", help="machine-readable output")

@@ -1147,6 +1147,10 @@ Three tiers:
 | loop counters print as v5, v3, v1 instead of i, j, k | [`contextnames`](#contextnames----on--off-default-off) |
 | the accumulator a function returns keeps a vN name | [`contextnames`](#contextnames----on--off-default-off) |
 | nested loops are hard to tell apart in stripped code | [`contextnames`](#contextnames----on--off-default-off) |
+| a local loaded from a struct field keeps a vN name | [`flownames`](#flownames----on--off-default-off) |
+| v3 = p->len instead of len = p->len | [`flownames`](#flownames----on--off-default-off) |
+| a char pointer local named vN | [`flownames`](#flownames----on--off-default-off) |
+| a pointer to a named struct named vN | [`flownames`](#flownames----on--off-default-off) |
 | a double parameter stored into a global prints as unsigned long and moves ahead of the integer parameters | [`floatglobals`](#floatglobals----on--off-default-on) |
 | a float parameter copied into a global prints as unsigned int | [`floatglobals`](#floatglobals----on--off-default-on) |
 | a global passed to a float parameter prints as a union reinterpretation ((union { unsigned int from; float to; }){ .from = dat_10001d78 }).to | [`floatglobals`](#floatglobals----on--off-default-on) |
@@ -3697,6 +3701,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Turn on for readable loops in stripped code: `for (v5 = 0; ...; v5 += 1)` prints `for (i = 0; ...; i += 1)` and the accumulated return value prints `result`. Off by default because it renames locals that other features' stage assertions and CLI tests spell as `vN`.
 - **Where / provenance:** P6/naming-policy · kuna · presentation-default · kuna-contextnames
 - **Example:** `option contextnames on`
+
+### `flownames` -- on | off, default `off`
+
+- **Symptoms:** a local loaded from a struct field keeps a vN name; v3 = p->len instead of len = p->len; a char pointer local named vN; a pointer to a named struct named vN.
+- **What it does:** Name a numbered local from the structure fields and the type it meets when no declaration or library call names it. `kuna_flownames` reads two kinds of evidence for the `libcnames` alias walk: a named field the value is loaded from or stored to through a typed pointer (`len = p->len`, `p->len = len`), or copied out of or into a member of a stack structure (`size = st.st_size`), counted only when every field the local meets has the same name, leading underscores dropped (`_flags` gives `flags`); and the local's own type, `str` for a `char` pointer, `wstr` for a wide-character pointer and `p_<name>` for a pointer to a named structure (`p_passwd`, the last `::` component without template arguments for a C++ type). A field the analysis made up (`field_0x10`), padding (`__pad0`, `__glibc_reserved`, `unused`), and a structure it synthesized (`struct_3`, `astruct_1`) name nothing. A field name ranks below a library argument and above a role name (`dest`/`src`) and `result`; a type name is the weakest evidence of all. The walk numbers every local exactly as with the option off and only then prints the name, so `v4` stays the same variable in every mode, a directive may name the local by either spelling, a clash takes `_2`, `_3`, ... in evidence order, and no spelling repeats a name another variable, the scope or a callee holds. Naming a local after the parameter it is passed to is upstream's `lookForFuncParamNames` for a locked callee prototype and `libcnames` for the built-in library tables; this option adds the evidence neither has.
+- **When to flip:** Turn on for stripped code that works through typed structures: `v3 = a0->st_size;` prints `st_size = a0->st_size;`, a `char *` local prints `str` and a `struct passwd *` local `p_passwd`. Off by default because it renames locals that other features' stage assertions and CLI tests spell as `vN`, and because a type name says less than the name a reader would choose.
+- **Where / provenance:** P6/naming-policy · ida · presentation-default · kuna-flownames
+- **Example:** `option flownames on`
 
 ### `floatglobals` -- on | off, default `on`
 

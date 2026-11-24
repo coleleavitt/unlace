@@ -1018,6 +1018,26 @@ a local, so with `libcnames` off a returned `open` descriptor still prints
 `result`. The option is off by default because it renames locals that other
 features' stage assertions and CLI tests spell as `vN`.
 
+**A local is named from the fields and the type it meets (`flownames`,
+default off).** `crates/unlace-bandb-base/src/p6_variables/kuna_flownames.rs
+(evidence)` adds two more kinds of evidence to the same walk. A field: the
+output of a `LOAD` whose address is a `PTRSUB` of a pointer to a named
+structure, the value a `STORE` through such an address writes, and the value a
+`COPY` takes out of or puts into a member of a stack structure (the Symbol
+`findContainer` gives for the varnode's address), each by the innermost field
+that exactly covers the access, nested structures followed four deep. The name
+is the field's own, leading underscores dropped; a field the analysis made up
+(`field_0x10`), padding (`pad`, `reserved`, `unused`), and any field of a
+structure it synthesized (`struct_3`, `astruct_1`, `frame_2`) give none.
+Field evidence follows the value through the folded copies and casts like
+library evidence, and fields that disagree name nothing. A type: the type of
+the local's name representative, `str` for a pointer to a one-byte `char`,
+`wstr` for a pointer to a UTF-16 or UTF-32 character, and `p_<name>` for a
+pointer to a named structure, `<name>` its last `::` component without
+template arguments. A field ranks below a library argument and above a role
+name and `result`; a type name is the weakest evidence of all, below
+`result`. Off by default for the same reason as `contextnames`.
+
 **The address of a stack object is library evidence too.** A local array,
 structure or scalar whose own address is a library argument
 (`read(a0,buf,0x100)`, `stat(a0,&buf)`, `waitpid(pid,&stat_loc,0)`,

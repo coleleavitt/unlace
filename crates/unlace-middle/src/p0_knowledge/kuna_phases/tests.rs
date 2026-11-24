@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_333() {
-    assert_eq!(kuna_num_settables(), 333);
-    assert_eq!(SETTABLE_TABLE.len(), 333);
+fn settable_count_is_334() {
+    assert_eq!(kuna_num_settables(), 334);
+    assert_eq!(SETTABLE_TABLE.len(), 334);
 }
 
 #[test]
-fn tier_counts_are_67_core_166_transform_100_analysis() {
+fn tier_counts_are_68_core_166_transform_100_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_67_core_166_transform_100_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (67, 166, 100));
+    assert_eq!((core, transform, analysis), (68, 166, 100));
 }
 
 #[test]
@@ -955,7 +955,8 @@ fn option_values_live_value_present_for_129() {
     // +1 for `oslog` (live_field = os_log_args).
     // 137 -> 138: `spsolve` (#70) added a live_field row without the bump.
     // +1 for `guarddispatch` (live_field = guard_dispatch).
-    assert_eq!(with_live, 139);
+    // +1 for `flownames` (live_field = flow_names).
+    assert_eq!(with_live, 140);
 }
 
 #[test]
@@ -1282,7 +1283,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `callresultuse`; its P4 row.
     // +1 for `guarddispatch`; its P2 row.
     // +1 for `typemerge`; its P6 row sits after `indirectonly`.
-    assert_eq!(json.matches("},\n").count(), 326);
+    // +1 for `flownames`; its P6 row sits beside `contextnames`.
+    assert_eq!(json.matches("},\n").count(), 327);
 }
 
 #[test]

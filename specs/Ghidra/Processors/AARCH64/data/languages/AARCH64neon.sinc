@@ -19266,14 +19266,13 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.8H
 :sqdmlal Rd_FPR64, Rn_FPR32, Re_VPR128.S.vIndex
 is b_2431=0b01011111 & b_2223=0b10 & b_1215=0b0011 & b_10=0 & Re_VPR128.S.vIndex & Re_VPR128.S & vIndex & Rd_FPR64 & Rn_FPR32 & Zd
 {
-	local tmp1:8 = sext(Rn_FPR32);
-	# simd element Re_VPR128.S[vIndex] lane size 4
-	local tmp2:4 = Re_VPR128.S.vIndex;
-	local tmp3:8 = sext(tmp2);
-	local tmp4:8 = tmp1 * tmp3;
-	local tmp5:8 = tmp4 * 2:8;
-	Rd_FPR64 = Rd_FPR64 + tmp5;
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local elm:4 = Re_VPR128.S.vIndex;
+	local proacc0:8 = sext(Rn_FPR32) * sext(elm);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x4000000000000000);
+	local acc0:8 = Rd_FPR64;
+	local ovf0:1 = scarry(acc0, proacc0);
+	Rd_FPR64 = (acc0 + proacc0) * zext(ovf0 == 0) + (0x7fffffffffffffff + zext(acc0 s< 0)) * zext(ovf0);
+	zext_zd(Zd);
 }
 
 # C7.2.284 SQDMLAL, SQDMLAL2 (by element) page C7-2646 line 154405 MATCH x5f003000/mask=xff00f400
@@ -19286,14 +19285,13 @@ is b_2431=0b01011111 & b_2223=0b10 & b_1215=0b0011 & b_10=0 & Re_VPR128.S.vIndex
 :sqdmlal Rd_FPR32, Rn_FPR16, Re_VPR128Lo.H.vIndexHLM
 is b_2431=0b01011111 & b_2223=0b01 & b_1215=0b0011 & b_10=0 & Re_VPR128Lo.H.vIndexHLM & Re_VPR128Lo.H & vIndexHLM & Rd_FPR32 & Rn_FPR16 & Zd
 {
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp1:2 = Re_VPR128Lo.H.vIndexHLM;
-	local tmp2:4 = sext(tmp1);
-	local tmp3:4 = sext(Rn_FPR16);
-	local tmp4:4 = tmp2 * tmp3;
-	local tmp5:4 = tmp4 * 2:4;
-	Rd_FPR32 = Rd_FPR32 + tmp5;
-	zext_zs(Zd); # zero upper 28 bytes of Zd
+	local elm:2 = Re_VPR128Lo.H.vIndexHLM;
+	local proacc0:4 = sext(Rn_FPR16) * sext(elm);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x40000000);
+	local acc0:4 = Rd_FPR32;
+	local ovf0:1 = scarry(acc0, proacc0);
+	Rd_FPR32 = (acc0 + proacc0) * zext(ovf0 == 0) + (0x7fffffff + zext(acc0 s< 0)) * zext(ovf0);
+	zext_zs(Zd);
 }
 
 # C7.2.284 SQDMLAL, SQDMLAL2 (by element) page C7-2646 line 154405 MATCH x0f003000/mask=xbf00f400
@@ -19306,22 +19304,18 @@ is b_2431=0b01011111 & b_2223=0b01 & b_1215=0b0011 & b_10=0 & Re_VPR128Lo.H.vInd
 :sqdmlal Rd_VPR128.2D, Rn_VPR64.2S, Re_VPR128.S.vIndex
 is b_31=0 & b_30=0 & b_2429=0b001111 & b_2223=0b10 & b_1215=0b0011 & b_10=0 & Re_VPR128.S.vIndex & Re_VPR128.S & vIndex & Rn_VPR64.2S & Rd_VPR128.2D & Zd
 {
-	# simd resize TMPQ1 = sext(Rn_VPR64.2S) (lane size 4 to 8)
-	TMPQ1[0,64] = sext(Rn_VPR64.2S[0,32]);
-	TMPQ1[64,64] = sext(Rn_VPR64.2S[32,32]);
-	# simd element Re_VPR128.S[vIndex] lane size 4
-	local tmp2:4 = Re_VPR128.S.vIndex;
-	local tmp3:8 = sext(tmp2);
-	# simd infix TMPQ2 = TMPQ1 * tmp3 on lane size 8
-	TMPQ2[0,64] = TMPQ1[0,64] * tmp3;
-	TMPQ2[64,64] = TMPQ1[64,64] * tmp3;
-	# simd infix TMPQ3 = TMPQ2 * 2:8 on lane size 8
-	TMPQ3[0,64] = TMPQ2[0,64] * 2:8;
-	TMPQ3[64,64] = TMPQ2[64,64] * 2:8;
-	# simd infix Rd_VPR128.2D = Rd_VPR128.2D + TMPQ3 on lane size 8
-	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] + TMPQ3[0,64];
-	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] + TMPQ3[64,64];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local elm:4 = Re_VPR128.S.vIndex;
+	local proacc0:8 = sext(Rn_VPR64.2S[0,32]) * sext(elm);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x4000000000000000);
+	local acc0:8 = Rd_VPR128.2D[0,64];
+	local ovf0:1 = scarry(acc0, proacc0);
+	Rd_VPR128.2D[0,64] = (acc0 + proacc0) * zext(ovf0 == 0) + (0x7fffffffffffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:8 = sext(Rn_VPR64.2S[32,32]) * sext(elm);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x4000000000000000);
+	local acc1:8 = Rd_VPR128.2D[64,64];
+	local ovf1:1 = scarry(acc1, proacc1);
+	Rd_VPR128.2D[64,64] = (acc1 + proacc1) * zext(ovf1 == 0) + (0x7fffffffffffffff + zext(acc1 s< 0)) * zext(ovf1);
+	zext_zq(Zd);
 }
 
 # C7.2.284 SQDMLAL, SQDMLAL2 (by element) page C7-2646 line 154405 MATCH x0f003000/mask=xbf00f400
@@ -19334,30 +19328,28 @@ is b_31=0 & b_30=0 & b_2429=0b001111 & b_2223=0b10 & b_1215=0b0011 & b_10=0 & Re
 :sqdmlal Rd_VPR128.4S, Rn_VPR64.4H, Re_VPR128Lo.H.vIndexHLM
 is b_31=0 & b_30=0 & b_2429=0b001111 & b_2223=0b01 & b_1215=0b0011 & b_10=0 & Re_VPR128Lo.H.vIndexHLM & Re_VPR128Lo.H & vIndexHLM & Rn_VPR64.4H & Rd_VPR128.4S & Zd
 {
-	# simd resize TMPQ1 = sext(Rn_VPR64.4H) (lane size 2 to 4)
-	TMPQ1[0,32] = sext(Rn_VPR64.4H[0,16]);
-	TMPQ1[32,32] = sext(Rn_VPR64.4H[16,16]);
-	TMPQ1[64,32] = sext(Rn_VPR64.4H[32,16]);
-	TMPQ1[96,32] = sext(Rn_VPR64.4H[48,16]);
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	local tmp3:4 = sext(tmp2);
-	# simd infix TMPQ2 = TMPQ1 * tmp3 on lane size 4
-	TMPQ2[0,32] = TMPQ1[0,32] * tmp3;
-	TMPQ2[32,32] = TMPQ1[32,32] * tmp3;
-	TMPQ2[64,32] = TMPQ1[64,32] * tmp3;
-	TMPQ2[96,32] = TMPQ1[96,32] * tmp3;
-	# simd infix TMPQ3 = TMPQ2 * 2:4 on lane size 4
-	TMPQ3[0,32] = TMPQ2[0,32] * 2:4;
-	TMPQ3[32,32] = TMPQ2[32,32] * 2:4;
-	TMPQ3[64,32] = TMPQ2[64,32] * 2:4;
-	TMPQ3[96,32] = TMPQ2[96,32] * 2:4;
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S + TMPQ3 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + TMPQ3[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + TMPQ3[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + TMPQ3[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + TMPQ3[96,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local elm:2 = Re_VPR128Lo.H.vIndexHLM;
+	local proacc0:4 = sext(Rn_VPR64.4H[0,16]) * sext(elm);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x40000000);
+	local acc0:4 = Rd_VPR128.4S[0,32];
+	local ovf0:1 = scarry(acc0, proacc0);
+	Rd_VPR128.4S[0,32] = (acc0 + proacc0) * zext(ovf0 == 0) + (0x7fffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:4 = sext(Rn_VPR64.4H[16,16]) * sext(elm);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x40000000);
+	local acc1:4 = Rd_VPR128.4S[32,32];
+	local ovf1:1 = scarry(acc1, proacc1);
+	Rd_VPR128.4S[32,32] = (acc1 + proacc1) * zext(ovf1 == 0) + (0x7fffffff + zext(acc1 s< 0)) * zext(ovf1);
+	local proacc2:4 = sext(Rn_VPR64.4H[32,16]) * sext(elm);
+	proacc2 = proacc2 * 2 - zext(proacc2 == 0x40000000);
+	local acc2:4 = Rd_VPR128.4S[64,32];
+	local ovf2:1 = scarry(acc2, proacc2);
+	Rd_VPR128.4S[64,32] = (acc2 + proacc2) * zext(ovf2 == 0) + (0x7fffffff + zext(acc2 s< 0)) * zext(ovf2);
+	local proacc3:4 = sext(Rn_VPR64.4H[48,16]) * sext(elm);
+	proacc3 = proacc3 * 2 - zext(proacc3 == 0x40000000);
+	local acc3:4 = Rd_VPR128.4S[96,32];
+	local ovf3:1 = scarry(acc3, proacc3);
+	Rd_VPR128.4S[96,32] = (acc3 + proacc3) * zext(ovf3 == 0) + (0x7fffffff + zext(acc3 s< 0)) * zext(ovf3);
+	zext_zq(Zd);
 }
 
 # C7.2.284 SQDMLAL, SQDMLAL2 (by element) page C7-2646 line 154405 MATCH x0f003000/mask=xbf00f400
@@ -19370,23 +19362,18 @@ is b_31=0 & b_30=0 & b_2429=0b001111 & b_2223=0b01 & b_1215=0b0011 & b_10=0 & Re
 :sqdmlal2 Rd_VPR128.2D, Rn_VPR128.4S, Re_VPR128.S.vIndex
 is b_31=0 & b_30=1 & b_2429=0b001111 & b_2223=0b10 & b_1215=0b0011 & b_10=0 & Re_VPR128.S.vIndex & Re_VPR128.S & vIndex & Rn_VPR128.4S & Rd_VPR128.2D & Zd
 {
-	TMPD1 = Rn_VPR128.4S[64,64];
-	# simd resize TMPQ2 = sext(TMPD1) (lane size 4 to 8)
-	TMPQ2[0,64] = sext(TMPD1[0,32]);
-	TMPQ2[64,64] = sext(TMPD1[32,32]);
-	# simd element Re_VPR128.S[vIndex] lane size 4
-	local tmp3:4 = Re_VPR128.S.vIndex;
-	local tmp4:8 = sext(tmp3);
-	# simd infix TMPQ3 = TMPQ2 * tmp4 on lane size 8
-	TMPQ3[0,64] = TMPQ2[0,64] * tmp4;
-	TMPQ3[64,64] = TMPQ2[64,64] * tmp4;
-	# simd infix TMPQ4 = TMPQ3 * 2:8 on lane size 8
-	TMPQ4[0,64] = TMPQ3[0,64] * 2:8;
-	TMPQ4[64,64] = TMPQ3[64,64] * 2:8;
-	# simd infix Rd_VPR128.2D = Rd_VPR128.2D + TMPQ4 on lane size 8
-	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] + TMPQ4[0,64];
-	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] + TMPQ4[64,64];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local elm:4 = Re_VPR128.S.vIndex;
+	local proacc0:8 = sext(Rn_VPR128.4S[64,32]) * sext(elm);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x4000000000000000);
+	local acc0:8 = Rd_VPR128.2D[0,64];
+	local ovf0:1 = scarry(acc0, proacc0);
+	Rd_VPR128.2D[0,64] = (acc0 + proacc0) * zext(ovf0 == 0) + (0x7fffffffffffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:8 = sext(Rn_VPR128.4S[96,32]) * sext(elm);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x4000000000000000);
+	local acc1:8 = Rd_VPR128.2D[64,64];
+	local ovf1:1 = scarry(acc1, proacc1);
+	Rd_VPR128.2D[64,64] = (acc1 + proacc1) * zext(ovf1 == 0) + (0x7fffffffffffffff + zext(acc1 s< 0)) * zext(ovf1);
+	zext_zq(Zd);
 }
 
 # C7.2.284 SQDMLAL, SQDMLAL2 (by element) page C7-2646 line 154405 MATCH x0f003000/mask=xbf00f400
@@ -19399,31 +19386,28 @@ is b_31=0 & b_30=1 & b_2429=0b001111 & b_2223=0b10 & b_1215=0b0011 & b_10=0 & Re
 :sqdmlal2 Rd_VPR128.4S, Rn_VPR128.8H, Re_VPR128Lo.H.vIndexHLM
 is b_31=0 & b_30=1 & b_2429=0b001111 & b_2223=0b01 & b_1215=0b0011 & b_10=0 & Re_VPR128Lo.H.vIndexHLM & Re_VPR128Lo.H & vIndexHLM & Rn_VPR128.8H & Rd_VPR128.4S & Zd
 {
-	TMPD1 = Rn_VPR128.8H[64,64];
-	# simd resize TMPQ2 = sext(TMPD1) (lane size 2 to 4)
-	TMPQ2[0,32] = sext(TMPD1[0,16]);
-	TMPQ2[32,32] = sext(TMPD1[16,16]);
-	TMPQ2[64,32] = sext(TMPD1[32,16]);
-	TMPQ2[96,32] = sext(TMPD1[48,16]);
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp3:2 = Re_VPR128Lo.H.vIndexHLM;
-	local tmp4:4 = sext(tmp3);
-	# simd infix TMPQ3 = TMPQ2 * tmp4 on lane size 4
-	TMPQ3[0,32] = TMPQ2[0,32] * tmp4;
-	TMPQ3[32,32] = TMPQ2[32,32] * tmp4;
-	TMPQ3[64,32] = TMPQ2[64,32] * tmp4;
-	TMPQ3[96,32] = TMPQ2[96,32] * tmp4;
-	# simd infix TMPQ4 = TMPQ3 * 2:4 on lane size 4
-	TMPQ4[0,32] = TMPQ3[0,32] * 2:4;
-	TMPQ4[32,32] = TMPQ3[32,32] * 2:4;
-	TMPQ4[64,32] = TMPQ3[64,32] * 2:4;
-	TMPQ4[96,32] = TMPQ3[96,32] * 2:4;
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S + TMPQ4 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + TMPQ4[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + TMPQ4[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + TMPQ4[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + TMPQ4[96,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local elm:2 = Re_VPR128Lo.H.vIndexHLM;
+	local proacc0:4 = sext(Rn_VPR128.8H[64,16]) * sext(elm);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x40000000);
+	local acc0:4 = Rd_VPR128.4S[0,32];
+	local ovf0:1 = scarry(acc0, proacc0);
+	Rd_VPR128.4S[0,32] = (acc0 + proacc0) * zext(ovf0 == 0) + (0x7fffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:4 = sext(Rn_VPR128.8H[80,16]) * sext(elm);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x40000000);
+	local acc1:4 = Rd_VPR128.4S[32,32];
+	local ovf1:1 = scarry(acc1, proacc1);
+	Rd_VPR128.4S[32,32] = (acc1 + proacc1) * zext(ovf1 == 0) + (0x7fffffff + zext(acc1 s< 0)) * zext(ovf1);
+	local proacc2:4 = sext(Rn_VPR128.8H[96,16]) * sext(elm);
+	proacc2 = proacc2 * 2 - zext(proacc2 == 0x40000000);
+	local acc2:4 = Rd_VPR128.4S[64,32];
+	local ovf2:1 = scarry(acc2, proacc2);
+	Rd_VPR128.4S[64,32] = (acc2 + proacc2) * zext(ovf2 == 0) + (0x7fffffff + zext(acc2 s< 0)) * zext(ovf2);
+	local proacc3:4 = sext(Rn_VPR128.8H[112,16]) * sext(elm);
+	proacc3 = proacc3 * 2 - zext(proacc3 == 0x40000000);
+	local acc3:4 = Rd_VPR128.4S[96,32];
+	local ovf3:1 = scarry(acc3, proacc3);
+	Rd_VPR128.4S[96,32] = (acc3 + proacc3) * zext(ovf3 == 0) + (0x7fffffff + zext(acc3 s< 0)) * zext(ovf3);
+	zext_zq(Zd);
 }
 
 # C7.2.285 SQDMLAL, SQDMLAL2 (vector) page C7-2650 line 154623 MATCH x5e209000/mask=xff20fc00
@@ -19436,12 +19420,12 @@ is b_31=0 & b_30=1 & b_2429=0b001111 & b_2223=0b01 & b_1215=0b0011 & b_10=0 & Re
 :sqdmlal Rd_FPR64, Rn_FPR32, Rm_FPR32
 is b_2431=0b01011110 & b_2223=0b10 & b_21=1 & b_1015=0b100100 & Rd_FPR64 & Rn_FPR32 & Rm_FPR32 & Zd
 {
-	local tmp1:8 = sext(Rn_FPR32);
-	local tmp2:8 = sext(Rm_FPR32);
-	local tmp3:8 = tmp1 * tmp2;
-	local tmp4:8 = tmp3 * 2:8;
-	Rd_FPR64 = Rd_FPR64 + tmp4;
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local proacc0:8 = sext(Rn_FPR32) * sext(Rm_FPR32);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x4000000000000000);
+	local acc0:8 = Rd_FPR64;
+	local ovf0:1 = scarry(acc0, proacc0);
+	Rd_FPR64 = (acc0 + proacc0) * zext(ovf0 == 0) + (0x7fffffffffffffff + zext(acc0 s< 0)) * zext(ovf0);
+	zext_zd(Zd);
 }
 
 # C7.2.285 SQDMLAL, SQDMLAL2 (vector) page C7-2650 line 154623 MATCH x5e209000/mask=xff20fc00
@@ -19454,12 +19438,12 @@ is b_2431=0b01011110 & b_2223=0b10 & b_21=1 & b_1015=0b100100 & Rd_FPR64 & Rn_FP
 :sqdmlal Rd_FPR32, Rn_FPR16, Rm_FPR16
 is b_2431=0b01011110 & b_2223=0b01 & b_21=1 & b_1015=0b100100 & Rd_FPR32 & Rn_FPR16 & Rm_FPR16 & Zd
 {
-	local tmp1:4 = sext(Rn_FPR16);
-	local tmp2:4 = sext(Rm_FPR16);
-	local tmp3:4 = tmp1 * tmp2;
-	local tmp4:4 = tmp3 * 2:4;
-	Rd_FPR32 = Rd_FPR32 + tmp4;
-	zext_zs(Zd); # zero upper 28 bytes of Zd
+	local proacc0:4 = sext(Rn_FPR16) * sext(Rm_FPR16);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x40000000);
+	local acc0:4 = Rd_FPR32;
+	local ovf0:1 = scarry(acc0, proacc0);
+	Rd_FPR32 = (acc0 + proacc0) * zext(ovf0 == 0) + (0x7fffffff + zext(acc0 s< 0)) * zext(ovf0);
+	zext_zs(Zd);
 }
 
 # C7.2.285 SQDMLAL, SQDMLAL2 (vector) page C7-2650 line 154623 MATCH x0e209000/mask=xbf20fc00
@@ -19472,22 +19456,17 @@ is b_2431=0b01011110 & b_2223=0b01 & b_21=1 & b_1015=0b100100 & Rd_FPR32 & Rn_FP
 :sqdmlal Rd_VPR128.2D, Rn_VPR64.2S, Rm_VPR64.2S
 is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b10 & b_21=1 & b_1015=0b100100 & Rn_VPR64.2S & Rd_VPR128.2D & Rm_VPR64.2S & Zd
 {
-	# simd resize TMPQ1 = sext(Rn_VPR64.2S) (lane size 4 to 8)
-	TMPQ1[0,64] = sext(Rn_VPR64.2S[0,32]);
-	TMPQ1[64,64] = sext(Rn_VPR64.2S[32,32]);
-	# simd resize TMPQ2 = sext(Rm_VPR64.2S) (lane size 4 to 8)
-	TMPQ2[0,64] = sext(Rm_VPR64.2S[0,32]);
-	TMPQ2[64,64] = sext(Rm_VPR64.2S[32,32]);
-	# simd infix TMPQ3 = TMPQ1 * TMPQ2 on lane size 8
-	TMPQ3[0,64] = TMPQ1[0,64] * TMPQ2[0,64];
-	TMPQ3[64,64] = TMPQ1[64,64] * TMPQ2[64,64];
-	# simd infix TMPQ4 = TMPQ3 * 2:8 on lane size 8
-	TMPQ4[0,64] = TMPQ3[0,64] * 2:8;
-	TMPQ4[64,64] = TMPQ3[64,64] * 2:8;
-	# simd infix Rd_VPR128.2D = Rd_VPR128.2D + TMPQ4 on lane size 8
-	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] + TMPQ4[0,64];
-	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] + TMPQ4[64,64];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local proacc0:8 = sext(Rn_VPR64.2S[0,32]) * sext(Rm_VPR64.2S[0,32]);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x4000000000000000);
+	local acc0:8 = Rd_VPR128.2D[0,64];
+	local ovf0:1 = scarry(acc0, proacc0);
+	Rd_VPR128.2D[0,64] = (acc0 + proacc0) * zext(ovf0 == 0) + (0x7fffffffffffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:8 = sext(Rn_VPR64.2S[32,32]) * sext(Rm_VPR64.2S[32,32]);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x4000000000000000);
+	local acc1:8 = Rd_VPR128.2D[64,64];
+	local ovf1:1 = scarry(acc1, proacc1);
+	Rd_VPR128.2D[64,64] = (acc1 + proacc1) * zext(ovf1 == 0) + (0x7fffffffffffffff + zext(acc1 s< 0)) * zext(ovf1);
+	zext_zq(Zd);
 }
 
 # C7.2.285 SQDMLAL, SQDMLAL2 (vector) page C7-2650 line 154623 MATCH x0e209000/mask=xbf20fc00
@@ -19500,32 +19479,27 @@ is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b10 & b_21=1 & b_1015=0b100100 & 
 :sqdmlal Rd_VPR128.4S, Rn_VPR64.4H, Rm_VPR64.4H
 is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b01 & b_21=1 & b_1015=0b100100 & Rn_VPR64.4H & Rd_VPR128.4S & Rm_VPR64.4H & Zd
 {
-	# simd resize TMPQ1 = sext(Rn_VPR64.4H) (lane size 2 to 4)
-	TMPQ1[0,32] = sext(Rn_VPR64.4H[0,16]);
-	TMPQ1[32,32] = sext(Rn_VPR64.4H[16,16]);
-	TMPQ1[64,32] = sext(Rn_VPR64.4H[32,16]);
-	TMPQ1[96,32] = sext(Rn_VPR64.4H[48,16]);
-	# simd resize TMPQ2 = sext(Rm_VPR64.4H) (lane size 2 to 4)
-	TMPQ2[0,32] = sext(Rm_VPR64.4H[0,16]);
-	TMPQ2[32,32] = sext(Rm_VPR64.4H[16,16]);
-	TMPQ2[64,32] = sext(Rm_VPR64.4H[32,16]);
-	TMPQ2[96,32] = sext(Rm_VPR64.4H[48,16]);
-	# simd infix TMPQ3 = TMPQ1 * TMPQ2 on lane size 4
-	TMPQ3[0,32] = TMPQ1[0,32] * TMPQ2[0,32];
-	TMPQ3[32,32] = TMPQ1[32,32] * TMPQ2[32,32];
-	TMPQ3[64,32] = TMPQ1[64,32] * TMPQ2[64,32];
-	TMPQ3[96,32] = TMPQ1[96,32] * TMPQ2[96,32];
-	# simd infix TMPQ4 = TMPQ3 * 2:4 on lane size 4
-	TMPQ4[0,32] = TMPQ3[0,32] * 2:4;
-	TMPQ4[32,32] = TMPQ3[32,32] * 2:4;
-	TMPQ4[64,32] = TMPQ3[64,32] * 2:4;
-	TMPQ4[96,32] = TMPQ3[96,32] * 2:4;
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S + TMPQ4 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + TMPQ4[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + TMPQ4[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + TMPQ4[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + TMPQ4[96,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local proacc0:4 = sext(Rn_VPR64.4H[0,16]) * sext(Rm_VPR64.4H[0,16]);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x40000000);
+	local acc0:4 = Rd_VPR128.4S[0,32];
+	local ovf0:1 = scarry(acc0, proacc0);
+	Rd_VPR128.4S[0,32] = (acc0 + proacc0) * zext(ovf0 == 0) + (0x7fffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:4 = sext(Rn_VPR64.4H[16,16]) * sext(Rm_VPR64.4H[16,16]);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x40000000);
+	local acc1:4 = Rd_VPR128.4S[32,32];
+	local ovf1:1 = scarry(acc1, proacc1);
+	Rd_VPR128.4S[32,32] = (acc1 + proacc1) * zext(ovf1 == 0) + (0x7fffffff + zext(acc1 s< 0)) * zext(ovf1);
+	local proacc2:4 = sext(Rn_VPR64.4H[32,16]) * sext(Rm_VPR64.4H[32,16]);
+	proacc2 = proacc2 * 2 - zext(proacc2 == 0x40000000);
+	local acc2:4 = Rd_VPR128.4S[64,32];
+	local ovf2:1 = scarry(acc2, proacc2);
+	Rd_VPR128.4S[64,32] = (acc2 + proacc2) * zext(ovf2 == 0) + (0x7fffffff + zext(acc2 s< 0)) * zext(ovf2);
+	local proacc3:4 = sext(Rn_VPR64.4H[48,16]) * sext(Rm_VPR64.4H[48,16]);
+	proacc3 = proacc3 * 2 - zext(proacc3 == 0x40000000);
+	local acc3:4 = Rd_VPR128.4S[96,32];
+	local ovf3:1 = scarry(acc3, proacc3);
+	Rd_VPR128.4S[96,32] = (acc3 + proacc3) * zext(ovf3 == 0) + (0x7fffffff + zext(acc3 s< 0)) * zext(ovf3);
+	zext_zq(Zd);
 }
 
 # C7.2.285 SQDMLAL, SQDMLAL2 (vector) page C7-2650 line 154623 MATCH x0e209000/mask=xbf20fc00
@@ -19538,24 +19512,17 @@ is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b01 & b_21=1 & b_1015=0b100100 & 
 :sqdmlal2 Rd_VPR128.2D, Rn_VPR128.4S, Rm_VPR128.4S
 is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b10 & b_21=1 & b_1015=0b100100 & Rn_VPR128.4S & Rd_VPR128.2D & Rm_VPR128.4S & Zd
 {
-	TMPD1 = Rn_VPR128.4S[64,64];
-	# simd resize TMPQ2 = sext(TMPD1) (lane size 4 to 8)
-	TMPQ2[0,64] = sext(TMPD1[0,32]);
-	TMPQ2[64,64] = sext(TMPD1[32,32]);
-	TMPD3 = Rm_VPR128.4S[64,64];
-	# simd resize TMPQ4 = sext(TMPD3) (lane size 4 to 8)
-	TMPQ4[0,64] = sext(TMPD3[0,32]);
-	TMPQ4[64,64] = sext(TMPD3[32,32]);
-	# simd infix TMPQ5 = TMPQ2 * TMPQ4 on lane size 8
-	TMPQ5[0,64] = TMPQ2[0,64] * TMPQ4[0,64];
-	TMPQ5[64,64] = TMPQ2[64,64] * TMPQ4[64,64];
-	# simd infix TMPQ6 = TMPQ5 * 2:8 on lane size 8
-	TMPQ6[0,64] = TMPQ5[0,64] * 2:8;
-	TMPQ6[64,64] = TMPQ5[64,64] * 2:8;
-	# simd infix Rd_VPR128.2D = Rd_VPR128.2D + TMPQ6 on lane size 8
-	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] + TMPQ6[0,64];
-	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] + TMPQ6[64,64];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local proacc0:8 = sext(Rn_VPR128.4S[64,32]) * sext(Rm_VPR128.4S[64,32]);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x4000000000000000);
+	local acc0:8 = Rd_VPR128.2D[0,64];
+	local ovf0:1 = scarry(acc0, proacc0);
+	Rd_VPR128.2D[0,64] = (acc0 + proacc0) * zext(ovf0 == 0) + (0x7fffffffffffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:8 = sext(Rn_VPR128.4S[96,32]) * sext(Rm_VPR128.4S[96,32]);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x4000000000000000);
+	local acc1:8 = Rd_VPR128.2D[64,64];
+	local ovf1:1 = scarry(acc1, proacc1);
+	Rd_VPR128.2D[64,64] = (acc1 + proacc1) * zext(ovf1 == 0) + (0x7fffffffffffffff + zext(acc1 s< 0)) * zext(ovf1);
+	zext_zq(Zd);
 }
 
 # C7.2.285 SQDMLAL, SQDMLAL2 (vector) page C7-2650 line 154623 MATCH x0e209000/mask=xbf20fc00
@@ -19568,34 +19535,27 @@ is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b10 & b_21=1 & b_1015=0b100100 & 
 :sqdmlal2 Rd_VPR128.4S, Rn_VPR128.8H, Rm_VPR128.8H
 is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b01 & b_21=1 & b_1015=0b100100 & Rn_VPR128.8H & Rd_VPR128.4S & Rm_VPR128.8H & Zd
 {
-	TMPD1 = Rn_VPR128.8H[64,64];
-	# simd resize TMPQ2 = sext(TMPD1) (lane size 2 to 4)
-	TMPQ2[0,32] = sext(TMPD1[0,16]);
-	TMPQ2[32,32] = sext(TMPD1[16,16]);
-	TMPQ2[64,32] = sext(TMPD1[32,16]);
-	TMPQ2[96,32] = sext(TMPD1[48,16]);
-	TMPD3 = Rm_VPR128.8H[64,64];
-	# simd resize TMPQ4 = sext(TMPD3) (lane size 2 to 4)
-	TMPQ4[0,32] = sext(TMPD3[0,16]);
-	TMPQ4[32,32] = sext(TMPD3[16,16]);
-	TMPQ4[64,32] = sext(TMPD3[32,16]);
-	TMPQ4[96,32] = sext(TMPD3[48,16]);
-	# simd infix TMPQ5 = TMPQ2 * TMPQ4 on lane size 4
-	TMPQ5[0,32] = TMPQ2[0,32] * TMPQ4[0,32];
-	TMPQ5[32,32] = TMPQ2[32,32] * TMPQ4[32,32];
-	TMPQ5[64,32] = TMPQ2[64,32] * TMPQ4[64,32];
-	TMPQ5[96,32] = TMPQ2[96,32] * TMPQ4[96,32];
-	# simd infix TMPQ6 = TMPQ5 * 2:4 on lane size 4
-	TMPQ6[0,32] = TMPQ5[0,32] * 2:4;
-	TMPQ6[32,32] = TMPQ5[32,32] * 2:4;
-	TMPQ6[64,32] = TMPQ5[64,32] * 2:4;
-	TMPQ6[96,32] = TMPQ5[96,32] * 2:4;
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S + TMPQ6 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + TMPQ6[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + TMPQ6[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + TMPQ6[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + TMPQ6[96,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local proacc0:4 = sext(Rn_VPR128.8H[64,16]) * sext(Rm_VPR128.8H[64,16]);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x40000000);
+	local acc0:4 = Rd_VPR128.4S[0,32];
+	local ovf0:1 = scarry(acc0, proacc0);
+	Rd_VPR128.4S[0,32] = (acc0 + proacc0) * zext(ovf0 == 0) + (0x7fffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:4 = sext(Rn_VPR128.8H[80,16]) * sext(Rm_VPR128.8H[80,16]);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x40000000);
+	local acc1:4 = Rd_VPR128.4S[32,32];
+	local ovf1:1 = scarry(acc1, proacc1);
+	Rd_VPR128.4S[32,32] = (acc1 + proacc1) * zext(ovf1 == 0) + (0x7fffffff + zext(acc1 s< 0)) * zext(ovf1);
+	local proacc2:4 = sext(Rn_VPR128.8H[96,16]) * sext(Rm_VPR128.8H[96,16]);
+	proacc2 = proacc2 * 2 - zext(proacc2 == 0x40000000);
+	local acc2:4 = Rd_VPR128.4S[64,32];
+	local ovf2:1 = scarry(acc2, proacc2);
+	Rd_VPR128.4S[64,32] = (acc2 + proacc2) * zext(ovf2 == 0) + (0x7fffffff + zext(acc2 s< 0)) * zext(ovf2);
+	local proacc3:4 = sext(Rn_VPR128.8H[112,16]) * sext(Rm_VPR128.8H[112,16]);
+	proacc3 = proacc3 * 2 - zext(proacc3 == 0x40000000);
+	local acc3:4 = Rd_VPR128.4S[96,32];
+	local ovf3:1 = scarry(acc3, proacc3);
+	Rd_VPR128.4S[96,32] = (acc3 + proacc3) * zext(ovf3 == 0) + (0x7fffffff + zext(acc3 s< 0)) * zext(ovf3);
+	zext_zq(Zd);
 }
 
 # C7.2.286 SQDMLSL, SQDMLSL2 (by element) page C7-2653 line 154796 MATCH x5f007000/mask=xff00f400
@@ -19608,14 +19568,13 @@ is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b01 & b_21=1 & b_1015=0b100100 & 
 :sqdmlsl Rd_FPR64, Rn_FPR32, Re_VPR128.S.vIndex
 is b_2431=0b01011111 & b_2223=0b10 & b_1215=0b0111 & b_10=0 & Re_VPR128.S.vIndex & Re_VPR128.S & vIndex & Rd_FPR64 & Rn_FPR32 & Zd
 {
-	local tmp1:8 = sext(Rn_FPR32);
-	# simd element Re_VPR128.S[vIndex] lane size 4
-	local tmp2:4 = Re_VPR128.S.vIndex;
-	local tmp3:8 = sext(tmp2);
-	local tmp4:8 = tmp1 * tmp3;
-	local tmp5:8 = tmp4 * 2:8;
-	Rd_FPR64 = Rd_FPR64 - tmp5;
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local elm:4 = Re_VPR128.S.vIndex;
+	local proacc0:8 = sext(Rn_FPR32) * sext(elm);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x4000000000000000);
+	local acc0:8 = Rd_FPR64;
+	local ovf0:1 = sborrow(acc0, proacc0);
+	Rd_FPR64 = (acc0 - proacc0) * zext(ovf0 == 0) + (0x7fffffffffffffff + zext(acc0 s< 0)) * zext(ovf0);
+	zext_zd(Zd);
 }
 
 # C7.2.286 SQDMLSL, SQDMLSL2 (by element) page C7-2653 line 154796 MATCH x5f007000/mask=xff00f400
@@ -19628,14 +19587,13 @@ is b_2431=0b01011111 & b_2223=0b10 & b_1215=0b0111 & b_10=0 & Re_VPR128.S.vIndex
 :sqdmlsl Rd_FPR32, Rn_FPR16, Re_VPR128Lo.H.vIndexHLM
 is b_2431=0b01011111 & b_2223=0b01 & b_1215=0b0111 & b_10=0 & Re_VPR128Lo.H.vIndexHLM & Re_VPR128Lo.H & vIndexHLM & Rd_FPR32 & Rn_FPR16 & Zd
 {
-	local tmp1:4 = sext(Rn_FPR16);
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	local tmp3:4 = sext(tmp2);
-	local tmp4:4 = tmp1 * tmp3;
-	local tmp5:4 = tmp4 * 2:4;
-	Rd_FPR32 = Rd_FPR32 - tmp5;
-	zext_zs(Zd); # zero upper 28 bytes of Zd
+	local elm:2 = Re_VPR128Lo.H.vIndexHLM;
+	local proacc0:4 = sext(Rn_FPR16) * sext(elm);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x40000000);
+	local acc0:4 = Rd_FPR32;
+	local ovf0:1 = sborrow(acc0, proacc0);
+	Rd_FPR32 = (acc0 - proacc0) * zext(ovf0 == 0) + (0x7fffffff + zext(acc0 s< 0)) * zext(ovf0);
+	zext_zs(Zd);
 }
 
 # C7.2.286 SQDMLSL, SQDMLSL2 (by element) page C7-2653 line 154796 MATCH x0f007000/mask=xbf00f400
@@ -19648,22 +19606,18 @@ is b_2431=0b01011111 & b_2223=0b01 & b_1215=0b0111 & b_10=0 & Re_VPR128Lo.H.vInd
 :sqdmlsl Rd_VPR128.2D, Rn_VPR64.2S, Re_VPR128.S.vIndex
 is b_31=0 & b_30=0 & b_2429=0b001111 & b_2223=0b10 & b_1215=0b0111 & b_10=0 & Re_VPR128.S.vIndex & Re_VPR128.S & vIndex & Rn_VPR64.2S & Rd_VPR128.2D & Zd
 {
-	# simd resize TMPQ1 = sext(Rn_VPR64.2S) (lane size 4 to 8)
-	TMPQ1[0,64] = sext(Rn_VPR64.2S[0,32]);
-	TMPQ1[64,64] = sext(Rn_VPR64.2S[32,32]);
-	# simd element Re_VPR128.S[vIndex] lane size 4
-	local tmp2:4 = Re_VPR128.S.vIndex;
-	local tmp3:8 = sext(tmp2);
-	# simd infix TMPQ2 = TMPQ1 * tmp3 on lane size 8
-	TMPQ2[0,64] = TMPQ1[0,64] * tmp3;
-	TMPQ2[64,64] = TMPQ1[64,64] * tmp3;
-	# simd infix TMPQ3 = TMPQ2 * 2:8 on lane size 8
-	TMPQ3[0,64] = TMPQ2[0,64] * 2:8;
-	TMPQ3[64,64] = TMPQ2[64,64] * 2:8;
-	# simd infix Rd_VPR128.2D = Rd_VPR128.2D - TMPQ3 on lane size 8
-	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] - TMPQ3[0,64];
-	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] - TMPQ3[64,64];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local elm:4 = Re_VPR128.S.vIndex;
+	local proacc0:8 = sext(Rn_VPR64.2S[0,32]) * sext(elm);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x4000000000000000);
+	local acc0:8 = Rd_VPR128.2D[0,64];
+	local ovf0:1 = sborrow(acc0, proacc0);
+	Rd_VPR128.2D[0,64] = (acc0 - proacc0) * zext(ovf0 == 0) + (0x7fffffffffffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:8 = sext(Rn_VPR64.2S[32,32]) * sext(elm);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x4000000000000000);
+	local acc1:8 = Rd_VPR128.2D[64,64];
+	local ovf1:1 = sborrow(acc1, proacc1);
+	Rd_VPR128.2D[64,64] = (acc1 - proacc1) * zext(ovf1 == 0) + (0x7fffffffffffffff + zext(acc1 s< 0)) * zext(ovf1);
+	zext_zq(Zd);
 }
 
 # C7.2.286 SQDMLSL, SQDMLSL2 (by element) page C7-2653 line 154796 MATCH x0f007000/mask=xbf00f400
@@ -19676,30 +19630,28 @@ is b_31=0 & b_30=0 & b_2429=0b001111 & b_2223=0b10 & b_1215=0b0111 & b_10=0 & Re
 :sqdmlsl Rd_VPR128.4S, Rn_VPR64.4H, Re_VPR128Lo.H.vIndexHLM
 is b_31=0 & b_30=0 & b_2429=0b001111 & b_2223=0b01 & b_1215=0b0111 & b_10=0 & Re_VPR128Lo.H.vIndexHLM & Re_VPR128Lo.H & vIndexHLM & Rn_VPR64.4H & Rd_VPR128.4S & Zd
 {
-	# simd resize TMPQ1 = sext(Rn_VPR64.4H) (lane size 2 to 4)
-	TMPQ1[0,32] = sext(Rn_VPR64.4H[0,16]);
-	TMPQ1[32,32] = sext(Rn_VPR64.4H[16,16]);
-	TMPQ1[64,32] = sext(Rn_VPR64.4H[32,16]);
-	TMPQ1[96,32] = sext(Rn_VPR64.4H[48,16]);
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	local tmp3:4 = sext(tmp2);
-	# simd infix TMPQ2 = TMPQ1 * tmp3 on lane size 4
-	TMPQ2[0,32] = TMPQ1[0,32] * tmp3;
-	TMPQ2[32,32] = TMPQ1[32,32] * tmp3;
-	TMPQ2[64,32] = TMPQ1[64,32] * tmp3;
-	TMPQ2[96,32] = TMPQ1[96,32] * tmp3;
-	# simd infix TMPQ3 = TMPQ2 * 2:4 on lane size 4
-	TMPQ3[0,32] = TMPQ2[0,32] * 2:4;
-	TMPQ3[32,32] = TMPQ2[32,32] * 2:4;
-	TMPQ3[64,32] = TMPQ2[64,32] * 2:4;
-	TMPQ3[96,32] = TMPQ2[96,32] * 2:4;
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S - TMPQ3 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] - TMPQ3[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] - TMPQ3[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] - TMPQ3[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] - TMPQ3[96,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local elm:2 = Re_VPR128Lo.H.vIndexHLM;
+	local proacc0:4 = sext(Rn_VPR64.4H[0,16]) * sext(elm);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x40000000);
+	local acc0:4 = Rd_VPR128.4S[0,32];
+	local ovf0:1 = sborrow(acc0, proacc0);
+	Rd_VPR128.4S[0,32] = (acc0 - proacc0) * zext(ovf0 == 0) + (0x7fffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:4 = sext(Rn_VPR64.4H[16,16]) * sext(elm);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x40000000);
+	local acc1:4 = Rd_VPR128.4S[32,32];
+	local ovf1:1 = sborrow(acc1, proacc1);
+	Rd_VPR128.4S[32,32] = (acc1 - proacc1) * zext(ovf1 == 0) + (0x7fffffff + zext(acc1 s< 0)) * zext(ovf1);
+	local proacc2:4 = sext(Rn_VPR64.4H[32,16]) * sext(elm);
+	proacc2 = proacc2 * 2 - zext(proacc2 == 0x40000000);
+	local acc2:4 = Rd_VPR128.4S[64,32];
+	local ovf2:1 = sborrow(acc2, proacc2);
+	Rd_VPR128.4S[64,32] = (acc2 - proacc2) * zext(ovf2 == 0) + (0x7fffffff + zext(acc2 s< 0)) * zext(ovf2);
+	local proacc3:4 = sext(Rn_VPR64.4H[48,16]) * sext(elm);
+	proacc3 = proacc3 * 2 - zext(proacc3 == 0x40000000);
+	local acc3:4 = Rd_VPR128.4S[96,32];
+	local ovf3:1 = sborrow(acc3, proacc3);
+	Rd_VPR128.4S[96,32] = (acc3 - proacc3) * zext(ovf3 == 0) + (0x7fffffff + zext(acc3 s< 0)) * zext(ovf3);
+	zext_zq(Zd);
 }
 
 # C7.2.286 SQDMLSL, SQDMLSL2 (by element) page C7-2653 line 154796 MATCH x0f007000/mask=xbf00f400
@@ -19712,23 +19664,18 @@ is b_31=0 & b_30=0 & b_2429=0b001111 & b_2223=0b01 & b_1215=0b0111 & b_10=0 & Re
 :sqdmlsl2 Rd_VPR128.2D, Rn_VPR128.4S, Re_VPR128.S.vIndex
 is b_31=0 & b_30=1 & b_2429=0b001111 & b_2223=0b10 & b_1215=0b0111 & b_10=0 & Re_VPR128.S.vIndex & Re_VPR128.S & vIndex & Rn_VPR128.4S & Rd_VPR128.2D & Zd
 {
-	TMPD1 = Rn_VPR128.4S[64,64];
-	# simd resize TMPQ2 = sext(TMPD1) (lane size 4 to 8)
-	TMPQ2[0,64] = sext(TMPD1[0,32]);
-	TMPQ2[64,64] = sext(TMPD1[32,32]);
-	# simd element Re_VPR128.S[vIndex] lane size 4
-	local tmp3:4 = Re_VPR128.S.vIndex;
-	local tmp4:8 = sext(tmp3);
-	# simd infix TMPQ3 = TMPQ2 * tmp4 on lane size 8
-	TMPQ3[0,64] = TMPQ2[0,64] * tmp4;
-	TMPQ3[64,64] = TMPQ2[64,64] * tmp4;
-	# simd infix TMPQ4 = TMPQ3 * 2:8 on lane size 8
-	TMPQ4[0,64] = TMPQ3[0,64] * 2:8;
-	TMPQ4[64,64] = TMPQ3[64,64] * 2:8;
-	# simd infix Rd_VPR128.2D = Rd_VPR128.2D - TMPQ4 on lane size 8
-	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] - TMPQ4[0,64];
-	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] - TMPQ4[64,64];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local elm:4 = Re_VPR128.S.vIndex;
+	local proacc0:8 = sext(Rn_VPR128.4S[64,32]) * sext(elm);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x4000000000000000);
+	local acc0:8 = Rd_VPR128.2D[0,64];
+	local ovf0:1 = sborrow(acc0, proacc0);
+	Rd_VPR128.2D[0,64] = (acc0 - proacc0) * zext(ovf0 == 0) + (0x7fffffffffffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:8 = sext(Rn_VPR128.4S[96,32]) * sext(elm);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x4000000000000000);
+	local acc1:8 = Rd_VPR128.2D[64,64];
+	local ovf1:1 = sborrow(acc1, proacc1);
+	Rd_VPR128.2D[64,64] = (acc1 - proacc1) * zext(ovf1 == 0) + (0x7fffffffffffffff + zext(acc1 s< 0)) * zext(ovf1);
+	zext_zq(Zd);
 }
 
 # C7.2.286 SQDMLSL, SQDMLSL2 (by element) page C7-2653 line 154796 MATCH x0f007000/mask=xbf00f400
@@ -19741,31 +19688,28 @@ is b_31=0 & b_30=1 & b_2429=0b001111 & b_2223=0b10 & b_1215=0b0111 & b_10=0 & Re
 :sqdmlsl2 Rd_VPR128.4S, Rn_VPR128.8H, Re_VPR128Lo.H.vIndexHLM
 is b_31=0 & b_30=1 & b_2429=0b001111 & b_2223=0b01 & b_1215=0b0111 & b_10=0 & Re_VPR128Lo.H.vIndexHLM & Re_VPR128Lo.H & vIndexHLM & Rn_VPR128.8H & Rd_VPR128.4S & Zd
 {
-	TMPD1 = Rn_VPR128.8H[64,64];
-	# simd resize TMPQ2 = sext(TMPD1) (lane size 2 to 4)
-	TMPQ2[0,32] = sext(TMPD1[0,16]);
-	TMPQ2[32,32] = sext(TMPD1[16,16]);
-	TMPQ2[64,32] = sext(TMPD1[32,16]);
-	TMPQ2[96,32] = sext(TMPD1[48,16]);
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp3:2 = Re_VPR128Lo.H.vIndexHLM;
-	local tmp4:4 = sext(tmp3);
-	# simd infix TMPQ3 = TMPQ2 * tmp4 on lane size 4
-	TMPQ3[0,32] = TMPQ2[0,32] * tmp4;
-	TMPQ3[32,32] = TMPQ2[32,32] * tmp4;
-	TMPQ3[64,32] = TMPQ2[64,32] * tmp4;
-	TMPQ3[96,32] = TMPQ2[96,32] * tmp4;
-	# simd infix TMPQ4 = TMPQ3 * 2:4 on lane size 4
-	TMPQ4[0,32] = TMPQ3[0,32] * 2:4;
-	TMPQ4[32,32] = TMPQ3[32,32] * 2:4;
-	TMPQ4[64,32] = TMPQ3[64,32] * 2:4;
-	TMPQ4[96,32] = TMPQ3[96,32] * 2:4;
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S - TMPQ4 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] - TMPQ4[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] - TMPQ4[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] - TMPQ4[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] - TMPQ4[96,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local elm:2 = Re_VPR128Lo.H.vIndexHLM;
+	local proacc0:4 = sext(Rn_VPR128.8H[64,16]) * sext(elm);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x40000000);
+	local acc0:4 = Rd_VPR128.4S[0,32];
+	local ovf0:1 = sborrow(acc0, proacc0);
+	Rd_VPR128.4S[0,32] = (acc0 - proacc0) * zext(ovf0 == 0) + (0x7fffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:4 = sext(Rn_VPR128.8H[80,16]) * sext(elm);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x40000000);
+	local acc1:4 = Rd_VPR128.4S[32,32];
+	local ovf1:1 = sborrow(acc1, proacc1);
+	Rd_VPR128.4S[32,32] = (acc1 - proacc1) * zext(ovf1 == 0) + (0x7fffffff + zext(acc1 s< 0)) * zext(ovf1);
+	local proacc2:4 = sext(Rn_VPR128.8H[96,16]) * sext(elm);
+	proacc2 = proacc2 * 2 - zext(proacc2 == 0x40000000);
+	local acc2:4 = Rd_VPR128.4S[64,32];
+	local ovf2:1 = sborrow(acc2, proacc2);
+	Rd_VPR128.4S[64,32] = (acc2 - proacc2) * zext(ovf2 == 0) + (0x7fffffff + zext(acc2 s< 0)) * zext(ovf2);
+	local proacc3:4 = sext(Rn_VPR128.8H[112,16]) * sext(elm);
+	proacc3 = proacc3 * 2 - zext(proacc3 == 0x40000000);
+	local acc3:4 = Rd_VPR128.4S[96,32];
+	local ovf3:1 = sborrow(acc3, proacc3);
+	Rd_VPR128.4S[96,32] = (acc3 - proacc3) * zext(ovf3 == 0) + (0x7fffffff + zext(acc3 s< 0)) * zext(ovf3);
+	zext_zq(Zd);
 }
 
 # C7.2.287 SQDMLSL, SQDMLSL2 (vector) page C7-2657 line 155015 MATCH x5e20b000/mask=xff20fc00
@@ -19778,12 +19722,12 @@ is b_31=0 & b_30=1 & b_2429=0b001111 & b_2223=0b01 & b_1215=0b0111 & b_10=0 & Re
 :sqdmlsl Rd_FPR64, Rn_FPR32, Rm_FPR32
 is b_2431=0b01011110 & b_2223=0b10 & b_21=1 & b_1015=0b101100 & Rd_FPR64 & Rn_FPR32 & Rm_FPR32 & Zd
 {
-	local tmp1:8 = sext(Rn_FPR32);
-	local tmp2:8 = sext(Rm_FPR32);
-	local tmp3:8 = tmp1 * tmp2;
-	local tmp4:8 = tmp3 * 2:8;
-	Rd_FPR64 = Rd_FPR64 - tmp4;
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local proacc0:8 = sext(Rn_FPR32) * sext(Rm_FPR32);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x4000000000000000);
+	local acc0:8 = Rd_FPR64;
+	local ovf0:1 = sborrow(acc0, proacc0);
+	Rd_FPR64 = (acc0 - proacc0) * zext(ovf0 == 0) + (0x7fffffffffffffff + zext(acc0 s< 0)) * zext(ovf0);
+	zext_zd(Zd);
 }
 
 # C7.2.287 SQDMLSL, SQDMLSL2 (vector) page C7-2657 line 155015 MATCH x5e20b000/mask=xff20fc00
@@ -19796,12 +19740,12 @@ is b_2431=0b01011110 & b_2223=0b10 & b_21=1 & b_1015=0b101100 & Rd_FPR64 & Rn_FP
 :sqdmlsl Rd_FPR32, Rn_FPR16, Rm_FPR16
 is b_2431=0b01011110 & b_2223=0b01 & b_21=1 & b_1015=0b101100 & Rd_FPR32 & Rn_FPR16 & Rm_FPR16 & Zd
 {
-	local tmp1:4 = sext(Rn_FPR16);
-	local tmp2:4 = sext(Rm_FPR16);
-	local tmp3:4 = tmp1 * tmp2;
-	local tmp4:4 = tmp3 * 2:4;
-	Rd_FPR32 = Rd_FPR32 - tmp4;
-	zext_zs(Zd); # zero upper 28 bytes of Zd
+	local proacc0:4 = sext(Rn_FPR16) * sext(Rm_FPR16);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x40000000);
+	local acc0:4 = Rd_FPR32;
+	local ovf0:1 = sborrow(acc0, proacc0);
+	Rd_FPR32 = (acc0 - proacc0) * zext(ovf0 == 0) + (0x7fffffff + zext(acc0 s< 0)) * zext(ovf0);
+	zext_zs(Zd);
 }
 
 # C7.2.287 SQDMLSL, SQDMLSL2 (vector) page C7-2657 line 155015 MATCH x0e20b000/mask=xbf20fc00
@@ -19814,22 +19758,17 @@ is b_2431=0b01011110 & b_2223=0b01 & b_21=1 & b_1015=0b101100 & Rd_FPR32 & Rn_FP
 :sqdmlsl Rd_VPR128.2D, Rn_VPR64.2S, Rm_VPR64.2S
 is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b10 & b_21=1 & b_1015=0b101100 & Rn_VPR64.2S & Rd_VPR128.2D & Rm_VPR64.2S & Zd
 {
-	# simd resize TMPQ1 = sext(Rn_VPR64.2S) (lane size 4 to 8)
-	TMPQ1[0,64] = sext(Rn_VPR64.2S[0,32]);
-	TMPQ1[64,64] = sext(Rn_VPR64.2S[32,32]);
-	# simd resize TMPQ2 = sext(Rm_VPR64.2S) (lane size 4 to 8)
-	TMPQ2[0,64] = sext(Rm_VPR64.2S[0,32]);
-	TMPQ2[64,64] = sext(Rm_VPR64.2S[32,32]);
-	# simd infix TMPQ3 = TMPQ1 * TMPQ2 on lane size 8
-	TMPQ3[0,64] = TMPQ1[0,64] * TMPQ2[0,64];
-	TMPQ3[64,64] = TMPQ1[64,64] * TMPQ2[64,64];
-	# simd infix TMPQ4 = TMPQ3 * 2:8 on lane size 8
-	TMPQ4[0,64] = TMPQ3[0,64] * 2:8;
-	TMPQ4[64,64] = TMPQ3[64,64] * 2:8;
-	# simd infix Rd_VPR128.2D = Rd_VPR128.2D - TMPQ4 on lane size 8
-	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] - TMPQ4[0,64];
-	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] - TMPQ4[64,64];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local proacc0:8 = sext(Rn_VPR64.2S[0,32]) * sext(Rm_VPR64.2S[0,32]);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x4000000000000000);
+	local acc0:8 = Rd_VPR128.2D[0,64];
+	local ovf0:1 = sborrow(acc0, proacc0);
+	Rd_VPR128.2D[0,64] = (acc0 - proacc0) * zext(ovf0 == 0) + (0x7fffffffffffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:8 = sext(Rn_VPR64.2S[32,32]) * sext(Rm_VPR64.2S[32,32]);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x4000000000000000);
+	local acc1:8 = Rd_VPR128.2D[64,64];
+	local ovf1:1 = sborrow(acc1, proacc1);
+	Rd_VPR128.2D[64,64] = (acc1 - proacc1) * zext(ovf1 == 0) + (0x7fffffffffffffff + zext(acc1 s< 0)) * zext(ovf1);
+	zext_zq(Zd);
 }
 
 # C7.2.287 SQDMLSL, SQDMLSL2 (vector) page C7-2657 line 155015 MATCH x0e20b000/mask=xbf20fc00
@@ -19842,32 +19781,27 @@ is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b10 & b_21=1 & b_1015=0b101100 & 
 :sqdmlsl Rd_VPR128.4S, Rn_VPR64.4H, Rm_VPR64.4H
 is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b01 & b_21=1 & b_1015=0b101100 & Rn_VPR64.4H & Rd_VPR128.4S & Rm_VPR64.4H & Zd
 {
-	# simd resize TMPQ1 = sext(Rn_VPR64.4H) (lane size 2 to 4)
-	TMPQ1[0,32] = sext(Rn_VPR64.4H[0,16]);
-	TMPQ1[32,32] = sext(Rn_VPR64.4H[16,16]);
-	TMPQ1[64,32] = sext(Rn_VPR64.4H[32,16]);
-	TMPQ1[96,32] = sext(Rn_VPR64.4H[48,16]);
-	# simd resize TMPQ2 = sext(Rm_VPR64.4H) (lane size 2 to 4)
-	TMPQ2[0,32] = sext(Rm_VPR64.4H[0,16]);
-	TMPQ2[32,32] = sext(Rm_VPR64.4H[16,16]);
-	TMPQ2[64,32] = sext(Rm_VPR64.4H[32,16]);
-	TMPQ2[96,32] = sext(Rm_VPR64.4H[48,16]);
-	# simd infix TMPQ3 = TMPQ1 * TMPQ2 on lane size 4
-	TMPQ3[0,32] = TMPQ1[0,32] * TMPQ2[0,32];
-	TMPQ3[32,32] = TMPQ1[32,32] * TMPQ2[32,32];
-	TMPQ3[64,32] = TMPQ1[64,32] * TMPQ2[64,32];
-	TMPQ3[96,32] = TMPQ1[96,32] * TMPQ2[96,32];
-	# simd infix TMPQ4 = TMPQ3 * 2:4 on lane size 4
-	TMPQ4[0,32] = TMPQ3[0,32] * 2:4;
-	TMPQ4[32,32] = TMPQ3[32,32] * 2:4;
-	TMPQ4[64,32] = TMPQ3[64,32] * 2:4;
-	TMPQ4[96,32] = TMPQ3[96,32] * 2:4;
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S - TMPQ4 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] - TMPQ4[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] - TMPQ4[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] - TMPQ4[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] - TMPQ4[96,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local proacc0:4 = sext(Rn_VPR64.4H[0,16]) * sext(Rm_VPR64.4H[0,16]);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x40000000);
+	local acc0:4 = Rd_VPR128.4S[0,32];
+	local ovf0:1 = sborrow(acc0, proacc0);
+	Rd_VPR128.4S[0,32] = (acc0 - proacc0) * zext(ovf0 == 0) + (0x7fffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:4 = sext(Rn_VPR64.4H[16,16]) * sext(Rm_VPR64.4H[16,16]);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x40000000);
+	local acc1:4 = Rd_VPR128.4S[32,32];
+	local ovf1:1 = sborrow(acc1, proacc1);
+	Rd_VPR128.4S[32,32] = (acc1 - proacc1) * zext(ovf1 == 0) + (0x7fffffff + zext(acc1 s< 0)) * zext(ovf1);
+	local proacc2:4 = sext(Rn_VPR64.4H[32,16]) * sext(Rm_VPR64.4H[32,16]);
+	proacc2 = proacc2 * 2 - zext(proacc2 == 0x40000000);
+	local acc2:4 = Rd_VPR128.4S[64,32];
+	local ovf2:1 = sborrow(acc2, proacc2);
+	Rd_VPR128.4S[64,32] = (acc2 - proacc2) * zext(ovf2 == 0) + (0x7fffffff + zext(acc2 s< 0)) * zext(ovf2);
+	local proacc3:4 = sext(Rn_VPR64.4H[48,16]) * sext(Rm_VPR64.4H[48,16]);
+	proacc3 = proacc3 * 2 - zext(proacc3 == 0x40000000);
+	local acc3:4 = Rd_VPR128.4S[96,32];
+	local ovf3:1 = sborrow(acc3, proacc3);
+	Rd_VPR128.4S[96,32] = (acc3 - proacc3) * zext(ovf3 == 0) + (0x7fffffff + zext(acc3 s< 0)) * zext(ovf3);
+	zext_zq(Zd);
 }
 
 # C7.2.287 SQDMLSL, SQDMLSL2 (vector) page C7-2657 line 155015 MATCH x0e20b000/mask=xbf20fc00
@@ -19880,24 +19814,17 @@ is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b01 & b_21=1 & b_1015=0b101100 & 
 :sqdmlsl2 Rd_VPR128.2D, Rn_VPR128.4S, Rm_VPR128.4S
 is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b10 & b_21=1 & b_1015=0b101100 & Rn_VPR128.4S & Rd_VPR128.2D & Rm_VPR128.4S & Zd
 {
-	TMPD1 = Rn_VPR128.4S[64,64];
-	# simd resize TMPQ2 = sext(TMPD1) (lane size 4 to 8)
-	TMPQ2[0,64] = sext(TMPD1[0,32]);
-	TMPQ2[64,64] = sext(TMPD1[32,32]);
-	TMPD3 = Rm_VPR128.4S[64,64];
-	# simd resize TMPQ4 = sext(TMPD3) (lane size 4 to 8)
-	TMPQ4[0,64] = sext(TMPD3[0,32]);
-	TMPQ4[64,64] = sext(TMPD3[32,32]);
-	# simd infix TMPQ5 = TMPQ2 * TMPQ4 on lane size 8
-	TMPQ5[0,64] = TMPQ2[0,64] * TMPQ4[0,64];
-	TMPQ5[64,64] = TMPQ2[64,64] * TMPQ4[64,64];
-	# simd infix TMPQ6 = TMPQ5 * 2:8 on lane size 8
-	TMPQ6[0,64] = TMPQ5[0,64] * 2:8;
-	TMPQ6[64,64] = TMPQ5[64,64] * 2:8;
-	# simd infix Rd_VPR128.2D = Rd_VPR128.2D - TMPQ6 on lane size 8
-	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] - TMPQ6[0,64];
-	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] - TMPQ6[64,64];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local proacc0:8 = sext(Rn_VPR128.4S[64,32]) * sext(Rm_VPR128.4S[64,32]);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x4000000000000000);
+	local acc0:8 = Rd_VPR128.2D[0,64];
+	local ovf0:1 = sborrow(acc0, proacc0);
+	Rd_VPR128.2D[0,64] = (acc0 - proacc0) * zext(ovf0 == 0) + (0x7fffffffffffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:8 = sext(Rn_VPR128.4S[96,32]) * sext(Rm_VPR128.4S[96,32]);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x4000000000000000);
+	local acc1:8 = Rd_VPR128.2D[64,64];
+	local ovf1:1 = sborrow(acc1, proacc1);
+	Rd_VPR128.2D[64,64] = (acc1 - proacc1) * zext(ovf1 == 0) + (0x7fffffffffffffff + zext(acc1 s< 0)) * zext(ovf1);
+	zext_zq(Zd);
 }
 
 # C7.2.287 SQDMLSL, SQDMLSL2 (vector) page C7-2657 line 155015 MATCH x0e20b000/mask=xbf20fc00
@@ -19910,34 +19837,27 @@ is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b10 & b_21=1 & b_1015=0b101100 & 
 :sqdmlsl2 Rd_VPR128.4S, Rn_VPR128.8H, Rm_VPR128.8H
 is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b01 & b_21=1 & b_1015=0b101100 & Rn_VPR128.8H & Rd_VPR128.4S & Rm_VPR128.8H & Zd
 {
-	TMPD1 = Rn_VPR128.8H[64,64];
-	# simd resize TMPQ2 = sext(TMPD1) (lane size 2 to 4)
-	TMPQ2[0,32] = sext(TMPD1[0,16]);
-	TMPQ2[32,32] = sext(TMPD1[16,16]);
-	TMPQ2[64,32] = sext(TMPD1[32,16]);
-	TMPQ2[96,32] = sext(TMPD1[48,16]);
-	TMPD3 = Rm_VPR128.8H[64,64];
-	# simd resize TMPQ4 = sext(TMPD3) (lane size 2 to 4)
-	TMPQ4[0,32] = sext(TMPD3[0,16]);
-	TMPQ4[32,32] = sext(TMPD3[16,16]);
-	TMPQ4[64,32] = sext(TMPD3[32,16]);
-	TMPQ4[96,32] = sext(TMPD3[48,16]);
-	# simd infix TMPQ5 = TMPQ2 * TMPQ4 on lane size 4
-	TMPQ5[0,32] = TMPQ2[0,32] * TMPQ4[0,32];
-	TMPQ5[32,32] = TMPQ2[32,32] * TMPQ4[32,32];
-	TMPQ5[64,32] = TMPQ2[64,32] * TMPQ4[64,32];
-	TMPQ5[96,32] = TMPQ2[96,32] * TMPQ4[96,32];
-	# simd infix TMPQ6 = TMPQ5 * 2:4 on lane size 4
-	TMPQ6[0,32] = TMPQ5[0,32] * 2:4;
-	TMPQ6[32,32] = TMPQ5[32,32] * 2:4;
-	TMPQ6[64,32] = TMPQ5[64,32] * 2:4;
-	TMPQ6[96,32] = TMPQ5[96,32] * 2:4;
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S - TMPQ6 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] - TMPQ6[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] - TMPQ6[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] - TMPQ6[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] - TMPQ6[96,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local proacc0:4 = sext(Rn_VPR128.8H[64,16]) * sext(Rm_VPR128.8H[64,16]);
+	proacc0 = proacc0 * 2 - zext(proacc0 == 0x40000000);
+	local acc0:4 = Rd_VPR128.4S[0,32];
+	local ovf0:1 = sborrow(acc0, proacc0);
+	Rd_VPR128.4S[0,32] = (acc0 - proacc0) * zext(ovf0 == 0) + (0x7fffffff + zext(acc0 s< 0)) * zext(ovf0);
+	local proacc1:4 = sext(Rn_VPR128.8H[80,16]) * sext(Rm_VPR128.8H[80,16]);
+	proacc1 = proacc1 * 2 - zext(proacc1 == 0x40000000);
+	local acc1:4 = Rd_VPR128.4S[32,32];
+	local ovf1:1 = sborrow(acc1, proacc1);
+	Rd_VPR128.4S[32,32] = (acc1 - proacc1) * zext(ovf1 == 0) + (0x7fffffff + zext(acc1 s< 0)) * zext(ovf1);
+	local proacc2:4 = sext(Rn_VPR128.8H[96,16]) * sext(Rm_VPR128.8H[96,16]);
+	proacc2 = proacc2 * 2 - zext(proacc2 == 0x40000000);
+	local acc2:4 = Rd_VPR128.4S[64,32];
+	local ovf2:1 = sborrow(acc2, proacc2);
+	Rd_VPR128.4S[64,32] = (acc2 - proacc2) * zext(ovf2 == 0) + (0x7fffffff + zext(acc2 s< 0)) * zext(ovf2);
+	local proacc3:4 = sext(Rn_VPR128.8H[112,16]) * sext(Rm_VPR128.8H[112,16]);
+	proacc3 = proacc3 * 2 - zext(proacc3 == 0x40000000);
+	local acc3:4 = Rd_VPR128.4S[96,32];
+	local ovf3:1 = sborrow(acc3, proacc3);
+	Rd_VPR128.4S[96,32] = (acc3 - proacc3) * zext(ovf3 == 0) + (0x7fffffff + zext(acc3 s< 0)) * zext(ovf3);
+	zext_zq(Zd);
 }
 
 # C7.2.288 SQDMULH (by element) page C7-2660 line 155188 MATCH x0f00c000/mask=xbf00f400
@@ -19949,22 +19869,14 @@ is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b01 & b_21=1 & b_1015=0b101100 & 
 :sqdmulh Rd_VPR64.2S, Rn_VPR64.2S, Re_VPR128.S.vIndex
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & advSIMD3.size=2 & Re_VPR128.S.vIndex & Re_VPR128.S & vIndex & b_1215=0xc & b_1010=0 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
-	# simd resize TMPQ1 = sext(Rn_VPR64.2S) (lane size 4 to 8)
-	TMPQ1[0,64] = sext(Rn_VPR64.2S[0,32]);
-	TMPQ1[64,64] = sext(Rn_VPR64.2S[32,32]);
-	# simd element Re_VPR128.S[vIndex] lane size 4
-	local tmp2:4 = Re_VPR128.S.vIndex;
-	local tmp3:8 = sext(tmp2);
-	# simd infix TMPQ2 = TMPQ1 * tmp3 on lane size 8
-	TMPQ2[0,64] = TMPQ1[0,64] * tmp3;
-	TMPQ2[64,64] = TMPQ1[64,64] * tmp3;
-	# simd infix TMPQ3 = TMPQ2 * 2:8 on lane size 8
-	TMPQ3[0,64] = TMPQ2[0,64] * 2:8;
-	TMPQ3[64,64] = TMPQ2[64,64] * 2:8;
-	# simd shuffle Rd_VPR64.2S = TMPQ3 (@1-0@3-1) lane size 4
-	Rd_VPR64.2S[0,32] = TMPQ3[32,32];
-	Rd_VPR64.2S[32,32] = TMPQ3[96,32];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local elm:4 = Re_VPR128.S.vIndex;
+	local proacc0:8 = sext(Rn_VPR64.2S[0,32]) * sext(elm);
+	local rnd0:8 = proacc0 * 2;
+	Rd_VPR64.2S[0,32] = rnd0(4) - zext(proacc0 == 0x4000000000000000);
+	local proacc1:8 = sext(Rn_VPR64.2S[32,32]) * sext(elm);
+	local rnd1:8 = proacc1 * 2;
+	Rd_VPR64.2S[32,32] = rnd1(4) - zext(proacc1 == 0x4000000000000000);
+	zext_zd(Zd);
 }
 
 # C7.2.288 SQDMULH (by element) page C7-2660 line 155188 MATCH x0f00c000/mask=xbf00f400
@@ -19976,30 +19888,20 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & advSIMD3.size=2 & Re_VPR128.S.vIndex & Re
 :sqdmulh Rd_VPR64.4H, Rn_VPR64.4H, Re_VPR128Lo.H.vIndexHLM
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & advSIMD3.size=1 & Re_VPR128Lo.H.vIndexHLM & Re_VPR128Lo.H & vIndexHLM & b_1215=0xc & b_1010=0 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
-	# simd resize TMPQ1 = sext(Rn_VPR64.4H) (lane size 2 to 4)
-	TMPQ1[0,32] = sext(Rn_VPR64.4H[0,16]);
-	TMPQ1[32,32] = sext(Rn_VPR64.4H[16,16]);
-	TMPQ1[64,32] = sext(Rn_VPR64.4H[32,16]);
-	TMPQ1[96,32] = sext(Rn_VPR64.4H[48,16]);
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	local tmp3:4 = sext(tmp2);
-	# simd infix TMPQ2 = TMPQ1 * tmp3 on lane size 4
-	TMPQ2[0,32] = TMPQ1[0,32] * tmp3;
-	TMPQ2[32,32] = TMPQ1[32,32] * tmp3;
-	TMPQ2[64,32] = TMPQ1[64,32] * tmp3;
-	TMPQ2[96,32] = TMPQ1[96,32] * tmp3;
-	# simd infix TMPQ3 = TMPQ2 * 2:4 on lane size 4
-	TMPQ3[0,32] = TMPQ2[0,32] * 2:4;
-	TMPQ3[32,32] = TMPQ2[32,32] * 2:4;
-	TMPQ3[64,32] = TMPQ2[64,32] * 2:4;
-	TMPQ3[96,32] = TMPQ2[96,32] * 2:4;
-	# simd shuffle Rd_VPR64.4H = TMPQ3 (@1-0@3-1@5-2@7-3) lane size 2
-	Rd_VPR64.4H[0,16] = TMPQ3[16,16];
-	Rd_VPR64.4H[16,16] = TMPQ3[48,16];
-	Rd_VPR64.4H[32,16] = TMPQ3[80,16];
-	Rd_VPR64.4H[48,16] = TMPQ3[112,16];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local elm:2 = Re_VPR128Lo.H.vIndexHLM;
+	local proacc0:4 = sext(Rn_VPR64.4H[0,16]) * sext(elm);
+	local rnd0:4 = proacc0 * 2;
+	Rd_VPR64.4H[0,16] = rnd0(2) - zext(proacc0 == 0x40000000);
+	local proacc1:4 = sext(Rn_VPR64.4H[16,16]) * sext(elm);
+	local rnd1:4 = proacc1 * 2;
+	Rd_VPR64.4H[16,16] = rnd1(2) - zext(proacc1 == 0x40000000);
+	local proacc2:4 = sext(Rn_VPR64.4H[32,16]) * sext(elm);
+	local rnd2:4 = proacc2 * 2;
+	Rd_VPR64.4H[32,16] = rnd2(2) - zext(proacc2 == 0x40000000);
+	local proacc3:4 = sext(Rn_VPR64.4H[48,16]) * sext(elm);
+	local rnd3:4 = proacc3 * 2;
+	Rd_VPR64.4H[48,16] = rnd3(2) - zext(proacc3 == 0x40000000);
+	zext_zd(Zd);
 }
 
 # C7.2.288 SQDMULH (by element) page C7-2660 line 155188 MATCH x0f00c000/mask=xbf00f400
@@ -20011,30 +19913,20 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & advSIMD3.size=1 & Re_VPR128Lo.H.vIndexHLM
 :sqdmulh Rd_VPR128.4S, Rn_VPR128.4S, Re_VPR128.S.vIndex
 is b_3131=0 & q=1 & u=0 & b_2428=0xf & advSIMD3.size=2 & Re_VPR128.S.vIndex & Re_VPR128.S & vIndex & b_1215=0xc & b_1010=0 & Rn_VPR128.4S & Rd_VPR128.4S & Zd
 {
-	# simd resize TMPZ1 = sext(Rn_VPR128.4S) (lane size 4 to 8)
-	TMPZ1[0,64] = sext(Rn_VPR128.4S[0,32]);
-	TMPZ1[64,64] = sext(Rn_VPR128.4S[32,32]);
-	TMPZ1[128,64] = sext(Rn_VPR128.4S[64,32]);
-	TMPZ1[192,64] = sext(Rn_VPR128.4S[96,32]);
-	# simd element Re_VPR128.S[vIndex] lane size 4
-	local tmp2:4 = Re_VPR128.S.vIndex;
-	local tmp3:8 = sext(tmp2);
-	# simd infix TMPZ2 = TMPZ1 * tmp3 on lane size 8
-	TMPZ2[0,64] = TMPZ1[0,64] * tmp3;
-	TMPZ2[64,64] = TMPZ1[64,64] * tmp3;
-	TMPZ2[128,64] = TMPZ1[128,64] * tmp3;
-	TMPZ2[192,64] = TMPZ1[192,64] * tmp3;
-	# simd infix TMPZ3 = TMPZ2 * 2:8 on lane size 8
-	TMPZ3[0,64] = TMPZ2[0,64] * 2:8;
-	TMPZ3[64,64] = TMPZ2[64,64] * 2:8;
-	TMPZ3[128,64] = TMPZ2[128,64] * 2:8;
-	TMPZ3[192,64] = TMPZ2[192,64] * 2:8;
-	# simd shuffle Rd_VPR128.4S = TMPZ3 (@1-0@3-1@5-2@7-3) lane size 4
-	Rd_VPR128.4S[0,32] = TMPZ3[32,32];
-	Rd_VPR128.4S[32,32] = TMPZ3[96,32];
-	Rd_VPR128.4S[64,32] = TMPZ3[160,32];
-	Rd_VPR128.4S[96,32] = TMPZ3[224,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local elm:4 = Re_VPR128.S.vIndex;
+	local proacc0:8 = sext(Rn_VPR128.4S[0,32]) * sext(elm);
+	local rnd0:8 = proacc0 * 2;
+	Rd_VPR128.4S[0,32] = rnd0(4) - zext(proacc0 == 0x4000000000000000);
+	local proacc1:8 = sext(Rn_VPR128.4S[32,32]) * sext(elm);
+	local rnd1:8 = proacc1 * 2;
+	Rd_VPR128.4S[32,32] = rnd1(4) - zext(proacc1 == 0x4000000000000000);
+	local proacc2:8 = sext(Rn_VPR128.4S[64,32]) * sext(elm);
+	local rnd2:8 = proacc2 * 2;
+	Rd_VPR128.4S[64,32] = rnd2(4) - zext(proacc2 == 0x4000000000000000);
+	local proacc3:8 = sext(Rn_VPR128.4S[96,32]) * sext(elm);
+	local rnd3:8 = proacc3 * 2;
+	Rd_VPR128.4S[96,32] = rnd3(4) - zext(proacc3 == 0x4000000000000000);
+	zext_zq(Zd);
 }
 
 # C7.2.288 SQDMULH (by element) page C7-2660 line 155188 MATCH x0f00c000/mask=xbf00f400
@@ -20046,46 +19938,32 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & advSIMD3.size=2 & Re_VPR128.S.vIndex & Re
 :sqdmulh Rd_VPR128.8H, Rn_VPR128.8H, Re_VPR128Lo.H.vIndexHLM
 is b_3131=0 & q=1 & u=0 & b_2428=0xf & advSIMD3.size=1 & Re_VPR128Lo.H.vIndexHLM & Re_VPR128Lo.H & vIndexHLM & b_1215=0xc & b_1010=0 & Rn_VPR128.8H & Rd_VPR128.8H & Zd
 {
-	# simd resize TMPZ1 = sext(Rn_VPR128.8H) (lane size 2 to 4)
-	TMPZ1[0,32] = sext(Rn_VPR128.8H[0,16]);
-	TMPZ1[32,32] = sext(Rn_VPR128.8H[16,16]);
-	TMPZ1[64,32] = sext(Rn_VPR128.8H[32,16]);
-	TMPZ1[96,32] = sext(Rn_VPR128.8H[48,16]);
-	TMPZ1[128,32] = sext(Rn_VPR128.8H[64,16]);
-	TMPZ1[160,32] = sext(Rn_VPR128.8H[80,16]);
-	TMPZ1[192,32] = sext(Rn_VPR128.8H[96,16]);
-	TMPZ1[224,32] = sext(Rn_VPR128.8H[112,16]);
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	local tmp3:4 = sext(tmp2);
-	# simd infix TMPZ2 = TMPZ1 * tmp3 on lane size 4
-	TMPZ2[0,32] = TMPZ1[0,32] * tmp3;
-	TMPZ2[32,32] = TMPZ1[32,32] * tmp3;
-	TMPZ2[64,32] = TMPZ1[64,32] * tmp3;
-	TMPZ2[96,32] = TMPZ1[96,32] * tmp3;
-	TMPZ2[128,32] = TMPZ1[128,32] * tmp3;
-	TMPZ2[160,32] = TMPZ1[160,32] * tmp3;
-	TMPZ2[192,32] = TMPZ1[192,32] * tmp3;
-	TMPZ2[224,32] = TMPZ1[224,32] * tmp3;
-	# simd infix TMPZ3 = TMPZ2 * 2:4 on lane size 4
-	TMPZ3[0,32] = TMPZ2[0,32] * 2:4;
-	TMPZ3[32,32] = TMPZ2[32,32] * 2:4;
-	TMPZ3[64,32] = TMPZ2[64,32] * 2:4;
-	TMPZ3[96,32] = TMPZ2[96,32] * 2:4;
-	TMPZ3[128,32] = TMPZ2[128,32] * 2:4;
-	TMPZ3[160,32] = TMPZ2[160,32] * 2:4;
-	TMPZ3[192,32] = TMPZ2[192,32] * 2:4;
-	TMPZ3[224,32] = TMPZ2[224,32] * 2:4;
-	# simd shuffle Rd_VPR128.8H = TMPZ3 (@1-0@3-1@5-2@7-3@9-4@11-5@13-6@15-7) lane size 2
-	Rd_VPR128.8H[0,16] = TMPZ3[16,16];
-	Rd_VPR128.8H[16,16] = TMPZ3[48,16];
-	Rd_VPR128.8H[32,16] = TMPZ3[80,16];
-	Rd_VPR128.8H[48,16] = TMPZ3[112,16];
-	Rd_VPR128.8H[64,16] = TMPZ3[144,16];
-	Rd_VPR128.8H[80,16] = TMPZ3[176,16];
-	Rd_VPR128.8H[96,16] = TMPZ3[208,16];
-	Rd_VPR128.8H[112,16] = TMPZ3[240,16];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local elm:2 = Re_VPR128Lo.H.vIndexHLM;
+	local proacc0:4 = sext(Rn_VPR128.8H[0,16]) * sext(elm);
+	local rnd0:4 = proacc0 * 2;
+	Rd_VPR128.8H[0,16] = rnd0(2) - zext(proacc0 == 0x40000000);
+	local proacc1:4 = sext(Rn_VPR128.8H[16,16]) * sext(elm);
+	local rnd1:4 = proacc1 * 2;
+	Rd_VPR128.8H[16,16] = rnd1(2) - zext(proacc1 == 0x40000000);
+	local proacc2:4 = sext(Rn_VPR128.8H[32,16]) * sext(elm);
+	local rnd2:4 = proacc2 * 2;
+	Rd_VPR128.8H[32,16] = rnd2(2) - zext(proacc2 == 0x40000000);
+	local proacc3:4 = sext(Rn_VPR128.8H[48,16]) * sext(elm);
+	local rnd3:4 = proacc3 * 2;
+	Rd_VPR128.8H[48,16] = rnd3(2) - zext(proacc3 == 0x40000000);
+	local proacc4:4 = sext(Rn_VPR128.8H[64,16]) * sext(elm);
+	local rnd4:4 = proacc4 * 2;
+	Rd_VPR128.8H[64,16] = rnd4(2) - zext(proacc4 == 0x40000000);
+	local proacc5:4 = sext(Rn_VPR128.8H[80,16]) * sext(elm);
+	local rnd5:4 = proacc5 * 2;
+	Rd_VPR128.8H[80,16] = rnd5(2) - zext(proacc5 == 0x40000000);
+	local proacc6:4 = sext(Rn_VPR128.8H[96,16]) * sext(elm);
+	local rnd6:4 = proacc6 * 2;
+	Rd_VPR128.8H[96,16] = rnd6(2) - zext(proacc6 == 0x40000000);
+	local proacc7:4 = sext(Rn_VPR128.8H[112,16]) * sext(elm);
+	local rnd7:4 = proacc7 * 2;
+	Rd_VPR128.8H[112,16] = rnd7(2) - zext(proacc7 == 0x40000000);
+	zext_zq(Zd);
 }
 
 # C7.2.288 SQDMULH (by element) page C7-2660 line 155188 MATCH x5f00c000/mask=xff00f400
@@ -20098,15 +19976,11 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & advSIMD3.size=1 & Re_VPR128Lo.H.vIndexHLM
 :sqdmulh Rd_FPR16, Rn_FPR16, Re_VPR128Lo.H.vIndexHLM
 is b_2431=0b01011111 & b_2223=0b01 & b_1215=0b1100 & b_10=0 & Rd_FPR16 & Rn_FPR16 & Re_VPR128Lo.H.vIndexHLM & Re_VPR128Lo.H & vIndexHLM & Zd
 {
-	local tmp1:4 = sext(Rn_FPR16);
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	local tmp3:4 = sext(tmp2);
-	local tmp4:4 = tmp1 * tmp3;
-	local tmp5:4 = tmp4 * 2:4;
-	local tmp6:4 = tmp5 >> 16:1;
-	Rd_FPR16 = tmp6:2;
-	zext_zh(Zd); # zero upper 30 bytes of Zd
+	local elm:2 = Re_VPR128Lo.H.vIndexHLM;
+	local proacc0:4 = sext(Rn_FPR16) * sext(elm);
+	local rnd0:4 = proacc0 * 2;
+	Rd_FPR16 = rnd0(2) - zext(proacc0 == 0x40000000);
+	zext_zh(Zd);
 }
 
 # C7.2.288 SQDMULH (by element) page C7-2660 line 155188 MATCH x5f00c000/mask=xff00f400
@@ -20119,15 +19993,11 @@ is b_2431=0b01011111 & b_2223=0b01 & b_1215=0b1100 & b_10=0 & Rd_FPR16 & Rn_FPR1
 :sqdmulh Rd_FPR32, Rn_FPR32, Re_VPR128.S.vIndex
 is b_2431=0b01011111 & b_2223=0b10 & b_1215=0b1100 & b_10=0 & Rd_FPR32 & Rn_FPR32 & Re_VPR128.S.vIndex & Re_VPR128.S & vIndex & Zd
 {
-	local tmp1:8 = sext(Rn_FPR32);
-	# simd element Re_VPR128.S[vIndex] lane size 4
-	local tmp2:4 = Re_VPR128.S.vIndex;
-	local tmp3:8 = sext(tmp2);
-	local tmp4:8 = tmp1 * tmp3;
-	local tmp5:8 = tmp4 * 2:8;
-	local tmp6:8 = tmp5 >> 32:1;
-	Rd_FPR32 = tmp6:4;
-	zext_zs(Zd); # zero upper 28 bytes of Zd
+	local elm:4 = Re_VPR128.S.vIndex;
+	local proacc0:8 = sext(Rn_FPR32) * sext(elm);
+	local rnd0:8 = proacc0 * 2;
+	Rd_FPR32 = rnd0(4) - zext(proacc0 == 0x4000000000000000);
+	zext_zs(Zd);
 }
 
 # C7.2.289 SQDMULH (vector) page C7-2663 line 155365 MATCH x5e20b400/mask=xff20fc00
@@ -20785,22 +20655,14 @@ is b_31=0 & b_2429=0b101110 & b_21=0 & b_1215=0b1000 & b_10=1 & sqrdml_subop & s
 :sqrdmulh Rd_VPR64.2S, Rn_VPR64.2S, Re_VPR128.S.vIndex
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & advSIMD3.size=2 & Re_VPR128.S.vIndex & Re_VPR128.S & vIndex & b_1215=0xd & b_1010=0 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
-	# simd resize TMPQ1 = sext(Rn_VPR64.2S) (lane size 4 to 8)
-	TMPQ1[0,64] = sext(Rn_VPR64.2S[0,32]);
-	TMPQ1[64,64] = sext(Rn_VPR64.2S[32,32]);
-	# simd element Re_VPR128.S[vIndex] lane size 4
-	local tmp2:4 = Re_VPR128.S.vIndex;
-	local tmp3:8 = sext(tmp2);
-	# simd infix TMPQ2 = TMPQ1 * tmp3 on lane size 8
-	TMPQ2[0,64] = TMPQ1[0,64] * tmp3;
-	TMPQ2[64,64] = TMPQ1[64,64] * tmp3;
-	# simd infix TMPQ3 = TMPQ2 * 2:8 on lane size 8
-	TMPQ3[0,64] = TMPQ2[0,64] * 2:8;
-	TMPQ3[64,64] = TMPQ2[64,64] * 2:8;
-	# simd shuffle Rd_VPR64.2S = TMPQ3 (@1-0@3-1) lane size 4
-	Rd_VPR64.2S[0,32] = TMPQ3[32,32];
-	Rd_VPR64.2S[32,32] = TMPQ3[96,32];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local elm:4 = Re_VPR128.S.vIndex;
+	local proacc0:8 = sext(Rn_VPR64.2S[0,32]) * sext(elm);
+	local rnd0:8 = proacc0 * 2 + 0x80000000;
+	Rd_VPR64.2S[0,32] = rnd0(4) - zext(proacc0 == 0x4000000000000000);
+	local proacc1:8 = sext(Rn_VPR64.2S[32,32]) * sext(elm);
+	local rnd1:8 = proacc1 * 2 + 0x80000000;
+	Rd_VPR64.2S[32,32] = rnd1(4) - zext(proacc1 == 0x4000000000000000);
+	zext_zd(Zd);
 }
 
 # C7.2.297 SQRDMULH (by element) page C7-2685 line 156680 MATCH x0f00d000/mask=xbf00f400
@@ -20812,30 +20674,20 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & advSIMD3.size=2 & Re_VPR128.S.vIndex & Re
 :sqrdmulh Rd_VPR64.4H, Rn_VPR64.4H, Re_VPR128Lo.H.vIndexHLM
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & advSIMD3.size=1 & Re_VPR128Lo.H.vIndexHLM & Re_VPR128Lo.H & vIndexHLM & b_1215=0xd & b_1010=0 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
-	# simd resize TMPQ1 = sext(Rn_VPR64.4H) (lane size 2 to 4)
-	TMPQ1[0,32] = sext(Rn_VPR64.4H[0,16]);
-	TMPQ1[32,32] = sext(Rn_VPR64.4H[16,16]);
-	TMPQ1[64,32] = sext(Rn_VPR64.4H[32,16]);
-	TMPQ1[96,32] = sext(Rn_VPR64.4H[48,16]);
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	local tmp3:4 = sext(tmp2);
-	# simd infix TMPQ2 = TMPQ1 * tmp3 on lane size 4
-	TMPQ2[0,32] = TMPQ1[0,32] * tmp3;
-	TMPQ2[32,32] = TMPQ1[32,32] * tmp3;
-	TMPQ2[64,32] = TMPQ1[64,32] * tmp3;
-	TMPQ2[96,32] = TMPQ1[96,32] * tmp3;
-	# simd infix TMPQ3 = TMPQ2 * 2:4 on lane size 4
-	TMPQ3[0,32] = TMPQ2[0,32] * 2:4;
-	TMPQ3[32,32] = TMPQ2[32,32] * 2:4;
-	TMPQ3[64,32] = TMPQ2[64,32] * 2:4;
-	TMPQ3[96,32] = TMPQ2[96,32] * 2:4;
-	# simd shuffle Rd_VPR64.4H = TMPQ3 (@1-0@3-1@5-2@7-3) lane size 2
-	Rd_VPR64.4H[0,16] = TMPQ3[16,16];
-	Rd_VPR64.4H[16,16] = TMPQ3[48,16];
-	Rd_VPR64.4H[32,16] = TMPQ3[80,16];
-	Rd_VPR64.4H[48,16] = TMPQ3[112,16];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local elm:2 = Re_VPR128Lo.H.vIndexHLM;
+	local proacc0:4 = sext(Rn_VPR64.4H[0,16]) * sext(elm);
+	local rnd0:4 = proacc0 * 2 + 0x8000;
+	Rd_VPR64.4H[0,16] = rnd0(2) - zext(proacc0 == 0x40000000);
+	local proacc1:4 = sext(Rn_VPR64.4H[16,16]) * sext(elm);
+	local rnd1:4 = proacc1 * 2 + 0x8000;
+	Rd_VPR64.4H[16,16] = rnd1(2) - zext(proacc1 == 0x40000000);
+	local proacc2:4 = sext(Rn_VPR64.4H[32,16]) * sext(elm);
+	local rnd2:4 = proacc2 * 2 + 0x8000;
+	Rd_VPR64.4H[32,16] = rnd2(2) - zext(proacc2 == 0x40000000);
+	local proacc3:4 = sext(Rn_VPR64.4H[48,16]) * sext(elm);
+	local rnd3:4 = proacc3 * 2 + 0x8000;
+	Rd_VPR64.4H[48,16] = rnd3(2) - zext(proacc3 == 0x40000000);
+	zext_zd(Zd);
 }
 
 # C7.2.297 SQRDMULH (by element) page C7-2685 line 156680 MATCH x0f00d000/mask=xbf00f400
@@ -20847,30 +20699,20 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & advSIMD3.size=1 & Re_VPR128Lo.H.vIndexHLM
 :sqrdmulh Rd_VPR128.4S, Rn_VPR128.4S, Re_VPR128.S.vIndex
 is b_3131=0 & q=1 & u=0 & b_2428=0xf & advSIMD3.size=2 & Re_VPR128.S.vIndex & Re_VPR128.S & vIndex & b_1215=0xd & b_1010=0 & Rn_VPR128.4S & Rd_VPR128.4S & Zd
 {
-	# simd resize TMPZ1 = sext(Rn_VPR128.4S) (lane size 4 to 8)
-	TMPZ1[0,64] = sext(Rn_VPR128.4S[0,32]);
-	TMPZ1[64,64] = sext(Rn_VPR128.4S[32,32]);
-	TMPZ1[128,64] = sext(Rn_VPR128.4S[64,32]);
-	TMPZ1[192,64] = sext(Rn_VPR128.4S[96,32]);
-	# simd element Re_VPR128.S[vIndex] lane size 4
-	local tmp2:4 = Re_VPR128.S.vIndex;
-	local tmp3:8 = sext(tmp2);
-	# simd infix TMPZ2 = TMPZ1 * tmp3 on lane size 8
-	TMPZ2[0,64] = TMPZ1[0,64] * tmp3;
-	TMPZ2[64,64] = TMPZ1[64,64] * tmp3;
-	TMPZ2[128,64] = TMPZ1[128,64] * tmp3;
-	TMPZ2[192,64] = TMPZ1[192,64] * tmp3;
-	# simd infix TMPZ3 = TMPZ2 * 2:8 on lane size 8
-	TMPZ3[0,64] = TMPZ2[0,64] * 2:8;
-	TMPZ3[64,64] = TMPZ2[64,64] * 2:8;
-	TMPZ3[128,64] = TMPZ2[128,64] * 2:8;
-	TMPZ3[192,64] = TMPZ2[192,64] * 2:8;
-	# simd shuffle Rd_VPR128.4S = TMPZ3 (@1-0@3-1@5-2@7-3) lane size 4
-	Rd_VPR128.4S[0,32] = TMPZ3[32,32];
-	Rd_VPR128.4S[32,32] = TMPZ3[96,32];
-	Rd_VPR128.4S[64,32] = TMPZ3[160,32];
-	Rd_VPR128.4S[96,32] = TMPZ3[224,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local elm:4 = Re_VPR128.S.vIndex;
+	local proacc0:8 = sext(Rn_VPR128.4S[0,32]) * sext(elm);
+	local rnd0:8 = proacc0 * 2 + 0x80000000;
+	Rd_VPR128.4S[0,32] = rnd0(4) - zext(proacc0 == 0x4000000000000000);
+	local proacc1:8 = sext(Rn_VPR128.4S[32,32]) * sext(elm);
+	local rnd1:8 = proacc1 * 2 + 0x80000000;
+	Rd_VPR128.4S[32,32] = rnd1(4) - zext(proacc1 == 0x4000000000000000);
+	local proacc2:8 = sext(Rn_VPR128.4S[64,32]) * sext(elm);
+	local rnd2:8 = proacc2 * 2 + 0x80000000;
+	Rd_VPR128.4S[64,32] = rnd2(4) - zext(proacc2 == 0x4000000000000000);
+	local proacc3:8 = sext(Rn_VPR128.4S[96,32]) * sext(elm);
+	local rnd3:8 = proacc3 * 2 + 0x80000000;
+	Rd_VPR128.4S[96,32] = rnd3(4) - zext(proacc3 == 0x4000000000000000);
+	zext_zq(Zd);
 }
 
 # C7.2.297 SQRDMULH (by element) page C7-2685 line 156680 MATCH x0f00d000/mask=xbf00f400
@@ -20882,46 +20724,32 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & advSIMD3.size=2 & Re_VPR128.S.vIndex & Re
 :sqrdmulh Rd_VPR128.8H, Rn_VPR128.8H, Re_VPR128Lo.H.vIndexHLM
 is b_3131=0 & q=1 & u=0 & b_2428=0xf & advSIMD3.size=1 & Re_VPR128Lo.H.vIndexHLM & Re_VPR128Lo.H & vIndexHLM & b_1215=0xd & b_1010=0 & Rn_VPR128.8H & Rd_VPR128.8H & Zd
 {
-	# simd resize TMPZ1 = sext(Rn_VPR128.8H) (lane size 2 to 4)
-	TMPZ1[0,32] = sext(Rn_VPR128.8H[0,16]);
-	TMPZ1[32,32] = sext(Rn_VPR128.8H[16,16]);
-	TMPZ1[64,32] = sext(Rn_VPR128.8H[32,16]);
-	TMPZ1[96,32] = sext(Rn_VPR128.8H[48,16]);
-	TMPZ1[128,32] = sext(Rn_VPR128.8H[64,16]);
-	TMPZ1[160,32] = sext(Rn_VPR128.8H[80,16]);
-	TMPZ1[192,32] = sext(Rn_VPR128.8H[96,16]);
-	TMPZ1[224,32] = sext(Rn_VPR128.8H[112,16]);
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	local tmp3:4 = sext(tmp2);
-	# simd infix TMPZ2 = TMPZ1 * tmp3 on lane size 4
-	TMPZ2[0,32] = TMPZ1[0,32] * tmp3;
-	TMPZ2[32,32] = TMPZ1[32,32] * tmp3;
-	TMPZ2[64,32] = TMPZ1[64,32] * tmp3;
-	TMPZ2[96,32] = TMPZ1[96,32] * tmp3;
-	TMPZ2[128,32] = TMPZ1[128,32] * tmp3;
-	TMPZ2[160,32] = TMPZ1[160,32] * tmp3;
-	TMPZ2[192,32] = TMPZ1[192,32] * tmp3;
-	TMPZ2[224,32] = TMPZ1[224,32] * tmp3;
-	# simd infix TMPZ3 = TMPZ2 * 2:4 on lane size 4
-	TMPZ3[0,32] = TMPZ2[0,32] * 2:4;
-	TMPZ3[32,32] = TMPZ2[32,32] * 2:4;
-	TMPZ3[64,32] = TMPZ2[64,32] * 2:4;
-	TMPZ3[96,32] = TMPZ2[96,32] * 2:4;
-	TMPZ3[128,32] = TMPZ2[128,32] * 2:4;
-	TMPZ3[160,32] = TMPZ2[160,32] * 2:4;
-	TMPZ3[192,32] = TMPZ2[192,32] * 2:4;
-	TMPZ3[224,32] = TMPZ2[224,32] * 2:4;
-	# simd shuffle Rd_VPR128.8H = TMPZ3 (@1-0@3-1@5-2@7-3@9-4@11-5@13-6@15-7) lane size 2
-	Rd_VPR128.8H[0,16] = TMPZ3[16,16];
-	Rd_VPR128.8H[16,16] = TMPZ3[48,16];
-	Rd_VPR128.8H[32,16] = TMPZ3[80,16];
-	Rd_VPR128.8H[48,16] = TMPZ3[112,16];
-	Rd_VPR128.8H[64,16] = TMPZ3[144,16];
-	Rd_VPR128.8H[80,16] = TMPZ3[176,16];
-	Rd_VPR128.8H[96,16] = TMPZ3[208,16];
-	Rd_VPR128.8H[112,16] = TMPZ3[240,16];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local elm:2 = Re_VPR128Lo.H.vIndexHLM;
+	local proacc0:4 = sext(Rn_VPR128.8H[0,16]) * sext(elm);
+	local rnd0:4 = proacc0 * 2 + 0x8000;
+	Rd_VPR128.8H[0,16] = rnd0(2) - zext(proacc0 == 0x40000000);
+	local proacc1:4 = sext(Rn_VPR128.8H[16,16]) * sext(elm);
+	local rnd1:4 = proacc1 * 2 + 0x8000;
+	Rd_VPR128.8H[16,16] = rnd1(2) - zext(proacc1 == 0x40000000);
+	local proacc2:4 = sext(Rn_VPR128.8H[32,16]) * sext(elm);
+	local rnd2:4 = proacc2 * 2 + 0x8000;
+	Rd_VPR128.8H[32,16] = rnd2(2) - zext(proacc2 == 0x40000000);
+	local proacc3:4 = sext(Rn_VPR128.8H[48,16]) * sext(elm);
+	local rnd3:4 = proacc3 * 2 + 0x8000;
+	Rd_VPR128.8H[48,16] = rnd3(2) - zext(proacc3 == 0x40000000);
+	local proacc4:4 = sext(Rn_VPR128.8H[64,16]) * sext(elm);
+	local rnd4:4 = proacc4 * 2 + 0x8000;
+	Rd_VPR128.8H[64,16] = rnd4(2) - zext(proacc4 == 0x40000000);
+	local proacc5:4 = sext(Rn_VPR128.8H[80,16]) * sext(elm);
+	local rnd5:4 = proacc5 * 2 + 0x8000;
+	Rd_VPR128.8H[80,16] = rnd5(2) - zext(proacc5 == 0x40000000);
+	local proacc6:4 = sext(Rn_VPR128.8H[96,16]) * sext(elm);
+	local rnd6:4 = proacc6 * 2 + 0x8000;
+	Rd_VPR128.8H[96,16] = rnd6(2) - zext(proacc6 == 0x40000000);
+	local proacc7:4 = sext(Rn_VPR128.8H[112,16]) * sext(elm);
+	local rnd7:4 = proacc7 * 2 + 0x8000;
+	Rd_VPR128.8H[112,16] = rnd7(2) - zext(proacc7 == 0x40000000);
+	zext_zq(Zd);
 }
 
 # C7.2.297 SQRDMULH (by element) page C7-2685 line 156680 MATCH x5f00d000/mask=xff00f400
@@ -20934,15 +20762,11 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & advSIMD3.size=1 & Re_VPR128Lo.H.vIndexHLM
 :sqrdmulh Rd_FPR16, Rn_FPR16, Re_VPR128Lo.H.vIndexHLM
 is b_2431=0b01011111 & b_2223=0b01 & b_1215=0b1101 & b_10=0 & Rd_FPR16 & Rn_FPR16 & Re_VPR128Lo.H.vIndexHLM & Re_VPR128Lo.H & vIndexHLM & Zd
 {
-	local tmp1:4 = sext(Rn_FPR16);
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	local tmp3:4 = sext(tmp2);
-	local tmp4:4 = tmp1 * tmp3;
-	local tmp5:4 = tmp4 * 2:4;
-	local tmp6:4 = tmp5 >> 16:4;
-	Rd_FPR16 = tmp6:2;
-	zext_zh(Zd); # zero upper 30 bytes of Zd
+	local elm:2 = Re_VPR128Lo.H.vIndexHLM;
+	local proacc0:4 = sext(Rn_FPR16) * sext(elm);
+	local rnd0:4 = proacc0 * 2 + 0x8000;
+	Rd_FPR16 = rnd0(2) - zext(proacc0 == 0x40000000);
+	zext_zh(Zd);
 }
 
 # C7.2.297 SQRDMULH (by element) page C7-2685 line 156680 MATCH x5f00d000/mask=xff00f400
@@ -20955,15 +20779,11 @@ is b_2431=0b01011111 & b_2223=0b01 & b_1215=0b1101 & b_10=0 & Rd_FPR16 & Rn_FPR1
 :sqrdmulh Rd_FPR32, Rn_FPR32, Re_VPR128.S.vIndex
 is b_2431=0b01011111 & b_2223=0b10 & b_1215=0b1101 & b_10=0 & Rd_FPR32 & Rn_FPR32 & Re_VPR128.S.vIndex & Re_VPR128.S & vIndex & Zd
 {
-	local tmp1:8 = sext(Rn_FPR32);
-	# simd element Re_VPR128.S[vIndex] lane size 4
-	local tmp2:4 = Re_VPR128.S.vIndex;
-	local tmp3:8 = sext(tmp2);
-	local tmp4:8 = tmp1 * tmp3;
-	local tmp5:8 = tmp4 * 2:8;
-	local tmp6:8 = tmp5 >> 32:8;
-	Rd_FPR32 = tmp6:4;
-	zext_zs(Zd); # zero upper 28 bytes of Zd
+	local elm:4 = Re_VPR128.S.vIndex;
+	local proacc0:8 = sext(Rn_FPR32) * sext(elm);
+	local rnd0:8 = proacc0 * 2 + 0x80000000;
+	Rd_FPR32 = rnd0(4) - zext(proacc0 == 0x4000000000000000);
+	zext_zs(Zd);
 }
 
 # C7.2.298 SQRDMULH (vector) page C7-2688 line 156859 MATCH x7e20b400/mask=xff20fc00
@@ -22689,41 +22509,40 @@ is b_2331=0b010111110 & b_22=1 & b_1015=0b001001 & Rd_FPR64 & Rn_FPR64 & Imm_shr
 :srsra Rd_VPR128.16B, Rn_VPR128.16B, Imm_shr_imm8
 is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x6 & b_1010=1 & Rn_VPR128.16B & Rd_VPR128.16B & Zd
 {
-	# simd infix TMPQ1 = Rn_VPR128.16B s>> Imm_shr_imm8:1 on lane size 1
-	TMPQ1[0,8] = Rn_VPR128.16B[0,8] s>> Imm_shr_imm8:1;
-	TMPQ1[8,8] = Rn_VPR128.16B[8,8] s>> Imm_shr_imm8:1;
-	TMPQ1[16,8] = Rn_VPR128.16B[16,8] s>> Imm_shr_imm8:1;
-	TMPQ1[24,8] = Rn_VPR128.16B[24,8] s>> Imm_shr_imm8:1;
-	TMPQ1[32,8] = Rn_VPR128.16B[32,8] s>> Imm_shr_imm8:1;
-	TMPQ1[40,8] = Rn_VPR128.16B[40,8] s>> Imm_shr_imm8:1;
-	TMPQ1[48,8] = Rn_VPR128.16B[48,8] s>> Imm_shr_imm8:1;
-	TMPQ1[56,8] = Rn_VPR128.16B[56,8] s>> Imm_shr_imm8:1;
-	TMPQ1[64,8] = Rn_VPR128.16B[64,8] s>> Imm_shr_imm8:1;
-	TMPQ1[72,8] = Rn_VPR128.16B[72,8] s>> Imm_shr_imm8:1;
-	TMPQ1[80,8] = Rn_VPR128.16B[80,8] s>> Imm_shr_imm8:1;
-	TMPQ1[88,8] = Rn_VPR128.16B[88,8] s>> Imm_shr_imm8:1;
-	TMPQ1[96,8] = Rn_VPR128.16B[96,8] s>> Imm_shr_imm8:1;
-	TMPQ1[104,8] = Rn_VPR128.16B[104,8] s>> Imm_shr_imm8:1;
-	TMPQ1[112,8] = Rn_VPR128.16B[112,8] s>> Imm_shr_imm8:1;
-	TMPQ1[120,8] = Rn_VPR128.16B[120,8] s>> Imm_shr_imm8:1;
-	# simd infix Rd_VPR128.16B = Rd_VPR128.16B + TMPQ1 on lane size 1
-	Rd_VPR128.16B[0,8] = Rd_VPR128.16B[0,8] + TMPQ1[0,8];
-	Rd_VPR128.16B[8,8] = Rd_VPR128.16B[8,8] + TMPQ1[8,8];
-	Rd_VPR128.16B[16,8] = Rd_VPR128.16B[16,8] + TMPQ1[16,8];
-	Rd_VPR128.16B[24,8] = Rd_VPR128.16B[24,8] + TMPQ1[24,8];
-	Rd_VPR128.16B[32,8] = Rd_VPR128.16B[32,8] + TMPQ1[32,8];
-	Rd_VPR128.16B[40,8] = Rd_VPR128.16B[40,8] + TMPQ1[40,8];
-	Rd_VPR128.16B[48,8] = Rd_VPR128.16B[48,8] + TMPQ1[48,8];
-	Rd_VPR128.16B[56,8] = Rd_VPR128.16B[56,8] + TMPQ1[56,8];
-	Rd_VPR128.16B[64,8] = Rd_VPR128.16B[64,8] + TMPQ1[64,8];
-	Rd_VPR128.16B[72,8] = Rd_VPR128.16B[72,8] + TMPQ1[72,8];
-	Rd_VPR128.16B[80,8] = Rd_VPR128.16B[80,8] + TMPQ1[80,8];
-	Rd_VPR128.16B[88,8] = Rd_VPR128.16B[88,8] + TMPQ1[88,8];
-	Rd_VPR128.16B[96,8] = Rd_VPR128.16B[96,8] + TMPQ1[96,8];
-	Rd_VPR128.16B[104,8] = Rd_VPR128.16B[104,8] + TMPQ1[104,8];
-	Rd_VPR128.16B[112,8] = Rd_VPR128.16B[112,8] + TMPQ1[112,8];
-	Rd_VPR128.16B[120,8] = Rd_VPR128.16B[120,8] + TMPQ1[120,8];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local shv:1 = Imm_shr_imm8:1;
+	local src0:1 = Rn_VPR128.16B[0,8];
+	Rd_VPR128.16B[0,8] = Rd_VPR128.16B[0,8] + ((src0 s>> shv) + ((src0 s>> (shv - 1)) & 1));
+	local src1:1 = Rn_VPR128.16B[8,8];
+	Rd_VPR128.16B[8,8] = Rd_VPR128.16B[8,8] + ((src1 s>> shv) + ((src1 s>> (shv - 1)) & 1));
+	local src2:1 = Rn_VPR128.16B[16,8];
+	Rd_VPR128.16B[16,8] = Rd_VPR128.16B[16,8] + ((src2 s>> shv) + ((src2 s>> (shv - 1)) & 1));
+	local src3:1 = Rn_VPR128.16B[24,8];
+	Rd_VPR128.16B[24,8] = Rd_VPR128.16B[24,8] + ((src3 s>> shv) + ((src3 s>> (shv - 1)) & 1));
+	local src4:1 = Rn_VPR128.16B[32,8];
+	Rd_VPR128.16B[32,8] = Rd_VPR128.16B[32,8] + ((src4 s>> shv) + ((src4 s>> (shv - 1)) & 1));
+	local src5:1 = Rn_VPR128.16B[40,8];
+	Rd_VPR128.16B[40,8] = Rd_VPR128.16B[40,8] + ((src5 s>> shv) + ((src5 s>> (shv - 1)) & 1));
+	local src6:1 = Rn_VPR128.16B[48,8];
+	Rd_VPR128.16B[48,8] = Rd_VPR128.16B[48,8] + ((src6 s>> shv) + ((src6 s>> (shv - 1)) & 1));
+	local src7:1 = Rn_VPR128.16B[56,8];
+	Rd_VPR128.16B[56,8] = Rd_VPR128.16B[56,8] + ((src7 s>> shv) + ((src7 s>> (shv - 1)) & 1));
+	local src8:1 = Rn_VPR128.16B[64,8];
+	Rd_VPR128.16B[64,8] = Rd_VPR128.16B[64,8] + ((src8 s>> shv) + ((src8 s>> (shv - 1)) & 1));
+	local src9:1 = Rn_VPR128.16B[72,8];
+	Rd_VPR128.16B[72,8] = Rd_VPR128.16B[72,8] + ((src9 s>> shv) + ((src9 s>> (shv - 1)) & 1));
+	local src10:1 = Rn_VPR128.16B[80,8];
+	Rd_VPR128.16B[80,8] = Rd_VPR128.16B[80,8] + ((src10 s>> shv) + ((src10 s>> (shv - 1)) & 1));
+	local src11:1 = Rn_VPR128.16B[88,8];
+	Rd_VPR128.16B[88,8] = Rd_VPR128.16B[88,8] + ((src11 s>> shv) + ((src11 s>> (shv - 1)) & 1));
+	local src12:1 = Rn_VPR128.16B[96,8];
+	Rd_VPR128.16B[96,8] = Rd_VPR128.16B[96,8] + ((src12 s>> shv) + ((src12 s>> (shv - 1)) & 1));
+	local src13:1 = Rn_VPR128.16B[104,8];
+	Rd_VPR128.16B[104,8] = Rd_VPR128.16B[104,8] + ((src13 s>> shv) + ((src13 s>> (shv - 1)) & 1));
+	local src14:1 = Rn_VPR128.16B[112,8];
+	Rd_VPR128.16B[112,8] = Rd_VPR128.16B[112,8] + ((src14 s>> shv) + ((src14 s>> (shv - 1)) & 1));
+	local src15:1 = Rn_VPR128.16B[120,8];
+	Rd_VPR128.16B[120,8] = Rd_VPR128.16B[120,8] + ((src15 s>> shv) + ((src15 s>> (shv - 1)) & 1));
+	zext_zq(Zd);
 }
 
 # C7.2.314 SRSRA page C7-2730 line 159316 MATCH x0f003400/mask=xbf80fc00
@@ -22735,14 +22554,12 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x6 & 
 :srsra Rd_VPR128.2D, Rn_VPR128.2D, Imm_shr_imm64
 is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x6 & b_1010=1 & Rn_VPR128.2D & Rd_VPR128.2D & Zd
 {
-	local tmp1:8 = zext(Imm_shr_imm64);
-	# simd infix TMPQ1 = Rn_VPR128.2D s>> tmp1 on lane size 8
-	TMPQ1[0,64] = Rn_VPR128.2D[0,64] s>> tmp1;
-	TMPQ1[64,64] = Rn_VPR128.2D[64,64] s>> tmp1;
-	# simd infix Rd_VPR128.2D = Rd_VPR128.2D + TMPQ1 on lane size 8
-	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] + TMPQ1[0,64];
-	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] + TMPQ1[64,64];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local shv:8 = zext(Imm_shr_imm64);
+	local src0:8 = Rn_VPR128.2D[0,64];
+	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] + ((src0 s>> shv) + ((src0 s>> (shv - 1)) & 1));
+	local src1:8 = Rn_VPR128.2D[64,64];
+	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] + ((src1 s>> shv) + ((src1 s>> (shv - 1)) & 1));
+	zext_zq(Zd);
 }
 
 # C7.2.314 SRSRA page C7-2730 line 159316 MATCH x0f003400/mask=xbf80fc00
@@ -22754,13 +22571,12 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x6 
 :srsra Rd_VPR64.2S, Rn_VPR64.2S, Imm_shr_imm32
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x6 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
-	# simd infix TMPD1 = Rn_VPR64.2S s>> Imm_shr_imm32:4 on lane size 4
-	TMPD1[0,32] = Rn_VPR64.2S[0,32] s>> Imm_shr_imm32:4;
-	TMPD1[32,32] = Rn_VPR64.2S[32,32] s>> Imm_shr_imm32:4;
-	# simd infix Rd_VPR64.2S = Rd_VPR64.2S + TMPD1 on lane size 4
-	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] + TMPD1[0,32];
-	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] + TMPD1[32,32];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local shv:4 = Imm_shr_imm32:4;
+	local src0:4 = Rn_VPR64.2S[0,32];
+	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] + ((src0 s>> shv) + ((src0 s>> (shv - 1)) & 1));
+	local src1:4 = Rn_VPR64.2S[32,32];
+	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] + ((src1 s>> shv) + ((src1 s>> (shv - 1)) & 1));
+	zext_zd(Zd);
 }
 
 # C7.2.314 SRSRA page C7-2730 line 159316 MATCH x0f003400/mask=xbf80fc00
@@ -22772,17 +22588,16 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x6 & b
 :srsra Rd_VPR64.4H, Rn_VPR64.4H, Imm_shr_imm16
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x6 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
-	# simd infix TMPD1 = Rn_VPR64.4H s>> Imm_shr_imm16:2 on lane size 2
-	TMPD1[0,16] = Rn_VPR64.4H[0,16] s>> Imm_shr_imm16:2;
-	TMPD1[16,16] = Rn_VPR64.4H[16,16] s>> Imm_shr_imm16:2;
-	TMPD1[32,16] = Rn_VPR64.4H[32,16] s>> Imm_shr_imm16:2;
-	TMPD1[48,16] = Rn_VPR64.4H[48,16] s>> Imm_shr_imm16:2;
-	# simd infix Rd_VPR64.4H = Rd_VPR64.4H + TMPD1 on lane size 2
-	Rd_VPR64.4H[0,16] = Rd_VPR64.4H[0,16] + TMPD1[0,16];
-	Rd_VPR64.4H[16,16] = Rd_VPR64.4H[16,16] + TMPD1[16,16];
-	Rd_VPR64.4H[32,16] = Rd_VPR64.4H[32,16] + TMPD1[32,16];
-	Rd_VPR64.4H[48,16] = Rd_VPR64.4H[48,16] + TMPD1[48,16];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local shv:2 = Imm_shr_imm16:2;
+	local src0:2 = Rn_VPR64.4H[0,16];
+	Rd_VPR64.4H[0,16] = Rd_VPR64.4H[0,16] + ((src0 s>> shv) + ((src0 s>> (shv - 1)) & 1));
+	local src1:2 = Rn_VPR64.4H[16,16];
+	Rd_VPR64.4H[16,16] = Rd_VPR64.4H[16,16] + ((src1 s>> shv) + ((src1 s>> (shv - 1)) & 1));
+	local src2:2 = Rn_VPR64.4H[32,16];
+	Rd_VPR64.4H[32,16] = Rd_VPR64.4H[32,16] + ((src2 s>> shv) + ((src2 s>> (shv - 1)) & 1));
+	local src3:2 = Rn_VPR64.4H[48,16];
+	Rd_VPR64.4H[48,16] = Rd_VPR64.4H[48,16] + ((src3 s>> shv) + ((src3 s>> (shv - 1)) & 1));
+	zext_zd(Zd);
 }
 
 # C7.2.314 SRSRA page C7-2730 line 159316 MATCH x0f003400/mask=xbf80fc00
@@ -22794,17 +22609,16 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x6 &
 :srsra Rd_VPR128.4S, Rn_VPR128.4S, Imm_shr_imm32
 is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x6 & b_1010=1 & Rn_VPR128.4S & Rd_VPR128.4S & Zd
 {
-	# simd infix TMPQ1 = Rn_VPR128.4S s>> Imm_shr_imm32:4 on lane size 4
-	TMPQ1[0,32] = Rn_VPR128.4S[0,32] s>> Imm_shr_imm32:4;
-	TMPQ1[32,32] = Rn_VPR128.4S[32,32] s>> Imm_shr_imm32:4;
-	TMPQ1[64,32] = Rn_VPR128.4S[64,32] s>> Imm_shr_imm32:4;
-	TMPQ1[96,32] = Rn_VPR128.4S[96,32] s>> Imm_shr_imm32:4;
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S + TMPQ1 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + TMPQ1[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + TMPQ1[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + TMPQ1[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + TMPQ1[96,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local shv:4 = Imm_shr_imm32:4;
+	local src0:4 = Rn_VPR128.4S[0,32];
+	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + ((src0 s>> shv) + ((src0 s>> (shv - 1)) & 1));
+	local src1:4 = Rn_VPR128.4S[32,32];
+	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + ((src1 s>> shv) + ((src1 s>> (shv - 1)) & 1));
+	local src2:4 = Rn_VPR128.4S[64,32];
+	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + ((src2 s>> shv) + ((src2 s>> (shv - 1)) & 1));
+	local src3:4 = Rn_VPR128.4S[96,32];
+	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + ((src3 s>> shv) + ((src3 s>> (shv - 1)) & 1));
+	zext_zq(Zd);
 }
 
 # C7.2.314 SRSRA page C7-2730 line 159316 MATCH x0f003400/mask=xbf80fc00
@@ -22816,25 +22630,24 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x6 & b
 :srsra Rd_VPR64.8B, Rn_VPR64.8B, Imm_shr_imm8
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x6 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
-	# simd infix TMPD1 = Rn_VPR64.8B s>> Imm_shr_imm8:1 on lane size 1
-	TMPD1[0,8] = Rn_VPR64.8B[0,8] s>> Imm_shr_imm8:1;
-	TMPD1[8,8] = Rn_VPR64.8B[8,8] s>> Imm_shr_imm8:1;
-	TMPD1[16,8] = Rn_VPR64.8B[16,8] s>> Imm_shr_imm8:1;
-	TMPD1[24,8] = Rn_VPR64.8B[24,8] s>> Imm_shr_imm8:1;
-	TMPD1[32,8] = Rn_VPR64.8B[32,8] s>> Imm_shr_imm8:1;
-	TMPD1[40,8] = Rn_VPR64.8B[40,8] s>> Imm_shr_imm8:1;
-	TMPD1[48,8] = Rn_VPR64.8B[48,8] s>> Imm_shr_imm8:1;
-	TMPD1[56,8] = Rn_VPR64.8B[56,8] s>> Imm_shr_imm8:1;
-	# simd infix Rd_VPR64.8B = Rd_VPR64.8B + TMPD1 on lane size 1
-	Rd_VPR64.8B[0,8] = Rd_VPR64.8B[0,8] + TMPD1[0,8];
-	Rd_VPR64.8B[8,8] = Rd_VPR64.8B[8,8] + TMPD1[8,8];
-	Rd_VPR64.8B[16,8] = Rd_VPR64.8B[16,8] + TMPD1[16,8];
-	Rd_VPR64.8B[24,8] = Rd_VPR64.8B[24,8] + TMPD1[24,8];
-	Rd_VPR64.8B[32,8] = Rd_VPR64.8B[32,8] + TMPD1[32,8];
-	Rd_VPR64.8B[40,8] = Rd_VPR64.8B[40,8] + TMPD1[40,8];
-	Rd_VPR64.8B[48,8] = Rd_VPR64.8B[48,8] + TMPD1[48,8];
-	Rd_VPR64.8B[56,8] = Rd_VPR64.8B[56,8] + TMPD1[56,8];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local shv:1 = Imm_shr_imm8:1;
+	local src0:1 = Rn_VPR64.8B[0,8];
+	Rd_VPR64.8B[0,8] = Rd_VPR64.8B[0,8] + ((src0 s>> shv) + ((src0 s>> (shv - 1)) & 1));
+	local src1:1 = Rn_VPR64.8B[8,8];
+	Rd_VPR64.8B[8,8] = Rd_VPR64.8B[8,8] + ((src1 s>> shv) + ((src1 s>> (shv - 1)) & 1));
+	local src2:1 = Rn_VPR64.8B[16,8];
+	Rd_VPR64.8B[16,8] = Rd_VPR64.8B[16,8] + ((src2 s>> shv) + ((src2 s>> (shv - 1)) & 1));
+	local src3:1 = Rn_VPR64.8B[24,8];
+	Rd_VPR64.8B[24,8] = Rd_VPR64.8B[24,8] + ((src3 s>> shv) + ((src3 s>> (shv - 1)) & 1));
+	local src4:1 = Rn_VPR64.8B[32,8];
+	Rd_VPR64.8B[32,8] = Rd_VPR64.8B[32,8] + ((src4 s>> shv) + ((src4 s>> (shv - 1)) & 1));
+	local src5:1 = Rn_VPR64.8B[40,8];
+	Rd_VPR64.8B[40,8] = Rd_VPR64.8B[40,8] + ((src5 s>> shv) + ((src5 s>> (shv - 1)) & 1));
+	local src6:1 = Rn_VPR64.8B[48,8];
+	Rd_VPR64.8B[48,8] = Rd_VPR64.8B[48,8] + ((src6 s>> shv) + ((src6 s>> (shv - 1)) & 1));
+	local src7:1 = Rn_VPR64.8B[56,8];
+	Rd_VPR64.8B[56,8] = Rd_VPR64.8B[56,8] + ((src7 s>> shv) + ((src7 s>> (shv - 1)) & 1));
+	zext_zd(Zd);
 }
 
 # C7.2.314 SRSRA page C7-2730 line 159316 MATCH x0f003400/mask=xbf80fc00
@@ -22846,25 +22659,24 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x6 & 
 :srsra Rd_VPR128.8H, Rn_VPR128.8H, Imm_shr_imm16
 is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x6 & b_1010=1 & Rn_VPR128.8H & Rd_VPR128.8H & Zd
 {
-	# simd infix TMPQ1 = Rn_VPR128.8H s>> Imm_shr_imm16:2 on lane size 2
-	TMPQ1[0,16] = Rn_VPR128.8H[0,16] s>> Imm_shr_imm16:2;
-	TMPQ1[16,16] = Rn_VPR128.8H[16,16] s>> Imm_shr_imm16:2;
-	TMPQ1[32,16] = Rn_VPR128.8H[32,16] s>> Imm_shr_imm16:2;
-	TMPQ1[48,16] = Rn_VPR128.8H[48,16] s>> Imm_shr_imm16:2;
-	TMPQ1[64,16] = Rn_VPR128.8H[64,16] s>> Imm_shr_imm16:2;
-	TMPQ1[80,16] = Rn_VPR128.8H[80,16] s>> Imm_shr_imm16:2;
-	TMPQ1[96,16] = Rn_VPR128.8H[96,16] s>> Imm_shr_imm16:2;
-	TMPQ1[112,16] = Rn_VPR128.8H[112,16] s>> Imm_shr_imm16:2;
-	# simd infix Rd_VPR128.8H = Rd_VPR128.8H + TMPQ1 on lane size 2
-	Rd_VPR128.8H[0,16] = Rd_VPR128.8H[0,16] + TMPQ1[0,16];
-	Rd_VPR128.8H[16,16] = Rd_VPR128.8H[16,16] + TMPQ1[16,16];
-	Rd_VPR128.8H[32,16] = Rd_VPR128.8H[32,16] + TMPQ1[32,16];
-	Rd_VPR128.8H[48,16] = Rd_VPR128.8H[48,16] + TMPQ1[48,16];
-	Rd_VPR128.8H[64,16] = Rd_VPR128.8H[64,16] + TMPQ1[64,16];
-	Rd_VPR128.8H[80,16] = Rd_VPR128.8H[80,16] + TMPQ1[80,16];
-	Rd_VPR128.8H[96,16] = Rd_VPR128.8H[96,16] + TMPQ1[96,16];
-	Rd_VPR128.8H[112,16] = Rd_VPR128.8H[112,16] + TMPQ1[112,16];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local shv:2 = Imm_shr_imm16:2;
+	local src0:2 = Rn_VPR128.8H[0,16];
+	Rd_VPR128.8H[0,16] = Rd_VPR128.8H[0,16] + ((src0 s>> shv) + ((src0 s>> (shv - 1)) & 1));
+	local src1:2 = Rn_VPR128.8H[16,16];
+	Rd_VPR128.8H[16,16] = Rd_VPR128.8H[16,16] + ((src1 s>> shv) + ((src1 s>> (shv - 1)) & 1));
+	local src2:2 = Rn_VPR128.8H[32,16];
+	Rd_VPR128.8H[32,16] = Rd_VPR128.8H[32,16] + ((src2 s>> shv) + ((src2 s>> (shv - 1)) & 1));
+	local src3:2 = Rn_VPR128.8H[48,16];
+	Rd_VPR128.8H[48,16] = Rd_VPR128.8H[48,16] + ((src3 s>> shv) + ((src3 s>> (shv - 1)) & 1));
+	local src4:2 = Rn_VPR128.8H[64,16];
+	Rd_VPR128.8H[64,16] = Rd_VPR128.8H[64,16] + ((src4 s>> shv) + ((src4 s>> (shv - 1)) & 1));
+	local src5:2 = Rn_VPR128.8H[80,16];
+	Rd_VPR128.8H[80,16] = Rd_VPR128.8H[80,16] + ((src5 s>> shv) + ((src5 s>> (shv - 1)) & 1));
+	local src6:2 = Rn_VPR128.8H[96,16];
+	Rd_VPR128.8H[96,16] = Rd_VPR128.8H[96,16] + ((src6 s>> shv) + ((src6 s>> (shv - 1)) & 1));
+	local src7:2 = Rn_VPR128.8H[112,16];
+	Rd_VPR128.8H[112,16] = Rd_VPR128.8H[112,16] + ((src7 s>> shv) + ((src7 s>> (shv - 1)) & 1));
+	zext_zq(Zd);
 }
 
 # C7.2.314 SRSRA page C7-2730 line 159316 MATCH x5f003400/mask=xff80fc00
@@ -22876,10 +22688,10 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x6 &
 :srsra Rd_FPR64, Rn_FPR64, Imm_shr_imm64
 is b_2331=0b010111110 & b_22=1 & b_1015=0b001101 & Rd_FPR64 & Rn_FPR64 & Imm_shr_imm64 & Zd
 {
-	local tmp1:8 = zext(Imm_shr_imm64);
-	local tmp2:8 = Rn_FPR64 s>> tmp1;
-	Rd_FPR64 = Rd_FPR64 + tmp2;
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local shv:8 = zext(Imm_shr_imm64);
+	local src0:8 = Rn_FPR64;
+	Rd_FPR64 = Rd_FPR64 + ((src0 s>> shv) + ((src0 s>> (shv - 1)) & 1));
+	zext_zd(Zd);
 }
 
 # C7.2.315 SSHL page C7-2733 line 159467 MATCH x5e204400/mask=xff20fc00
@@ -24560,8 +24372,9 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.8H
 :suqadd Rd_FPR8, Rn_FPR8
 is b_31=0 & b_30=1 & b_2429=0b011110 & b_2223=0b00 & b_1021=0b100000001110 & Rd_FPR8 & Rn_FPR8 & Zd
 {
-	Rd_FPR8 = Rd_FPR8 + Rn_FPR8;
-	zext_zb(Zd); # zero upper 31 bytes of Zd
+	local sum0:2 = sext(Rd_FPR8) + zext(Rn_FPR8);
+	Rd_FPR8 = sum0:1 * zext(sum0 s<= 0x7f) + 0x7f * zext(sum0 s> 0x7f);
+	zext_zb(Zd);
 }
 
 # C7.2.337 SUQADD page C7-2797 line 163431 MATCH x5e203800/mask=xff3ffc00
@@ -24574,8 +24387,9 @@ is b_31=0 & b_30=1 & b_2429=0b011110 & b_2223=0b00 & b_1021=0b100000001110 & Rd_
 :suqadd Rd_FPR16, Rn_FPR16
 is b_31=0 & b_30=1 & b_2429=0b011110 & b_2223=0b01 & b_1021=0b100000001110 & Rd_FPR16 & Rn_FPR16 & Zd
 {
-	Rd_FPR16 = Rd_FPR16 + Rn_FPR16;
-	zext_zh(Zd); # zero upper 30 bytes of Zd
+	local sum0:4 = sext(Rd_FPR16) + zext(Rn_FPR16);
+	Rd_FPR16 = sum0:2 * zext(sum0 s<= 0x7fff) + 0x7fff * zext(sum0 s> 0x7fff);
+	zext_zh(Zd);
 }
 
 # C7.2.337 SUQADD page C7-2797 line 163431 MATCH x5e203800/mask=xff3ffc00
@@ -24588,8 +24402,9 @@ is b_31=0 & b_30=1 & b_2429=0b011110 & b_2223=0b01 & b_1021=0b100000001110 & Rd_
 :suqadd Rd_FPR32, Rn_FPR32
 is b_31=0 & b_30=1 & b_2429=0b011110 & b_2223=0b10 & b_1021=0b100000001110 & Rd_FPR32 & Rn_FPR32 & Zd
 {
-	Rd_FPR32 = Rd_FPR32 + Rn_FPR32;
-	zext_zs(Zd); # zero upper 28 bytes of Zd
+	local sum0:8 = sext(Rd_FPR32) + zext(Rn_FPR32);
+	Rd_FPR32 = sum0:4 * zext(sum0 s<= 0x7fffffff) + 0x7fffffff * zext(sum0 s> 0x7fffffff);
+	zext_zs(Zd);
 }
 
 # C7.2.337 SUQADD page C7-2797 line 163431 MATCH x5e203800/mask=xff3ffc00
@@ -24602,8 +24417,9 @@ is b_31=0 & b_30=1 & b_2429=0b011110 & b_2223=0b10 & b_1021=0b100000001110 & Rd_
 :suqadd Rd_FPR64, Rn_FPR64
 is b_31=0 & b_30=1 & b_2429=0b011110 & b_2223=0b11 & b_1021=0b100000001110 & Rd_FPR64 & Rn_FPR64 & Zd
 {
-	Rd_FPR64 = Rd_FPR64 + Rn_FPR64;
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local sum0:16 = sext(Rd_FPR64) + zext(Rn_FPR64);
+	Rd_FPR64 = sum0:8 * zext(sum0 s<= 0x7fffffffffffffff) + 0x7fffffffffffffff * zext(sum0 s> 0x7fffffffffffffff);
+	zext_zd(Zd);
 }
 
 # C7.2.337 SUQADD page C7-2797 line 163431 MATCH x0e203800/mask=xbf3ffc00
@@ -24616,16 +24432,23 @@ is b_31=0 & b_30=1 & b_2429=0b011110 & b_2223=0b11 & b_1021=0b100000001110 & Rd_
 :suqadd Rd_VPR64.8B, Rn_VPR64.8B
 is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b00 & b_1021=0b100000001110 & Rd_VPR64.8B & Rn_VPR64.8B & Zd
 {
-	# simd infix Rd_VPR64.8B = Rd_VPR64.8B + Rn_VPR64.8B on lane size 1
-	Rd_VPR64.8B[0,8] = Rd_VPR64.8B[0,8] + Rn_VPR64.8B[0,8];
-	Rd_VPR64.8B[8,8] = Rd_VPR64.8B[8,8] + Rn_VPR64.8B[8,8];
-	Rd_VPR64.8B[16,8] = Rd_VPR64.8B[16,8] + Rn_VPR64.8B[16,8];
-	Rd_VPR64.8B[24,8] = Rd_VPR64.8B[24,8] + Rn_VPR64.8B[24,8];
-	Rd_VPR64.8B[32,8] = Rd_VPR64.8B[32,8] + Rn_VPR64.8B[32,8];
-	Rd_VPR64.8B[40,8] = Rd_VPR64.8B[40,8] + Rn_VPR64.8B[40,8];
-	Rd_VPR64.8B[48,8] = Rd_VPR64.8B[48,8] + Rn_VPR64.8B[48,8];
-	Rd_VPR64.8B[56,8] = Rd_VPR64.8B[56,8] + Rn_VPR64.8B[56,8];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local sum0:2 = sext(Rd_VPR64.8B[0,8]) + zext(Rn_VPR64.8B[0,8]);
+	Rd_VPR64.8B[0,8] = sum0:1 * zext(sum0 s<= 0x7f) + 0x7f * zext(sum0 s> 0x7f);
+	local sum1:2 = sext(Rd_VPR64.8B[8,8]) + zext(Rn_VPR64.8B[8,8]);
+	Rd_VPR64.8B[8,8] = sum1:1 * zext(sum1 s<= 0x7f) + 0x7f * zext(sum1 s> 0x7f);
+	local sum2:2 = sext(Rd_VPR64.8B[16,8]) + zext(Rn_VPR64.8B[16,8]);
+	Rd_VPR64.8B[16,8] = sum2:1 * zext(sum2 s<= 0x7f) + 0x7f * zext(sum2 s> 0x7f);
+	local sum3:2 = sext(Rd_VPR64.8B[24,8]) + zext(Rn_VPR64.8B[24,8]);
+	Rd_VPR64.8B[24,8] = sum3:1 * zext(sum3 s<= 0x7f) + 0x7f * zext(sum3 s> 0x7f);
+	local sum4:2 = sext(Rd_VPR64.8B[32,8]) + zext(Rn_VPR64.8B[32,8]);
+	Rd_VPR64.8B[32,8] = sum4:1 * zext(sum4 s<= 0x7f) + 0x7f * zext(sum4 s> 0x7f);
+	local sum5:2 = sext(Rd_VPR64.8B[40,8]) + zext(Rn_VPR64.8B[40,8]);
+	Rd_VPR64.8B[40,8] = sum5:1 * zext(sum5 s<= 0x7f) + 0x7f * zext(sum5 s> 0x7f);
+	local sum6:2 = sext(Rd_VPR64.8B[48,8]) + zext(Rn_VPR64.8B[48,8]);
+	Rd_VPR64.8B[48,8] = sum6:1 * zext(sum6 s<= 0x7f) + 0x7f * zext(sum6 s> 0x7f);
+	local sum7:2 = sext(Rd_VPR64.8B[56,8]) + zext(Rn_VPR64.8B[56,8]);
+	Rd_VPR64.8B[56,8] = sum7:1 * zext(sum7 s<= 0x7f) + 0x7f * zext(sum7 s> 0x7f);
+	zext_zd(Zd);
 }
 
 # C7.2.337 SUQADD page C7-2797 line 163431 MATCH x0e203800/mask=xbf3ffc00
@@ -24638,24 +24461,39 @@ is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b00 & b_1021=0b100000001110 & Rd_
 :suqadd Rd_VPR128.16B, Rn_VPR128.16B
 is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b00 & b_1021=0b100000001110 & Rd_VPR128.16B & Rn_VPR128.16B & Zd
 {
-	# simd infix Rd_VPR128.16B = Rd_VPR128.16B + Rn_VPR128.16B on lane size 1
-	Rd_VPR128.16B[0,8] = Rd_VPR128.16B[0,8] + Rn_VPR128.16B[0,8];
-	Rd_VPR128.16B[8,8] = Rd_VPR128.16B[8,8] + Rn_VPR128.16B[8,8];
-	Rd_VPR128.16B[16,8] = Rd_VPR128.16B[16,8] + Rn_VPR128.16B[16,8];
-	Rd_VPR128.16B[24,8] = Rd_VPR128.16B[24,8] + Rn_VPR128.16B[24,8];
-	Rd_VPR128.16B[32,8] = Rd_VPR128.16B[32,8] + Rn_VPR128.16B[32,8];
-	Rd_VPR128.16B[40,8] = Rd_VPR128.16B[40,8] + Rn_VPR128.16B[40,8];
-	Rd_VPR128.16B[48,8] = Rd_VPR128.16B[48,8] + Rn_VPR128.16B[48,8];
-	Rd_VPR128.16B[56,8] = Rd_VPR128.16B[56,8] + Rn_VPR128.16B[56,8];
-	Rd_VPR128.16B[64,8] = Rd_VPR128.16B[64,8] + Rn_VPR128.16B[64,8];
-	Rd_VPR128.16B[72,8] = Rd_VPR128.16B[72,8] + Rn_VPR128.16B[72,8];
-	Rd_VPR128.16B[80,8] = Rd_VPR128.16B[80,8] + Rn_VPR128.16B[80,8];
-	Rd_VPR128.16B[88,8] = Rd_VPR128.16B[88,8] + Rn_VPR128.16B[88,8];
-	Rd_VPR128.16B[96,8] = Rd_VPR128.16B[96,8] + Rn_VPR128.16B[96,8];
-	Rd_VPR128.16B[104,8] = Rd_VPR128.16B[104,8] + Rn_VPR128.16B[104,8];
-	Rd_VPR128.16B[112,8] = Rd_VPR128.16B[112,8] + Rn_VPR128.16B[112,8];
-	Rd_VPR128.16B[120,8] = Rd_VPR128.16B[120,8] + Rn_VPR128.16B[120,8];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local sum0:2 = sext(Rd_VPR128.16B[0,8]) + zext(Rn_VPR128.16B[0,8]);
+	Rd_VPR128.16B[0,8] = sum0:1 * zext(sum0 s<= 0x7f) + 0x7f * zext(sum0 s> 0x7f);
+	local sum1:2 = sext(Rd_VPR128.16B[8,8]) + zext(Rn_VPR128.16B[8,8]);
+	Rd_VPR128.16B[8,8] = sum1:1 * zext(sum1 s<= 0x7f) + 0x7f * zext(sum1 s> 0x7f);
+	local sum2:2 = sext(Rd_VPR128.16B[16,8]) + zext(Rn_VPR128.16B[16,8]);
+	Rd_VPR128.16B[16,8] = sum2:1 * zext(sum2 s<= 0x7f) + 0x7f * zext(sum2 s> 0x7f);
+	local sum3:2 = sext(Rd_VPR128.16B[24,8]) + zext(Rn_VPR128.16B[24,8]);
+	Rd_VPR128.16B[24,8] = sum3:1 * zext(sum3 s<= 0x7f) + 0x7f * zext(sum3 s> 0x7f);
+	local sum4:2 = sext(Rd_VPR128.16B[32,8]) + zext(Rn_VPR128.16B[32,8]);
+	Rd_VPR128.16B[32,8] = sum4:1 * zext(sum4 s<= 0x7f) + 0x7f * zext(sum4 s> 0x7f);
+	local sum5:2 = sext(Rd_VPR128.16B[40,8]) + zext(Rn_VPR128.16B[40,8]);
+	Rd_VPR128.16B[40,8] = sum5:1 * zext(sum5 s<= 0x7f) + 0x7f * zext(sum5 s> 0x7f);
+	local sum6:2 = sext(Rd_VPR128.16B[48,8]) + zext(Rn_VPR128.16B[48,8]);
+	Rd_VPR128.16B[48,8] = sum6:1 * zext(sum6 s<= 0x7f) + 0x7f * zext(sum6 s> 0x7f);
+	local sum7:2 = sext(Rd_VPR128.16B[56,8]) + zext(Rn_VPR128.16B[56,8]);
+	Rd_VPR128.16B[56,8] = sum7:1 * zext(sum7 s<= 0x7f) + 0x7f * zext(sum7 s> 0x7f);
+	local sum8:2 = sext(Rd_VPR128.16B[64,8]) + zext(Rn_VPR128.16B[64,8]);
+	Rd_VPR128.16B[64,8] = sum8:1 * zext(sum8 s<= 0x7f) + 0x7f * zext(sum8 s> 0x7f);
+	local sum9:2 = sext(Rd_VPR128.16B[72,8]) + zext(Rn_VPR128.16B[72,8]);
+	Rd_VPR128.16B[72,8] = sum9:1 * zext(sum9 s<= 0x7f) + 0x7f * zext(sum9 s> 0x7f);
+	local sum10:2 = sext(Rd_VPR128.16B[80,8]) + zext(Rn_VPR128.16B[80,8]);
+	Rd_VPR128.16B[80,8] = sum10:1 * zext(sum10 s<= 0x7f) + 0x7f * zext(sum10 s> 0x7f);
+	local sum11:2 = sext(Rd_VPR128.16B[88,8]) + zext(Rn_VPR128.16B[88,8]);
+	Rd_VPR128.16B[88,8] = sum11:1 * zext(sum11 s<= 0x7f) + 0x7f * zext(sum11 s> 0x7f);
+	local sum12:2 = sext(Rd_VPR128.16B[96,8]) + zext(Rn_VPR128.16B[96,8]);
+	Rd_VPR128.16B[96,8] = sum12:1 * zext(sum12 s<= 0x7f) + 0x7f * zext(sum12 s> 0x7f);
+	local sum13:2 = sext(Rd_VPR128.16B[104,8]) + zext(Rn_VPR128.16B[104,8]);
+	Rd_VPR128.16B[104,8] = sum13:1 * zext(sum13 s<= 0x7f) + 0x7f * zext(sum13 s> 0x7f);
+	local sum14:2 = sext(Rd_VPR128.16B[112,8]) + zext(Rn_VPR128.16B[112,8]);
+	Rd_VPR128.16B[112,8] = sum14:1 * zext(sum14 s<= 0x7f) + 0x7f * zext(sum14 s> 0x7f);
+	local sum15:2 = sext(Rd_VPR128.16B[120,8]) + zext(Rn_VPR128.16B[120,8]);
+	Rd_VPR128.16B[120,8] = sum15:1 * zext(sum15 s<= 0x7f) + 0x7f * zext(sum15 s> 0x7f);
+	zext_zq(Zd);
 }
 
 # C7.2.337 SUQADD page C7-2797 line 163431 MATCH x0e203800/mask=xbf3ffc00
@@ -24668,12 +24506,15 @@ is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b00 & b_1021=0b100000001110 & Rd_
 :suqadd Rd_VPR64.4H, Rn_VPR64.4H
 is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b01 & b_1021=0b100000001110 & Rd_VPR64.4H & Rn_VPR64.4H & Zd
 {
-	# simd infix Rd_VPR64.4H = Rd_VPR64.4H + Rn_VPR64.4H on lane size 2
-	Rd_VPR64.4H[0,16] = Rd_VPR64.4H[0,16] + Rn_VPR64.4H[0,16];
-	Rd_VPR64.4H[16,16] = Rd_VPR64.4H[16,16] + Rn_VPR64.4H[16,16];
-	Rd_VPR64.4H[32,16] = Rd_VPR64.4H[32,16] + Rn_VPR64.4H[32,16];
-	Rd_VPR64.4H[48,16] = Rd_VPR64.4H[48,16] + Rn_VPR64.4H[48,16];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local sum0:4 = sext(Rd_VPR64.4H[0,16]) + zext(Rn_VPR64.4H[0,16]);
+	Rd_VPR64.4H[0,16] = sum0:2 * zext(sum0 s<= 0x7fff) + 0x7fff * zext(sum0 s> 0x7fff);
+	local sum1:4 = sext(Rd_VPR64.4H[16,16]) + zext(Rn_VPR64.4H[16,16]);
+	Rd_VPR64.4H[16,16] = sum1:2 * zext(sum1 s<= 0x7fff) + 0x7fff * zext(sum1 s> 0x7fff);
+	local sum2:4 = sext(Rd_VPR64.4H[32,16]) + zext(Rn_VPR64.4H[32,16]);
+	Rd_VPR64.4H[32,16] = sum2:2 * zext(sum2 s<= 0x7fff) + 0x7fff * zext(sum2 s> 0x7fff);
+	local sum3:4 = sext(Rd_VPR64.4H[48,16]) + zext(Rn_VPR64.4H[48,16]);
+	Rd_VPR64.4H[48,16] = sum3:2 * zext(sum3 s<= 0x7fff) + 0x7fff * zext(sum3 s> 0x7fff);
+	zext_zd(Zd);
 }
 
 # C7.2.337 SUQADD page C7-2797 line 163431 MATCH x0e203800/mask=xbf3ffc00
@@ -24686,16 +24527,23 @@ is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b01 & b_1021=0b100000001110 & Rd_
 :suqadd Rd_VPR128.8H, Rn_VPR128.8H
 is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b01 & b_1021=0b100000001110 & Rd_VPR128.8H & Rn_VPR128.8H & Zd
 {
-	# simd infix Rd_VPR128.8H = Rd_VPR128.8H + Rn_VPR128.8H on lane size 2
-	Rd_VPR128.8H[0,16] = Rd_VPR128.8H[0,16] + Rn_VPR128.8H[0,16];
-	Rd_VPR128.8H[16,16] = Rd_VPR128.8H[16,16] + Rn_VPR128.8H[16,16];
-	Rd_VPR128.8H[32,16] = Rd_VPR128.8H[32,16] + Rn_VPR128.8H[32,16];
-	Rd_VPR128.8H[48,16] = Rd_VPR128.8H[48,16] + Rn_VPR128.8H[48,16];
-	Rd_VPR128.8H[64,16] = Rd_VPR128.8H[64,16] + Rn_VPR128.8H[64,16];
-	Rd_VPR128.8H[80,16] = Rd_VPR128.8H[80,16] + Rn_VPR128.8H[80,16];
-	Rd_VPR128.8H[96,16] = Rd_VPR128.8H[96,16] + Rn_VPR128.8H[96,16];
-	Rd_VPR128.8H[112,16] = Rd_VPR128.8H[112,16] + Rn_VPR128.8H[112,16];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local sum0:4 = sext(Rd_VPR128.8H[0,16]) + zext(Rn_VPR128.8H[0,16]);
+	Rd_VPR128.8H[0,16] = sum0:2 * zext(sum0 s<= 0x7fff) + 0x7fff * zext(sum0 s> 0x7fff);
+	local sum1:4 = sext(Rd_VPR128.8H[16,16]) + zext(Rn_VPR128.8H[16,16]);
+	Rd_VPR128.8H[16,16] = sum1:2 * zext(sum1 s<= 0x7fff) + 0x7fff * zext(sum1 s> 0x7fff);
+	local sum2:4 = sext(Rd_VPR128.8H[32,16]) + zext(Rn_VPR128.8H[32,16]);
+	Rd_VPR128.8H[32,16] = sum2:2 * zext(sum2 s<= 0x7fff) + 0x7fff * zext(sum2 s> 0x7fff);
+	local sum3:4 = sext(Rd_VPR128.8H[48,16]) + zext(Rn_VPR128.8H[48,16]);
+	Rd_VPR128.8H[48,16] = sum3:2 * zext(sum3 s<= 0x7fff) + 0x7fff * zext(sum3 s> 0x7fff);
+	local sum4:4 = sext(Rd_VPR128.8H[64,16]) + zext(Rn_VPR128.8H[64,16]);
+	Rd_VPR128.8H[64,16] = sum4:2 * zext(sum4 s<= 0x7fff) + 0x7fff * zext(sum4 s> 0x7fff);
+	local sum5:4 = sext(Rd_VPR128.8H[80,16]) + zext(Rn_VPR128.8H[80,16]);
+	Rd_VPR128.8H[80,16] = sum5:2 * zext(sum5 s<= 0x7fff) + 0x7fff * zext(sum5 s> 0x7fff);
+	local sum6:4 = sext(Rd_VPR128.8H[96,16]) + zext(Rn_VPR128.8H[96,16]);
+	Rd_VPR128.8H[96,16] = sum6:2 * zext(sum6 s<= 0x7fff) + 0x7fff * zext(sum6 s> 0x7fff);
+	local sum7:4 = sext(Rd_VPR128.8H[112,16]) + zext(Rn_VPR128.8H[112,16]);
+	Rd_VPR128.8H[112,16] = sum7:2 * zext(sum7 s<= 0x7fff) + 0x7fff * zext(sum7 s> 0x7fff);
+	zext_zq(Zd);
 }
 
 # C7.2.337 SUQADD page C7-2797 line 163431 MATCH x0e203800/mask=xbf3ffc00
@@ -24708,10 +24556,11 @@ is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b01 & b_1021=0b100000001110 & Rd_
 :suqadd Rd_VPR64.2S, Rn_VPR64.2S
 is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b10 & b_1021=0b100000001110 & Rd_VPR64.2S & Rn_VPR64.2S & Zd
 {
-	# simd infix Rd_VPR64.2S = Rd_VPR64.2S + Rn_VPR64.2S on lane size 4
-	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] + Rn_VPR64.2S[0,32];
-	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] + Rn_VPR64.2S[32,32];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local sum0:8 = sext(Rd_VPR64.2S[0,32]) + zext(Rn_VPR64.2S[0,32]);
+	Rd_VPR64.2S[0,32] = sum0:4 * zext(sum0 s<= 0x7fffffff) + 0x7fffffff * zext(sum0 s> 0x7fffffff);
+	local sum1:8 = sext(Rd_VPR64.2S[32,32]) + zext(Rn_VPR64.2S[32,32]);
+	Rd_VPR64.2S[32,32] = sum1:4 * zext(sum1 s<= 0x7fffffff) + 0x7fffffff * zext(sum1 s> 0x7fffffff);
+	zext_zd(Zd);
 }
 
 # C7.2.337 SUQADD page C7-2797 line 163431 MATCH x0e203800/mask=xbf3ffc00
@@ -24724,12 +24573,15 @@ is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b10 & b_1021=0b100000001110 & Rd_
 :suqadd Rd_VPR128.4S, Rn_VPR128.4S
 is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b10 & b_1021=0b100000001110 & Rd_VPR128.4S & Rn_VPR128.4S & Zd
 {
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S + Rn_VPR128.4S on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + Rn_VPR128.4S[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + Rn_VPR128.4S[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + Rn_VPR128.4S[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + Rn_VPR128.4S[96,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local sum0:8 = sext(Rd_VPR128.4S[0,32]) + zext(Rn_VPR128.4S[0,32]);
+	Rd_VPR128.4S[0,32] = sum0:4 * zext(sum0 s<= 0x7fffffff) + 0x7fffffff * zext(sum0 s> 0x7fffffff);
+	local sum1:8 = sext(Rd_VPR128.4S[32,32]) + zext(Rn_VPR128.4S[32,32]);
+	Rd_VPR128.4S[32,32] = sum1:4 * zext(sum1 s<= 0x7fffffff) + 0x7fffffff * zext(sum1 s> 0x7fffffff);
+	local sum2:8 = sext(Rd_VPR128.4S[64,32]) + zext(Rn_VPR128.4S[64,32]);
+	Rd_VPR128.4S[64,32] = sum2:4 * zext(sum2 s<= 0x7fffffff) + 0x7fffffff * zext(sum2 s> 0x7fffffff);
+	local sum3:8 = sext(Rd_VPR128.4S[96,32]) + zext(Rn_VPR128.4S[96,32]);
+	Rd_VPR128.4S[96,32] = sum3:4 * zext(sum3 s<= 0x7fffffff) + 0x7fffffff * zext(sum3 s> 0x7fffffff);
+	zext_zq(Zd);
 }
 
 # C7.2.337 SUQADD page C7-2797 line 163431 MATCH x0e203800/mask=xbf3ffc00
@@ -24742,10 +24594,11 @@ is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b10 & b_1021=0b100000001110 & Rd_
 :suqadd Rd_VPR128.2D, Rn_VPR128.2D
 is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b11 & b_1021=0b100000001110 & Rd_VPR128.2D & Rn_VPR128.2D & Zd
 {
-	# simd infix Rd_VPR128.2D = Rd_VPR128.2D + Rn_VPR128.2D on lane size 8
-	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] + Rn_VPR128.2D[0,64];
-	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] + Rn_VPR128.2D[64,64];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local sum0:16 = sext(Rd_VPR128.2D[0,64]) + zext(Rn_VPR128.2D[0,64]);
+	Rd_VPR128.2D[0,64] = sum0:8 * zext(sum0 s<= 0x7fffffffffffffff) + 0x7fffffffffffffff * zext(sum0 s> 0x7fffffffffffffff);
+	local sum1:16 = sext(Rd_VPR128.2D[64,64]) + zext(Rn_VPR128.2D[64,64]);
+	Rd_VPR128.2D[64,64] = sum1:8 * zext(sum1 s<= 0x7fffffffffffffff) + 0x7fffffffffffffff * zext(sum1 s> 0x7fffffffffffffff);
+	zext_zq(Zd);
 }
 
 # C7.2.338 SXTL, SXTL2 page C7-2799 line 163553 MATCH x0f00a400/mask=xbf87fc00
@@ -29855,41 +29708,40 @@ is b_31=0 & b_30=1 & b_2329=0b1011101 & b_22=0 & b_1021=0b100001110010 & Rd_VPR1
 :ursra Rd_VPR128.16B, Rn_VPR128.16B, Imm_shr_imm8
 is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x6 & b_1010=1 & Rn_VPR128.16B & Rd_VPR128.16B & Zd
 {
-	# simd infix TMPQ1 = Rn_VPR128.16B >> Imm_shr_imm8:1 on lane size 1
-	TMPQ1[0,8] = Rn_VPR128.16B[0,8] >> Imm_shr_imm8:1;
-	TMPQ1[8,8] = Rn_VPR128.16B[8,8] >> Imm_shr_imm8:1;
-	TMPQ1[16,8] = Rn_VPR128.16B[16,8] >> Imm_shr_imm8:1;
-	TMPQ1[24,8] = Rn_VPR128.16B[24,8] >> Imm_shr_imm8:1;
-	TMPQ1[32,8] = Rn_VPR128.16B[32,8] >> Imm_shr_imm8:1;
-	TMPQ1[40,8] = Rn_VPR128.16B[40,8] >> Imm_shr_imm8:1;
-	TMPQ1[48,8] = Rn_VPR128.16B[48,8] >> Imm_shr_imm8:1;
-	TMPQ1[56,8] = Rn_VPR128.16B[56,8] >> Imm_shr_imm8:1;
-	TMPQ1[64,8] = Rn_VPR128.16B[64,8] >> Imm_shr_imm8:1;
-	TMPQ1[72,8] = Rn_VPR128.16B[72,8] >> Imm_shr_imm8:1;
-	TMPQ1[80,8] = Rn_VPR128.16B[80,8] >> Imm_shr_imm8:1;
-	TMPQ1[88,8] = Rn_VPR128.16B[88,8] >> Imm_shr_imm8:1;
-	TMPQ1[96,8] = Rn_VPR128.16B[96,8] >> Imm_shr_imm8:1;
-	TMPQ1[104,8] = Rn_VPR128.16B[104,8] >> Imm_shr_imm8:1;
-	TMPQ1[112,8] = Rn_VPR128.16B[112,8] >> Imm_shr_imm8:1;
-	TMPQ1[120,8] = Rn_VPR128.16B[120,8] >> Imm_shr_imm8:1;
-	# simd infix Rd_VPR128.16B = Rd_VPR128.16B + TMPQ1 on lane size 1
-	Rd_VPR128.16B[0,8] = Rd_VPR128.16B[0,8] + TMPQ1[0,8];
-	Rd_VPR128.16B[8,8] = Rd_VPR128.16B[8,8] + TMPQ1[8,8];
-	Rd_VPR128.16B[16,8] = Rd_VPR128.16B[16,8] + TMPQ1[16,8];
-	Rd_VPR128.16B[24,8] = Rd_VPR128.16B[24,8] + TMPQ1[24,8];
-	Rd_VPR128.16B[32,8] = Rd_VPR128.16B[32,8] + TMPQ1[32,8];
-	Rd_VPR128.16B[40,8] = Rd_VPR128.16B[40,8] + TMPQ1[40,8];
-	Rd_VPR128.16B[48,8] = Rd_VPR128.16B[48,8] + TMPQ1[48,8];
-	Rd_VPR128.16B[56,8] = Rd_VPR128.16B[56,8] + TMPQ1[56,8];
-	Rd_VPR128.16B[64,8] = Rd_VPR128.16B[64,8] + TMPQ1[64,8];
-	Rd_VPR128.16B[72,8] = Rd_VPR128.16B[72,8] + TMPQ1[72,8];
-	Rd_VPR128.16B[80,8] = Rd_VPR128.16B[80,8] + TMPQ1[80,8];
-	Rd_VPR128.16B[88,8] = Rd_VPR128.16B[88,8] + TMPQ1[88,8];
-	Rd_VPR128.16B[96,8] = Rd_VPR128.16B[96,8] + TMPQ1[96,8];
-	Rd_VPR128.16B[104,8] = Rd_VPR128.16B[104,8] + TMPQ1[104,8];
-	Rd_VPR128.16B[112,8] = Rd_VPR128.16B[112,8] + TMPQ1[112,8];
-	Rd_VPR128.16B[120,8] = Rd_VPR128.16B[120,8] + TMPQ1[120,8];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local shv:1 = Imm_shr_imm8:1;
+	local src0:1 = Rn_VPR128.16B[0,8];
+	Rd_VPR128.16B[0,8] = Rd_VPR128.16B[0,8] + ((src0 >> shv) + ((src0 >> (shv - 1)) & 1));
+	local src1:1 = Rn_VPR128.16B[8,8];
+	Rd_VPR128.16B[8,8] = Rd_VPR128.16B[8,8] + ((src1 >> shv) + ((src1 >> (shv - 1)) & 1));
+	local src2:1 = Rn_VPR128.16B[16,8];
+	Rd_VPR128.16B[16,8] = Rd_VPR128.16B[16,8] + ((src2 >> shv) + ((src2 >> (shv - 1)) & 1));
+	local src3:1 = Rn_VPR128.16B[24,8];
+	Rd_VPR128.16B[24,8] = Rd_VPR128.16B[24,8] + ((src3 >> shv) + ((src3 >> (shv - 1)) & 1));
+	local src4:1 = Rn_VPR128.16B[32,8];
+	Rd_VPR128.16B[32,8] = Rd_VPR128.16B[32,8] + ((src4 >> shv) + ((src4 >> (shv - 1)) & 1));
+	local src5:1 = Rn_VPR128.16B[40,8];
+	Rd_VPR128.16B[40,8] = Rd_VPR128.16B[40,8] + ((src5 >> shv) + ((src5 >> (shv - 1)) & 1));
+	local src6:1 = Rn_VPR128.16B[48,8];
+	Rd_VPR128.16B[48,8] = Rd_VPR128.16B[48,8] + ((src6 >> shv) + ((src6 >> (shv - 1)) & 1));
+	local src7:1 = Rn_VPR128.16B[56,8];
+	Rd_VPR128.16B[56,8] = Rd_VPR128.16B[56,8] + ((src7 >> shv) + ((src7 >> (shv - 1)) & 1));
+	local src8:1 = Rn_VPR128.16B[64,8];
+	Rd_VPR128.16B[64,8] = Rd_VPR128.16B[64,8] + ((src8 >> shv) + ((src8 >> (shv - 1)) & 1));
+	local src9:1 = Rn_VPR128.16B[72,8];
+	Rd_VPR128.16B[72,8] = Rd_VPR128.16B[72,8] + ((src9 >> shv) + ((src9 >> (shv - 1)) & 1));
+	local src10:1 = Rn_VPR128.16B[80,8];
+	Rd_VPR128.16B[80,8] = Rd_VPR128.16B[80,8] + ((src10 >> shv) + ((src10 >> (shv - 1)) & 1));
+	local src11:1 = Rn_VPR128.16B[88,8];
+	Rd_VPR128.16B[88,8] = Rd_VPR128.16B[88,8] + ((src11 >> shv) + ((src11 >> (shv - 1)) & 1));
+	local src12:1 = Rn_VPR128.16B[96,8];
+	Rd_VPR128.16B[96,8] = Rd_VPR128.16B[96,8] + ((src12 >> shv) + ((src12 >> (shv - 1)) & 1));
+	local src13:1 = Rn_VPR128.16B[104,8];
+	Rd_VPR128.16B[104,8] = Rd_VPR128.16B[104,8] + ((src13 >> shv) + ((src13 >> (shv - 1)) & 1));
+	local src14:1 = Rn_VPR128.16B[112,8];
+	Rd_VPR128.16B[112,8] = Rd_VPR128.16B[112,8] + ((src14 >> shv) + ((src14 >> (shv - 1)) & 1));
+	local src15:1 = Rn_VPR128.16B[120,8];
+	Rd_VPR128.16B[120,8] = Rd_VPR128.16B[120,8] + ((src15 >> shv) + ((src15 >> (shv - 1)) & 1));
+	zext_zq(Zd);
 }
 
 # C7.2.387 URSRA page C7-2904 line 169558 MATCH x2f003400/mask=xbf80fc00
@@ -29901,14 +29753,12 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x6 & 
 :ursra Rd_VPR128.2D, Rn_VPR128.2D, Imm_shr_imm64
 is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x6 & b_1010=1 & Rn_VPR128.2D & Rd_VPR128.2D & Zd
 {
-	local tmp1:8 = zext(Imm_shr_imm64);
-	# simd infix TMPQ1 = Rn_VPR128.2D >> tmp1 on lane size 8
-	TMPQ1[0,64] = Rn_VPR128.2D[0,64] >> tmp1;
-	TMPQ1[64,64] = Rn_VPR128.2D[64,64] >> tmp1;
-	# simd infix Rd_VPR128.2D = Rd_VPR128.2D + TMPQ1 on lane size 8
-	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] + TMPQ1[0,64];
-	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] + TMPQ1[64,64];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local shv:8 = zext(Imm_shr_imm64);
+	local src0:8 = Rn_VPR128.2D[0,64];
+	Rd_VPR128.2D[0,64] = Rd_VPR128.2D[0,64] + ((src0 >> shv) + ((src0 >> (shv - 1)) & 1));
+	local src1:8 = Rn_VPR128.2D[64,64];
+	Rd_VPR128.2D[64,64] = Rd_VPR128.2D[64,64] + ((src1 >> shv) + ((src1 >> (shv - 1)) & 1));
+	zext_zq(Zd);
 }
 
 # C7.2.387 URSRA page C7-2904 line 169558 MATCH x2f003400/mask=xbf80fc00
@@ -29920,14 +29770,12 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x6 
 :ursra Rd_VPR64.2S, Rn_VPR64.2S, Imm_shr_imm32
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x6 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
-	local tmp1:4 = Imm_shr_imm32;
-	# simd infix TMPD1 = Rn_VPR64.2S >> tmp1 on lane size 4
-	TMPD1[0,32] = Rn_VPR64.2S[0,32] >> tmp1;
-	TMPD1[32,32] = Rn_VPR64.2S[32,32] >> tmp1;
-	# simd infix Rd_VPR64.2S = Rd_VPR64.2S + TMPD1 on lane size 4
-	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] + TMPD1[0,32];
-	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] + TMPD1[32,32];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local shv:4 = Imm_shr_imm32:4;
+	local src0:4 = Rn_VPR64.2S[0,32];
+	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] + ((src0 >> shv) + ((src0 >> (shv - 1)) & 1));
+	local src1:4 = Rn_VPR64.2S[32,32];
+	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] + ((src1 >> shv) + ((src1 >> (shv - 1)) & 1));
+	zext_zd(Zd);
 }
 
 # C7.2.387 URSRA page C7-2904 line 169558 MATCH x2f003400/mask=xbf80fc00
@@ -29939,15 +29787,16 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x6 & b
 :ursra Rd_VPR64.4H, Rn_VPR64.4H, Imm_shr_imm16
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x6 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
-	# simd infix TMPD1 = Rn_VPR64.4H >> Imm_shr_imm16:2 on lane size 2
-	TMPD1[0,16] = Rn_VPR64.4H[0,16] >> Imm_shr_imm16:2;
-	TMPD1[16,16] = Rn_VPR64.4H[16,16] >> Imm_shr_imm16:2;
-	TMPD1[32,16] = Rn_VPR64.4H[32,16] >> Imm_shr_imm16:2;
-	TMPD1[48,16] = Rn_VPR64.4H[48,16] >> Imm_shr_imm16:2;
-	# simd infix Rd_VPR64.4H = Rd_VPR64.4H + TMPD1 on lane size 4
-	Rd_VPR64.4H[0,32] = Rd_VPR64.4H[0,32] + TMPD1[0,32];
-	Rd_VPR64.4H[32,32] = Rd_VPR64.4H[32,32] + TMPD1[32,32];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local shv:2 = Imm_shr_imm16:2;
+	local src0:2 = Rn_VPR64.4H[0,16];
+	Rd_VPR64.4H[0,16] = Rd_VPR64.4H[0,16] + ((src0 >> shv) + ((src0 >> (shv - 1)) & 1));
+	local src1:2 = Rn_VPR64.4H[16,16];
+	Rd_VPR64.4H[16,16] = Rd_VPR64.4H[16,16] + ((src1 >> shv) + ((src1 >> (shv - 1)) & 1));
+	local src2:2 = Rn_VPR64.4H[32,16];
+	Rd_VPR64.4H[32,16] = Rd_VPR64.4H[32,16] + ((src2 >> shv) + ((src2 >> (shv - 1)) & 1));
+	local src3:2 = Rn_VPR64.4H[48,16];
+	Rd_VPR64.4H[48,16] = Rd_VPR64.4H[48,16] + ((src3 >> shv) + ((src3 >> (shv - 1)) & 1));
+	zext_zd(Zd);
 }
 
 # C7.2.387 URSRA page C7-2904 line 169558 MATCH x2f003400/mask=xbf80fc00
@@ -29959,18 +29808,16 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x6 &
 :ursra Rd_VPR128.4S, Rn_VPR128.4S, Imm_shr_imm32
 is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x6 & b_1010=1 & Rn_VPR128.4S & Rd_VPR128.4S & Zd
 {
-	local tmp1:4 = Imm_shr_imm32;
-	# simd infix TMPQ1 = Rn_VPR128.4S >> tmp1 on lane size 4
-	TMPQ1[0,32] = Rn_VPR128.4S[0,32] >> tmp1;
-	TMPQ1[32,32] = Rn_VPR128.4S[32,32] >> tmp1;
-	TMPQ1[64,32] = Rn_VPR128.4S[64,32] >> tmp1;
-	TMPQ1[96,32] = Rn_VPR128.4S[96,32] >> tmp1;
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S + TMPQ1 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + TMPQ1[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + TMPQ1[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + TMPQ1[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + TMPQ1[96,32];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local shv:4 = Imm_shr_imm32:4;
+	local src0:4 = Rn_VPR128.4S[0,32];
+	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + ((src0 >> shv) + ((src0 >> (shv - 1)) & 1));
+	local src1:4 = Rn_VPR128.4S[32,32];
+	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + ((src1 >> shv) + ((src1 >> (shv - 1)) & 1));
+	local src2:4 = Rn_VPR128.4S[64,32];
+	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + ((src2 >> shv) + ((src2 >> (shv - 1)) & 1));
+	local src3:4 = Rn_VPR128.4S[96,32];
+	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + ((src3 >> shv) + ((src3 >> (shv - 1)) & 1));
+	zext_zq(Zd);
 }
 
 # C7.2.387 URSRA page C7-2904 line 169558 MATCH x2f003400/mask=xbf80fc00
@@ -29982,25 +29829,24 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x6 & b
 :ursra Rd_VPR64.8B, Rn_VPR64.8B, Imm_shr_imm8
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x6 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
-	# simd infix TMPD1 = Rn_VPR64.8B >> Imm_shr_imm8:1 on lane size 1
-	TMPD1[0,8] = Rn_VPR64.8B[0,8] >> Imm_shr_imm8:1;
-	TMPD1[8,8] = Rn_VPR64.8B[8,8] >> Imm_shr_imm8:1;
-	TMPD1[16,8] = Rn_VPR64.8B[16,8] >> Imm_shr_imm8:1;
-	TMPD1[24,8] = Rn_VPR64.8B[24,8] >> Imm_shr_imm8:1;
-	TMPD1[32,8] = Rn_VPR64.8B[32,8] >> Imm_shr_imm8:1;
-	TMPD1[40,8] = Rn_VPR64.8B[40,8] >> Imm_shr_imm8:1;
-	TMPD1[48,8] = Rn_VPR64.8B[48,8] >> Imm_shr_imm8:1;
-	TMPD1[56,8] = Rn_VPR64.8B[56,8] >> Imm_shr_imm8:1;
-	# simd infix Rd_VPR64.8B = Rd_VPR64.8B + TMPD1 on lane size 1
-	Rd_VPR64.8B[0,8] = Rd_VPR64.8B[0,8] + TMPD1[0,8];
-	Rd_VPR64.8B[8,8] = Rd_VPR64.8B[8,8] + TMPD1[8,8];
-	Rd_VPR64.8B[16,8] = Rd_VPR64.8B[16,8] + TMPD1[16,8];
-	Rd_VPR64.8B[24,8] = Rd_VPR64.8B[24,8] + TMPD1[24,8];
-	Rd_VPR64.8B[32,8] = Rd_VPR64.8B[32,8] + TMPD1[32,8];
-	Rd_VPR64.8B[40,8] = Rd_VPR64.8B[40,8] + TMPD1[40,8];
-	Rd_VPR64.8B[48,8] = Rd_VPR64.8B[48,8] + TMPD1[48,8];
-	Rd_VPR64.8B[56,8] = Rd_VPR64.8B[56,8] + TMPD1[56,8];
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local shv:1 = Imm_shr_imm8:1;
+	local src0:1 = Rn_VPR64.8B[0,8];
+	Rd_VPR64.8B[0,8] = Rd_VPR64.8B[0,8] + ((src0 >> shv) + ((src0 >> (shv - 1)) & 1));
+	local src1:1 = Rn_VPR64.8B[8,8];
+	Rd_VPR64.8B[8,8] = Rd_VPR64.8B[8,8] + ((src1 >> shv) + ((src1 >> (shv - 1)) & 1));
+	local src2:1 = Rn_VPR64.8B[16,8];
+	Rd_VPR64.8B[16,8] = Rd_VPR64.8B[16,8] + ((src2 >> shv) + ((src2 >> (shv - 1)) & 1));
+	local src3:1 = Rn_VPR64.8B[24,8];
+	Rd_VPR64.8B[24,8] = Rd_VPR64.8B[24,8] + ((src3 >> shv) + ((src3 >> (shv - 1)) & 1));
+	local src4:1 = Rn_VPR64.8B[32,8];
+	Rd_VPR64.8B[32,8] = Rd_VPR64.8B[32,8] + ((src4 >> shv) + ((src4 >> (shv - 1)) & 1));
+	local src5:1 = Rn_VPR64.8B[40,8];
+	Rd_VPR64.8B[40,8] = Rd_VPR64.8B[40,8] + ((src5 >> shv) + ((src5 >> (shv - 1)) & 1));
+	local src6:1 = Rn_VPR64.8B[48,8];
+	Rd_VPR64.8B[48,8] = Rd_VPR64.8B[48,8] + ((src6 >> shv) + ((src6 >> (shv - 1)) & 1));
+	local src7:1 = Rn_VPR64.8B[56,8];
+	Rd_VPR64.8B[56,8] = Rd_VPR64.8B[56,8] + ((src7 >> shv) + ((src7 >> (shv - 1)) & 1));
+	zext_zd(Zd);
 }
 
 # C7.2.387 URSRA page C7-2904 line 169558 MATCH x2f003400/mask=xbf80fc00
@@ -30012,25 +29858,24 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x6 & 
 :ursra Rd_VPR128.8H, Rn_VPR128.8H, Imm_shr_imm16
 is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x6 & b_1010=1 & Rn_VPR128.8H & Rd_VPR128.8H & Zd
 {
-	# simd infix TMPQ1 = Rn_VPR128.8H >> Imm_shr_imm16:2 on lane size 2
-	TMPQ1[0,16] = Rn_VPR128.8H[0,16] >> Imm_shr_imm16:2;
-	TMPQ1[16,16] = Rn_VPR128.8H[16,16] >> Imm_shr_imm16:2;
-	TMPQ1[32,16] = Rn_VPR128.8H[32,16] >> Imm_shr_imm16:2;
-	TMPQ1[48,16] = Rn_VPR128.8H[48,16] >> Imm_shr_imm16:2;
-	TMPQ1[64,16] = Rn_VPR128.8H[64,16] >> Imm_shr_imm16:2;
-	TMPQ1[80,16] = Rn_VPR128.8H[80,16] >> Imm_shr_imm16:2;
-	TMPQ1[96,16] = Rn_VPR128.8H[96,16] >> Imm_shr_imm16:2;
-	TMPQ1[112,16] = Rn_VPR128.8H[112,16] >> Imm_shr_imm16:2;
-	# simd infix Rd_VPR128.8H = Rd_VPR128.8H + TMPQ1 on lane size 2
-	Rd_VPR128.8H[0,16] = Rd_VPR128.8H[0,16] + TMPQ1[0,16];
-	Rd_VPR128.8H[16,16] = Rd_VPR128.8H[16,16] + TMPQ1[16,16];
-	Rd_VPR128.8H[32,16] = Rd_VPR128.8H[32,16] + TMPQ1[32,16];
-	Rd_VPR128.8H[48,16] = Rd_VPR128.8H[48,16] + TMPQ1[48,16];
-	Rd_VPR128.8H[64,16] = Rd_VPR128.8H[64,16] + TMPQ1[64,16];
-	Rd_VPR128.8H[80,16] = Rd_VPR128.8H[80,16] + TMPQ1[80,16];
-	Rd_VPR128.8H[96,16] = Rd_VPR128.8H[96,16] + TMPQ1[96,16];
-	Rd_VPR128.8H[112,16] = Rd_VPR128.8H[112,16] + TMPQ1[112,16];
-	zext_zq(Zd); # zero upper 16 bytes of Zd
+	local shv:2 = Imm_shr_imm16:2;
+	local src0:2 = Rn_VPR128.8H[0,16];
+	Rd_VPR128.8H[0,16] = Rd_VPR128.8H[0,16] + ((src0 >> shv) + ((src0 >> (shv - 1)) & 1));
+	local src1:2 = Rn_VPR128.8H[16,16];
+	Rd_VPR128.8H[16,16] = Rd_VPR128.8H[16,16] + ((src1 >> shv) + ((src1 >> (shv - 1)) & 1));
+	local src2:2 = Rn_VPR128.8H[32,16];
+	Rd_VPR128.8H[32,16] = Rd_VPR128.8H[32,16] + ((src2 >> shv) + ((src2 >> (shv - 1)) & 1));
+	local src3:2 = Rn_VPR128.8H[48,16];
+	Rd_VPR128.8H[48,16] = Rd_VPR128.8H[48,16] + ((src3 >> shv) + ((src3 >> (shv - 1)) & 1));
+	local src4:2 = Rn_VPR128.8H[64,16];
+	Rd_VPR128.8H[64,16] = Rd_VPR128.8H[64,16] + ((src4 >> shv) + ((src4 >> (shv - 1)) & 1));
+	local src5:2 = Rn_VPR128.8H[80,16];
+	Rd_VPR128.8H[80,16] = Rd_VPR128.8H[80,16] + ((src5 >> shv) + ((src5 >> (shv - 1)) & 1));
+	local src6:2 = Rn_VPR128.8H[96,16];
+	Rd_VPR128.8H[96,16] = Rd_VPR128.8H[96,16] + ((src6 >> shv) + ((src6 >> (shv - 1)) & 1));
+	local src7:2 = Rn_VPR128.8H[112,16];
+	Rd_VPR128.8H[112,16] = Rd_VPR128.8H[112,16] + ((src7 >> shv) + ((src7 >> (shv - 1)) & 1));
+	zext_zq(Zd);
 }
 
 # C7.2.387 URSRA page C7-2904 line 169558 MATCH x7f003400/mask=xff80fc00
@@ -30043,10 +29888,10 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x6 &
 :ursra Rd_FPR64, Rn_FPR64, Imm_shr_imm64
 is b_2331=0b011111110 & b_22=1 & b_1015=0b001101 & Rd_FPR64 & Rn_FPR64 & Imm_shr_imm64 & Zd
 {
-	local tmp1:8 = zext(Imm_shr_imm64);
-	local tmp2:8 = Rn_FPR64 >> tmp1;
-	Rd_FPR64 = Rd_FPR64 + tmp2;
-	zext_zd(Zd); # zero upper 24 bytes of Zd
+	local shv:8 = zext(Imm_shr_imm64);
+	local src0:8 = Rn_FPR64;
+	Rd_FPR64 = Rd_FPR64 + ((src0 >> shv) + ((src0 >> (shv - 1)) & 1));
+	zext_zd(Zd);
 }
 
 # C7.2.390 USHL page C7-2911 line 169885 MATCH x7e204400/mask=xff20fc00
@@ -32075,19 +31920,19 @@ is b_3131=0b0 & Q=1 & b_1029=0b00111010100001011010 & Rn_VPR128.8H & Rd_VPR128.4
 # x0f40f000/mask=xbfc0f400 NOT MATCHED BY ANY CONSTRUCTOR
 # b_0031=0.00111101......1111.0..........
 
-:bfdot Rd_VPR128.2S, Rn_VPR128.4H, , Re_VPR128.H.vIndexHL
-is b_3131=0b0 & Q=0 & b_2229=0b00111101 & Re_VPR128.H.vIndexHL & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.4H & Rd_VPR128.2S
+:bfdot Rd_VPR128.2S, Rn_VPR128.4H, Re_VPR128.2H.dotIndex
+is b_3131=0b0 & Q=0 & b_2229=0b00111101 & Re_VPR128.2H.dotIndex & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.4H & Rd_VPR128.2S
 {
-	Rd_VPR128.2S = NEON_bfdot(Rn_VPR128.4H, Re_VPR128.H.vIndexHL);
+	Rd_VPR128.2S = NEON_bfdot(Rn_VPR128.4H, Re_VPR128.2H.dotIndex);
 }
 
 # C7.2.15 BFDOT (by element) page C7-2039 line 119080 MATCH x0f40f000/mask=xbfc0f400
 # CONSTRUCT x4f40f000/mask=xffc0f400 MATCHED 1 DOCUMENTED OPCODES
 
-:bfdot Rd_VPR128.4S, Rn_VPR128.8H, Re_VPR128.H.vIndexHL
-is b_3131=0b0 & Q=1 & b_2229=0b00111101 & Re_VPR128.H.vIndexHL & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.8H & Rd_VPR128.4S
+:bfdot Rd_VPR128.4S, Rn_VPR128.8H, Re_VPR128.2H.dotIndex
+is b_3131=0b0 & Q=1 & b_2229=0b00111101 & Re_VPR128.2H.dotIndex & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.8H & Rd_VPR128.4S
 {
-	Rd_VPR128.4S = NEON_bfdot(Rn_VPR128.8H, Re_VPR128.H.vIndexHL);
+	Rd_VPR128.4S = NEON_bfdot(Rn_VPR128.8H, Re_VPR128.2H.dotIndex);
 }
 
 # C7.2.16 BFDOT (vector) page C7-2041 line 119201 MATCH x2e40fc00/mask=xbfe0fc00
@@ -32115,19 +31960,19 @@ is b_3131=0b0 & Q=1 & b_2129=0b101110010 & Rm_VPR128.8H & b_1015=0b111111 & Rn_V
 # x0fc0f000/mask=xbfc0f400 NOT MATCHED BY ANY CONSTRUCTOR
 # b_0031=0.00111111......1111.0..........
 
-:bfmlalb Rd_VPR128.4S, Rn_VPR128.8H, Re_VPR128Lo.H.vIndexHLM
-is b_3131=0b0 & Q=0 & b_2229=0b00111111 & Re_VPR128Lo.H.vIndexHLM & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.8H & Rd_VPR128.4S
+:bfmlalb Rd_VPR128.4S, Rn_VPR128.8H, Re_VPR128Lo.H.vIndexHLM3
+is b_3131=0b0 & Q=0 & b_2229=0b00111111 & Re_VPR128Lo.H.vIndexHLM3 & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.8H & Rd_VPR128.4S
 {
-	Rd_VPR128.4S = NEON_bfmlalb(Rd_VPR128.4S, Rn_VPR128.8H, Re_VPR128Lo.H.vIndexHLM);
+	Rd_VPR128.4S = NEON_bfmlalb(Rd_VPR128.4S, Rn_VPR128.8H, Re_VPR128Lo.H.vIndexHLM3);
 }
 
 # C7.2.17 BFMLALB, BFMLALT (by element) page C7-2043 line 119316 MATCH x0fc0f000/mask=xbfc0f400
 # CONSTRUCT x4fc0f000/mask=xffc0f400 MATCHED 1 DOCUMENTED OPCODES
 
-:bfmlalt Rd_VPR128.4S, Rn_VPR128.8H, Re_VPR128Lo.H.vIndexHLM
-is b_3131=0b0 & Q=1 & b_2229=0b00111111 & Re_VPR128Lo.H.vIndexHLM & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.8H & Rd_VPR128.4S
+:bfmlalt Rd_VPR128.4S, Rn_VPR128.8H, Re_VPR128Lo.H.vIndexHLM3
+is b_3131=0b0 & Q=1 & b_2229=0b00111111 & Re_VPR128Lo.H.vIndexHLM3 & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.8H & Rd_VPR128.4S
 {
-	Rd_VPR128.4S = NEON_bfmlalt(Rd_VPR128.4S, Rn_VPR128.8H, Re_VPR128Lo.H.vIndexHLM);
+	Rd_VPR128.4S = NEON_bfmlalt(Rd_VPR128.4S, Rn_VPR128.8H, Re_VPR128Lo.H.vIndexHLM3);
 }
 
 # C7.2.18 BFMLALB, BFMLALT (vector) page C7-2045 line 119401 MATCH x2ec0fc00/mask=xbfe0fc00
@@ -32437,19 +32282,19 @@ is b_2131=0b01001110100 & Rm_VPR128.16B & b_1015=0b101001  & Rn_VPR128.16B & Rd_
 # x0f00f000/mask=xbfc0f400 NOT MATCHED BY ANY CONSTRUCTOR
 # b_0031=0.00111100......1111.0..........
 
-:sudot Rd_VPR128.2S, Rn_VPR128.8B, Re_VPR128.H.vIndexHL
-is b_3131=0b0 & Q=0 & b_2229=0b00111100 & Re_VPR128.H.vIndexHL & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.8B & Rd_VPR128.2S
+:sudot Rd_VPR128.2S, Rn_VPR128.8B, Re_VPR128.4B.dotIndex
+is b_3131=0b0 & Q=0 & b_2229=0b00111100 & Re_VPR128.4B.dotIndex & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.8B & Rd_VPR128.2S
 {
-	Rd_VPR128.2S = NEON_sudot(Rd_VPR128.2S, Rn_VPR128.8B, Re_VPR128.H.vIndexHL);
+	Rd_VPR128.2S = NEON_sudot(Rd_VPR128.2S, Rn_VPR128.8B, Re_VPR128.4B.dotIndex);
 }
 
 # C7.2.336 SUDOT (by element) page C7-2795 line 163341 MATCH x0f00f000/mask=xbfc0f400
 # CONSTRUCT x4f00f000/mask=xffc0f400 MATCHED 1 DOCUMENTED OPCODES
 
-:sudot Rd_VPR128.4S, Rn_VPR128.16B, Re_VPR128.H.vIndexHL
-is b_3131=0b0 & Q=1 & b_2229=0b00111100 & Re_VPR128.H.vIndexHL & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.16B & Rd_VPR128.4S
+:sudot Rd_VPR128.4S, Rn_VPR128.16B, Re_VPR128.4B.dotIndex
+is b_3131=0b0 & Q=1 & b_2229=0b00111100 & Re_VPR128.4B.dotIndex & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.16B & Rd_VPR128.4S
 {
-	Rd_VPR128.4S = NEON_sudot(Rd_VPR128.4S, Rn_VPR128.16B, Re_VPR128.H.vIndexHL);
+	Rd_VPR128.4S = NEON_sudot(Rd_VPR128.4S, Rn_VPR128.16B, Re_VPR128.4B.dotIndex);
 }
 
 # C7.2.370 UMMLA (vector) page C7-2867 line 167357 MATCH x6e80a400/mask=xffe0fc00
@@ -32488,19 +32333,19 @@ is b_3131=0b0 & Q=1 & b_2129=0b001110100 & Rn_VPR128.16B & b_1015=0b100111 & Rm_
 # x0f80f000/mask=xbfc0f400 NOT MATCHED BY ANY CONSTRUCTOR
 # b_0031=0.00111110......1111.0..........
 
-:usdot Rd_VPR128.2S, Rn_VPR128.8B, Re_VPR128.H.vIndexHL
-is b_3131=0b0 & Q=0 & b_2229=0b00111110 & Re_VPR128.H.vIndexHL & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.8B & Rd_VPR128.2S
+:usdot Rd_VPR128.2S, Rn_VPR128.8B, Re_VPR128.4B.dotIndex
+is b_3131=0b0 & Q=0 & b_2229=0b00111110 & Re_VPR128.4B.dotIndex & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.8B & Rd_VPR128.2S
 {
-	Rd_VPR128.2S = NEON_usdot(Rd_VPR128.2S, Rn_VPR128.8B, Re_VPR128.H.vIndexHL);
+	Rd_VPR128.2S = NEON_usdot(Rd_VPR128.2S, Rn_VPR128.8B, Re_VPR128.4B.dotIndex);
 }
 
 # C7.2.389 USDOT (by element) page C7-2909 line 169795 MATCH x0f80f000/mask=xbfc0f400
 # CONSTRUCT x4f80f000/mask=xffc0f400 MATCHED 1 DOCUMENTED OPCODES
 
-:usdot Rd_VPR128.4S, Rn_VPR128.16B, Re_VPR128.H.vIndexHL
-is b_3131=0b0 & Q=1 & b_2229=0b00111110 & Re_VPR128.H.vIndexHL & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.16B & Rd_VPR128.4S
+:usdot Rd_VPR128.4S, Rn_VPR128.16B, Re_VPR128.4B.dotIndex
+is b_3131=0b0 & Q=1 & b_2229=0b00111110 & Re_VPR128.4B.dotIndex & b_1215=0b1111 & b_1010=0b0 & Rn_VPR128.16B & Rd_VPR128.4S
 {
-	Rd_VPR128.4S = NEON_usdot(Rd_VPR128.4S, Rn_VPR128.16B, Re_VPR128.H.vIndexHL);
+	Rd_VPR128.4S = NEON_usdot(Rd_VPR128.4S, Rn_VPR128.16B, Re_VPR128.4B.dotIndex);
 }
 
 # C7.2.393 USMMLA (vector) page C7-2919 line 170338 MATCH x4e80ac00/mask=xffe0fc00

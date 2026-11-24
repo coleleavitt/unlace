@@ -5359,6 +5359,24 @@ Found by `tools/difffuzz` against Unicorn.
   `th_logicflags()`, so with S they set C from the shifter (`ThumbExpandImm12` or `thshift2`),
   as `ORR`, `EOR` and `TST` already did; before, `ANDS.W r8,r11,r9,ROR #21` left C unchanged.
 
+### AArch64 rounding, saturation and by-element operands (#546)
+
+- `SRSRA`/`URSRA` add the rounding bit (`(x >> s) + ((x >> (s-1)) & 1)`, which cannot overflow);
+  the inline `SQRDMULH`/`SQDMULH` (by element) round and saturate the one overflowing product
+  (both operands the minimum); `SQDMLAL`/`SQDMLSL`(2) saturate the doubled product and the
+  accumulation; `SUQADD` saturates. These 63 constructors in `AARCH64neon.sinc` are rewritten
+  lane by lane; the forms that already lift to a `NEON_*` user operation are unchanged.
+- The unsigned float-to-integer conversions still lift as `trunc`, so a negative input wraps
+  instead of giving 0. Clamping it makes every `(unsigned)f` decompile with a sign test of the
+  float's bits, and the C conversion of a negative value is undefined anyway.
+- `SUDOT`, `USDOT` and `BFDOT` (by element) read the 32-bit group of Vm selected by H:L
+  (`Re_VPR128.4B.dotIndex`, `Re_VPR128.2H.dotIndex`), and `BFMLALB`/`BFMLALT` (by element) the
+  halfword of V0-V15 selected by H:L:M (`Re_VPR128Lo.H.vIndexHLM3`); before, the first three
+  failed to lift (`generateLocation: null space`) and the last did not decode.
+- The FEAT_MOPS `cpyType` table had the four write-unprivileged options (`wt`, `wtn`, `wtrn`,
+  `wtwn`) at the wrong encodings, so e.g. `cpyfewtrn` did not decode, and `SETP/SETM/SETE`
+  printed as `setpp`/`setpm`/`setpe`.
+
 ## 2.9 Go stack-growth prologue folding
 
 **(kuna) `option gomorestack off|auto|always`, default auto,

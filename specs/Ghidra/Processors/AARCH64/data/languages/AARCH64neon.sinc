@@ -6975,10 +6975,10 @@ is b_31=0 & b_30=1 & b_2329=0b0011110 & b_2022=0b001 & b_1015=0b111111 & Rd_VPR1
 # Half-precision to 32-bit variant when sf == 0 && type == 11 G=GPR32 V=FPR16 size=2 fbits=FBits16
 
 :fcvtzs Rd_GPR32, Rn_FPR16, FBitsOp
-is b_31=0 & b_2430=0b0011110 & b_2223=0b11 & b_1621=0b011000 & b_15=1 & Rd_GPR32 & Rn_FPR16 & FBitsOp & FBits16 & Rd_GPR64
+is b_31=0 & b_2430=0b0011110 & b_2223=0b11 & b_1621=0b011000 & b_15=1 & Rd_GPR32 & Rn_FPR16 & FBitsOp & FBits64 & Rd_GPR64
 {
-	local tmp1:2 = Rn_FPR16 f* FBits16;
-	Rd_GPR32 = trunc(tmp1);
+	local hx:8 = float2float(Rn_FPR16);
+	Rd_GPR32 = trunc(hx f* FBits64);
 	zext_rs(Rd_GPR64); # zero upper 28 bytes of Rd_GPR64
 }
 
@@ -6990,10 +6990,10 @@ is b_31=0 & b_2430=0b0011110 & b_2223=0b11 & b_1621=0b011000 & b_15=1 & Rd_GPR32
 # Half-precision to 64-bit variant when sf == 1 && type == 11 G=GPR64 V=FPR16 size=2 fbits=FBits16
 
 :fcvtzs Rd_GPR64, Rn_FPR16, FBitsOp
-is b_31=1 & b_2430=0b0011110 & b_2223=0b11 & b_1621=0b011000 & Rd_GPR64 & Rn_FPR16 & FBitsOp & FBits16
+is b_31=1 & b_2430=0b0011110 & b_2223=0b11 & b_1621=0b011000 & Rd_GPR64 & Rn_FPR16 & FBitsOp & FBits64
 {
-	local tmp1:2 = Rn_FPR16 f* FBitsOp;
-	Rd_GPR64 = trunc(tmp1);
+	local hx:8 = float2float(Rn_FPR16);
+	Rd_GPR64 = trunc(hx f* FBits64);
 }
 
 # C7.2.91 FCVTZS (scalar, fixed-point) page C7-2227 line 130156 MATCH x1e180000/mask=x7f3f0000
@@ -7122,11 +7122,10 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=1 & Imm_shr_imm16 & b_1115=0x1f & 
 :fcvtzu Rd_FPR16, Rn_FPR16, Imm_shr_imm16
 is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b111111 & Imm_shr_imm16 & Rn_FPR16 & Rd_FPR16 & Zd
 {
-	local tmp1:2 = 1:2 << Imm_shr_imm16;
-	local tmp2:2 = int2float(tmp1);
-	local tmp3:2 = Rn_FPR16 f* tmp2;
-	local tmp4:2 = abs(tmp3);
-	Rd_FPR16 = trunc(tmp4);
+	local shv:8 = zext(Imm_shr_imm16:4);
+	local sca:8 = int2float(1:8 << (shv >> 1)) f* int2float(1:8 << (shv - (shv >> 1)));
+	local hx:8 = float2float(Rn_FPR16) f* sca;
+	Rd_FPR16 = trunc(abs(hx));
 	zext_zh(Zd); # zero upper 30 bytes of Zd
 }
 
@@ -7140,11 +7139,10 @@ is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b111111 & Imm_shr_imm16 & Rn_FPR1
 :fcvtzu Rd_FPR32, Rn_FPR32, Imm_shr_imm32
 is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b111111 & Imm_shr_imm32 & Rn_FPR32 & Rd_FPR32 & Zd
 {
-	local tmp1:4 = 1:4 << Imm_shr_imm32:4;
-	local tmp2:4 = int2float(tmp1);
-	local tmp3:4 = Rn_FPR32 f* tmp2;
-	local tmp4:4 = abs(tmp3);
-	Rd_FPR32 = trunc(tmp4);
+	local shv:8 = zext(Imm_shr_imm32:4);
+	local sca:8 = int2float(1:8 << (shv >> 1)) f* int2float(1:8 << (shv - (shv >> 1)));
+	local sx:8 = float2float(Rn_FPR32) f* sca;
+	Rd_FPR32 = trunc(abs(sx));
 	zext_zs(Zd); # zero upper 28 bytes of Zd
 }
 
@@ -7158,12 +7156,9 @@ is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b111111 & Imm_shr_imm32 & Rn_FPR32
 :fcvtzu Rd_FPR64, Rn_FPR64, Imm_shr_imm64
 is b_2331=0b011111110 & b_22=1 & b_1015=0b111111 & Imm_shr_imm64 & Rn_FPR64 & Rd_FPR64 & Zd
 {
-	local tmp1:8 = zext(Imm_shr_imm64);
-	local tmp2:8 = 1:8 << tmp1;
-	local tmp3:8 = int2float(tmp2);
-	local tmp4:8 = Rn_FPR64 f* tmp3;
-	local tmp5:8 = abs(tmp4);
-	Rd_FPR64 = trunc(tmp5);
+	local shv:8 = zext(Imm_shr_imm64);
+	local sca:8 = int2float(1:8 << (shv >> 1)) f* int2float(1:8 << (shv - (shv >> 1)));
+	Rd_FPR64 = trunc(abs(Rn_FPR64 f* sca));
 	zext_zd(Zd); # zero upper 24 bytes of Zd
 }
 
@@ -7174,10 +7169,10 @@ is b_2331=0b011111110 & b_22=1 & b_1015=0b111111 & Imm_shr_imm64 & Rn_FPR64 & Rd
 # AUNIT --inst x1ed98000/mask=xffff8000 --rand hfp --status noqemu --comment "nofpround"
 
 :fcvtzu Rd_GPR32, Rn_FPR16, FBitsOp
-is sf=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=3 & fpOpcode=1 & b_15=1 & FBitsOp & FBits16 & Rn_FPR16 & Rd_GPR32 & Rd_GPR64
+is sf=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=3 & fpOpcode=1 & b_15=1 & FBitsOp & FBits64 & Rn_FPR16 & Rd_GPR32 & Rd_GPR64
 {
-	local tmp1:2 = Rn_FPR16 f* FBitsOp;
-	Rd_GPR32 = trunc(tmp1);
+	local hx:8 = float2float(Rn_FPR16);
+	Rd_GPR32 = trunc(hx f* FBits64);
 	zext_rs(Rd_GPR64); # zero upper 28 bytes of Rd_GPR64
 }
 
@@ -7188,10 +7183,10 @@ is sf=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=3 & fpOpcode=
 # AUNIT --inst x9ed90000/mask=xffff0000 --rand hfp --status noqemu --comment "nofpround"
 
 :fcvtzu Rd_GPR64, Rn_FPR16, FBitsOp
-is sf=1 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=3 & fpOpcode=1 & FBitsOp & FBits16 & Rn_FPR16 & Rd_GPR64
+is sf=1 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=3 & fpOpcode=1 & FBitsOp & FBits64 & Rn_FPR16 & Rd_GPR64
 {
-	local tmp1:2 = Rn_FPR16 f* FBitsOp;
-	Rd_GPR64 = trunc(tmp1);
+	local hx:8 = float2float(Rn_FPR16);
+	Rd_GPR64 = trunc(hx f* FBits64);
 }
 
 # C7.2.95 FCVTZU (scalar, fixed-point) page C7-2237 line 130769 MATCH x1e190000/mask=x7f3f0000
@@ -8660,21 +8655,12 @@ is b_31=0 & b_30=1 & b_2129=0b001110010 & b_1015=0b000011 & Rd_VPR128.8H & Rn_VP
 # AUNIT --inst x0f800000/mask=xffc0f400 --rand sfp --status noqemu --comment "ext nofpround"
 # SIMD 2S when Q = 0
 
-:fmlal Rd_VPR64.2S, vRn_VPR64^".2H", Re_VPR128Lo.H.vIndexHLM
-is b_31=0 & b_30=0 & b_2329=0b0011111 & b_22=0 & b_1215=0b0000 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR64.2S & vRn_VPR64 & Rn_VPR64 & Re_VPR128Lo.H.vIndexHLM & Zd
+:fmlal Rd_VPR64.2S, vRn_VPR64^".2H", Re_VPR128Lo.H.vIndexHLM3
+is b_31=0 & b_30=0 & b_2329=0b0011111 & b_22=0 & b_1215=0b0000 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR64.2S & vRn_VPR64 & Rn_VPR64 & Re_VPR128Lo.H.vIndexHLM3 & Zd
 {
-	TMPS1 = Rn_VPR64[0,32];
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	# simd infix TMPS2 = TMPS1 f* tmp2 on lane size 2
-	TMPS2[0,16] = TMPS1[0,16] f* tmp2;
-	TMPS2[16,16] = TMPS1[16,16] f* tmp2;
-	# simd resize TMPD3 = float2float(TMPS2) (lane size 2 to 4)
-	TMPD3[0,32] = float2float(TMPS2[0,16]);
-	TMPD3[32,32] = float2float(TMPS2[16,16]);
-	# simd infix Rd_VPR64.2S = Rd_VPR64.2S + TMPD3 on lane size 4
-	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] + TMPD3[0,32];
-	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] + TMPD3[32,32];
+	local mel:4 = float2float(Re_VPR128Lo.H.vIndexHLM3);
+	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] f+ (float2float(Rn_VPR64[0,16]) f* mel);
+	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] f+ (float2float(Rn_VPR64[16,16]) f* mel);
 	zext_zd(Zd); # zero upper 24 bytes of Zd
 }
 
@@ -8685,27 +8671,14 @@ is b_31=0 & b_30=0 & b_2329=0b0011111 & b_22=0 & b_1215=0b0000 & b_10=0 & Re_VPR
 # AUNIT --inst x4f800000/mask=xffc0f400 --rand sfp --status noqemu --comment "ext nofpround"
 # SIMD 4S when Q = 1
 
-:fmlal Rd_VPR128.4S, vRn_VPR128^".4H", Re_VPR128Lo.H.vIndexHLM
-is b_31=0 & b_30=1 & b_2329=0b0011111 & b_22=0 & b_1215=0b0000 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Re_VPR128Lo.H.vIndexHLM & Zd
+:fmlal Rd_VPR128.4S, vRn_VPR128^".4H", Re_VPR128Lo.H.vIndexHLM3
+is b_31=0 & b_30=1 & b_2329=0b0011111 & b_22=0 & b_1215=0b0000 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Re_VPR128Lo.H.vIndexHLM3 & Zd
 {
-	TMPD1 = Rn_VPR128[0,64];
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	# simd infix TMPD2 = TMPD1 f* tmp2 on lane size 2
-	TMPD2[0,16] = TMPD1[0,16] f* tmp2;
-	TMPD2[16,16] = TMPD1[16,16] f* tmp2;
-	TMPD2[32,16] = TMPD1[32,16] f* tmp2;
-	TMPD2[48,16] = TMPD1[48,16] f* tmp2;
-	# simd resize TMPQ3 = float2float(TMPD2) (lane size 2 to 4)
-	TMPQ3[0,32] = float2float(TMPD2[0,16]);
-	TMPQ3[32,32] = float2float(TMPD2[16,16]);
-	TMPQ3[64,32] = float2float(TMPD2[32,16]);
-	TMPQ3[96,32] = float2float(TMPD2[48,16]);
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S + TMPQ3 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + TMPQ3[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + TMPQ3[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + TMPQ3[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + TMPQ3[96,32];
+	local mel:4 = float2float(Re_VPR128Lo.H.vIndexHLM3);
+	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] f+ (float2float(Rn_VPR128[0,16]) f* mel);
+	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] f+ (float2float(Rn_VPR128[16,16]) f* mel);
+	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] f+ (float2float(Rn_VPR128[32,16]) f* mel);
+	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] f+ (float2float(Rn_VPR128[48,16]) f* mel);
 	zext_zq(Zd); # zero upper 16 bytes of Zd
 }
 
@@ -8716,21 +8689,12 @@ is b_31=0 & b_30=1 & b_2329=0b0011111 & b_22=0 & b_1215=0b0000 & b_10=0 & Re_VPR
 # AUNIT --inst x2f808000/mask=xffc0f400 --rand sfp --status noqemu --comment "ext nofpround"
 # SIMD 2S when Q = 0
 
-:fmlal2 Rd_VPR64.2S, vRn_VPR64^".2H", Re_VPR128Lo.H.vIndexHLM
-is b_31=0 & b_30=0 & b_2329=0b1011111 & b_22=0 & b_1215=0b1000 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR64.2S & vRn_VPR64 & Rn_VPR64 & Re_VPR128Lo.H.vIndexHLM & Zd
+:fmlal2 Rd_VPR64.2S, vRn_VPR64^".2H", Re_VPR128Lo.H.vIndexHLM3
+is b_31=0 & b_30=0 & b_2329=0b1011111 & b_22=0 & b_1215=0b1000 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR64.2S & vRn_VPR64 & Rn_VPR64 & Re_VPR128Lo.H.vIndexHLM3 & Zd
 {
-	TMPS1 = Rn_VPR64[32,32];
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	# simd infix TMPS2 = TMPS1 f* tmp2 on lane size 2
-	TMPS2[0,16] = TMPS1[0,16] f* tmp2;
-	TMPS2[16,16] = TMPS1[16,16] f* tmp2;
-	# simd resize TMPD3 = float2float(TMPS2) (lane size 2 to 4)
-	TMPD3[0,32] = float2float(TMPS2[0,16]);
-	TMPD3[32,32] = float2float(TMPS2[16,16]);
-	# simd infix Rd_VPR64.2S = Rd_VPR64.2S + TMPD3 on lane size 4
-	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] + TMPD3[0,32];
-	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] + TMPD3[32,32];
+	local mel:4 = float2float(Re_VPR128Lo.H.vIndexHLM3);
+	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] f+ (float2float(Rn_VPR64[32,16]) f* mel);
+	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] f+ (float2float(Rn_VPR64[48,16]) f* mel);
 	zext_zd(Zd); # zero upper 24 bytes of Zd
 }
 
@@ -8741,27 +8705,14 @@ is b_31=0 & b_30=0 & b_2329=0b1011111 & b_22=0 & b_1215=0b1000 & b_10=0 & Re_VPR
 # AUNIT --inst x6f808000/mask=xffc0f400 --rand sfp --status noqemu --comment "ext nofpround"
 # SIMD 4S when Q = 1
 
-:fmlal2 Rd_VPR128.4S, vRn_VPR128^".4H", Re_VPR128Lo.H.vIndexHLM
-is b_31=0 & b_30=1 & b_2329=0b1011111 & b_22=0 & b_1215=0b1000 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Re_VPR128Lo.H.vIndexHLM & Zd
+:fmlal2 Rd_VPR128.4S, vRn_VPR128^".4H", Re_VPR128Lo.H.vIndexHLM3
+is b_31=0 & b_30=1 & b_2329=0b1011111 & b_22=0 & b_1215=0b1000 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Re_VPR128Lo.H.vIndexHLM3 & Zd
 {
-	TMPD1 = Rn_VPR128[64,64];
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	# simd infix TMPD2 = TMPD1 f* tmp2 on lane size 2
-	TMPD2[0,16] = TMPD1[0,16] f* tmp2;
-	TMPD2[16,16] = TMPD1[16,16] f* tmp2;
-	TMPD2[32,16] = TMPD1[32,16] f* tmp2;
-	TMPD2[48,16] = TMPD1[48,16] f* tmp2;
-	# simd resize TMPQ3 = float2float(TMPD2) (lane size 2 to 4)
-	TMPQ3[0,32] = float2float(TMPD2[0,16]);
-	TMPQ3[32,32] = float2float(TMPD2[16,16]);
-	TMPQ3[64,32] = float2float(TMPD2[32,16]);
-	TMPQ3[96,32] = float2float(TMPD2[48,16]);
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S + TMPQ3 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + TMPQ3[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + TMPQ3[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + TMPQ3[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + TMPQ3[96,32];
+	local mel:4 = float2float(Re_VPR128Lo.H.vIndexHLM3);
+	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] f+ (float2float(Rn_VPR128[64,16]) f* mel);
+	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] f+ (float2float(Rn_VPR128[80,16]) f* mel);
+	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] f+ (float2float(Rn_VPR128[96,16]) f* mel);
+	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] f+ (float2float(Rn_VPR128[112,16]) f* mel);
 	zext_zq(Zd); # zero upper 16 bytes of Zd
 }
 
@@ -8775,17 +8726,8 @@ is b_31=0 & b_30=1 & b_2329=0b1011111 & b_22=0 & b_1215=0b1000 & b_10=0 & Re_VPR
 :fmlal Rd_VPR64.2S, vRn_VPR64^".2H", vRm_VPR64^".2H"
 is b_31=0 & b_30=0 & b_2329=0b0011100 & b_22=0 & b_21=1 & b_1015=0b111011 & Rd_VPR64.2S & vRn_VPR64 & Rn_VPR64 & vRm_VPR64 & Rm_VPR64 & Zd
 {
-	TMPS1 = Rn_VPR64[0,32];
-	TMPS2 = Rm_VPR64[0,32];
-	# simd infix TMPS3 = TMPS1 f* TMPS2 on lane size 2
-	TMPS3[0,16] = TMPS1[0,16] f* TMPS2[0,16];
-	TMPS3[16,16] = TMPS1[16,16] f* TMPS2[16,16];
-	# simd resize TMPD4 = float2float(TMPS3) (lane size 2 to 4)
-	TMPD4[0,32] = float2float(TMPS3[0,16]);
-	TMPD4[32,32] = float2float(TMPS3[16,16]);
-	# simd infix Rd_VPR64.2S = Rd_VPR64.2S + TMPD4 on lane size 4
-	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] + TMPD4[0,32];
-	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] + TMPD4[32,32];
+	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] f+ (float2float(Rn_VPR64[0,16]) f* float2float(Rm_VPR64[0,16]));
+	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] f+ (float2float(Rn_VPR64[16,16]) f* float2float(Rm_VPR64[16,16]));
 	zext_zd(Zd); # zero upper 24 bytes of Zd
 }
 
@@ -8799,23 +8741,10 @@ is b_31=0 & b_30=0 & b_2329=0b0011100 & b_22=0 & b_21=1 & b_1015=0b111011 & Rd_V
 :fmlal Rd_VPR128.4S, vRn_VPR128^".4H", Rm_VPR64.4H
 is b_31=0 & b_30=1 & b_2329=0b0011100 & b_22=0 & b_21=1 & b_1015=0b111011 & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Rm_VPR64.4H & Zd
 {
-	TMPD1 = Rn_VPR128[0,64];
-	TMPD2 = Rm_VPR64.4H[0,64];
-	# simd infix TMPD3 = TMPD1 f* TMPD2 on lane size 2
-	TMPD3[0,16] = TMPD1[0,16] f* TMPD2[0,16];
-	TMPD3[16,16] = TMPD1[16,16] f* TMPD2[16,16];
-	TMPD3[32,16] = TMPD1[32,16] f* TMPD2[32,16];
-	TMPD3[48,16] = TMPD1[48,16] f* TMPD2[48,16];
-	# simd resize TMPQ4 = float2float(TMPD3) (lane size 2 to 4)
-	TMPQ4[0,32] = float2float(TMPD3[0,16]);
-	TMPQ4[32,32] = float2float(TMPD3[16,16]);
-	TMPQ4[64,32] = float2float(TMPD3[32,16]);
-	TMPQ4[96,32] = float2float(TMPD3[48,16]);
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S + TMPQ4 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + TMPQ4[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + TMPQ4[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + TMPQ4[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + TMPQ4[96,32];
+	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] f+ (float2float(Rn_VPR128[0,16]) f* float2float(Rm_VPR64.4H[0,16]));
+	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] f+ (float2float(Rn_VPR128[16,16]) f* float2float(Rm_VPR64.4H[16,16]));
+	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] f+ (float2float(Rn_VPR128[32,16]) f* float2float(Rm_VPR64.4H[32,16]));
+	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] f+ (float2float(Rn_VPR128[48,16]) f* float2float(Rm_VPR64.4H[48,16]));
 	zext_zq(Zd); # zero upper 16 bytes of Zd
 }
 
@@ -8829,17 +8758,8 @@ is b_31=0 & b_30=1 & b_2329=0b0011100 & b_22=0 & b_21=1 & b_1015=0b111011 & Rd_V
 :fmlal2 Rd_VPR64.2S, vRn_VPR64^".2H", vRm_VPR128^".2H"
 is b_31=0 & b_30=0 & b_2329=0b1011100 & b_22=0 & b_21=1 & b_1015=0b110011 & Rd_VPR64.2S & vRn_VPR64 & Rn_VPR64 & vRm_VPR128 & Rm_VPR128 & Zd
 {
-	TMPS1 = Rn_VPR64[32,32];
-	TMPS2 = Rm_VPR128[32,32];
-	# simd infix TMPS3 = TMPS1 f* TMPS2 on lane size 2
-	TMPS3[0,16] = TMPS1[0,16] f* TMPS2[0,16];
-	TMPS3[16,16] = TMPS1[16,16] f* TMPS2[16,16];
-	# simd resize TMPD4 = float2float(TMPS3) (lane size 2 to 4)
-	TMPD4[0,32] = float2float(TMPS3[0,16]);
-	TMPD4[32,32] = float2float(TMPS3[16,16]);
-	# simd infix Rd_VPR64.2S = Rd_VPR64.2S + TMPD4 on lane size 4
-	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] + TMPD4[0,32];
-	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] + TMPD4[32,32];
+	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] f+ (float2float(Rn_VPR64[32,16]) f* float2float(Rm_VPR128[32,16]));
+	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] f+ (float2float(Rn_VPR64[48,16]) f* float2float(Rm_VPR128[48,16]));
 	zext_zd(Zd); # zero upper 24 bytes of Zd
 }
 
@@ -8851,24 +8771,12 @@ is b_31=0 & b_30=0 & b_2329=0b1011100 & b_22=0 & b_21=1 & b_1015=0b110011 & Rd_V
 # SIMD 4S when Q = 1
 
 :fmlal2 Rd_VPR128.4S, vRn_VPR128^".4H", Rm_VPR64.4H
-is b_31=0 & b_30=1 & b_2329=0b1011100 & b_22=0 & b_21=1 & b_1015=0b110011 & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Rm_VPR64.4H & Zd
+is b_31=0 & b_30=1 & b_2329=0b1011100 & b_22=0 & b_21=1 & b_1015=0b110011 & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Rm_VPR64.4H & Zd & Rm_VPR128
 {
-	TMPD1 = Rn_VPR128[64,64];
-	# simd infix TMPD2 = TMPD1 f* Rm_VPR64.4H on lane size 2
-	TMPD2[0,16] = TMPD1[0,16] f* Rm_VPR64.4H[0,16];
-	TMPD2[16,16] = TMPD1[16,16] f* Rm_VPR64.4H[16,16];
-	TMPD2[32,16] = TMPD1[32,16] f* Rm_VPR64.4H[32,16];
-	TMPD2[48,16] = TMPD1[48,16] f* Rm_VPR64.4H[48,16];
-	# simd resize TMPQ3 = float2float(TMPD2) (lane size 2 to 4)
-	TMPQ3[0,32] = float2float(TMPD2[0,16]);
-	TMPQ3[32,32] = float2float(TMPD2[16,16]);
-	TMPQ3[64,32] = float2float(TMPD2[32,16]);
-	TMPQ3[96,32] = float2float(TMPD2[48,16]);
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S + TMPQ3 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] + TMPQ3[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] + TMPQ3[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] + TMPQ3[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] + TMPQ3[96,32];
+	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] f+ (float2float(Rn_VPR128[64,16]) f* float2float(Rm_VPR128[64,16]));
+	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] f+ (float2float(Rn_VPR128[80,16]) f* float2float(Rm_VPR128[80,16]));
+	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] f+ (float2float(Rn_VPR128[96,16]) f* float2float(Rm_VPR128[96,16]));
+	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] f+ (float2float(Rn_VPR128[112,16]) f* float2float(Rm_VPR128[112,16]));
 	zext_zq(Zd); # zero upper 16 bytes of Zd
 }
 
@@ -9150,21 +9058,12 @@ is b_31=0 & b_30=1 & b_2129=0b001110110 & b_1015=0b000011 & Rd_VPR128.8H & Rn_VP
 # AUNIT --inst x0f804000/mask=xffc0f400 --rand sfp --status noqemu --comment "ext nofpround"
 # SIMD 2S when Q = 0
 
-:fmlsl Rd_VPR64.2S, vRn_VPR64^".2H", Re_VPR128Lo.H.vIndexHLM
-is b_31=0 & b_30=0 & b_2329=0b0011111 & b_22=0 & b_1215=0b0100 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR64.2S & vRn_VPR64 & Rn_VPR64 & Re_VPR128Lo.H.vIndexHLM & Zd
+:fmlsl Rd_VPR64.2S, vRn_VPR64^".2H", Re_VPR128Lo.H.vIndexHLM3
+is b_31=0 & b_30=0 & b_2329=0b0011111 & b_22=0 & b_1215=0b0100 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR64.2S & vRn_VPR64 & Rn_VPR64 & Re_VPR128Lo.H.vIndexHLM3 & Zd
 {
-	TMPS1 = Rn_VPR64[0,32];
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	# simd infix TMPS2 = TMPS1 f* tmp2 on lane size 2
-	TMPS2[0,16] = TMPS1[0,16] f* tmp2;
-	TMPS2[16,16] = TMPS1[16,16] f* tmp2;
-	# simd resize TMPD3 = float2float(TMPS2) (lane size 2 to 4)
-	TMPD3[0,32] = float2float(TMPS2[0,16]);
-	TMPD3[32,32] = float2float(TMPS2[16,16]);
-	# simd infix Rd_VPR64.2S = Rd_VPR64.2S - TMPD3 on lane size 4
-	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] - TMPD3[0,32];
-	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] - TMPD3[32,32];
+	local mel:4 = float2float(Re_VPR128Lo.H.vIndexHLM3);
+	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] f- (float2float(Rn_VPR64[0,16]) f* mel);
+	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] f- (float2float(Rn_VPR64[16,16]) f* mel);
 	zext_zd(Zd); # zero upper 24 bytes of Zd
 }
 
@@ -9175,27 +9074,14 @@ is b_31=0 & b_30=0 & b_2329=0b0011111 & b_22=0 & b_1215=0b0100 & b_10=0 & Re_VPR
 # AUNIT --inst x4f804000/mask=xffc0f400 --rand sfp --status noqemu --comment "ext nofpround"
 # SIMD 4S when Q = 1
 
-:fmlsl Rd_VPR128.4S, vRn_VPR128^".4H", Re_VPR128Lo.H.vIndexHLM
-is b_31=0 & b_30=1 & b_2329=0b0011111 & b_22=0 & b_1215=0b0100 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Re_VPR128Lo.H.vIndexHLM & Zd
+:fmlsl Rd_VPR128.4S, vRn_VPR128^".4H", Re_VPR128Lo.H.vIndexHLM3
+is b_31=0 & b_30=1 & b_2329=0b0011111 & b_22=0 & b_1215=0b0100 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Re_VPR128Lo.H.vIndexHLM3 & Zd
 {
-	TMPD1 = Rn_VPR128[0,64];
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	# simd infix TMPD2 = TMPD1 f* tmp2 on lane size 2
-	TMPD2[0,16] = TMPD1[0,16] f* tmp2;
-	TMPD2[16,16] = TMPD1[16,16] f* tmp2;
-	TMPD2[32,16] = TMPD1[32,16] f* tmp2;
-	TMPD2[48,16] = TMPD1[48,16] f* tmp2;
-	# simd resize TMPQ3 = float2float(TMPD2) (lane size 2 to 4)
-	TMPQ3[0,32] = float2float(TMPD2[0,16]);
-	TMPQ3[32,32] = float2float(TMPD2[16,16]);
-	TMPQ3[64,32] = float2float(TMPD2[32,16]);
-	TMPQ3[96,32] = float2float(TMPD2[48,16]);
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S - TMPQ3 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] - TMPQ3[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] - TMPQ3[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] - TMPQ3[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] - TMPQ3[96,32];
+	local mel:4 = float2float(Re_VPR128Lo.H.vIndexHLM3);
+	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] f- (float2float(Rn_VPR128[0,16]) f* mel);
+	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] f- (float2float(Rn_VPR128[16,16]) f* mel);
+	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] f- (float2float(Rn_VPR128[32,16]) f* mel);
+	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] f- (float2float(Rn_VPR128[48,16]) f* mel);
 	zext_zq(Zd); # zero upper 16 bytes of Zd
 }
 
@@ -9206,21 +9092,12 @@ is b_31=0 & b_30=1 & b_2329=0b0011111 & b_22=0 & b_1215=0b0100 & b_10=0 & Re_VPR
 # AUNIT --inst x2f80c000/mask=xffc0f400 --rand sfp --status noqemu --comment "ext nofpround"
 # SIMD 2S when Q = 0
 
-:fmlsl2 Rd_VPR64.2S, vRn_VPR64^".2H", Re_VPR128Lo.H.vIndexHLM
-is b_31=0 & b_30=0 & b_2329=0b1011111 & b_22=0 & b_1215=0b1100 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR64.2S & vRn_VPR64 & Rn_VPR64 & Re_VPR128Lo.H.vIndexHLM & Zd
+:fmlsl2 Rd_VPR64.2S, vRn_VPR64^".2H", Re_VPR128Lo.H.vIndexHLM3
+is b_31=0 & b_30=0 & b_2329=0b1011111 & b_22=0 & b_1215=0b1100 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR64.2S & vRn_VPR64 & Rn_VPR64 & Re_VPR128Lo.H.vIndexHLM3 & Zd
 {
-	TMPS1 = Rn_VPR64[32,32];
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	# simd infix TMPS2 = TMPS1 f* tmp2 on lane size 2
-	TMPS2[0,16] = TMPS1[0,16] f* tmp2;
-	TMPS2[16,16] = TMPS1[16,16] f* tmp2;
-	# simd resize TMPD3 = float2float(TMPS2) (lane size 2 to 4)
-	TMPD3[0,32] = float2float(TMPS2[0,16]);
-	TMPD3[32,32] = float2float(TMPS2[16,16]);
-	# simd infix Rd_VPR64.2S = Rd_VPR64.2S - TMPD3 on lane size 4
-	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] - TMPD3[0,32];
-	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] - TMPD3[32,32];
+	local mel:4 = float2float(Re_VPR128Lo.H.vIndexHLM3);
+	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] f- (float2float(Rn_VPR64[32,16]) f* mel);
+	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] f- (float2float(Rn_VPR64[48,16]) f* mel);
 	zext_zd(Zd); # zero upper 24 bytes of Zd
 }
 
@@ -9231,27 +9108,14 @@ is b_31=0 & b_30=0 & b_2329=0b1011111 & b_22=0 & b_1215=0b1100 & b_10=0 & Re_VPR
 # AUNIT --inst x6f80c000/mask=xffc0f400 --rand sfp --status noqemu --comment "ext nofpround"
 # SIMD 4S when Q = 1
 
-:fmlsl2 Rd_VPR128.4S, vRn_VPR128^".4H", Re_VPR128Lo.H.vIndexHLM
-is b_31=0 & b_30=1 & b_2329=0b1011111 & b_22=0 & b_1215=0b1100 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Re_VPR128Lo.H.vIndexHLM & Zd
+:fmlsl2 Rd_VPR128.4S, vRn_VPR128^".4H", Re_VPR128Lo.H.vIndexHLM3
+is b_31=0 & b_30=1 & b_2329=0b1011111 & b_22=0 & b_1215=0b1100 & b_10=0 & Re_VPR128Lo.H & vIndexHLM & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Re_VPR128Lo.H.vIndexHLM3 & Zd
 {
-	TMPD1 = Rn_VPR128[64,64];
-	# simd element Re_VPR128Lo.H[vIndexHLM] lane size 2
-	local tmp2:2 = Re_VPR128Lo.H.vIndexHLM;
-	# simd infix TMPD2 = TMPD1 f* tmp2 on lane size 2
-	TMPD2[0,16] = TMPD1[0,16] f* tmp2;
-	TMPD2[16,16] = TMPD1[16,16] f* tmp2;
-	TMPD2[32,16] = TMPD1[32,16] f* tmp2;
-	TMPD2[48,16] = TMPD1[48,16] f* tmp2;
-	# simd resize TMPQ3 = float2float(TMPD2) (lane size 2 to 4)
-	TMPQ3[0,32] = float2float(TMPD2[0,16]);
-	TMPQ3[32,32] = float2float(TMPD2[16,16]);
-	TMPQ3[64,32] = float2float(TMPD2[32,16]);
-	TMPQ3[96,32] = float2float(TMPD2[48,16]);
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S - TMPQ3 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] - TMPQ3[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] - TMPQ3[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] - TMPQ3[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] - TMPQ3[96,32];
+	local mel:4 = float2float(Re_VPR128Lo.H.vIndexHLM3);
+	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] f- (float2float(Rn_VPR128[64,16]) f* mel);
+	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] f- (float2float(Rn_VPR128[80,16]) f* mel);
+	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] f- (float2float(Rn_VPR128[96,16]) f* mel);
+	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] f- (float2float(Rn_VPR128[112,16]) f* mel);
 	zext_zq(Zd); # zero upper 16 bytes of Zd
 }
 
@@ -9265,17 +9129,8 @@ is b_31=0 & b_30=1 & b_2329=0b1011111 & b_22=0 & b_1215=0b1100 & b_10=0 & Re_VPR
 :fmlsl Rd_VPR64.2S, vRn_VPR64^".2H", vRm_VPR64^".2H"
 is b_31=0 & b_30=0 & b_2329=0b0011101 & b_22=0 & b_21=1 & b_1015=0b111011 & Rd_VPR64.2S & vRn_VPR64 & Rn_VPR64 & vRm_VPR64 & Rm_VPR64 & Zd
 {
-	TMPS1 = Rn_VPR64[0,32];
-	TMPS2 = Rm_VPR64[0,32];
-	# simd infix TMPS3 = TMPS1 f* TMPS2 on lane size 2
-	TMPS3[0,16] = TMPS1[0,16] f* TMPS2[0,16];
-	TMPS3[16,16] = TMPS1[16,16] f* TMPS2[16,16];
-	# simd resize TMPD4 = float2float(TMPS3) (lane size 2 to 4)
-	TMPD4[0,32] = float2float(TMPS3[0,16]);
-	TMPD4[32,32] = float2float(TMPS3[16,16]);
-	# simd infix Rd_VPR64.2S = Rd_VPR64.2S - TMPD4 on lane size 4
-	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] - TMPD4[0,32];
-	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] - TMPD4[32,32];
+	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] f- (float2float(Rn_VPR64[0,16]) f* float2float(Rm_VPR64[0,16]));
+	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] f- (float2float(Rn_VPR64[16,16]) f* float2float(Rm_VPR64[16,16]));
 	zext_zd(Zd); # zero upper 24 bytes of Zd
 }
 
@@ -9289,23 +9144,10 @@ is b_31=0 & b_30=0 & b_2329=0b0011101 & b_22=0 & b_21=1 & b_1015=0b111011 & Rd_V
 :fmlsl Rd_VPR128.4S, vRn_VPR128^".4H", Rm_VPR64.4H
 is b_31=0 & b_30=1 & b_2329=0b0011101 & b_22=0 & b_21=1 & b_1015=0b111011 & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Rm_VPR64.4H & Zd
 {
-	TMPD1 = Rn_VPR128[0,64];
-	TMPD2 = Rm_VPR64.4H[0,64];
-	# simd infix TMPD3 = TMPD1 f* TMPD2 on lane size 2
-	TMPD3[0,16] = TMPD1[0,16] f* TMPD2[0,16];
-	TMPD3[16,16] = TMPD1[16,16] f* TMPD2[16,16];
-	TMPD3[32,16] = TMPD1[32,16] f* TMPD2[32,16];
-	TMPD3[48,16] = TMPD1[48,16] f* TMPD2[48,16];
-	# simd resize TMPQ4 = float2float(TMPD3) (lane size 2 to 4)
-	TMPQ4[0,32] = float2float(TMPD3[0,16]);
-	TMPQ4[32,32] = float2float(TMPD3[16,16]);
-	TMPQ4[64,32] = float2float(TMPD3[32,16]);
-	TMPQ4[96,32] = float2float(TMPD3[48,16]);
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S - TMPQ4 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] - TMPQ4[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] - TMPQ4[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] - TMPQ4[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] - TMPQ4[96,32];
+	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] f- (float2float(Rn_VPR128[0,16]) f* float2float(Rm_VPR64.4H[0,16]));
+	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] f- (float2float(Rn_VPR128[16,16]) f* float2float(Rm_VPR64.4H[16,16]));
+	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] f- (float2float(Rn_VPR128[32,16]) f* float2float(Rm_VPR64.4H[32,16]));
+	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] f- (float2float(Rn_VPR128[48,16]) f* float2float(Rm_VPR64.4H[48,16]));
 	zext_zq(Zd); # zero upper 16 bytes of Zd
 }
 
@@ -9319,17 +9161,8 @@ is b_31=0 & b_30=1 & b_2329=0b0011101 & b_22=0 & b_21=1 & b_1015=0b111011 & Rd_V
 :fmlsl2 Rd_VPR64.2S, vRn_VPR64^".2H", vRm_VPR128^".2H"
 is b_31=0 & b_30=0 & b_2329=0b1011101 & b_22=0 & b_21=1 & b_1015=0b110011 & Rd_VPR64.2S & vRn_VPR64 & Rn_VPR64 & vRm_VPR128 & Rm_VPR128 & Zd
 {
-	TMPS1 = Rn_VPR64[32,32];
-	TMPS2 = Rm_VPR128[32,32];
-	# simd infix TMPS3 = TMPS1 f* TMPS2 on lane size 2
-	TMPS3[0,16] = TMPS1[0,16] f* TMPS2[0,16];
-	TMPS3[16,16] = TMPS1[16,16] f* TMPS2[16,16];
-	# simd resize TMPD4 = float2float(TMPS3) (lane size 2 to 4)
-	TMPD4[0,32] = float2float(TMPS3[0,16]);
-	TMPD4[32,32] = float2float(TMPS3[16,16]);
-	# simd infix Rd_VPR64.2S = Rd_VPR64.2S - TMPD4 on lane size 4
-	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] - TMPD4[0,32];
-	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] - TMPD4[32,32];
+	Rd_VPR64.2S[0,32] = Rd_VPR64.2S[0,32] f- (float2float(Rn_VPR64[32,16]) f* float2float(Rm_VPR128[32,16]));
+	Rd_VPR64.2S[32,32] = Rd_VPR64.2S[32,32] f- (float2float(Rn_VPR64[48,16]) f* float2float(Rm_VPR128[48,16]));
 	zext_zd(Zd); # zero upper 24 bytes of Zd
 }
 
@@ -9341,24 +9174,12 @@ is b_31=0 & b_30=0 & b_2329=0b1011101 & b_22=0 & b_21=1 & b_1015=0b110011 & Rd_V
 # SIMD 4S when Q = 1
 
 :fmlsl2 Rd_VPR128.4S, vRn_VPR128^".4H", Rm_VPR64.4H
-is b_31=0 & b_30=1 & b_2329=0b1011101 & b_22=0 & b_21=1 & b_1015=0b110011 & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Rm_VPR64.4H & Zd
+is b_31=0 & b_30=1 & b_2329=0b1011101 & b_22=0 & b_21=1 & b_1015=0b110011 & Rd_VPR128.4S & vRn_VPR128 & Rn_VPR128 & Rm_VPR64.4H & Zd & Rm_VPR128
 {
-	TMPD1 = Rn_VPR128[64,64];
-	# simd infix TMPD2 = TMPD1 f* Rm_VPR64.4H on lane size 2
-	TMPD2[0,16] = TMPD1[0,16] f* Rm_VPR64.4H[0,16];
-	TMPD2[16,16] = TMPD1[16,16] f* Rm_VPR64.4H[16,16];
-	TMPD2[32,16] = TMPD1[32,16] f* Rm_VPR64.4H[32,16];
-	TMPD2[48,16] = TMPD1[48,16] f* Rm_VPR64.4H[48,16];
-	# simd resize TMPQ3 = float2float(TMPD2) (lane size 2 to 4)
-	TMPQ3[0,32] = float2float(TMPD2[0,16]);
-	TMPQ3[32,32] = float2float(TMPD2[16,16]);
-	TMPQ3[64,32] = float2float(TMPD2[32,16]);
-	TMPQ3[96,32] = float2float(TMPD2[48,16]);
-	# simd infix Rd_VPR128.4S = Rd_VPR128.4S - TMPQ3 on lane size 4
-	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] - TMPQ3[0,32];
-	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] - TMPQ3[32,32];
-	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] - TMPQ3[64,32];
-	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] - TMPQ3[96,32];
+	Rd_VPR128.4S[0,32] = Rd_VPR128.4S[0,32] f- (float2float(Rn_VPR128[64,16]) f* float2float(Rm_VPR128[64,16]));
+	Rd_VPR128.4S[32,32] = Rd_VPR128.4S[32,32] f- (float2float(Rn_VPR128[80,16]) f* float2float(Rm_VPR128[80,16]));
+	Rd_VPR128.4S[64,32] = Rd_VPR128.4S[64,32] f- (float2float(Rn_VPR128[96,16]) f* float2float(Rm_VPR128[96,16]));
+	Rd_VPR128.4S[96,32] = Rd_VPR128.4S[96,32] f- (float2float(Rn_VPR128[112,16]) f* float2float(Rm_VPR128[112,16]));
 	zext_zq(Zd); # zero upper 16 bytes of Zd
 }
 
@@ -9414,7 +9235,8 @@ is b_3131=0 & q=1 & b_29=0 & b_2428=0xf & b_1923=0x0 & Imm_neon_uimm8Shift & cmo
 :fmov Rd_VPR64.4H, Imm_neon_uimm8Shift
 is b_31=0 & b_30=0 & b_1929=0b00111100000 & b_1015=0b111111 & Rd_VPR64.4H & Imm_neon_uimm8Shift & Zd
 {
-	local tmp1:2 = int2float(Imm_neon_uimm8Shift);
+	local fimm:4 = Imm_neon_uimm8Shift:4;
+	local tmp1:2 = float2float(fimm);
 	# simd duplicate Rd_VPR64.4H = all elements tmp1 (lane size 2)
 	Rd_VPR64.4H[0,16] = tmp1;
 	Rd_VPR64.4H[16,16] = tmp1;
@@ -9434,7 +9256,8 @@ is b_31=0 & b_30=0 & b_1929=0b00111100000 & b_1015=0b111111 & Rd_VPR64.4H & Imm_
 :fmov Rd_VPR128.8H, Imm_neon_uimm8Shift
 is b_31=0 & b_30=1 & b_1929=0b00111100000 & b_1015=0b111111 & Rd_VPR128.8H & Imm_neon_uimm8Shift & Zd
 {
-	local tmp1:2 = int2float(Imm_neon_uimm8Shift);
+	local fimm:4 = Imm_neon_uimm8Shift:4;
+	local tmp1:2 = float2float(fimm);
 	# simd duplicate Rd_VPR128.8H = all elements tmp1 (lane size 2)
 	Rd_VPR128.8H[0,16] = tmp1;
 	Rd_VPR128.8H[16,16] = tmp1;
@@ -14932,7 +14755,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 	# simd infix TMPQ2 = TMPQ2 * 2:4 on lane size 4
 	TMPQ2[0,32] = TMPQ2[0,32] * 2:4;
 	TMPQ2[32,32] = TMPQ2[32,32] * 2:4;
-	TMPQ2[64,32] = TMPQ2[94,32] * 2:4;
+	TMPQ2[64,32] = TMPQ2[64,32] * 2:4;
 	TMPQ2[96,32] = TMPQ2[96,32] * 2:4;
 
 	# simd infix TMPQ3 = Rn_VPR128.4S s< Rm_VPR128.4S on lane size 4
@@ -16306,10 +16129,10 @@ is b_31=0 & b_30=1 & b_1029=0b00111001111001110110 & Rd_VPR128.8H & Rn_VPR128.8H
 # 32-bit to half-precision variant when sf == 0 && type == 11
 
 :scvtf Rd_FPR16, Rn_GPR32, FBitsOp
-is sf=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=0 & fpOpcode=2 & b_15=1 & FBitsOp & FBits16 & Rn_GPR32 & Rd_FPR16 & Zd
+is sf=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=0 & fpOpcode=2 & b_15=1 & FBitsOp & FBits64 & Rn_GPR32 & Rd_FPR16 & Zd
 {
-	local tmp1:2 = int2float(Rn_GPR32);
-	Rd_FPR16 = tmp1 f/ FBits16;
+	local dx:8 = int2float(Rn_GPR32);
+	Rd_FPR16 = float2float(dx f/ FBits64);
 	zext_zh(Zd); # zero upper 30 bytes of Zd
 }
 
@@ -16321,10 +16144,10 @@ is sf=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=0 & fpOpcode=
 # 64-bit to half-precision variant when sf == 1 && type == 11
 
 :scvtf Rd_FPR16, Rn_GPR64, FBitsOp
-is sf=1 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=0 & fpOpcode=2 & FBitsOp & FBits16 & Rn_GPR64 & Rd_FPR16 & Zd
+is sf=1 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=0 & fpOpcode=2 & FBitsOp & FBits64 & Rn_GPR64 & Rd_FPR16 & Zd
 {
-	local tmp1:2 = int2float(Rn_GPR64);
-	Rd_FPR16 = tmp1 f/ FBits16;
+	local dx:8 = int2float(Rn_GPR64);
+	Rd_FPR16 = float2float(dx f/ FBits64);
 	zext_zh(Zd); # zero upper 30 bytes of Zd
 }
 
@@ -26684,11 +26507,11 @@ is b_31=0 & b_30=1 & b_1029=0b10111001111001110110 & Rd_VPR128.8H & Rn_VPR128.8H
 # if sf == '0' && scale<5> == '0' then UnallocatedEncoding();
 
 :ucvtf Rd_FPR16, Rn_GPR32, FBitsOp
-is sf=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=0 & fpOpcode=3 & b_15=1 & FBitsOp & FBits16 & Rn_GPR32 & Rd_FPR16 & Zd
+is sf=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=0 & fpOpcode=3 & b_15=1 & FBitsOp & FBits64 & Rn_GPR32 & Rd_FPR16 & Zd
 {
-	local tmp1:8 = zext(Rn_GPR32);
-	local tmp2:2 = int2float(tmp1);
-	Rd_FPR16 = tmp2 f/ FBits16;
+	local ux:8 = zext(Rn_GPR32);
+	local dx:8 = int2float(ux);
+	Rd_FPR16 = float2float(dx f/ FBits64);
 	zext_zh(Zd); # zero upper 30 bytes of Zd
 }
 
@@ -26699,11 +26522,11 @@ is sf=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=0 & fpOpcode=
 # AUNIT --inst x9ec30000/mask=xffff0000 --status noqemu --comment "nofpround"
 
 :ucvtf Rd_FPR16, Rn_GPR64, FBitsOp
-is sf=1 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=0 & fpOpcode=3 & FBitsOp & FBits16 & Rn_GPR64 & Rd_FPR16 & Zd
+is sf=1 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=0 & mode=0 & fpOpcode=3 & FBitsOp & FBits64 & Rn_GPR64 & Rd_FPR16 & Zd
 {
-	local tmp1:9 = zext(Rn_GPR64);
-	local tmp2:2 = int2float(tmp1);
-	Rd_FPR16 = tmp2 f/ FBits16;
+	local ux:9 = zext(Rn_GPR64);
+	local dx:8 = int2float(ux);
+	Rd_FPR16 = float2float(dx f/ FBits64);
 	zext_zh(Zd); # zero upper 30 bytes of Zd
 }
 

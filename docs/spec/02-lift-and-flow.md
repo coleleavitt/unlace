@@ -5523,6 +5523,23 @@ scalar `SQSHL`/`SQSHLU`/`UQSHL` (immediate) decoded their left shift with the ri
 formula (`sqshl d13, d6, #10` printed `#0x36`), and scalar `SLI d` read only 5 bits of its
 6-bit shift; they now take `Imm_uimm3`/`Imm_uimm4`/`Imm_uimm5`/`Imm_imm0_63` by element size.
 
+### AArch64 FP16 fixed-point conversions, FMLAL/FMLSL, FP16 FMOV immediate, SABD
+
+Found by `tools/difffuzz --oracle qemu`.
+
+- `FBits16`/`FBits32`/`FBits64` (`AARCH64instructions.sinc`) build 2^fbits from two powers of two,
+  so fbits = 64 no longer shifts out to 0. The half-precision fixed-point conversions
+  (`FCVTZS`/`FCVTZU` from H to a general register, `SCVTF`/`UCVTF` to H) scale in double
+  precision with `FBits64` (2^fbits overflows a half for fbits > 15, and two of them multiplied by
+  the fbits count itself), and `FCVTZU h/s/d, #fbits` scales by a double built the same way.
+- `FMLAL`/`FMLSL`(2), vector and by element, widen each half to single and accumulate with
+  `f+`/`f-` (they multiplied in half precision and added the single-precision bit patterns as
+  integers); the product of two halves is exact in single precision, so this is the fused result.
+  The by-element forms index V0-V15 by H:L:M (`Re_VPR128Lo.H.vIndexHLM3`).
+- `FMOV v.4H/v.8H, #imm` converts the single-precision expansion of the immediate to half
+  (`float2float`); it converted the bit pattern as an integer.
+- `SABD v.4S` read lane 2 of its doubled difference from bit 94.
+
 ## 2.9 Go stack-growth prologue folding
 
 **(kuna) `option gomorestack off|auto|always`, default auto,

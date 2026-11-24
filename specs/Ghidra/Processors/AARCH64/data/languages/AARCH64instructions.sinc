@@ -2757,9 +2757,10 @@ Re_VPR128.2H.dotIndex: vRe_VPR128^".2H["^dotIndexHL^"]" is Re_VPR128 & vRe_VPR12
 
 FBitsOp: "#"^fbits is Scale [ fbits = 64 - Scale; ] { export *[const]:2 fbits; }
 
-FBits64: factor is FBitsOp & Scale [ factor = 1 << (64 - Scale); ] { fval:8 = int2float(factor:8); export fval; }
-FBits32: factor is FBitsOp & Scale [ factor = 1 << (64 - Scale); ] { fval:4 = int2float(factor:8); export fval; }
-FBits16: factor is FBitsOp & Scale [ factor = 1 << (64 - Scale); ] { fval:2 = int2float(factor:8); export fval; }
+# 2^fbits as a float, built from two powers of two so that fbits = 64 (Scale = 0) does not shift out.
+FBits64: fe is FBitsOp & Scale [ fe = 64 - Scale; ] { local eh:8 = fe >> 1; local x:8 = int2float(1:8 << eh); local y:8 = int2float(1:8 << (fe - eh)); fval:8 = x f* y; export fval; }
+FBits32: fe is FBitsOp & Scale [ fe = 64 - Scale; ] { local eh:8 = fe >> 1; local x:4 = int2float(1:8 << eh); local y:4 = int2float(1:8 << (fe - eh)); fval:4 = x f* y; export fval; }
+FBits16: fe is FBitsOp & Scale [ fe = 64 - Scale; ] { local eh:8 = fe >> 1; local x:2 = int2float(1:8 << eh); local y:2 = int2float(1:8 << (fe - eh)); fval:2 = x f* y; export fval; }
 
 # float
 

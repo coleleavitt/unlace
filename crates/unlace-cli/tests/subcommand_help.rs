@@ -164,6 +164,7 @@ fn every_json_surface_names_its_root_in_help() {
         ("modes", "{modes:["),
         ("docs", "[{topic,"),
         ("catalog", "[{option,"),
+        ("project", "{project,"),
     ];
     for sub in subcommands() {
         let text = help_text(&run(&[&sub, "--help"]));

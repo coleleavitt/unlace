@@ -161,6 +161,7 @@ kuna_options! { self, p1;
     "spsolve" => registered!(crate::kuna_coreoptions::SpSolve),
 
     "arithhelpers" => registered!(crate::kuna_arithhelpers::ArithHelpers),
+    "aeabifloat" => registered!(crate::kuna_aeabifloat::AeabiFloat),
     "objcarc" => registered!(crate::kuna_objcarc::ObjcArc),
     "objcrettype" => registered!(crate::kuna_objcrettype::ObjcRettype),
     "objcresolve" => registered!(crate::kuna_objcrettype::ObjcResolve),
@@ -233,6 +234,7 @@ kuna_options! { self, p1;
     "switchextent" => registered!(crate::jumptable::SwitchExtent),
     "honestgaps" => registered!(crate::kuna_honestgaps::HonestGaps),
     "constselectjump" => registered!(crate::kuna_constselectjump::ConstSelectMode),
+    "jumptablework" => registered!(crate::kuna_jumptablework::JumpTableWork),
     "switchguardbound" => registered!(crate::jumptable::SwitchGuardBound),
     "highsliceguard" => registered!(crate::jumptable::HighsliceGuard),
     "switchsharedcase" => registered!(crate::jumptable::SwitchSharedCase),

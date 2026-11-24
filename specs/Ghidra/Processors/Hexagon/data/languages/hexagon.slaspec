@@ -177,7 +177,7 @@ define register offset=0x4000 size=$(HVX_PREDICATE_SIZE) [	Q0	Q1	Q2	Q3	];
 # Define context bits
 #
 
-define register offset=0x5000 size=12   contextreg;
+define register offset=0x5000 size=20   contextreg;
 
 define context contextreg
 
@@ -237,6 +237,11 @@ define context contextreg
                            # (not used by packed instructions)
                            
   unused3        = (75,95)
+
+  # Hardware-loop start addresses: loop0/loop1 set them for the instructions that follow, so the
+  # packet that ends the loop (parse bits) can branch back directly instead of through SA0/SA1.
+  lp0sa          = (96,127)
+  lp1sa          = (128,159)
 ;
 
 # USR Register Fields

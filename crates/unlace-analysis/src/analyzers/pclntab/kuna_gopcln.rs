@@ -11,7 +11,8 @@
 //! and comments the first instruction of each inlined call with the callee and
 //! the call site; [`GoPclnLinesPass`] adds a `file:line` comment wherever the
 //! source position changes, the Go counterpart of `dwarf_lines`. Both are gated
-//! on `--option gopcln` (`on`, `lines`), default off.
+//! on `--option gopcln` (`on`, `lines`), default off, and run at the commit
+//! point (`crate::passes::run_gopcln`), where the option is in effect.
 //!
 //! Layouts (`runtime/runtime2.go` `_func`, `inlinedCall`, `runtime/symtab.go`
 //! `funcdata`/`pcvalue`/`step`/`funcfile` at go1.16, go1.18 and go1.20; IDA's

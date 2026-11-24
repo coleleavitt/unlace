@@ -5,10 +5,11 @@ use common::process;
 use std::process::Command;
 
 fn decompile(entry: &str, name: &str, option: &str, local_type: Option<&str>) -> String {
-    let xml = include_str!(concat!(
+    let xml = &unlace_stagefile::xml_of_toml(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/stages/kuna-call-array-extent.xml"
-    ));
+        "/../../tests/stages/kuna-call-array-extent.toml"
+    )))
+    .unwrap();
     let chunk =
         regex::Regex::new(r#"<bytechunk[^>]*offset="(0x[0-9a-f]+)"[^>]*>([0-9a-f]+)</bytechunk>"#)
             .unwrap();

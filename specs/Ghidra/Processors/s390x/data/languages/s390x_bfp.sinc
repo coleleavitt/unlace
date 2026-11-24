@@ -16,6 +16,8 @@
 :stey c_fsA,XBD6 is c_op8=0xed & c_opl=0x66 & c_fsA & XBD6 { *:4 XBD6 = c_fsA; }
 :ldgr b_fE,b_rF is b_op16=0xb3c1 & b_fE & b_rF { b_fE = b_rF; }
 :lgdr b_rE,b_fF is b_op16=0xb3cd & b_rE & b_fF { b_rE = b_fF; }
+:lder b_fE,b_fsF is b_op16=0xb324 & b_fE & b_fsF { b_fE = zext(b_fsF) << 32; }
+:lde c_fA,XBDE6 is c_op8=0xed & c_opl=0x24 & c_fA & XBDE6 { local v:4 = *:4 XBDE6; c_fA = zext(v) << 32; }
 :ldebr b_fE,b_fsF is b_op16=0xb304 & b_fE & b_fsF { b_fE = float2float(b_fsF); }
 :ldeb c_fA,XBDE6 is c_op8=0xed & c_opl=0x04 & c_fA & XBDE6 { local v:4 = *:4 XBDE6; c_fA = float2float(v); }
 :ledbr b_fsE,b_fF is b_op16=0xb344 & b_fsE & b_fF { b_fsE = float2float(b_fF); }
@@ -113,11 +115,14 @@
 :cpsdr b_fE,b_fC,b_fF is b_op16=0xb372 & b_fE & b_fC & b_fF { b_fE = (b_fF & 0x7fffffffffffffff) | (b_fC & 0x8000000000000000); }
 :sfpc b_rlE is b_op16=0xb384 & b_rlE { fpc = b_rlE; }
 :efpc b_rlE is b_op16=0xb38c & b_rlE { b_rlE = fpc; }
+:tceb c_fsA,XBDE6 is c_op8=0xed & c_opl=0x10 & c_fsA & XBDE6 { local x:4 = c_fsA; local m:8 = XBDE6 & 0xfff; local sg:1 = (x >> 31) == 1; local ex:4 = (x >> 23) & 0xff; local fr:4 = x & 0x7fffff; local q:1 = ((x >> 22) & 1) == 1; local emax:1 = ex == 0xff; local k:8 = zext(sg) + 2 * zext(ex != 0 && !emax) + 4 * zext(ex == 0 && fr != 0) + 6 * zext(emax && fr == 0) + 8 * zext(emax && fr != 0 && q) + 10 * zext(emax && fr != 0 && !q); local bit:8 = (m >> (11 - k)) & 1; CC0 = (bit == 0); CC1 = (bit != 0); CC2 = 0; CC3 = 0; ccAux(); }
+:tcdb c_fA,XBDE6 is c_op8=0xed & c_opl=0x11 & c_fA & XBDE6 { local x:8 = c_fA; local m:8 = XBDE6 & 0xfff; local sg:1 = (x >> 63) == 1; local ex:8 = (x >> 52) & 0x7ff; local fr:8 = x & 0xfffffffffffff; local q:1 = ((x >> 51) & 1) == 1; local emax:1 = ex == 0x7ff; local k:8 = zext(sg) + 2 * zext(ex != 0 && !emax) + 4 * zext(ex == 0 && fr != 0) + 6 * zext(emax && fr == 0) + 8 * zext(emax && fr != 0 && q) + 10 * zext(emax && fr != 0 && !q); local bit:8 = (m >> (11 - k)) & 1; CC0 = (bit == 0); CC1 = (bit != 0); CC2 = 0; CC3 = 0; ccAux(); }
 
 # Extended (128-bit) values live in a register pair: fN holds the high half and
 # fN+2 the low half.
 :lxr b_fE,b_fF is b_op16=0xb365 & b_fE & b_fqE & b_fF & b_fqF { local hi:8 = b_fF; local lo:8 = b_fqF; b_fE = hi; b_fqE = lo; }
 :lzxr b_fE is b_op16=0xb376 & b_fE & b_fqE { b_fE = 0; b_fqE = 0; }
+:tcxb c_fA,XBDE6 is c_op8=0xed & c_opl=0x12 & c_fA & c_fqA & XBDE6 { local x:8 = c_fA; local lo:8 = c_fqA; local m:8 = XBDE6 & 0xfff; local sg:1 = (x >> 63) == 1; local ex:8 = (x >> 48) & 0x7fff; local fr:8 = (x & 0xffffffffffff) | lo; local q:1 = ((x >> 47) & 1) == 1; local emax:1 = ex == 0x7fff; local k:8 = zext(sg) + 2 * zext(ex != 0 && !emax) + 4 * zext(ex == 0 && fr != 0) + 6 * zext(emax && fr == 0) + 8 * zext(emax && fr != 0 && q) + 10 * zext(emax && fr != 0 && !q); local bit:8 = (m >> (11 - k)) & 1; CC0 = (bit == 0); CC1 = (bit != 0); CC2 = 0; CC3 = 0; ccAux(); }
 :axbr b_fE,b_fF is b_op16=0xb34a & b_fE & b_fqE & b_fF & b_fqF { local x:16 = (zext(b_fE) << 64) | zext(b_fqE); local y:16 = (zext(b_fF) << 64) | zext(b_fqF); local res:16 = x f+ y; ccFloat(res); b_fE = res(8); b_fqE = res:8; }
 :sxbr b_fE,b_fF is b_op16=0xb34b & b_fE & b_fqE & b_fF & b_fqF { local x:16 = (zext(b_fE) << 64) | zext(b_fqE); local y:16 = (zext(b_fF) << 64) | zext(b_fqF); local res:16 = x f- y; ccFloat(res); b_fE = res(8); b_fqE = res:8; }
 :mxbr b_fE,b_fF is b_op16=0xb34c & b_fE & b_fqE & b_fF & b_fqF { local x:16 = (zext(b_fE) << 64) | zext(b_fqE); local y:16 = (zext(b_fF) << 64) | zext(b_fqF); local res:16 = x f* y; b_fE = res(8); b_fqE = res:8; }

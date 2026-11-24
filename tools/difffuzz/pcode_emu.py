@@ -3,10 +3,13 @@
 Input is the `ops` list of one `unlace raw-pcode --json` instruction row. Memory that was never
 written reads from a caller-supplied fill function, so the reference emulator can map the same bytes
 on demand. An op this interpreter cannot give a defined result for (CALLOTHER, a division by zero, a
-float wider than 8 bytes) raises Unmodeled and the case is counted instead of compared.
+float NaN result, an x87 transcendental) raises Unmodeled and the case is counted instead of compared.
 """
 import math
 import struct
+from fractions import Fraction
+
+import softfloat
 
 
 class Unmodeled(Exception):
@@ -142,7 +145,12 @@ def step(state, ops, addr, size, max_steps=20000):
             state.write("ram", ptr, v["size"], rd(v))
             continue
         if opc == "LOAD":
-            r = state.read("ram", rd(ins[1]), osz)
+            # space id 0 is the constant space: a dynamic export into it (`export *[const]:8 tmp`)
+            # loads the pointer value itself
+            if ins[0]["offset"] == 0:
+                r = rd(ins[1]) & mask(osz)
+            else:
+                r = state.read("ram", rd(ins[1]), osz)
         else:
             r = _eval(opc, ins, rd, osz)
         state.write(*_vn(out), r)
@@ -239,6 +247,8 @@ def _eval(opc, ins, rd, osz):
 
 
 def _float(opc, ins, a, asz, b, osz):
+    if 10 in (asz, osz) or (len(ins) > 1 and ins[1]["size"] == 10):
+        return _float_ext(opc, ins, a, asz, b, osz)
     if opc == "INT2FLOAT":
         return from_float(float(sext(a, asz)), osz)
     x = to_float(a, asz)
@@ -260,7 +270,7 @@ def _float(opc, ins, a, asz, b, osz):
             if r != sext(r, osz):
                 raise Unmodeled("float to int overflow")
             return r & mask(osz)
-        return from_float(float(f(x)), osz)
+        return from_float(math.copysign(float(f(x)), x), osz)
     if opc == "FLOAT_SQRT":
         if not x >= 0:
             raise Unmodeled("nan result")
@@ -292,3 +302,99 @@ def _float(opc, ins, a, asz, b, osz):
     if osz == 4:
         r = struct.unpack("<f", struct.pack("<f", r))[0] if not math.isinf(r) and abs(r) < 3.5e38 else r
     return from_float(r, osz)
+
+
+def _float_ext(opc, ins, a, asz, b, osz):
+    """Float ops with an x87 80-bit operand or result, exactly rounded (tools/difffuzz/softfloat.py)."""
+    sf = softfloat
+    if opc == "INT2FLOAT":
+        return sf.from_signed(Fraction(sext(a, asz)), osz)
+    ka, xa, sa = sf.value(a, asz)
+    if opc == "FLOAT_NAN":
+        return int(ka == "nan")
+    if opc == "FLOAT_NEG":
+        return a ^ (1 << (8 * asz - 1))
+    if opc == "FLOAT_ABS":
+        return a & ~(1 << (8 * asz - 1))
+    if ka == "nan":
+        if opc in ("FLOAT_EQUAL", "FLOAT_LESS", "FLOAT_LESSEQUAL"):
+            return 0
+        if opc == "FLOAT_NOTEQUAL":
+            return 1
+        raise Unmodeled("nan operand")
+    if opc == "FLOAT2FLOAT":
+        if ka == "inf":
+            return sf.encode_inf(sa, osz)
+        if ka == "zero":
+            return sf.encode_zero(sa, osz)
+        return sf.encode(sa, abs(xa), osz)
+    if opc in ("TRUNC", "CEIL", "FLOOR", "ROUND"):
+        if ka == "inf":
+            raise Unmodeled("float to int of nan/inf")
+        if opc == "TRUNC":
+            r = int(xa)
+            if r != sext(r, osz):
+                raise Unmodeled("float to int overflow")
+            return r & mask(osz)
+        r = {"CEIL": math.ceil, "FLOOR": math.floor, "ROUND": lambda v: math.floor(v + Fraction(1, 2))}[opc](xa)
+        return sf.from_signed(Fraction(r), osz, zero_sign=sa)
+    if opc == "FLOAT_SQRT":
+        if ka == "zero":
+            return a
+        if sa:
+            raise Unmodeled("nan result")
+        if ka == "inf":
+            return a
+        return sf.encode(0, sf.sqrt_sticky(xa, 64), osz)
+    kb, xb, sb = sf.value(b, ins[1]["size"])
+    if kb == "nan":
+        if opc in ("FLOAT_EQUAL", "FLOAT_LESS", "FLOAT_LESSEQUAL"):
+            return 0
+        if opc == "FLOAT_NOTEQUAL":
+            return 1
+        raise Unmodeled("nan operand")
+    inf = lambda s: math.inf if not s else -math.inf
+    fa = inf(sa) if ka == "inf" else xa
+    fb = inf(sb) if kb == "inf" else xb
+    if opc == "FLOAT_EQUAL":
+        return int(fa == fb)
+    if opc == "FLOAT_NOTEQUAL":
+        return int(fa != fb)
+    if opc == "FLOAT_LESS":
+        return int(fa < fb)
+    if opc == "FLOAT_LESSEQUAL":
+        return int(fa <= fb)
+    if opc in ("FLOAT_ADD", "FLOAT_SUB"):
+        if opc == "FLOAT_SUB":
+            sb ^= 1
+            xb = -xb if xb is not None else None
+        if ka == "inf" or kb == "inf":
+            if ka == "inf" and kb == "inf" and sa != sb:
+                raise Unmodeled("nan result")
+            return sf.encode_inf(sa if ka == "inf" else sb, osz)
+        r = xa + xb
+        if r == 0:
+            return sf.encode_zero(sa & sb if ka == "zero" and kb == "zero" else 0, osz)
+        return sf.from_signed(r, osz)
+    s = sa ^ sb
+    if opc == "FLOAT_MULT":
+        if ka == "inf" or kb == "inf":
+            if ka == "zero" or kb == "zero":
+                raise Unmodeled("nan result")
+            return sf.encode_inf(s, osz)
+        r = xa * xb
+        return sf.encode_zero(s, osz) if r == 0 else sf.from_signed(r, osz)
+    if opc == "FLOAT_DIV":
+        if ka == "inf":
+            if kb == "inf":
+                raise Unmodeled("nan result")
+            return sf.encode_inf(s, osz)
+        if kb == "inf":
+            return sf.encode_zero(s, osz)
+        if kb == "zero":
+            if ka == "zero":
+                raise Unmodeled("nan result")
+            return sf.encode_inf(s, osz)
+        r = xa / xb
+        return sf.encode_zero(s, osz) if r == 0 else sf.from_signed(r, osz)
+    raise Unmodeled(opc)

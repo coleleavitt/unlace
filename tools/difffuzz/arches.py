@@ -12,6 +12,7 @@ import capstone as cs
 import unicorn as uc
 from unicorn import arm64_const as a64
 from unicorn import riscv_const as rv
+from unicorn import s390x_const as sz
 from unicorn import x86_const as x86
 
 
@@ -202,9 +203,14 @@ class X86_64(Arch):
     def ignored(self, mnemonic, operands, state):
         if mnemonic == "mov" and re.search(r"\b(dr|cr)\d", operands):
             return {"*"}
-        if mnemonic == "bswap" and not re.match(r"^[re]", operands):
+        if mnemonic == "bswap" and (not re.match(r"^[re]", operands) or re.match(r"^r\d+w$", operands)):
             return {"*"}
         if mnemonic in ("shld", "shrd") and operands.endswith("cl") and ("word" in operands or re.match(r"^[a-ds][xip]\b|^r\d+w", operands)):
+            return {"*"}
+        m = re.search(r",\s*(0x[0-9a-f]+|\d+)$", operands)
+        if mnemonic in ("shld", "shrd") and m and ("word ptr" in operands or re.match(r"^[a-ds][xip]\b|^r\d+w", operands)) \
+                and int(m.group(1), 0) & 31 > 16:
+            # a 16-bit SHLD/SHRD by more than 16 leaves the destination undefined (SDM)
             return {"*"}
         if mnemonic in ("extrq", "insertq"):
             # Unicorn's INSERTQ inserts the wrong field and its EXTRQ keeps bits 127:64, which the
@@ -220,6 +226,116 @@ class X86_64(Arch):
             if mnemonic in ("shld", "shrd"):
                 ign |= {"CF", "SF", "ZF", "PF"} if "," in operands else set()
         return ign
+
+
+class X86_64Native(X86_64):
+    """x86-64 against this CPU (qemu_backend.X86NativeHarness, --oracle native): YMM0..YMM15 compared
+    at full width, and encodings drawn mostly from the SSE, VEX (AVX/AVX2/FMA/BMI/AES/SHA/GFNI/VNNI)
+    and x87 opcode spaces that Unicorn's QEMU core leaves out."""
+    name = "x86-64-native"
+    vecs = [(f"YMM{i}", None) for i in range(16)]
+
+    def ignored(self, mnemonic, operands, state):
+        # a segment register's value is the process's selector natively and 0 in the p-code state
+        if re.search(r"\b[cdefgs]s\b(?!:)", operands):
+            return {"*"}
+        return super().ignored(mnemonic, operands, state)
+
+    def gen(self, rng):
+        tail = rng.getrandbits(64).to_bytes(8, "little") + rng.getrandbits(32).to_bytes(4, "little")
+        modrm = bytes([rng.choice([rng.getrandbits(8) | 0xC0, rng.getrandbits(8)])])
+        k = rng.random()
+        if k < 0.3:
+            pre = bytes(rng.choice([[], [0x66], [0xF2], [0xF3]])) + bytes(rng.choice([[], [], [0x40 | rng.getrandbits(4)]]))
+            esc = rng.choice([[0x0F], [0x0F], [0x0F, 0x38], [0x0F, 0x3A]])
+            return pre + bytes(esc) + bytes([rng.getrandbits(8)]) + modrm + tail
+        if k < 0.8:
+            if rng.random() < 0.4:
+                vex = bytes([0xC5, rng.getrandbits(8)])
+            else:
+                b1 = (rng.getrandbits(3) << 5) | rng.choice([1, 2, 3])
+                vex = bytes([0xC4, b1, rng.getrandbits(8)])
+            return vex + bytes([rng.getrandbits(8)]) + modrm + tail
+        if k < 0.9:
+            return bytes([0xD8 + rng.getrandbits(3)]) + modrm + tail
+        return super().gen(rng)
+
+
+
+def x87_value(rng):
+    """An 80-bit extended value: mostly normal numbers near 1 and small integers, some zeros,
+    infinities, large and tiny exponents and denormals; never a NaN or unnormal."""
+    k = rng.random()
+    s = rng.getrandbits(1) << 79
+    if k < 0.05:
+        return s
+    if k < 0.08:
+        return s | (0x7FFF << 64) | (1 << 63)
+    if k < 0.1:
+        return s | rng.getrandbits(63)                                  # denormal
+    if k < 0.3:
+        n = rng.randrange(1, 1 << rng.choice([4, 16, 32, 63]))
+        e = n.bit_length() - 1
+        return s | ((16383 + e) << 64) | (n << (63 - e))                # an integer
+    if k < 0.9:
+        e = 16383 + rng.randrange(-70, 70)
+    else:
+        e = rng.randrange(1, 0x7FFF)
+    m = (1 << 63) | rng.getrandbits(63)
+    if rng.random() < 0.3:
+        m &= ~((1 << rng.randrange(20, 63)) - 1)                         # few significant bits
+    return s | (e << 64) | m
+
+
+# the x86 deny list with x87 allowed, except the environment/state loads and stores and FLDCW (the
+# oracle runs at the default control word: 64-bit precision, round to nearest, exceptions masked)
+X87_DENY = re.compile(
+    X86_DENY.pattern.replace("|f.*|", "|fx.*|f?wait|fn?stenv|fldenv|fn?save|frstor|fldcw|")
+)
+
+
+# x87 ops whose C1 is the round-up indicator (not expressible in p-code), and the compares whose
+# C1 the SDM clears but this CPU leaves unchanged
+X87_C1_FREE = re.compile(
+    r"^(f(i?(add|sub|subr|mul|div|divr))p?|fsqrt|fscale|frndint|fistp?|f(u)?comp?i|fcmov.*)$"
+)
+
+
+class X86_64X87(X86_64Native):
+    """x86-64-native restricted to the x87 escape opcodes D8..DF (with prefixes now and then)."""
+    name = "x86-64-x87"
+    deny = X87_DENY
+
+    def extra_init(self, rng):
+        """ST0..ST6 hold x87 values (ST7 is empty, so one push does not overflow) and C0..C3 random."""
+        init = {f"C{i}": rng.getrandbits(1) for i in range(4)}
+        for i in range(7):
+            init[f"ST{i}"] = x87_value(rng)
+        init["ST7"] = 0
+        # the harness's FXRSTOR image: control word 0x37F, TOP = 0, the condition bits
+        init["FPUControlWord"] = 0x37F
+        init["FPUStatusWord"] = init["C0"] << 8 | init["C1"] << 9 | init["C2"] << 10 | init["C3"] << 14
+        return init
+
+    def canonical(self, cand):
+        # Capstone's FSTPNCE (D9 D8+i) is an undocumented FSTP alias that LLVM and SLEIGH leave undecoded
+        return cand["mnemonic"] != "fstpnce"
+
+    def ignored(self, mnemonic, operands, state):
+        out = super().ignored(mnemonic, operands, state)
+        if X87_C1_FREE.match(mnemonic) or (mnemonic in ("fst", "fstp") and re.search(r"\b[dq]word ptr", operands)):
+            out = out | {"C1"}
+        # the partial remainder comes from a rounded divide and multiply: exact for small quotients only
+        # and the constants are the double values widened (a decompiler constant is at most 8 bytes)
+        if mnemonic in ("fprem", "fprem1", "fldpi", "fldl2e", "fldl2t", "fldlg2", "fldln2"):
+            out = out | {"ST0"}
+        return out
+
+    def gen(self, rng):
+        tail = rng.getrandbits(64).to_bytes(8, "little") + rng.getrandbits(32).to_bytes(4, "little")
+        modrm = bytes([rng.choice([rng.getrandbits(8) | 0xC0, rng.getrandbits(8)])])
+        pre = bytes(rng.choice([[], [], [], [0x66], [0x48], [0x9B]]))
+        return pre + bytes([0xD8 + rng.getrandbits(3)]) + modrm + tail
 
 
 A64_DENY = re.compile(
@@ -500,12 +616,21 @@ class Mips64(Arch):
 
 # Release 6 compact branches (no delay slot) are compared; delay-slot branches are not.
 MIPSR6_DENY = re.compile(MIPS64_DENY.pattern.replace("^(b.*|j.*|", "^(b(?!\\w*c$).*|j(?!\\w*c$).*|").replace("|bc.*|bal.*|", "|")
-                         .replace(".*\\.(s|d|ps|w|l|b|h|v)", ".*\\.(s|ps|l)|cfcmsa|ctcmsa"))
-# MSA: w0..w31 are compared; FPU operations (on $f registers, outside the harness state) are skipped.
+                         .replace(".*\\.(s|d|ps|w|l|b|h|v)", ".*\\.(s|ps|l)"))
+# MSA: w0..w31 and MSACSR are compared; FPU operations (on $f registers, outside the harness state)
+# are skipped.
 MSA_VECS = [(f"w{i}", None) for i in range(32)]
 
 
-class Mips64R6(Mips64):
+class MsaCsr:
+    """MSACSR as a flag word: random sticky Flags (bits 6:2), round-to-nearest, no enables, no
+    cause, so no FP operation traps and the rounding mode is the one p-code uses."""
+
+    def flag_words(self):
+        return [(None, {"MSACSR": (0, 32)}, lambda w: w & 0x7C)]
+
+
+class Mips64R6(MsaCsr, Mips64):
     """MIPS64 Release 6 (MIPS:BE:64:R6): no HI/LO, new compact branches and multiply/divide."""
     name = "mips64r6"
     lang = "MIPS:BE:64:R6"
@@ -523,7 +648,7 @@ class Mips64R6(Mips64):
         return set()
 
 
-class Mips32R6(Mips32):
+class Mips32R6(MsaCsr, Mips32):
     """MIPS32 Release 6 (MIPS:BE:32:R6) on a MIPS64R6 core."""
     name = "mipsr6"
     lang = "MIPS:BE:32:R6"
@@ -563,6 +688,8 @@ class Ppc32(Arch32):
         ("LR", ppc.UC_PPC_REG_LR), ("CTR", ppc.UC_PPC_REG_CTR)]
     pc_const = ppc.UC_PPC_REG_PC
     deny = PPC_DENY
+    # the QEMU harness seeds and compares these XER bits (Unicorn's XER accessors cannot)
+    qemu_bits = ("xer_so", "xer_ov", "xer_ca")
 
     def unicorn(self):
         emu = uc.Uc(uc.UC_ARCH_PPC, uc.UC_MODE_PPC32 | uc.UC_MODE_BIG_ENDIAN)
@@ -579,6 +706,314 @@ class Ppc32(Arch32):
 
     def fix_inputs(self, init, rng):
         pass
+
+    def canonical(self, cand):
+        # an update-form load/store with RA=0, or a load with update into RA (invalid forms)
+        w = int.from_bytes(cand["bytes"], "big" if self.big else "little")
+        op, rt, ra = w >> 26, (w >> 21) & 31, (w >> 16) & 31
+        xo = (w >> 1) & 0x3FF
+        upd_d = op in (33, 35, 41, 43, 37, 39, 45, 47, 49, 51, 53, 55) or (op == 58 and w & 3 == 1) or (op == 62 and w & 3 == 1)
+        upd_x = op == 31 and xo in (55, 119, 311, 375, 183, 247, 439, 503, 53, 181, 373, 567, 599, 631, 695, 759, 727)
+        if (upd_d or upd_x) and ra == 0:
+            return False
+        loads = op in (33, 35, 41, 43, 49, 51, 58) or (op == 31 and xo in (55, 119, 311, 375, 53, 373))
+        if (upd_d or upd_x) and loads and ra == rt:
+            return False
+        return True
+
+
+# QEMU seeds and compares LR, CTR, CR, XER and the FPRs, and runs both branch outcomes, so the
+# 64-bit QEMU-only architectures leave out only what touches state the harness does not hold
+PPC_DENY_QEMU = re.compile(
+    r"^(sc|scv|t[wd]i?.*|rfi.*|rfci|rfmci|hrfid|mtmsr.*|mfmsr|mfsr.*|mtsr.*|mftb.*|wrtee.*|"
+    r"mbar|msync|dcb.*|icb.*|tlb.*|slb.*|[lst][bhwdq]arx|st[bhwdq]cx\.|mfdcr|mtdcr|attn|wait.*|"
+    r"mffs.*|mtfs.*|mcrfs|v.*|ev.*|lv.*|stv.*|dss.*|dst.*|xs.*|xv.*|xx.*|lx.*|stx.*|"
+    r"m[ft]vsr.*|darn|copy|paste.*|cp_abort|msgsnd.*|msgclr.*|lq|stq|ldat|lwat|stdat|stwat|"
+    r"mfbhrbe|clrbhrb|rfebb|bctar.*|.*ep[xX]|ld[bc]ix|st[bc]ix|lwzcix|lhzcix|stwcix|sthcix)$"
+)
+
+
+class Ppc64(Ppc32):
+    """64-bit PowerPC (QEMU oracle only: qemu-ppc64 -cpu power10, 64-bit mode)."""
+    name = "ppc64"
+    deny = PPC_DENY_QEMU
+    vecs = [(f"f{i}", getattr(ppc, f"UC_PPC_REG_FPR{i}")) for i in range(32)]
+    lang = "PowerPC:BE:64:default"
+    elf_machine = 21
+    elf64 = True
+    until = (1 << 64) - 1
+
+    def addr_ok(self, a):
+        return a < (1 << 47)
+
+    def unicorn(self):
+        return uc.Uc(uc.UC_ARCH_PPC, uc.UC_MODE_PPC64 | uc.UC_MODE_BIG_ENDIAN)
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_PPC, cs.CS_MODE_64 | cs.CS_MODE_BIG_ENDIAN)
+
+    def partial(self, mnemonic, operands):
+        """Bits of a destination the architecture defines (the rest are undefined)."""
+        if re.match(r"^(divwu?|divwu?o|divweu?|divweu?o|mulhwu?)\.?$", mnemonic):
+            # 64-bit mode: RT[0:31] (the high word) is undefined
+            return {operands.split(",")[0].strip(): 0xFFFFFFFF}
+        return {}
+
+    def ignored(self, mnemonic, operands, state):
+        out = set()
+        if re.match(r"^(divwu?|divwu?o|divweu?|divweu?o|mulhwu?)\.$", mnemonic):
+            out.add("cr0")  # LT/GT/EQ undefined in 64-bit mode; SO is still compared via xer_so
+        if mnemonic.startswith("f") and mnemonic.endswith("."):
+            out.add("cr1")  # copies FPSCR[FX,FEX,VX,OX]; the FPSCR exception bits are not modelled
+            if re.match(r"^f(n?m(add|sub)s?|sel)\.$", mnemonic):
+                out.add("cr3")  # QEMU 10.2 also sets CR bit 14 for the A-form record forms
+        if re.match(r"^f(n?m(add|sub))s?\.?$", mnemonic):
+            out.add(operands.split(",")[0].strip())  # fused multiply-add: p-code rounds twice
+        if re.match(r"^stfsu?x?$", mnemonic):
+            import struct
+            frs = operands.split(",")[0].strip()
+            v = state.get(frs)
+            d = struct.unpack("<d", struct.pack("<Q", v))[0]
+            try:
+                exact = struct.unpack("<f", struct.pack("<f", d))[0] == d
+            except OverflowError:
+                exact = False
+            if not exact:
+                # a double outside single precision: the ISA stores truncated bits, p-code rounds
+                return {"*"}
+        if re.match(r"^lfsu?x?$", mnemonic):
+            frt = operands.split(",")[0].strip()
+            v = state.get(frt)
+            if (v >> 52) & 0x7FF == 0x7FF and v & ((1 << 52) - 1):
+                out.add(frt)  # a single sNaN is widened without quieting; p-code quiets it
+        return out
+
+    def canonical(self, cand):
+        if not super().canonical(cand):
+            return False
+        w = int.from_bytes(cand["bytes"], "big" if self.big else "little")
+        if not self.big and (w >> 26 in (46, 47) or (w >> 26 == 31 and ((w >> 1) & 0x3FF) in (533, 597, 661, 725))):
+            return False  # lmw/stmw and the string ops raise an alignment interrupt in little-endian mode
+        if w >> 26 == 31 and ((w >> 1) & 0x3FF) in (339, 467):  # mfspr / mtspr: only XER, LR, CTR
+            spr = ((w >> 16) & 0x1F) | ((w >> 11) & 0x1F) << 5
+            return spr in (1, 8, 9)
+        return True
+
+
+class Ppc64le(Ppc64):
+    name = "ppc64le"
+    lang = "PowerPC:LE:64:default"
+    big = False
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_PPC, cs.CS_MODE_64 | cs.CS_MODE_LITTLE_ENDIAN)
+
+
+class Ppc64Isa(Ppc64):
+    """Power ISA 3.0 with AltiVec (the language a POWER7+ image needs)."""
+    name = "ppc64-isa"
+    lang = "PowerPC:BE:64:A2ALT"
+
+
+class Ppc64leIsa(Ppc64le):
+    name = "ppc64le-isa"
+    lang = "PowerPC:LE:64:A2ALT"
+
+
+S390X_DENY = re.compile(
+    r"^(svc|ex|exrl|diag|sigp|lpswe?|ssm|stnsm|stosm|lctlg?|stctlg?|ptlb|ipte|idte|sske|iske|rrbe|rrbm|"
+    r"lra[y g]?|lurag?|sturg?|stpx|spx|stap|stidp|sck|sckc|stckc|spt|stpt|stck[ef]?|ecag|ectg|stfle|stfl|"
+    r"stsi|stcps|stcrw|tsch|ssch|msch|csch|hsch|rsch|xsch|chsc|rchp|sal|schm|tpi|tpei|siga|"
+    r"mc|trap[24]|tbegin.*|tend|tabort|etnd|ntstg|ppa|niai|bpp|bprp|pfd|pfdrl|"
+    r"sar|ear|lam|lamy|stam|stamy|cpya|sacf|sac|ipk|spka|pt|pti|pc|pr|bsg|bsa|bakr|ereg|eregg|esea|epar|epair|esar|"
+    r"esta|msta|mvcp|mvcs|mvcdk|mvcsk|mvcos|mvpg|mvcl|mvcle|mvclu|clcl|clcle|clclu|"
+    r"cu[0-9]+|cu[a-z]+|tre|troo|trot|trto|trtt|srst|srstu|cuse|cmpsc|kmc|km|kimd|klmd|kmac|kmctr|kmf|kmo|pcc|kma|"
+    r"prno|kdsa|dfltcc|sortl|nnpa.*|[lst]ctlg?|.*[\._]?fpc|sfasr|srnmb?|srnmt|lfas|efpc|sfpc|lfpc|stfpc|"
+    r"[a-z]*dt[a-z]*|[a-z]*xt[a-z]*|v.*|wf.*|lcbb)$"
+)
+
+
+class S390x(Arch):
+    """IBM z/Architecture (QEMU oracle: qemu-s390x -cpu max). The condition code is one-hot in
+    CC0..CC3 with CCA = cc >= 2 and CCB = cc & 1."""
+    name = "s390x"
+    lang = "s390x:BE:64:default"
+    elf_machine = 22
+    big = True
+    pc = "PC"
+    max_len = 6
+    gprs = [(f"r{i}", getattr(sz, f"UC_S390X_REG_R{i}")) for i in range(16)]
+    vecs = [(f"v{i}", getattr(sz, f"UC_S390X_REG_V{i}", None)) for i in range(32)]
+    pc_const = sz.UC_S390X_REG_PC
+    deny = S390X_DENY
+    qemu_bits = ("CC0", "CC1", "CC2", "CC3", "CCA", "CCB")
+
+    def qemu_bit_values(self, rng):
+        cc = rng.randrange(4)
+        out = {f"CC{k}": int(cc == k) for k in range(4)}
+        out["CCA"], out["CCB"] = int(cc >= 2), cc & 1
+        return out
+
+    def unicorn(self):
+        return uc.Uc(uc.UC_ARCH_S390X, uc.UC_MODE_BIG_ENDIAN)
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_SYSZ, cs.CS_MODE_BIG_ENDIAN)
+
+    def gen(self, rng):
+        return rng.getrandbits(48).to_bytes(6, "big")
+
+    def skip(self, cand):
+        # QEMU 10.2 stores the low word shifted left by 32 (zero) for STMH, not bits 0-31
+        return cand["mnemonic"] == "stmh"
+
+    def ignored(self, mnemonic, operands, state):
+        dst = "v" + operands.split(",")[0].strip()[2:]
+        if re.match(r"^[vw]fn?m[as](sb|db|xb)$", mnemonic):
+            return {dst}  # fused: p-code rounds twice
+        if re.match(r"^[vw]c(dg|dlg|ef|elf)b?$", mnemonic):
+            mode = operands.split(",")[-1].strip()
+            if mode not in ("0", "4"):
+                return {dst}  # an int-to-float conversion rounds to nearest in p-code, whatever M5 says
+        return set()
+
+    partial_uses_sleigh = True
+
+    def partial(self, mnemonic, operands, sleigh=None):
+        """A scalar (W) vector instruction defines element 0 of its target; the rest of the
+        register is unpredictable. The SLEIGH mnemonic is used when there is one (Capstone 5
+        prints the newer W forms as their generic V form)."""
+        if sleigh is not None:
+            mnemonic = sleigh["mnemonic"]
+            dst = sleigh["operands"].split(",")[0].strip()
+            dst = "%" + dst.rstrip("s") if dst.startswith(("f", "v")) else dst
+        else:
+            dst = operands.split(",")[0].strip()
+        if not mnemonic.startswith("w") or not dst.startswith(("%f", "%v")) or mnemonic.endswith("xb") and not mnemonic.startswith("wflrx"):
+            return {}
+        sb = re.search(r"sbs?$", mnemonic) is not None or \
+            mnemonic in ("wledb", "wcefb", "wcelfb", "wcfeb", "wclfeb")
+        return {"v" + dst[2:]: ((1 << 32) - 1) << 96 if sb else ((1 << 64) - 1) << 64}
+
+
+class S390xVec(S390x):
+    """s390x with the generator drawing vector-facility (E7, E6) encodings."""
+    name = "s390x-vec"
+    deny = re.compile(r"$^")
+
+    def gen(self, rng):
+        return bytes([0xE6 if rng.random() < 0.1 else 0xE7]) + rng.getrandbits(40).to_bytes(5, "big")
+
+
+class _ObjdumpIns:
+    def __init__(self, b, mnemonic, op_str):
+        self.bytes, self.mnemonic, self.op_str = b, mnemonic, op_str
+
+
+class ObjdumpDis:
+    """A Capstone stand-in for an architecture Capstone 5 lacks: binutils objdump decodes
+    4-byte little-endian words in batches, cached by encoding."""
+
+    def __init__(self, tool, mach):
+        self.tool, self.mach, self.cache = tool, mach, {}
+
+    def prime(self, words):
+        import os
+        import subprocess
+        import tempfile
+        todo = sorted({w for w in words if w not in self.cache})
+        if not todo:
+            return
+        with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
+            f.write(b"".join(todo))
+            path = f.name
+        try:
+            out = subprocess.run([self.tool, "-D", "-b", "binary", "-m", self.mach, path],
+                                 capture_output=True, text=True, check=True).stdout
+        finally:
+            os.unlink(path)
+        got = {}
+        for line in out.splitlines():
+            m = re.match(r"\s*([0-9a-f]+):\t([0-9a-f]{8})\s*\t(\S+)\s*(.*)$", line)
+            if m:
+                got[int(m.group(1), 16) // 4] = (m.group(3), m.group(4).split("#")[0].strip())
+        for i, w in enumerate(todo):
+            mn = got.get(i)
+            self.cache[w] = None if mn is None or mn[0].startswith(".") else mn
+
+    def disasm(self, raw, addr):
+        b = bytes(raw[:4])
+        if len(b) < 4:
+            return
+        if b not in self.cache:
+            self.prime([b])
+        hit = self.cache[b]
+        if hit:
+            yield _ObjdumpIns(b, hit[0], hit[1])
+
+
+LA_NAMES = ("ra tp sp a0 a1 a2 a3 a4 a5 a6 a7 t0 t1 t2 t3 t4 t5 t6 t7 t8 r21 fp "
+            "s0 s1 s2 s3 s4 s5 s6 s7 s8").split()
+LA_FNAMES = [f"fa{i}" for i in range(8)] + [f"ft{i}" for i in range(16)] + [f"fs{i}" for i in range(8)]
+LA_DENY = re.compile(
+    r"^(syscall|break|dbcl|hvcl|ertn|idle|cpucfg|rdtime.*|csr.*|iocsr.*|tlb.*|invtlb|cacop|lddir|ldpte|"
+    r"gcsr.*|gtlb.*|preld.*|asrt.*|ll\..*|sc\..*|llacq.*|screl.*|sc\.q|"
+    r"movfcsr2gr|movgr2fcsr|frecipe.*|frsqrte.*|f(ld|st)(gt|le)\..*|v.*|xv.*|"
+    r"x86.*|arm.*|setx86.*|setarm.*|setj|movgr2scr|movscr2gr|jiscr.*|"
+    r"rcr.*|rotr\.[bh]|rotri\.[bh]|addu12i.*|adc\..*|sbc\..*|sra\.?[bh].*|srl\.?[bh].*|sll\.?[bh].*|"
+    r"ldl\..*|ldr\..*|stl\..*|str\..*|armmove|armmfflag|armmtflag|x86mfflag|x86mtflag|gcsr.*|lbt.*)$"
+)
+_LA_DIS = None
+
+
+class LoongArch64(Arch):
+    """LoongArch64 (QEMU oracle only: qemu-loongarch64 -cpu max; Unicorn and Capstone 5 lack it).
+    Encodings are decoded with binutils objdump ($DIFFFUZZ_LA_OBJDUMP or
+    loongarch64-linux-gnu-objdump on PATH)."""
+    name = "loongarch64"
+    lang = "Loongarch:LE:64:lp64d"
+    elf_machine = 258
+    pc = "pc"
+    gprs = [(n, 0) for n in LA_NAMES]
+    vecs = [(n, 0) for n in LA_FNAMES]
+    deny = LA_DENY
+
+    def partial(self, mnemonic, operands):
+        """A single-precision or word result in an FPR leaves bits 63:32 undefined (QEMU NaN-boxes
+        them); only the low word is compared."""
+        dst = operands.split(",")[0].strip().lstrip("$")
+        if not dst.startswith("f") or mnemonic.startswith("movgr2frh"):
+            return {}
+        parts = mnemonic.split(".")
+        fmt = parts[1] if parts[0] in ("ftint", "ftintrm", "ftintrp", "ftintrz", "ftintrne", "ffint", "fcvt") and len(parts) > 2 else parts[-1]
+        return {dst: 0xFFFFFFFF} if fmt in ("s", "w") else {}
+
+    def ignored(self, mnemonic, operands, state):
+        if re.match(r"^fn?m(add|sub)\.[sd]$", mnemonic):
+            return {operands.split(",")[0].strip().lstrip("$")}  # fused: p-code rounds twice
+        return set()
+
+    def unicorn(self):
+        raise NotImplementedError("LoongArch has no Unicorn model; use --oracle qemu")
+
+    def capstone(self):
+        global _LA_DIS
+        if _LA_DIS is None:
+            import os
+            import shutil
+            tool = os.environ.get("DIFFFUZZ_LA_OBJDUMP") or shutil.which("loongarch64-linux-gnu-objdump")
+            if not tool:
+                raise SystemExit("loongarch64: set DIFFFUZZ_LA_OBJDUMP to a binutils objdump for LoongArch")
+            _LA_DIS = ObjdumpDis(tool, "loongarch")
+        return _LA_DIS
+
+    def gen(self, rng):
+        pool = getattr(self, "_pool", None)
+        if not pool:
+            pool = [rng.getrandbits(32).to_bytes(4, "little") for _ in range(8192)]
+            self.capstone().prime(pool)
+            self._pool = pool
+        return pool.pop()
 
 
 TC_DENY = re.compile(
@@ -828,4 +1263,138 @@ class Sh4(Arch32):
         return {"S", "Q", "M"}
 
 
-ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), TriCore(), Nios2(), Sh4())}
+M68K_DENY = re.compile(
+    r"^(trap.*|illegal|rte|stop|reset|movec|moves.*|move16|bkpt|chk.*|cpush.*|cinv.*|pflush.*|ptest.*|pmove.*|"
+    r"f.*|linea|linef|cas2.*|callm|rtm|nop|pack|unpk)$"
+)
+
+
+class M68k(Arch32):
+    """Motorola 68040 integer instructions, against QEMU user mode (--oracle qemu, qemu-m68k -cpu
+    m68040). FPU, privileged, trap and MMU/cache instructions are not generated."""
+    name = "m68k"
+    lang = "68000:BE:32:default"
+    elf_machine = 4
+    big = True
+    pc = "PC"
+    gprs = [(f"D{i}", None) for i in range(8)] + [(f"A{i}", None) for i in range(7)] + [("SP", None)]
+    pc_const = None
+    flags_reg = "ccr"
+    flag_bits = {"CF": 0, "VF": 1, "ZF": 2, "NF": 3, "XF": 4}
+    deny = M68K_DENY
+
+    def unicorn(self):
+        raise NotImplementedError("m68k runs with --oracle qemu")
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_M68K, cs.CS_MODE_M68K_040)
+
+    def gen(self, rng):
+        return rng.getrandbits(176).to_bytes(22, "big")
+
+    def canonical(self, cand):
+        # Capstone accepts reserved extension-word encodings (and prints them as such)
+        ops = cand["op_str"]
+        if re.search(r"\(\[|\((?:[ad]\d|a7)\.[wl]|invalid|\[\]|\[,", ops):
+            return False
+        if re.search(r"\bfp\d|\bsr\b", ops) or (cand["mnemonic"] in ("abcd", "sbcd") and "#" in ops):
+            return False
+        return not cand["mnemonic"].startswith("dc.") and cand["mnemonic"] != "abcd.l"
+
+    def skip(self, cand):
+        # QEMU 8.2's memory shifts take arithmetic/logical from EA bit 3 instead of opcode bit 9
+        if cand["mnemonic"] in ("asl.w", "asr.w", "lsl.w", "lsr.w") and not re.match(r"(#|d\d), ", cand["op_str"]):
+            return True
+        # QEMU 8.2's TAS (An)+ always steps by 1, also for A7
+        if cand["mnemonic"] == "tas.b" and cand["op_str"] == "(a7)+":
+            return True
+        # QEMU 8.2 steps A7 by 1 in the byte -(Ay),-(Ax) forms; the manual keeps it word aligned (2)
+        if re.match(r"(addx|subx|abcd|sbcd)(\.b)?$", cand["mnemonic"]) and "-(a7)" in cand["op_str"]:
+            return True
+        # LINK A7: QEMU pushes A7 before the decrement, other references after; the manual leaves it open
+        return cand["mnemonic"] == "link.w" and cand["op_str"].startswith("a7,")
+
+
+SPARC_DENY = re.compile(
+    r"^(b.*|fb.*|cb.*|call|jmpl?|ret|retl|rett|return|save|restore|saved|restored|flushw|done|retry|"
+    r"t(a|n|ne|e|g|le|ge|l|gu|leu|cc|cs|pos|neg|vc|vs)|taddcctv|tsubcctv|rd.*|wr.*|flush|membar|stbar|"
+    r"prefetch.*|f.*|impdep.*|illtrap|unimp|sir|iprefetch|(ld|st)[a-z]*a|swapa|casx?a|ldq.*|stq.*|"
+    r"shutdown|sleep|nop)$"
+)
+
+
+class Sparc64(Arch):
+    """SPARC V9 integer instructions, against QEMU user mode (--oracle qemu). Branches, calls,
+    register-window, trap, privileged, ASI and floating-point instructions are not generated."""
+    name = "sparc64"
+    lang = "sparc:BE:64:default"
+    elf_machine = 43
+    big = True
+    pc = "PC"
+    gprs = [(n, None) for n in ["g1", "g2", "g3", "g4", "g5", "g6", "g7", "o0", "o1", "o2", "o3", "o4", "o5",
+                                "sp", "o7", "l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7", "i0", "i1", "i2",
+                                "i3", "i4", "i5", "fp", "i7"]] + [("Y", None)]
+    pc_const = None
+    flags_reg = "ccr"
+    flag_bits = {"i_cf": 0, "i_vf": 1, "i_zf": 2, "i_nf": 3, "x_cf": 4, "x_vf": 5, "x_zf": 6, "x_nf": 7}
+    deny = SPARC_DENY
+
+    def unicorn(self):
+        raise NotImplementedError("sparc runs with --oracle qemu")
+
+    def capstone(self):
+        return cs.Cs(cs.CS_ARCH_SPARC, cs.CS_MODE_BIG_ENDIAN | cs.CS_MODE_V9)
+
+    def gen(self, rng):
+        k = rng.random()
+        w = rng.getrandbits(32)
+        if k < 0.05:
+            w = (w & 0x3E3FFFFF) | 0x01000000                         # sethi
+        else:
+            w = (w & 0x3FFFFFFF) | (0x80000000 if k < 0.65 else 0xC0000000)
+        return w.to_bytes(4, "big")
+
+    def canonical(self, cand):
+        w = int.from_bytes(cand["bytes"][:4], "big")
+        op, op3, i = w >> 30, (w >> 19) & 0x3F, (w >> 13) & 1
+        if op == 2 and op3 in (0x25, 0x26, 0x27):
+            # shift encodings: bits 11:5 (11:6 with x = 1) are reserved
+            res = 0xFC0 if (i and (w >> 12) & 1) else 0xFE0
+            if w & res:
+                return False
+        elif op == 2 and op3 < 0x25 and not i and (w >> 5) & 0xFF:
+            return False                                     # the unused asi field of a register form
+        elif op == 2 and op3 == 0x2C:
+            # MOVcc: cc2 = 0 is fcc, cc1:cc0 = 01/11 are reserved, bits 10:5 of the register form too
+            if not (w >> 18) & 1 or (w >> 11) & 1 or (not i and (w >> 5) & 0x3F):
+                return False
+        elif op == 2 and op3 in (0x36, 0x37):
+            return False                                     # VIS / IMPDEP
+        return not re.search(r"%f|%c\d|%fsr|%fcc|%asi|%q", cand["op_str"])
+
+    def skip(self, cand):
+        # QEMU 8.2 zero-extends a 32-bit SLL; V9 shifts all 64 bits
+        return self.elf64 and cand["mnemonic"] == "sll"
+
+    def fix_inputs(self, init, rng):
+        init["Y"] &= 0xFFFFFFFF
+
+
+class Sparc32(Sparc64):
+    """The 32-bit SPARC V9 language (32-bit registers) on qemu-sparc32plus. Instructions that only
+    exist for 64-bit registers or read xcc are not generated, and xcc is not compared."""
+    name = "sparc"
+    lang = "sparc:BE:32:default"
+    elf_machine = 18
+    elf64 = False
+
+    def canonical(self, cand):
+        if re.match(r"(ldx|stx|sllx|srlx|srax|mulx|sdivx|udivx|casx|movr.*|popc|ldsw)$", cand["mnemonic"]):
+            return False
+        return "%xcc" not in cand["op_str"] and Sparc64.canonical(self, cand)
+
+    def ignored(self, mnemonic, operands, state):
+        return {"x_cf", "x_vf", "x_zf", "x_nf"}
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32())}

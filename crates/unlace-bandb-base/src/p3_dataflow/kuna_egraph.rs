@@ -51,7 +51,7 @@ const ITER_LIMIT: usize = 12;
 /// A guard against a pathological search; the node limit stops it first.
 const TIME_LIMIT: Duration = Duration::from_secs(2);
 /// Most input combinations of the small-width check.
-const EXHAUSTIVE_BITS: usize = 16;
+const EXHAUSTIVE_BITS: usize = 12;
 
 define_language! {
     /// The p-code integer ops of an MBA tree as e-graph nodes.
@@ -294,7 +294,10 @@ fn add(eg: &mut EGraph<Bv, Fold>, e: &Expr, n: usize, mask: u64, seed: bool) -> 
             eg.add(Bv::Not(a))
         }
     };
-    if seed && let Some(s) = mba_seed(e, n, mask) {
+    if seed
+        && bitwise_ops(e) >= 2
+        && let Some(s) = mba_seed(e, n, mask)
+    {
         let s = add(eg, &s, n, mask, false);
         eg.union(id, s);
     }
@@ -403,13 +406,18 @@ pub(crate) fn saturate(
         if simple.ops() >= budget
             || bitwise_ops(&simple) >= bit_budget
             || !kuna_mba::agree(f, &simple, n, mask)
-            || !agree_exhaustive(f, &simple, n)
         {
             return None;
         }
-        let refuted =
-            n <= MAX_NONLINEAR_LEAVES && kuna_mba::prove_equal(f, &simple, n, bits) == Some(false);
-        (!refuted).then_some(simple)
+        // A proof at the full width makes the small-width check redundant.
+        let proof = (n <= MAX_NONLINEAR_LEAVES)
+            .then(|| kuna_mba::prove_equal(f, &simple, n, bits))
+            .flatten();
+        let ok = match proof {
+            Some(p) => p,
+            None => agree_exhaustive(f, &simple, n),
+        };
+        ok.then_some(simple)
     };
     let quick = run(eg, mask, QUICK_NODE_LIMIT, QUICK_ITER_LIMIT);
     if let Some(s) = check(&quick) {
@@ -519,7 +527,14 @@ impl Rule for RuleEgraphSimplify {
         let simple = if bitwise_ops(&t.expr) < 2 {
             mba_seed(&t.expr, t.n, kuna_mba::mask_of(size)).filter(|s| s.ops() < t.budget)
         } else {
-            saturate(&t.expr, t.n, 8 * size as u32, t.budget, usize::MAX)
+            // A tree already regrouped once may only lose bitwise ops now,
+            // which saturation checks before the evaluations do.
+            let bits_cap = if self.regrouped.contains(&fp) {
+                bit_budget
+            } else {
+                usize::MAX
+            };
+            saturate(&t.expr, t.n, 8 * size as u32, t.budget, bits_cap)
         };
         let Some(simple) = simple else {
             self.barren.insert(key);

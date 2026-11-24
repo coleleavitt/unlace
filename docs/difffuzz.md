@@ -18,7 +18,8 @@ python3 -m venv ~/.local/share/difffuzz-venv
 
 `--arch` is `x86-64`, `aarch64`, `riscv64`, `arm` (A32), `thumb` (T32), `mips` (MIPS32 big-endian),
 `mips64`, `mips64r6`, `mipsr6` (MIPS64, MIPS64 Release 6 and MIPS32 Release 6, big-endian; use
-`--oracle qemu`), `ppc` (PowerPC 32 big-endian) or `tricore`. `--sleighpath DIR` lifts with the `.sla`
+`--oracle qemu`), `ppc` (PowerPC 32 big-endian), `tricore`, or (QEMU oracle only) `ppc64`, `ppc64le`, `ppc64-isa`,
+`ppc64le-isa`, `s390x`, `s390x-vec` and `loongarch64`. `--sleighpath DIR` lifts with the `.sla`
 files under `DIR` instead of the built-in ones, so a spec edit can be checked right after
 `slacomp` without rebuilding unlace. The summary on stdout counts each outcome and lists the
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
@@ -29,7 +30,10 @@ input registers and the differing values.
 `--oracle qemu` replaces Unicorn with the installed QEMU user-mode binaries
 (`tools/difffuzz/qemu_backend.py`) for `aarch64` (`qemu-aarch64 -cpu max`), `riscv64`
 (`qemu-riscv64 -cpu max`), `mips` and `mips64` (`qemu-mips64 -cpu MIPS64R2-generic`), and `mipsr6`
-and `mips64r6` (`qemu-mips64 -cpu I6400`, an R6 ELF with no HI/LO in the harness). QEMU 10 implements
+and `mips64r6` (`qemu-mips64 -cpu I6400`, an R6 ELF with no HI/LO in the harness). `ppc` (`qemu-ppc -cpu 7457`), and the QEMU-only `ppc64`, `ppc64le` (`PowerPC:*:64:default`),
+`ppc64-isa` and `ppc64le-isa` (`PowerPC:*:64:A2ALT`, Power ISA 3.0) on `qemu-ppc64` /
+`qemu-ppc64le -cpu power10`, `s390x` on `qemu-s390x -cpu max`, and `loongarch64` on `qemu-loongarch64 -cpu max`. `DIFFFUZZ_QEMU_DIR` names a directory searched before `PATH`
+for the QEMU binaries (a `--target-list=ppc-linux-user,...` build of QEMU 10 works). QEMU 10 implements
 what Unicorn's older QEMU core lacks or gets wrong: BF16, I8MM (`usdot`/`sudot`), MOPS,
 `fcmla`/`fcadd`, and RISC-V NaN-boxing.
 
@@ -61,6 +65,13 @@ afterwards. The register file is unchanged.
   sign-extends the address. Release 6 compact branches (`b*c`, `j*c`) are compared; their target
   goes to a second epilogue. Unaligned loads and stores trap on QEMU and count as reference
   exceptions.
+- MSA (`mipsr6`, `mips64r6`; the I6400 core has MSA): w0..w31 are loaded with `ld.d` and stored
+  with `st.d` at table offset 512, and MSACSR is seeded and read back with `ctcmsa`/`cfcmsa` at 1032
+  (through a general register the epilogue saves and restores). MSACSR starts with random sticky
+  Flags (bits 6:2), round-to-nearest, and no enables or cause bits, so no MSA floating-point
+  operation traps. An instruction that writes enables together with a matching cause
+  (`ctcmsa $1`) traps on QEMU and counts as a reference exception. MSA instructions SLEIGH lifts
+  to a user operation count as unmodeled.
 - Nios II (`--arch nios2`, `nios2:LE:32:R1`) has no Unicorn or Capstone support, so it runs only
   with `--oracle qemu`, and `arches.py` decodes mnemonics itself from the Nios II opcode tables.
   QEMU dropped the target after 8.2: build `qemu-nios2` from a QEMU 8.2 tree
@@ -81,9 +92,67 @@ afterwards. The register file is unchanged.
   first run: `MOV.x @Rm+,Rn` with m = n keeps the loaded value (no increment), `MOV.x Rm,@-Rn`
   with m = n stores Rm's value before the decrement (QEMU's reading). Seed 3, 6000 encodings:
   13481 matches, no mismatches left.
+- Motorola 68040 (`--arch m68k`, `68000:BE:32:default`, `--oracle qemu` with `qemu-m68k -cpu m68040`):
+  integer instructions; FPU, MMU, cache, trap and privileged ones are not generated, nor PACK/UNPK
+  (QEMU 8.2 lacks them) or the reserved extension words Capstone accepts. QEMU 8.2 quirks skipped:
+  memory ASL/ASR/LSL/LSR (it reads arithmetic/logical from the EA bits), byte `-(A7)` in
+  ADDX/SUBX/ABCD/SBCD and TAS `(A7)+` (it steps A7 by 1), LINK A7. Fixed in `68000.sinc` after the
+  first runs: CMP/CMPA/CMPI/CMPM left X alone; shift V (only ASL sets it, from every bit shifted
+  through the MSB) and rotate counts past the width; ROXL/ROXR counts modulo width + 1; ADDX now
+  sets X, after the sum; SUBX V with X; NEGX C and V; DIVU.W/DIVS.W overflow (V set, register
+  kept); the -(Ay),-(Ax) forms with Ay = Ax and their byte A7 step; CMPM.B on A7; MOVEM to -(An)
+  with An in the list (68020+ stores An minus the size) and MOVEM.W's 2-byte step; a PC-relative
+  second operand counts from its own extension word; bit-field width 0 = 32, register fields wrap,
+  memory fields reach a fifth byte, BFFFO adds the offset, BFCHG/BFCLR/BFSET write the operand
+  back. Seed 13, 4000 encodings: 8152 matches, no mismatches.
+- SPARC V9 (`--arch sparc64`, `sparc:BE:64:default`, `qemu-sparc64`; `--arch sparc`,
+  `sparc:BE:32:default`, on `qemu-sparc32plus`, which runs the V8+ ABI on a V9 CPU; both
+  `--oracle qemu`, QEMU 8.2): the table register is restored in the BA's delay slot; Y and CCR
+  go through `wr`/`rd`. SPARC64 QEMU maps 8 KiB pages, so its segments are widened to 8 KiB
+  (`seg_align`). Not generated: branches, calls, register windows, traps, `rd`/`wr`,
+  ASI, floating-point and VIS instructions, and reserved encodings QEMU refuses (shift bits
+  11:5, the unused asi field of a register-form ALU op, MOVcc's reserved cc values). The 32-bit
+  language skips the 64-bit-only instructions and does not compare xcc. QEMU 8.2 zero-extends
+  a 32-bit SLL, so `sll` is skipped on sparc64 (V9 shifts all 64 bits). Fixed in `SparcV9.sinc`
+  after the first run: UDIV/SDIV(cc) clamp an overflowing quotient (2^32-1, 2^31-1 or -2^31)
+  and set icc.v; xcc of UMULcc/SMULcc/UDIVcc/SDIVcc comes from the 64-bit result. Seed 5,
+  4000 encodings on sparc64: 10650 matches; seed 6, 3000 on sparc: 8251; no mismatches.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.
+- PowerPC: the harness loads r0..r31, LR, CTR, CR, XER (SO, OV, CA are seeded and compared,
+  which Unicorn cannot do) and f0..f31, and keeps the table address in a register the
+  instruction does not write, like RISC-V. 32-bit PowerPC runs on `qemu-ppc`; the 64-bit
+  languages run in 64-bit mode, where a word divide or multiply-high leaves RT[0:31] and the
+  CR0 of its record form undefined (only the low word is compared). The 64-bit arches allow
+  branches, CR moves, `mfspr`/`mtspr` of XER/LR/CTR, the string and multiple ops (big-endian
+  only: little-endian mode raises an alignment interrupt) and scalar FP. FP record forms
+  leave CR1 uncompared (the FPSCR exception bits are not modelled), fused multiply-adds leave
+  their result uncompared (p-code rounds twice), `stfs` of a double outside single range
+  (the ISA stores truncated bits) is `undefined`, and an `lfs` of a single sNaN (widened
+  without quieting) is not compared. QEMU 10.2 also sets CR bit 14 for the A-form FP record
+  forms (`fmadd.`, `fsel.`, ...), so CR3 is not compared there.
+- LoongArch64 (`Loongarch:LE:64:lp64d`) has no Unicorn or Capstone 5 support, so it runs only with
+  `--oracle qemu`, and its encodings are decoded in batches by binutils objdump
+  (`DIFFFUZZ_LA_OBJDUMP`, or `loongarch64-linux-gnu-objdump` on `PATH`; a `--target=loongarch64-linux-gnu`
+  binutils build works). The harness loads r1..r31 and keeps the table address in a register the
+  instruction does not write, and f0..f31 (`fld.d`/`fst.d`). A single-precision or word result
+  in an FPR is compared in its low word only (bits 63:32 are undefined; QEMU NaN-boxes them),
+  and a fused multiply-add's result is not compared. LSX/LASX, LBT, CSR, FCSR moves, timer,
+  `ll`/`sc` and privileged instructions are left out.
+- s390x: r0..r15 and v0..v31 (`vl`/`vst`; `f0`..`f15` are their leftmost doublewords) are seeded and
+  compared; the condition code is set with `spm` and read back with `ipm`, and is seeded one-hot
+  into `CC0`..`CC3` with `CCA`/`CCB` to match. The table address is kept in a register the
+  instruction does not write. `s390x-vec` draws `E7`/`E6` (vector) encodings. A scalar (W) vector
+  instruction is compared in element 0 of its target only (the rest is unpredictable; the SLEIGH
+  mnemonic decides, since Capstone 5 prints newer W forms as their generic V form); fused
+  multiply-adds are not compared, nor an integer-to-float conversion with a rounding mode other
+  than 0 or 4. Decimal, hexadecimal FP and privileged instructions are left out of `s390x`, as
+  are `ex`/`exrl` and the interruptible storage-to-storage instructions. `stmh` is skipped: QEMU
+  10.2 stores the low word shifted left by 32 (that is, zero) instead of bits 0-31 of each register.
+- `CEIL`, `FLOOR` and `ROUND` keep the sign of their operand (`ceil(-0.3)` is `-0.0`).
+- A `LOAD` from the constant space (a dynamic export such as `export *[const]:8 tmp`) reads
+  its pointer as the value.
 
 ### RISC-V vector (`--arch riscv64v`)
 
@@ -99,6 +168,9 @@ mnemonics). Capstone 5 does not decode them. QEMU runs with
   vtype, vxsat, vxrm, fcsr and vstart. Half of the x registers point into a 64 KiB data
   region, which is always mapped and compared. When QEMU raises SIGILL (a register group, SEW
   or EEW the instruction does not allow) the case is retried at LMUL 1 with each SEW.
+- **vtype as context.** Each encoding is lifted after a `vsetvli x0, x0` of each vtype it is run
+  at (`lift_variants`), so the decoder sees the vtype the harness sets, and the case is run with
+  the first of those vtypes QEMU accepts.
 - **What is compared.** `riscv.rvv.sinc` lifts every vector instruction to a user operation,
   so element values cannot be compared. The p-code runs twice, each time with different
   random user-operation results. A byte written the same way in both runs must equal QEMU's
@@ -107,6 +179,9 @@ mnemonics). Capstone 5 does not decode them. QEMU runs with
   gives every register the p-code does not read new contents, keeping vl, vtype, vxrm and
   fcsr. If a byte the p-code writes through a user operation changes, the result is
   `missing-input`, tagged with the case's tail/mask policy (`tu/mu` etc.).
+- **After vtype context (`tools/gen_rvv_groups.py`)** (pinned `unlace-92c033f5ca`, 400
+  encodings, seeds 5/6): VLEN 128 247 match, 17 with findings; VLEN 256 239 match, 29 with
+  findings. Every remaining finding is fflags or vxsat, which the lift leaves out.
 - **First run** (pinned `unlace-cc4eab698b`, 400 encodings each):
   - VLEN 128: 146 match, 111 with findings, 143 reference exceptions. The exceptions are
     SIGSEGV on indexed and strided addresses outside the region, and SIGILL on encodings
@@ -124,6 +199,39 @@ On the #546 encodings, `--oracle qemu` runs `bfdot` and `usdot` (Unicorn raises
 `UC_ERR_EXCEPTION`) and agrees with Unicorn on the rest. In 300 random RISC-V instructions it
 finds `fle.s` reading an unboxed single (`d38c9fa1`): QEMU compares the canonical NaN and
 writes 0, SLEIGH writes 1. Unicorn misses this because it does not unbox either.
+
+## Regression sweep
+
+`tools/difffuzz/sweep.py` runs every configuration (each `--arch` with the Unicorn oracle where
+Unicorn emulates it, with `--oracle qemu`, including `riscv64v`, and `x86-64-native` with
+`--oracle native`) at a fixed seed and a small
+count, one difffuzz process per configuration, and prints one line per configuration:
+
+```sh
+DIFFFUZZ_QEMU_DIR=~/.local/share/qemu-8.2-user ~/.local/share/difffuzz-venv/bin/python \
+    tools/difffuzz/sweep.py --unlace target/debug/unlace --objdump <llvm-objdump with RVV> --jobs 4 --out sweep.json
+x86-64       unicorn  ok    match    270  mismatch    0 (+0 known)  decode    0  ref-exc    8  unmodeled    9
+riscv64v     qemu     ok    match    126  mismatch    0 (+66 known)  decode    0  ref-exc   83  unmodeled    0
+s390x        qemu     unavailable: no QEMU user binary
+```
+
+`--count` (200), `--trials` (2) and `--seed` (1) are passed through, and so are `--sleighpath`
+(to check spec edits) and `--only REGEX` (over `arch/oracle`). A configuration whose oracle is
+not installed is `unavailable`, not a failure. `--out` writes the outcome counts of each
+configuration and up to `--keep` (10) of its failing cases.
+
+The exit status is 1 when a configuration has a finding of a failing kind (`mismatch`,
+`length`, `missing-output`, `missing-input`) that `tools/difffuzz/sweep_known.json` does not
+accept, 2 when a configuration errored, and 0 otherwise. `sweep_known.json` maps
+`arch/oracle` to the difference keys (a register, `missing-output`, `missing-input`) and the
+fnmatch patterns over their values that are documented open classes. Today that is only the RISC-V
+vector accrued flags (fflags, vxsat), which the lift leaves out as the scalar F/D lift does. A value
+mismatch is never accepted.
+
+First run (unlace-2feb8da847, seed 1, 200 per configuration): every available configuration is
+`ok`. Unavailable were `ppc`, `ppc64le`, `ppc64le-isa` and `s390x` on QEMU (no
+`qemu-ppc`/`qemu-ppc64le`/`qemu-s390x` on this host). `riscv64v` had 66 findings, all in its four
+documented classes.
 
 ## How a case runs
 
@@ -221,6 +329,14 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
 - **ARM.** A conditional `STRHT` wrote its base back even when the condition failed, and stored 4
   bytes. The T32 `ANDS`, `BICS`, `MOVS.W` (immediate), `MVNS` and `ANDS.W`/`MVNS.W` with a
   shifted register did not set C from the shifter.
+- **PowerPC.** `divw.` set XER[OV]/[SO]; `lhbrx`/`lwbrx` were not byte-reversed in the
+  little-endian languages; `ldbrx`/`stdbrx` were user ops; `stswi` with a partial last
+  register stored the whole word.
+- **LoongArch.** `bstrins.w`/`.d` had `bstrpick`'s semantics; `slli.d`/`srli.d`/`srai.d` masked the
+  shift with `0x1f`; the rotates shifted arithmetically; `bytepick.w`/`.d` picked the wrong bytes;
+  `ftintrm`/`ftintrp`/`ftint` truncated and the `.l.s` forms wrote only the low word.
+- **s390x.** `risbhg`/`risblg` took the start and end positions from six bits of I3/I4 (bit 2
+  set gave a position past the word) and `risblg`'s `+ 32` bound tighter than the mask.
 - **TriCore (#563).** PSW.V was the sign bit of the 32-bit result instead of signed overflow
   (`overflowflags`, about 110 constructors), and `SHA` never set PSW.C.
 
@@ -248,14 +364,64 @@ in Unicorn, while the lifted p-code of the original runs from the same state. An
 (R16-R31) is renamed to an R8-R15 register the instruction does not use; a new-data-destination
 form `op dst, src1, src2` becomes `mov T, src1; op T, src2; mov dst, T` through a free temporary
 (zero-extending an 8- or 16-bit result, as APX does); `{nf}` must leave every flag unchanged in the
-p-code; SETcc.zu/IMUL.zu add the zero-extension; PUSH2/POP2 become two PUSHes/POPs. CCMP/CTEST,
-CFCMOVcc, JMPABS, branches and RIP-relative operands are skipped.
+p-code; SETcc.zu/IMUL.zu add the zero-extension; PUSH2/POP2 become two PUSHes/POPs. CCMPcc/CTESTcc become
+a branch around the CMP/TEST whose false path loads OF SF ZF CF from dfv, PF from dfv.CF and clears AF
+(PUSHFQ/POPFQ; the reference's stack slot is not compared); CFCMOVcc becomes a branch around the move
+that zeroes the destination (or keeps src1 in the NDD form) on the false path, so a false condition
+never touches memory. JMPABS, branches and RIP-relative operands are skipped.
 
 ```sh
 clang -O2 -mapxf -fPIC -shared -o lib.so *.c
 ~/.local/share/difffuzz-venv/bin/python tools/difffuzz/apxcheck.py lib.so --unlace <unlace> --sleighpath specs
 ```
 
-On Lua 5.3 and zlib built with clang 22 and gcc 15 (`-O2 -mapxf`), 3131 of the 3272 distinct APX
-encodings were verified (at least one trial with in-range addresses) and none differed; replacing
-the NF ADD's sum with a difference in `apx_map4.sinc` makes the check report it.
+On Lua 5.3 and zlib built with clang 22 and gcc 15 (`-O2 -mapxf`), 3314 of the 3406 distinct APX
+encodings (CCMP/CTEST/CFCMOV included) were verified (at least one trial with in-range
+addresses) and none differed. A hand-written probe of every CCMP/CTEST condition, size, operand form
+and several dfv values, and every CFCMOVcc/CMOVcc NDD form and condition (928 encodings) verifies
+927 with no difference. Breaking the NF ADD, or the false-path PF of CCMP or the zeroing of CFCMOV,
+in a copy of `apx_map4.sinc` makes the check report it (122 and 360 mismatches).
+
+There is no reference for the AVX-512 or AVX10.2 lifts here: Unicorn and QEMU (11.0) have no
+AVX-512, and Intel SDE needs Intel's licence accepted to download.
+
+## x86-64 against this CPU (`--oracle native`)
+
+`--arch x86-64-native --oracle native` runs each case natively instead of under Unicorn: the QEMU
+harness of `qemu_backend.py` (prologue loading every register, the instruction at its lifted
+address, an epilogue that writes the registers and touched pages to stdout) gets an x86-64 form,
+`X86NativeHarness`, whose ELF is executed directly. YMM0-YMM15 are compared at 256 bits, and the
+generator draws mostly from the legacy SSE, VEX and x87 opcode spaces, which Unicorn's QEMU core
+leaves out (AVX2, FMA, F16C, AES/VAES, VPCLMULQDQ, GFNI, SHA, AVX-VNNI, BMI, ADX on a CPU that has
+them; an instruction this CPU lacks ends with SIGILL and counts as `ref-exception`). The p-code of
+most vector arithmetic is a user operation, so those cases are `unmodeled`; moves, shuffles, blends,
+scalar float arithmetic, integer and flag semantics are compared.
+
+```sh
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch x86-64-native --oracle native \
+    --count 1500 --seed 41 --unlace <unlace> --sleighpath specs
+```
+
+`tools/x86_avx512_sweep.py --enc EncVEX` / `--enc EncNormal` (with VEX or legacy `--predicates`) is the
+matching decode check against `llvm-objdump` for those encodings.
+
+### x87 (`--arch x86-64-x87`)
+
+`pcode_emu.py` computes every float op with an 80-bit operand or result exactly (`softfloat.py`:
+values decoded to fractions, one round-to-nearest-even into the destination format, subnormals
+included; an x87 unnormal or pseudo-NaN counts as a NaN operand, which is `unmodeled`).
+`--arch x86-64-x87 --oracle native` draws only the D8-DF escapes; the harness `FXRSTOR`s an image
+with control word 0x37F (64-bit precision, nearest, exceptions masked), ST0-ST6 holding random
+values (normal, integer, zero, infinity, denormal), ST7 empty and C0-C3 random, and `FXSAVE`s it
+after the instruction. ST0-ST7 (except a register the CPU tags empty) and C0-C3 are compared; a case
+where the CPU reports a stack fault (SF) is `undefined`. Not compared: C1 of the rounding
+instructions (the round-up indicator) and of FCOMI/FUCOMI(P) and FCMOVcc (cleared by the SDM, left
+unchanged by this CPU), ST0 of FPREM/FPREM1 and of the five constant loads (see
+`docs/spec/02-lift-and-flow.md`). FLDCW and the environment loads and stores are denied. The
+`x86-64-native` configuration loads no x87 state and compares none: natively an MMX write sets bits
+79:64 of its register to ones, which the MMX lifts leave alone.
+
+```sh
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch x86-64-x87 --oracle native \
+    --count 3000 --seed 7 --unlace <unlace> --sleighpath specs
+```

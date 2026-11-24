@@ -65,7 +65,7 @@ rebuild, then `mergecheck`. Regenerate `docs/options.md` from the freshly built 
 
 `binary_source: dataset` means `verify --promote` will REFUSE to vendor the acceptance into
 `tests/cli/`. Attempt 1 already added `tests/cli/direct-address-keyboard-handler.json` and
-`tests/stages/tailcallframe.xml` — confirm they actually run and actually assert something rather
+`tests/stages/tailcallframe.toml` — confirm they actually run and actually assert something rather
 than assuming they do.
 
 **There is no draft PR to undraft.** The implementation-mode preamble's `open_pr.sh --undraft` line

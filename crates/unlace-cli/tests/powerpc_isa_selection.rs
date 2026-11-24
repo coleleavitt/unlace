@@ -1,4 +1,5 @@
-//! A failed generic PowerPC decode explains the ISA override without guessing it.
+//! A failed generic PowerPC decode explains the ISA override without guessing it, and a
+//! little-endian ELFv2 image (POWER8 by its ABI) selects the Power ISA language itself.
 
 use crate::common;
 
@@ -131,18 +132,33 @@ fn generic_powerpc_failure_explains_the_explicit_isa_override() {
                 &bytes,
             )
             .unwrap();
-            // A big-endian image that declares ELFv2 takes the ELFv2 compiler spec.
-            let compiler = if name == "BE" && abi == 2 {
-                "elfv2"
+            // A big-endian image that declares ELFv2 takes the ELFv2 compiler spec; a little-endian
+            // one that does not declare ELFv1 takes the Power ISA language.
+            let isa_default = name == "LE" && abi != 1;
+            let selected = if isa_default {
+                format!("{alternate}:default")
+            } else if name == "BE" && abi == 2 {
+                format!("{generic}:elfv2")
             } else {
-                "default"
+                format!("{generic}:default")
             };
-            assert_eq!(
-                loader.get_arch_type(),
-                format!("{generic}:{compiler}").as_bytes()
-            );
+            assert_eq!(loader.get_arch_type(), selected.as_bytes());
             std::fs::write(&path, bytes).unwrap();
-            for options in [vec![], vec!["--target", generic.as_str()], vec!["--json"]] {
+            if isa_default {
+                for options in [vec![], vec!["--json"]] {
+                    let output = decompile(&path, "select_value", &options);
+                    assert!(
+                        !output.contains("halt_") && !output.contains("isel encoding"),
+                        "{output}"
+                    );
+                }
+            }
+            let generic_runs: Vec<Vec<&str>> = if isa_default {
+                vec![vec!["--target", generic.as_str()]]
+            } else {
+                vec![vec![], vec!["--target", generic.as_str()], vec!["--json"]]
+            };
+            for options in generic_runs {
                 let output = decompile(&path, "select_value", &options);
                 assert!(output.contains("halt_baddata"), "{output}");
                 assert!(output.contains("isel encoding"), "{output}");

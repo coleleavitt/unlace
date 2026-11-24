@@ -7,13 +7,24 @@ SLEIGH processor module for 64-bit Linux on IBM Z. Language id
 
 - The general instructions of the z/Architecture through the z15 facilities:
   RR, RRE, RRF, RX, RXY, RS, RSY, RI, RIL, RIE, RIS, RRS, SI, SIY, SIL and SS
-  formats.
+  formats, including the high-word facility, the z14 multiply-with-CC and z15
+  logical-with-complement instructions, compare double and swap and the
+  quadword pair loads and stores.
 - Binary floating point on `f0`-`f15`: short and long, and extended values in
-  the register pairs `fN`:`fN+2`.
+  the register pairs `fN`:`fN+2`, including `TEST DATA CLASS`.
+
+The encodings of the high-word, z14/z15, pair and test-data-class rows were
+taken from the binutils `s390-opc.txt` table (opcode and format only), and
+`tools/difffuzz --arch s390x --oracle qemu` checks the p-code against
+`qemu-s390x -cpu max`.
 - The s390x ELF ABI in `s390x.cspec`.
 
-Not yet modelled: the vector facility (every `E7` opcode), hexadecimal and
-decimal floating point, packed decimal, and the privileged instructions. An
+- The vector facility (opcodes `E7` and `E6`, through vector-enhancements 3 and the
+  vector packed-decimal facilities), written by `gen_vector.py` into `s390x_vector.sinc`
+  (below).
+
+Not yet modelled: hexadecimal and decimal floating point (except `lde`/`lder`,
+which LLVM uses to load a float), and the privileged instructions. An
 instruction outside the module does not decode.
 
 ## How the files are produced
@@ -25,6 +36,34 @@ files, which are committed:
 python3 gen_sinc.py data/languages
 slacomp data/languages/s390x.slaspec
 ```
+
+## The vector facility
+
+`vector_insts.json` lists every non-pseudo `E6`/`E7` instruction of LLVM's SystemZ target
+(mnemonic, operands, and the 48 encoding bits), extracted from the TableGen records of LLVM
+release/22.x (Apache-2.0 with LLVM exceptions) with
+`llvm-tblgen -dump-json -I llvm/include -I llvm/lib/Target/SystemZ SystemZ.td` and
+`python3 gen_vector.py --extract dump.json`. `gen_vector.py data/languages` writes
+`s390x_vector.sinc` and `vector_fields.txt` (the token fields it uses), which
+`gen_sinc.py` adds to the 48-bit token, so run it first. `v0`-`v31` are the vector
+registers; `f0`-`f31` and `f0s`-`f31s` name the leftmost doubleword and word, which the
+scalar (W) forms read and write. A register field is four bits plus its RXB bit.
+
+Exact p-code: moves, inserts and extracts (`vlr`, `vlvg*`, `vlgv*`, `vlvgp`, `vgbm`,
+`vzero`/`vone`, `vrep*`, `vgm*`, `vmrh*`/`vmrl*`, `vpdi`, `vsel`, `vpk*`, `vup*`), the
+logical operations, lane add/subtract/multiply-low/min/max/complement/positive, the element
+compares with their condition code, the element and whole-register shifts and rotates, the
+loads and stores (`vl`, `vst`, `vlrep*`, `vle*`, `vste*`, `vlei*`, `vllez*`, and the
+z15 element-reversed and byte-reversed forms), and binary floating point: add, subtract,
+multiply, divide, square root, multiply-and-add (rounded twice), sign operations,
+compares (`wfc`/`wfk` set the condition code), `vftci`/`wftci`, lengthening and
+rounding conversions, the integer conversions, and `vfi`/`wfi` for rounding modes 1, 5,
+6 and 7 (6 and 7 only for the vector forms). An integer-to-float conversion rounds to
+nearest whatever its mode; a float-to-integer conversion is exact for modes 1, 5, 6 and 7
+and a user operation otherwise. Every other instruction (string search, Galois-field and
+multiply-high forms, checksums, packed decimal, NNPA, `vfmax`/`vfmin`, gathers and
+scatters, `vlm`/`vstm`, ...) is a user operation `vec_<mnemonic>` over its operands, with
+`vec_<mnemonic>_cc` for its condition code.
 
 ## The condition code
 

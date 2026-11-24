@@ -1166,30 +1166,36 @@
 }
 :LZCNT Reg16, rm16 is $(APX_MAP4) & apxND=0 & apxNF=0 & $(APX_PP_V) & opsize=0 & byte=0xF5; Reg16 ... & rm16 {
 
-  Reg16 = lzcount(rm16);
-  lzcntflags(rm16, Reg16);
+  local src = rm16;
+  Reg16 = lzcount(src);
+  lzcntflags(src, Reg16);
 }
 :LZCNT^".NF" Reg16, rm16 is $(APX_MAP4) & apxND=0 & apxNF=1 & $(APX_PP_V) & opsize=0 & byte=0xF5; Reg16 ... & rm16 {
 
-  Reg16 = lzcount(rm16);
+  local src = rm16;
+  Reg16 = lzcount(src);
 }
 :LZCNT Reg32, rm32 is $(APX_MAP4) & apxND=0 & apxNF=0 & $(APX_PP_V) & opsize=1 & byte=0xF5; Reg32 ... & check_Reg32_dest ... & rm32 {
 
-  Reg32 = lzcount(rm32);
-  lzcntflags(rm32, Reg32);
+  local src = rm32;
+  Reg32 = lzcount(src);
+  lzcntflags(src, Reg32);
   build check_Reg32_dest;
 }
 :LZCNT^".NF" Reg32, rm32 is $(APX_MAP4) & apxND=0 & apxNF=1 & $(APX_PP_V) & opsize=1 & byte=0xF5; Reg32 ... & check_Reg32_dest ... & rm32 {
 
-  Reg32 = lzcount(rm32);
+  local src = rm32;
+  Reg32 = lzcount(src);
   build check_Reg32_dest;
 }
 :LZCNT Reg64, rm64 is $(LONGMODE_ON) & $(APX_MAP4) & apxND=0 & apxNF=0 & $(APX_PP_V) & opsize=2 & byte=0xF5; Reg64 ... & rm64 {
 
-  Reg64 = lzcount(rm64);
-  lzcntflags(rm64, Reg64);
+  local src = rm64;
+  Reg64 = lzcount(src);
+  lzcntflags(src, Reg64);
 }
 :LZCNT^".NF" Reg64, rm64 is $(LONGMODE_ON) & $(APX_MAP4) & apxND=0 & apxNF=1 & $(APX_PP_V) & opsize=2 & byte=0xF5; Reg64 ... & rm64 {
 
-  Reg64 = lzcount(rm64);
+  local src = rm64;
+  Reg64 = lzcount(src);
 }

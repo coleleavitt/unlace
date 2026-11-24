@@ -25,6 +25,7 @@ HEAD), then the stage parity gate:
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import re
 import subprocess
@@ -352,6 +353,25 @@ def check_round_trip(m: dict, text: str) -> None:
 
 # --- references and the baseline -------------------------------------------------------------
 
+# Files whose mentions of a stage test are text (fixture provenance and sources, golden records,
+# CLI test notes, the option catalog's prose): the conversion rewrites them instead of keeping the
+# test XML. phases.toml's prose is captured verbatim in phase_catalog.json, so both change together.
+TEXT_REFS = (
+    "tests/golden/snapshot-manifest.json",
+    "tests/golden/vectors/lift/*.txt",
+    "tests/cli/*.json",
+    "crates/*/tests/fixtures/*",
+    "crates/unlace-decomp/phases.toml",
+)
+TEXT_REF_CODE = (".py", ".rs")
+
+
+def text_ref(rel: str) -> bool:
+    if rel.endswith(TEXT_REF_CODE):
+        return False
+    return any(fnmatch.fnmatch(rel, g) for g in TEXT_REFS)
+
+
 def tracked_files() -> list[str]:
     out = subprocess.run(["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True)
     return out.stdout.splitlines()
@@ -366,7 +386,7 @@ def references(stems: set[str]) -> dict[str, list[str]]:
     hits: dict[str, list[str]] = {}
     rx = re.compile(r"(?<![\w.-])([\w.+-]+)\.xml\b")
     for rel in tracked_files():
-        if rel.endswith(".md") or rel.startswith(("tests/stages/", "docs/")):
+        if rel.endswith(".md") or rel.startswith(("tests/stages/", "docs/")) or text_ref(rel):
             continue
         p = ROOT / rel
         try:
@@ -387,7 +407,7 @@ def references(stems: set[str]) -> dict[str, list[str]]:
 def rewrite_references(stems: set[str]) -> list[str]:
     changed = []
     for rel in tracked_files():
-        if not (rel.endswith(".md") or rel.endswith(".rs")):
+        if not (rel.endswith(".md") or rel.endswith(".rs") or text_ref(rel)):
             continue
         p = ROOT / rel
         try:
@@ -407,7 +427,7 @@ def rewrite_references(stems: set[str]) -> list[str]:
                             for l in text.split("\n"))
         else:
             new = path_sub(text)
-            if p == README:
+            if p == README or text_ref(rel):
                 new = re.sub(r"(?<![\w.+/-])([\w.+-]+)\.xml\b",
                              lambda mm: mm.group(1) + ".toml" if mm.group(1) in stems else mm.group(0), new)
         if new != text:
@@ -476,9 +496,9 @@ def convert(paths: list[Path]) -> None:
         p.with_suffix(".toml").write_text(text, encoding="utf-8")
         converted.append(p)
     names = {p.with_suffix(".toml").name for p in converted}
-    dropped = drop_from_baseline(keys_of(names))
     for p in converted:
         subprocess.run(["git", "rm", "-q", str(p.relative_to(ROOT))], cwd=ROOT, check=True)
+    dropped = drop_from_baseline(keys_of(names))
     subprocess.run(["git", "add", "--"] + [str(p.with_suffix(".toml").relative_to(ROOT)) for p in converted],
                    cwd=ROOT, check=True)
     changed = rewrite_references({p.stem for p in converted})

@@ -3547,7 +3547,7 @@ outcome reaches. A `CALLOTHER` is inserted after the merge block's
 no-overflow outcome, a threshold that is not `(2^W - 1) / c`, or a guard over
 other factors is left alone.
 
-**alloca** (kuna) — `crates/unlace-bandb-base/src/p3_dataflow/kuna_alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/kuna-alloca.toml`.
+**alloca** (kuna) — `crates/unlace-bandb-base/src/p3_dataflow/kuna_alloca.rs (RuleAlloca, RuleAllocaProbe, rewrite_raw)`, group `analysis`, live gate `alloca_calls` (`option alloca`, default on). A dynamic stack allocation becomes `alloca(size)` (builtin `BUILTIN_ALLOCA`, output typed `void *`). At `ActionStart`, before heritage, `sp = sp - reg` (directly, or through the temporary SLEIGH stages it in) becomes `sp = alloca(reg)`, unless the same block loaded the register as a constant: `mov eax,N; call __chkstk; sub rsp,rax` is a fixed frame. Rewriting the raw op gives the stack pointer one definition that later rules cannot duplicate. `RuleAlloca` then takes the size back to the `n` the source wrote when it is the round-up `(n + c) & -a` (`a` from 4 to 64, `c` below 64, also as `>> k << k`, through the zero extension a 32-bit `and` adds) or the stack-clash remainder `(n + c) & (p - a)`. It also rewrites an `INT_ADD` of a stack-pointer value (the entry stack pointer, or an earlier `alloca` result, plus constants) and the negation of a non-constant rounded size, which is how clang computes the new stack pointer in another register first, and it drops the realignment `(alloca(n) + c) & -a` of the result. It leaves that `INT_ADD` alone when its result meets another stack-derived pointer in a `MULTIEQUAL` (`p = n > k ? alloca(n) : buf`), because the frame array `buf` is laid out from the stack arithmetic the merge sees. Under stack-clash protection the page part is taken by a probe loop guarded by `sp == limit`. `RuleAllocaProbe` removes each probe, a store back of the word the same instruction just loaded from the same stack-derived address (`or qword [rsp+0xff8],0`, `xor qword [rsp],0`). A load and a store from two instructions are not a probe: another store can change the slot between them, so the second store restores an earlier value. CPython's `r = []; ...; return r` lost its return value this way, because `STORE_FAST r` pops the slot that `LOAD_FAST r` later pushes back into. It also pins a guard that compares a stack pointer with the loop's limit (an `alloca` result, or the stack pointer less the page part) to the successor that does not test the limit again, which makes the loop unreachable. The stack arguments an i386 caller pushes after the allocation stay unrecovered, as before, because the stack model has one frame base and after the allocation the stack pointer is not that base plus a constant. Exercised by `tests/stages/kuna-alloca.toml`.
 
 **cancelbytearithmetic** (repipe `cancelling-byte-arithmetic-splits`) —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_cancelbytearithmetic.rs`
@@ -3898,10 +3898,22 @@ parameter's 48-bit test stays. *Rewrite:* the
 compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
 unboxing dies. Exact, so always on.
 
+**maskjoin** —
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_maskjoin.rs (RuleMaskJoin)`, oppool1, fires on
+`INT_ADD`, `INT_OR` and `INT_XOR`. *Pattern:* both inputs are `INT_AND`s of one non-constant
+value `x` (through `COPY`s) with constants `m1` and `m2` that share no bit, at a width of at
+most eight bytes. The masked values then share no set bit, so the sum, the or and the exclusive
+or are the same value. *Rewrite:* the op becomes `COPY x` when `m1 | m2` covers every bit of
+`x`, else `INT_AND x, m1 | m2`. ARM's `vmov d0, r0, r1` lifts as
+`(zext(r1) << 32) + zext(r0)`; after a call returning a `double` in r0:r1 its halves simplify to
+`v & 0xffffffff00000000` and `v & 0xffffffff`, and the move printed as two masked halves of a
+union cast instead of `v`. An identity, so always on.
+
 **satconvert** —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_satconvert.rs (RuleSatConvert)`, oppool1, fires
 on `MULTIEQUAL`, option `satconvert` (default on). *Pattern:* the outermost of three two-input
-joins, each taking a constant on one out-edge of its immediate dominator's branch (the select
+joins, each taking a constant (through the `COPY` that writes it, since a `MULTIEQUAL` never
+reads a constant) on one out-edge of its immediate dominator's branch (the select
 test `pow2select` uses), whose innermost input is `FLOAT_TRUNC(x)` at the join's width or the
 low word of a 64-bit one. The branches test `x` against float constants or `NAN(x)`. This is how
 `riscv.fd.sinc` lifts an `rtz` `fcvt.w*`/`fcvt.l*`. *Proof:* the ladder is evaluated at NaN,
@@ -4732,10 +4744,11 @@ each leaf takes a value hashed from its varnode, the same for every spelling
 and leaf order) and refuses a tree whose fingerprint it has seen, until the
 next function. A rewrite that removes a bitwise op always stands; the
 arithmetic core rules add none back, so those cannot cycle either. The result agrees with the tree on 64
-pseudo-random full-width inputs, agrees on every input at the widest width
-(at most 8 bits) where the leaves take at most `2^16` combinations, and is not
-refuted by `mba`'s bit-serial proof, which runs for at most three leaves and
-proves equality at the full width when it finishes. Truncation to a narrower
+pseudo-random full-width inputs, and is either proven equal at the full width
+by `mba`'s bit-serial proof (run for at most three leaves) or, when the proof
+does not run or gives up, agrees on every input at the widest width (at most
+8 bits) where the leaves take at most `2^12` combinations; a refutation rejects
+it. Truncation to a narrower
 width commutes with every op of the tree, so the small-width check is a
 necessary condition. Equality itself follows from the rules being identities;
 the checks guard the lowering into and out of the e-graph. A unit test
@@ -4787,7 +4800,10 @@ finds nothing more) or if the tree has fewer than three bitwise ops; otherwise
 the second round continues on the same e-graph up to 4000 e-nodes and 12
 iterations. A tree with a single bitwise op gets no e-graph at all: it has no
 MBA identity to compose, and only `mba`'s closed form of the whole tree is
-tried.
+tried. A subterm is seeded with `mba`'s closed form only when it has
+at least two bitwise ops. A tree the rule has already regrouped once in the
+function goes into saturation with the bitwise-op cap, so a regrouping
+extraction is rejected before any evaluation.
 
 Example: `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, one substitution
 applied to the result of another, becomes `(x | y) + z`: the seed folds the

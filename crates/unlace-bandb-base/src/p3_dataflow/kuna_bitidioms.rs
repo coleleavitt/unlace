@@ -538,10 +538,18 @@ impl Rule for RuleIntAbs {
         } else {
             return 0;
         };
-        let size = data.vbank().get(out).map_or(0, |v| v.get_size());
-        if !matches!(size, 1 | 2 | 4 | 8) {
+        // A MULTIEQUAL whose readers already moved to an abs call (one dead
+        // code cannot remove, or one that reads itself) would take a new call
+        // on every pass of the pool.
+        if x == out || data.vbank().get(out).is_none_or(|v| v.has_no_descend()) {
             return 0;
         }
+        let size = data.vbank().get(out).map_or(0, |v| v.get_size());
+        let builtin = match size {
+            4 => BUILTIN_ABS,
+            8 => BUILTIN_LABS,
+            _ => return 0,
+        };
         // Which branch outcome reaches each MULTIEQUAL slot.
         let blocks = data.bblocks_ref();
         let m = blocks.block(merge);
@@ -624,11 +632,6 @@ impl Rule for RuleIntAbs {
         let Some(addr) = addr else { return 0 };
         let call = data.new_op(2, addr);
         data.op_set_opcode_code(call, OpCode::CPUI_CALLOTHER);
-        let builtin = match size {
-            4 => BUILTIN_ABS,
-            8 => BUILTIN_LABS,
-            _ => return 0,
-        };
         let id = data.new_constant(4, builtin as uintb);
         if data.op_set_input(call, id, 0).is_err() || data.op_set_input(call, x, 1).is_err() {
             return 0;

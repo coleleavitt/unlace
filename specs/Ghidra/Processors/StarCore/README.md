@@ -36,32 +36,48 @@ its DALU or AGU position as the manual's table describes.
 
 ## What is modelled
 
-- Decode and listing of the 421 instruction forms the manual's tables define
+- Decode and listing of the 459 instruction forms the manual's tables define
   (each register-size variant of a form counted separately); register pairs and
   quads, effective-address modes with their post-updates, immediates (one's
   complement `~` fields too), PC-relative and absolute targets.
-- p-code for 206 forms: moves between memory and registers (`.B/.W/.L`, signed
+- p-code for 246 forms: moves between memory and registers (`.B/.W/.L`, signed
   and `MOVEU`, every addressing mode), immediate moves, `TFR`, `TFRA`,
   `TFRT`/`TFRF`, `ADD`, `SUB`, `ADDA`, `SUBA`, `AND`, `OR`, `EOR`, `IMPY`,
   shifts, `NEG`, `NOT`, `ABS`, `INC`, sign and zero extension, the compare and
   test instructions (T bit), `BRA`, `BT`, `BF`, `BSR`, `JMP`, `JSR`, `JT`, `JF`,
-  `RTS`, `RTE` and their delayed forms, `NOP`.
+  `RTS`, `RTE` and their delayed forms, `NOP`, and the hardware loops: `DOSETUPn`, `DOENn`,
+  `DOENSHn`, `SKIPLS`, `BREAK`, `CONT`, `CONTD` and the prefix loop marks (below).
+
+## Hardware loops
+
+`DOSETUPn` records the loop start and `DOENn`/`DOENSHn` the enabled loops (the highest one is
+active) and the short-loop flag in flowing context. The `LPMARKA`/`LPMARKB` bits of a prefix end
+an iteration where the manual places them: `LPMARKA` on the last set of a long loop or on a
+one-set short loop, `LPMARKB` two sets before the last of a long loop or on the first set of a
+two-set short loop (carried forward in context to the set that ends the iteration). After that
+set, while `LCn > 1` it counts down and branches to the start, otherwise `LCn` is cleared and the
+loop's enable bit is cleared for the code that follows. `SKIPLS` branches when the active `LCn`
+is zero or less. `CONT`/`CONTD`, under their set's condition, branch to their label when
+the active `LCn` is one or less (clearing it) and back to the loop start otherwise, `CONTD`
+after its delay slot.
 
 ## Gaps
 
-- 112 named user operations: fractional multiply and MAC (`MPY`, `MAC`, `MACR`, ...),
+- 111 named user operations: fractional multiply and MAC (`MPY`, `MAC`, `MACR`, ...),
   the 16-bit pair, Viterbi and BMU bit-mask instructions, `DIV`, bit-field
   `EXTRACT`/`INSERT`, the multi-register moves (`.2W`, `.2L`, `.4W`, `.4F`),
-  fractional moves with scaling, hardware loops (`DOEN`, `DOSETUP`, `SKIPLS`,
-  `BREAK`, `CONT`, loop marks), `PUSH`/`POP`, interrupt and debug control.
+  fractional moves with scaling, `PUSH`/`POP`, interrupt and debug control, and `sc_active_lc` for `SKIPLS`
+  where no enabled loop is known.
+- A set that carries both loop marks (an inner and an outer loop ending together) only ends
+  the inner one; a loop set up in another function, or through `SR`/`LCn`/`SAn` moves, is not
+  seen.
 - Data registers are 64-bit in p-code; the 40-bit width, the extension byte,
   saturation and the scaling mode are not modelled.
 - Effective-address post-updates happen when the address is formed, not at the
   end of the set.
 - `DECA`, `INCA`, the `CLR`/`ASL` aliases and other assembler-mapped forms list
-  as the instruction they map to; `BREAK`, `SKIPLS`, `DOENn`, `DOENSHn`,
-  `DOSETUPn` and the two `AND` immediate forms with a `{u16}` half are not
-  decoded.
+  as the instruction they map to; the two `AND` immediate forms with a `{u16}`
+  half are not decoded.
 - Serial grouping is decoded by trying multi-word forms before one-word forms
   where both match the first word.
 
@@ -71,5 +87,7 @@ There is no public assembler or disassembler for the SC140. The decoder was
 checked for self-consistency: every form of every table, filled with random
 field values, was encoded and listed back (1,021 of 1,095 list as the same
 mnemonic; the rest are assembler-mapped aliases that list as the instruction they
-map to, and the undecoded loop forms above). The CLI test images were assembled
-by hand from the manual's tables.
+map to, and the loop forms, which were not decoded then). The loop forms added
+since (`DOSETUPn`, `DOENn` and `DOENSHn` in their `#u6`, `#u16` and register forms, `SKIPLS`,
+`BREAK`) were checked on hand-encoded words, and random images list as before apart from sets
+that contain them. The CLI test images were assembled by hand from the manual's tables.

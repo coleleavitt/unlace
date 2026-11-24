@@ -4202,6 +4202,15 @@ impl Funcdata {
         }
     }
 
+    /// The ops of basic block `bl` in order, read through the op links as the
+    /// walk goes: [`Self::bb_ops`] without the `Vec`, for a reader that may
+    /// stop early and does not change the block.
+    pub fn bb_ops_iter(&self, bl: BlockId) -> impl Iterator<Item = OpId> + '_ {
+        std::iter::successors(self.bb_op_head(bl), move |&op| {
+            self.obank.get(op).expect("bb_ops").basic_neighbours().1
+        })
+    }
+
     /// Iterate the ops of basic block `bl` in list order (head..tail).
     pub fn bb_ops(&self, bl: BlockId) -> Vec<OpId> {
         let mut out = Vec::with_capacity(self.bb_op_len(bl));
@@ -4220,7 +4229,7 @@ impl Funcdata {
     /// directly into the switch does not strand a visible statement).
     pub fn block_no_intervening_statement(&self, bl: BlockId) -> bool {
         use crate::op::pcodeop_flags;
-        for bop in self.bb_ops(bl) {
+        for bop in self.bb_ops_iter(bl) {
             let o = match self.obank().get(bop) {
                 Some(o) => o,
                 None => continue,
@@ -4258,14 +4267,11 @@ impl Funcdata {
                 return false;
             }
             // Every use of the output must be inside this same block.
-            let descend: Vec<OpId> = self
-                .vbank()
-                .get(outvn)
-                .map(|v| v.descend_iter().collect())
-                .unwrap_or_default();
-            for dop in descend {
-                if self.obank().get(dop).and_then(|d| d.get_parent()) != Some(bl) {
-                    return false;
+            if let Some(v) = self.vbank().get(outvn) {
+                for dop in v.descend_iter() {
+                    if self.obank().get(dop).and_then(|d| d.get_parent()) != Some(bl) {
+                        return false;
+                    }
                 }
             }
         }

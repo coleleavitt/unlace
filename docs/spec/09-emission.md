@@ -1724,8 +1724,8 @@ prints the null statement `;` on its own line. A label followed by another
 label, a statement, or a nested block is untouched, so output that was already
 valid does not change. The Rust back-end (§9.6) needs no counterpart: it prints
 labels as comments and an empty arm as `N => { }`. The ARM and x86-64 shapes are
-pinned by `tests/stages/kuna-labelstmt-arm.xml` and
-`tests/stages/kuna-labelstmt-x64.xml`, and the unlace-cli round trip
+pinned by `tests/stages/kuna-labelstmt-arm.toml` and
+`tests/stages/kuna-labelstmt-x64.toml`, and the unlace-cli round trip
 `emitted_label_statements.rs` compiles the printed functions with
 `-std=c11 -pedantic-errors` and checks that they behave like their source.
 
@@ -3123,7 +3123,10 @@ rewritten name joins arguments with `, ` and closes nested lists as `>>`. A name
 more than 32 levels deep, longer than 4 KiB, or with unbalanced brackets is
 printed as it is. The namespaces printed in front of a declared or called
 function lose an inline namespace after `std` too
-(`kuna_cppshortnames.rs (short_scopes)`). A scope keeps `basic_string`,
+(`kuna_cppshortnames.rs (short_scopes)`), and so does a function name that
+carries its whole demangled path, as every name of a standalone load does
+(`std::__cxx11::basic_string::_M_append` prints
+`std::basic_string::_M_append`; `kuna_cppshortnames.rs (function_name)`). A scope keeps `basic_string`,
 because the demangled symbol name no longer has the template arguments that
 would tell `std::string` from `std::wstring`.
 
@@ -5840,7 +5843,14 @@ already `0` or `1` (`cond_is_boolean`): a `BlockCondition` chain, or a leaf whos
 `truthycond` render does not print as a bare operand (`x != 0` printed as `x`).
 
 After that statement loop, the same option folds the trailing run of each sequence
-built from a `BlockList` (`fold_return_run`). The tail is a leaf that
+built from a `BlockList` or a `BlockGraph` (`fold_return_run`; in a graph each folded `if`
+must fall through to the next statement, its one out edge going to that statement's
+block, `falls_to`), and, before the sequences, each `if`/`else` without goto whose two
+arms are each a run value (a leaf `return_term` accepts or a `folded_return`) into one
+`return` joined the way `combine_return` joins a guard and the rest of a run
+(`fold_return_ite`: `if (c) { ...run... } else return 0;` becomes `return c && ...;`).
+The function body's root is usually a `BlockGraph`, so top-level runs need the graph
+case. The tail is a leaf that
 `return_term` accepts: one `RETURN` of an integer or boolean type whose value is
 the constant `0` or `1` (directly or through an implied `COPY`), or a value
 defined by an op with a boolean output (through `COPY` and `INT_ZEXT`) that binds

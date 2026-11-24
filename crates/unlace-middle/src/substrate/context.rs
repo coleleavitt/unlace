@@ -905,7 +905,7 @@ pub struct ArchContext {
     /// [`crate::p4_calls::kuna_armfloatreturn::helper_model`].
     pub arm_base_model: Option<Rc<crate::fspec::ProtoModel>>,
     /// (kuna) The core-register (soft-float) model a declared AEABI helper
-    /// prototype is laid out under while `armfloatreturn` applies.  Read by
+    /// prototype is laid out under on every 32-bit ARM image (RTABI32 3.1).  Read by
     /// [`crate::p4_calls::kuna_armfloatreturn::declared_helper_model`].
     pub arm_helper_model: Option<Rc<crate::fspec::ProtoModel>>,
     /// What the image says about floating-point arguments (`Some(false)`: they

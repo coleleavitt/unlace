@@ -117,6 +117,7 @@ pub mod kuna_aifcorroborate;
 pub mod kuna_aifnoppad;
 mod kuna_aifpoolslide;
 pub mod kuna_aifstrict;
+pub(crate) mod kuna_aifstringveto;
 mod kuna_armprologue;
 pub(crate) mod kuna_entrychecks;
 mod kuna_framecache;

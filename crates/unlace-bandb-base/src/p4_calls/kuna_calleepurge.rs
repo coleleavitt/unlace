@@ -732,12 +732,19 @@ fn widen(old: Option<Val>, joined: Option<Val>, is_sp: bool) -> Option<Val> {
 }
 
 /// The walk's state at an instruction boundary: each general register's value
-/// (`None`, not a stack address), and (`calleeargs`) the general registers
+/// (`None`, not a stack address), (`calleeargs`) the general registers
 /// ([`State::lost`]) and the stack slots below the return address
-/// ([`slot_bit`]) that may hold a stack address the walk no longer places.
+/// ([`slot_bit`]) that may hold a stack address the walk no longer places,
+/// and (`calleeargsmsvc`) the frame slot an MSVC EH prologue saved the exact
+/// stack pointer in, with that value (`mov [ebp-0x10],esp`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[doc(hidden)]
-pub struct State(pub [Option<Val>; 8], pub u8, pub u64);
+pub struct State(
+    pub [Option<Val>; 8],
+    pub u8,
+    pub u64,
+    pub Option<(i64, i64)>,
+);
 
 impl State {
     #[doc(hidden)]
@@ -745,7 +752,7 @@ impl State {
         let mut r = [None; 8];
         r[SP] = Some(Val::exact(0));
         r[BP] = Some(Val::CallerFrame);
-        State(r, 0, 0)
+        State(r, 0, 0, None)
     }
 
     fn join(&self, other: &State) -> State {
@@ -753,7 +760,12 @@ impl State {
         for (i, v) in r.iter_mut().enumerate() {
             *v = widen(self.0[i], join(self.0[i], other.0[i]), i == SP);
         }
-        State(r, self.1 | other.1, self.2 | other.2)
+        State(
+            r,
+            self.1 | other.1,
+            self.2 | other.2,
+            self.3.filter(|_| self.3 == other.3),
+        )
     }
 
     /// Does general register `r` hold a stack address the walk lost?
@@ -919,6 +931,63 @@ fn scrambles(regs: &Regs, ins: &[VarnodeData], vals: &[Option<Val>]) -> bool {
         && konst(&ins[1]).is_none()
 }
 
+/// (`calleeargsmsvc`) Follow the stack pointer an MSVC EH frame saves for
+/// its catch funclets (`mov [ebp-0x10],esp` after the prologue's pushes).
+/// The function's own code leaves the stack pointer back at that value when it
+/// unlinks the SEH registration in its epilogue (`mov fs:[0],ecx`), so a
+/// stack pointer that calls the walk cannot read left only bounded is placed
+/// there again, and the pops after it (the cookie slot, the callee-saved
+/// registers) read the slots the prologue wrote. A later store to the saved
+/// slot forgets it. A call the walk cannot read that is made with the stack
+/// pointer at the saved value (only its return address pushed) takes no stack
+/// argument, so it pops none and the stack pointer stays there (`walk`).
+fn msvc_saved_sp(
+    state: &mut State,
+    regs: &Regs,
+    ins: &[VarnodeData],
+    at: Option<Val>,
+    value: Option<Val>,
+    size: u32,
+    fs_temps: &[u64],
+) {
+    let slot = at.and_then(Val::as_exact);
+    let sp = state.0[SP].and_then(Val::as_exact);
+    let saves_sp = size == 4 && sp.is_some() && value.and_then(Val::as_exact) == sp;
+    if saves_sp && !slot.is_some_and(|o| o < 0) {
+        trace(|| format!("msvc: esp {sp:?} stored to {at:?}, not a frame slot"));
+    } else if saves_sp {
+        if let (Some(o), Some(v)) = (slot, value.and_then(Val::as_exact)) {
+            trace(|| format!("msvc: saved esp {v:#x} in slot {o:#x}"));
+            state.3 = Some((o, v));
+            return;
+        }
+    }
+    if let (Some((o, _)), Some(w)) = (state.3, slot) {
+        if w < o + 4 && o < w + size as i64 {
+            trace(|| format!("msvc: saved esp slot {o:#x} overwritten"));
+            state.3 = None;
+            return;
+        }
+    }
+    let unlinks = ins.get(1).is_some_and(|a| from_fs(a, regs, fs_temps))
+        && !matches!(value, Some(Val::Stack { .. }));
+    if unlinks {
+        trace(|| {
+            format!(
+                "msvc: seh unlink, esp {:?}, saved {:?}",
+                state.0[SP], state.3
+            )
+        });
+    }
+    if let (true, Some((_, saved))) = (unlinks, state.3) {
+        if let Some(Val::Stack { lo, hi, own: false }) = state.0[SP] {
+            if lo <= saved && saved <= hi && lo != hi {
+                state.0[SP] = Some(Val::exact(saved));
+            }
+        }
+    }
+}
+
 fn saved_bit(r: usize) -> u8 {
     CALLEE_SAVED
         .iter()
@@ -1066,6 +1135,9 @@ pub fn step_with(
                     && matches!(value, Some(Val::Stack { hi, .. }) if hi < 0);
                 touch(at, size, &mut s.arg_end, &mut s.unplaced);
                 escape(value, &mut s.unplaced);
+                if regs.fs.is_some() {
+                    msvc_saved_sp(&mut s.state, regs, ins, at, value, size, &fs_temps);
+                }
                 if track {
                     s.unplaced |= lost_at(1);
                     let carries = value.is_some() || lost_at(2);
@@ -1410,7 +1482,16 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
             match effect.effect {
                 Effect::Balanced(ep) => s.state.0[SP] = Some(sp.shift(ep as i64)),
                 Effect::NoReturn => s.falls_through = false,
-                Effect::Unknown => s.state.0[SP] = Some(after_unread_call(sp)),
+                Effect::Unknown => {
+                    s.state.0[SP] = Some(match s.state.3 {
+                        Some((_, saved))
+                            if regs.fs.is_some() && sp.as_exact() == Some(saved - 4) =>
+                        {
+                            Val::exact(saved)
+                        }
+                        _ => after_unread_call(sp),
+                    })
+                }
                 Effect::Unbalanced => {
                     s.state.0[SP] = Some(Val::Opaque { own: false });
                     writes |= effect.writes;

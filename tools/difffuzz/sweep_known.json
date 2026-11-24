@@ -1,0 +1,9 @@
+{
+ "riscv64v/qemu": {
+  "_why": "riscv.rvv.sinc lifts vector instructions to user operations and, like the scalar F/D lift, leaves the accrued flags out: FP vector ops do not write fflags (fcsr) and fixed-point ops do not write vxsat (docs/difffuzz.md, RISC-V vector).",
+  "missing-output": [
+   "fcsr",
+   "vxsat"
+  ]
+ }
+}

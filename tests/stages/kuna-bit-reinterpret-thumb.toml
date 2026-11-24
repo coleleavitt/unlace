@@ -1,0 +1,63 @@
+# Synthetic GCC -O2 code from the union transfers and numeric casts in
+# the corresponding CLI runtime test. bits32 flips the sign bit; the other
+# transfers preserve the input bits. No external binary is required.
+
+[image]
+arch = 'ARM:LE:32:v8:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'bits32' },
+    { space = 'ram', offset = '0x100c', name = 'unbits32' },
+    { space = 'ram', offset = '0x1018', name = 'bits64' },
+    { space = 'ram', offset = '0x1020', name = 'unbits64' },
+    { space = 'ram', offset = '0x1028', name = 'numeric32' },
+    { space = 'ram', offset = '0x1034', name = 'trunc32' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '00f1004300ee103a704700bf82b08ded010a019802b0704741ec100b704700bf51ec100b704700bf00ee100ab8eec00a704700bffdeec07a17ee900a704700bf08b5fff7feff41ec100b08bd08b551ec100bfff7feff08bd'
+
+[script]
+commands = [
+    'set context TMode 1 [ram,0x1000] [ram,0x1100]',
+    'parse line extern float4 bits32(uint4 x);',
+    'parse line extern uint4 unbits32(float4 x);',
+    'parse line extern float8 bits64(uint8 x);',
+    'parse line extern uint8 unbits64(float8 x);',
+    'parse line extern float4 numeric32(int4 x);',
+    'parse line extern int4 trunc32(float4 x);',
+    'load function bits32',
+    'decompile',
+    'print C',
+    'load function unbits32',
+    'decompile',
+    'print C',
+    'load function bits64',
+    'decompile',
+    'print C',
+    'load function unbits64',
+    'decompile',
+    'print C',
+    'load function numeric32',
+    'decompile',
+    'print C',
+    'load function trunc32',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Bit reinterpret thumb #1: storage transfers use a union'
+count = 4
+literal = 'union {'
+
+[[match]]
+name = 'Bit reinterpret thumb #2: numeric integer conversion stays a cast'
+count = 1
+literal = 'return (float4)(int8)x;'
+
+[[match]]
+name = 'Bit reinterpret thumb #3: numeric float truncation stays a cast'
+count = 1
+literal = 'return (int4)x;'

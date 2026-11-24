@@ -109,6 +109,10 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // long long)` on SPARC32 BE ELF. Registered always; the COMMIT is gated by
         // `--option libgccsigs on|off` (default off) via `analysis_pass_enabled`.
         Box::new(crate::protos::kuna_libgcc::LibgccSigsPass),
+        // (kuna) The Arm run-time ABI helpers (`__aeabi_dadd`, `__aeabi_d2iz`,
+        // `__aeabi_memcpy`, ...) typed as RTABI32 declares them, on a 32-bit ARM
+        // image that names one. Registered always.
+        Box::new(crate::protos::kuna_aeabisigs::AeabiSigsPass),
         // S1 built-in Win32 API signatures (`win32sigs`): the Windows half of the
         // `.gdt` stand-in, which nothing in the tree carried. PE/COFF only, and
         // keyed by ENTRY ADDRESS rather than by name -- a PE import is TWO
@@ -493,12 +497,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         passes.push(Box::new(
             crate::strings::kuna_strrecords::StrRecordPass::go(),
         ));
-        // (kuna `gopcln`) Source positions and inlined calls from the pclntab:
-        // header and inline-marker comments (`gopcln on`), then per-statement
-        // `file:line` comments (`gopcln lines`). Both self-gate, so a default
-        // run reads nothing.
-        passes.push(Box::new(crate::pclntab::kuna_gopcln::GoPclnPass));
-        passes.push(Box::new(crate::pclntab::kuna_gopcln::GoPclnLinesPass));
+        // (kuna `gopcln`) is not registered here: its passes read the option,
+        // which a load-time pass sees only at its constructor default, so they
+        // run deferred at the commit point ([`run_gopcln`]).
         // (kuna `gonoreturn`) BEFORE `gopclntab`, preserving that pass's
         // appended-last contract: apply the vendored Go no-return list to the
         // pclntab's own function list, so a STRIPPED Go binary (no .symtab for
@@ -1808,18 +1809,21 @@ pub fn run_listing_consumers_replaying_observed(
                         })
                     };
                     let mut veto_out = AnalysisOutput::default();
+                    let string_at = |e: u64| crate::aif::kuna_aifstringveto::string_at(&file, e);
                     veto_out.data_vetoed = listing
                         .functions()
                         .filter(|(_, f)| !f.from_symbol)
                         .map(|(&e, _)| e)
-                        .filter(|&e| targets.contains(&e) && !flow_target(e))
+                        .filter(|&e| (targets.contains(&e) || string_at(e)) && !flow_target(e))
                         .collect();
                     out.push(("aifdataveto", veto_out));
                     aif_out.entries.retain(|&e| {
                         let span = listing
                             .instruction_at(e)
                             .map_or(1, |i| u64::from(i.len).max(1));
-                        flow_target(e) || targets.range(e..e.saturating_add(span)).next().is_none()
+                        flow_target(e)
+                            || (targets.range(e..e.saturating_add(span)).next().is_none()
+                                && !string_at(e))
                     });
                 }
             }
@@ -2130,6 +2134,31 @@ pub fn run_com(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
     };
     let mut out = crate::com::ComPass.run(&ctx);
     out.sanitize_names(symbolnamechars_mode());
+    out
+}
+
+/// Run the **deferred** Go source-position comments (`option gopcln`) at the
+/// commit point, where the option is in effect: [`crate::pclntab::kuna_gopcln`]'s
+/// passes read it, and a load-time pass sees only the constructor default
+/// (`off`), so registered at load they never wrote a comment. Both passes decline
+/// an image without a Go pclntab.
+pub fn run_gopcln(path: &str, bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
+    let Ok(file) = crate::loadimage_object::parse_object(bytes) else {
+        return AnalysisOutput::default();
+    };
+    let Ok(image) = crate::loadimage_object::ObjectLoadImage::from_bytes_silent(path, bytes) else {
+        return AnalysisOutput::default();
+    };
+    let ctx = AnalysisCtx {
+        file: &file,
+        bytes,
+        image: Some(&image),
+        arch,
+        listing: None,
+        image_path: None,
+    };
+    let mut out = crate::pclntab::kuna_gopcln::GoPclnPass.run(&ctx);
+    out.merge(crate::pclntab::kuna_gopcln::GoPclnLinesPass.run(&ctx));
     out
 }
 
@@ -2623,14 +2652,14 @@ mod tests {
         }
     }
 
-    /// The Go pass set is exactly the base set plus the six Go-arm passes:
-    /// `fatstrrecords` (the string-record pass's Go arm), then `gopcln` and
-    /// `gopcln_lines` (source positions), then `gonoreturn`
+    /// The Go pass set is exactly the base set plus the four Go-arm passes:
+    /// `fatstrrecords` (the string-record pass's Go arm), then `gonoreturn`
     /// (the pclntab no-return list), then `gotypes` (the runtime-type
     /// harvest), then `gopclntab` (the function-name recovery, keeping its
     /// appended-last contract); no other compiler carries the Go-only ones.
+    /// `gopcln` runs deferred ([`run_gopcln`]), so no pass set carries it.
     #[test]
-    fn go_adds_only_the_six_go_passes() {
+    fn go_adds_only_the_four_go_passes() {
         let base = ids(&passes_for(Compiler::Gcc, NON_PE));
         let go = ids(&passes_for(Compiler::Go, NON_PE));
         assert_eq!(
@@ -2655,20 +2684,14 @@ mod tests {
         );
         assert_eq!(
             go.get(go.len() - 4),
-            Some(&"gopcln_lines"),
-            "gopcln_lines precedes gonoreturn"
-        );
-        assert_eq!(
-            go.get(go.len() - 5),
-            Some(&"gopcln"),
-            "gopcln precedes gopcln_lines"
-        );
-        assert_eq!(
-            go.get(go.len() - 6),
             Some(&"fatstrrecords"),
             "the record pass opens the Go block"
         );
-        assert_eq!(go.len(), base.len() + 6, "Go adds exactly six passes");
+        assert_eq!(go.len(), base.len() + 4, "Go adds exactly four passes");
+        assert!(
+            !go.contains(&"gopcln") && !go.contains(&"gopcln_lines"),
+            "gopcln runs deferred, not at load"
+        );
         // No non-Go compiler carries the Go-only passes.
         for c in [
             Compiler::Gcc,

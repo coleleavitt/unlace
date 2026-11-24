@@ -97,6 +97,16 @@ const LIB_CONFLICT_PREFIX: &str = "libID_conflict_";
 /// the fact carries only the function name (the install loop applies by inject id,
 /// which the commit re-resolves the same way the pass matched it).
 pub fn target_fixup_map(arch: &Architecture) -> Vec<(String, String)> {
+    fixup_map(arch, true)
+}
+
+/// [`target_fixup_map`], with the kuna fixup families' option gates applied
+/// only when `gated`. The load-time scan matches against every family: it runs
+/// before the run's `--option`s reach the architecture, so a default-off family
+/// (`aeabifloat`) would never match a relocatable object's undefined helpers,
+/// which no later stream names. The commit re-derives each fact's fixup through
+/// the gated map, so a family that is off still installs nothing.
+fn fixup_map(arch: &Architecture, gated: bool) -> Vec<(String, String)> {
     let mut map: Vec<(String, String)> = Vec::new();
     for payload in &arch.pcodeinjectlib.injection {
         let SleighPayload::Callfixup(cf) = payload else {
@@ -105,7 +115,8 @@ pub fn target_fixup_map(arch: &Architecture) -> Vec<(String, String)> {
         let Ok(fixup_name) = std::str::from_utf8(&cf.payload.core.name) else {
             continue;
         };
-        if fixup_name.starts_with(unlace_decomp::kuna_arithhelpers::FIXUP_PREFIX)
+        if gated
+            && fixup_name.starts_with(unlace_decomp::kuna_arithhelpers::FIXUP_PREFIX)
             && !arch
                 .kuna_options
                 .get::<unlace_decomp::kuna_arithhelpers::ArithHelpers>()
@@ -113,7 +124,17 @@ pub fn target_fixup_map(arch: &Architecture) -> Vec<(String, String)> {
         {
             continue;
         }
-        if fixup_name.starts_with(unlace_decomp::kuna_objcarc::FIXUP_PREFIX)
+        if gated
+            && fixup_name.starts_with(unlace_decomp::kuna_aeabifloat::FIXUP_PREFIX)
+            && !arch
+                .kuna_options
+                .get::<unlace_decomp::kuna_aeabifloat::AeabiFloat>()
+                .0
+        {
+            continue;
+        }
+        if gated
+            && fixup_name.starts_with(unlace_decomp::kuna_objcarc::FIXUP_PREFIX)
             && !arch
                 .kuna_options
                 .get::<unlace_decomp::kuna_objcarc::ObjcArc>()
@@ -170,7 +191,7 @@ fn scan_call_fixups(file: &object::File, bytes: &[u8], arch: &Architecture) -> A
     // FUNC symbols — neutral data on every format. The map comes from the loaded
     // arch's cspec (the Windows cspec ships its own fixups), so this fires on a
     // PE/Mach-O whose toolchain emitted a fixup'd stub, with no format branch.
-    let map = target_fixup_map(arch);
+    let map = fixup_map(arch, false);
     if map.is_empty() {
         return out;
     }

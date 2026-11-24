@@ -86,7 +86,7 @@
 //! betaflight soft-float helpers whose halves are exactly that -- and it also
 //! resurrected the GH-6990 SPARC symptom, because a *void* `main` that touches
 //! nothing at all leaves `o0:o1` passing through and SPARC passes arguments in
-//! those same registers (`tests/stages/gh6990-returnpair.xml`). Nothing local to
+//! those same registers (`tests/stages/gh6990-returnpair.toml`). Nothing local to
 //! the pair separates "returns its argument unchanged" from "never touched the
 //! return registers", so the rescue is not taken and those three functions keep
 //! today's answer.

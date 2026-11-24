@@ -64,7 +64,7 @@ stage files); `docs/baseline-stages.json` re-recorded (1021 keys), not hand-merg
 
 ## 4. Test
 
-`tests/stages/kuna-argclobber.xml`, two passes over one hand-assembled x86-64
+`tests/stages/kuna-argclobber.toml`, two passes over one hand-assembled x86-64
 bytechunk (`caller` / `clobber` / `target` / `helper`), cut to the fmt witness's
 real shape: one path calls `clobber` (whose own first act is a call, so
 `calleepreserves` cannot narrow the killed set), the other runs `idivl` and leaves

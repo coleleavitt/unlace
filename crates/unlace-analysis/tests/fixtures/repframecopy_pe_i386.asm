@@ -28,7 +28,7 @@
 ;   big_draw(a, b, src)   calls paint3(a, b, 3), then passes a 32-dword struct
 ;                         by value: the copy stays a loop and its bottom-of-frame
 ;                         pointer is what `calleeargs` keeps from costing paint3
-;                         its pushed arguments (tests/stages/kuna-calleeargs.xml).
+;                         its pushed arguments (tests/stages/kuna-calleeargs.toml).
 ;   shift_pass(a)         fills nine slots at the stack pointer, moves the upper
 ;                         eight down one slot with an overlapping `rep movsd`,
 ;                         and calls fill8: it takes 1..8 and 8.

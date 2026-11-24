@@ -61,9 +61,10 @@ use crate::funcdata::Funcdata;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StructHeadlessMode {
     /// Upstream `structsynth`: a record is read at offset 0.
-    #[default]
     Off,
-    /// A closed function's parameter may be a record read only past its start.
+    /// A closed function's parameter may be a record read only past its start. The shipped
+    /// default.
+    #[default]
     Closed,
 }
 
@@ -76,7 +77,7 @@ impl crate::kuna_optionset::KunaOption for StructHeadlessMode {
     }
 
     fn shipped() -> Self {
-        StructHeadlessMode::Off
+        StructHeadlessMode::Closed
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {

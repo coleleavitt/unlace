@@ -602,7 +602,11 @@ take the first unconsumed entry of that class (or a general one) that fits
 list, drawn from the dedicated hidden-return class or the normal pointer slots
 (`assign_map_standard_out`, response codes `hiddenret_*`). A `__thiscall`-style
 model then marks the right input as the `this` pointer, swapping markup when
-the hidden-return pointer bumped it. Failure mode: an unassignable *input*
+the hidden-return pointer bumped it. A prototype parked with no return type
+(the DWARF reader leaves it empty when it cannot build the declared type, as for
+Zig's zero-size `void` base type) is an unassignable output, not an assertion:
+both output lists report `ParamUnassigned`, which a caller that ignores output
+errors reads as a `void` return. Failure mode: an unassignable *input*
 raises a hard error; an unassignable *output* is only survivable where the
 caller opted into `ignore_output_error`, which degrades the return to `void`.
 

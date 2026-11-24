@@ -31,7 +31,7 @@ use std::collections::BTreeSet;
 
 use object::FileKind;
 use object::read::Object;
-use object::read::pe::PeFile32;
+use object::read::pe::{ImageNtHeaders, ImageOptionalHeader, PeFile32};
 
 use super::mfcmsgmap::{Image, relocated_rvas};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
@@ -57,6 +57,14 @@ impl AnalysisPass for MsvcPtrEntryPass {
     }
 }
 
+/// (unlace #871) Is the image linked by MSVC? Its linker writes a major linker
+/// version of 5 or later; GNU ld, which builds MinGW and Cygwin images, writes 2.
+/// A MinGW image's SJLJ landing pads and stored labels are what this pass must
+/// not walk, so such an image gets no targets at all.
+fn is_msvc_linked(major_linker_version: u8) -> bool {
+    major_linker_version >= 5
+}
+
 /// Does `code` start with an MSVC frame prologue?
 fn is_frame_prologue(code: &[u8]) -> bool {
     code.starts_with(&[0x55, 0x8b, 0xec]) || code.starts_with(&[0x8b, 0xff, 0x55, 0x8b, 0xec])
@@ -71,6 +79,9 @@ pub fn prologue_pointer_targets(bytes: &[u8]) -> Vec<u64> {
     let Ok(pe) = PeFile32::parse(bytes) else {
         return Vec::new();
     };
+    if !is_msvc_linked(pe.nt_headers().optional_header().major_linker_version()) {
+        return Vec::new();
+    }
     let base = pe.relative_address_base();
     let sections = pe.section_table();
     let image = Image {
@@ -154,6 +165,14 @@ mod tests {
         assert!(!is_mov_imm32(1, &|rva: u32| movr
             .get(rva as usize)
             .copied()));
+    }
+
+    #[test]
+    fn a_gnu_linked_image_is_not_read() {
+        // terminatecurrent_i686.exe (MinGW) writes major linker version 2.
+        assert!(!is_msvc_linked(2));
+        assert!(is_msvc_linked(5));
+        assert!(is_msvc_linked(14));
     }
 
     #[test]

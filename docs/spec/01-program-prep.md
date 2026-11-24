@@ -10710,7 +10710,9 @@ whose bytes are `push ebp; mov ebp,esp` in MSVC's encoding (`55 8B EC`, or
 walk uses it as a root. The mid-function labels MSVC stores (switch targets, catch
 continuations, SEH handlers) do not start with a frame. GCC and MinGW encode
 `mov ebp,esp` as `89 E5`, so their SJLJ landing pads never match either; those
-are why `addrtakenentry` stays x86-64-only. On PEGRP32F.dll it finds 1,255
+are why `addrtakenentry` stays x86-64-only. An image linked by GNU ld (MinGW or
+Cygwin, PE optional header `MajorLinkerVersion` 2) is not read at all (#871). On
+PEGRP32F.dll it finds 1,255
 targets, every one an IDA 9.5 function start, and 452 of them were missing from
 the inventory. Code built with frame-pointer omission has no prologue to test,
 so a second form is read for it. The relocated immediate of a

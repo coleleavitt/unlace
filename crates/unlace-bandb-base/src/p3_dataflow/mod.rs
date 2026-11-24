@@ -33,6 +33,7 @@ pub mod kuna_inputtile;
 pub mod kuna_intfloatround;
 pub mod kuna_latecse;
 pub mod kuna_loopcounterstore;
+pub mod kuna_maskjoin;
 pub mod kuna_mba; // (kuna `mba`) linear mixed boolean-arithmetic simplification
 pub mod kuna_memoryguard;
 pub mod kuna_mulblob; // (kuna) keep a widened multiply operand a value, not an aggregate
@@ -41,6 +42,7 @@ pub mod kuna_octeoneffects;
 pub mod kuna_opaquearms;
 pub mod kuna_opaqueimplied;
 pub mod kuna_ovlesssimplify;
+pub mod kuna_pairphi; // (kuna `pairlocal`) a 64-bit local held in a register pair joins at its phis
 pub mod kuna_partialglobalload;
 pub mod kuna_persistcalls;
 pub mod kuna_phithread;
@@ -49,7 +51,6 @@ pub mod kuna_prunedssa;
 pub mod kuna_rangefold;
 pub mod kuna_renamereads;
 pub mod kuna_repstring;
-pub mod kuna_maskjoin;
 pub mod kuna_satconvert;
 pub mod kuna_satmul;
 pub mod kuna_selectdiv;

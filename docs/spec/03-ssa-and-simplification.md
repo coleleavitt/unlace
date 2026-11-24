@@ -4824,3 +4824,40 @@ inner `(x & ~y) + y` to `x | y`, and the outer `(t ^ z) + 2*(t & z)` rule then
 matches with `t` that class. Not done: rules that need a side condition (a
 constant that is a power of two, a shift amount), `INT_RIGHT` and the
 extensions, trees wider than 8 bytes, and more than six leaves.
+
+## (kuna) Register-pair locals — `option pairlocal`, default off
+
+**`crates/unlace-bandb-base/src/p3_dataflow/kuna_pairphi.rs (RulePairPhi)`, in
+oppool1 after `egraph`.** A 32-bit target keeps a `long long` local in two
+registers (`edx:eax` on x86). Heritage places one MULTIEQUAL per register where
+control flow joins, so a 64-bit use after the join reads `PIECE(hi, lo)` of two
+32-bit variables and prints as `CONCAT44(v3, v2)`, with each half assigned on
+every incoming path. Upstream's double-precision framework (`double.rs`,
+`PhiForm`) joins such phis only from a known whole and never from constant
+pieces, and Ghidra prints the halves separately (`CARRY4` arithmetic); IDA's
+microcode tracks the pair as one scattered variable.
+
+The rule fires on a `PIECE(hi, lo)` with an 8-byte output whose inputs are the
+outputs of two MULTIEQUALs of the same block, each with one input per incoming
+edge. For every edge it builds the 64-bit value the pair carries there:
+
+- two constants: the 64-bit constant `hi << 32 | lo`;
+- `hi` the constant 0: `ZEXT(lo)`; `hi = lo s>> 31`: `SEXT(lo)`;
+- `hi = SUBPIECE(w, 4)` and `lo = SUBPIECE(w, 0)` of one 8-byte `w`: `w`;
+- the two phis' own outputs (a loop that carries the pair unchanged): the new
+  phi itself.
+
+Any other edge, or one constant half with a variable other half, leaves the
+PIECE alone. When every edge has a value, a new 8-byte MULTIEQUAL of them is
+inserted at the head of the block; an extension is a new op at the end of its
+predecessor (before its branch), where the edge's inputs are live. The PIECE
+becomes a COPY of the new phi's output. Each edge value equals the pair on that
+edge, so the rewrite is exact. The half phis keep their other readers and are
+removed as dead code when they have none.
+
+Pinned by `tests/stages/kuna-pairlocal.toml` (gcc -m32 -O1, a `long long` set
+to a sign-extended int, a zero-extended product and 0 on three paths: the
+option-off output has one `CONCAT44`, the option-on output none). Not done: a
+pair whose halves are joined through PIECEs of other variables (64-bit
+add-with-carry chains, `CONCAT44(hi - (lo1 < lo2), lo1 - lo2)`), and pairs in
+memory (`CONCAT44(dat_4, dat_0)`).

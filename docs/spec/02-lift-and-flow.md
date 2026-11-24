@@ -4177,6 +4177,27 @@ TLBI forms match only Rt=31 (as in LLVM); another Rt stays `sys`. Exercised by
 `unlace-cli/tests/aarch64_rme.rs` (a raw image decompiles to the user
 operations).
 
+### TriCore TC1.6.2 and TC1.8 (#98)
+
+A new language `tricore:LE:32:tc18` (`tricore_tc18.slaspec`) decodes the
+instructions added by TriCore TC1.6.2 (AURIX TC3xx) and TC1.8 (AURIX TC4x),
+from the opcode diagrams of Infineon's TC1.8 architecture manual: population
+count, byte shuffle, 64-bit divide and remainder (with the overflow flags),
+`lha`, `jri`, 16-bit `calli`, the single-precision additions (`abs.f`,
+`neg.f`, `max.f`, `min.f`, `ftoin`, half-precision conversions) and the
+TC1.8 double-precision FPU on the E register pairs (arithmetic, `madd.df`,
+`msub.df`, `cmp.df`, min/max, conversions), plus `mfdcr`/`mtdcr` and
+`rfh`. CRCs other than `crc32b.w`, the carry-less multiply, `lsync`,
+`trapinv`, `hvcall` and the virtual-machine cache operations are named
+pcodeops. The TC1.6.1 `crc32` keeps its name in the older languages and is
+`crc32b.w` in this one; nothing else in the older languages changes. Before,
+each of these was a bad instruction. Exercised by
+`unlace-cli/tests/tricore_tc18.rs`: a probe of every added encoding
+(hand-assembled from the manual; no TriCore assembler is available) and raw
+images whose C is checked (`div64` is a 64-bit division of the register
+pairs, `shuffle` with 0x1b is `bswap`, `itodf` a `(double)` cast). Gaps
+are listed in `specs/Ghidra/Processors/tricore/README.md`.
+
 ### Vendored community processor modules (#98)
 
 These processor directories vendor a community SLEIGH module unchanged (its
@@ -4262,6 +4283,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `TopSM` | TI TopSM RF core | `topsm:LE:16:default` | antoniovazquezblanco/GhidraTopSM @ `3f45fd9d28`, MIT |
 | `SH` | Renesas SuperH SH-2E/SH-3/SH-3E/SH-4A | `sh3:BE:32:default`, `sh3:LE:32:default`, `sh3e:BE:32:default`, `sh3e:LE:32:default`, `sh2e:BE:32:default` | aleph-void/ghidra-sh (fork of will07c5/ghidra-sh) @ `31c6ca03e9`, MIT |
 | `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | written for unlace from the Moxie architecture page and the binutils opcode table |
+| `tricore` (TC1.8) | Infineon TriCore TC1.6.2/TC1.8 (AURIX TC3xx, TC4x) | `tricore:LE:32:tc18` | written for #98 from Infineon's TriCore TC1.8 architecture manual |
 <!-- vendor-rows -->
 
 ### Processor modules written for unlace (#98)

@@ -1,0 +1,9 @@
+@define Tricore ""
+
+@define TRICORE_GENERIC ""
+@define TRICORE_V2 ""
+@define TRICORE_TC18 ""
+
+define endian=little;
+
+@include "tricore.sinc"

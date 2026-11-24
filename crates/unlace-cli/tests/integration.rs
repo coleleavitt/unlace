@@ -42,6 +42,8 @@ mod rust_signature_summary;
 mod sparc_prologue_start;
 #[path = "stm8_raw.rs"]
 mod stm8_raw;
+#[path = "tricore_tc18.rs"]
+mod tricore_tc18;
 #[path = "w65816_raw.rs"]
 mod w65816_raw;
 #[path = "x86_amx.rs"]

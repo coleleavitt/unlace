@@ -4275,6 +4275,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 |---|---|---|---|---|
 | `CHIP8` | CHIP-8 (COSMAC VIP) and SUPER-CHIP 1.1 | `CHIP8:BE:16:VIP`, `CHIP8:BE:16:SCHIP` | COSMAC VIP manual, SUPER-CHIP 1.1 notes | `unlace-cli/tests/chip8.rs` |
 | `HuC6280` | Hudson Soft HuC6280 (PC Engine) | `HuC6280:LE:16:default` | 65C02 and HuC6280 instruction descriptions, MAME `h6280` | `unlace-cli/tests/huc6280.rs` |
+| `KR1878` | Angstrem KR1878VE1 (TESEY core) | `KR1878:LE:16:default` | ChipNews 2000/1 instruction table, Angstrem datasheet | `unlace-cli/tests/kr1878_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

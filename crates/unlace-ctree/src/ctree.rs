@@ -166,6 +166,15 @@ pub enum StmtKind {
         value: Option<ExprId>,
         op: Option<OpId>,
     },
+    /// (unlace `itaniumeh`) An `if` on an `eh_unwinding()` exceptional edge, printed as
+    /// `try { <cond statements> <normal> } catch (..) { <handler> }`: its condition block,
+    /// the arm that runs inside the `try`, the landing pad and the arm the edge enters.
+    Try {
+        cond: BlockId,
+        normal: Option<BlockId>,
+        pad: u64,
+        handler: BlockId,
+    },
     /// Not modelled yet: printed from its origin block.
     Opaque,
 }
@@ -364,6 +373,7 @@ impl CTree {
             | StmtKind::Goto { .. }
             | StmtKind::Return { .. }
             | StmtKind::SwitchOf { .. }
+            | StmtKind::Try { .. }
             | StmtKind::Opaque => Vec::new(),
         }
     }
@@ -388,6 +398,7 @@ impl CTree {
             StmtKind::Return { value: None, .. } => "return".to_string(),
             StmtKind::Return { value: Some(e), .. } => format!("return {}", self.expr_text(*e)),
             StmtKind::SwitchOf { switch } => format!("switch-of {switch:?}"),
+            StmtKind::Try { pad, .. } => format!("try pad={pad:#x}"),
             StmtKind::Opaque => "opaque".to_string(),
         };
         match stmt.origin {

@@ -5691,6 +5691,33 @@ impl PrintC {
         Some((pad, other, Some(tru)))
     }
 
+    /// (unlace `itaniumeh`) The `try` form of the `if` `blk` on an exceptional edge: its
+    /// condition block, the arm that runs inside the `try` (printed after the `catch` it
+    /// would read as code the handler falls into), the landing pad and the arm the edge
+    /// enters. The arm that starts at a pad is the handler; else the pad of the call the edge
+    /// follows names it (`eh_if_arms`).
+    pub(super) fn eh_try_match(
+        &self,
+        fd: &Funcdata,
+        blk: BlockId,
+    ) -> Option<(BlockId, Option<BlockId>, u64, BlockId)> {
+        let block = fd.sblocks_ref().block(blk);
+        if self.lang().kw_open_curly != "{" || block.get_size() < 2 || !self.is_eh_if(fd, blk) {
+            return None;
+        }
+        let cond = block.get_block(0);
+        let tru = block.get_block(1);
+        let other = (block.get_size() == 3).then(|| block.get_block(2));
+        if let Some(pad) = self.eh_pad_start(fd, tru) {
+            return Some((cond, other, pad, tru));
+        }
+        if let Some((other, pad)) = other.and_then(|o| Some((o, self.eh_pad_start(fd, o)?))) {
+            return Some((cond, Some(tru), pad, other));
+        }
+        let (pad, handler, normal) = self.eh_if_arms(fd, blk)?;
+        Some((cond, normal, pad, handler))
+    }
+
     /// (unlace `itaniumeh`) Is `blk` an `if` whose condition is an
     /// `eh_unwinding()` exceptional edge?
     fn is_eh_if(&self, fd: &Funcdata, blk: BlockId) -> bool {
@@ -6027,29 +6054,11 @@ impl PrintC {
             }
             return;
         }
-        // (unlace `itaniumeh`) `if (eh_unwinding()) { pad } [else { normal }]`.
-        if self.lang().kw_open_curly == "{"
-            && fd.sblocks_ref().block(blk).get_size() >= 2
-            && self.is_eh_if(fd, blk)
-        {
-            let cond = fd.sblocks_ref().block(blk).get_block(0);
-            let tru = fd.sblocks_ref().block(blk).get_block(1);
-            let other = (fd.sblocks_ref().block(blk).get_size() == 3)
-                .then(|| fd.sblocks_ref().block(blk).get_block(2));
-            // The normal arm goes inside the `try`: printed after the `catch`
-            // it would read as code the handler falls into.
-            if let Some(pad) = self.eh_pad_start(fd, tru) {
-                self.emit_eh_try(fd, arch, cond, other, pad, &[tru], false);
-                return;
-            }
-            if let Some((other, pad)) = other.and_then(|o| Some((o, self.eh_pad_start(fd, o)?))) {
-                self.emit_eh_try(fd, arch, cond, Some(tru), pad, &[other], false);
-                return;
-            }
-            if let Some((pad, handler, normal)) = self.eh_if_arms(fd, blk) {
-                self.emit_eh_try(fd, arch, cond, normal, pad, &[handler], false);
-                return;
-            }
+        // (unlace `itaniumeh`) `if (eh_unwinding()) { pad } [else { normal }]`: the `Try`
+        // statement the tree made of it (`ctree_rewrite`).
+        if let Some((cond, normal, pad, handler)) = self.try_form(fd, blk) {
+            self.emit_eh_try(fd, arch, cond, normal, pad, &[handler], false);
+            return;
         }
         match self.ite_form(fd, arch, blk) {
             Some(ctreeprint::IteForm::Bool(m)) => {

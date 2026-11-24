@@ -176,7 +176,9 @@ impl PrintC {
         }
     }
 
-    /// Take the tree to `rewritten`: each `if` the `iteboolean` or `iteregion` print form
+    /// Take the tree to `rewritten`. First each `if` on an `eh_unwinding()` exceptional edge
+    /// that prints as a `try` (`eh_try_match`; `itaniumeh`) becomes a `Try` statement, which
+    /// no later rewrite touches. Then each `if` the `iteboolean` or `iteregion` print form
     /// applies to (the same tests, in the same order, `emit_block_if` used to make while
     /// printing) becomes the assignment statement it prints as. With `option boolreturn on`
     /// (C output), an `if` whose arms only return `1` and `0` becomes `return c` or
@@ -186,6 +188,26 @@ impl PrintC {
             return;
         };
         self.ctree_take_plans();
+        for &id in &ids {
+            let Some(blk) = self.ctree.as_ref().and_then(|tree| {
+                let stmt = tree.stmt(id);
+                let blk = stmt.origin?;
+                (tree.node_for(blk) == Some(id) && matches!(stmt.kind, StmtKind::If { .. }))
+                    .then_some(blk)
+            }) else {
+                continue;
+            };
+            if let Some((cond, normal, pad, handler)) = self.eh_try_match(fd, blk)
+                && let Some(tree) = self.ctree.as_mut()
+            {
+                tree.stmt_mut(id).kind = StmtKind::Try {
+                    cond,
+                    normal,
+                    pad,
+                    handler,
+                };
+            }
+        }
         let bool_return = arch.unlace_options.get::<crate::ctree::Boolreturn>().0
             && self.out_lang == crate::lang::OutLang::C;
         let ret_ternary = arch.unlace_options.get::<crate::ctree::Retternary>().0
@@ -203,7 +225,12 @@ impl PrintC {
             }) else {
                 continue;
             };
-            if fd.sblocks_ref().block(blk).get_type() != BlockType::If {
+            if fd.sblocks_ref().block(blk).get_type() != BlockType::If
+                || self
+                    .ctree
+                    .as_ref()
+                    .is_some_and(|tree| matches!(tree.stmt(id).kind, StmtKind::Try { .. }))
+            {
                 continue;
             }
             let form = match self.ite_boolean_match(fd, blk) {
@@ -350,6 +377,31 @@ impl PrintC {
             return Some(IteForm::Bool(m));
         }
         self.ite_ternary_match(fd, arch, blk).map(IteForm::Ternary)
+    }
+
+    /// (unlace `itaniumeh`) The `try` form the tree gave the `BlockIf` `blk`
+    /// (`eh_try_match`, run by `ctree_rewrite`); for an `if` the tree holds no statement for
+    /// (below the builder's depth bound), the match itself.
+    pub(super) fn try_form(
+        &self,
+        fd: &Funcdata,
+        blk: BlockId,
+    ) -> Option<(BlockId, Option<BlockId>, u64, BlockId)> {
+        let Some(tree) = self.ctree.as_ref() else {
+            return self.eh_try_match(fd, blk);
+        };
+        let Some(id) = tree.node_for(blk) else {
+            return self.eh_try_match(fd, blk);
+        };
+        match tree.stmt(id).kind {
+            StmtKind::Try {
+                cond,
+                normal,
+                pad,
+                handler,
+            } => Some((cond, normal, pad, handler)),
+            _ => None,
+        }
     }
 
     /// The `return` form the tree gave the `BlockIf` `blk`: its condition block, the body's

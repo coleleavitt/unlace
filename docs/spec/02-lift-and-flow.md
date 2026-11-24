@@ -4180,6 +4180,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `EBC` | EFI Byte Code | `EBC:LE:64:default`, `EBC:LE:32:default` | aleph-void/Ghidra-EFI-Byte-Code-Processor (fork of meromwolff/Ghidra-EFI-Byte-Code-Processor) @ `f27afea157`, MIT |
 | `SPC700` | Sony SPC700 (SNES audio) | `spc700:LE:16:default`, `spc700:LE:16:65816` | aleph-void/SPCdra (fork of qwertymodo/SPCdra) @ `e4f0b34412`, Apache-2.0 |
 | `EmotionEngine` | PlayStation 2 Emotion Engine (R5900, MMI, VU) | `r5900:LE:32:default` | aleph-void/ghidra-emotionengine-reloaded (fork of chaoticgd/ghidra-emotionengine-reloaded) @ `77e147c007`, Apache-2.0 |
+| `Allegrex` | PSP Allegrex (with VFPU) | `Allegrex:LE:32:default` | aleph-void/ghidra-allegrex (fork of kotcrab/ghidra-allegrex) @ `7929c178ae`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

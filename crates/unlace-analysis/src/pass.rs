@@ -858,6 +858,12 @@ pub struct AnalysisOutput {
     /// symbol table under the same gate. Name-only (not typed) so an itab
     /// address used polymorphically keeps rendering the symbol.
     pub go_itabs: Vec<SymFact>,
+    /// (kuna `goitabcalls`) Interface parameters of a stripped Go binary: each
+    /// callee register a static itab is passed in, typed as a pointer to the
+    /// interface's itab record. Produced by the Listing consumer
+    /// [`crate::gotypes::kuna_itabargs::GoItabArgsPass`], which runs only under
+    /// the option; committed as input hints.
+    pub go_itab_inputs: Vec<InputHintFact>,
     /// (kuna `swifttypes`) The Swift type-layout facts. See [`SwiftTypeFacts`].
     pub swift_types: SwiftTypeFacts,
     /// (kuna `swiftobjcthunk`) Each function the Swift metadata pass named
@@ -1166,6 +1172,7 @@ impl AnalysisOutput {
         self.cortexm_scs = self.cortexm_scs.or(other.cortexm_scs);
         self.go_type_globals.extend(other.go_type_globals);
         self.go_itabs.extend(other.go_itabs);
+        self.go_itab_inputs.extend(other.go_itab_inputs);
         self.swift_enum_cases.extend(other.swift_enum_cases);
         self.swift_types
             .typed_data

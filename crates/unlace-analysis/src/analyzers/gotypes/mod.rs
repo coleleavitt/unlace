@@ -88,6 +88,7 @@ use kuna_layout::GoImage;
 
 mod kuna_fieldtypes;
 mod kuna_ifacefields;
+pub mod kuna_itabargs;
 mod kuna_itabs;
 mod kuna_itabtypes;
 mod kuna_layout;
@@ -772,6 +773,39 @@ fn struct_layout_fingerprint(img: &GoImage, t: &GoType) -> Option<String> {
         }
     }
     Some(fp)
+}
+
+/// (kuna `goitabcalls`) Every static itab of a 64-bit little-endian Go image
+/// with its interface's linker spelling, located as the harvest locates them;
+/// empty for any other image.
+pub(crate) fn static_itab_interfaces(file: &object::File) -> Vec<(u64, String)> {
+    if !file.is_little_endian() || !file.is_64() {
+        return Vec::new();
+    }
+    let mut img = GoImage::new(file);
+    let version =
+        buildinfo_blob(file).and_then(|b| go_version(b, |vma, len| img.bytes.read(vma, len)));
+    img.u16_names = matches!(version, Some((1, ..=16)));
+    let Some(header_vma) = locate_header(file, &img.bytes) else {
+        return Vec::new();
+    };
+    let Some(anchor) = locate_moduledata(file, &img, header_vma) else {
+        return Vec::new();
+    };
+    let Some(meta) =
+        locate_type_meta(&img, anchor).or_else(|| locate_type_meta_descriptors(&img, anchor))
+    else {
+        return Vec::new();
+    };
+    kuna_itabs::locate_itabs(&img, anchor, meta.types, meta.etypes)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|vma| {
+            let (_, inter) = kuna_itabs::read_itab(&img, meta.types, meta.etypes, vma)?;
+            let name = kuna_typeglobals::linker_name(&img, &meta, &inter);
+            kuna_typeglobals::global_name_ok(&name).then_some((vma, name))
+        })
+        .collect()
 }
 
 /// (kuna) `GoTypesPass` — the Go runtime-type harvest (Go-detected images only).

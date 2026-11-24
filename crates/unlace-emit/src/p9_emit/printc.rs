@@ -9387,7 +9387,7 @@ impl PrintC {
                 let keccak = |index: u64| {
                     arch.userops
                         .get_op(index as u32)
-                        .is_some_and(|u| u.get_name() == "keccak256")
+                        .is_some_and(|u| u.get_name() == &b"keccak256"[..])
                 };
                 if let Some(access) = crate::evmstorage::access(fd, op, name, keccak) {
                     self.op_evm_storage_ir(fd, arch, op, access);

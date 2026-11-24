@@ -36,13 +36,15 @@ pub struct StorageAccess {
 pub fn access(
     fd: &Funcdata,
     op: OpId,
-    name: &str,
+    name: &[u8],
     keccak: impl Fn(u64) -> bool,
 ) -> Option<StorageAccess> {
-    let store = match name {
-        "sload" => false,
-        "sstore" => true,
-        _ => return None,
+    let store = if name == &b"sstore"[..] {
+        true
+    } else if name == &b"sload"[..] {
+        false
+    } else {
+        return None;
     };
     let o = fd.obank().get(op)?;
     let slot = o.get_in(1)?;

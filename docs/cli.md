@@ -173,7 +173,7 @@ settings, and hands them to a child process through that child's environment.
 | `UNLACE_ARM_ISA` | the ARM/Thumb decode mode of a 32-bit ARM load that names none; read once into `LoadOptions::arm_isa` at each environment-mode load, and an unrecognized value fails each load that reads it |
 
 Trace, debug and fault-injection variables (`UNLACE_*_TRACE`, `UNLACE_*_DEBUG`,
-`UNLACE_DUMP`, `UNLACE_ACTION_PROF` and the test-only ones above) are read where
+`UNLACE_DUMP`, `UNLACE_ACTION_PROF`, `UNLACE_TIMING` and the test-only ones above) are read where
 they act and are never option state.
 
 **Environment boundary.** Option variables are read at three places: the entry

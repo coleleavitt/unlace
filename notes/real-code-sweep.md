@@ -71,3 +71,33 @@ The corpus has 13 functions:
 - #679 Hexagon crossbuild.
 - #680 wasm object names.
 - #681 ARM soft-float return on armeb and v7-M.
+
+## Bytecode and GPU families (sleigh-fam-e, 2026-11-24)
+
+Real artifacts decompiled one function or code object at a time with the pinned
+`unlace-bin/unlace-c720410c75` (`decompile <image> <addr> --raw-image --target <lang> --base 0`,
+30 s timeout). "Clean" means exit 0 and no bad instruction, unimplemented or `halt_baddata`.
+
+| Family | Corpus | Units | Clean | Spec fixes | Engine issues |
+|---|---|---|---|---|---|
+| `CPython:LE:32:3.12` | every code object of 40 python3.12 stdlib modules (argparse, typing, enum, inspect, _pydecimal, tarfile, zipfile, logging, asyncio.tasks, ...) | 3242 | 3240, then 3242 after #684 | #684: FOR_ITER without an internal p-code branch | #686 (Could not find op at target), #690 (tailcallframe, 5 objects) |
+| `Lua:LE:32:5.1` | every prototype of the Lua 5.1 test suite, luac 5.1.5 | 371 | 371 | none | none |
+| `Lua:LE:32:5.2` | Lua 5.2.2 test suite, luac 5.2.4 | 529 | 529 | none | none |
+| `Lua:LE:32:5.3` | Lua 5.3.4 test suite, luac 5.3.6 | 666 | 666 | none | none |
+| `Lua:LE:32:5.4` | Lua 5.4.6 test suite, luac 5.4.8 | 1034 | 1033 | none | #688 (kuna_selectdiv overflow on bitwise.lua's main chunk) |
+| `V8Ignition:LE:32:13.6` | `node --no-lazy --print-bytecode` of npm's semver package and the Node internals it loads | 682 | 682 | none | none |
+| `EVM:BE:32:Cancun` | solc 0.8.24 runtime code of an ERC-20 and a vault (mapping, array, call, selfdestruct), optimizer off and on | 4 | 2 | none | #687 (jump-table shift overflow on the ERC-20 runtimes) |
+| `AMDGPU:LE:64:GFX9/10/11` | 8 OpenCL kernels (matmul, tiled matmul, histogram, LDS scan, float4 saxpy, clamp, f64 math, string scan) at -O2/-O3 for gfx900, gfx1030, gfx1100 | 96 | 82, then 96 after #685 | #685: v_div_scale/fmas/fixup_f64, v_cmp_class_f64/f32, gfx11 s_sendmsg_rtn_b32; f64 literals are the high half on GFX10/11 | none |
+
+Notes:
+- Lua and V8 warnings are informational only (`iteboolean` re-rolls in Lua; none in V8).
+- EVM: the two contracts that decompile are hard to read. Internal Solidity functions return
+  through a JUMP to an address on the stack, so the dispatcher becomes indirect jumps
+  ("Re-entered indirect jump"), and many JUMPI conditions print as bare expression
+  statements. That is the dynamic-jump structure of EVM code, not a decode error; every
+  instruction lifts.
+- Lua corpus prototypes come from a small chunk parser for each luac format (5.1 to 5.4 headers,
+  constants, nested prototypes, debug info); CPython code objects come from
+  `co_code` of every nested code object.
+- Java Card and MULTOS MEL had no real artifacts beyond the public MULTOS ALU already used for
+  #650 (33 functions, clean).

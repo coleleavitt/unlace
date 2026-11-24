@@ -2,7 +2,8 @@
 
 Status (2026-11-23): section 9 steps 2-4 landed: `crates/unlace-ctree` holds the types, `CMaturity`
 and the builder at `built`; `option ctree on` (default off) prints the body through the tree
-(`printc/kuna_ctreeprint.rs`: graph sequences, leaves and `if` arms; the rest stays opaque).
+(`printc/kuna_ctreeprint.rs`: graph sequences, leaves, and through `CTree::part` the arms of an
+`if` and the bodies of loops and goto blocks). Loops, switches and goto blocks are tree nodes.
 Spec: `docs/spec/09-emission.md`, "Printing through the C syntax tree".
 
 Today the printer walks the structured block graph and the p-code ops directly and writes text as it

@@ -5879,7 +5879,7 @@ impl PrintC {
             self.flush_eol_warnings();
             let id = self.emit.start_indent();
             let id1 = self.emit.begin_block(0);
-            self.emit_if_arm(fd, arch, blk, 1);
+            self.emit_part(fd, arch, blk, 1);
             self.emit.end_block(id1);
             self.emit.stop_indent(id);
             if size == 3 {
@@ -5896,7 +5896,7 @@ impl PrintC {
                 if else_is_if {
                     self.context.set_mod(modifiers::PENDING_BRACE);
                     let id2 = self.emit.begin_block(0);
-                    self.emit_if_arm(fd, arch, blk, 2);
+                    self.emit_part(fd, arch, blk, 2);
                     self.emit.end_block(id2);
                 } else {
                     let id2 = self.emit.open_brace_indent(
@@ -5904,7 +5904,7 @@ impl PrintC {
                         self.output_brace(self.options.brace_ifelse),
                     );
                     let id3 = self.emit.begin_block(0);
-                    self.emit_if_arm(fd, arch, blk, 2);
+                    self.emit_part(fd, arch, blk, 2);
                     self.emit.end_block(id3);
                     self.emit
                         .close_brace_indent(self.lang().kw_close_curly, id2);
@@ -5921,7 +5921,7 @@ impl PrintC {
             // the `if (cond) {` header brace.
             self.flush_eol_warnings();
             let id1 = self.emit.begin_block(0);
-            self.emit_if_arm(fd, arch, blk, 1);
+            self.emit_part(fd, arch, blk, 1);
             self.emit.end_block(id1);
             self.emit.close_brace_indent(self.lang().kw_close_curly, id);
 
@@ -5942,7 +5942,7 @@ impl PrintC {
                     // so the child BlockIf registers a lazy brace.
                     self.context.set_mod(modifiers::PENDING_BRACE);
                     let id2 = self.emit.begin_block(0);
-                    self.emit_if_arm(fd, arch, blk, 2);
+                    self.emit_part(fd, arch, blk, 2);
                     self.emit.end_block(id2);
                 } else {
                     let id2 = self.emit.open_brace_indent(
@@ -5950,7 +5950,7 @@ impl PrintC {
                         self.output_brace(self.options.brace_ifelse),
                     );
                     let id3 = self.emit.begin_block(0);
-                    self.emit_if_arm(fd, arch, blk, 2);
+                    self.emit_part(fd, arch, blk, 2);
                     self.emit.end_block(id3);
                     self.emit
                         .close_brace_indent(self.lang().kw_close_curly, id2);
@@ -6912,7 +6912,7 @@ impl PrintC {
             let list = fd.sblocks_ref().block(inner).get_list().to_vec();
             self.emit_block_list(fd, arch, inner, &list[skip..]);
         } else {
-            self.emit_block(fd, arch, inner);
+            self.emit_part(fd, arch, blk, 0);
         }
         self.context.pop_mod();
         if self.goto_rewrites.silent.contains(&blk) {
@@ -6987,7 +6987,7 @@ impl PrintC {
         self.flush_eol_warnings();
         self.context.set_mod(modifiers::NO_BRANCH); // Don't print goto at bottom of clause
         let id2 = self.emit.begin_block(0);
-        self.emit_block(fd, arch, fd.sblocks_ref().block(blk).get_block(1));
+        self.emit_part(fd, arch, blk, 1);
         self.emit.end_block(id2);
         self.emit
             .close_brace_indent(self.lang().kw_close_curly, indent);
@@ -7090,7 +7090,7 @@ impl PrintC {
         }
         self.context.set_mod(modifiers::NO_BRANCH); // don't print goto at bottom of clause
         let id2 = self.emit.begin_block(0);
-        self.emit_block(fd, arch, fd.sblocks_ref().block(blk).get_block(1));
+        self.emit_part(fd, arch, blk, 1);
         self.emit.end_block(id2);
         self.emit
             .close_brace_indent(self.lang().kw_close_curly, indent);
@@ -7135,7 +7135,7 @@ impl PrintC {
         self.context.push_mod();
         let id2 = self.emit.begin_block(0);
         self.context.set_mod(modifiers::NO_BRANCH);
-        self.emit_block(fd, arch, body);
+        self.emit_part(fd, arch, blk, 0);
         self.emit.end_block(id2);
         self.context.pop_mod();
         self.emit.close_brace_indent(self.lang().kw_close_curly, id);
@@ -7182,7 +7182,7 @@ impl PrintC {
         self.flush_eol_warnings();
         self.context.set_mod(modifiers::NO_BRANCH);
         let id2 = self.emit.begin_block(0);
-        self.emit_block(fd, arch, body);
+        self.emit_part(fd, arch, blk, 0);
         self.emit.end_block(id2);
         self.emit.close_brace_indent(self.lang().kw_close_curly, id);
         self.context.pop_mod();
@@ -7217,9 +7217,8 @@ impl PrintC {
             self.lang().kw_open_curly,
             self.output_brace(self.options.brace_loop),
         );
-        let body = fd.sblocks_ref().block(blk).get_block(0);
         let id1 = self.emit.begin_block(0);
-        self.emit_block(fd, arch, body);
+        self.emit_part(fd, arch, blk, 0);
         self.emit.end_block(id1);
         self.emit.close_brace_indent(self.lang().kw_close_curly, id);
         if !self.options.inf_loop_top {

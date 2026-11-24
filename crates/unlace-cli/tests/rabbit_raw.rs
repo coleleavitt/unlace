@@ -29,8 +29,14 @@ fn decompile(target: &str) -> String {
 fn rabbit_add_compare_store_decompiles() {
     for target in ["Rabbit2000:LE:16:default", "Rabbit3000:LE:16:default"] {
         let stdout = decompile(target);
-        assert!(stdout.contains("<= 0xf"), "the CP / JR NC test survives: {stdout}");
-        assert!(stdout.contains("dat_8000 = "), "the store to 0x8000: {stdout}");
+        assert!(
+            stdout.contains("<= 0xf"),
+            "the CP / JR NC test survives: {stdout}"
+        );
+        assert!(
+            stdout.contains("dat_8000 = "),
+            "the store to 0x8000: {stdout}"
+        );
         assert!(stdout.contains("return 5;"), "the taken path: {stdout}");
         assert!(stdout.contains("return 0;"), "the fall-back path: {stdout}");
     }

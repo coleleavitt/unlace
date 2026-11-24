@@ -15098,6 +15098,18 @@ which unconditionally cannot return. Without it, every caller grows a spurious
 fall-through edge into the cold path that structures into an invalid
 `while(true)`+`goto`.
 
+A call through an import slot counts as a no-return call when the load-time
+passes flagged the slot, and on x86 also when the slot is `TerminateProcess` and
+the process handle is the current one (`terminates_current`): reading the
+contiguous instructions before the call backward (at most four), the `-1`
+pseudo-handle stored as the first argument (`push -1`, `mov dword [esp],-1`,
+`or rcx,-1`, `mov rcx,-1`), or eax/rax stored as it (`push eax`, `mov
+[esp],eax`, `mov rcx,rax`) after a `call [GetCurrentProcess]` with only constant
+argument stores in between. The CRT's `__invoke_watson` and
+`__report_gsfailure` end that way and keep a cookie check and a `ret` behind the
+call, so the reachability rule concludes them
+(`tests/stages/terminatecurrent.toml`).
+
 On Go AMD64 ELF, `pclntab/gomcall.rs` independently identifies the
 unique `runtime.mcall` name and entry address in pclntab and verifies that
 the entry lies within the Listing's executable ranges. The saved goroutine

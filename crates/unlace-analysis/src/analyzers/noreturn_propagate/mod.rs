@@ -147,7 +147,7 @@ impl AnalysisPass for NoReturnPropagatePass {
             .get::<unlace_decomp::analysisgates::NoreturnReach>()
             .0;
         let resuming_entry = crate::pclntab::gomcall::resuming_entry(ctx, listing);
-        let slot_calls = terminal_slot_calls(listing, ctx.file);
+        let slot_calls = terminal_slot_calls(listing, ctx.file, &imports);
         for fact in propagate_noreturn(
             listing,
             &error_recog,
@@ -747,10 +747,28 @@ fn reaches_only_noreturn_walk<B: InstructionBody + ?Sized>(
 /// slot no-return. Such a call names no function in the Listing, so the
 /// static-target test above cannot see it; without this a `-fno-plt` wrapper
 /// ending in `exit()` never joins the terminal set.
-fn terminal_slot_calls(listing: &Listing, file: &object::File) -> BTreeSet<u64> {
+///
+/// (unlace#837) An x86 `call [TerminateProcess]` whose process handle is the
+/// current process (`GetCurrentProcess()` just before it, or the `-1`
+/// pseudo-handle) is such a call too: the CRT's `__invoke_watson` and
+/// `__report_gsfailure` end that way, and IDA names them no-return.
+fn terminal_slot_calls(
+    listing: &Listing,
+    file: &object::File,
+    imports: &[ImportSym],
+) -> BTreeSet<u64> {
     use object::read::Object;
     let mut out = BTreeSet::new();
     let arch = file.architecture();
+    let slots_of = |name: &[u8]| -> BTreeSet<u64> {
+        imports
+            .iter()
+            .filter(|p| p.kind == ImportSymKind::Import && import_base_name(&p.name) == name)
+            .map(|p| p.addr)
+            .collect()
+    };
+    let terminate = slots_of(b"TerminateProcess");
+    let current = slots_of(b"GetCurrentProcess");
     if !matches!(
         arch,
         object::Architecture::X86_64 | object::Architecture::I386 | object::Architecture::Aarch64
@@ -761,15 +779,97 @@ fn terminal_slot_calls(listing: &Listing, file: &object::File) -> BTreeSet<u64> 
         if !insn.flow.is_call || !insn.flows.is_empty() {
             continue;
         }
+        let wide = arch == object::Architecture::X86_64;
         let slot = match arch {
             object::Architecture::Aarch64 => aarch64_call_slot(file, vma),
-            _ => x86_call_slot(file, vma, insn.len, arch == object::Architecture::X86_64),
+            _ => x86_call_slot(file, vma, insn.len, wide),
         };
-        if slot.is_some_and(|slot| listing.is_noreturn_target(slot)) {
+        let ends_current = || {
+            arch != object::Architecture::Aarch64
+                && terminates_current(listing, file, vma, wide, &current)
+        };
+        if slot.is_some_and(|slot| {
+            listing.is_noreturn_target(slot) || (terminate.contains(&slot) && ends_current())
+        }) {
             out.insert(vma);
         }
     }
     out
+}
+
+/// An import's name without a leading `_` and a trailing `@N` (stdcall).
+fn import_base_name(name: &[u8]) -> &[u8] {
+    let name = name.strip_prefix(b"_").unwrap_or(name);
+    match name.iter().rposition(|&b| b == b'@') {
+        Some(at) if at > 0 && name[at + 1..].iter().all(u8::is_ascii_digit) => &name[..at],
+        _ => name,
+    }
+}
+
+/// Does the x86 call at `vma` pass the current process as its first argument?
+/// The contiguous instructions before it, at most four, are read backward: the
+/// `-1` pseudo-handle stored as the argument (`push -1`, `mov dword [esp],-1`,
+/// `or rcx,-1`, `mov rcx,-1`) settles it; otherwise eax/rax stored as the
+/// argument (`push eax`, `mov [esp],eax`, `mov rcx,rax`) must come from a
+/// `call [GetCurrentProcess]` with only constant argument stores in between.
+fn terminates_current(
+    listing: &Listing,
+    file: &object::File,
+    vma: u64,
+    wide: bool,
+    current: &BTreeSet<u64>,
+) -> bool {
+    let mut cursor = vma;
+    let mut handle = false;
+    for (&at, insn) in listing
+        .instructions_in_range(vma.saturating_sub(48), Some(vma))
+        .rev()
+        .take(4)
+    {
+        if at.checked_add(u64::from(insn.len)) != Some(cursor) {
+            return false;
+        }
+        cursor = at;
+        let Some(b) = bytes_at(file, at, insn.len as usize) else {
+            return false;
+        };
+        let imm_arg = if wide {
+            matches!(b, [0xba, _, _, _, _] | [0x31 | 0x33, 0xd2])
+        } else {
+            matches!(
+                b,
+                [0x6a, _] | [0x68, _, _, _, _] | [0xc7, 0x44, 0x24, 0x04, _, _, _, _]
+            )
+        };
+        if !handle {
+            let minus_one = if wide {
+                matches!(
+                    b,
+                    [0x48, 0x83, 0xc9, 0xff] | [0x48, 0xc7, 0xc1, 0xff, 0xff, 0xff, 0xff]
+                )
+            } else {
+                matches!(b, [0x6a, 0xff] | [0xc7, 0x04, 0x24, 0xff, 0xff, 0xff, 0xff])
+            };
+            if minus_one {
+                return true;
+            }
+            let from_eax = if wide {
+                matches!(b, [0x48, 0x8b, 0xc8] | [0x48, 0x89, 0xc1])
+            } else {
+                matches!(b, [0x50] | [0x89, 0x04, 0x24])
+            };
+            if from_eax {
+                handle = true;
+                continue;
+            }
+        } else if insn.flow.is_call {
+            return x86_call_slot(file, at, insn.len, wide).is_some_and(|s| current.contains(&s));
+        }
+        if !imm_arg {
+            return false;
+        }
+    }
+    false
 }
 
 /// The slot an x86 `[notrack] call [rip+disp32]` / `call [abs32]` at `vma` reads.

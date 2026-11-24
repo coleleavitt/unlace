@@ -2363,7 +2363,8 @@ mod tests {
         // and rawswitch-loop / a matched table whose cases loop back with a loaded index is labelled by it
         // and boolreturn-condlist / guards concatenated into the next guard's condition join the return run
         // and c-keyword-members / a member named with a C keyword is escaped
-        assert_eq!(count, 1033, "corpus file count drifted");
+        // and terminatecurrent / a TerminateProcess(GetCurrentProcess()) wrapper is no-return
+        assert_eq!(count, 1034, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

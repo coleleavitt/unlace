@@ -1600,9 +1600,23 @@ pub(crate) fn decompile_entries(
     pointer_arguments: bool,
     tail_callees: bool,
 ) -> Vec<FuncResult> {
+    decompile_entries_with(prog, args, targets, pointer_arguments, tail_callees, false)
+}
+
+/// [`decompile_entries`], also capturing each function's prototype line when
+/// `want_proto` (the embedding API reports it beside the body).
+pub(crate) fn decompile_entries_with(
+    prog: &mut ConsoleProgram,
+    args: &Args,
+    targets: Vec<FunctionEntry>,
+    pointer_arguments: bool,
+    tail_callees: bool,
+    want_proto: bool,
+) -> Vec<FuncResult> {
     arm_fn_budgets(prog, args);
     let opts = DecompileOptions {
         no_vars: args.no_vars,
+        want_proto,
         want_provenance: args.wants_provenance(),
         single_target: targets.len() == 1,
         want_pointer_arguments: pointer_arguments,

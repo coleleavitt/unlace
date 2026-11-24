@@ -40,10 +40,16 @@ pub(crate) fn selections(
     args: &Args,
     targets: &[FunctionEntry],
 ) -> Interiors {
-    let mut found = Interiors::new();
     if args.addrs.is_empty() && args.names.is_none() {
-        return found;
+        return Interiors::new();
     }
+    of_targets(prog, targets)
+}
+
+/// [`selections`] for targets chosen outside the argument list (the embedding
+/// API's per-call selection), where every target counts as explicitly selected.
+pub(crate) fn of_targets(prog: &ConsoleProgram, targets: &[FunctionEntry]) -> Interiors {
+    let mut found = Interiors::new();
     let bytes: Vec<u64> = targets.iter().map(|t| t.addr.get_offset()).collect();
     for (byte, owner) in bytes.iter().zip(prog.entries_containing(&bytes)) {
         let Some(owner) = owner else {

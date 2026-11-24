@@ -1,0 +1,22 @@
+[package]
+name = "unlace"
+description = "Embed the unlace decompiler in-process: load a binary or raw bytes, declare function bounds, decompile to C and a structured document"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# The command line as a library: every load, parse and render goes through its code paths.
+unlace-cli.workspace = true
+serde_json = "1"
+tempfile = "3.27"
+thiserror.workspace = true
+
+[features]
+# Carry the compiled SLEIGH tree inside the binary, as a release `unlace` does.
+embed-specs = ["unlace-cli/embed-specs"]
+
+[lints]
+workspace = true

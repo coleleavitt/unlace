@@ -4,6 +4,7 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod flow;
+pub mod kuna_aeabifloat; // (kuna) AEABI soft-float helpers (__aeabi_dadd, __aeabi_d2iz) as C operators and casts
 pub mod kuna_arithhelpers; // (kuna) 32-bit runtime arithmetic helpers (__udivdi3, __aeabi_uldivmod, _alldiv) as C operators
 pub mod kuna_armflowcontext;
 pub mod kuna_armhoist; // (kuna `armhoist`) hoist the ops both arms of a branch share before structuring

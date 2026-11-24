@@ -1,0 +1,1207 @@
+# Imagination Technologies META (Meta 1.1, 1.2 and 2.1 general-purpose instruction set).
+# Written for unlace from the binutils-gdb META opcode table and disassembler
+# (include/opcode/metag.h, opcodes/metag-dis.c) for the encodings, and the META ABI as
+# the Linux arch/metag port and GCC's metag back end used it. No GPL text is copied: the
+# constructors below are written from the field layouts those files document.
+# Every instruction is one 32-bit little-endian word. Registers live in units: D0, D1
+# (data), A0, A1 (address), CT (control), PC, TR, TT and FX; each operand field names a
+# register number inside a unit chosen by other bits of the word.
+
+define endian=little;
+define alignment=4;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0x0 size=4 [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 D0.8 D0.9 D0.10 D0.11 D0.12 D0.13 D0.14 D0.15 D0.16 D0.17 D0.18 D0.19 D0.20 D0.21 D0.22 D0.23 D0.24 D0.25 D0.26 D0.27 D0.28 D0.29 D0.30 D0.31 ];
+define register offset=0x80 size=4 [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 D1.8 D1.9 D1.10 D1.11 D1.12 D1.13 D1.14 D1.15 D1.16 D1.17 D1.18 D1.19 D1.20 D1.21 D1.22 D1.23 D1.24 D1.25 D1.26 D1.27 D1.28 D1.29 D1.30 D1.31 ];
+define register offset=0x100 size=4 [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 A0.8 A0.9 A0.10 A0.11 A0.12 A0.13 A0.14 A0.15 CPC0 ];
+define register offset=0x180 size=4 [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 A1.8 A1.9 A1.10 A1.11 A1.12 A1.13 A1.14 A1.15 CPC1 ];
+define register offset=0x200 size=4 [ TXENABLE TXMODE TXSTATUS TXRPT TXTIMER TXL1START TXL1END TXL1COUNT TXL2START TXL2END TXL2COUNT TXBPOBITS TXMRSIZE TXTIMERI TXDRCTRL TXDRSIZE TXCATCH0 TXCATCH1 TXCATCH2 TXCATCH3 TXDEFR TXCPRS TXCLKCTRL TXINTERN0 TXAMAREG0 TXAMAREG1 TXAMAREG2 TXAMAREG3 TXDIVTIME TXPRIVEXT TXACTCYC TXIDLECYC ];
+define register offset=0x280 size=4 [ PC PCX RD ];
+define register offset=0x300 size=4 [ TXSTAT TXMASK TXSTATI TXMASKI TXPOLL TXGPIOI TXPOLLI TXGPIOO ];
+define register offset=0x380 size=4 [ TTEXEC TTCTRL TTMARK TTREC GTEXEC ];
+define register offset=0x400 size=4 [ FX.0 FX.1 FX.2 FX.3 FX.4 FX.5 FX.6 FX.7 FX.8 FX.9 FX.10 FX.11 FX.12 FX.13 FX.14 FX.15 ];
+define register offset=0x500 size=1 [ NF ZF VF CF ];
+define register offset=0x600 size=8 [ contextreg ];
+define context contextreg
+  md0_1 = (0,4)
+  md1_1 = (0,4)
+  ma0_1 = (0,4)
+  ma1_1 = (0,4)
+  mr1 = (0,4)
+  md0_2 = (5,9)
+  md1_2 = (5,9)
+  ma0_2 = (5,9)
+  ma1_2 = (5,9)
+  mr2 = (5,9)
+  md0_3 = (10,14)
+  md1_3 = (10,14)
+  ma0_3 = (10,14)
+  ma1_3 = (10,14)
+  mr3 = (10,14)
+  md0_4 = (15,19)
+  md1_4 = (15,19)
+  ma0_4 = (15,19)
+  ma1_4 = (15,19)
+  mr4 = (15,19)
+  md0_5 = (20,24)
+  md1_5 = (20,24)
+  ma0_5 = (20,24)
+  ma1_5 = (20,24)
+  mr5 = (20,24)
+  md0_6 = (25,29)
+  md1_6 = (25,29)
+  ma0_6 = (25,29)
+  ma1_6 = (25,29)
+  mr6 = (25,29)
+  md0_7 = (30,34)
+  md1_7 = (30,34)
+  ma0_7 = (30,34)
+  ma1_7 = (30,34)
+  mr7 = (30,34)
+;
+
+define token instr(32)
+  maj    = (28,31)
+  minor  = (24,27)
+  sbit   = (27,27)
+  cbit   = (26,26)
+  ibit   = (25,25)
+  ubit   = (24,24)
+  r19    = (19,23)
+  r14    = (14,18)
+  r9     = (9,13)
+  r9u    = (12,13)
+  imm16  = (3,18)
+  simm16 = (3,18) signed
+  imm8   = (6,13)
+  imm5   = (9,13)
+  cc     = (1,4)
+  u1     = (1,4)
+  u5     = (5,8)
+  u10    = (10,13)
+  b0     = (0,0)
+  b1     = (1,1)
+  b2     = (2,2)
+  b5     = (5,5)
+  b6     = (6,6)
+  b7     = (7,7)
+  b8     = (8,8)
+  b9     = (9,9)
+  shty   = (6,7)
+  f0_8   = (0,8)
+  f1_8   = (1,8)
+  f1_5   = (1,5)
+  f3_8   = (3,8)
+  f0_4   = (0,4)
+  f0_2   = (0,2)
+  f0_1   = (0,1)
+  f9_13  = (9,13)
+  f19_23 = (19,23)
+  f0_23  = (0,23)
+  f0_7   = (0,7)
+  boff19 = (5,23) signed
+  su3    = (3,4)
+  su5    = (5,6)
+  gsimm6 = (8,13) signed
+  gsimm6u = (8,13)
+  eximm12 = (7,18) signed
+  exb0   = (0,0)
+  exsz   = (1,2)
+  rmask  = (7,13)
+  rmb1   = (7,7)
+  rmb2   = (8,8)
+  rmb3   = (9,9)
+  rmb4   = (10,10)
+  rmb5   = (11,11)
+  rmb6   = (12,12)
+  rmb7   = (13,13)
+  crr    = (0,2)
+  low24  = (0,23)
+  f1_13  = (1,13)
+  f5_8   = (5,8)
+  f19_31 = (19,31)
+  ct_19 = (19,23)
+  ct_14 = (14,18)
+  ct_9 = (9,13)
+  d0_19 = (19,23)
+  d0_14 = (14,18)
+  d0_9 = (9,13)
+  d1_19 = (19,23)
+  d1_14 = (14,18)
+  d1_9 = (9,13)
+  a0_19 = (19,23)
+  a0_14 = (14,18)
+  a0_9 = (9,13)
+  a1_19 = (19,23)
+  a1_14 = (14,18)
+  a1_9 = (9,13)
+  pc_19 = (19,23)
+  pc_14 = (14,18)
+  pc_9 = (9,13)
+  tr_19 = (19,23)
+  tr_14 = (14,18)
+  tr_9 = (9,13)
+  tt_19 = (19,23)
+  tt_14 = (14,18)
+  tt_9 = (9,13)
+  fx_19 = (19,23)
+  fx_14 = (14,18)
+  fx_9 = (9,13)
+  d0_o = (9,11)
+  d1_o = (9,11)
+  a0_o = (9,11)
+  a1_o = (9,11)
+  d0_x = (0,0)
+  d1_x = (0,0)
+  a0_x = (0,0)
+  a1_x = (0,0)
+  d0_c = (0,2)
+  d1_c = (0,2)
+  a0_c = (0,2)
+  a1_c = (0,2)
+;
+
+attach variables [ ct_19 ] [ TXENABLE TXMODE TXSTATUS TXRPT TXTIMER TXL1START TXL1END TXL1COUNT TXL2START TXL2END TXL2COUNT TXBPOBITS TXMRSIZE TXTIMERI TXDRCTRL TXDRSIZE TXCATCH0 TXCATCH1 TXCATCH2 TXCATCH3 TXDEFR TXCPRS TXCLKCTRL TXINTERN0 TXAMAREG0 TXAMAREG1 TXAMAREG2 TXAMAREG3 TXDIVTIME TXPRIVEXT TXACTCYC TXIDLECYC ];
+attach variables [ ct_14 ] [ TXENABLE TXMODE TXSTATUS TXRPT TXTIMER TXL1START TXL1END TXL1COUNT TXL2START TXL2END TXL2COUNT TXBPOBITS TXMRSIZE TXTIMERI TXDRCTRL TXDRSIZE TXCATCH0 TXCATCH1 TXCATCH2 TXCATCH3 TXDEFR TXCPRS TXCLKCTRL TXINTERN0 TXAMAREG0 TXAMAREG1 TXAMAREG2 TXAMAREG3 TXDIVTIME TXPRIVEXT TXACTCYC TXIDLECYC ];
+attach variables [ ct_9 ] [ TXENABLE TXMODE TXSTATUS TXRPT TXTIMER TXL1START TXL1END TXL1COUNT TXL2START TXL2END TXL2COUNT TXBPOBITS TXMRSIZE TXTIMERI TXDRCTRL TXDRSIZE TXCATCH0 TXCATCH1 TXCATCH2 TXCATCH3 TXDEFR TXCPRS TXCLKCTRL TXINTERN0 TXAMAREG0 TXAMAREG1 TXAMAREG2 TXAMAREG3 TXDIVTIME TXPRIVEXT TXACTCYC TXIDLECYC ];
+attach variables [ d0_19 ] [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 D0.8 D0.9 D0.10 D0.11 D0.12 D0.13 D0.14 D0.15 D0.16 D0.17 D0.18 D0.19 D0.20 D0.21 D0.22 D0.23 D0.24 D0.25 D0.26 D0.27 D0.28 D0.29 D0.30 D0.31 ];
+attach variables [ d0_14 ] [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 D0.8 D0.9 D0.10 D0.11 D0.12 D0.13 D0.14 D0.15 D0.16 D0.17 D0.18 D0.19 D0.20 D0.21 D0.22 D0.23 D0.24 D0.25 D0.26 D0.27 D0.28 D0.29 D0.30 D0.31 ];
+attach variables [ d0_9 ] [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 D0.8 D0.9 D0.10 D0.11 D0.12 D0.13 D0.14 D0.15 D0.16 D0.17 D0.18 D0.19 D0.20 D0.21 D0.22 D0.23 D0.24 D0.25 D0.26 D0.27 D0.28 D0.29 D0.30 D0.31 ];
+attach variables [ d1_19 ] [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 D1.8 D1.9 D1.10 D1.11 D1.12 D1.13 D1.14 D1.15 D1.16 D1.17 D1.18 D1.19 D1.20 D1.21 D1.22 D1.23 D1.24 D1.25 D1.26 D1.27 D1.28 D1.29 D1.30 D1.31 ];
+attach variables [ d1_14 ] [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 D1.8 D1.9 D1.10 D1.11 D1.12 D1.13 D1.14 D1.15 D1.16 D1.17 D1.18 D1.19 D1.20 D1.21 D1.22 D1.23 D1.24 D1.25 D1.26 D1.27 D1.28 D1.29 D1.30 D1.31 ];
+attach variables [ d1_9 ] [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 D1.8 D1.9 D1.10 D1.11 D1.12 D1.13 D1.14 D1.15 D1.16 D1.17 D1.18 D1.19 D1.20 D1.21 D1.22 D1.23 D1.24 D1.25 D1.26 D1.27 D1.28 D1.29 D1.30 D1.31 ];
+attach variables [ a0_19 ] [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 A0.8 A0.9 A0.10 A0.11 A0.12 A0.13 A0.14 A0.15 CPC0 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ a0_14 ] [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 A0.8 A0.9 A0.10 A0.11 A0.12 A0.13 A0.14 A0.15 CPC0 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ a0_9 ] [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 A0.8 A0.9 A0.10 A0.11 A0.12 A0.13 A0.14 A0.15 CPC0 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ a1_19 ] [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 A1.8 A1.9 A1.10 A1.11 A1.12 A1.13 A1.14 A1.15 CPC1 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ a1_14 ] [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 A1.8 A1.9 A1.10 A1.11 A1.12 A1.13 A1.14 A1.15 CPC1 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ a1_9 ] [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 A1.8 A1.9 A1.10 A1.11 A1.12 A1.13 A1.14 A1.15 CPC1 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ pc_19 ] [ PC PCX _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ pc_14 ] [ PC PCX _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ pc_9 ] [ PC PCX _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ tr_19 ] [ TXSTAT TXMASK TXSTATI TXMASKI TXPOLL TXGPIOI TXPOLLI TXGPIOO _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ tr_14 ] [ TXSTAT TXMASK TXSTATI TXMASKI TXPOLL TXGPIOI TXPOLLI TXGPIOO _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ tr_9 ] [ TXSTAT TXMASK TXSTATI TXMASKI TXPOLL TXGPIOI TXPOLLI TXGPIOO _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ tt_19 ] [ TTEXEC TTCTRL TTMARK TTREC GTEXEC _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ tt_14 ] [ TTEXEC TTCTRL TTMARK TTREC GTEXEC _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ tt_9 ] [ TTEXEC TTCTRL TTMARK TTREC GTEXEC _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ fx_19 ] [ FX.0 FX.1 FX.2 FX.3 FX.4 FX.5 FX.6 FX.7 FX.8 FX.9 FX.10 FX.11 FX.12 FX.13 FX.14 FX.15 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ fx_14 ] [ FX.0 FX.1 FX.2 FX.3 FX.4 FX.5 FX.6 FX.7 FX.8 FX.9 FX.10 FX.11 FX.12 FX.13 FX.14 FX.15 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ fx_9 ] [ FX.0 FX.1 FX.2 FX.3 FX.4 FX.5 FX.6 FX.7 FX.8 FX.9 FX.10 FX.11 FX.12 FX.13 FX.14 FX.15 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ d0_o ] [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 ];
+attach variables [ d1_o ] [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 ];
+attach variables [ a0_o ] [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 ];
+attach variables [ a1_o ] [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 ];
+attach variables [ d0_x ] [ D0Re0 D0Ar6 ];
+attach variables [ d1_x ] [ D1Re0 D1Ar5 ];
+attach variables [ a0_x ] [ A0StP A0FrP ];
+attach variables [ a1_x ] [ A1GbP A1LbP ];
+attach variables [ d0_c ] [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 ];
+attach variables [ d1_c ] [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 ];
+attach variables [ a0_c ] [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 ];
+attach variables [ a1_c ] [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 ];
+
+
+attach variables [ md0_1 ] [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 D0.8 D0.9 D0.10 D0.11 D0.12 D0.13 D0.14 D0.15 D0.16 D0.17 D0.18 D0.19 D0.20 D0.21 D0.22 D0.23 D0.24 D0.25 D0.26 D0.27 D0.28 D0.29 D0.30 D0.31 ];
+attach variables [ md1_1 ] [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 D1.8 D1.9 D1.10 D1.11 D1.12 D1.13 D1.14 D1.15 D1.16 D1.17 D1.18 D1.19 D1.20 D1.21 D1.22 D1.23 D1.24 D1.25 D1.26 D1.27 D1.28 D1.29 D1.30 D1.31 ];
+attach variables [ ma0_1 ] [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 A0.8 A0.9 A0.10 A0.11 A0.12 A0.13 A0.14 A0.15 CPC0 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ ma1_1 ] [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 A1.8 A1.9 A1.10 A1.11 A1.12 A1.13 A1.14 A1.15 CPC1 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ md0_2 ] [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 D0.8 D0.9 D0.10 D0.11 D0.12 D0.13 D0.14 D0.15 D0.16 D0.17 D0.18 D0.19 D0.20 D0.21 D0.22 D0.23 D0.24 D0.25 D0.26 D0.27 D0.28 D0.29 D0.30 D0.31 ];
+attach variables [ md1_2 ] [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 D1.8 D1.9 D1.10 D1.11 D1.12 D1.13 D1.14 D1.15 D1.16 D1.17 D1.18 D1.19 D1.20 D1.21 D1.22 D1.23 D1.24 D1.25 D1.26 D1.27 D1.28 D1.29 D1.30 D1.31 ];
+attach variables [ ma0_2 ] [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 A0.8 A0.9 A0.10 A0.11 A0.12 A0.13 A0.14 A0.15 CPC0 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ ma1_2 ] [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 A1.8 A1.9 A1.10 A1.11 A1.12 A1.13 A1.14 A1.15 CPC1 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ md0_3 ] [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 D0.8 D0.9 D0.10 D0.11 D0.12 D0.13 D0.14 D0.15 D0.16 D0.17 D0.18 D0.19 D0.20 D0.21 D0.22 D0.23 D0.24 D0.25 D0.26 D0.27 D0.28 D0.29 D0.30 D0.31 ];
+attach variables [ md1_3 ] [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 D1.8 D1.9 D1.10 D1.11 D1.12 D1.13 D1.14 D1.15 D1.16 D1.17 D1.18 D1.19 D1.20 D1.21 D1.22 D1.23 D1.24 D1.25 D1.26 D1.27 D1.28 D1.29 D1.30 D1.31 ];
+attach variables [ ma0_3 ] [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 A0.8 A0.9 A0.10 A0.11 A0.12 A0.13 A0.14 A0.15 CPC0 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ ma1_3 ] [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 A1.8 A1.9 A1.10 A1.11 A1.12 A1.13 A1.14 A1.15 CPC1 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ md0_4 ] [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 D0.8 D0.9 D0.10 D0.11 D0.12 D0.13 D0.14 D0.15 D0.16 D0.17 D0.18 D0.19 D0.20 D0.21 D0.22 D0.23 D0.24 D0.25 D0.26 D0.27 D0.28 D0.29 D0.30 D0.31 ];
+attach variables [ md1_4 ] [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 D1.8 D1.9 D1.10 D1.11 D1.12 D1.13 D1.14 D1.15 D1.16 D1.17 D1.18 D1.19 D1.20 D1.21 D1.22 D1.23 D1.24 D1.25 D1.26 D1.27 D1.28 D1.29 D1.30 D1.31 ];
+attach variables [ ma0_4 ] [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 A0.8 A0.9 A0.10 A0.11 A0.12 A0.13 A0.14 A0.15 CPC0 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ ma1_4 ] [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 A1.8 A1.9 A1.10 A1.11 A1.12 A1.13 A1.14 A1.15 CPC1 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ md0_5 ] [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 D0.8 D0.9 D0.10 D0.11 D0.12 D0.13 D0.14 D0.15 D0.16 D0.17 D0.18 D0.19 D0.20 D0.21 D0.22 D0.23 D0.24 D0.25 D0.26 D0.27 D0.28 D0.29 D0.30 D0.31 ];
+attach variables [ md1_5 ] [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 D1.8 D1.9 D1.10 D1.11 D1.12 D1.13 D1.14 D1.15 D1.16 D1.17 D1.18 D1.19 D1.20 D1.21 D1.22 D1.23 D1.24 D1.25 D1.26 D1.27 D1.28 D1.29 D1.30 D1.31 ];
+attach variables [ ma0_5 ] [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 A0.8 A0.9 A0.10 A0.11 A0.12 A0.13 A0.14 A0.15 CPC0 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ ma1_5 ] [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 A1.8 A1.9 A1.10 A1.11 A1.12 A1.13 A1.14 A1.15 CPC1 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ md0_6 ] [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 D0.8 D0.9 D0.10 D0.11 D0.12 D0.13 D0.14 D0.15 D0.16 D0.17 D0.18 D0.19 D0.20 D0.21 D0.22 D0.23 D0.24 D0.25 D0.26 D0.27 D0.28 D0.29 D0.30 D0.31 ];
+attach variables [ md1_6 ] [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 D1.8 D1.9 D1.10 D1.11 D1.12 D1.13 D1.14 D1.15 D1.16 D1.17 D1.18 D1.19 D1.20 D1.21 D1.22 D1.23 D1.24 D1.25 D1.26 D1.27 D1.28 D1.29 D1.30 D1.31 ];
+attach variables [ ma0_6 ] [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 A0.8 A0.9 A0.10 A0.11 A0.12 A0.13 A0.14 A0.15 CPC0 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ ma1_6 ] [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 A1.8 A1.9 A1.10 A1.11 A1.12 A1.13 A1.14 A1.15 CPC1 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ md0_7 ] [ D0Re0 D0Ar6 D0Ar4 D0Ar2 D0FrT D0.5 D0.6 D0.7 D0.8 D0.9 D0.10 D0.11 D0.12 D0.13 D0.14 D0.15 D0.16 D0.17 D0.18 D0.19 D0.20 D0.21 D0.22 D0.23 D0.24 D0.25 D0.26 D0.27 D0.28 D0.29 D0.30 D0.31 ];
+attach variables [ md1_7 ] [ D1Re0 D1Ar5 D1Ar3 D1Ar1 D1RtP D1.5 D1.6 D1.7 D1.8 D1.9 D1.10 D1.11 D1.12 D1.13 D1.14 D1.15 D1.16 D1.17 D1.18 D1.19 D1.20 D1.21 D1.22 D1.23 D1.24 D1.25 D1.26 D1.27 D1.28 D1.29 D1.30 D1.31 ];
+attach variables [ ma0_7 ] [ A0StP A0FrP A0.2 A0.3 A0.4 A0.5 A0.6 A0.7 A0.8 A0.9 A0.10 A0.11 A0.12 A0.13 A0.14 A0.15 CPC0 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+attach variables [ ma1_7 ] [ A1GbP A1LbP A1.2 A1.3 A1.4 A1.5 A1.6 A1.7 A1.8 A1.9 A1.10 A1.11 A1.12 A1.13 A1.14 A1.15 CPC1 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ];
+
+# Condition codes (binutils enum cond_code): C is set by a borrow on subtract (CS = LO).
+CC: ""   is cc=0  { export 1:1; }
+CC: "EQ" is cc=1  { c:1 = ZF; export c; }
+CC: "NE" is cc=2  { c:1 = !ZF; export c; }
+CC: "CS" is cc=3  { c:1 = CF; export c; }
+CC: "CC" is cc=4  { c:1 = !CF; export c; }
+CC: "MI" is cc=5  { c:1 = NF; export c; }
+CC: "PL" is cc=6  { c:1 = !NF; export c; }
+CC: "VS" is cc=7  { c:1 = VF; export c; }
+CC: "VC" is cc=8  { c:1 = !VF; export c; }
+CC: "HI" is cc=9  { c:1 = !CF && !ZF; export c; }
+CC: "LS" is cc=10 { c:1 = CF || ZF; export c; }
+CC: "GE" is cc=11 { c:1 = NF == VF; export c; }
+CC: "LT" is cc=12 { c:1 = NF != VF; export c; }
+CC: "GT" is cc=13 { c:1 = !ZF && (NF == VF); export c; }
+CC: "LE" is cc=14 { c:1 = ZF || (NF != VF); export c; }
+CC: "NV" is cc=15 { export 0:1; }
+
+macro addflags(a, b, r) {
+  CF = carry(a, b);
+  VF = scarry(a, b);
+  ZF = r == 0;
+  NF = r s< 0;
+}
+macro subflags(a, b, r) {
+  CF = a < b;
+  VF = sborrow(a, b);
+  ZF = r == 0;
+  NF = r s< 0;
+}
+macro logflags(r) {
+  ZF = r == 0;
+  NF = r s< 0;
+}
+
+define pcodeop switch_trap;
+define pcodeop lock;
+define pcodeop rti;
+define pcodeop rth;
+define pcodeop ffb;
+define pcodeop norm;
+define pcodeop nmin;
+define pcodeop kick;
+define pcodeop defr;
+define pcodeop dcache;
+define pcodeop icache;
+define pcodeop cacher;
+define pcodeop cachew;
+define pcodeop lnkget;
+define pcodeop lnkset;
+
+# Register operands in the unit an ALU instruction works on: D0/D1 from bit 24, or A0/A1
+# for the address-unit major opcode 8.
+
+RD19: d0_19 is maj!=8 & ubit=0 & d0_19 { export d0_19; }
+RD19: d1_19 is maj!=8 & ubit=1 & d1_19 { export d1_19; }
+RD19: a0_19 is maj=8 & ubit=0 & a0_19 { export a0_19; }
+RD19: a1_19 is maj=8 & ubit=1 & a1_19 { export a1_19; }
+RS14: d0_14 is maj!=8 & ubit=0 & d0_14 { export d0_14; }
+RS14: d1_14 is maj!=8 & ubit=1 & d1_14 { export d1_14; }
+RS14: a0_14 is maj=8 & ubit=0 & a0_14 { export a0_14; }
+RS14: a1_14 is maj=8 & ubit=1 & a1_14 { export a1_14; }
+RS9: d0_9 is maj!=8 & ubit=0 & d0_9 { export d0_9; }
+RS9: d1_9 is maj!=8 & ubit=1 & d1_9 { export d1_9; }
+RS9: a0_9 is maj=8 & ubit=0 & a0_9 { export a0_9; }
+RS9: a1_9 is maj=8 & ubit=1 & a1_9 { export a1_9; }
+
+# Source 2 with the O2R bit: bits 12-13 pick another unit, bits 9-11 the register (lookup_o2r).
+RS9o: RS9 is b0=0 & RS9 { export RS9; }
+RS9o: a1_o is b0=1 & maj!=8 & ubit=0 & r9u=0 & a1_o { export a1_o; }
+RS9o: d1_o is b0=1 & maj!=8 & ubit=0 & r9u=1 & d1_o { export d1_o; }
+RS9o: RD   is b0=1 & maj!=8 & ubit=0 & r9u=2 & RD   { export RD; }
+RS9o: a0_o is b0=1 & maj!=8 & ubit=0 & r9u=3 & a0_o { export a0_o; }
+RS9o: a1_o is b0=1 & maj!=8 & ubit=1 & r9u=0 & a1_o { export a1_o; }
+RS9o: d0_o is b0=1 & maj!=8 & ubit=1 & r9u=1 & d0_o { export d0_o; }
+RS9o: RD   is b0=1 & maj!=8 & ubit=1 & r9u=2 & RD   { export RD; }
+RS9o: a0_o is b0=1 & maj!=8 & ubit=1 & r9u=3 & a0_o { export a0_o; }
+RS9o: a1_o is b0=1 & maj=8 & ubit=0 & r9u=0 & a1_o { export a1_o; }
+RS9o: d0_o is b0=1 & maj=8 & ubit=0 & r9u=1 & d0_o { export d0_o; }
+RS9o: RD   is b0=1 & maj=8 & ubit=0 & r9u=2 & RD   { export RD; }
+RS9o: d1_o is b0=1 & maj=8 & ubit=0 & r9u=3 & d1_o { export d1_o; }
+RS9o: d1_o is b0=1 & maj=8 & ubit=1 & r9u=0 & d1_o { export d1_o; }
+RS9o: d0_o is b0=1 & maj=8 & ubit=1 & r9u=1 & d0_o { export d0_o; }
+RS9o: RD   is b0=1 & maj=8 & ubit=1 & r9u=2 & RD   { export RD; }
+RS9o: a0_o is b0=1 & maj=8 & ubit=1 & r9u=3 & a0_o { export a0_o; }
+
+# A register in any unit, the unit taken from a 4-bit field.
+
+U5r19: ct_19 is u5=0 & ct_19 { export ct_19; }
+U5r19: d0_19 is u5=1 & d0_19 { export d0_19; }
+U5r19: d1_19 is u5=2 & d1_19 { export d1_19; }
+U5r19: a0_19 is u5=3 & a0_19 { export a0_19; }
+U5r19: a1_19 is u5=4 & a1_19 { export a1_19; }
+U5r19: pc_19 is u5=5 & pc_19 { export pc_19; }
+U5r19: tr_19 is u5=7 & tr_19 { export tr_19; }
+U5r19: tt_19 is u5=8 & tt_19 { export tt_19; }
+U5r19: fx_19 is u5=9 & fx_19 { export fx_19; }
+U5r14: ct_14 is u5=0 & ct_14 { export ct_14; }
+U5r14: d0_14 is u5=1 & d0_14 { export d0_14; }
+U5r14: d1_14 is u5=2 & d1_14 { export d1_14; }
+U5r14: a0_14 is u5=3 & a0_14 { export a0_14; }
+U5r14: a1_14 is u5=4 & a1_14 { export a1_14; }
+U5r14: pc_14 is u5=5 & pc_14 { export pc_14; }
+U5r14: tr_14 is u5=7 & tr_14 { export tr_14; }
+U5r14: tt_14 is u5=8 & tt_14 { export tt_14; }
+U5r14: fx_14 is u5=9 & fx_14 { export fx_14; }
+U10r19: ct_19 is u10=0 & ct_19 { export ct_19; }
+U10r19: d0_19 is u10=1 & d0_19 { export d0_19; }
+U10r19: d1_19 is u10=2 & d1_19 { export d1_19; }
+U10r19: a0_19 is u10=3 & a0_19 { export a0_19; }
+U10r19: a1_19 is u10=4 & a1_19 { export a1_19; }
+U10r19: pc_19 is u10=5 & pc_19 { export pc_19; }
+U10r19: tr_19 is u10=7 & tr_19 { export tr_19; }
+U10r19: tt_19 is u10=8 & tt_19 { export tt_19; }
+U10r19: fx_19 is u10=9 & fx_19 { export fx_19; }
+U1r19: ct_19 is u1=0 & ct_19 { export ct_19; }
+U1r19: d0_19 is u1=1 & d0_19 { export d0_19; }
+U1r19: d1_19 is u1=2 & d1_19 { export d1_19; }
+U1r19: a0_19 is u1=3 & a0_19 { export a0_19; }
+U1r19: a1_19 is u1=4 & a1_19 { export a1_19; }
+U1r19: pc_19 is u1=5 & pc_19 { export pc_19; }
+U1r19: tr_19 is u1=7 & tr_19 { export tr_19; }
+U1r19: tt_19 is u1=8 & tt_19 { export tt_19; }
+U1r19: fx_19 is u1=9 & fx_19 { export fx_19; }
+
+# The pair of a 64-bit transfer: D0.n with D1.n, A0.n with A1.n (get_pair_unit).
+P1r19: d1_19 is u1=1 & d1_19 { export d1_19; }
+P1r19: d0_19 is u1=2 & d0_19 { export d0_19; }
+P1r19: a1_19 is u1=3 & a1_19 { export a1_19; }
+P1r19: a0_19 is u1=4 & a0_19 { export a0_19; }
+
+# Short (2-bit) unit fields: 0 = A1, 1 = D0, 2 = D1, 3 = A0 (short_unit).
+
+SB: a1_14 is su5=0 & a1_14 { export a1_14; }
+SBx: a1_x is su5=0 & a1_x { export a1_x; }
+SR19: a1_19 is su3=0 & a1_19 { export a1_19; }
+SP19: a0_19 is su3=0 & a0_19 { export a0_19; }
+SRc: a1_c is su3=0 & a1_c { export a1_c; }
+SJ19: a1_19 is f0_1=0 & a1_19 { export a1_19; }
+SBo9: a1_9 is su5=0 & a1_9 { export a1_9; }
+SB: d0_14 is su5=1 & d0_14 { export d0_14; }
+SBx: d0_x is su5=1 & d0_x { export d0_x; }
+SR19: d0_19 is su3=1 & d0_19 { export d0_19; }
+SP19: d1_19 is su3=1 & d1_19 { export d1_19; }
+SRc: d0_c is su3=1 & d0_c { export d0_c; }
+SJ19: d0_19 is f0_1=1 & d0_19 { export d0_19; }
+SBo9: d0_9 is su5=1 & d0_9 { export d0_9; }
+SB: d1_14 is su5=2 & d1_14 { export d1_14; }
+SBx: d1_x is su5=2 & d1_x { export d1_x; }
+SR19: d1_19 is su3=2 & d1_19 { export d1_19; }
+SP19: d0_19 is su3=2 & d0_19 { export d0_19; }
+SRc: d1_c is su3=2 & d1_c { export d1_c; }
+SJ19: d1_19 is f0_1=2 & d1_19 { export d1_19; }
+SBo9: d1_9 is su5=2 & d1_9 { export d1_9; }
+SB: a0_14 is su5=3 & a0_14 { export a0_14; }
+SBx: a0_x is su5=3 & a0_x { export a0_x; }
+SR19: a0_19 is su3=3 & a0_19 { export a0_19; }
+SP19: a1_19 is su3=3 & a1_19 { export a1_19; }
+SRc: a0_c is su3=3 & a0_c { export a0_c; }
+SJ19: a0_19 is f0_1=3 & a0_19 { export a0_19; }
+SBo9: a0_9 is su5=3 & a0_9 { export a0_9; }
+
+# 16-bit immediates: bit 1 sign-extends, bit 0 (T) places the value in the top half.
+I16A: "#"simm16 is b0=0 & b1=1 & simm16 { export *[const]:4 simm16; }
+I16A: "#"imm16  is b0=0 & b1=0 & imm16  { export *[const]:4 imm16; }
+I16A: "#"tv     is b0=1 & imm16 [ tv = imm16 << 16; ] { export *[const]:4 tv; }
+# Logic and compare immediates: bit 2 (M) fills the other half with ones (MB, MT).
+I16L: I16A      is b2=0 & I16A { export I16A; }
+I16L: "#"tv     is b2=1 & b0=0 & imm16 [ tv = imm16 | 0xffff0000; ] { export *[const]:4 tv; }
+I16L: "#"tv     is b2=1 & b0=1 & imm16 [ tv = (imm16 << 16) | 0xffff; ] { export *[const]:4 tv; }
+I8: "#"imm8 is imm8 { export *[const]:4 imm8; }
+REL: dest is boff19 [ dest = inst_start + boff19 * 4; ] { export *:4 dest; }
+
+
+# ALU: ADD, SUB, AND, OR, XOR (major 0-4; bit 27 sets the flags) and the address-unit ADD/SUB (major 8; bit 27 selects SUB).
+:ADD RD19, RS14, RS9o is maj=0 & sbit=0 & cbit=0 & ibit=0 & b2=0 & f3_8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a + b; 
+  RD19 = r;
+}
+:MOV RD19, RS9o is maj=0 & sbit=0 & cbit=0 & ibit=0 & b2=1 & f3_8=0 & RD19 & RS9o {
+  b:4 = RS9o; r:4 = b; 
+  RD19 = r;
+}
+:MOV RD19, I16A is maj=0 & sbit=0 & cbit=0 & ibit=1 & b2=1 & RD19 & I16A {
+  b:4 = I16A; r:4 = b; 
+  RD19 = r;
+}
+:ADD RD19, I16A is maj=0 & sbit=0 & cbit=0 & ibit=1 & b2=0 & RD19 & I16A {
+  a:4 = RD19; b:4 = I16A; r:4 = a + b; 
+  RD19 = r;
+}
+:ADD^CC U5r19, RS14, RS9o is maj=0 & sbit=0 & cbit=1 & ibit=0 & CC & U5r19 & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a + b; 
+  U5r19 = r;
+}
+:ADD U1r19, RS14, I8 is maj=0 & sbit=0 & cbit=1 & ibit=1 & b5=1 & b0=0 & U1r19 & RS14 & I8 {
+  a:4 = RS14; b:4 = I8; r:4 = a + b; 
+  U1r19 = r;
+}
+:ADD^CC RD19, RS14, I8 is maj=0 & sbit=0 & cbit=1 & ibit=1 & b5=0 & b0=0 & CC & RD19 & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a + b; 
+  RD19 = r;
+}
+:ADDS RD19, RS14, RS9o is maj=0 & sbit=1 & cbit=0 & ibit=0 & b2=0 & f3_8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a + b; addflags(a, b, r);
+  RD19 = r;
+}
+:MOVS RD19, RS9o is maj=0 & sbit=1 & cbit=0 & ibit=0 & b2=1 & f3_8=0 & RD19 & RS9o {
+  b:4 = RS9o; r:4 = b; logflags(r);
+  RD19 = r;
+}
+:MOVS RD19, I16A is maj=0 & sbit=1 & cbit=0 & ibit=1 & b2=1 & RD19 & I16A {
+  b:4 = I16A; r:4 = b; logflags(r);
+  RD19 = r;
+}
+:ADDS RD19, I16A is maj=0 & sbit=1 & cbit=0 & ibit=1 & b2=0 & RD19 & I16A {
+  a:4 = RD19; b:4 = I16A; r:4 = a + b; addflags(a, b, r);
+  RD19 = r;
+}
+:ADDS^CC U5r19, RS14, RS9o is maj=0 & sbit=1 & cbit=1 & ibit=0 & CC & U5r19 & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a + b; addflags(a, b, r);
+  U5r19 = r;
+}
+:ADDS U1r19, RS14, I8 is maj=0 & sbit=1 & cbit=1 & ibit=1 & b5=1 & b0=0 & U1r19 & RS14 & I8 {
+  a:4 = RS14; b:4 = I8; r:4 = a + b; addflags(a, b, r);
+  U1r19 = r;
+}
+:ADDS^CC RD19, RS14, I8 is maj=0 & sbit=1 & cbit=1 & ibit=1 & b5=0 & b0=0 & CC & RD19 & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a + b; addflags(a, b, r);
+  RD19 = r;
+}
+:SUB RD19, RS14, RS9o is maj=1 & sbit=0 & cbit=0 & ibit=0 & b2=0 & f3_8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a - b; 
+  RD19 = r;
+}
+:NEG RD19, RS9o is maj=1 & sbit=0 & cbit=0 & ibit=0 & b2=1 & f3_8=0 & RD19 & RS9o {
+  b:4 = RS9o; r:4 = -b; 
+  RD19 = r;
+}
+:NEG RD19, I16A is maj=1 & sbit=0 & cbit=0 & ibit=1 & b2=1 & RD19 & I16A {
+  b:4 = I16A; r:4 = -b; 
+  RD19 = r;
+}
+:SUB RD19, I16A is maj=1 & sbit=0 & cbit=0 & ibit=1 & b2=0 & RD19 & I16A {
+  a:4 = RD19; b:4 = I16A; r:4 = a - b; 
+  RD19 = r;
+}
+:SUB^CC U5r19, RS14, RS9o is maj=1 & sbit=0 & cbit=1 & ibit=0 & CC & U5r19 & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a - b; 
+  U5r19 = r;
+}
+:SUB U1r19, RS14, I8 is maj=1 & sbit=0 & cbit=1 & ibit=1 & b5=1 & b0=0 & U1r19 & RS14 & I8 {
+  a:4 = RS14; b:4 = I8; r:4 = a - b; 
+  U1r19 = r;
+}
+:SUB^CC RD19, RS14, I8 is maj=1 & sbit=0 & cbit=1 & ibit=1 & b5=0 & b0=0 & CC & RD19 & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a - b; 
+  RD19 = r;
+}
+:SUBS RD19, RS14, RS9o is maj=1 & sbit=1 & cbit=0 & ibit=0 & b2=0 & f3_8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a - b; subflags(a, b, r);
+  RD19 = r;
+}
+:NEGS RD19, RS9o is maj=1 & sbit=1 & cbit=0 & ibit=0 & b2=1 & f3_8=0 & RD19 & RS9o {
+  b:4 = RS9o; r:4 = -b; subflags(0:4, b, r);
+  RD19 = r;
+}
+:NEGS RD19, I16A is maj=1 & sbit=1 & cbit=0 & ibit=1 & b2=1 & RD19 & I16A {
+  b:4 = I16A; r:4 = -b; subflags(0:4, b, r);
+  RD19 = r;
+}
+:SUBS RD19, I16A is maj=1 & sbit=1 & cbit=0 & ibit=1 & b2=0 & RD19 & I16A {
+  a:4 = RD19; b:4 = I16A; r:4 = a - b; subflags(a, b, r);
+  RD19 = r;
+}
+:SUBS^CC U5r19, RS14, RS9o is maj=1 & sbit=1 & cbit=1 & ibit=0 & CC & U5r19 & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a - b; subflags(a, b, r);
+  U5r19 = r;
+}
+:SUBS U1r19, RS14, I8 is maj=1 & sbit=1 & cbit=1 & ibit=1 & b5=1 & b0=0 & U1r19 & RS14 & I8 {
+  a:4 = RS14; b:4 = I8; r:4 = a - b; subflags(a, b, r);
+  U1r19 = r;
+}
+:SUBS^CC RD19, RS14, I8 is maj=1 & sbit=1 & cbit=1 & ibit=1 & b5=0 & b0=0 & CC & RD19 & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a - b; subflags(a, b, r);
+  RD19 = r;
+}
+:AND RD19, RS14, RS9o is maj=2 & sbit=0 & cbit=0 & ibit=0 & b1=0 & b2=0 & f3_8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a & b; 
+  RD19 = r;
+}
+:AND RD19, I16L is maj=2 & sbit=0 & cbit=0 & ibit=1 & RD19 & I16L {
+  a:4 = RD19; b:4 = I16L; r:4 = a & b; 
+  RD19 = r;
+}
+:AND^CC U5r19, RS14, RS9o is maj=2 & sbit=0 & cbit=1 & ibit=0 & CC & U5r19 & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a & b; 
+  U5r19 = r;
+}
+:AND U1r19, RS14, I8 is maj=2 & sbit=0 & cbit=1 & ibit=1 & b5=1 & b0=0 & U1r19 & RS14 & I8 {
+  a:4 = RS14; b:4 = I8; r:4 = a & b; 
+  U1r19 = r;
+}
+:AND^CC RD19, RS14, I8 is maj=2 & sbit=0 & cbit=1 & ibit=1 & b5=0 & b0=0 & CC & RD19 & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a & b; 
+  RD19 = r;
+}
+:ANDS RD19, RS14, RS9o is maj=2 & sbit=1 & cbit=0 & ibit=0 & b1=0 & b2=0 & f3_8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a & b; logflags(r);
+  RD19 = r;
+}
+:ANDS RD19, I16L is maj=2 & sbit=1 & cbit=0 & ibit=1 & RD19 & I16L {
+  a:4 = RD19; b:4 = I16L; r:4 = a & b; logflags(r);
+  RD19 = r;
+}
+:ANDS^CC U5r19, RS14, RS9o is maj=2 & sbit=1 & cbit=1 & ibit=0 & CC & U5r19 & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a & b; logflags(r);
+  U5r19 = r;
+}
+:ANDS U1r19, RS14, I8 is maj=2 & sbit=1 & cbit=1 & ibit=1 & b5=1 & b0=0 & U1r19 & RS14 & I8 {
+  a:4 = RS14; b:4 = I8; r:4 = a & b; logflags(r);
+  U1r19 = r;
+}
+:ANDS^CC RD19, RS14, I8 is maj=2 & sbit=1 & cbit=1 & ibit=1 & b5=0 & b0=0 & CC & RD19 & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a & b; logflags(r);
+  RD19 = r;
+}
+:OR RD19, RS14, RS9o is maj=3 & sbit=0 & cbit=0 & ibit=0 & b1=0 & b2=0 & f3_8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a | b; 
+  RD19 = r;
+}
+:OR RD19, I16L is maj=3 & sbit=0 & cbit=0 & ibit=1 & RD19 & I16L {
+  a:4 = RD19; b:4 = I16L; r:4 = a | b; 
+  RD19 = r;
+}
+:OR^CC U5r19, RS14, RS9o is maj=3 & sbit=0 & cbit=1 & ibit=0 & CC & U5r19 & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a | b; 
+  U5r19 = r;
+}
+:OR U1r19, RS14, I8 is maj=3 & sbit=0 & cbit=1 & ibit=1 & b5=1 & b0=0 & U1r19 & RS14 & I8 {
+  a:4 = RS14; b:4 = I8; r:4 = a | b; 
+  U1r19 = r;
+}
+:OR^CC RD19, RS14, I8 is maj=3 & sbit=0 & cbit=1 & ibit=1 & b5=0 & b0=0 & CC & RD19 & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a | b; 
+  RD19 = r;
+}
+:ORS RD19, RS14, RS9o is maj=3 & sbit=1 & cbit=0 & ibit=0 & b1=0 & b2=0 & f3_8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a | b; logflags(r);
+  RD19 = r;
+}
+:ORS RD19, I16L is maj=3 & sbit=1 & cbit=0 & ibit=1 & RD19 & I16L {
+  a:4 = RD19; b:4 = I16L; r:4 = a | b; logflags(r);
+  RD19 = r;
+}
+:ORS^CC U5r19, RS14, RS9o is maj=3 & sbit=1 & cbit=1 & ibit=0 & CC & U5r19 & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a | b; logflags(r);
+  U5r19 = r;
+}
+:ORS U1r19, RS14, I8 is maj=3 & sbit=1 & cbit=1 & ibit=1 & b5=1 & b0=0 & U1r19 & RS14 & I8 {
+  a:4 = RS14; b:4 = I8; r:4 = a | b; logflags(r);
+  U1r19 = r;
+}
+:ORS^CC RD19, RS14, I8 is maj=3 & sbit=1 & cbit=1 & ibit=1 & b5=0 & b0=0 & CC & RD19 & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a | b; logflags(r);
+  RD19 = r;
+}
+:XOR RD19, RS14, RS9o is maj=4 & sbit=0 & cbit=0 & ibit=0 & b1=0 & b2=0 & f3_8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a ^ b; 
+  RD19 = r;
+}
+:XOR RD19, I16L is maj=4 & sbit=0 & cbit=0 & ibit=1 & RD19 & I16L {
+  a:4 = RD19; b:4 = I16L; r:4 = a ^ b; 
+  RD19 = r;
+}
+:XOR^CC U5r19, RS14, RS9o is maj=4 & sbit=0 & cbit=1 & ibit=0 & CC & U5r19 & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a ^ b; 
+  U5r19 = r;
+}
+:XOR U1r19, RS14, I8 is maj=4 & sbit=0 & cbit=1 & ibit=1 & b5=1 & b0=0 & U1r19 & RS14 & I8 {
+  a:4 = RS14; b:4 = I8; r:4 = a ^ b; 
+  U1r19 = r;
+}
+:XOR^CC RD19, RS14, I8 is maj=4 & sbit=0 & cbit=1 & ibit=1 & b5=0 & b0=0 & CC & RD19 & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a ^ b; 
+  RD19 = r;
+}
+:XORS RD19, RS14, RS9o is maj=4 & sbit=1 & cbit=0 & ibit=0 & b1=0 & b2=0 & f3_8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a ^ b; logflags(r);
+  RD19 = r;
+}
+:XORS RD19, I16L is maj=4 & sbit=1 & cbit=0 & ibit=1 & RD19 & I16L {
+  a:4 = RD19; b:4 = I16L; r:4 = a ^ b; logflags(r);
+  RD19 = r;
+}
+:XORS^CC U5r19, RS14, RS9o is maj=4 & sbit=1 & cbit=1 & ibit=0 & CC & U5r19 & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a ^ b; logflags(r);
+  U5r19 = r;
+}
+:XORS U1r19, RS14, I8 is maj=4 & sbit=1 & cbit=1 & ibit=1 & b5=1 & b0=0 & U1r19 & RS14 & I8 {
+  a:4 = RS14; b:4 = I8; r:4 = a ^ b; logflags(r);
+  U1r19 = r;
+}
+:XORS^CC RD19, RS14, I8 is maj=4 & sbit=1 & cbit=1 & ibit=1 & b5=0 & b0=0 & CC & RD19 & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a ^ b; logflags(r);
+  RD19 = r;
+}
+:ADD RD19, RS14, RS9o is maj=8 & sbit=0 & cbit=0 & ibit=0 & b2=0 & f3_8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a + b; 
+  RD19 = r;
+}
+:MOV RD19, RS9o is maj=8 & sbit=0 & cbit=0 & ibit=0 & b2=1 & f3_8=0 & RD19 & RS9o {
+  b:4 = RS9o; r:4 = b; 
+  RD19 = r;
+}
+:MOV RD19, I16A is maj=8 & sbit=0 & cbit=0 & ibit=1 & b2=1 & RD19 & I16A {
+  b:4 = I16A; r:4 = b; 
+  RD19 = r;
+}
+:ADD RD19, I16A is maj=8 & sbit=0 & cbit=0 & ibit=1 & b2=0 & RD19 & I16A {
+  a:4 = RD19; b:4 = I16A; r:4 = a + b; 
+  RD19 = r;
+}
+:ADD^CC U5r19, RS14, RS9o is maj=8 & sbit=0 & cbit=1 & ibit=0 & CC & U5r19 & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a + b; 
+  U5r19 = r;
+}
+:ADD U1r19, RS14, I8 is maj=8 & sbit=0 & cbit=1 & ibit=1 & b5=1 & b0=0 & U1r19 & RS14 & I8 {
+  a:4 = RS14; b:4 = I8; r:4 = a + b; 
+  U1r19 = r;
+}
+:ADD^CC RD19, RS14, I8 is maj=8 & sbit=0 & cbit=1 & ibit=1 & b5=0 & b0=0 & CC & RD19 & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a + b; 
+  RD19 = r;
+}
+:SUB RD19, RS14, RS9o is maj=8 & sbit=1 & cbit=0 & ibit=0 & b2=0 & f3_8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a - b; 
+  RD19 = r;
+}
+:NEG RD19, RS9o is maj=8 & sbit=1 & cbit=0 & ibit=0 & b2=1 & f3_8=0 & RD19 & RS9o {
+  b:4 = RS9o; r:4 = -b; 
+  RD19 = r;
+}
+:NEG RD19, I16A is maj=8 & sbit=1 & cbit=0 & ibit=1 & b2=1 & RD19 & I16A {
+  b:4 = I16A; r:4 = -b; 
+  RD19 = r;
+}
+:SUB RD19, I16A is maj=8 & sbit=1 & cbit=0 & ibit=1 & b2=0 & RD19 & I16A {
+  a:4 = RD19; b:4 = I16A; r:4 = a - b; 
+  RD19 = r;
+}
+:SUB^CC U5r19, RS14, RS9o is maj=8 & sbit=1 & cbit=1 & ibit=0 & CC & U5r19 & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a - b; 
+  U5r19 = r;
+}
+:SUB U1r19, RS14, I8 is maj=8 & sbit=1 & cbit=1 & ibit=1 & b5=1 & b0=0 & U1r19 & RS14 & I8 {
+  a:4 = RS14; b:4 = I8; r:4 = a - b; 
+  U1r19 = r;
+}
+:SUB^CC RD19, RS14, I8 is maj=8 & sbit=1 & cbit=1 & ibit=1 & b5=0 & b0=0 & CC & RD19 & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a - b; 
+  RD19 = r;
+}
+
+# MULW multiplies the low 16 bits of each operand, MULD (MUL) is a 32-bit multiply.
+:MULW RD19, RS14, RS9o is maj=6 & sbit=0 & cbit=0 & ibit=0 & b6=0 & f1_5=0 & b7=0 & b8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; RD19 = zext(a:2) * zext(b:2);
+}
+:MULD RD19, RS14, RS9o is maj=6 & sbit=0 & cbit=0 & ibit=0 & b6=1 & f1_5=0 & b7=0 & b8=0 & RD19 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; RD19 = a * b;
+}
+:MULW RD19, I16A is maj=6 & sbit=0 & cbit=0 & ibit=1 & b2=0 & RD19 & I16A {
+  a:4 = RD19; b:4 = I16A; RD19 = zext(a:2) * zext(b:2);
+}
+:MULD RD19, I16A is maj=6 & sbit=0 & cbit=0 & ibit=1 & b2=1 & RD19 & I16A {
+  a:4 = RD19; b:4 = I16A; RD19 = a * b;
+}
+
+# Shifts (major 5): bits 6-7 pick the shift, bit 25 an immediate count in bits 9-13, bit 27 sets the flags.
+SA: RS9  is ibit=0 & RS9  { c:4 = RS9 & 0x1f; export c; }
+SA: "#"imm5 is ibit=1 & imm5 { export *[const]:4 imm5; }
+:LSL RD19, RS14, SA is maj=5 & sbit=0 & cbit=0 & shty=0 & f1_5=0 & b0=0 & b8=0 & RD19 & RS14 & SA {
+  a:4 = RS14; r:4 = a << SA; 
+  RD19 = r;
+}
+:LSL U1r19, RS14, SA is maj=5 & sbit=0 & cbit=1 & shty=0 & b5=1 & b8=0 & U1r19 & RS14 & SA {
+  a:4 = RS14; r:4 = a << SA; 
+  U1r19 = r;
+}
+:LSL^CC RD19, RS14, SA is maj=5 & sbit=0 & cbit=1 & shty=0 & b5=0 & b0=0 & b8=0 & CC & RD19 & RS14 & SA {
+  if (!CC) goto inst_next;
+  a:4 = RS14; r:4 = a << SA; 
+  RD19 = r;
+}
+:LSLS RD19, RS14, SA is maj=5 & sbit=1 & cbit=0 & shty=0 & f1_5=0 & b0=0 & b8=0 & RD19 & RS14 & SA {
+  a:4 = RS14; r:4 = a << SA; logflags(r);
+  RD19 = r;
+}
+:LSLS U1r19, RS14, SA is maj=5 & sbit=1 & cbit=1 & shty=0 & b5=1 & b8=0 & U1r19 & RS14 & SA {
+  a:4 = RS14; r:4 = a << SA; logflags(r);
+  U1r19 = r;
+}
+:LSLS^CC RD19, RS14, SA is maj=5 & sbit=1 & cbit=1 & shty=0 & b5=0 & b0=0 & b8=0 & CC & RD19 & RS14 & SA {
+  if (!CC) goto inst_next;
+  a:4 = RS14; r:4 = a << SA; logflags(r);
+  RD19 = r;
+}
+:LSR RD19, RS14, SA is maj=5 & sbit=0 & cbit=0 & shty=1 & f1_5=0 & b0=0 & b8=0 & RD19 & RS14 & SA {
+  a:4 = RS14; r:4 = a >> SA; 
+  RD19 = r;
+}
+:LSR U1r19, RS14, SA is maj=5 & sbit=0 & cbit=1 & shty=1 & b5=1 & b8=0 & U1r19 & RS14 & SA {
+  a:4 = RS14; r:4 = a >> SA; 
+  U1r19 = r;
+}
+:LSR^CC RD19, RS14, SA is maj=5 & sbit=0 & cbit=1 & shty=1 & b5=0 & b0=0 & b8=0 & CC & RD19 & RS14 & SA {
+  if (!CC) goto inst_next;
+  a:4 = RS14; r:4 = a >> SA; 
+  RD19 = r;
+}
+:LSRS RD19, RS14, SA is maj=5 & sbit=1 & cbit=0 & shty=1 & f1_5=0 & b0=0 & b8=0 & RD19 & RS14 & SA {
+  a:4 = RS14; r:4 = a >> SA; logflags(r);
+  RD19 = r;
+}
+:LSRS U1r19, RS14, SA is maj=5 & sbit=1 & cbit=1 & shty=1 & b5=1 & b8=0 & U1r19 & RS14 & SA {
+  a:4 = RS14; r:4 = a >> SA; logflags(r);
+  U1r19 = r;
+}
+:LSRS^CC RD19, RS14, SA is maj=5 & sbit=1 & cbit=1 & shty=1 & b5=0 & b0=0 & b8=0 & CC & RD19 & RS14 & SA {
+  if (!CC) goto inst_next;
+  a:4 = RS14; r:4 = a >> SA; logflags(r);
+  RD19 = r;
+}
+:ASL RD19, RS14, SA is maj=5 & sbit=0 & cbit=0 & shty=2 & f1_5=0 & b0=0 & b8=0 & RD19 & RS14 & SA {
+  a:4 = RS14; r:4 = a << SA; 
+  RD19 = r;
+}
+:ASL U1r19, RS14, SA is maj=5 & sbit=0 & cbit=1 & shty=2 & b5=1 & b8=0 & U1r19 & RS14 & SA {
+  a:4 = RS14; r:4 = a << SA; 
+  U1r19 = r;
+}
+:ASL^CC RD19, RS14, SA is maj=5 & sbit=0 & cbit=1 & shty=2 & b5=0 & b0=0 & b8=0 & CC & RD19 & RS14 & SA {
+  if (!CC) goto inst_next;
+  a:4 = RS14; r:4 = a << SA; 
+  RD19 = r;
+}
+:ASLS RD19, RS14, SA is maj=5 & sbit=1 & cbit=0 & shty=2 & f1_5=0 & b0=0 & b8=0 & RD19 & RS14 & SA {
+  a:4 = RS14; r:4 = a << SA; logflags(r);
+  RD19 = r;
+}
+:ASLS U1r19, RS14, SA is maj=5 & sbit=1 & cbit=1 & shty=2 & b5=1 & b8=0 & U1r19 & RS14 & SA {
+  a:4 = RS14; r:4 = a << SA; logflags(r);
+  U1r19 = r;
+}
+:ASLS^CC RD19, RS14, SA is maj=5 & sbit=1 & cbit=1 & shty=2 & b5=0 & b0=0 & b8=0 & CC & RD19 & RS14 & SA {
+  if (!CC) goto inst_next;
+  a:4 = RS14; r:4 = a << SA; logflags(r);
+  RD19 = r;
+}
+:ASR RD19, RS14, SA is maj=5 & sbit=0 & cbit=0 & shty=3 & f1_5=0 & b0=0 & b8=0 & RD19 & RS14 & SA {
+  a:4 = RS14; r:4 = a s>> SA; 
+  RD19 = r;
+}
+:ASR U1r19, RS14, SA is maj=5 & sbit=0 & cbit=1 & shty=3 & b5=1 & b8=0 & U1r19 & RS14 & SA {
+  a:4 = RS14; r:4 = a s>> SA; 
+  U1r19 = r;
+}
+:ASR^CC RD19, RS14, SA is maj=5 & sbit=0 & cbit=1 & shty=3 & b5=0 & b0=0 & b8=0 & CC & RD19 & RS14 & SA {
+  if (!CC) goto inst_next;
+  a:4 = RS14; r:4 = a s>> SA; 
+  RD19 = r;
+}
+:ASRS RD19, RS14, SA is maj=5 & sbit=1 & cbit=0 & shty=3 & f1_5=0 & b0=0 & b8=0 & RD19 & RS14 & SA {
+  a:4 = RS14; r:4 = a s>> SA; logflags(r);
+  RD19 = r;
+}
+:ASRS U1r19, RS14, SA is maj=5 & sbit=1 & cbit=1 & shty=3 & b5=1 & b8=0 & U1r19 & RS14 & SA {
+  a:4 = RS14; r:4 = a s>> SA; logflags(r);
+  U1r19 = r;
+}
+:ASRS^CC RD19, RS14, SA is maj=5 & sbit=1 & cbit=1 & shty=3 & b5=0 & b0=0 & b8=0 & CC & RD19 & RS14 & SA {
+  if (!CC) goto inst_next;
+  a:4 = RS14; r:4 = a s>> SA; logflags(r);
+  RD19 = r;
+}
+
+# CMP and TST (major 7; bit 27 selects TST) set the flags from a subtract or an AND.
+:CMP RS14, RS9o is maj=7 & sbit=0 & cbit=0 & ibit=0 & f1_8=0 & f19_23=0 & RS14 & RS9o {
+  a:4 = RS14; b:4 = RS9o; r:4 = a - b; subflags(a, b, r);
+}
+:CMP RD19, I16L is maj=7 & sbit=0 & cbit=0 & ibit=1 & RD19 & I16L {
+  a:4 = RD19; b:4 = I16L; r:4 = a - b; subflags(a, b, r);
+}
+:CMP^CC RS14, RS9o is maj=7 & sbit=0 & cbit=1 & ibit=0 & f5_8=0 & f19_23=0 & CC & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = RS9o; r:4 = a - b; subflags(a, b, r);
+}
+:CMP^CC RS14, I8 is maj=7 & sbit=0 & cbit=1 & ibit=1 & b5=0 & b0=0 & f19_23=0 & CC & RS14 & I8 {
+  if (!CC) goto inst_next;
+  a:4 = RS14; b:4 = I8; r:4 = a - b; subflags(a, b, r);
+}
+:TST RS14, RS9o is maj=7 & sbit=1 & cbit=0 & ibit=0 & f1_8=0 & f19_23=0 & RS14 & RS9o {
+  r:4 = RS14 & RS9o; logflags(r);
+}
+:TST RD19, I16L is maj=7 & sbit=1 & cbit=0 & ibit=1 & RD19 & I16L {
+  r:4 = RD19 & I16L; logflags(r);
+}
+:TST^CC RS14, RS9o is maj=7 & sbit=1 & cbit=1 & ibit=0 & f5_8=0 & f19_23=0 & CC & RS14 & RS9o {
+  if (!CC) goto inst_next;
+  r:4 = RS14 & RS9o; logflags(r);
+}
+:TST^CC RS14, I8 is maj=7 & sbit=1 & cbit=1 & ibit=1 & b5=0 & b0=0 & f19_23=0 & CC & RS14 & I8 {
+  if (!CC) goto inst_next;
+  r:4 = RS14 & I8; logflags(r);
+}
+
+:MIN RD19, RS14, RS9 is maj=7 & sbit=0 & cbit=0 & ibit=0 & f0_8=0x20 & RD19 & RS14 & RS9 {
+  a:4 = RS14; b:4 = RS9; r:4 = a; if (a s<= b) goto <d>; r = b; <d> RD19 = r;
+}
+:MAX RD19, RS14, RS9 is maj=7 & sbit=0 & cbit=0 & ibit=0 & f0_8=0x24 & RD19 & RS14 & RS9 {
+  a:4 = RS14; b:4 = RS9; r:4 = a; if (a s>= b) goto <d>; r = b; <d> RD19 = r;
+}
+:NMIN RD19, RS14, RS9 is maj=7 & sbit=0 & cbit=0 & ibit=0 & f0_8=0x2c & RD19 & RS14 & RS9 {
+  RD19 = nmin(RS14, RS9);
+}
+:FFB RD19, RS14 is maj=7 & sbit=0 & cbit=0 & ibit=0 & f0_8=0x04 & f9_13=0 & RD19 & RS14 { RD19 = ffb(RS14); }
+:NORM RD19, RS14 is maj=7 & sbit=0 & cbit=0 & ibit=0 & f0_8=0x08 & f9_13=0 & RD19 & RS14 { RD19 = norm(RS14); }
+:ABS RD19, RS14 is maj=7 & sbit=0 & cbit=0 & ibit=0 & f0_8=0x28 & f9_13=0 & RD19 & RS14 {
+  a:4 = RS14; r:4 = a; if (a s>= 0) goto <d>; r = -a; <d> RD19 = r;
+}
+
+# Byte, word and swap operations (major 10, minor 10); bit 0 picks D0 or D1.
+BD19: d0_19 is b0=0 & d0_19 { export d0_19; }
+BD19: d1_19 is b0=1 & d1_19 { export d1_19; }
+BS14: d0_14 is b0=0 & d0_14 { export d0_14; }
+BS14: d1_14 is b0=1 & d1_14 { export d1_14; }
+:XSDB BD19, BS14  is maj=10 & minor=10 & f1_13=0x00 & BD19 & BS14 { s:4 = BS14; BD19 = sext(s:1); }
+:XSDSB BD19, BS14 is maj=10 & minor=10 & f1_13=0x04 & BD19 & BS14 { s:4 = BS14; r:4 = sext(s:1); logflags(r); BD19 = r; }
+:XSDW BD19, BS14  is maj=10 & minor=10 & f1_13=0x01 & BD19 & BS14 { s:4 = BS14; BD19 = sext(s:2); }
+:XSDSW BD19, BS14 is maj=10 & minor=10 & f1_13=0x05 & BD19 & BS14 { s:4 = BS14; r:4 = sext(s:2); logflags(r); BD19 = r; }
+:RTDW BD19, BS14  is maj=10 & minor=10 & f1_13=0x03 & BD19 & BS14 { s:4 = BS14; BD19 = (s << 16) | (s >> 16); }
+:RTDSW BD19, BS14 is maj=10 & minor=10 & f1_13=0x07 & BD19 & BS14 { s:4 = BS14; r:4 = (s << 16) | (s >> 16); logflags(r); BD19 = r; }
+:BEXD BD19, BS14  is maj=10 & minor=10 & f1_13=0x02 & BD19 & BS14 {
+  s:4 = BS14; BD19 = (s << 24) | ((s & 0xff00) << 8) | ((s >> 8) & 0xff00) | (s >> 24);
+}
+:BEXSD BD19, BS14 is maj=10 & minor=10 & f1_13=0x06 & BD19 & BS14 {
+  s:4 = BS14; r:4 = (s << 24) | ((s & 0xff00) << 8) | ((s >> 8) & 0xff00) | (s >> 24); logflags(r); BD19 = r;
+}
+
+# Flow: B cc (pc + 4 * imm19), CALLR (link register, pc-relative), JUMP/CALL (register + imm16).
+:NOP is maj=10 & minor=0 & low24=0xfffffe { }
+:B REL is maj=10 & minor=0 & cc=0 & REL { goto REL; }
+:B^CC REL is maj=10 & minor=0 & cc!=0 & CC & REL { if (CC) goto REL; }
+:CALLR SRc, REL is maj=10 & minor=11 & SRc & REL { SRc = inst_next; call REL; }
+:JUMP SJ19, "#"imm16 is maj=10 & minor=12 & b2=0 & SJ19 & imm16 { t:4 = SJ19 + imm16; goto [t]; }
+:CALL SJ19, "#"imm16 is maj=10 & minor=12 & b2=1 & SJ19 & imm16 { t:4 = SJ19 + imm16; D1RtP = inst_next; call [t]; }
+
+# Unit-to-unit moves (major 10, minor 3): destination unit 5-8 / register 14-18, source unit
+# 10-13 / register 19-23. MOV PC,D1RtP is the return.
+:RTI is maj=10 & minor=3 & low24=0xffffff { rti(); return [PCX]; }
+:RTH is maj=10 & minor=3 & low24=0x7fffff { rth(); return [PCX]; }
+:MOV "PC", "D1RtP" is maj=10 & minor=3 & b0=0 & b9=0 & cc=0 & u5=5 & r14=0 & u10=2 & r19=4 {
+  return [D1RtP];
+}
+:MOV^CC "PC", "D1RtP" is maj=10 & minor=3 & b0=0 & b9=0 & cc!=0 & CC & u5=5 & r14=0 & u10=2 & r19=4 {
+  if (!CC) goto inst_next;
+  return [D1RtP];
+}
+:MOV "PC", U10r19 is maj=10 & minor=3 & b0=0 & b9=0 & cc=0 & u5=5 & r14=0 & U10r19 {
+  t:4 = U10r19;
+  goto [t];
+}
+:MOV^CC "PC", U10r19 is maj=10 & minor=3 & b0=0 & b9=0 & cc!=0 & CC & u5=5 & r14=0 & U10r19 {
+  if (!CC) goto inst_next;
+  t:4 = U10r19;
+  goto [t];
+}
+:MOV^CC U5r14, U10r19 is maj=10 & minor=3 & b0=0 & b9=0 & CC & U5r14 & U10r19 {
+  if (!CC) goto inst_next;
+  U5r14 = U10r19;
+}
+:SWAP^CC U5r14, U10r19 is maj=10 & minor=3 & b0=0 & b9=1 & CC & U5r14 & U10r19 {
+  if (!CC) goto inst_next;
+  t:4 = U5r14; U5r14 = U10r19; U10r19 = t;
+}
+:KICK^CC U10r19, U5r14 is maj=10 & minor=3 & b0=1 & b9=0 & f9_13=0 & CC & U10r19 & U5r14 {
+  if (!CC) goto inst_next;
+  kick(U10r19, U5r14);
+}
+
+# Control-unit immediates (major 10, minor 9): bit 2 selects TT instead of CT, bit 0 MOVT.
+CT19: ct_19 is b2=0 & ct_19 { export ct_19; }
+CT19: tt_19 is b2=1 & tt_19 { export tt_19; }
+:MOV CT19, I16A is maj=10 & minor=9 & CT19 & I16A { CT19 = I16A; }
+
+:SWITCH "#"low24 is maj=10 & minor=15 & low24 { switch_trap(low24:4); }
+:LOCK0 is maj=10 & minor=8 & low24=0 { lock(0:1); }
+:LOCK1 is maj=10 & minor=8 & low24=1 { lock(1:1); }
+:LOCK2 is maj=10 & minor=8 & low24=3 { lock(2:1); }
+
+# GET and SET (majors 12 and 11): bits 24 and 26 give the size, bit 25 an immediate offset.
+EA1: "["SB"]" is ibit=1 & gsimm6=0 & SB { export *[ram]:1 SB; }
+EA1: "["SB"++]" is ibit=1 & b7=1 & b0=1 & gsimm6=1 & SB { a:4 = SB; SB = SB + 1; export *[ram]:1 a; }
+EA1: "[++"SB"]" is ibit=1 & b7=1 & b0=0 & gsimm6=1 & SB { SB = SB + 1; export *[ram]:1 SB; }
+EA1: "["SB"--]" is ibit=1 & b7=1 & b0=1 & gsimm6u=0x3f & SB { a:4 = SB; SB = SB - 1; export *[ram]:1 a; }
+EA1: "[--"SB"]" is ibit=1 & b7=1 & b0=0 & gsimm6u=0x3f & SB { SB = SB - 1; export *[ram]:1 SB; }
+EA1: "["SB"+#"off"++]" is ibit=1 & b7=1 & b0=1 & SB & gsimm6 [ off = gsimm6 * 1; ] { a:4 = SB; SB = SB + off; export *[ram]:1 a; }
+EA1: "["SB"++#"off"]" is ibit=1 & b7=1 & b0=0 & SB & gsimm6 [ off = gsimm6 * 1; ] { SB = SB + off; export *[ram]:1 SB; }
+EA1: "["SB"+#"off"]" is ibit=1 & b7=0 & SB & gsimm6 [ off = gsimm6 * 1; ] { a:4 = SB + off; export *[ram]:1 a; }
+EA1: "["SB"+"SBo9"++]" is ibit=0 & b7=1 & b0=1 & SB & SBo9 { a:4 = SB; SB = SB + SBo9; export *[ram]:1 a; }
+EA1: "["SB"++"SBo9"]" is ibit=0 & b7=1 & b0=0 & SB & SBo9 { SB = SB + SBo9; export *[ram]:1 SB; }
+EA1: "["SB"+"SBo9"]" is ibit=0 & b7=0 & SB & SBo9 { a:4 = SB + SBo9; export *[ram]:1 a; }
+EX1: "["SBx"]" is eximm12=0 & SBx { export *[ram]:1 SBx; }
+EX1: "["SBx"+#"off"]" is SBx & eximm12 [ off = eximm12 * 1; ] { a:4 = SBx + off; export *[ram]:1 a; }
+:GETB U1r19, EA1 is maj=12 & (minor=0 | minor=2) & U1r19 & EA1 { U1r19 = zext(EA1); }
+:SETB EA1, U1r19 is maj=11 & (minor=0 | minor=2) & U1r19 & EA1 { v:4 = U1r19; EA1 = v:1; }
+:GETB SR19, EX1 is maj=10 & minor=7 & exsz=0 & SR19 & EX1 { SR19 = zext(EX1); }
+:SETB EX1, SR19 is maj=10 & minor=5 & exsz=0 & SR19 & EX1 { v:4 = SR19; EX1 = v:1; }
+EA2: "["SB"]" is ibit=1 & gsimm6=0 & SB { export *[ram]:2 SB; }
+EA2: "["SB"++]" is ibit=1 & b7=1 & b0=1 & gsimm6=1 & SB { a:4 = SB; SB = SB + 2; export *[ram]:2 a; }
+EA2: "[++"SB"]" is ibit=1 & b7=1 & b0=0 & gsimm6=1 & SB { SB = SB + 2; export *[ram]:2 SB; }
+EA2: "["SB"--]" is ibit=1 & b7=1 & b0=1 & gsimm6u=0x3f & SB { a:4 = SB; SB = SB - 2; export *[ram]:2 a; }
+EA2: "[--"SB"]" is ibit=1 & b7=1 & b0=0 & gsimm6u=0x3f & SB { SB = SB - 2; export *[ram]:2 SB; }
+EA2: "["SB"+#"off"++]" is ibit=1 & b7=1 & b0=1 & SB & gsimm6 [ off = gsimm6 * 2; ] { a:4 = SB; SB = SB + off; export *[ram]:2 a; }
+EA2: "["SB"++#"off"]" is ibit=1 & b7=1 & b0=0 & SB & gsimm6 [ off = gsimm6 * 2; ] { SB = SB + off; export *[ram]:2 SB; }
+EA2: "["SB"+#"off"]" is ibit=1 & b7=0 & SB & gsimm6 [ off = gsimm6 * 2; ] { a:4 = SB + off; export *[ram]:2 a; }
+EA2: "["SB"+"SBo9"++]" is ibit=0 & b7=1 & b0=1 & SB & SBo9 { a:4 = SB; SB = SB + SBo9; export *[ram]:2 a; }
+EA2: "["SB"++"SBo9"]" is ibit=0 & b7=1 & b0=0 & SB & SBo9 { SB = SB + SBo9; export *[ram]:2 SB; }
+EA2: "["SB"+"SBo9"]" is ibit=0 & b7=0 & SB & SBo9 { a:4 = SB + SBo9; export *[ram]:2 a; }
+EX2: "["SBx"]" is eximm12=0 & SBx { export *[ram]:2 SBx; }
+EX2: "["SBx"+#"off"]" is SBx & eximm12 [ off = eximm12 * 2; ] { a:4 = SBx + off; export *[ram]:2 a; }
+:GETW U1r19, EA2 is maj=12 & (minor=1 | minor=3) & U1r19 & EA2 { U1r19 = zext(EA2); }
+:SETW EA2, U1r19 is maj=11 & (minor=1 | minor=3) & U1r19 & EA2 { v:4 = U1r19; EA2 = v:2; }
+:GETW SR19, EX2 is maj=10 & minor=7 & exsz=1 & SR19 & EX2 { SR19 = zext(EX2); }
+:SETW EX2, SR19 is maj=10 & minor=5 & exsz=1 & SR19 & EX2 { v:4 = SR19; EX2 = v:2; }
+EA4: "["SB"]" is ibit=1 & gsimm6=0 & SB { export *[ram]:4 SB; }
+EA4: "["SB"++]" is ibit=1 & b7=1 & b0=1 & gsimm6=1 & SB { a:4 = SB; SB = SB + 4; export *[ram]:4 a; }
+EA4: "[++"SB"]" is ibit=1 & b7=1 & b0=0 & gsimm6=1 & SB { SB = SB + 4; export *[ram]:4 SB; }
+EA4: "["SB"--]" is ibit=1 & b7=1 & b0=1 & gsimm6u=0x3f & SB { a:4 = SB; SB = SB - 4; export *[ram]:4 a; }
+EA4: "[--"SB"]" is ibit=1 & b7=1 & b0=0 & gsimm6u=0x3f & SB { SB = SB - 4; export *[ram]:4 SB; }
+EA4: "["SB"+#"off"++]" is ibit=1 & b7=1 & b0=1 & SB & gsimm6 [ off = gsimm6 * 4; ] { a:4 = SB; SB = SB + off; export *[ram]:4 a; }
+EA4: "["SB"++#"off"]" is ibit=1 & b7=1 & b0=0 & SB & gsimm6 [ off = gsimm6 * 4; ] { SB = SB + off; export *[ram]:4 SB; }
+EA4: "["SB"+#"off"]" is ibit=1 & b7=0 & SB & gsimm6 [ off = gsimm6 * 4; ] { a:4 = SB + off; export *[ram]:4 a; }
+EA4: "["SB"+"SBo9"++]" is ibit=0 & b7=1 & b0=1 & SB & SBo9 { a:4 = SB; SB = SB + SBo9; export *[ram]:4 a; }
+EA4: "["SB"++"SBo9"]" is ibit=0 & b7=1 & b0=0 & SB & SBo9 { SB = SB + SBo9; export *[ram]:4 SB; }
+EA4: "["SB"+"SBo9"]" is ibit=0 & b7=0 & SB & SBo9 { a:4 = SB + SBo9; export *[ram]:4 a; }
+EX4: "["SBx"]" is eximm12=0 & SBx { export *[ram]:4 SBx; }
+EX4: "["SBx"+#"off"]" is SBx & eximm12 [ off = eximm12 * 4; ] { a:4 = SBx + off; export *[ram]:4 a; }
+:GETD U1r19, EA4 is maj=12 & (minor=4 | minor=6) & U1r19 & EA4 { U1r19 = EA4; }
+:SETD EA4, U1r19 is maj=11 & (minor=4 | minor=6) & U1r19 & EA4 { v:4 = U1r19; EA4 = v; }
+:GETD SR19, EX4 is maj=10 & minor=7 & exsz=2 & SR19 & EX4 { SR19 = EX4; }
+:SETD EX4, SR19 is maj=10 & minor=5 & exsz=2 & SR19 & EX4 { v:4 = SR19; EX4 = v; }
+EA8: "["SB"]" is ibit=1 & gsimm6=0 & SB { export *[ram]:8 SB; }
+EA8: "["SB"++]" is ibit=1 & b7=1 & b0=1 & gsimm6=1 & SB { a:4 = SB; SB = SB + 8; export *[ram]:8 a; }
+EA8: "[++"SB"]" is ibit=1 & b7=1 & b0=0 & gsimm6=1 & SB { SB = SB + 8; export *[ram]:8 SB; }
+EA8: "["SB"--]" is ibit=1 & b7=1 & b0=1 & gsimm6u=0x3f & SB { a:4 = SB; SB = SB - 8; export *[ram]:8 a; }
+EA8: "[--"SB"]" is ibit=1 & b7=1 & b0=0 & gsimm6u=0x3f & SB { SB = SB - 8; export *[ram]:8 SB; }
+EA8: "["SB"+#"off"++]" is ibit=1 & b7=1 & b0=1 & SB & gsimm6 [ off = gsimm6 * 8; ] { a:4 = SB; SB = SB + off; export *[ram]:8 a; }
+EA8: "["SB"++#"off"]" is ibit=1 & b7=1 & b0=0 & SB & gsimm6 [ off = gsimm6 * 8; ] { SB = SB + off; export *[ram]:8 SB; }
+EA8: "["SB"+#"off"]" is ibit=1 & b7=0 & SB & gsimm6 [ off = gsimm6 * 8; ] { a:4 = SB + off; export *[ram]:8 a; }
+EA8: "["SB"+"SBo9"++]" is ibit=0 & b7=1 & b0=1 & SB & SBo9 { a:4 = SB; SB = SB + SBo9; export *[ram]:8 a; }
+EA8: "["SB"++"SBo9"]" is ibit=0 & b7=1 & b0=0 & SB & SBo9 { SB = SB + SBo9; export *[ram]:8 SB; }
+EA8: "["SB"+"SBo9"]" is ibit=0 & b7=0 & SB & SBo9 { a:4 = SB + SBo9; export *[ram]:8 a; }
+EX8: "["SBx"]" is eximm12=0 & SBx { export *[ram]:8 SBx; }
+EX8: "["SBx"+#"off"]" is SBx & eximm12 [ off = eximm12 * 8; ] { a:4 = SBx + off; export *[ram]:8 a; }
+:GETL U1r19, P1r19, EA8 is maj=12 & (minor=5 | minor=7) & U1r19 & P1r19 & EA8 { v:8 = EA8; U1r19 = v:4; P1r19 = v(4); }
+:SETL EA8, U1r19, P1r19 is maj=11 & (minor=5 | minor=7) & U1r19 & P1r19 & EA8 { v:8 = (zext(P1r19) << 32) | zext(U1r19); EA8 = v; }
+:GETL SR19, SP19, EX8 is maj=10 & minor=7 & exsz=3 & SR19 & SP19 & EX8 { v:8 = EX8; SR19 = v:4; SP19 = v(4); }
+:SETL EX8, SR19, SP19 is maj=10 & minor=5 & exsz=3 & SR19 & SP19 & EX8 { v:8 = (zext(SP19) << 32) | zext(SR19); EX8 = v; }
+
+# MGET/MSET (major 12/11, minor 8 = 32-bit, 9 = 64-bit pairs): the first register in bits
+# 19-23, bits 7-13 add the next seven registers, the base is post-incremented.
+MGD1: is rmb1=0 { }
+MGD1: ","^ma1_1 is rmb1=1 & su3=0 & SB & ma1_1 & ma0_1 { ma1_1 = *:4 SB; SB = SB + 4; }
+MGD1: ","^md0_1 is rmb1=1 & su3=1 & SB & md0_1 & md1_1 { md0_1 = *:4 SB; SB = SB + 4; }
+MGD1: ","^md1_1 is rmb1=1 & su3=2 & SB & md1_1 & md0_1 { md1_1 = *:4 SB; SB = SB + 4; }
+MGD1: ","^ma0_1 is rmb1=1 & su3=3 & SB & ma0_1 & ma1_1 { ma0_1 = *:4 SB; SB = SB + 4; }
+MSD1: is rmb1=0 { }
+MSD1: ","^ma1_1 is rmb1=1 & su3=0 & SB & ma1_1 & ma0_1 { *:4 SB = ma1_1; SB = SB + 4; }
+MSD1: ","^md0_1 is rmb1=1 & su3=1 & SB & md0_1 & md1_1 { *:4 SB = md0_1; SB = SB + 4; }
+MSD1: ","^md1_1 is rmb1=1 & su3=2 & SB & md1_1 & md0_1 { *:4 SB = md1_1; SB = SB + 4; }
+MSD1: ","^ma0_1 is rmb1=1 & su3=3 & SB & ma0_1 & ma1_1 { *:4 SB = ma0_1; SB = SB + 4; }
+MGL1: is rmb1=0 { }
+MGL1: ","^ma1_1 is rmb1=1 & su3=0 & SB & ma1_1 & ma0_1 { ma1_1 = *:4 SB; ma0_1 = *:4 (SB + 4); SB = SB + 8; }
+MGL1: ","^md0_1 is rmb1=1 & su3=1 & SB & md0_1 & md1_1 { md0_1 = *:4 SB; md1_1 = *:4 (SB + 4); SB = SB + 8; }
+MGL1: ","^md1_1 is rmb1=1 & su3=2 & SB & md1_1 & md0_1 { md1_1 = *:4 SB; md0_1 = *:4 (SB + 4); SB = SB + 8; }
+MGL1: ","^ma0_1 is rmb1=1 & su3=3 & SB & ma0_1 & ma1_1 { ma0_1 = *:4 SB; ma1_1 = *:4 (SB + 4); SB = SB + 8; }
+MSL1: is rmb1=0 { }
+MSL1: ","^ma1_1 is rmb1=1 & su3=0 & SB & ma1_1 & ma0_1 { *:4 SB = ma1_1; *:4 (SB + 4) = ma0_1; SB = SB + 8; }
+MSL1: ","^md0_1 is rmb1=1 & su3=1 & SB & md0_1 & md1_1 { *:4 SB = md0_1; *:4 (SB + 4) = md1_1; SB = SB + 8; }
+MSL1: ","^md1_1 is rmb1=1 & su3=2 & SB & md1_1 & md0_1 { *:4 SB = md1_1; *:4 (SB + 4) = md0_1; SB = SB + 8; }
+MSL1: ","^ma0_1 is rmb1=1 & su3=3 & SB & ma0_1 & ma1_1 { *:4 SB = ma0_1; *:4 (SB + 4) = ma1_1; SB = SB + 8; }
+MGD2: is rmb2=0 { }
+MGD2: ","^ma1_2 is rmb2=1 & su3=0 & SB & ma1_2 & ma0_2 { ma1_2 = *:4 SB; SB = SB + 4; }
+MGD2: ","^md0_2 is rmb2=1 & su3=1 & SB & md0_2 & md1_2 { md0_2 = *:4 SB; SB = SB + 4; }
+MGD2: ","^md1_2 is rmb2=1 & su3=2 & SB & md1_2 & md0_2 { md1_2 = *:4 SB; SB = SB + 4; }
+MGD2: ","^ma0_2 is rmb2=1 & su3=3 & SB & ma0_2 & ma1_2 { ma0_2 = *:4 SB; SB = SB + 4; }
+MSD2: is rmb2=0 { }
+MSD2: ","^ma1_2 is rmb2=1 & su3=0 & SB & ma1_2 & ma0_2 { *:4 SB = ma1_2; SB = SB + 4; }
+MSD2: ","^md0_2 is rmb2=1 & su3=1 & SB & md0_2 & md1_2 { *:4 SB = md0_2; SB = SB + 4; }
+MSD2: ","^md1_2 is rmb2=1 & su3=2 & SB & md1_2 & md0_2 { *:4 SB = md1_2; SB = SB + 4; }
+MSD2: ","^ma0_2 is rmb2=1 & su3=3 & SB & ma0_2 & ma1_2 { *:4 SB = ma0_2; SB = SB + 4; }
+MGL2: is rmb2=0 { }
+MGL2: ","^ma1_2 is rmb2=1 & su3=0 & SB & ma1_2 & ma0_2 { ma1_2 = *:4 SB; ma0_2 = *:4 (SB + 4); SB = SB + 8; }
+MGL2: ","^md0_2 is rmb2=1 & su3=1 & SB & md0_2 & md1_2 { md0_2 = *:4 SB; md1_2 = *:4 (SB + 4); SB = SB + 8; }
+MGL2: ","^md1_2 is rmb2=1 & su3=2 & SB & md1_2 & md0_2 { md1_2 = *:4 SB; md0_2 = *:4 (SB + 4); SB = SB + 8; }
+MGL2: ","^ma0_2 is rmb2=1 & su3=3 & SB & ma0_2 & ma1_2 { ma0_2 = *:4 SB; ma1_2 = *:4 (SB + 4); SB = SB + 8; }
+MSL2: is rmb2=0 { }
+MSL2: ","^ma1_2 is rmb2=1 & su3=0 & SB & ma1_2 & ma0_2 { *:4 SB = ma1_2; *:4 (SB + 4) = ma0_2; SB = SB + 8; }
+MSL2: ","^md0_2 is rmb2=1 & su3=1 & SB & md0_2 & md1_2 { *:4 SB = md0_2; *:4 (SB + 4) = md1_2; SB = SB + 8; }
+MSL2: ","^md1_2 is rmb2=1 & su3=2 & SB & md1_2 & md0_2 { *:4 SB = md1_2; *:4 (SB + 4) = md0_2; SB = SB + 8; }
+MSL2: ","^ma0_2 is rmb2=1 & su3=3 & SB & ma0_2 & ma1_2 { *:4 SB = ma0_2; *:4 (SB + 4) = ma1_2; SB = SB + 8; }
+MGD3: is rmb3=0 { }
+MGD3: ","^ma1_3 is rmb3=1 & su3=0 & SB & ma1_3 & ma0_3 { ma1_3 = *:4 SB; SB = SB + 4; }
+MGD3: ","^md0_3 is rmb3=1 & su3=1 & SB & md0_3 & md1_3 { md0_3 = *:4 SB; SB = SB + 4; }
+MGD3: ","^md1_3 is rmb3=1 & su3=2 & SB & md1_3 & md0_3 { md1_3 = *:4 SB; SB = SB + 4; }
+MGD3: ","^ma0_3 is rmb3=1 & su3=3 & SB & ma0_3 & ma1_3 { ma0_3 = *:4 SB; SB = SB + 4; }
+MSD3: is rmb3=0 { }
+MSD3: ","^ma1_3 is rmb3=1 & su3=0 & SB & ma1_3 & ma0_3 { *:4 SB = ma1_3; SB = SB + 4; }
+MSD3: ","^md0_3 is rmb3=1 & su3=1 & SB & md0_3 & md1_3 { *:4 SB = md0_3; SB = SB + 4; }
+MSD3: ","^md1_3 is rmb3=1 & su3=2 & SB & md1_3 & md0_3 { *:4 SB = md1_3; SB = SB + 4; }
+MSD3: ","^ma0_3 is rmb3=1 & su3=3 & SB & ma0_3 & ma1_3 { *:4 SB = ma0_3; SB = SB + 4; }
+MGL3: is rmb3=0 { }
+MGL3: ","^ma1_3 is rmb3=1 & su3=0 & SB & ma1_3 & ma0_3 { ma1_3 = *:4 SB; ma0_3 = *:4 (SB + 4); SB = SB + 8; }
+MGL3: ","^md0_3 is rmb3=1 & su3=1 & SB & md0_3 & md1_3 { md0_3 = *:4 SB; md1_3 = *:4 (SB + 4); SB = SB + 8; }
+MGL3: ","^md1_3 is rmb3=1 & su3=2 & SB & md1_3 & md0_3 { md1_3 = *:4 SB; md0_3 = *:4 (SB + 4); SB = SB + 8; }
+MGL3: ","^ma0_3 is rmb3=1 & su3=3 & SB & ma0_3 & ma1_3 { ma0_3 = *:4 SB; ma1_3 = *:4 (SB + 4); SB = SB + 8; }
+MSL3: is rmb3=0 { }
+MSL3: ","^ma1_3 is rmb3=1 & su3=0 & SB & ma1_3 & ma0_3 { *:4 SB = ma1_3; *:4 (SB + 4) = ma0_3; SB = SB + 8; }
+MSL3: ","^md0_3 is rmb3=1 & su3=1 & SB & md0_3 & md1_3 { *:4 SB = md0_3; *:4 (SB + 4) = md1_3; SB = SB + 8; }
+MSL3: ","^md1_3 is rmb3=1 & su3=2 & SB & md1_3 & md0_3 { *:4 SB = md1_3; *:4 (SB + 4) = md0_3; SB = SB + 8; }
+MSL3: ","^ma0_3 is rmb3=1 & su3=3 & SB & ma0_3 & ma1_3 { *:4 SB = ma0_3; *:4 (SB + 4) = ma1_3; SB = SB + 8; }
+MGD4: is rmb4=0 { }
+MGD4: ","^ma1_4 is rmb4=1 & su3=0 & SB & ma1_4 & ma0_4 { ma1_4 = *:4 SB; SB = SB + 4; }
+MGD4: ","^md0_4 is rmb4=1 & su3=1 & SB & md0_4 & md1_4 { md0_4 = *:4 SB; SB = SB + 4; }
+MGD4: ","^md1_4 is rmb4=1 & su3=2 & SB & md1_4 & md0_4 { md1_4 = *:4 SB; SB = SB + 4; }
+MGD4: ","^ma0_4 is rmb4=1 & su3=3 & SB & ma0_4 & ma1_4 { ma0_4 = *:4 SB; SB = SB + 4; }
+MSD4: is rmb4=0 { }
+MSD4: ","^ma1_4 is rmb4=1 & su3=0 & SB & ma1_4 & ma0_4 { *:4 SB = ma1_4; SB = SB + 4; }
+MSD4: ","^md0_4 is rmb4=1 & su3=1 & SB & md0_4 & md1_4 { *:4 SB = md0_4; SB = SB + 4; }
+MSD4: ","^md1_4 is rmb4=1 & su3=2 & SB & md1_4 & md0_4 { *:4 SB = md1_4; SB = SB + 4; }
+MSD4: ","^ma0_4 is rmb4=1 & su3=3 & SB & ma0_4 & ma1_4 { *:4 SB = ma0_4; SB = SB + 4; }
+MGL4: is rmb4=0 { }
+MGL4: ","^ma1_4 is rmb4=1 & su3=0 & SB & ma1_4 & ma0_4 { ma1_4 = *:4 SB; ma0_4 = *:4 (SB + 4); SB = SB + 8; }
+MGL4: ","^md0_4 is rmb4=1 & su3=1 & SB & md0_4 & md1_4 { md0_4 = *:4 SB; md1_4 = *:4 (SB + 4); SB = SB + 8; }
+MGL4: ","^md1_4 is rmb4=1 & su3=2 & SB & md1_4 & md0_4 { md1_4 = *:4 SB; md0_4 = *:4 (SB + 4); SB = SB + 8; }
+MGL4: ","^ma0_4 is rmb4=1 & su3=3 & SB & ma0_4 & ma1_4 { ma0_4 = *:4 SB; ma1_4 = *:4 (SB + 4); SB = SB + 8; }
+MSL4: is rmb4=0 { }
+MSL4: ","^ma1_4 is rmb4=1 & su3=0 & SB & ma1_4 & ma0_4 { *:4 SB = ma1_4; *:4 (SB + 4) = ma0_4; SB = SB + 8; }
+MSL4: ","^md0_4 is rmb4=1 & su3=1 & SB & md0_4 & md1_4 { *:4 SB = md0_4; *:4 (SB + 4) = md1_4; SB = SB + 8; }
+MSL4: ","^md1_4 is rmb4=1 & su3=2 & SB & md1_4 & md0_4 { *:4 SB = md1_4; *:4 (SB + 4) = md0_4; SB = SB + 8; }
+MSL4: ","^ma0_4 is rmb4=1 & su3=3 & SB & ma0_4 & ma1_4 { *:4 SB = ma0_4; *:4 (SB + 4) = ma1_4; SB = SB + 8; }
+MGD5: is rmb5=0 { }
+MGD5: ","^ma1_5 is rmb5=1 & su3=0 & SB & ma1_5 & ma0_5 { ma1_5 = *:4 SB; SB = SB + 4; }
+MGD5: ","^md0_5 is rmb5=1 & su3=1 & SB & md0_5 & md1_5 { md0_5 = *:4 SB; SB = SB + 4; }
+MGD5: ","^md1_5 is rmb5=1 & su3=2 & SB & md1_5 & md0_5 { md1_5 = *:4 SB; SB = SB + 4; }
+MGD5: ","^ma0_5 is rmb5=1 & su3=3 & SB & ma0_5 & ma1_5 { ma0_5 = *:4 SB; SB = SB + 4; }
+MSD5: is rmb5=0 { }
+MSD5: ","^ma1_5 is rmb5=1 & su3=0 & SB & ma1_5 & ma0_5 { *:4 SB = ma1_5; SB = SB + 4; }
+MSD5: ","^md0_5 is rmb5=1 & su3=1 & SB & md0_5 & md1_5 { *:4 SB = md0_5; SB = SB + 4; }
+MSD5: ","^md1_5 is rmb5=1 & su3=2 & SB & md1_5 & md0_5 { *:4 SB = md1_5; SB = SB + 4; }
+MSD5: ","^ma0_5 is rmb5=1 & su3=3 & SB & ma0_5 & ma1_5 { *:4 SB = ma0_5; SB = SB + 4; }
+MGL5: is rmb5=0 { }
+MGL5: ","^ma1_5 is rmb5=1 & su3=0 & SB & ma1_5 & ma0_5 { ma1_5 = *:4 SB; ma0_5 = *:4 (SB + 4); SB = SB + 8; }
+MGL5: ","^md0_5 is rmb5=1 & su3=1 & SB & md0_5 & md1_5 { md0_5 = *:4 SB; md1_5 = *:4 (SB + 4); SB = SB + 8; }
+MGL5: ","^md1_5 is rmb5=1 & su3=2 & SB & md1_5 & md0_5 { md1_5 = *:4 SB; md0_5 = *:4 (SB + 4); SB = SB + 8; }
+MGL5: ","^ma0_5 is rmb5=1 & su3=3 & SB & ma0_5 & ma1_5 { ma0_5 = *:4 SB; ma1_5 = *:4 (SB + 4); SB = SB + 8; }
+MSL5: is rmb5=0 { }
+MSL5: ","^ma1_5 is rmb5=1 & su3=0 & SB & ma1_5 & ma0_5 { *:4 SB = ma1_5; *:4 (SB + 4) = ma0_5; SB = SB + 8; }
+MSL5: ","^md0_5 is rmb5=1 & su3=1 & SB & md0_5 & md1_5 { *:4 SB = md0_5; *:4 (SB + 4) = md1_5; SB = SB + 8; }
+MSL5: ","^md1_5 is rmb5=1 & su3=2 & SB & md1_5 & md0_5 { *:4 SB = md1_5; *:4 (SB + 4) = md0_5; SB = SB + 8; }
+MSL5: ","^ma0_5 is rmb5=1 & su3=3 & SB & ma0_5 & ma1_5 { *:4 SB = ma0_5; *:4 (SB + 4) = ma1_5; SB = SB + 8; }
+MGD6: is rmb6=0 { }
+MGD6: ","^ma1_6 is rmb6=1 & su3=0 & SB & ma1_6 & ma0_6 { ma1_6 = *:4 SB; SB = SB + 4; }
+MGD6: ","^md0_6 is rmb6=1 & su3=1 & SB & md0_6 & md1_6 { md0_6 = *:4 SB; SB = SB + 4; }
+MGD6: ","^md1_6 is rmb6=1 & su3=2 & SB & md1_6 & md0_6 { md1_6 = *:4 SB; SB = SB + 4; }
+MGD6: ","^ma0_6 is rmb6=1 & su3=3 & SB & ma0_6 & ma1_6 { ma0_6 = *:4 SB; SB = SB + 4; }
+MSD6: is rmb6=0 { }
+MSD6: ","^ma1_6 is rmb6=1 & su3=0 & SB & ma1_6 & ma0_6 { *:4 SB = ma1_6; SB = SB + 4; }
+MSD6: ","^md0_6 is rmb6=1 & su3=1 & SB & md0_6 & md1_6 { *:4 SB = md0_6; SB = SB + 4; }
+MSD6: ","^md1_6 is rmb6=1 & su3=2 & SB & md1_6 & md0_6 { *:4 SB = md1_6; SB = SB + 4; }
+MSD6: ","^ma0_6 is rmb6=1 & su3=3 & SB & ma0_6 & ma1_6 { *:4 SB = ma0_6; SB = SB + 4; }
+MGL6: is rmb6=0 { }
+MGL6: ","^ma1_6 is rmb6=1 & su3=0 & SB & ma1_6 & ma0_6 { ma1_6 = *:4 SB; ma0_6 = *:4 (SB + 4); SB = SB + 8; }
+MGL6: ","^md0_6 is rmb6=1 & su3=1 & SB & md0_6 & md1_6 { md0_6 = *:4 SB; md1_6 = *:4 (SB + 4); SB = SB + 8; }
+MGL6: ","^md1_6 is rmb6=1 & su3=2 & SB & md1_6 & md0_6 { md1_6 = *:4 SB; md0_6 = *:4 (SB + 4); SB = SB + 8; }
+MGL6: ","^ma0_6 is rmb6=1 & su3=3 & SB & ma0_6 & ma1_6 { ma0_6 = *:4 SB; ma1_6 = *:4 (SB + 4); SB = SB + 8; }
+MSL6: is rmb6=0 { }
+MSL6: ","^ma1_6 is rmb6=1 & su3=0 & SB & ma1_6 & ma0_6 { *:4 SB = ma1_6; *:4 (SB + 4) = ma0_6; SB = SB + 8; }
+MSL6: ","^md0_6 is rmb6=1 & su3=1 & SB & md0_6 & md1_6 { *:4 SB = md0_6; *:4 (SB + 4) = md1_6; SB = SB + 8; }
+MSL6: ","^md1_6 is rmb6=1 & su3=2 & SB & md1_6 & md0_6 { *:4 SB = md1_6; *:4 (SB + 4) = md0_6; SB = SB + 8; }
+MSL6: ","^ma0_6 is rmb6=1 & su3=3 & SB & ma0_6 & ma1_6 { *:4 SB = ma0_6; *:4 (SB + 4) = ma1_6; SB = SB + 8; }
+MGD7: is rmb7=0 { }
+MGD7: ","^ma1_7 is rmb7=1 & su3=0 & SB & ma1_7 & ma0_7 { ma1_7 = *:4 SB; SB = SB + 4; }
+MGD7: ","^md0_7 is rmb7=1 & su3=1 & SB & md0_7 & md1_7 { md0_7 = *:4 SB; SB = SB + 4; }
+MGD7: ","^md1_7 is rmb7=1 & su3=2 & SB & md1_7 & md0_7 { md1_7 = *:4 SB; SB = SB + 4; }
+MGD7: ","^ma0_7 is rmb7=1 & su3=3 & SB & ma0_7 & ma1_7 { ma0_7 = *:4 SB; SB = SB + 4; }
+MSD7: is rmb7=0 { }
+MSD7: ","^ma1_7 is rmb7=1 & su3=0 & SB & ma1_7 & ma0_7 { *:4 SB = ma1_7; SB = SB + 4; }
+MSD7: ","^md0_7 is rmb7=1 & su3=1 & SB & md0_7 & md1_7 { *:4 SB = md0_7; SB = SB + 4; }
+MSD7: ","^md1_7 is rmb7=1 & su3=2 & SB & md1_7 & md0_7 { *:4 SB = md1_7; SB = SB + 4; }
+MSD7: ","^ma0_7 is rmb7=1 & su3=3 & SB & ma0_7 & ma1_7 { *:4 SB = ma0_7; SB = SB + 4; }
+MGL7: is rmb7=0 { }
+MGL7: ","^ma1_7 is rmb7=1 & su3=0 & SB & ma1_7 & ma0_7 { ma1_7 = *:4 SB; ma0_7 = *:4 (SB + 4); SB = SB + 8; }
+MGL7: ","^md0_7 is rmb7=1 & su3=1 & SB & md0_7 & md1_7 { md0_7 = *:4 SB; md1_7 = *:4 (SB + 4); SB = SB + 8; }
+MGL7: ","^md1_7 is rmb7=1 & su3=2 & SB & md1_7 & md0_7 { md1_7 = *:4 SB; md0_7 = *:4 (SB + 4); SB = SB + 8; }
+MGL7: ","^ma0_7 is rmb7=1 & su3=3 & SB & ma0_7 & ma1_7 { ma0_7 = *:4 SB; ma1_7 = *:4 (SB + 4); SB = SB + 8; }
+MSL7: is rmb7=0 { }
+MSL7: ","^ma1_7 is rmb7=1 & su3=0 & SB & ma1_7 & ma0_7 { *:4 SB = ma1_7; *:4 (SB + 4) = ma0_7; SB = SB + 8; }
+MSL7: ","^md0_7 is rmb7=1 & su3=1 & SB & md0_7 & md1_7 { *:4 SB = md0_7; *:4 (SB + 4) = md1_7; SB = SB + 8; }
+MSL7: ","^md1_7 is rmb7=1 & su3=2 & SB & md1_7 & md0_7 { *:4 SB = md1_7; *:4 (SB + 4) = md0_7; SB = SB + 8; }
+MSL7: ","^ma0_7 is rmb7=1 & su3=3 & SB & ma0_7 & ma1_7 { *:4 SB = ma0_7; *:4 (SB + 4) = ma1_7; SB = SB + 8; }
+:MGETD SR19^MGD1^MGD2^MGD3^MGD4^MGD5^MGD6^MGD7, "["SB"++]" is maj=12 & minor=8 & f0_2=0 & SR19 & SP19 & SB & MGD1 & MGD2 & MGD3 & MGD4 & MGD5 & MGD6 & MGD7 [ mr1 = r19 + 1; mr2 = r19 + 2; mr3 = r19 + 3; mr4 = r19 + 4; mr5 = r19 + 5; mr6 = r19 + 6; mr7 = r19 + 7; ] {
+  SR19 = *:4 SB; SB = SB + 4; build MGD1; build MGD2; build MGD3; build MGD4; build MGD5; build MGD6; build MGD7;
+}
+:MSETD "["SB"++]", SR19^MSD1^MSD2^MSD3^MSD4^MSD5^MSD6^MSD7 is maj=11 & minor=8 & f0_2=0 & SR19 & SP19 & SB & MSD1 & MSD2 & MSD3 & MSD4 & MSD5 & MSD6 & MSD7 [ mr1 = r19 + 1; mr2 = r19 + 2; mr3 = r19 + 3; mr4 = r19 + 4; mr5 = r19 + 5; mr6 = r19 + 6; mr7 = r19 + 7; ] {
+  *:4 SB = SR19; SB = SB + 4; build MSD1; build MSD2; build MSD3; build MSD4; build MSD5; build MSD6; build MSD7;
+}
+:MGETL SR19^MGL1^MGL2^MGL3^MGL4^MGL5^MGL6^MGL7, "["SB"++]" is maj=12 & minor=9 & f0_2=0 & SR19 & SP19 & SB & MGL1 & MGL2 & MGL3 & MGL4 & MGL5 & MGL6 & MGL7 [ mr1 = r19 + 1; mr2 = r19 + 2; mr3 = r19 + 3; mr4 = r19 + 4; mr5 = r19 + 5; mr6 = r19 + 6; mr7 = r19 + 7; ] {
+  SR19 = *:4 SB; SP19 = *:4 (SB + 4); SB = SB + 8; build MGL1; build MGL2; build MGL3; build MGL4; build MGL5; build MGL6; build MGL7;
+}
+:MSETL "["SB"++]", SR19^MSL1^MSL2^MSL3^MSL4^MSL5^MSL6^MSL7 is maj=11 & minor=9 & f0_2=0 & SR19 & SP19 & SB & MSL1 & MSL2 & MSL3 & MSL4 & MSL5 & MSL6 & MSL7 [ mr1 = r19 + 1; mr2 = r19 + 2; mr3 = r19 + 3; mr4 = r19 + 4; mr5 = r19 + 5; mr6 = r19 + 6; mr7 = r19 + 7; ] {
+  *:4 SB = SR19; *:4 (SB + 4) = SP19; SB = SB + 8; build MSL1; build MSL2; build MSL3; build MSL4; build MSL5; build MSL6; build MSL7;
+}
+
+# Conditional SET (major 10, minor 4): bits 0 and 9 give the size, bit 7 the linked form.
+P10r19: d1_19 is u10=1 & d1_19 { export d1_19; }
+P10r19: d0_19 is u10=2 & d0_19 { export d0_19; }
+P10r19: a1_19 is u10=3 & a1_19 { export a1_19; }
+P10r19: a0_19 is u10=4 & a0_19 { export a0_19; }
+CSB: "["SB"]" is SB { export SB; }
+:SETB^CC CSB, U10r19 is maj=10 & minor=4 & b7=0 & b8=0 & b0=0 & b9=0 & CC & CSB & U10r19 {
+  if (!CC) goto inst_next;
+  v:4 = U10r19; *:1 CSB = v:1;
+}
+:SETW^CC CSB, U10r19 is maj=10 & minor=4 & b7=0 & b8=0 & b0=1 & b9=0 & CC & CSB & U10r19 {
+  if (!CC) goto inst_next;
+  v:4 = U10r19; *:2 CSB = v:2;
+}
+:SETD^CC CSB, U10r19 is maj=10 & minor=4 & b7=0 & b8=0 & b0=0 & b9=1 & CC & CSB & U10r19 {
+  if (!CC) goto inst_next;
+  v:4 = U10r19; *:4 CSB = v;
+}
+:SETL^CC CSB, U10r19 is maj=10 & minor=4 & b7=0 & b8=0 & b0=1 & b9=1 & CC & CSB & U10r19 & P10r19 {
+  if (!CC) goto inst_next;
+  v:8 = (zext(P10r19) << 32) | zext(U10r19); *:8 CSB = v;
+}
+

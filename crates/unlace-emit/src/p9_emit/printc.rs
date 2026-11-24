@@ -4407,6 +4407,19 @@ impl PrintC {
                 }
             }
         }
+        // (unlace `vaarg`) The `ap` a `va_start(ap,..)` or `va_arg(ap,T)` of the
+        // promoted local `va_list` names has no HighVariable, so declare it.
+        if matches!(self.lang().forms.decl, crate::lang::DeclForm::CTypeThenName)
+            && Self::prints_local_va_list(fd)
+            && !decls.iter().any(|(_, name)| name == "ap")
+        {
+            self.emit.tag_line();
+            self.emit.print("va_list", SyntaxHighlight::TypeColor);
+            self.emit.spaces(1, 0);
+            self.emit.print("ap", SyntaxHighlight::VarColor);
+            self.emit
+                .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
+        }
         // Blank separating line before the body (C++ emits a tag_line after the
         // last decl; the body's first statement then starts on its own line).
         self.emit.tag_line();
@@ -4448,6 +4461,30 @@ impl PrintC {
                 }
             }
         }
+    }
+
+    /// (unlace `vaarg`) Does the body print a `va_start`/`va_arg` on the promoted
+    /// local `va_list` (the constant `push_va_list` spells `ap`)?
+    fn prints_local_va_list(fd: &Funcdata) -> bool {
+        fd.obank()
+            .iter_code(unlace_num::opcodes::OpCode::CPUI_CALLOTHER)
+            .any(|op| {
+                let Some(o) = fd.obank().get(op).filter(|o| !o.is_dead()) else {
+                    return false;
+                };
+                let builtin = o
+                    .get_in(0)
+                    .and_then(|v| fd.vbank().get(v))
+                    .map(|v| v.get_offset());
+                matches!(
+                    builtin,
+                    Some(b) if b == crate::userop::BUILTIN_VA_START as u64
+                        || b == crate::userop::BUILTIN_VAARG as u64
+                ) && o
+                    .get_in(1)
+                    .and_then(|v| fd.vbank().get(v))
+                    .is_some_and(|v| v.is_constant())
+            })
     }
 
     /// (unlace) The locals the last printed document declared.

@@ -1084,7 +1084,8 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   non-empty section out above `0x400000` (`RELOC_BASE`, matching CLE so addresses
   line up with angr's), apply the relocations, rebase defined symbols, and bind
   each undefined extern to a synthetic call target in an extern area above the
-  sections so calls render by name. A section header's size is a claim the file
+  sections so calls render by name (the next 4 KiB page plus one; on a 16-bit
+  machine the next 16 bytes, so AVR's 4 KiB `rcall` still reaches every libcall). A section header's size is a claim the file
   need not back, so the layout allocates zero-fill only for data — `SHT_NOBITS`
   storage and a data extent past the end of the file — and at most 256 MiB of it
   per object (`reloc_object.rs (ZERO_FILL_LIMIT)`); code is laid out at the bytes

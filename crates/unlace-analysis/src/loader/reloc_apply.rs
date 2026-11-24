@@ -2566,8 +2566,8 @@ fn avr_pcrel(
     Ok(())
 }
 
-/// AVR `ldi Rd, K` (`1110 KKKK dddd KKKK`): one byte of `S + A`, of its
-/// negation, or of its word address.
+/// AVR `ldi Rd, K` (`1110 KKKK dddd KKKK`, and the other register-immediate
+/// forms): one byte of `S + A`, of its negation, or of its word address.
 fn avr_ldi(
     field: &mut [u8],
     reloc: RelocationInfo,
@@ -2577,7 +2577,10 @@ fn avr_ldi(
     pm: bool,
 ) -> Result<(), RelocationFailure> {
     let mut insn = read_u16(field, true);
-    if insn & 0xf000 != 0xe000 || reloc.implicit_addend {
+    // The register-immediate format `xxxx KKKK dddd KKKK`: `ldi` (E), and the
+    // `subi`/`sbci` (5/4) pair gcc adds a negated address with, `cpi` (3),
+    // `ori` (6) and `andi` (7).
+    if !matches!(insn >> 12, 0x3..=0x7 | 0xe) || reloc.implicit_addend {
         return Err(RelocationFailure::InvalidEncoding);
     }
     let mut value = symbol as i128 + reloc.addend as i128;
@@ -4472,6 +4475,16 @@ mod avr_amdgpu_tests {
         );
         assert_eq!(
             avr(R_AVR_13_PCREL, 0, &[0x00, 0xe0], 0x120, 0x100),
+            Err(RelocationFailure::InvalidEncoding)
+        );
+        // `sbci r29, hi8(-(x))` and `cpi`; an `add` (0x0c00) is not an immediate form.
+        assert_eq!(avr(10, 0, &[0x10, 0x40], 0x2234, 0), Ok(vec![0x1d, 0x4d]));
+        assert_eq!(
+            avr(R_AVR_LO8_LDI, 0, &[0x80, 0x30], 0x1234, 0),
+            Ok(vec![0x84, 0x33])
+        );
+        assert_eq!(
+            avr(R_AVR_LO8_LDI, 0, &[0x00, 0x0c], 0x1234, 0),
             Err(RelocationFailure::InvalidEncoding)
         );
         assert_eq!(

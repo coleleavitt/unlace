@@ -4259,6 +4259,30 @@ and the vector crypto extensions (Zvk*) are not covered. Exercised by
 names, RV32 and RV64, and intrinsic-selected functions that decompile with
 no unimplemented instruction.
 
+
+### RISC-V Zfh half-precision floating point (#98)
+
+`riscv.zfh.sinc` decodes Zfh 1.0 (and so its Zfhmin subset) in every RISC-V
+language that has the F extension: `flh`/`fsh`, `fadd.h`, `fsub.h`,
+`fmul.h`, `fdiv.h`, `fsqrt.h`, `fsgnj{,n,x}.h`, `fmin.h`/`fmax.h`, the
+fused `fmadd.h`/`fmsub.h`/`fnmsub.h`/`fnmadd.h` (fmt field 10), the
+compares `feq.h`/`flt.h`/`fle.h`, `fmv.x.h`/`fmv.h.x`, `fclass.h`, and
+the conversions between half and single, double, 32-bit and (RV64) 64-bit
+integers. Before, every one of them was a bad instruction. A half value is
+the low 16 bits of an f register: `frs1H`/`frs2H`/`frs3H` read them, and a
+write zero-extends the 2-byte result into the register as the single-precision
+forms do (`fassignS`; the ISA's NaN-boxing is not modelled, as for F).
+Arithmetic, square root, compares and conversions are the ordinary p-code
+float operations on 2-byte varnodes (`FLOAT_ADD`, `FLOAT2FLOAT`,
+`FLOAT_INT2FLOAT`, `FLOAT_TRUNC`, ...); the translator has no 2-byte float
+format, so the simplifier does not fold half-precision constants, the same as
+AArch64's FP16 forms. `fmv.x.h` sign-extends the 16-bit pattern into `rd`,
+`fmin.h`/`fmax.h` return the non-NaN operand when one is NaN, and
+`fclass.h` is the user operation `fclass_h`. Exercised by
+`unlace-cli/tests/riscv_zfh.rs`: one probe row per encoding against LLVM's
+names, RV32 and RV64, and LLVM-selected half-precision functions that
+decompile with no bad or unimplemented instruction.
+
 ### RISC-V moves and conversions from FP to integer registers (GH-831)
 
 `fmv.x.d` copies the 64-bit pattern of its FP source into the integer

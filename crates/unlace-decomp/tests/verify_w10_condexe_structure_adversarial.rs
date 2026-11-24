@@ -244,7 +244,7 @@ fn rust_decompile_first(stem: &str) -> Result<(XmlArchitecture, Funcdata), Strin
 // ---------------------------------------------------------------------------
 
 fn cpp_oracle_bin() -> PathBuf {
-    if let Some(p) = std::env::var_os("KUNA_DECOMP_TEST") {
+    if let Some(p) = unlace_base::env::var_os("UNLACE_DECOMP_TEST") {
         PathBuf::from(p)
     } else {
         repo_root().join("decompiler/cpp/decomp_test_dbg")

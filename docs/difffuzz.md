@@ -32,7 +32,7 @@ input registers and the differing values.
 (`qemu-riscv64 -cpu max`), `mips` and `mips64` (`qemu-mips64 -cpu MIPS64R2-generic`), and `mipsr6`
 and `mips64r6` (`qemu-mips64 -cpu I6400`, an R6 ELF with no HI/LO in the harness). `ppc` (`qemu-ppc -cpu 7457`), and the QEMU-only `ppc64`, `ppc64le` (`PowerPC:*:64:default`),
 `ppc64-isa` and `ppc64le-isa` (`PowerPC:*:64:A2ALT`, Power ISA 3.0) on `qemu-ppc64` /
-`qemu-ppc64le -cpu power10`, `s390x` on `qemu-s390x -cpu max`, and `loongarch64` on `qemu-loongarch64 -cpu max`. `DIFFFUZZ_QEMU_DIR` names a directory searched before `PATH`
+`qemu-ppc64le -cpu power10`, `s390x` on `qemu-s390x -cpu max`, `loongarch64` on `qemu-loongarch64 -cpu max`, and `arm` and `thumb` on `qemu-arm -cpu max`. `DIFFFUZZ_QEMU_DIR` names directories (separated by `:`) searched before `PATH`
 for the QEMU binaries (a `--target-list=ppc-linux-user,...` build of QEMU 10 works). QEMU 10 implements
 what Unicorn's older QEMU core lacks or gets wrong: BF16, I8MM (`usdot`/`sudot`), MOPS,
 `fcmla`/`fcadd`, and RISC-V NaN-boxing.
@@ -117,6 +117,25 @@ afterwards. The register file is unchanged.
   after the first run: UDIV/SDIV(cc) clamp an overflowing quotient (2^32-1, 2^31-1 or -2^31)
   and set icc.v; xcc of UMULcc/SMULcc/UDIVcc/SDIVcc comes from the 64-bit result. Seed 5,
   4000 encodings on sparc64: 10650 matches; seed 6, 3000 on sparc: 8251; no mismatches.
+- PA-RISC 1.1 (`--arch hppa`, `pa-risc:BE:32:default`, `--oracle qemu` with `qemu-hppa` from
+  QEMU 8.2). Capstone 5 has no PA-RISC, so candidates are decoded by a multi-target binutils
+  `objdump` (`ObjdumpDis`/`ObjdumpArch`: `$DIFFFUZZ_OBJDUMP`, default
+  `~/.local/share/difffuzz-binutils/bin/objdump`, built from binutils 2.45 with
+  `--enable-targets=all`), a batch of 4096 encodings per objdump run. binutils also decodes the
+  PA 2.0 forms, which are dropped. SAR and the carry bit go in and out through `mtsar`/`mfctl`
+  and `addi -1`/`add,c`; nullification is compared too: the epilogue's first instruction
+  complements a second free register, which keeps its input value only when the instruction
+  nullified it. Not generated: branches, system, cache/TLB, FP, coprocessor, DCOR and DS. When
+  SLEIGH traps on a ,TSV/,O overflow the case is undefined (QEMU 8.2 checks the 64-bit sign and
+  misses narrow overflows). Fixed in the PA-RISC module after the first run: the 11-bit
+  immediate took bit 11 (`im11less0`); the add and subtract conditions (=, <, <=, NUV/<<,
+  ZNV/<<=, SV, OD) are computed from the operands the instruction saves first
+  (`condA`/`condB`/`condCin`), so a target that aliases a source no longer changes them and
+  ADD,C/SUB,B/SHxADD conditions include the carry and the shift; ADD,C, ADD,CO and SUB,B carry
+  the full 33-bit sum; the unit conditions SDC/SBC/SHC are implemented; STBY stores the right
+  bytes and its ,M form modifies the base register (after the store, QEMU's reading), not the
+  source; a short-displacement store whose source is the modified base stores the old value.
+  Seeds 4 and 5, 3000 encodings each: 6205 and 6293 matches, no mismatches.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.
@@ -208,7 +227,7 @@ Unicorn emulates it, with `--oracle qemu`, including `riscv64v`, and `x86-64-nat
 count, one difffuzz process per configuration, and prints one line per configuration:
 
 ```sh
-DIFFFUZZ_QEMU_DIR=~/.local/share/qemu-8.2-user ~/.local/share/difffuzz-venv/bin/python \
+DIFFFUZZ_QEMU_DIR=~/.local/share/qemu-8.2-user:~/.local/share/qemu-10.2-user ~/.local/share/difffuzz-venv/bin/python \
     tools/difffuzz/sweep.py --unlace target/debug/unlace --objdump <llvm-objdump with RVV> --jobs 4 --out sweep.json
 x86-64       unicorn  ok    match    270  mismatch    0 (+0 known)  decode    0  ref-exc    8  unmodeled    9
 riscv64v     qemu     ok    match    126  mismatch    0 (+66 known)  decode    0  ref-exc   83  unmodeled    0
@@ -265,7 +284,15 @@ documented classes.
   (UNPREDICTABLE); `Q` outside the saturating instructions. A32 encodings whose should-be-zero
   fields are set are dropped before lifting: an encoding is kept only when Keystone assembles
   Capstone's text back to the same bytes (`pip install keystone-engine`; without it every
-  encoding is kept).
+  encoding is kept). Also dropped as UNPREDICTABLE: an `LDRD`/`STRD` whose first register is
+  odd or `lr`; T32 shifted-register data-processing ops with bit 15 of the second halfword set
+  and saturate/bit-field ops with bit 10 of the first; `SVC` (a system call on QEMU).
+- ARM and Thumb on QEMU (`qemu-arm -cpu max`, QEMU 10; build it with
+  `--target-list=arm-linux-user`): the A32 prologue sets NZCVQ and GE with `MSR APSR_nzcvqg`,
+  loads r0..lr, and enters the instruction with `LDR pc` from a literal (bit 0 set for Thumb);
+  a Thumb exit leaves through `BX pc` from a word-aligned address. First run (pinned
+  `unlace-a3147ecd77`, seed 4, 2000 encodings each): arm 4020 matches, thumb 4876, no
+  mismatches.
 - MIPS: branches and jumps (delay slots), loads and stores (Unicorn maps kuseg differently, and
   SLEIGH lifts an `lwl`/`lwr` pair as one access by design), FPU, MSA and privileged
   instructions; HI/LO after `DIV`.

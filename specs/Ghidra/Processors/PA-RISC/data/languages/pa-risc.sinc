@@ -135,6 +135,9 @@ define register offset=0x6000 size=4 [
 # special hidden registers to support the nullify and delay slot features of PA-RISC
 define register offset=0x7000 size=1 [nullifyCond nullifyNextCond branchCond branchExecuted]; 
 define register offset=0x7100 size=4 [branchIndDest nullifyCondResult];
+# operands of the add/subtract a condition is evaluated on (the instruction sets them first)
+define register offset=0x7180 size=4 [condA condB condRes];
+define register offset=0x7190 size=1 [condCin];
 
 define register offset=0x7200 size=12   contextreg;
 define context contextreg
@@ -277,7 +280,7 @@ define token instr(32)
     im14		= (0,13)
     im14less0	= (1,13)
     im11		= (0,10) signed
-    im11less0	= (1,11)
+    im11less0	= (1,10)
     sim5		= (0,4) signed
     im5			= (0,4)
     im5less0	= (1,4)
@@ -1482,11 +1485,11 @@ BBCond:					is c=6 & R1 & bboffset { tmp:1 = ((R1 >> (31-bboffset)) & 0x1) == 0 
 # unit conditions for checking byte ranges within a word
 #
 RegUnitCond:		is c=0 { export 0:1; } # never
-RegUnitCond:		is c=2 & RT  { tmp:1 = (RT:1 == 0) || ((RT:2 & 0xFF00) == 0) || ((RT:3 & 0xFF0000) == 0) || ((RT & 0xFF000000) == 0)   ; export tmp; } # some byte zero
-RegUnitCond:		is c=3 & RT { tmp:1 = ((RT:2 & 0xFFFF) == 0) || ((RT & 0xFFFF0000) == 0) ; export tmp; } # some halfword zero
-RegUnitCond:		is c=4  { export 0:1; } # some digit carry -- TODO FIGURE OUT BCD
-RegUnitCond:		is c=6  { export 0:1; } # some byte carry -- TODO BCD
-RegUnitCond:		is c=7  { export 0:1; } # some halfword carry -- TODO BCD
+RegUnitCond:		is c=2 { tmp:1 = ((condRes & 0xFF) == 0) || ((condRes & 0xFF00) == 0) || ((condRes & 0xFF0000) == 0) || ((condRes & 0xFF000000) == 0); export tmp; } # SBZ: some byte zero
+RegUnitCond:		is c=3 { tmp:1 = ((condRes & 0xFFFF) == 0) || ((condRes & 0xFFFF0000) == 0); export tmp; } # SHZ: some halfword zero
+RegUnitCond:		is c=4 { local uS:8 = zext(condA) + zext(condB); local uC:8 = uS ^ zext(condA) ^ zext(condB); tmp:1 = (uC & 0x111111110) != 0; export tmp; } # SDC: some digit carry
+RegUnitCond:		is c=6 { local uS:8 = zext(condA) + zext(condB); local uC:8 = uS ^ zext(condA) ^ zext(condB); tmp:1 = (uC & 0x101010100) != 0; export tmp; } # SBC: some byte carry
+RegUnitCond:		is c=7 { local uS:8 = zext(condA) + zext(condB); local uC:8 = uS ^ zext(condA) ^ zext(condB); tmp:1 = (uC & 0x100010000) != 0; export tmp; } # SHC: some halfword carry
 
 UnitCond: ""			is RegUnitCond & fv=0 { export RegUnitCond; }
 UnitCond: ""			is RegUnitCond & fv=1 { tmp:1 = ! RegUnitCond; export tmp; }
@@ -1503,14 +1506,14 @@ UnitCondSym: InvUnitCondSym	is InvUnitCondSym & fv=1 { }
 #
 ##### The Add Conditions from table 5-4 on page 5-5
 #
-RegAddCond: 		is c = 0 { export 0:1; } # never
-RegAddCond: 		is c = 1 & R1 & R2 { tmp:1 = (R1 == R2) ; export tmp; } # equal
-RegAddCond: 		is c = 2 & R1 & R2 { tmp:1 = (R1 s< -R2) ; export tmp; } # signed less than negative of R2 
-RegAddCond: 		is c = 3 & R1 & R2 { tmp:1 = (R1 s<= R2) ; export tmp; } # signed less than or equal to R2
-RegAddCond: 		is c = 4 & R1 & R2 { tmp:1 = ! carry(R1,R2) ; export tmp; } # unsigned sum does not overflow
-RegAddCond: 		is c = 5 & R1 & R2 { tmp:1 = (R1 + R2) == 0 ; export tmp; } # sum is zero or no overflow (why two definitions??)
-RegAddCond: 		is c = 6 & R1 & R2 { tmp:1 = scarry(R1,R2); export tmp; } # signed sum overflows
-RegAddCond: 		is c = 7 & R1 & R2 { tmp:1 = ((R1+R2) & 0x1) == 0x1 ; export tmp; } # sum is odd
+RegAddCond: is c = 0 { export 0:1; } # never
+RegAddCond: is c = 1 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cR == 0; export tmp; } # = (sum is zero)
+RegAddCond: is c = 2 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cS s< 0; export tmp; } # < (sum negative)
+RegAddCond: is c = 3 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cS s<= 0; export tmp; } # <= (sum negative or zero)
+RegAddCond: is c = 4 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cW[32,1] == 0; export tmp; } # NUV (no carry)
+RegAddCond: is c = 5 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = (cR == 0) || (cW[32,1] == 0); export tmp; } # ZNV (zero or no carry)
+RegAddCond: is c = 6 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cS != sext(cR); export tmp; } # SV (signed overflow)
+RegAddCond: is c = 7 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = (cR & 1) == 1; export tmp; } # OD (sum odd)
 
 AddCond:			is RegAddCond & fv=0 { export RegAddCond; }
 AddCond:			is RegAddCond & fv=1 { tmp:1 = ! RegAddCond; export tmp; }
@@ -1526,10 +1529,10 @@ AddCondSym: InvAddCondSym	is InvAddCondSym & fv=1 { }
 
 RegAddCondI: 		is c = 0 { export 0:1; } # never
 RegAddCondI: 		is c = 1 & highlse5 & R2 { val:$(REGSIZE) = sext(highlse5:1); tmp:1 = (val == -R2) ; export tmp; } # equal to negated
-RegAddCondI: 		is c = 2 & highlse5 & R2 { val:$(REGSIZE) = sext(highlse5:1); tmp:1 = (val s< -R2) ; export tmp; } # signed less than negated R2 
-RegAddCondI: 		is c = 3 & highlse5 & R2 { val:$(REGSIZE) = sext(highlse5:1); tmp:1 = (val s<= -R2) ; export tmp; } # signed less than or equal to R2
+RegAddCondI: 		is c = 2 & highlse5 & R2 { val:$(REGSIZE) = sext(highlse5:1); local cS:8 = sext(val) + sext(R2); tmp:1 = cS s< 0; export tmp; } # signed sum negative 
+RegAddCondI: 		is c = 3 & highlse5 & R2 { val:$(REGSIZE) = sext(highlse5:1); local cS:8 = sext(val) + sext(R2); tmp:1 = cS s<= 0; export tmp; } # signed sum negative or zero
 RegAddCondI: 		is c = 4 & highlse5 & R2 { val:$(REGSIZE) = sext(highlse5:1); tmp:1 = ! carry(val,R2) ; export tmp; } # unsigned sum does not overflow
-RegAddCondI: 		is c = 5 & highlse5 & R2 { val:$(REGSIZE) = sext(highlse5:1); tmp:1 = (val + R2) == 0 ; export tmp; } # sum is zero or no overflow (why two definitions??)
+RegAddCondI: 		is c = 5 & highlse5 & R2 { val:$(REGSIZE) = sext(highlse5:1); tmp:1 = ((val + R2) == 0) || !carry(val,R2); export tmp; } # sum is zero or no carry
 RegAddCondI: 		is c = 6 & highlse5 & R2 { val:$(REGSIZE) = sext(highlse5:1); tmp:1 = scarry(val,R2); export tmp; } # signed sum overflows
 RegAddCondI: 		is c = 7 & highlse5 & R2 { val:$(REGSIZE) = sext(highlse5:1); tmp:1 = ((val+R2) & 0x1) == 0x1 ; export tmp; } # sum is odd
 
@@ -1542,35 +1545,13 @@ RegAddCondI: 		is c = 7 & highlse5 & R2 { val:$(REGSIZE) = sext(highlse5:1); tmp
 #
 
 RegAddCondI11: is c = 0 { export 0:1; } # never
-
-RegAddCondI11: is temp32 & c = 1 & lse11 & R2 {
-                                val:8 = sext(temp32:2); tmp_R2:8 = sext(R2);
-				tmp:1 = (val == -tmp_R2) ; export tmp; } # equal
-
-RegAddCondI11: is temp32 & c = 2 & lse11 & R2 {
-                                val:8 = sext(temp32:2); tmp_R2:8 = sext(R2);
-				tmp:1 = (val s< -tmp_R2) ; export tmp; } # signed less than negative of R2
-
-RegAddCondI11: is temp32 & c = 3 & lse11 & R2 {
-				val:8 = sext(temp32:2); tmp_R2:8 = sext(R2);
-				tmp:1 = (val s<= -tmp_R2) ; export tmp; } # signed less than or equal to R2
-
-RegAddCondI11: is temp32 & c = 4 & lse11 & R2 {
-				val:$(REGSIZE) = sext(temp32:2);
-				tmp:1 = ! carry(val,R2) ; export tmp; } # unsigned sum does not overflow
-
-RegAddCondI11: is temp32 & c = 5 & lse11 & R2 {
-				# Don't need 64-bit arithmetic here
-				val:$(REGSIZE) = sext(temp32:2);
-				tmp:1 = (val + R2) == 0 ; export tmp; } # sum is zero or no overflow (why two definitions??)
-
-RegAddCondI11: is temp32 & c = 6 & lse11 & R2 {
-				val:$(REGSIZE) = sext(temp32:2);
-				tmp:1 = scarry(val,R2); export tmp; } # signed sum overflows
-
-RegAddCondI11: is temp32 & c = 7 & lse11 & R2 {
-				val:8 = sext(temp32:2); tmp_R2:8 = sext(R2);
-				tmp:1 = ((val+tmp_R2) & 0x1) == 0x1 ; export tmp; } # sum is odd
+RegAddCondI11: is c = 1 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cR == 0; export tmp; } # = (sum is zero)
+RegAddCondI11: is c = 2 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cS s< 0; export tmp; } # < (sum negative)
+RegAddCondI11: is c = 3 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cS s<= 0; export tmp; } # <= (sum negative or zero)
+RegAddCondI11: is c = 4 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cW[32,1] == 0; export tmp; } # NUV (no carry)
+RegAddCondI11: is c = 5 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = (cR == 0) || (cW[32,1] == 0); export tmp; } # ZNV (zero or no carry)
+RegAddCondI11: is c = 6 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cS != sext(cR); export tmp; } # SV (signed overflow)
+RegAddCondI11: is c = 7 { local cS:8 = sext(condA) + sext(condB) + zext(condCin); local cW:8 = zext(condA) + zext(condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = (cR & 1) == 1; export tmp; } # OD (sum odd)
 
 AddCondI11:		is RegAddCondI11 & fv=0 { export RegAddCondI11; }
 AddCondI11:		is RegAddCondI11 & fv=1 { temp:1 = ! RegAddCondI11; export temp; }
@@ -1584,14 +1565,14 @@ AddCondI11Nullify:	is AddCondI11 [ nullifyEnable=1; globalset(inst_next, nullify
 #
 #### Compare / Subtract Instructions
 #
-RegCSCond: 		is c=0 & R1 & R2 { export 0:1; }  # never
-RegCSCond: 		is c=1 & R1 & R2 { tmp:1 = (R1 == R2) ; export tmp; } # equal
-RegCSCond: 		is c=2 & R1 & R2 { tmp:1 = (R1 s< R2) ; export tmp; } # signed less than
-RegCSCond: 		is c=3 & R1 & R2 { tmp:1 = (R1 s<= R2) ; export tmp; } # signed less than equal
-RegCSCond: 		is c=4 & R1 & R2 { tmp:1 = (R1 < R2) ; export tmp; } # unsigned less than 
-RegCSCond: 		is c=5 & R1 & R2 { tmp:1 = (R1 <= R2) ; export tmp; } # unsigned less than equal
-RegCSCond: 		is c=6 & R1 & R2 { tmp:1 = sborrow(R1,R2) ; export tmp; } # signed minus overflows (borrows)
-RegCSCond: 		is c=7 & R1 & R2 { tmp:1 = ((R1 - R2) & 0x1) == 1 ; export tmp; } # odd
+RegCSCond: is c=0 { export 0:1; } # never
+RegCSCond: is c=1 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cR == 0; export tmp; } # = (equal)
+RegCSCond: is c=2 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cS s< 0; export tmp; } # < (signed less)
+RegCSCond: is c=3 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cS s<= 0; export tmp; } # <= (signed less or equal)
+RegCSCond: is c=4 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cW[32,1] == 0; export tmp; } # << (unsigned less: borrow)
+RegCSCond: is c=5 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = (cW[32,1] == 0) || (cR == 0); export tmp; } # <<= (borrow or equal)
+RegCSCond: is c=6 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cS != sext(cR); export tmp; } # SV (signed overflow)
+RegCSCond: is c=7 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = (cR & 1) == 1; export tmp; } # OD (difference odd)
 
 CSCond: 	is fv=0 & RegCSCond { export RegCSCond; }
 CSCond: 	is fv=1 & RegCSCond { tmp:1 = ! RegCSCond; export tmp; }
@@ -1613,18 +1594,18 @@ RegCSCondI: 		is  c=2 & R2 & highlse5 { val:$(REGSIZE) = sext(highlse5); tmp:1 =
 RegCSCondI: 		is  c=3 & R2 & highlse5 { val:$(REGSIZE) = sext(highlse5); tmp:1 = (val s<= R2) ; export tmp; } # signed less than equal
 RegCSCondI: 		is  c=4 & R2 & highlse5 { val:$(REGSIZE) = sext(highlse5); tmp:1 = (val < R2) ; export tmp; } # unsigned less than 
 RegCSCondI: 		is  c=5 & R2 & highlse5 { val:$(REGSIZE) = sext(highlse5); tmp:1 = (val <= R2) ; export tmp; } # unsigned less than equal
-RegCSCondI: 		is  c=6 & R2 & highlse5 { val:$(REGSIZE) = sext(highlse5); local diff = (val - R2); tmp:1 = (val s> 0 && R2 s> 0 && diff s< 0) || (val s< 0 && R2 s< 0 && diff s> 0)  ; export tmp; } # overflow
+RegCSCondI: 		is  c=6 & R2 & highlse5 { val:$(REGSIZE) = sext(highlse5); tmp:1 = sborrow(val,R2); export tmp; } # overflow
 RegCSCondI: 		is  c=7 & R2 & highlse5 { val:$(REGSIZE) = sext(highlse5); tmp:1 = ((val - R2) & 0x1) == 1 ; export tmp; } # odd
 
 # The Compare or Subtract conditions compared with 11 bit immediates. These are used with the SUBI[O] and COMICLR instructions. Both regular and inverted forms are used.
-RegCSCondI11: 		is  c=0 & R2 & lse11 { export 0:1; }  # never
-RegCSCondI11: 		is  c=1 & R2 & lse11 { val:$(REGSIZE) = sext(lse11); tmp:1 = (val == R2) ; export tmp; } # equal
-RegCSCondI11: 		is  c=2 & R2 & lse11 { val:$(REGSIZE) = sext(lse11); tmp:1 = (val s< R2) ; export tmp; } # signed less than
-RegCSCondI11: 		is  c=3 & R2 & lse11 { val:$(REGSIZE) = sext(lse11); tmp:1 = (val s<= R2) ; export tmp; } # signed less than equal
-RegCSCondI11: 		is  c=4 & R2 & lse11 { val:$(REGSIZE) = sext(lse11); tmp:1 = (val < R2) ; export tmp; } # unsigned less than 
-RegCSCondI11: 		is  c=5 & R2 & lse11 { val:$(REGSIZE) = sext(lse11); tmp:1 = (val <= R2) ; export tmp; } # unsigned less than equal
-RegCSCondI11: 		is  c=6 & R2 & lse11 { val:$(REGSIZE) = sext(lse11); local diff = (val - R2); tmp:1 = (val s> 0 && R2 s> 0 && diff s< 0) || (val s< 0 && R2 s< 0 && diff s> 0)  ; export tmp; } # overflow
-RegCSCondI11: 		is  c=7 & R2 & lse11 { val:$(REGSIZE) = sext(lse11); tmp:1 = ((val - R2) & 0x1) == 1 ; export tmp; } # odd
+RegCSCondI11: is c=0 { export 0:1; } # never
+RegCSCondI11: is c=1 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cR == 0; export tmp; } # = (equal)
+RegCSCondI11: is c=2 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cS s< 0; export tmp; } # < (signed less)
+RegCSCondI11: is c=3 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cS s<= 0; export tmp; } # <= (signed less or equal)
+RegCSCondI11: is c=4 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cW[32,1] == 0; export tmp; } # << (unsigned less: borrow)
+RegCSCondI11: is c=5 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = (cW[32,1] == 0) || (cR == 0); export tmp; } # <<= (borrow or equal)
+RegCSCondI11: is c=6 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = cS != sext(cR); export tmp; } # SV (signed overflow)
+RegCSCondI11: is c=7 { local cS:8 = sext(condA) + sext(~condB) + zext(condCin); local cW:8 = zext(condA) + zext(~condB) + zext(condCin); local cR:4 = cW:4; tmp:1 = (cR & 1) == 1; export tmp; } # OD (difference odd)
 
 CSCondI11:		is RegCSCondI11 & fv=0 { export RegCSCondI11; }
 CSCondI11:		is RegCSCondI11 & fv=1 { temp:1 = ! RegCSCondI11; export temp; }
@@ -1698,9 +1679,9 @@ storeShortDispCmplt: ",MB"					is u=1 & m=1 & RB & RX & SPCBASE & lse5 { local l
 
 # Table 5-13 on page 5-26
 storeBytesShortCmplt: 					is u=0 & m=0 & SPCBASE & lse5 { off:$(ADDRSIZE) = SPCBASE + sext(lse5); export off; } # none / beginning, don't modify base register
-storeBytesShortCmplt: ",BM"				is u=0 & m=1 & SPCBASE & RR & lse5  { off:$(ADDRSIZE) = SPCBASE + sext(lse5); RR = (RR + sext(lse5)) & 0xFFFFFFFC; export off; } # beginning, modify base register
+storeBytesShortCmplt: ",BM"				is u=0 & m=1 & SPCBASE & RB & lse5  { off:$(ADDRSIZE) = SPCBASE; RB = (RB + sext(lse5)) & 0xFFFFFFFC; export off; } # beginning, modify base register
 storeBytesShortCmplt: ",E"				is u=1 & m=0 & SPCBASE & lse5 { off:$(ADDRSIZE) = SPCBASE + sext(lse5); export off; } # ending, don't modify
-storeBytesShortCmplt: ",EM"				is u=1 & m=1 & SPCBASE & RR & lse5 { off:$(ADDRSIZE) = SPCBASE + sext(lse5); RR = (RR + sext(lse5)) & 0xFFFFFFFC; export off; } # ending, modify
+storeBytesShortCmplt: ",EM"				is u=1 & m=1 & SPCBASE & RB & lse5 { off:$(ADDRSIZE) = SPCBASE; RB = (RB + sext(lse5)) & 0xFFFFFFFC; export off; } # ending, modify
 
 # u fixed at 0, Table 5-11 on page 5-22, for LPA and related system level opcodes
 sysCmplt: 							is m=0 { }

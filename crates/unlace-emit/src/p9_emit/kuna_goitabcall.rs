@@ -123,6 +123,15 @@ fn table_interface(
     if depth == 0 {
         return None;
     }
+    // A value method's receiver arrives in registers field by field, so when
+    // its struct's first field is an interface the first input is that
+    // field's table (`io.nopCloser.Read`).
+    if v.is_input() {
+        let record = value_receiver_type(arch, fd.get_name())?;
+        return is_first_input(fd, arch, vn)
+            .then(|| interface_field_at(arch, &record, 0))
+            .flatten();
+    }
     let def = fd.obank().get(v.get_def()?)?;
     match def.code() {
         // A copy, and the width changes and call guards a register variable shared
@@ -238,35 +247,111 @@ fn receiver_field_interface(
     vn: VarnodeId,
     offset: i64,
 ) -> Option<String> {
-    if !arch.archid.starts_with("x86:LE:64:") {
-        return None;
-    }
-    let mut v = fd.vbank().get(vn)?;
-    for _ in 0..MAX_DEPTH {
-        if v.is_input() {
-            break;
-        }
-        let def = fd.obank().get(v.get_def()?)?;
-        if def.code() != OpCode::CPUI_COPY {
-            return None;
-        }
-        v = fd.vbank().get(def.get_in(0)?)?;
-    }
-    let rax = arch.get_register_varnode(b"RAX").ok()?;
-    if !v.is_input()
-        || v.get_offset() != rax.offset
-        || Some(v.get_space().get_index()) != rax.space.as_ref().map(|s| s.get_index())
-    {
+    if !is_first_input(fd, arch, vn) {
         return None;
     }
     let record = pointer_receiver_type(fd.get_name())?;
-    match arch.types().kuna_lang_facet(&record)? {
+    interface_field_at(arch, &record, offset)
+}
+
+/// The interface of the field at byte `offset` of named struct `record`, from
+/// its `GoInterfaceFields` facet.
+fn interface_field_at(arch: &Architecture, record: &str, offset: i64) -> Option<String> {
+    match arch.types().kuna_lang_facet(record)? {
         LangFacet::GoInterfaceFields { fields } => fields
             .into_iter()
             .find(|(at, _)| i64::from(*at) == offset)
             .map(|(_, interface)| interface),
         _ => None,
     }
+}
+
+/// How many Varnodes [`input_root`] visits.
+const MAX_ROOT_NODES: usize = 32;
+
+/// `true` when `vn` is, on every path, the function's first integer input as
+/// it was received (amd64 `RAX`, the Go register ABI's receiver and first
+/// argument): its definitions back to the input are copies, casts, call
+/// guards and joins, a loop's join included.
+fn is_first_input(fd: &Funcdata, arch: &Architecture, vn: VarnodeId) -> bool {
+    if !arch.archid.starts_with("x86:LE:64:") {
+        return false;
+    }
+    let Ok(rax) = arch.get_register_varnode(b"RAX") else {
+        return false;
+    };
+    let mut roots: Vec<VarnodeId> = Vec::new();
+    let mut seen: Vec<VarnodeId> = Vec::new();
+    if !input_root(fd, vn, &mut seen, &mut roots) {
+        return false;
+    }
+    let [root] = roots.as_slice() else {
+        return false;
+    };
+    fd.vbank().get(*root).is_some_and(|v| {
+        v.is_input()
+            && v.get_offset() == rax.offset
+            && Some(v.get_space().get_index()) == rax.space.as_ref().map(|s| s.get_index())
+    })
+}
+
+/// Collect into `roots` the inputs `vn` comes from through copies, casts,
+/// call guards and joins; `false` when another definition (or the visit
+/// bound) is reached.
+fn input_root(
+    fd: &Funcdata,
+    vn: VarnodeId,
+    seen: &mut Vec<VarnodeId>,
+    roots: &mut Vec<VarnodeId>,
+) -> bool {
+    if seen.contains(&vn) {
+        return true;
+    }
+    if seen.len() >= MAX_ROOT_NODES {
+        return false;
+    }
+    seen.push(vn);
+    let Some(v) = fd.vbank().get(vn) else {
+        return false;
+    };
+    if v.is_input() {
+        if !roots.contains(&vn) {
+            roots.push(vn);
+        }
+        return true;
+    }
+    let Some(def) = v.get_def().and_then(|id| fd.obank().get(id)) else {
+        return false;
+    };
+    match def.code() {
+        OpCode::CPUI_COPY | OpCode::CPUI_CAST | OpCode::CPUI_INDIRECT => def
+            .get_in(0)
+            .is_some_and(|input| input_root(fd, input, seen, roots)),
+        OpCode::CPUI_MULTIEQUAL => {
+            (0..def.num_input().min(MAX_JOIN_INPUTS)).all(|i| {
+                def.get_in(i)
+                    .is_some_and(|input| input_root(fd, input, seen, roots))
+            }) && def.num_input() <= MAX_JOIN_INPUTS
+        }
+        _ => false,
+    }
+}
+
+/// `pkg.T` for a value method `pkg.T.M` whose receiver struct carries a
+/// `GoInterfaceFields` facet (a function `pkg.F` names no such struct).
+fn value_receiver_type(arch: &Architecture, name: &str) -> Option<String> {
+    if name.contains(['(', '[', ' ']) {
+        return None;
+    }
+    let record = &name[..name.rfind('.')?];
+    if !record.contains('.') {
+        return None;
+    }
+    matches!(
+        arch.types().kuna_lang_facet(record)?,
+        LangFacet::GoInterfaceFields { .. }
+    )
+    .then(|| record.to_string())
 }
 
 /// `pkg.T` for a pointer method named `pkg.(*T).M`; `None` for any other

@@ -77,6 +77,8 @@ mod riscv_zfa;
 mod riscv_zfh;
 #[path = "romp_raw.rs"]
 mod romp_raw;
+#[path = "s1c_raw.rs"]
+mod s1c_raw;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
 #[path = "sbpf.rs"]

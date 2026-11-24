@@ -287,7 +287,7 @@ fn match_all_inner(
         last |= round + 1 == MAX_ROUNDS;
         let mut found: Vec<(u64, String, i32)> = Vec::new();
         for &ea in entries {
-            if named.contains_key(&ea) {
+            if named.contains_key(&ea) || inside_instruction(listing, ea) {
                 continue;
             }
             let code = image.from(ea);
@@ -391,6 +391,18 @@ fn modules_at<'a>(s: &Matcher<'a>, code: &[u8], pattern_len: usize) -> Vec<&'a M
     let mut found = s.match_at(&padded);
     found.retain(|m| m.length as usize <= code.len());
     found
+}
+
+/// Whether `ea` is a tail byte: a decoded instruction starts before it and runs
+/// past it, so no function begins there. IDA skips such a match with
+/// `flirt: skip tail bytes` (`sub_700DB0`, an FF_TAIL address). The address is
+/// read with its mode bit cleared, as a Thumb entry carries it.
+fn inside_instruction(listing: &Listing, ea: u64) -> bool {
+    let at = ea & !1;
+    !listing.is_instruction_start(at)
+        && listing
+            .instruction_before(at)
+            .is_some_and(|insn| insn.addr.saturating_add(u64::from(insn.len)) > at)
 }
 
 /// Whether the entry is a bare return, after a landing pad if it starts with one

@@ -47,13 +47,13 @@ fn surface_count_is_101() {
 }
 
 #[test]
-fn settable_count_is_331() {
-    assert_eq!(kuna_num_settables(), 331);
-    assert_eq!(SETTABLE_TABLE.len(), 331);
+fn settable_count_is_332() {
+    assert_eq!(kuna_num_settables(), 332);
+    assert_eq!(SETTABLE_TABLE.len(), 332);
 }
 
 #[test]
-fn tier_counts_are_67_core_164_transform_100_analysis() {
+fn tier_counts_are_67_core_164_transform_101_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_67_core_164_transform_100_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (67, 164, 100));
+    assert_eq!((core, transform, analysis), (67, 164, 101));
 }
 
 #[test]
@@ -406,6 +406,9 @@ fn option_values_live_value_present_for_129() {
         // gate (no `live_field`); its live state is read console-side via
         // kuna_live_value, like the analysis-pass gates around it. Default-off.
         "rtti",
+        // (kuna) MSVC ThrowInfo labels and throw-site comments, the same PE-only
+        // analysis-pass gate as `rtti`. Default-off.
+        "msvceh",
         // (kuna) ELF libc-start `main` naming + prototype -- the ELF counterpart of
         // `machomain` above and the same seam: an analysis-tier gate with no
         // codegen live reader, read console-side via kuna_live_value. Default-ON.
@@ -1279,7 +1282,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // Recounted after merging upstream/main (2026-11-22): one row per settable, the last without a comma.
     // +1 for `oslog`; its P9 row.
     // +1 for `callresultuse`; its P4 row.
-    assert_eq!(json.matches("},\n").count(), 324);
+    // Recounted with `msvceh` (its P1 row follows `rtti`): one per settable but the last.
+    assert_eq!(json.matches("},\n").count(), 331);
 }
 
 #[test]

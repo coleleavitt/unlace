@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="JavaCard"
+            endian="big"
+            size="16"
+            variant="3.1"
+            version="1.0"
+            slafile="javacard.sla"
+            processorspec="javacard.pspec"
+            id="JavaCard:BE:16:3.1">
+    <description>Java Card virtual machine bytecode (Java Card Platform 3.1, Classic Edition)</description>
+    <compiler name="default" spec="javacard.cspec" id="default"/>
+  </language>
+</language_definitions>

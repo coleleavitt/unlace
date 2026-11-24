@@ -93,6 +93,8 @@ mod riscv_zfh;
 mod romp_raw;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
+#[path = "s1c_raw.rs"]
+mod s1c_raw;
 #[path = "s2650_raw.rs"]
 mod s2650_raw;
 mod sam8_raw;

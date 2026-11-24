@@ -4217,6 +4217,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `WE32100` | AT&T WE32100 | `WE32100:BE:32:default` | aleph-void/ghidra-we32100 (fork of fletto2/ghidra-we32100) @ `0324efb5cd`, MIT |
 | `WonderSwan` | NEC V30MZ (WonderSwan) | `V30MZ:LE:16:default` | aleph-void/ghidra-wonderswan (fork of JidouGhost-TL/ghidra-wonderswan) @ `f499014b08`, Apache-2.0 |
 | `XaviX` | XaviX | `XaviX:LE:24:default` | aleph-void/ghidra-xavix @ `8a94e7953b`, MIT |
+| `CellSPU` | Cell SPU (PS3) | `SPU:BE:32:default` | aleph-void/GhidraSPU (fork of aerosoul94/GhidraSPU) @ `a2efc11569`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

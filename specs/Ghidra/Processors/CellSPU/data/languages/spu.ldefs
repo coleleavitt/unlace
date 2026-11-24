@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+    <language processor="SPU"
+              endian="big"
+              size="32"
+              variant="default"
+              version="2.0"
+              slafile="spu.sla"
+              processorspec="spu.pspec"
+              id="SPU:BE:32:default">
+        <description>Cell Broadband Engine Synergistic Processor Unit (SPU ISA 1.2)</description>
+        <compiler name="default" spec="spu.cspec" id="default"/>
+        <external_name tool="gnu" name="spu"/>
+        <external_name tool="DWARF.register.mapping.file" name="spu.dwarf"/>
+    </language>
+</language_definitions>

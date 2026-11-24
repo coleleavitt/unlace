@@ -2085,7 +2085,19 @@ symbols; an address that already has a name keeps it. A companion that carries
 DWARF also feeds the DWARF analyzer
 (`crates/unlace-analysis/src/analyzers/dwarf/mod.rs (DwarfPass)` runs
 over the companion when the image has no `.debug_info`), since the addresses
-are the image's own; MiniDebugInfo has no DWARF. The loader also reports a `PT_LOAD`
+are the image's own; MiniDebugInfo has no DWARF. A debug file that `dwz -m`
+compressed (Fedora/RHEL `-debuginfo`, Debian/Ubuntu `-dbgsym`) keeps the
+strings and partial units several packages share in a supplementary file its
+`.gnu_debugaltlink` names with that file's build-id;
+`elf_debuglink.rs (find_altlink)` looks for it at the named path (absolute,
+with `/usr/lib/debug` also tried under each `KUNA_DEBUG_DIRS` root, or
+relative to the debug file), then by build-id under the debug directories,
+and accepts it only if its build-id matches. The DWARF analyzer then sets it as
+gimli's supplementary `Dwarf` (`Dwarf::set_sup`), so names in
+`DW_FORM_GNU_strp_alt` / `DW_FORM_strp_sup` resolve. A `DW_FORM_GNU_ref_alt`
+reference into the supplementary file's partial units is not followed yet
+(the per-unit DIE snapshot resolves only unit-local references), so a type
+that lives only there stays unknown. The loader also reports a `PT_LOAD`
 that maps an address another `PT_LOAD` already mapped from different file bytes
 (`elf_debuglink.rs (overlapping_loads)`), a shape only a hand-made or hostile
 image has; which bytes win is unchanged.

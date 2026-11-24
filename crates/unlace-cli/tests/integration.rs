@@ -54,6 +54,8 @@ mod moxie_raw;
 mod nios2_raw;
 #[path = "pdp11_raw.rs"]
 mod pdp11_raw;
+#[path = "propeller_raw.rs"]
+mod propeller_raw;
 #[path = "rabbit_raw.rs"]
 mod rabbit_raw;
 #[path = "v60.rs"]

@@ -1176,6 +1176,7 @@ impl Worker {
         scratch: &Path,
     ) -> std::io::Result<Self> {
         let mut cmd = Command::new(exe);
+        crate::loadtime::apply_invocation(&mut cmd);
         cmd.arg("decompile-all")
             .arg(cfg.binary)
             .arg("--jobs-worker")

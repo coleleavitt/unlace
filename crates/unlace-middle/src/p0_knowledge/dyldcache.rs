@@ -26,11 +26,6 @@ pub fn dyldcrossrefs_enabled() -> bool {
         .unwrap_or_else(crate::loadoptions::env::dyldcrossrefs)
 }
 
-pub fn set_dyldimage_env(name: &str) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(DYLDIMAGE_ENV, name) };
-}
-
 /// The image a `dyldimage` value names; `none` and the empty value name none.
 pub fn image_name(value: &str) -> Option<&str> {
     Some(value.trim()).filter(|v| !v.is_empty() && *v != "none")

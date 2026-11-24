@@ -5278,6 +5278,17 @@ Found by `tools/difffuzz` against Unicorn and checked against the Arm ARM.
 target; they now jump to `rs1 & ~1` as the `jalr` constructors in `riscv.rv32i.sinc` already
 did. Found by `tools/difffuzz`.
 
+### ARM lifter fixes from differential fuzzing
+
+Found by `tools/difffuzz` against Unicorn.
+
+- `STRHT` (`ARMinstructions.sinc`) builds its `addrmode3` after `COND`, so a failing
+  condition no longer writes the base register back, and stores `Rd:2` (it stored all 4 bytes).
+- The T32 `AND`, `BIC`, `MOV.W` and `MVN` immediate forms and the `AND.W` and `MVN.W`
+  shifted-register forms (`ARMTHUMBinstructions.sinc`) take `thSBIT_CZN` and
+  `th_logicflags()`, so with S they set C from the shifter (`ThumbExpandImm12` or `thshift2`),
+  as `ORR`, `EOR` and `TST` already did; before, `ANDS.W r8,r11,r9,ROR #21` left C unchanged.
+
 ## 2.9 Go stack-growth prologue folding
 
 **(kuna) `option gomorestack off|auto|always`, default auto,

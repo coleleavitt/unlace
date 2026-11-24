@@ -5742,7 +5742,8 @@ armEndianNess: "BE" is c0031=0xf1010200 { export 1:1; }
 
 :strht^COND Rd,addrmode3		is $(AMODE) & ARMcond=1 & COND & c2527=0 & P24=0 & W21=1 & L20=0 & c0407=11 & Rd & addrmode3	{
   build COND;
-  *:2 addrmode3 = Rd;
+  build addrmode3;
+  *:2 addrmode3 = Rd:2;
 }
 
 @endif # VERSION_6K
